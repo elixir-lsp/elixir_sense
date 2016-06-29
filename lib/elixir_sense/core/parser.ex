@@ -1,7 +1,7 @@
-defmodule ElixirSense.Parser do
+defmodule ElixirSense.Core.Parser do
 
-  alias ElixirSense.MetadataBuilder
-  alias ElixirSense.Metadata
+  alias ElixirSense.Core.MetadataBuilder
+  alias ElixirSense.Core.Metadata
 
   def parse_file(file, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
     case File.read(file) do
@@ -11,7 +11,7 @@ defmodule ElixirSense.Parser do
     end
   end
 
-  defp parse_string(source, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
+  def parse_string(source, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
     case string_to_ast(source, try_to_fix_parse_error, cursor_line_number) do
       {:ok, ast} ->
         acc = MetadataBuilder.build(ast)

@@ -1,7 +1,7 @@
-defmodule ElixirSense.SourceTest do
+defmodule ElixirSense.Core.SourceTest do
   use ExUnit.Case
 
-  import ElixirSense.Source
+  import ElixirSense.Core.Source
   
   test "which_func/1 for functions without namespace" do
     assert which_func("var = func(") == {nil, :func, 0}

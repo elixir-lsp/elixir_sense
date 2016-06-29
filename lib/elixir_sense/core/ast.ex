@@ -1,6 +1,6 @@
-defmodule ElixirSense.Ast do
+defmodule ElixirSense.Core.Ast do
 
-  alias ElixirSense.Introspection
+  alias ElixirSense.Core.Introspection
 
   @empty_env_info %{requires: [], imports: [], behaviours: []}
 

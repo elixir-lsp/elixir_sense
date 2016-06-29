@@ -1,4 +1,4 @@
-defmodule ElixirSense.Source do
+defmodule ElixirSense.Core.Source do
 
   def get_prefix(code, line, col) do
     line = code |> String.split("\n") |> Enum.at(line-1)

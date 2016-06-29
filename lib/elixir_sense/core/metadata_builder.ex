@@ -1,21 +1,22 @@
-defmodule ElixirSense.MetadataBuilder do
+defmodule ElixirSense.Core.MetadataBuilder do
 
   @moduledoc """
   This module is responsible for building/retrieving environment information from an AST.
   """
 
-  import ElixirSense.State
-  alias ElixirSense.Ast
+  import ElixirSense.Core.State
+  alias ElixirSense.Core.Ast
+  alias ElixirSense.Core.State
 
   @scope_keywords [:for, :try, :fn]
   @block_keywords [:do, :else, :rescue, :catch, :after]
 
   @doc """
   Traverses the AST building/retrieving the environment information.
-  It returns a `ElixirSense.State` struct containing the information.
+  It returns a `ElixirSense.Core.State` struct containing the information.
   """
   def build(ast) do
-    {_ast, state} = Macro.traverse(ast, %ElixirSense.State{}, &pre/2, &post/2)
+    {_ast, state} = Macro.traverse(ast, %State{}, &pre/2, &post/2)
     state
   end
 

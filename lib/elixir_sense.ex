@@ -1,20 +1,18 @@
 defmodule ElixirSense do
-  use Application
 
-  # See http://elixir-lang.org/docs/stable/elixir/Application.html
-  # for more information on OTP Applications
-  def start(_type, _args) do
-    import Supervisor.Spec, warn: false
+  alias ElixirSense.Core.State
+  alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.Parser
+  alias ElixirSense.Providers.Docs
 
-    # Define workers and child supervisors to be supervised
-    children = [
-      # Starts a worker by calling: ElixirSense.Worker.start_link(arg1, arg2, arg3)
-      # worker(ElixirSense.Worker, [arg1, arg2, arg3]),
-    ]
+  def docs(expr, buffer, line) do
+    metadata = Parser.parse_string(buffer, true, true, line)
+    %State.Env{
+      imports: imports,
+      aliases: aliases
+    } = Metadata.get_env(metadata, line)
 
-    # See http://elixir-lang.org/docs/stable/elixir/Supervisor.html
-    # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: ElixirSense.Supervisor]
-    Supervisor.start_link(children, opts)
+    Docs.all(expr, imports, aliases)
   end
+
 end

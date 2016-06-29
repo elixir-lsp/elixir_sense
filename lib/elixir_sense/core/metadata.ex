@@ -1,4 +1,6 @@
-defmodule ElixirSense.Metadata do
+defmodule ElixirSense.Core.Metadata do
+
+  alias ElixirSense.Core.State
 
   defstruct source: nil,
             mods_funs_to_lines: %{},
@@ -7,7 +9,7 @@ defmodule ElixirSense.Metadata do
 
   def get_env(%__MODULE__{} = metadata, line_number) do
     case Map.get(metadata.lines_to_env, line_number) do
-      nil -> %ElixirSense.State.Env{}
+      nil -> %State.Env{}
       ctx -> ctx
     end
   end

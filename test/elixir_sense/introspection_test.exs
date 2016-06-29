@@ -1,8 +1,8 @@
-defmodule ElixirSense.IntrospectionTest do
+defmodule ElixirSense.Core.IntrospectionTest do
 
   use ExUnit.Case
 
-  import ElixirSense.Introspection
+  import ElixirSense.Core.Introspection
 
   test "get_callbacks_with_docs for erlang behaviours" do
     assert get_callbacks_with_docs(:supervisor) == [%{

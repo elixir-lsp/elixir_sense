@@ -1,8 +1,8 @@
-defmodule ElixirSense.MetadataBuilderTest do
+defmodule ElixirSense.Core.MetadataBuilderTest do
 
   use ExUnit.Case
 
-  alias ElixirSense.MetadataBuilder
+  alias ElixirSense.Core.MetadataBuilder
 
   test "build metadata from kernel.ex" do
     assert get_subject_definition_line(Kernel, :defmodule, nil) =~ "defmacro defmodule(alias, do: block) do"

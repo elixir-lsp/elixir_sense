@@ -1,4 +1,4 @@
-defmodule ElixirSense.Introspection do
+defmodule ElixirSense.Core.Introspection do
 
   @moduledoc """
   A collection of functions to introspect/format docs, specs, types and callbacks.

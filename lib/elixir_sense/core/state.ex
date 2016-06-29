@@ -1,4 +1,4 @@
-defmodule ElixirSense.State do
+defmodule ElixirSense.Core.State do
 
   defstruct [
     namespace:  [:Elixir],
