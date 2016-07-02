@@ -2,8 +2,7 @@ defmodule Alchemist.API.Docl do
 
   @moduledoc false
 
-  import IEx.Helpers, warn: false
-
+  @spec request(String.t) :: no_return
   def request(args) do
     Application.put_env(:iex, :colors, [enabled: true])
 

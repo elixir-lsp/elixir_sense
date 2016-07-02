@@ -2,7 +2,7 @@ defmodule ElixirSense.Core.SourceTest do
   use ExUnit.Case
 
   import ElixirSense.Core.Source
-  
+
   test "which_func/1 for functions without namespace" do
     assert which_func("var = func(") == {nil, :func, 0}
     assert which_func("var = func(param1, ") == {nil, :func, 1}
@@ -41,4 +41,54 @@ defmodule ElixirSense.Core.SourceTest do
   test "which_func/1 for erlang functions" do
     assert which_func("var = :global.whereis_name( ") == {:global, :whereis_name, 0}
   end
+
+  test "the truth 13" do
+    assert which_func("fn(a, ") == :none
+  end
+
+  test "the truth 14" do
+    assert which_func("var = Enum.sort_by(list, fn(i) -> i*i end, fn(a, ") == {Enum, :sort_by, 2}
+    assert which_func("fn(a, ") == :none
+  end
+
+  test "the truth 15" do
+    assert which_func("var = Enum.map([1,2], fn(i) -> i*") == {Enum, :map, 1}
+  end
+
+  test "the truth 16" do
+    assert which_func("var = Enum.map([1,2,3") == {Enum, :map, 0}
+  end
+
+  test "the truth 17" do
+    assert which_func("var = Enum.map([1,2], [1, ") == {Enum, :map, 1}
+  end
+
+  test "the truth 18" do
+    assert which_func("var = Enum.map({1,2,3") == {Enum, :map, 0}
+  end
+
+  test "the truth 19" do
+    assert which_func("var = Enum.map({1,2}, {1, ") == {Enum, :map, 1}
+  end
+
+  test "the truth 20" do
+    assert which_func("var = Enum.map({1,2}, [{1, ") == {Enum, :map, 1}
+  end
+
+  test "the truth 21" do
+    assert which_func("var = Enum.map([") == {Enum, :map, 0}
+  end
+
+  test "the truth 22" do
+    assert which_func("var = Enum.map([1,") == {Enum, :map, 0}
+  end
+
+  test "the truth 23" do
+    assert which_func("var = Enum.map([{1,") == {Enum, :map, 0}
+  end
+
+  test "the truth 24" do
+    assert which_func("var = Enum.map([{1,[a, ") == {Enum, :map, 0}
+  end
+
 end

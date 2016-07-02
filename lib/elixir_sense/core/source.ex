@@ -10,12 +10,13 @@ defmodule ElixirSense.Core.Source do
       case prefix |> String.to_char_list |> :elixir_tokenizer.tokenize(1, []) do
         {:ok, _, _, tokens} ->
           tokens |> Enum.reverse
-        {:error, {_line, error_prefix, _token}, _rest, sofar} ->
-          :elixir_utils.characters_to_binary(error_prefix)
+        {:error, {_line, _error_prefix, _token}, _rest, sofar} ->
+          # IO.puts :stderr, :elixir_utils.characters_to_binary(error_prefix)
+          # IO.inspect(:stderr, sofar, [])
           sofar
       end
 
-    %{candidate: candidate, npar: npar} = scan(tokens, %{npar: 0, count: 0, candidate: []})
+    %{candidate: candidate, npar: npar} = scan(tokens, %{npar: 0, count: 0, count2: 0, candidate: []})
 
     case candidate do
       []          -> :none
@@ -28,7 +29,7 @@ defmodule ElixirSense.Core.Source do
   end
 
   defp scan([{:",", _}|_], %{count: 1} = state), do: state
-  defp scan([{:",", _}|tokens], %{count: 0} = state) do
+  defp scan([{:",", _}|tokens], %{count: 0, count2: 0} = state) do
     scan(tokens, %{state | npar: state.npar + 1, candidate: []})
   end
   defp scan([{:"(", _}|_], %{count: 1} = state), do: state
@@ -38,6 +39,15 @@ defmodule ElixirSense.Core.Source do
   defp scan([{:")", _}|tokens], state) do
     scan(tokens, %{state | count: state.count - 1, candidate: []})
   end
+  defp scan([{token, _}|tokens], %{count2: 0} = state) when token in [:"[", :"{"] do
+    scan(tokens, %{state | npar: 0, count2: 0})
+  end
+  defp scan([{token, _}|tokens], state) when token in [:"[", :"{"] do
+    scan(tokens, %{state | count2: state.count2 + 1})
+  end
+  defp scan([{token, _}|tokens], state) when token in [:"]", :"}"]do
+    scan(tokens, %{state | count2: state.count2 - 1})
+  end
   defp scan([{:paren_identifier, _, value}|tokens], %{count: 1} = state) do
     scan(tokens, %{state | candidate: [value|state.candidate]})
   end
@@ -46,6 +56,9 @@ defmodule ElixirSense.Core.Source do
   end
   defp scan([{:atom, _, value}|tokens], %{count: 1} = state) do
     scan(tokens, %{state | candidate: [value|state.candidate]})
+  end
+  defp scan([{:fn, _}|tokens], %{count: 1} = state) do
+    scan(tokens, %{state | npar: 0, count: 0})
   end
   defp scan([{:., _}|tokens], state), do: scan(tokens, state)
   defp scan([_|_], %{count: 1} = state), do: state

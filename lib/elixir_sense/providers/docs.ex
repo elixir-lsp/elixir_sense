@@ -3,6 +3,7 @@ defmodule ElixirSense.Providers.Docs do
   alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.Introspection
 
+  @spec all(String.t, [module], [{module, module}]) :: String.t
   def all(expr, modules, aliases) do
     search(expr, modules, aliases)
   end

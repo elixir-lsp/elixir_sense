@@ -95,7 +95,6 @@ defmodule ElixirSense.Core.Introspection do
           {{fun, arity}, _, kind, doc} ->
             get_callback_with_doc(fun, kind, doc, {fun, arity}, callbacks)
         end
-      _ -> []
     end
   end
 
