@@ -6,7 +6,7 @@ defmodule Alchemist.API.Comp do
     {{hint, buffer_file, line}, _} =  Code.eval_string(args)
     buffer = File.read!(buffer_file)
 
-    ElixirSense.suggestions(hint, buffer, line) |> Enum.map(&IO.puts/1)
+    ElixirSense.suggestions(hint, buffer, line) |> Enum.each(&IO.puts/1)
     IO.puts "END-OF-COMP"
   end
 

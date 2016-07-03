@@ -9,14 +9,9 @@ defmodule ElixirSense.Providers.Suggestion do
     process([hint, "Elixir", imports, aliases, vars, attributes, behaviours, scope])
   end
 
-  defp print(result) do
-    result
-    |> Enum.uniq
-  end
-
   defp process([nil, _, imports, _, _, _, _]) do
     Complete.run('', imports) ++ Complete.run('')
-    |> print
+    |> Enum.uniq
   end
 
   defp process([hint, _context, imports, aliases, vars, attributes, behaviours, scope]) do
@@ -38,7 +33,7 @@ defmodule ElixirSense.Providers.Suggestion do
         _mod   -> find_callbacks(behaviours, hint)
       end
     full_list = [first_item] ++ callbacks_or_returns ++ find_attributes(attributes, hint) ++ find_vars(vars, hint) ++ list1 ++ list2
-    full_list |> print
+    full_list |> Enum.uniq
   end
 
   defp find_vars(vars, hint) do

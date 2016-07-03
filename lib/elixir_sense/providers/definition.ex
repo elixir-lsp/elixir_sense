@@ -84,15 +84,7 @@ defmodule ElixirSense.Providers.Definition do
     end
   end
 
-  defp source([]), do: nil
-  defp source(module) when is_list(module) do
-    module
-    |> Module.concat
-    |> do_source
-  end
-  defp source(module), do: do_source(module)
-
-  defp do_source(module) do
+  defp source(module) do
     file = if Code.ensure_loaded? module do
       case module.module_info(:compile)[:source] do
         nil    -> nil
