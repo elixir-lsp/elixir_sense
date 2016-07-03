@@ -150,4 +150,22 @@ defmodule Alchemist.API.DoclTest do
     """
   end
 
+  test "DOCL request for GenServer" do
+    output = capture_io(fn ->
+      Docl.request("{\"GenServer\", \"#{fixture("my_module.ex")}\", 4}")
+    end)
+
+    assert output =~ """
+    > GenServer
+
+    A behaviour module for implementing the server of a client-server relation.
+
+    A GenServer is a process like any other Elixir process and it can be used
+    to keep state, execute code asynchronously and so on. The advantage of using
+    a generic server process (GenServer) implemented using this module is that it
+    will have a standard set of interface functions and include functionality for
+    tracing and error reporting. It will also fit into a supervision tree.
+    """
+  end
+
 end
