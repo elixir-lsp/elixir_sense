@@ -5,6 +5,7 @@ defmodule ElixirSense do
   alias ElixirSense.Core.Parser
   alias ElixirSense.Providers.Docs
   alias ElixirSense.Providers.Definition
+  alias ElixirSense.Providers.Suggestion
 
   @spec docs(String.t, String.t, pos_integer) :: String.t
   def docs(expr, buffer, line) do
@@ -27,6 +28,21 @@ defmodule ElixirSense do
     } = Metadata.get_env(buffer_file_metadata, line)
 
     Definition.find(mod, fun, [module|imports], aliases)
+  end
+
+  def suggestions(hint, buffer, line) do
+    buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
+    %State.Env{
+      imports: imports,
+      aliases: aliases,
+      vars: vars,
+      attributes: attributes,
+      behaviours: behaviours,
+      module: module,
+      scope: scope
+    } = Metadata.get_env(buffer_file_metadata, line)
+
+    Suggestion.find(hint, [module|imports], aliases, vars, attributes, behaviours, scope)
   end
 
 end

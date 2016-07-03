@@ -5,9 +5,13 @@ defmodule Alchemist.API.CompTest do
 
   alias Alchemist.API.Comp
 
+  defp fixture(file) do
+    Path.expand("../../fixtures/#{file}", __DIR__)
+  end
+
   test "COMP request with empty hint" do
     assert capture_io(fn ->
-      Comp.process([nil, Elixir, [], [], [], [], []])
+      Comp.request(~s({"", "#{fixture("my_module.ex")}", 1}))
     end) =~ """
 
     import/2;macro;module,opts;Kernel.SpecialForms;Imports functions and macros from other modules.;
@@ -19,7 +23,7 @@ defmodule Alchemist.API.CompTest do
 
   test "COMP request without empty hint" do
     assert capture_io(fn ->
-      Comp.process(['is_b', Elixir, [], [], [], [], [], :module])
+      Comp.request(~s({"is_b", "#{fixture("my_module.ex")}", 1}))
     end) =~ """
     is_b;hint
     is_binary/1;function;term;Kernel;Returns `true` if `term` is a binary\\; otherwise returns `false`.;@spec is_binary(term) :: boolean
@@ -31,7 +35,7 @@ defmodule Alchemist.API.CompTest do
 
   test "COMP request with an alias" do
     assert capture_io(fn ->
-      Comp.process(['MyList.flat', Elixir, [], [{MyList, List}], [], [], [], :module])
+      Comp.request(~s({"MyList.flat", "#{fixture("my_module.ex")}", 3}))
     end) =~ """
     MyList.flatten;hint
     flatten/2;function;list,tail;List;Flattens the given `list` of nested lists.\\nThe list `tail` will be added at the end of\\nthe flattened list.;@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var
@@ -42,7 +46,7 @@ defmodule Alchemist.API.CompTest do
 
   test "COMP request with a module hint" do
     assert capture_io(fn ->
-      Comp.process(['Str', Elixir, [], [], [], [], [], :module])
+      Comp.request(~s({"Str", "#{fixture("my_module.ex")}", 1}))
     end) =~ """
     Str;hint
     Stream;module;struct;Module for creating and composing streams.

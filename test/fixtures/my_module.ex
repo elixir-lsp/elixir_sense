@@ -1,5 +1,5 @@
 defmodule MyModule do
-  alias List, as: MyCustomList
+  alias List, as: MyList
   import Mix.Generator
 
 end

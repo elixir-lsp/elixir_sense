@@ -59,10 +59,9 @@ defmodule Alchemist.API.DoclTest do
     """
   end
 
-  test "DOCL request for MyCustomList.flatten with alias" do
+  test "DOCL request for MyList.flatten with alias" do
     output = capture_io(fn ->
-      Docl.request("{\"MyCustomList.flatten\", \"#{fixture("my_module.ex")}\", 4}")
-      # Docl.process(["MyCustomList.flatten", [], [{MyCustomList, List}]])
+      Docl.request("{\"MyList.flatten\", \"#{fixture("my_module.ex")}\", 4}")
     end)
     [docs, _types] = output |> String.split("\u000B")
 
