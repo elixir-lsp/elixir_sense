@@ -214,17 +214,13 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_attribute(state, attribute) do
-    scope = get_current_scope_name(state)
     [attributes_from_scope|other_attributes] = state.attributes
 
     attributes_from_scope =
       if attribute in attributes_from_scope do
         attributes_from_scope
       else
-        case Atom.to_string(attribute) do
-          ^scope   -> attributes_from_scope
-          _        -> [attribute|attributes_from_scope]
-        end
+        [attribute|attributes_from_scope]
       end
 
     %{state | attributes: [attributes_from_scope|other_attributes], scope_attributes: [attributes_from_scope|tl(state.scope_attributes)]}
