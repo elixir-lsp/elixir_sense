@@ -162,7 +162,7 @@ defmodule Alchemist.API.Eval do
   end
 
   defp print_match_error(%{__struct__: type, description: description, line: line}) do
-    IO.puts "# #{Introspection.module_to_string(type)} on line #{line}: \n#  ↳ #{description}"
+    IO.puts "# #{Introspection.module_to_string(type)} on line #{line}:\n#  ↳ #{description}"
   end
 
   defp print_match_error(%MatchError{}) do
