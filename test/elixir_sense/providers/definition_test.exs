@@ -42,7 +42,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
   test "find definition of remote erlang functions" do
     {file, line} = Definition.find(:lists, :duplicate, [], [])
     assert file =~ "/src/lists.erl"
-    assert line == 302
+    assert line == 303
   end
 
   test "non existing modules" do
