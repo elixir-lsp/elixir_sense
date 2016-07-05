@@ -6,6 +6,7 @@ defmodule ElixirSense do
   alias ElixirSense.Providers.Docs
   alias ElixirSense.Providers.Definition
   alias ElixirSense.Providers.Suggestion
+  alias ElixirSense.Providers.Signature
 
   @spec docs(String.t, String.t, pos_integer) :: String.t
   def docs(expr, buffer, line) do
@@ -43,6 +44,17 @@ defmodule ElixirSense do
     } = Metadata.get_env(buffer_file_metadata, line)
 
     Suggestion.find(hint, [module|imports], aliases, vars, attributes, behaviours, scope)
+  end
+
+  @spec find_signature(String.t, String.t, pos_integer) :: Signature.signature_info
+  def find_signature(prefix, buffer, line) do
+    buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
+    %State.Env{
+      imports: imports,
+      aliases: aliases,
+    } = Metadata.get_env(buffer_file_metadata, line)
+
+    Signature.find(prefix, imports, aliases)
   end
 
 end

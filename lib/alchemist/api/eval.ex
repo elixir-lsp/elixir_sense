@@ -2,13 +2,11 @@ defmodule Alchemist.API.Eval do
 
   @moduledoc false
 
-  alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Ast
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.Source
 
   def request(args) do
     args
@@ -19,25 +17,13 @@ defmodule Alchemist.API.Eval do
   end
 
   def process({:signature_info, buffer_file, file, line}) do
+    buffer = File.read!(buffer_file)
+    prefix = File.read!(file)
 
-    metadata = Parser.parse_file(buffer_file, true, true, line)
-    %State.Env{
-      imports: imports,
-      aliases: aliases
-    } = Metadata.get_env(metadata, line)
-
-    case File.read!("#{file}") |> Source.which_func do
-      {mod, func, npar} ->
-        # IO.puts :stderr, "ANTES"
-        # IO.inspect(:stderr, {mod, func}, [])
-        {mod, func} = real_mod_fun({mod, func}, [mod|imports], aliases)
-        # IO.puts :stderr, "DEPOIS"
-        # IO.inspect(:stderr, {mod, func}, [])
-
+    case ElixirSense.find_signature(prefix, buffer, line) do
+      %{active_parameter: npar, signatures: signatures} ->
         IO.puts "#{npar}"
-        Introspection.get_signatures(mod, func)
-        |> format_signatures
-        |> IO.puts
+        IO.puts format_signatures(signatures)
       :none ->
         IO.puts "none"
     end
@@ -199,47 +185,7 @@ defmodule Alchemist.API.Eval do
     |> Ast.set_module_for_env(module)
   end
 
-  def real_mod_fun({nil, function}, [], []) do
-    look_for_kernel_functions(function)
-  end
-
-  def real_mod_fun({nil, function}, imports, _) do
-    module = Enum.filter(imports, &ModuleInfo.has_function?(&1, function))
-    |> List.first
-
-    case module do
-      nil -> look_for_kernel_functions(function)
-      _   -> {module, function}
-    end
-  end
-
-  def real_mod_fun({module, function}, _, aliases) do
-    mod =
-      if elixir_module?(module) do
-        module
-        |> Module.split
-        |> ModuleInfo.expand_alias(aliases)
-      else
-        module
-      end
-    {mod, function}
-  end
-
-  defp look_for_kernel_functions(function) do
-    cond do
-      ModuleInfo.docs?(Kernel, function) ->
-        {Kernel, function}
-      ModuleInfo.docs?(Kernel.SpecialForms, function) ->
-        {Kernel.SpecialForms, function}
-      true -> {nil, nil}
-    end
-  end
-
-  defp elixir_module?(module) do
-    module == Module.concat(Elixir, module)
-  end
-
-  def format_signatures(signatures) do
+  defp format_signatures(signatures) do
     for %{name: name, params: params} <- signatures do
       fun_args_text = params |> Enum.join(",") |> String.replace("\\\\", "\\\\\\\\")
       "#{name};#{fun_args_text}"

@@ -11,12 +11,12 @@ requires = [
   "lib/elixir_sense/providers/definition.ex",
   "lib/elixir_sense/providers/docs.ex",
   "lib/elixir_sense/providers/suggestion.ex",
+  "lib/elixir_sense/providers/signature.ex",
   "lib/elixir_sense.ex",
   "lib/alchemist/api/comp.ex",
   "lib/alchemist/api/defl.ex",
   "lib/alchemist/api/docl.ex",
   "lib/alchemist/api/eval.ex",
-  "lib/alchemist/api/info.ex",
 ]
 
 requires |> Enum.each(fn file ->
