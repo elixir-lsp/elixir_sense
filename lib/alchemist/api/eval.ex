@@ -29,18 +29,6 @@ defmodule Alchemist.API.Eval do
     end
   end
 
-  def process({:eval, file}) do
-    try do
-      File.read!("#{file}")
-      |> Code.eval_string
-      |> Tuple.to_list
-      |> List.first
-      |> IO.inspect
-    rescue
-      e -> IO.inspect e
-    end
-  end
-
   def process({:match, file}) do
     try do
       file_content = File.read!("#{file}")
@@ -69,56 +57,11 @@ defmodule Alchemist.API.Eval do
   end
 
   def process({:quote, file}) do
-    try do
-      File.read!("#{file}")
-      |> Code.string_to_quoted
-      |> Tuple.to_list
-      |> List.last
-      |> IO.inspect
-    rescue
-      e -> IO.inspect e
-    end
-  end
-
-  def process({:expand_once, buffer_file, file, line}) do
-    try do
-      {_, expr} = File.read!("#{file}") |> Code.string_to_quoted
-      env = create_env(buffer_file, line)
-      expand_and_print(&Macro.expand_once/2, expr, env)
-    rescue
-      e -> IO.inspect e
-    end
-  end
-
-  def process({:expand, buffer_file, file, line}) do
-    try do
-      {_, expr} = File.read!("#{file}") |> Code.string_to_quoted
-      env = create_env(buffer_file, line)
-      expand_and_print(&Macro.expand/2, expr, env)
-    rescue
-      e -> IO.inspect e
-    end
-  end
-
-  def process({:expand_partial, buffer_file, file, line}) do
-    try do
-      {_, expr} = File.read!("#{file}")
-      |> Code.string_to_quoted
-      env = create_env(buffer_file, line)
-      expand_and_print(&Ast.expand_partial/2, expr, env)
-    rescue
-      e -> IO.inspect e
-    end
-  end
-
-  def process({:expand_all, buffer_file, file, line}) do
-    try do
-      {_, expr} = File.read!("#{file}") |> Code.string_to_quoted
-      env = create_env(buffer_file, line)
-      expand_and_print(&Ast.expand_all/2, expr, env)
-    rescue
-      e -> IO.inspect e
-    end
+    File.read!("#{file}")
+    |> Code.string_to_quoted
+    |> Tuple.to_list
+    |> List.last
+    |> IO.inspect
   end
 
   def process({:expand_full, buffer_file, file, line}) do
@@ -167,10 +110,6 @@ defmodule Alchemist.API.Eval do
 
   defp print_match_error(%MatchError{}) do
     IO.puts "# No match"
-  end
-
-  defp print_match_error(e) do
-    IO.inspect(e)
   end
 
   defp create_env(file, line) do
