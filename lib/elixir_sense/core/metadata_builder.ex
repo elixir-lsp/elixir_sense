@@ -10,6 +10,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   @scope_keywords [:for, :try, :fn]
   @block_keywords [:do, :else, :rescue, :catch, :after]
+  @defs [:def, :defp, :defmacro, :defmacrop]
 
   @doc """
   Traverses the AST building/retrieving the environment information.
@@ -179,25 +180,16 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_module(ast, state, line, module)
   end
 
-  defp pre({def_name, meta, [{:when, _, [head|_]}, body]}, state) when def_name in [:def, :defp] do
-    pre({:def, meta, [head, body]}, state)
+  defp pre({def_name, meta, [{:when, _, [head|_]}, body]}, state) when def_name in @defs do
+    pre({def_name, meta, [head, body]}, state)
   end
 
-  defp pre({def_name, [line: line], [{name, _, params}, _body]} = ast, state) when def_name in [:def, :defp] and is_atom(name) do
+  defp pre({def_name, [line: line], [{name, _, params}, _body]} = ast, state) when def_name in @defs and is_atom(name) do
     pre_func(ast, state, line, name, params)
   end
 
-  defp pre({def_fun, _, _} = ast, state) when def_fun in [:def, :defp] do
+  defp pre({def_name, _, _} = ast, state) when def_name in @defs do
     {ast, state}
-  end
-
-  # Macro without body. Ex: Kernel.SpecialForms.import
-  defp pre({:defmacro, meta, [head]}, state) do
-    pre({:defmacro, meta, [head,nil]}, state)
-  end
-
-  defp pre({:defmacro, meta, args}, state) do
-    pre({:def, meta, args}, state)
   end
 
   defp pre({:@, [line: line], [{:behaviour, _, [{:__aliases__, _, module_atoms}]}]} = ast, state) do
@@ -328,25 +320,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     post_module(ast, state, module)
   end
 
-  defp post({def_fun, meta, [{:when, _, [head|_]}, body]}, state) when def_fun in [:def, :defp] do
-    pre({:def, meta, [head, body]}, state)
-  end
-
-  defp post({def_name, [line: _line], [{name, _, _params}, _]} = ast, state) when def_name in [:def, :defp] and is_atom(name) do
+  defp post({def_name, [line: _line], [{name, _, _params}, _]} = ast, state) when def_name in @defs and is_atom(name) do
     post_func(ast, state)
   end
 
-  defp post({def_fun, _, _} = ast, state) when def_fun in [:def, :defp] do
+  defp post({def_name, _, _} = ast, state) when def_name in @defs do
     {ast, state}
-  end
-
-  # Macro without body. Ex: Kernel.SpecialForms.import
-  defp post({:defmacro, meta, [head]}, state) do
-    post({:def, meta, [head,nil]}, state)
-  end
-
-  defp post({:defmacro, meta, args}, state) do
-    post({:def, meta, args}, state)
   end
 
   defp post({atom, _, _} = ast, state) when atom in @scope_keywords do
