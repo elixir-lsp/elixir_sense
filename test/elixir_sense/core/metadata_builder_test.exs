@@ -336,6 +336,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 3) == [{Email, Foo.Email}, {User, Foo.User}]
   end
 
+  test "aliases without options" do
+
+    state =
+      """
+      defmodule MyModule do
+        alias Foo.User
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [{User, Foo.User}]
+  end
+
   test "imports defined with v1.2 notation" do
 
     state =
@@ -384,6 +398,34 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_imports(state, 14)  == [List, Enum, String]
     assert get_line_imports(state, 16)  == [List, Enum]
     assert get_line_imports(state, 19)  == [Code, List]
+  end
+
+  test "requires" do
+
+    state =
+      """
+      defmodule MyModule do
+        require Mod
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_requires(state, 3)  == [Mod]
+  end
+
+  test "requires with 1.2 notation" do
+
+    state =
+      """
+      defmodule MyModule do
+        require Mod.{Mo1, Mod2}
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_requires(state, 3)  == [Mod.Mod2, Mod.Mo1]
   end
 
   test "current module" do
@@ -444,11 +486,64 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_behaviours(state, 17)  == [Application, SomeModule.SomeBehaviour]
   end
 
+  test "behaviour from erlang module" do
+
+    state =
+      """
+      defmodule OuterModule do
+        @behaviour :gen_server
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_behaviours(state, 3)  == [:gen_server]
+  end
+
+  test "current scope" do
+
+    state =
+      """
+      defmodule MyModule do
+        def func do
+          IO.puts ""
+        end
+        IO.puts ""
+        def func_with_when(par) when is_list(par) do
+          IO.puts ""
+        end
+        IO.puts ""
+        defmacro macro1(ast) do
+          IO.puts ""
+        end
+        IO.puts ""
+        defmacro import(module, opts)
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_scope_name(state, 3) == {:func, 0}
+    assert get_scope_name(state, 5) == :MyModule
+    assert get_scope_name(state, 7) == {:func_with_when, 1}
+    assert get_scope_name(state, 9) == :MyModule
+    assert get_scope_name(state, 11) == {:macro1, 1}
+    assert get_scope_name(state, 13) == :MyModule
+    assert get_scope_name(state, 15) == :MyModule
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted
     |> (fn {:ok, ast} -> ast end).()
     |> MetadataBuilder.build
+  end
+
+  defp get_scope_name(state, line) do
+    case state.lines_to_env[line] do
+      nil -> nil
+      env -> env.scope
+    end
   end
 
   defp get_line_vars(state, line) do
@@ -469,6 +564,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     case state.lines_to_env[line] do
       nil -> []
       env -> env.imports
+    end
+  end
+
+  defp get_line_requires(state, line) do
+    case state.lines_to_env[line] do
+      nil -> []
+      env -> env.requires
     end
   end
 
