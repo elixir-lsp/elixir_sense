@@ -5,6 +5,42 @@ defmodule ElixirSense.Providers.Suggestion do
   alias Alchemist.Helpers.Complete
   alias ElixirSense.Core.Introspection
 
+  @type fun_arity :: {fun :: atom, arity :: non_neg_integer}
+  @type scope :: module | fun_arity
+
+  @type attribute :: %{
+    type: :attribute,
+    name: String.t
+  }
+
+  @type variable :: %{
+    type: :var,
+    name: String.t
+  }
+
+  @type return :: %{
+    type: :return,
+    description: String.t,
+    spec: String.t,
+    snippet: String.t,
+  }
+
+  @type callback :: %{
+    type: :callback,
+    name: String.t,
+    arity: non_neg_integer,
+    args: String.t,
+    origin: String.t,
+    summary: String.t,
+    spec: String.t
+  }
+
+  @type suggestion :: attribute | variable | return | callback
+
+  @doc """
+  Finds all suggestions based on the context
+  """
+  @spec find(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope) :: [suggestion]
   def find(hint, imports, aliases, vars, attributes, behaviours, scope) do
     process([hint, "Elixir", imports, aliases, vars, attributes, behaviours, scope])
   end
@@ -36,29 +72,33 @@ defmodule ElixirSense.Providers.Suggestion do
     full_list |> Enum.uniq
   end
 
+  @spec find_vars([String.t], String.t) :: [variable]
   defp find_vars(vars, hint) do
     for var <- vars, hint == "" or String.starts_with?("#{var}", hint) do
-      "#{var};var"
+      %{type: :variable, name: var}
     end |> Enum.sort
   end
 
+  @spec find_attributes([String.t], String.t) :: [attribute]
   defp find_attributes(attributes, hint) do
     for attribute <- attributes, hint in ["", "@"] or String.starts_with?("@#{attribute}", hint) do
-      "@#{attribute};attribute"
+      %{type: :attribute, name: "@#{attribute}"}
     end |> Enum.sort
   end
 
+  @spec find_returns([module], String.t, scope) :: [return]
   defp find_returns(behaviours, "", {fun, arity}) do
     for mod <- behaviours, Introspection.define_callback?(mod, fun, arity) do
       for return <- Introspection.get_returns_from_callback(mod, fun, arity) do
-        "#{return.description};return;#{return.spec};#{return.snippet}"
+        %{type: :return, description: return.description, spec: return.spec, snippet: return.snippet}
       end
     end |> List.flatten
   end
-  defp find_returns(_behaviours, _hint, _) do
+  defp find_returns(_behaviours, _hint, _module) do
     []
   end
 
+  @spec find_callbacks([module], String.t) :: [callback]
   defp find_callbacks(behaviours, hint) do
     behaviours |> Enum.flat_map(fn mod ->
       mod_name = mod |> Introspection.module_to_string
@@ -69,7 +109,7 @@ defmodule ElixirSense.Providers.Suggestion do
         [_, args_str] = Regex.run(~r/.\((.*)\)/, signature)
         args = args_str |> String.replace(~r/\s/, "")
         spec = spec |> String.replace(~r/\n/, "\\\\n")
-        "#{name}/#{arity};callback;#{args};#{mod_name};#{desc};#{spec}"
+        %{type: :callback, name: name, arity: arity, args: args, origin: mod_name, summary: desc, spec: spec}
       end
     end) |> Enum.sort
   end
