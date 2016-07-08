@@ -5,7 +5,7 @@ defmodule ElixirSense.Providers.Suggestion do
   alias Alchemist.Helpers.Complete
   alias ElixirSense.Core.Introspection
 
-  @type fun_arity :: {fun :: atom, arity :: non_neg_integer}
+  @type fun_arity :: {atom, non_neg_integer}
   @type scope :: module | fun_arity
 
   @type attribute :: %{
@@ -35,22 +35,46 @@ defmodule ElixirSense.Providers.Suggestion do
     spec: String.t
   }
 
-  @type suggestion :: attribute | variable | return | callback
+  @type func :: %{
+    type: :function,
+    name: String.t,
+    arity: non_neg_integer,
+    args: String.t,
+    origin: String.t,
+    summary: String.t,
+    spec: String.t
+  }
+
+  @type mod :: %{
+    type: :module,
+    name: String.t,
+    subtype: String.t,
+    summary: String.t
+  }
+
+  @type hint :: %{
+    type: :hint,
+    value: String.t
+  }
+
+  @type suggestion :: attribute
+                    | variable
+                    | return
+                    | callback
+                    | func
+                    | mod
+                    | hint
 
   @doc """
   Finds all suggestions based on the context
   """
   @spec find(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope) :: [suggestion]
   def find(hint, imports, aliases, vars, attributes, behaviours, scope) do
-    process([hint, "Elixir", imports, aliases, vars, attributes, behaviours, scope])
+    find_mods_and_funcs(hint, imports, aliases, vars, attributes, behaviours, scope)
   end
 
-  defp process([nil, _, imports, _, _, _, _]) do
-    Complete.run('', imports) ++ Complete.run('')
-    |> Enum.uniq
-  end
-
-  defp process([hint, _context, imports, aliases, vars, attributes, behaviours, scope]) do
+  @spec find_mods_and_funcs(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope) :: [hint | mod | func]
+  defp find_mods_and_funcs(hint, imports, aliases, vars, attributes, behaviours, scope) do
     Application.put_env(:"alchemist.el", :aliases, aliases)
 
     list1 = Complete.run(hint, imports)
@@ -58,7 +82,7 @@ defmodule ElixirSense.Providers.Suggestion do
     first_item = Enum.at(list2, 0)
 
     if first_item in [nil, ""] do
-      first_item = "#{hint};hint"
+      first_item = %{type: :hint, value: "#{hint}"}
     else
       list2 = List.delete_at(list2, 0)
     end

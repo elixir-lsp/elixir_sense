@@ -2,35 +2,39 @@ defmodule Alchemist.API.Comp do
 
   @moduledoc false
 
+  @spec request(String.t) :: no_return
   def request(args) do
     {{hint, buffer_file, line}, _} =  Code.eval_string(args)
     buffer = File.read!(buffer_file)
 
     ElixirSense.suggestions(hint, buffer, line)
-    |> Enum.each(&print_suggestion/1)
+    |> Enum.map(&format_suggestion/1)
+    |> Enum.each(&IO.puts/1)
     IO.puts "END-OF-COMP"
   end
 
-  def print_suggestion(%{type: :callback} = suggestion) do
-    %{name: name, arity: arity, args: args, origin: mod_name, summary: desc, spec: spec} = suggestion
-    IO.puts "#{name}/#{arity};callback;#{args};#{mod_name};#{desc};#{spec}"
+  defp format_suggestion(%{type: :variable, name: name}) do
+    "#{name};var"
   end
-
-  def print_suggestion(%{type: :return} = suggestion) do
-    %{description: description, spec: spec, snippet: snippet} = suggestion
-    IO.puts "#{description};return;#{spec};#{snippet}"
+  defp format_suggestion(%{type: :attribute, name: name}) do
+    "@#{name};attribute"
   end
-
-  def print_suggestion(%{type: :attribute, name: name}) do
-    IO.puts "@#{name};attribute"
+  defp format_suggestion(%{type: :hint, value: value}) do
+    "#{value};hint"
   end
-
-  def print_suggestion(%{type: :variable, name: name}) do
-    IO.puts "#{name};var"
+  defp format_suggestion(%{type: :module, name: name, subtype: subtype, summary: summary}) do
+    "#{name};module;#{subtype};#{summary}"
   end
-
-  def print_suggestion(suggestion) do
-    IO.puts suggestion
+  defp format_suggestion(%{type: :callback, name: name, arity: arity, args: args, origin: mod_name, summary: desc, spec: spec}) do
+    "#{name}/#{arity};callback;#{args};#{mod_name};#{desc};#{spec}"
   end
-
+  defp format_suggestion(%{type: :return, description: description, spec: spec, snippet: snippet}) do
+    "#{description};return;#{spec};#{snippet}"
+  end
+  defp format_suggestion(%{type: type, name: func, arity: arity, args: args, origin: mod_name, summary: summary, spec: spec}) do
+    "#{func}/#{arity};#{type};#{args};#{mod_name};#{summary};#{spec}"
+  end
+  defp format_suggestion(suggestion) do
+    suggestion
+  end
 end

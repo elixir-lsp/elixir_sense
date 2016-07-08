@@ -1,6 +1,6 @@
 defmodule Alchemist.Helpers.Complete do
 
-  @added_functions [{:__info__, 1}, {:module_info, 0}, {:module_info, 1}]
+  @builtin_functions [{:__info__, 1}, {:module_info, 0}, {:module_info, 1}]
 
   alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.Introspection
@@ -26,7 +26,7 @@ defmodule Alchemist.Helpers.Complete do
 
     case { status, result, list } do
       { :no, _, _ }  -> ''
-      { :yes, [], _ } -> List.insert_at(list, 0, '#{exp};hint')
+      { :yes, [], _ } -> List.insert_at(list, 0, %{type: :hint, value: "#{exp}"})
       { :yes, _, [] } -> run(code ++ result)
       { :yes, _,  _ } -> List.insert_at(run(code ++ result), 1, Enum.at(list, 0))
       #
@@ -37,7 +37,7 @@ defmodule Alchemist.Helpers.Complete do
     context_module = modules |> Enum.at(0)
 
     exported? = fn mod, f, a ->
-      !({f, a} in @added_functions) and (function_exported?(mod, f, a) or macro_exported?(mod, f, a))
+      !({f, a} in @builtin_functions) and (function_exported?(mod, f, a) or macro_exported?(mod, f, a))
     end
     accept_function = fn
       (mod, mod, _, _, _         ) -> true
@@ -58,13 +58,13 @@ defmodule Alchemist.Helpers.Complete do
           {_, _, :defmacro}  -> "macro"
           {m, m, :def}       -> "public_function"
           {_, _, :def}       -> "function"
-          {m, m, :undefined} -> if ({f, a} in @added_functions) or exported?.(module, f, a), do: "public_function", else: "private_function"
+          {m, m, :undefined} -> if ({f, a} in @builtin_functions) or exported?.(module, f, a), do: "public_function", else: "private_function"
           _                  -> "unknown"
         end
 
         func_name = Atom.to_string(f)
         mod_name = module |> Introspection.module_to_string
-        "#{func_name}/#{a};#{kind};#{fun_args};#{mod_name};#{desc};#{spec}"
+        %{type: kind, name: func_name, arity: a, args: fun_args, origin: mod_name, summary: desc, spec: spec}
       end
     end |> List.flatten
   end
@@ -131,7 +131,7 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp yes(hint, entries) do
-    {:yes, String.to_char_list(hint), Enum.map(entries, &String.to_char_list/1)}
+    {:yes, String.to_char_list(hint), entries}
   end
 
   defp no do
@@ -349,7 +349,7 @@ defmodule Alchemist.Helpers.Complete do
         functions = mod.__info__(:functions) |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end)
         macros ++ functions
       end
-      funs ++ (@added_functions |> Enum.map(fn {f,a} -> {f, a, :function, nil, nil } end))
+      funs ++ (@builtin_functions |> Enum.map(fn {f,a} -> {f, a, :function, nil, nil } end))
     else
       for {f, a} <- mod.module_info(:exports) do
         case f |> Atom.to_string do
@@ -369,11 +369,11 @@ defmodule Alchemist.Helpers.Complete do
   ## Ad-hoc conversions
 
   defp to_entries(%{kind: :module, name: name, desc: desc, subtype: subtype}) when subtype != nil do
-    ["#{name};module;#{subtype};#{desc}"]
+    [%{type: :module, name: name, subtype: subtype, summary: desc}]
   end
 
   defp to_entries(%{kind: :module, name: name, desc: desc}) do
-    ["#{name};module;;#{desc}"]
+    [%{type: :module, name: name, subtype: nil, summary: desc}]
   end
 
   defp to_entries(%{kind: :function, name: name, arities: arities, module: mod, func_kind: func_kind, docs: docs, specs: specs}) do
@@ -387,13 +387,8 @@ defmodule Alchemist.Helpers.Complete do
         _         -> "function"
       end
       mod_name = mod |> Introspection.module_to_string
-      "#{name}/#{a};#{kind};#{fun_args};#{mod_name};#{desc};#{spec}"
+      %{type: kind, name: name, arity: a, args: fun_args, origin: mod_name, summary: desc, spec: spec}
     end
-  end
-
-  #TODO: still needed?
-  defp to_entries(%{kind: :function, name: name, arities: arities}) do
-    for a <- :lists.sort(arities), do: "#{name}/#{a};function"
   end
 
   defp to_uniq_entries(%{kind: :module} = mod) do
