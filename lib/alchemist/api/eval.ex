@@ -9,9 +9,10 @@ defmodule Alchemist.API.Eval do
   alias ElixirSense.Core.Introspection
 
   def request(args) do
-    args
-    |> normalize
-    |> process
+    _no_return =
+      args
+      |> normalize
+      |> process
 
     IO.puts "END-OF-EVAL"
   end

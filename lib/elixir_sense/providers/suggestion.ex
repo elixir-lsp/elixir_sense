@@ -70,30 +70,38 @@ defmodule ElixirSense.Providers.Suggestion do
   """
   @spec find(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope) :: [suggestion]
   def find(hint, imports, aliases, vars, attributes, behaviours, scope) do
-    find_mods_and_funcs(hint, imports, aliases, vars, attributes, behaviours, scope)
-  end
-
-  @spec find_mods_and_funcs(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope) :: [hint | mod | func]
-  defp find_mods_and_funcs(hint, imports, aliases, vars, attributes, behaviours, scope) do
-    Application.put_env(:"alchemist.el", :aliases, aliases)
-
-    list1 = Complete.run(hint, imports)
-    list2 = Complete.run(hint)
-    first_item = Enum.at(list2, 0)
-
-    if first_item in [nil, ""] do
-      first_item = %{type: :hint, value: "#{hint}"}
-    else
-      list2 = List.delete_at(list2, 0)
-    end
+    %{hint: hint_suggestion, suggestions: mods_and_funcs} = find_hint_mods_funcs(hint, imports, aliases)
 
     callbacks_or_returns =
       case scope do
         {_f, _a} -> find_returns(behaviours, hint, scope)
         _mod   -> find_callbacks(behaviours, hint)
       end
-    full_list = [first_item] ++ callbacks_or_returns ++ find_attributes(attributes, hint) ++ find_vars(vars, hint) ++ list1 ++ list2
-    full_list |> Enum.uniq
+
+    [hint_suggestion]
+    |> Kernel.++(callbacks_or_returns)
+    |> Kernel.++(find_attributes(attributes, hint))
+    |> Kernel.++(find_vars(vars, hint))
+    |> Kernel.++(mods_and_funcs)
+    |> Enum.uniq
+  end
+
+  @spec find_hint_mods_funcs(String.t, [module], [{module, module}]) :: %{hint: hint, suggestions: [mod | func]}
+  defp find_hint_mods_funcs(hint, imports, aliases) do
+    Application.put_env(:"alchemist.el", :aliases, aliases)
+
+    list1 = Complete.run(hint, imports)
+    list2 = Complete.run(hint)
+
+    {hint_suggestion, suggestions} =
+      case List.first(list2) do
+        sug when sug in [nil, ""] ->
+          {%{type: :hint, value: "#{hint}"}, list1 ++ list2}
+        sug ->
+          {sug, list1 ++ List.delete_at(list2, 0)}
+      end
+
+    %{hint: hint_suggestion, suggestions: suggestions}
   end
 
   @spec find_vars([String.t], String.t) :: [variable]
