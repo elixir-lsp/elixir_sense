@@ -9,6 +9,9 @@ defmodule ElixirSense.Mixfile do
      start_permanent: Mix.env == :prod,
      test_coverage: [tool: ExCoveralls],
      preferred_cli_env: ["coveralls": :test, "coveralls.detail": :test, "coveralls.html": :test],
+     dialyzer: [
+       flags: ["-Wunmatched_returns", "-Werror_handling", "-Wrace_conditions", "-Wunderspecs", "-Wno_match"]
+     ],
      deps: deps()]
   end
 
