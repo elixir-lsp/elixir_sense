@@ -25,15 +25,15 @@ defmodule ElixirSense.Providers.Definition do
   @spec find(module, atom, [module], [{module, module}]) :: location
   def find(mod, fun, imports, aliases) do
     [mod, fun, imports, aliases]
-    |> process
-    |> post_process(fun)
+    |> find_file
+    |> find_line(fun)
   end
 
-  defp process([nil, function, [], []]) do
+  defp find_file([nil, function, [], []]) do
     look_for_kernel_functions(function)
   end
 
-  defp process([nil, function, imports, _aliases]) do
+  defp find_file([nil, function, imports, _aliases]) do
     module = Enum.filter(imports, &ModuleInfo.has_function?(&1, function))
     |> List.first
 
@@ -43,7 +43,7 @@ defmodule ElixirSense.Providers.Definition do
     end
   end
 
-  defp process([module, _function, _imports, aliases]) do
+  defp find_file([module, _function, _imports, aliases]) do
     if elixir_module?(module) do
       module
       |> Module.split
@@ -53,18 +53,18 @@ defmodule ElixirSense.Providers.Definition do
     end |> source
   end
 
-  defp post_process({_, file}, _fun) when file in ["non_existing", nil, ""] do
-    do_post_process("non_existing", nil)
+  defp find_line({_, file}, _fun) when file in ["non_existing", nil, ""] do
+    {"non_existing", nil}
   end
 
-  defp post_process({mod, file}, fun) do
+  defp find_line({mod, file}, fun) do
     line = if String.ends_with?(file, ".erl") do
       find_fun_line_in_erl_file(file, fun)
     else
       file_metadata = Parser.parse_file(file, false, false, nil)
       Metadata.get_function_line(file_metadata, mod, fun)
     end
-    do_post_process(file, line)
+    {file, line}
   end
 
   defp find_fun_line_in_erl_file(file, fun) do
@@ -77,9 +77,6 @@ defmodule ElixirSense.Providers.Definition do
 
     (index || 0) + 1
   end
-
-  defp do_post_process(file, nil), do: {file, nil}
-  defp do_post_process(file, line), do: {file, line}
 
   defp elixir_module?(module) do
     module == Module.concat(Elixir, module)
