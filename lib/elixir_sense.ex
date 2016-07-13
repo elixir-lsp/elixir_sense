@@ -80,7 +80,7 @@ defmodule ElixirSense do
       ...> end
       ...> '''
       iex> ElixirSense.signature("MyList.flatten(par0, par1, ", code, 3)
-      %{active_parameter: 2,
+      %{active_param: 2,
         signatures: [
           %{name: "flatten", params: ["list"]},
           %{name: "flatten", params: ["list", "tail"]}]}
