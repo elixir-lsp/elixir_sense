@@ -9,8 +9,8 @@ defmodule ElixirSense do
   alias ElixirSense.Providers.Signature
 
   @spec docs(String.t, String.t, pos_integer) :: String.t
-  def docs(expr, buffer, line) do
-    metadata = Parser.parse_string(buffer, true, true, line)
+  def docs(expr, code, line) do
+    metadata = Parser.parse_string(code, true, true, line)
     %State.Env{
       imports: imports,
       aliases: aliases
@@ -20,8 +20,8 @@ defmodule ElixirSense do
   end
 
   @spec find_definition(module, atom, String.t, pos_integer) :: Definition.location
-  def find_definition(mod, fun, buffer, line) do
-    buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
+  def find_definition(mod, fun, code, line) do
+    buffer_file_metadata = Parser.parse_string(code, true, true, line)
     %State.Env{
       imports: imports,
       aliases: aliases,
@@ -31,8 +31,9 @@ defmodule ElixirSense do
     Definition.find(mod, fun, [module|imports], aliases)
   end
 
-  def suggestions(hint, buffer, line) do
-    buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
+  @spec suggestions(String.t, String.t, non_neg_integer) :: [Suggestion.suggestion]
+  def suggestions(hint, code, line) do
+    buffer_file_metadata = Parser.parse_string(code, true, true, line)
     %State.Env{
       imports: imports,
       aliases: aliases,
@@ -47,8 +48,8 @@ defmodule ElixirSense do
   end
 
   @spec find_signature(String.t, String.t, pos_integer) :: Signature.signature_info
-  def find_signature(prefix, buffer, line) do
-    buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
+  def find_signature(prefix, code, line) do
+    buffer_file_metadata = Parser.parse_string(code, true, true, line)
     %State.Env{
       imports: imports,
       aliases: aliases,

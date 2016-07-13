@@ -1,6 +1,8 @@
 defmodule ElixirSense.Providers.Suggestion do
 
-  @moduledoc false
+  @moduledoc """
+  Provider responsible for finding suggestions for auto-completing
+  """
 
   alias Alchemist.Helpers.Complete
   alias ElixirSense.Core.Introspection
@@ -66,7 +68,15 @@ defmodule ElixirSense.Providers.Suggestion do
                     | hint
 
   @doc """
-  Finds all suggestions based on the context
+  Finds all suggestions based on context info.
+
+  ## Examples
+
+      iex> Suggestion.find("Stri", [], [], [], [], [], nil)
+      [%{type: :hint, value: "String"},
+       %{name: "String", subtype: nil, summary: "A String in Elixir is a UTF-8 encoded binary.", type: :module},
+       %{name: "StringIO", subtype: nil, summary: "Controls an IO device process that wraps a string.", type: :module}]
+
   """
   @spec find(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope) :: [suggestion]
   def find(hint, imports, aliases, vars, attributes, behaviours, scope) do

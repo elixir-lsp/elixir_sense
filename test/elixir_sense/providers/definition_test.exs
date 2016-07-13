@@ -53,10 +53,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert Definition.find(:erlang, nil, [], []) == {"non_existing", nil}
   end
 
-  test "erlang modules from deps" do
-    {file, line} = Definition.find(:hackney, nil, [], [])
-    assert file =~ "deps/hackney/src/hackney.erl"
-    assert line == 1
+  # Call this when running `mix test`, but not when running `elixir run_test.exs`
+  if Process.whereis(Elixir.Mix.Supervisor) do
+    test "erlang modules from deps" do
+      {file, line} = Definition.find(:hackney, nil, [], [])
+      assert file =~ "deps/hackney/src/hackney.erl"
+      assert line == 1
+    end
   end
 
   test "find the related module when searching for built-in functions" do

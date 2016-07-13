@@ -3,6 +3,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
   use ExUnit.Case
   alias ElixirSense.Providers.Suggestion
 
+  doctest Suggestion
+
   defmodule MyModule do
     def say_hi, do: true
   end
