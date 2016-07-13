@@ -1,6 +1,10 @@
 defmodule ElixirSense.Providers.Definition do
 
-  @moduledoc false
+  @moduledoc """
+  Provides a function to find out where symbols are defined.
+
+  Currently finds definition of modules, functions and macros.
+  """
 
   alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.Metadata
@@ -10,6 +14,14 @@ defmodule ElixirSense.Providers.Definition do
   @type line :: pos_integer
   @type location :: {file, line | nil}
 
+  @doc """
+  Finds out where a module, function or macro was defined.
+
+  ## Examples
+    iex> {file, line} = Definition.find(MyString, nil, [], [{MyString, String}])
+    iex> {Path.basename(file), line}
+    {"string.ex", 3}
+  """
   @spec find(module, atom, [module], [{module, module}]) :: location
   def find(mod, fun, imports, aliases) do
     [mod, fun, imports, aliases]

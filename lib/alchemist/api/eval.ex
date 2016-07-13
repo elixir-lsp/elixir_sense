@@ -21,7 +21,7 @@ defmodule Alchemist.API.Eval do
     buffer = File.read!(buffer_file)
     prefix = File.read!(file)
 
-    case ElixirSense.find_signature(prefix, buffer, line) do
+    case ElixirSense.signature(prefix, buffer, line) do
       %{active_parameter: npar, signatures: signatures} ->
         IO.puts "#{npar}"
         IO.puts format_signatures(signatures)

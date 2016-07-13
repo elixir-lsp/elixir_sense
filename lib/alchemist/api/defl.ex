@@ -8,7 +8,7 @@ defmodule Alchemist.API.Defl do
     buffer = File.read!(buffer_file)
 
     path =
-      case ElixirSense.find_definition(mod, fun, buffer, line) do
+      case ElixirSense.definition(mod, fun, buffer, line) do
         {file, nil}  -> file
         {file, line} -> "#{file}:#{line}"
       end

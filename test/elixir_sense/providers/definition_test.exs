@@ -3,6 +3,8 @@ defmodule ElixirSense.Providers.DefinitionTest do
   use ExUnit.Case
   alias ElixirSense.Providers.Definition
 
+  doctest Definition
+
   test "find definition of functions from Kernel" do
       {file, line} = Definition.find(nil, :defmodule, [], [])
       assert file =~ "lib/elixir/lib/kernel.ex"
