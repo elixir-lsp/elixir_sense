@@ -42,7 +42,6 @@ defmodule ElixirSense.Providers.Definition do
   end
 
   defp post_process({_, file}, _fun) when file in ["non_existing", nil, ""] do
-    #TODO: Replace non_existing => not_available
     do_post_process("non_existing", nil)
   end
 

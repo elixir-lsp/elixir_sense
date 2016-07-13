@@ -49,6 +49,16 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert Definition.find(SilverBulletModule, :run, [], []) == {"non_existing", nil}
   end
 
+  test "preloaded modules" do
+    assert Definition.find(:erlang, nil, [], []) == {"non_existing", nil}
+  end
+
+  test "erlang modules from deps" do
+    {file, line} = Definition.find(:hackney, nil, [], [])
+    assert file =~ "deps/hackney/src/hackney.erl"
+    assert line == 1
+  end
+
   test "find the related module when searching for built-in functions" do
     {file, line} = Definition.find(List, :module_info, [], [])
     assert file =~ "lib/elixir/lib/list.ex"

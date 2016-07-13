@@ -34,7 +34,4 @@ defmodule Alchemist.API.Comp do
   defp format_suggestion(%{type: type, name: func, arity: arity, args: args, origin: mod_name, summary: summary, spec: spec}) do
     "#{func}/#{arity};#{type};#{args};#{mod_name};#{summary};#{spec}"
   end
-  defp format_suggestion(suggestion) do
-    suggestion
-  end
 end
