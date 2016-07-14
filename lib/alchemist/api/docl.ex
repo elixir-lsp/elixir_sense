@@ -9,8 +9,21 @@ defmodule Alchemist.API.Docl do
     {{expr, buffer_file, line}, _} = Code.eval_string(args)
     buffer = File.read!(buffer_file)
 
-    IO.puts ElixirSense.docs(expr, buffer, line)
+    ElixirSense.docs(expr, buffer, line)
+    |> format_docs
+    |> IO.puts
+
     IO.puts "END-OF-DOCL"
+  end
+
+  # Docs for modules
+  defp format_docs(%{docs: docs, types: types, callbacks: callbacks}) do
+    docs <> "\u000B" <> types <> "\u000B" <> callbacks
+  end
+
+  # Docs for functions
+  defp format_docs(%{docs: docs, types: types}) do
+    docs <> "\u000B" <> types
   end
 
 end

@@ -3,7 +3,7 @@ defmodule ElixirSense.Providers.Docs do
   alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.Introspection
 
-  @spec all(String.t, [module], [{module, module}]) :: String.t
+  @spec all(String.t, [module], [{module, module}]) :: Introspection.docs
   def all(expr, modules, aliases) do
     search(expr, modules, aliases)
   end
@@ -11,7 +11,7 @@ defmodule ElixirSense.Providers.Docs do
   defp search(nil), do: true
   defp search(expr) do
     {module, function} = Introspection.split_mod_func_call(expr)
-    Introspection.get_docs_md(module, function)
+    Introspection.get_all_docs(module, function)
   end
 
   defp search(expr, modules, []) do

@@ -10,12 +10,18 @@ defmodule ElixirSense.Core.Introspection do
 
   alias Kernel.Typespec
 
+  @type markdown :: String.t
+  @type mod_docs :: %{docs: markdown, types: markdown, callbacks: markdown}
+  @type fun_docs :: %{docs: markdown, types: markdown}
+  @type docs :: mod_docs | fun_docs
+
   @wrapped_behaviours %{
     :gen_server  => GenServer,
     :gen_event   => GenEvent
   }
 
-  def get_docs_md(mod, nil) do
+  @spec get_all_docs(mod :: module, fun :: atom | nil) :: docs
+  def get_all_docs(mod, nil) do
     mod_str = module_to_string(mod)
     title = "> #{mod_str}\n\n"
     body = case Code.get_docs(mod, :moduledoc) do
@@ -24,11 +30,10 @@ defmodule ElixirSense.Core.Introspection do
       {_line, doc} ->
         doc
     end
-
-    title <> body <> "\u000B" <> get_types_md(mod) <> "\u000B" <> get_callbacks_md(mod)
+    %{docs: title <> body, types: get_types_md(mod), callbacks: get_callbacks_md(mod)}
   end
 
-  def get_docs_md(mod, fun) do
+  def get_all_docs(mod, fun) do
     docs = Code.get_docs(mod, :docs)
     funcs_str =
       for {{f, arity}, _, _, args, text} <- docs, f == fun do
@@ -38,7 +43,7 @@ defmodule ElixirSense.Core.Introspection do
         "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity)}#{text}"
       end |> Enum.join("\n\n____\n\n")
 
-    funcs_str <> "\u000B" <> get_types_md(mod)
+    %{docs: funcs_str, types: get_types_md(mod)}
   end
 
   def get_signatures(mod, fun) do

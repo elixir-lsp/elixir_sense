@@ -7,12 +7,29 @@ defmodule ElixirSense do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
+  alias ElixirSense.Core.Introspection
   alias ElixirSense.Providers.Docs
   alias ElixirSense.Providers.Definition
   alias ElixirSense.Providers.Suggestion
   alias ElixirSense.Providers.Signature
 
-  @spec docs(String.t, String.t, pos_integer) :: String.t
+  @doc ~S"""
+    Returns all documentation related the module or function.
+
+    ## Examples
+
+      iex> code = ~S'''
+      ...> defmodule MyModule do
+      ...>   alias Enum, as: MyEnum
+      ...>
+      ...> end
+      ...> '''
+      iex> ElixirSense.docs("MyEnum.to_list", code, 3) |> Map.get(:docs) |> String.split("\n") |> Enum.at(6)
+      "Converts `enumerable` to a list."
+      iex> ElixirSense.docs("Enum.to_list", code, 3) |> Map.get(:types) |> String.split("\n") |> Enum.at(0)
+      "  `@type t :: Enumerable.t"
+  """
+  @spec docs(String.t, String.t, pos_integer) :: Introspection.docs
   def docs(expr, code, line) do
     metadata = Parser.parse_string(code, true, true, line)
     %State.Env{
