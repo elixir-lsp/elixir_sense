@@ -1,24 +1,27 @@
 requires = [
-  "lib/elixir_sense/core/introspection.ex",
-  "lib/elixir_sense/core/ast.ex",
-  "lib/elixir_sense/core/state.ex",
-  "lib/elixir_sense/core/metadata_builder.ex",
-  "lib/elixir_sense/core/metadata.ex",
-  "lib/elixir_sense/core/parser.ex",
-  "lib/elixir_sense/core/source.ex",
-  "lib/alchemist/helpers/module_info.ex",
-  "lib/alchemist/helpers/complete.ex",
-  "lib/elixir_sense/providers/definition.ex",
-  "lib/elixir_sense/providers/docs.ex",
-  "lib/elixir_sense/providers/suggestion.ex",
-  "lib/elixir_sense/providers/signature.ex",
-  "lib/elixir_sense.ex",
-  "lib/alchemist/api/comp.ex",
-  "lib/alchemist/api/defl.ex",
-  "lib/alchemist/api/docl.ex",
-  "lib/alchemist/api/eval.ex",
+  "elixir_sense/core/introspection.ex",
+  "elixir_sense/core/ast.ex",
+  "elixir_sense/core/state.ex",
+  "elixir_sense/core/metadata_builder.ex",
+  "elixir_sense/core/metadata.ex",
+  "elixir_sense/core/parser.ex",
+  "elixir_sense/core/source.ex",
+  "alchemist/helpers/module_info.ex",
+  "alchemist/helpers/complete.ex",
+  "elixir_sense/providers/definition.ex",
+  "elixir_sense/providers/docs.ex",
+  "elixir_sense/providers/suggestion.ex",
+  "elixir_sense/providers/signature.ex",
+  "elixir_sense.ex",
+  "alchemist/api/comp.ex",
+  "alchemist/api/defl.ex",
+  "alchemist/api/docl.ex",
+  "alchemist/api/eval.ex",
+  "alchemist/server.ex"
 ]
 
 requires |> Enum.each(fn file ->
-  Code.require_file(file, __DIR__)
+  Code.require_file("lib/#{file}", __DIR__)
 end)
+
+Alchemist.Server.start([System.argv])
