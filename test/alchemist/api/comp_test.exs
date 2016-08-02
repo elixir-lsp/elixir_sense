@@ -88,8 +88,9 @@ defmodule Alchemist.API.CompTest do
 
   test "COMP request lists attributes" do
     assert capture_io(fn ->
-      Comp.request(~s({"", "#{fixture("my_module.ex")}", 5}))
+      Comp.request(~s({"@", "#{fixture("my_module.ex")}", 5}))
     end) =~ """
+    @;hint
     @my_attribute;attribute
     """
   end
