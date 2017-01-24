@@ -11,13 +11,13 @@ defmodule Alchemist.API.DeflTest do
   test "DEFL request prints file:line" do
     assert capture_io(fn ->
       Defl.request(~s({"nil,defmodule", "some_path", "#{fixture("my_module.ex")}", 1}))
-    end) =~ "lib/elixir/lib/kernel.ex:3068"
+    end) =~ "lib/elixir/lib/kernel.ex:3"
   end
 
   test "DEFL request prints only file when no line is returned" do
     assert capture_io(fn ->
       Defl.request(~s({"List,module_info", "some_path", "#{fixture("my_module.ex")}", 1}))
-    end) =~ "lib/elixir/lib/list.ex"    
+    end) =~ "lib/elixir/lib/list.ex"
   end
 
 end

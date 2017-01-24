@@ -6,33 +6,33 @@ defmodule ElixirSense.Providers.DefinitionTest do
   doctest Definition
 
   test "find definition of functions from Kernel" do
-      {file, line} = Definition.find(nil, :defmodule, [], [])
-      assert file =~ "lib/elixir/lib/kernel.ex"
-      assert line == 3068
+    {file, line} = Definition.find(nil, :defmodule, [], [])
+    assert file =~ "lib/elixir/lib/kernel.ex"
+    assert read_line(file, line) =~ "defmacro defmodule"
   end
 
   test "find definition of functions from Kernel.SpecialForms" do
     {file, line} = Definition.find(nil, :import, [], [])
     assert file =~ "lib/elixir/lib/kernel/special_forms.ex"
-    assert line == 644
+    assert read_line(file, line) =~ "defmacro import"
   end
 
   test "find definition of functions from imports" do
     {file, line} = Definition.find(nil, :create_file, [Mix.Generator], [])
     assert file =~ "lib/mix/lib/mix/generator.ex"
-    assert line == 25
+    assert read_line(file, line) =~ "def create_file"
   end
 
   test "find definition of functions from aliased modules" do
     {file, line} = Definition.find(MyList, :flatten, [], [{MyList, List}])
     assert file =~ "lib/elixir/lib/list.ex"
-    assert line == 94
+    assert read_line(file, line) =~ "def flatten"
   end
 
   test "find definition of modules" do
     {file, line} = Definition.find(String, nil, [], [{MyList, List}])
     assert file =~ "lib/elixir/lib/string.ex"
-    assert line == 3
+    assert read_line(file, line) =~ "defmodule String"
   end
 
   test "find definition of erlang modules" do
@@ -44,7 +44,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
   test "find definition of remote erlang functions" do
     {file, line} = Definition.find(:lists, :duplicate, [], [])
     assert file =~ "/src/lists.erl"
-    assert line == 303
+    assert read_line(file, line) =~ "duplicate(N, X)"
   end
 
   test "non existing modules" do
@@ -68,6 +68,14 @@ defmodule ElixirSense.Providers.DefinitionTest do
     {file, line} = Definition.find(List, :module_info, [], [])
     assert file =~ "lib/elixir/lib/list.ex"
     assert line == nil
+  end
+
+  defp read_line(file, line) do
+    file
+    |> File.read!
+    |> String.split(["\n", "\r\n"])
+    |> Enum.at(line-1)
+    |> String.trim
   end
 
 end
