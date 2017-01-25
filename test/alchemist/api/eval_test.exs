@@ -122,14 +122,23 @@ defmodule Alchemist.API.EvalTest do
       )
       """
 
-      assert expanded_all =~ """
-      (
-        require(Application)
+      if (Version.match?(System.version, ">=1.4.0")) do
+        assert expanded_all =~ """
         (
-          Module.put_attribute(MyModule, :behaviour, Application)
-          Module.put_attribute(MyModule, :doc, {0, false}, [{MyModule, :__MODULE__, 0, [file: \"lib/alchemist/api/eval.ex\", line: 0]}])
-      """
-
+          require(Application)
+          (
+            Module.put_attribute(MyModule, :behaviour, Application, nil, nil)
+            Module.put_attribute(MyModule, :doc, {0, false}, [{MyModule, :__MODULE__, 0, [file: \"lib/alchemist/api/eval.ex\", line: 0]}], nil)
+        """
+      else
+        assert expanded_all =~ """
+        (
+          require(Application)
+          (
+            Module.put_attribute(MyModule, :behaviour, Application)
+            Module.put_attribute(MyModule, :doc, {0, false}, [{MyModule, :__MODULE__, 0, [file: \"lib/alchemist/api/eval.ex\", line: 0]}])
+        """
+      end
     end
 
     test "EVAL request expand full with error" do
