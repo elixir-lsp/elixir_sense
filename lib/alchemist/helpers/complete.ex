@@ -265,7 +265,7 @@ defmodule Alchemist.Helpers.Complete do
       subtype = Introspection.get_module_subtype(mod_as_atom)
       %{kind: :module, type: :elixir, name: Enum.at(parts, depth-1), desc: desc, subtype: subtype}
     end
-    |> Enum.uniq(fn %{name: name} -> name end)
+    |> Enum.uniq_by(fn %{name: name} -> name end)
   end
 
   ## Helpers
