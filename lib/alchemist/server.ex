@@ -1,6 +1,7 @@
 defmodule Alchemist.Server do
 
-  @version "0.1.0-beta"
+  # v0.1.0-beta
+
   @minimal_reload_time 2000
 
   @moduledoc """
