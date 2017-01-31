@@ -145,7 +145,7 @@ defmodule Alchemist.API.EvalTest do
       output = capture_io(fn ->
         Eval.request(~s({:expand_full, "#{fixture("my_module.ex")}", "#{fixture("eval_expand_full_error.txt")}", 2}))
       end)
-      [expanded_once, expanded, expanded_partial] = String.split(output, "\u000B")
+      [expanded_once, expanded, expanded_partial, expanded_all] = String.split(output, "\u000B")
 
       assert expanded_once =~ """
       {2, "missing terminator: } (for \\"{\\" starting at line 1)", ""}
@@ -156,7 +156,11 @@ defmodule Alchemist.API.EvalTest do
       """
 
       assert expanded_partial =~ """
-      %FunctionClauseError{arity: 4, function: :do_traverse_args, module: Macro}
+      {2, "missing terminator: } (for \\"{\\" starting at line 1)", ""}
+      """
+
+      assert expanded_all =~ """
+      {2, "missing terminator: } (for \\"{\\" starting at line 1)", ""}
       """
     end
 
