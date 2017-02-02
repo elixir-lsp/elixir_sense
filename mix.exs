@@ -21,6 +21,7 @@ defmodule ElixirSense.Mixfile do
 
   defp deps do
     [{:excoveralls, "~> 0.6", only: :test},
-    {:dialyxir, "~> 0.4", only: [:dev]}]
+    {:dialyxir, "~> 0.4", only: [:dev]},
+    {:ex_doc, "~> 0.14", only: [:dev]}]
   end
 end
