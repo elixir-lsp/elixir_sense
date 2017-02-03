@@ -5,16 +5,16 @@ defmodule Alchemist.Helpers.Complete do
   alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.Introspection
 
-  @moduledoc """
-  This Alchemist.Completer holds a codebase copy of the
-  IEx.Autocomplete because for the use of context specific
-  aliases.
+  @moduledoc false
 
-  With the release of Elixir v1.1 the IEx.Autocomplete will
-  look for aliases in a certain environment variable
-  `Application.get_env(:iex, :autocomplete_server)` and until
-  then we'll use our own autocomplete codebase.
-  """
+  # This Alchemist.Completer holds a codebase copy of the
+  # IEx.Autocomplete because for the use of context specific
+  # aliases.
+  #
+  # With the release of Elixir v1.1 the IEx.Autocomplete will
+  # look for aliases in a certain environment variable
+  # `Application.get_env(:iex, :autocomplete_server)` and until
+  # then we'll use our own autocomplete codebase.
 
   def run(exp) do
     code = case is_bitstring(exp) do

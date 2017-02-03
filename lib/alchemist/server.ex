@@ -4,17 +4,17 @@ defmodule Alchemist.Server do
 
   @minimal_reload_time 2000
 
-  @moduledoc """
-  The Alchemist-Server operates as an informant for a specific desired
-  Elixir Mix project and serves with informations as the following:
-
-    * Completion for Modules and functions.
-    * Documentation lookup for Modules and functions.
-    * Code evaluation and quoted representation of code.
-    * Definition lookup of code.
-    * Listing of all available Mix tasks.
-    * Listing of all available Modules with documentation.
-  """
+  @moduledoc false
+  
+  # The Alchemist-Server operates as an informant for a specific desired
+  # Elixir Mix project and serves with informations as the following:
+  #
+  #   * Completion for Modules and functions.
+  #   * Documentation lookup for Modules and functions.
+  #   * Code evaluation and quoted representation of code.
+  #   * Definition lookup of code.
+  #   * Listing of all available Mix tasks.
+  #   * Listing of all available Modules with documentation.
 
   alias Alchemist.API
 

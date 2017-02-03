@@ -1,7 +1,10 @@
 defmodule ElixirSense do
 
   @moduledoc """
-  Provides the most common functions for most editors/tools.
+  ElxirSense is a Elixir library that implements useful features for any editor/tool that needs
+  to introspect context-aware information about Elixir source code.
+
+  This module provides the basic functionality for context-aware code completion, docs, signature info and more.
   """
 
   alias ElixirSense.Core.State
@@ -15,14 +18,14 @@ defmodule ElixirSense do
   alias ElixirSense.Providers.Expand
 
   @doc ~S"""
-    Returns all documentation related the module or function.
+  Returns all documentation related a module or function, including types and callback information.
 
-    ## Examples
+  ## Example
 
-      iex> code = ~S'''
+      iex> code = '''
       ...> defmodule MyModule do
       ...>   alias Enum, as: MyEnum
-      ...>
+      ...>   MyEnum.to_list(1..3)
       ...> end
       ...> '''
       iex> ElixirSense.docs("MyEnum.to_list", code, 3) |> Map.get(:docs) |> String.split("\n") |> Enum.at(6)
@@ -41,6 +44,22 @@ defmodule ElixirSense do
     Docs.all(expr, imports, aliases)
   end
 
+  @doc ~S"""
+  Returns the location (file and line) where a module, function or macro was defined.
+
+  ## Example
+
+      iex> code = '''
+      ...> defmodule MyModule do
+      ...>   alias Enum, as: MyEnum
+      ...>   MyEnum.to_list(1..3)
+      ...> end
+      ...> '''
+      iex> {path, line} = ElixirSense.definition(MyEnum, :to_list, code, 3)
+      iex> file = path |> Path.basename
+      iex> file <> ":" <> to_string(line)
+      "enum.ex:2523"
+  """
   @spec definition(module, atom, String.t, pos_integer) :: Definition.location
   def definition(mod, fun, code, line) do
     buffer_file_metadata = Parser.parse_string(code, true, true, line)
@@ -54,14 +73,28 @@ defmodule ElixirSense do
   end
 
   @doc """
-    Finds all suggestions given a hint, the code buffer and the line where the cursor is positioned.
+  Finds suggestions by a given hint.
 
-    ## Examples
+  Returned suggestions:
 
-      iex> code = ~S'''
+    * Modules, functions, variables, function params and module attributes available in the current scope.
+    * Callbacks defined in behaviours (works also when @behaviour is injected by use directives)
+    * Lists the accepted "returns" specs when inside a callback implementation
+
+  Additional information:
+
+    * Type of the module (Module, Struct, Protocol, Implementation or Exception)
+    * Documentation summary for each module or function
+    * Function and callback specs
+    * Origin: where the function was originally defined (for aliased, imported modules or callbacks)
+    * Smart snippets for functions
+
+  ## Example
+
+      iex> code = '''
       ...> defmodule MyModule do
       ...>   alias List, as: MyList
-      ...>
+      ...>   MyList.fi
       ...> end
       ...> '''
       iex> ElixirSense.suggestions("MyList.fi", code, 3)
@@ -88,13 +121,14 @@ defmodule ElixirSense do
   end
 
   @doc """
-    Returns the signature info from the function when inside a function call.
+  Returns the signature info from the function when inside a function call.
 
-    ## Examples
+  ## Example
+
       iex> code = ~S'''
       ...> defmodule MyModule do
       ...>   alias List, as: MyList
-      ...>
+      ...>   MyList.flatten(par0,
       ...> end
       ...> '''
       iex> ElixirSense.signature("MyList.flatten(par0, ", code, 3)
@@ -123,7 +157,7 @@ defmodule ElixirSense do
     * `expand_once` - Calls `Macro.expand_once/2`
     * `expand` - Calls `Macro.expand/2`
     * `expand_all` - Recursively calls `Macro.expand/2`
-    * `expand_partial` - The same as `expand_all` but do not expand `:def, :defp, :defmodule, :@, :defmacro,
+    * `expand_partial` - The same as `expand_all`, but does not expand `:def, :defp, :defmodule, :@, :defmacro,
     :defmacrop, :defoverridable, :__ENV__, :__CALLER__, :raise, :if, :unless, :in`
 
   > **Notice**: In order to expand the selected code properly, ElixirSense parses/expands the source file and tries to introspect context information

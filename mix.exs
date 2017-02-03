@@ -12,7 +12,9 @@ defmodule ElixirSense.Mixfile do
      dialyzer: [
        flags: ["-Wunmatched_returns", "-Werror_handling", "-Wrace_conditions", "-Wunderspecs", "-Wno_match"]
      ],
-     deps: deps()]
+     deps: deps(),
+     docs: docs()
+   ]
   end
 
   def application do
@@ -24,4 +26,9 @@ defmodule ElixirSense.Mixfile do
     {:dialyxir, "~> 0.4", only: [:dev]},
     {:ex_doc, "~> 0.14", only: [:dev]}]
   end
+
+  defp docs do
+    [main: "ElixirSense"]
+  end
+
 end
