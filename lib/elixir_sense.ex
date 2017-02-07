@@ -16,6 +16,7 @@ defmodule ElixirSense do
   alias ElixirSense.Providers.Suggestion
   alias ElixirSense.Providers.Signature
   alias ElixirSense.Providers.Expand
+  alias ElixirSense.Providers.Eval
 
   @doc ~S"""
   Returns all documentation related a module or function, including types and callback information.
@@ -232,6 +233,22 @@ defmodule ElixirSense do
     } = Metadata.get_env(buffer_file_metadata, line)
 
     Expand.expand_full(code, requires, imports, module)
+  end
+
+  @doc ~S"""
+  Evaluate a pattern matching expression and returns its bindings, if any.
+
+  ## Example
+
+      iex> code = '''
+      ...>   {_, %{status: status, msg: message}, [arg1|_]} = {:error, %{status: 404, msg: "Not found"}, [1,2,3]}
+      ...> '''
+      iex> ElixirSense.match(code)
+      [status: 404, message: "Not found", arg1: 1]
+  """
+  @spec match(String.t) :: Eval.bindings
+  def match(code) do
+    Eval.match(code)
   end
 
 end
