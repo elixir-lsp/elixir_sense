@@ -599,7 +599,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> Code.string_to_quoted
       |> MetadataBuilder.build
 
-    line_number = Map.get(acc.mods_funs_to_lines, {module, func, arity})
+    %{lines: lines} = Map.get(acc.mods_funs_to_lines, {module, func, arity})
+    line_number = List.last(lines)
 
     File.read!(file) |> String.split("\n") |> Enum.at(line_number-1)
   end

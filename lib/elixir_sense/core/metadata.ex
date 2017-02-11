@@ -17,7 +17,14 @@ defmodule ElixirSense.Core.Metadata do
   def get_function_line(%__MODULE__{} = metadata, module, function) do
     case Map.get(metadata.mods_funs_to_lines, {module, function, nil}) do
       nil -> get_function_line_using_docs(module, function)
-      line -> line
+      %{lines: lines} -> List.last(lines)
+    end
+  end
+
+  def get_function_info(%__MODULE__{} = metadata, module, function) do
+    case Map.get(metadata.mods_funs_to_lines, {module, function, nil}) do
+      nil -> get_function_line_using_docs(module, function)
+      info -> info
     end
   end
 
