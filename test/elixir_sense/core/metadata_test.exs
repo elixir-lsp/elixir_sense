@@ -27,17 +27,11 @@ defmodule ElixirSense.Core.MetadataTest do
       end
       """
 
-      metadata = Parser.parse_string(code, true, true, 0)
-      params =
-        Metadata.get_function_info(metadata, MyModule, :func)
-        |> Map.get(:params)
-        |> Enum.reverse
+    params =
+      Parser.parse_string(code, true, true, 0)
+      |> Metadata.get_function_params(MyModule, :func)
 
-      params_list = Enum.map(params, fn param ->
-        Macro.to_string(param) |> String.slice(1..-2)
-      end)
-
-    assert params_list == [
+    assert params == [
       "1",
       "par1",
       "par1, {a, _b} = par2",

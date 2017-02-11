@@ -28,6 +28,17 @@ defmodule ElixirSense.Core.Metadata do
     end
   end
 
+  def get_function_params(%__MODULE__{} = metadata, module, function) do
+    params =
+      get_function_info(metadata, module, function)
+      |> Map.get(:params)
+      |> Enum.reverse
+
+    Enum.map(params, fn param ->
+      Macro.to_string(param) |> String.slice(1..-2)
+    end)
+  end
+
   defp get_function_line_using_docs(module, function) do
     docs = Code.get_docs(module, :docs)
 
