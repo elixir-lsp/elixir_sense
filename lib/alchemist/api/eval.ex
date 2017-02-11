@@ -64,7 +64,7 @@ defmodule Alchemist.API.Eval do
 
   defp format_signatures(signatures) do
     for %{name: name, params: params} <- signatures do
-      fun_args_text = params |> Enum.join(",") |> String.replace("\\\\", "\\\\\\\\")
+      fun_args_text = params |> Enum.join(",")
       "#{name};#{fun_args_text}"
     end |> Enum.join("\n")
   end
