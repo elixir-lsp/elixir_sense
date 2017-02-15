@@ -5,7 +5,7 @@ defmodule ElixirSense.Core.MetadataTest do
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Metadata
 
-  test "params" do
+  test "get_function_params" do
     code =
       """
       defmodule MyModule do
@@ -36,6 +36,55 @@ defmodule ElixirSense.Core.MetadataTest do
       "par1",
       "par1, {a, _b} = par2",
       "[head | _], par2"
+    ]
+  end
+
+  test "get_function_signatures" do
+    code =
+      """
+      defmodule MyModule do
+        defp func(par) do
+          IO.inspect par
+        end
+
+        defp func([] = my_list) do
+          IO.inspect my_list
+        end
+
+        defp func(par1 = {a, _}, {_b, _c} = par2) do
+          IO.inspect {a, par2}
+        end
+
+        defp func([head|_], par2) do
+          IO.inspect head <> par2
+        end
+
+        defp func(par1, [head|_]) do
+          IO.inspect {par1, head}
+        end
+
+        defp func("a_string", par2) do
+          IO.inspect par2
+        end
+
+        defp func({_, _, _}, optional \\\\ true) do
+          IO.inspect optional
+        end
+      end
+      """
+
+    signatures =
+      Parser.parse_string(code, true, true, 0)
+      |> Metadata.get_function_signatures(MyModule, :func)
+
+    assert signatures == [
+      %{name: "func", params: ["par"]},
+      %{name: "func", params: ["my_list"]},
+      %{name: "func", params: ["par1", "par2"]},
+      %{name: "func", params: ["list", "par2"]},
+      %{name: "func", params: ["par1", "list"]},
+      %{name: "func", params: ["arg1", "par2"]},
+      %{name: "func", params: ["tuple", "optional \\\\ true"]}
     ]
   end
 

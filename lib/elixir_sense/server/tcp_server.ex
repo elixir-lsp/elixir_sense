@@ -58,7 +58,8 @@ defmodule ElixirSense.Server.TCPServer do
 
   def process_request(data) do
     %{ "request" => request, "payload" => payload } = :erlang.binary_to_term(data)
-    dispatch_request(request, payload)
+    request
+    |> dispatch_request(payload)
     |> :erlang.term_to_binary
   end
 
