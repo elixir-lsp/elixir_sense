@@ -121,8 +121,6 @@ defmodule ElixirSense.Core.Introspection do
     doc
     |> String.split("\n\n")
     |> Enum.at(0)
-    |> String.replace(~r/\n/, "\\\\n")
-    |> String.replace(";", "\\;")
   end
 
   defp format_type({:opaque, type}) do

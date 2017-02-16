@@ -69,14 +69,9 @@ defmodule ElixirSense.Providers.Signature do
   end
 
   defp look_for_imported_functions(nil, function, imports) do
-    module =
-      imports
-      |> Enum.filter(&ModuleInfo.has_function?(&1, function))
-      |> List.first
-
-    case module do
+    case imports |> Enum.find(&ModuleInfo.has_function?(&1, function)) do
       nil -> {nil, nil}
-      _   -> {module, function}
+      module  -> {module, function}
     end
   end
 

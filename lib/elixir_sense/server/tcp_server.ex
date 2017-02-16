@@ -67,6 +67,10 @@ defmodule ElixirSense.Server.TCPServer do
     ElixirSense.signature(textBeforeCursor, buffer, line)
   end
 
+  defp dispatch_request("suggestions", %{"prefix" => prefix, "buffer" => buffer, "line" => line}) do
+    ElixirSense.suggestions(prefix, buffer, line)
+  end
+
   defp send_response(data, socket) do
     :gen_tcp.send(socket, data)
   end

@@ -26,9 +26,10 @@ defmodule Alchemist.API.CompTest do
       Comp.request(~s({"is_b", "#{fixture("my_module.ex")}", 1}))
     end) =~ """
     is_b;hint
-    is_binary/1;function;term;Kernel;Returns `true` if `term` is a binary\\; otherwise returns `false`.;@spec is_binary(term) :: boolean
-    is_bitstring/1;function;term;Kernel;Returns `true` if `term` is a bitstring (including a binary)\\; otherwise returns `false`.;@spec is_bitstring(term) :: boolean
-    is_boolean/1;function;term;Kernel;Returns `true` if `term` is either the atom `true` or the atom `false` (i.e.,\\na boolean)\\; otherwise returns `false`.;@spec is_boolean(term) :: boolean
+    is_binary/1;function;term;Kernel;Returns `true` if `term` is a binary; otherwise returns `false`.;@spec is_binary(term) :: boolean
+    is_bitstring/1;function;term;Kernel;Returns `true` if `term` is a bitstring (including a binary); otherwise returns `false`.;@spec is_bitstring(term) :: boolean
+    is_boolean/1;function;term;Kernel;Returns `true` if `term` is either the atom `true` or the atom `false` (i.e.,
+    a boolean); otherwise returns `false`.;@spec is_boolean(term) :: boolean
     END-OF-COMP
     """
   end
@@ -38,7 +39,9 @@ defmodule Alchemist.API.CompTest do
       Comp.request(~s({"MyList.flat", "#{fixture("my_module.ex")}", 3}))
     end) =~ """
     MyList.flatten;hint
-    flatten/2;function;list,tail;List;Flattens the given `list` of nested lists.\\nThe list `tail` will be added at the end of\\nthe flattened list.;@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var
+    flatten/2;function;list,tail;List;Flattens the given `list` of nested lists.
+    The list `tail` will be added at the end of
+    the flattened list.;@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var
     flatten/1;function;list;List;Flattens the given `list` of nested lists.;@spec flatten(deep_list) :: list when deep_list: [any | deep_list]
     END-OF-COMP
     """
@@ -60,8 +63,11 @@ defmodule Alchemist.API.CompTest do
     assert capture_io(fn ->
       Comp.request(~s({"", "#{fixture("my_server.ex")}", 3}))
     end) =~ """
-    code_change/3;callback;old_vsn,state,extra;GenServer;Invoked to change the state of the `GenServer` when a different version of a\\nmodule is loaded (hot code swapping) and the state's term structure should be\\nchanged.;@callback code_change(old_vsn, state :: term, extra :: term) ::\\n  {:ok, new_state :: term} |\\n  {:error, reason :: term} when old_vsn: term | {:down, term}\\n
-    format_status/2;callback;reason,pdict_and_state;GenServer;Invoked in some cases to retrieve a formatted version of the `GenServer` status.;@callback format_status(reason, pdict_and_state :: list) :: term when reason: :normal | :terminate\\n
+    code_change/3;callback;old_vsn,state,extra;GenServer;Invoked to change the state of the `GenServer` when a different version of a
+    module is loaded (hot code swapping) and the state's term structure should be
+    changed.;@callback code_change(old_vsn, state :: term, extra :: term) ::
+      {:ok, new_state :: term} |
+      {:error, reason :: term} when old_vsn: term | {:down, term}
     """
   end
 
