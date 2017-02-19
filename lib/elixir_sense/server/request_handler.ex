@@ -1,7 +1,7 @@
 defmodule RequestHandler do
 
-  def handle_request("signature", %{"buffer" => buffer, "textBeforeCursor" => textBeforeCursor, "line" => line}) do
-    ElixirSense.signature(textBeforeCursor, buffer, line)
+  def handle_request("signature", %{"buffer" => buffer, "line" => line, "column" => column}) do
+    ElixirSense.signature(buffer, line, column)
   end
 
   def handle_request("suggestions", %{"prefix" => prefix, "buffer" => buffer, "line" => line}) do
@@ -24,7 +24,7 @@ defmodule RequestHandler do
   end
 
   def handle_request(request, paylod) do
-    IO.puts :stderr, "Cannot handle request #{request}, payload: #{inspect(paylod)}"
+    IO.puts :stderr, "Cannot handle request \"#{request}\". Payload: #{inspect(paylod)}"
   end
 
 end

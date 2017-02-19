@@ -3,7 +3,7 @@ defmodule ElixirSense.Core.SourceTest do
 
   import ElixirSense.Core.Source
 
-  describe "whichd_func/" do
+  describe "which_func/1" do
 
     test "functions without namespace" do
       assert which_func("var = func(") == {nil, :func, 0}
@@ -98,4 +98,21 @@ defmodule ElixirSense.Core.SourceTest do
 
   end
 
+  describe "text_before/3" do
+
+    test "functions without namespace" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1, )
+      end
+      """
+      text = """
+      defmodule MyMod do
+        def my_func(par1,
+      """ |> String.trim()
+
+      assert text_before(code, 2, 20) == text
+    end
+
+  end
 end

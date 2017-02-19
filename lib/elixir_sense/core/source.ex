@@ -5,6 +5,31 @@ defmodule ElixirSense.Core.Source do
     line |> String.slice(0, col-1)
   end
 
+  def text_before(code, line, col) do
+    pos = find_position(code, line, col, {0, 1, 1})
+    {text, _rest} = String.split_at(code, pos)
+    text
+  end
+
+  defp find_position(_text, line, col, {pos, line, col}) do
+    pos
+  end
+
+  defp find_position(text, line, col, {pos, current_line, current_col}) do
+    case String.next_grapheme(text) do
+      {grapheme, rest} ->
+        {new_pos, new_line, new_col} =
+          if grapheme == "\n" || grapheme == "\r\n" do
+            {pos + 1, current_line + 1, 1}
+          else
+            {pos + 1, current_line, current_col + 1}
+          end
+          find_position(rest, line, col, {new_pos, new_line, new_col})
+      nil ->
+        pos
+    end
+  end
+
   def which_func(prefix) do
     tokens =
       case prefix |> String.to_char_list |> :elixir_tokenizer.tokenize(1, []) do
