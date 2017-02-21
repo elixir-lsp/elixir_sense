@@ -16,6 +16,7 @@ defmodule ElixirSense.Providers.SignatureTest do
       """
       assert ElixirSense.signature(code, 3, 23) == %{
         active_param: 1,
+        pipe_before: false,
         signatures: [
           %{name: "flatten", params: ["list"]},
           %{name: "flatten", params: ["list", "tail"]}
@@ -32,6 +33,7 @@ defmodule ElixirSense.Providers.SignatureTest do
 
       assert ElixirSense.signature(code, 2, 14) == %{
         active_param: 1,
+        pipe_before: false,
         signatures: [
           %{name: "apply", params: ["fun", "args"]},
           %{name: "apply", params: ["module", "fun", "args"]}
@@ -54,7 +56,23 @@ defmodule ElixirSense.Providers.SignatureTest do
         a_func(
       end
       """
-      assert ElixirSense.signature(code, 2, 10) == %{active_param: 0, signatures: []}
+      assert ElixirSense.signature(code, 2, 10) == %{active_param: 0, signatures: [], pipe_before: false}
+    end
+
+    test "after |>" do
+      code = """
+      defmodule MyModule do
+        {1, 2} |> IO.inspect(
+      end
+      """
+      assert ElixirSense.signature(code, 2, 24) == %{
+        active_param: 1,
+        pipe_before: true,
+        signatures: [
+          %{name: "inspect", params: ["item", "opts \\\\ []"]},
+          %{name: "inspect", params: ["device", "item", "opts"]}
+        ]
+      }
     end
 
   end
