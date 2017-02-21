@@ -12,6 +12,14 @@ defmodule RequestHandler do
     ElixirSense.docs(subject, buffer, line)
   end
 
+  def handle_request("observer", %{"action" => "start"}) do
+    :observer.start()
+  end
+
+  def handle_request("observer", %{"action" => "stop"}) do
+    :observer.stop()
+  end
+
   def handle_request("definition", %{"buffer" => buffer, "module" => module, "function" => function, "line" => line}) do
     {mod, _} = Code.eval_string(module)
     fun = function && String.to_atom(function)
