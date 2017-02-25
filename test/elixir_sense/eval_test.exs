@@ -1,4 +1,4 @@
-defmodule Alchemist.API.EvalTest do
+defmodule ElixirSense.Evaltest do
 
   use ExUnit.Case
 

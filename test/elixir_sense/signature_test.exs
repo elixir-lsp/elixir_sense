@@ -1,4 +1,4 @@
-defmodule ElixirSense.Providers.SignatureTest do
+defmodule ElixirSense.SignatureTest do
 
   use ExUnit.Case
   alias ElixirSense.Providers.Signature

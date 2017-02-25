@@ -1,4 +1,4 @@
-defmodule ElixirSense.Providers.DocsTest do
+defmodule ElixirSense.DocsTest do
 
   use ExUnit.Case
 
