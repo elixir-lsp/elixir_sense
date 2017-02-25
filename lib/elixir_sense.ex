@@ -265,7 +265,7 @@ defmodule ElixirSense do
       ...>   {_, %{status: status, msg: message}, [arg1|_]} = {:error, %{status: 404, msg: "Not found"}, [1,2,3]}
       ...> '''
       iex> ElixirSense.match(code)
-      [status: 404, message: "Not found", arg1: 1]
+      "# Bindings\n\nstatus = 404\n\nmessage = \"Not found\"\n\narg1 = 1"
   """
   @spec match(String.t) :: Eval.bindings
   def match(code) do
