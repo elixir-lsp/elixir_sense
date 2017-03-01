@@ -235,4 +235,145 @@ defmodule ElixirSense.Core.SourceTest do
     end
 
   end
+  describe "subject" do
+
+    test "functions without namespace" do
+      code = """
+      defmodule MyMod do
+        my_func(par1, )
+      end
+      """
+
+      assert subject(code, 2, 5) == "my_func"
+    end
+
+    test "functions with namespace" do
+      code = """
+      defmodule MyMod do
+        Mod.func(par1, )
+      end
+      """
+
+      assert subject(code, 2, 8) == "Mod.func"
+    end
+
+    test "functions ending with !" do
+      code = """
+      defmodule MyMod do
+        Mod.func!
+      end
+      """
+
+      assert subject(code, 2, 8) == "Mod.func!"
+    end
+
+    test "functions ending with ?" do
+      code = """
+      defmodule MyMod do
+        func?(par1, )
+      end
+      """
+
+      assert subject(code, 2, 8) == "func?"
+    end
+
+    test "erlang modules" do
+      code = """
+        :lists.concat([1,2])
+      """
+
+      assert subject(code, 1, 5) == ":lists"
+      assert subject(code, 1, 5) == ":lists"
+    end
+
+    test "functions from erlang modules" do
+      code = """
+        :lists.concat([1,2])
+      """
+
+      assert subject(code, 1, 12) == ":lists.concat"
+    end
+
+    test "capture operator" do
+      code = """
+        Emum.map(list, &func/1)
+      """
+
+      assert subject(code, 1, 21) == "func"
+    end
+
+    test "functions with `!` operator before" do
+      code = """
+        if !match({_,_}, var) do
+      """
+
+      assert subject(code, 1, 8) == "match"
+    end
+
+    test "module and function in different lines" do
+      code = """
+        Mod.
+          func
+      """
+
+      assert subject(code, 2, 7) == "Mod.func"
+    end
+
+    test "elixir module" do
+      code = """
+      defmodule MyMod do
+        ModA.ModB.func
+      end
+      """
+
+      assert subject(code, 2, 4)  == "ModA"
+      assert subject(code, 2, 9)  == "ModA.ModB"
+      assert subject(code, 2, 14) == "ModA.ModB.func"
+    end
+
+    test "anonymous functions call" do
+      code = """
+        my_func.(1,2)
+      """
+
+      assert subject(code, 1, 4) == "my_func"
+    end
+
+    test "no empty/stop grapheme after subject" do
+      code = "Mod.my_func"
+
+      assert subject(code, 1, 2) == "Mod"
+      assert subject(code, 1, 6) == "Mod.my_func"
+    end
+
+    test "find closest on the edges" do
+      code = """
+      defmodule MyMod do
+        Mod.my_func(par1, par2)
+      end
+      """
+
+      assert subject(code, 2, 2) == nil
+      assert subject(code, 2, 3) == "Mod"
+      assert subject(code, 2, 5) == "Mod"
+      assert subject(code, 2, 6) == "Mod"
+      assert subject(code, 2, 7) == "Mod.my_func"
+      assert subject(code, 2, 14) == "Mod.my_func"
+      assert subject(code, 2, 15) == "par1"
+      assert subject(code, 2, 19) == "par1"
+      assert subject(code, 2, 20) == nil
+      assert subject(code, 2, 21) == "par2"
+    end
+
+    test "module from struct" do
+      code = """
+      defmodule MyMod do
+        Mod.my_func(%MyMod{a: 1})
+      end
+      """
+
+      assert subject(code, 2, 17) == "MyMod"
+    end
+
+  end
 end

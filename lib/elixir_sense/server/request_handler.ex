@@ -8,8 +8,8 @@ defmodule RequestHandler do
     ElixirSense.suggestions(prefix, buffer, line)
   end
 
-  def handle_request("docs", %{"buffer" => buffer, "subject" => subject, "line" => line}) do
-    ElixirSense.docs(subject, buffer, line)
+  def handle_request("docs", %{"buffer" => buffer, "line" => line, "column" => column}) do
+    ElixirSense.docs(buffer, line, column)
   end
 
   def handle_request("expand_full", %{"buffer" => buffer, "selected_code" => selected_code, "line" => line}) do

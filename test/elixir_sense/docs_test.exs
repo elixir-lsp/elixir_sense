@@ -11,7 +11,15 @@ defmodule ElixirSense.DocsTest do
       end
       """
 
-      assert ElixirSense.docs("defmodule", buffer, 2).docs =~ """
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 1, 2)
+
+      assert subject == "defmodule"
+      assert actual_subject == "Kernel.defmodule"
+      assert docs =~ """
       Defines a module given by name with the given contents.
       """
     end
@@ -19,12 +27,20 @@ defmodule ElixirSense.DocsTest do
     test "retrieve function documentation" do
       buffer = """
       defmodule MyModule do
-
+        def func(list) do
+          List.flatten(list)
+        end
       end
       """
 
-      docs = ElixirSense.docs("List.flatten", buffer, 2).docs
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 12)
 
+      assert subject == "List.flatten"
+      assert actual_subject == "List.flatten"
       assert docs == """
       > List.flatten(list)
 
@@ -65,12 +81,18 @@ defmodule ElixirSense.DocsTest do
       buffer = """
       defmodule MyModule do
         alias List, as: MyList
-
+        MyList.flatten
       end
       """
 
-      docs = ElixirSense.docs("MyList.flatten", buffer, 3).docs
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 12)
 
+      assert subject == "MyList.flatten"
+      assert actual_subject == "List.flatten"
       assert docs == """
       > List.flatten(list)
 
@@ -111,12 +133,18 @@ defmodule ElixirSense.DocsTest do
       buffer = """
       defmodule MyModule do
         import Mix.Generator
-
+        create_file(
       end
       """
 
-      docs = ElixirSense.docs("create_file", buffer, 3).docs
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 5)
 
+      assert subject == "create_file"
+      assert actual_subject == "Mix.Generator.create_file"
       assert docs =~ """
       > Mix.Generator.create_file(path, contents, opts \\\\\\\\ [])
 
@@ -136,12 +164,14 @@ defmodule ElixirSense.DocsTest do
     test "request for defmacro" do
       buffer = """
       defmodule MyModule do
-
+        defmacro my_macro do
+        end
       end
       """
 
-      docs = ElixirSense.docs("defmacro", buffer, 2).docs
+      %{subject: subject, docs: %{docs: docs}} = ElixirSense.docs(buffer, 2, 5)
 
+      assert subject == "defmacro"
       assert docs =~ """
       > Kernel.defmacro(call, expr \\\\\\\\ nil)
 
@@ -168,12 +198,18 @@ defmodule ElixirSense.DocsTest do
     test "retrieve documentation from modules" do
       buffer = """
       defmodule MyModule do
-
+        use GenServer
       end
       """
 
-      docs = ElixirSense.docs("GenServer", buffer, 2).docs
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 2, 8)
 
+      assert subject == "GenServer"
+      assert actual_subject == "GenServer"
       assert docs =~ """
       > GenServer
 
@@ -190,12 +226,13 @@ defmodule ElixirSense.DocsTest do
     test "retrieve type information from modules" do
       buffer = """
       defmodule MyModule do
-
+        use GenServer
       end
       """
 
-      docs = ElixirSense.docs("GenServer", buffer, 2).types
+      %{subject: subject, docs: %{types: docs}} = ElixirSense.docs(buffer, 2, 8)
 
+      assert subject == "GenServer"
       assert docs =~ """
         `@type on_start ::
         {:ok, pid} |
@@ -221,12 +258,13 @@ defmodule ElixirSense.DocsTest do
     test "retrieve callback information from modules" do
       buffer = """
       defmodule MyModule do
-
+        use Application
       end
       """
 
-      docs = ElixirSense.docs("Application", buffer, 2).callbacks
+      %{subject: subject, docs: %{callbacks: docs}} = ElixirSense.docs(buffer, 2, 8)
 
+      assert subject == "Application"
       assert docs =~ """
         > start(start_type, start_args)
 
