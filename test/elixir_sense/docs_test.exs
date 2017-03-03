@@ -280,5 +280,18 @@ defmodule ElixirSense.DocsTest do
       """
     end
 
+    test "no docs" do
+      buffer = """
+      defmodule MyModule do
+        raise ArgumentError, "Error"
+      end
+      """
+
+      %{subject: subject, docs: %{docs: docs}} = ElixirSense.docs(buffer, 2, 11)
+
+      assert subject == "ArgumentError"
+      assert docs == "No documentation available"
+    end
+
   end
 end

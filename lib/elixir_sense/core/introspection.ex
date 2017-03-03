@@ -61,12 +61,10 @@ defmodule ElixirSense.Core.Introspection do
   def get_docs_md(mod) when is_atom(mod) do
     mod_str = module_to_string(mod)
     case Code.get_docs(mod, :moduledoc) do
-      nil ->
-        "No documentation available"
-      {_line, false} ->
-        "@moduledoc is set to false"
-      {_line, doc} ->
+      {_line, doc} when is_binary(doc) ->
         "> #{mod_str}\n\n" <> doc
+      _ ->
+        "No documentation available"
     end
   end
 
@@ -419,17 +417,23 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def split_mod_func_call(call) do
-    {:ok, quoted} = call |> Code.string_to_quoted
-    case Macro.decompose_call(quoted) do
-      {{:__aliases__, _, mod_parts}, fun, _args} ->
-        {Module.concat(mod_parts), fun}
-      {:__aliases__, mod_parts} ->
-        {Module.concat(mod_parts), nil}
-      {mod, func, []} ->
-        {mod, func}
-      {func, []} ->
-        {nil, func}
-      _ -> {nil, nil}
+    case Code.string_to_quoted(call) do
+      {:error, _} ->
+        {nil, nil}
+      {:ok, quoted} when is_atom(quoted) ->
+        {quoted, nil}
+      {:ok, quoted} ->
+        case Macro.decompose_call(quoted) do
+          {{:__aliases__, _, mod_parts}, fun, _args} ->
+            {Module.concat(mod_parts), fun}
+          {:__aliases__, mod_parts} ->
+            {Module.concat(mod_parts), nil}
+          {mod, func, []} when is_atom(mod) and is_atom(func) ->
+            {mod, func}
+          {func, []} when is_atom(func) ->
+            {nil, func}
+          _ -> {nil, nil}
+        end
     end
   end
 
@@ -540,8 +544,11 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  defp elixir_module?(module) do
+  defp elixir_module?(module) when is_atom(module) do
     module == Module.concat(Elixir, module)
+  end
+  defp elixir_module?(_) do
+    false
   end
 
 end

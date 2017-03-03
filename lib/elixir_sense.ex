@@ -73,13 +73,13 @@ defmodule ElixirSense do
       ...>   MyEnum.to_list(1..3)
       ...> end
       ...> '''
-      iex> {path, line} = ElixirSense.definition(MyEnum, :to_list, code, 3)
-      iex> file = path |> Path.basename
-      iex> file <> ":" <> to_string(line)
+      iex> {path, line} = ElixirSense.definition(code, 3, 11)
+      iex> "#{Path.basename(path)}:#{to_string(line)}"
       "enum.ex:2523"
   """
-  @spec definition(module, atom, String.t, pos_integer) :: Definition.location
-  def definition(mod, fun, code, line) do
+  @spec definition(String.t, String.t, pos_integer) :: Definition.location
+  def definition(code, line, column) do
+    subject = Source.subject(code, line, column)
     buffer_file_metadata = Parser.parse_string(code, true, true, line)
     %State.Env{
       imports: imports,
@@ -87,7 +87,7 @@ defmodule ElixirSense do
       module: module
     } = Metadata.get_env(buffer_file_metadata, line)
 
-    Definition.find(mod, fun, [module|imports], aliases)
+    Definition.find(subject, imports, aliases, module)
   end
 
   @doc """
