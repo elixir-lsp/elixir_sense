@@ -27,19 +27,20 @@ defmodule ElixirSense.Providers.Signature do
   @spec find(String.t, [module], [{module, module}], module, map) :: signature_info
   def find(prefix, imports, aliases, module, metadata) do
     case Source.which_func(prefix) do
-      %{candidate: {mod, func}, npar: npar, pipe_before: pipe_before} ->
-        %{active_param: npar, pipe_before: pipe_before, signatures: find_signatures(mod, func, imports, aliases, module, metadata)}
+      %{candidate: {mod, fun}, npar: npar, pipe_before: pipe_before} ->
+        %{active_param: npar, pipe_before: pipe_before, signatures: find_signatures({mod, fun}, imports, aliases, module, metadata)}
       _ ->
         :none
     end
   end
 
-  defp find_signatures(mod, func, imports, aliases, module, metadata) do
-    {actual_mod, actual_func} = Introspection.actual_mod_fun({mod, func}, imports, aliases, module)
+  defp find_signatures(mod_fun, imports, aliases, module, metadata) do
+    {mod, fun} = Introspection.actual_mod_fun(mod_fun, imports, aliases, module)
 
-    Metadata.get_function_signatures(metadata, module, func)
-    |> Kernel.++(Introspection.get_signatures(actual_mod, actual_func))
-    |> Enum.uniq_by(fn sig -> sig.params end)
+    case Metadata.get_function_signatures(metadata, mod, fun) do
+      [] -> Introspection.get_signatures(mod, fun)
+      signatures -> signatures
+    end |> Enum.uniq_by(fn sig -> sig.params end)
   end
 
 end
