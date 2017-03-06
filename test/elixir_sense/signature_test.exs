@@ -60,6 +60,43 @@ defmodule ElixirSense.SignatureTest do
       }
     end
 
+    test "finds signatures from local functions" do
+      code = """
+      defmodule MyModule do
+
+        def run do
+          sum(a,
+        end
+
+        defp sum(a, b) do
+          a + b
+        end
+
+        defp sum({a, b}) do
+          a + b
+        end
+      end
+      """
+      assert ElixirSense.signature(code, 4, 12) == %{
+        active_param: 1,
+        pipe_before: false,
+        signatures: [
+          %{
+            name: "sum",
+            params: ["a", "b"],
+            documentation: "",
+            spec: ""
+          },
+          %{
+            name: "sum",
+            params: ["tuple"],
+            documentation: "",
+            spec: ""
+          }
+        ]
+      }
+    end
+
     test "returns :none when it cannot identify a function call" do
       code = """
       defmodule MyModule do

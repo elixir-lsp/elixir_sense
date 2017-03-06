@@ -485,12 +485,12 @@ defmodule ElixirSense.Core.Introspection do
     Enum.map(specs, &{tag, &1})
   end
 
-  def actual_mod_fun({_mod, fun} = mod_fun, imports, aliases, current_module) do
+  def actual_mod_fun(mod_fun, imports, aliases, current_module) do
     with {nil, nil} <- find_kernel_function(mod_fun),
          {nil, nil} <- find_imported_function(mod_fun, imports),
          {nil, nil} <- find_aliased_function(mod_fun, aliases),
          {nil, nil} <- find_function_in_module(mod_fun),
-         {nil, nil} <- find_function_in_module({current_module, fun})
+         {nil, nil} <- find_function_in_current_module(mod_fun, current_module)
     do
       mod_fun
     else
@@ -545,6 +545,14 @@ defmodule ElixirSense.Core.Introspection do
     else
       {nil, nil}
     end
+  end
+
+  defp find_function_in_current_module({nil, fun}, current_module) do
+    {current_module, fun}
+  end
+
+  defp find_function_in_current_module(_, _) do
+    {nil, nil}
   end
 
   defp elixir_module?(module) when is_atom(module) do
