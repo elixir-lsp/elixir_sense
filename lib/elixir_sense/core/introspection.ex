@@ -31,12 +31,14 @@ defmodule ElixirSense.Core.Introspection do
     %{docs: get_func_docs_md(mod, fun), types: get_types_md(mod)}
   end
 
-  def get_signatures(mod, fun) do
-    docs = Code.get_docs(mod, :docs) || []
-    for {{f, _arity}, _, _, args, _text} <- docs, f == fun do
+  def get_signatures(mod, fun, code_docs \\ nil) do
+    docs = code_docs || Code.get_docs(mod, :docs) || []
+    for {{f, arity}, _, _, args, text} <- docs, f == fun do
       fun_args = Enum.map(args, &format_doc_arg(&1))
       fun_str = Atom.to_string(fun)
-      %{name: fun_str, params: fun_args}
+      doc = extract_summary_from_docs(text)
+      spec = get_spec(mod, fun, arity)
+      %{name: fun_str, params: fun_args, documentation: doc, spec: spec}
     end
   end
 

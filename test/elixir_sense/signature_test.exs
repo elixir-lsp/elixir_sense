@@ -18,8 +18,18 @@ defmodule ElixirSense.SignatureTest do
         active_param: 1,
         pipe_before: false,
         signatures: [
-          %{name: "flatten", params: ["list"]},
-          %{name: "flatten", params: ["list", "tail"]}
+          %{
+            name: "flatten",
+            params: ["list"],
+            documentation: "Flattens the given `list` of nested lists.",
+            spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]"
+          },
+          %{
+            name: "flatten",
+            params: ["list", "tail"],
+            documentation: "Flattens the given `list` of nested lists.\nThe list `tail` will be added at the end of\nthe flattened list.",
+            spec: "@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var"
+          }
         ]
       }
     end
@@ -30,13 +40,22 @@ defmodule ElixirSense.SignatureTest do
         apply(par1,
       end
       """
-
       assert ElixirSense.signature(code, 2, 14) == %{
         active_param: 1,
         pipe_before: false,
         signatures: [
-          %{name: "apply", params: ["fun", "args"]},
-          %{name: "apply", params: ["module", "fun", "args"]}
+          %{
+            name: "apply",
+            params: ["fun", "args"],
+            documentation: "Invokes the given `fun` with the list of arguments `args`.",
+            spec: "@spec apply((... -> any), [any]) :: any"
+          },
+          %{
+            name: "apply",
+            params: ["module", "fun", "args"],
+            documentation: "Invokes the given `fun` from `module` with the list of arguments `args`.",
+            spec: "@spec apply(module, atom, [any]) :: any"
+          }
         ]
       }
     end
@@ -69,8 +88,18 @@ defmodule ElixirSense.SignatureTest do
         active_param: 1,
         pipe_before: true,
         signatures: [
-          %{name: "inspect", params: ["item", "opts \\\\ []"]},
-          %{name: "inspect", params: ["device", "item", "opts"]}
+          %{
+            name: "inspect",
+            params: ["item", "opts \\\\ []"],
+            documentation: "Inspects and writes the given `item` to the device.",
+            spec: "@spec inspect(item, Keyword.t) :: item when item: var"
+          },
+          %{
+            name: "inspect",
+            params: ["device", "item", "opts"],
+            documentation: "Inspects `item` according to the given options using the IO `device`.",
+            spec: "@spec inspect(device, item, Keyword.t) :: item when item: var"
+          }
         ]
       }
     end
