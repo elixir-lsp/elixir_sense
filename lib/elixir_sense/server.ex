@@ -8,7 +8,7 @@ defmodule ElixirSense.Server do
     loop()
   end
 
-  def start_supervisor(host: host, port: port, env: env) do
+  defp start_supervisor(host: host, port: port, env: env) do
     import Supervisor.Spec
 
     children = [
@@ -20,7 +20,7 @@ defmodule ElixirSense.Server do
     Supervisor.start_link(children, opts)
   end
 
-  def loop() do
+  defp loop() do
     case IO.gets("") do
       :eof ->
         IO.puts(:stderr, "Stopping alchemist-server")
