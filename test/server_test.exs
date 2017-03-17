@@ -107,7 +107,7 @@ defmodule ElixirSense.ServerTest do
   defp send_request(socket, request) do
     data = :erlang.term_to_binary(request)
     length = byte_size(data)
-    send_and_recv(socket, <<101, length :: size(32), data :: bitstring>>)
+    send_and_recv(socket, <<length :: size(32), data :: bitstring>>)
     |> :erlang.binary_to_term
     |> Map.get(:payload)
   end
@@ -115,6 +115,7 @@ defmodule ElixirSense.ServerTest do
   defp send_and_recv(socket, command) do
     :ok = :gen_tcp.send(socket, command)
     {:ok, data} = :gen_tcp.recv(socket, 0, 1000)
+    <<_length :: size(32), data :: bitstring>> = data
     data
   end
 
