@@ -7,7 +7,7 @@ defmodule ElixirSense.ServerTest do
     end)
 
     Process.sleep(50)
-    {:ok, socket} = :gen_tcp.connect('localhost', 7777, [:binary, active: false])
+    {:ok, socket} = :gen_tcp.connect('localhost', 7777, [:binary, active: false, packet: 4])
     {:ok, socket: socket}
   end
 
@@ -106,17 +106,15 @@ defmodule ElixirSense.ServerTest do
 
   defp send_request(socket, request) do
     data = :erlang.term_to_binary(request)
-    length = byte_size(data)
-    send_and_recv(socket, <<length :: size(32), data :: bitstring>>)
+    send_and_recv(socket, data)
     |> :erlang.binary_to_term
     |> Map.get(:payload)
   end
 
-  defp send_and_recv(socket, command) do
-    :ok = :gen_tcp.send(socket, command)
-    {:ok, data} = :gen_tcp.recv(socket, 0, 1000)
-    <<_length :: size(32), data :: bitstring>> = data
-    data
+  defp send_and_recv(socket, data) do
+    :ok = :gen_tcp.send(socket, data)
+    {:ok, response} = :gen_tcp.recv(socket, 0, 1000)
+    response
   end
 
 end
