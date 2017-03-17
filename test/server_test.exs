@@ -85,6 +85,19 @@ defmodule ElixirSense.ServerTest do
     assert send_request(socket, request).docs.docs =~ "> Enum.to_list"
   end
 
+  test "suggestions request", %{socket: socket} do
+    request = %{
+      "request_id" => 1,
+      "request" => "suggestions",
+      "payload" => %{
+        "buffer" => "",
+        "line" => 1,
+        "prefix" => "List."
+      }
+    }
+    assert send_request(socket, request) |> Enum.at(0) == %{type: :hint, value: "List."}
+  end
+
   test "set_context request", %{socket: socket} do
     {_, _, _, env, cwd, _} = ContextLoader.get_state()
 
