@@ -90,9 +90,9 @@ defmodule ElixirSense.ServerTest do
       "request_id" => 1,
       "request" => "suggestions",
       "payload" => %{
-        "buffer" => "",
+        "buffer" => "List.",
         "line" => 1,
-        "prefix" => "List."
+        "column" => 6
       }
     }
     assert send_request(socket, request) |> Enum.at(0) == %{type: :hint, value: "List."}

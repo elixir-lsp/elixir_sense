@@ -9,7 +9,7 @@ defmodule ElixirSense.SuggestionsTest do
     end
     """
 
-    list = ElixirSense.suggestions("", buffer, 1)
+    list = ElixirSense.suggestions(buffer, 2, 7)
 
     assert Enum.find(list, fn s -> match?(%{name: "import", arity: 2}, s) end) == %{
       args: "module,opts", arity: 2, name: "import",
@@ -36,11 +36,11 @@ defmodule ElixirSense.SuggestionsTest do
 
     buffer = """
     defmodule MyModule do
-
+      is_b
     end
     """
 
-    list = ElixirSense.suggestions("is_b", buffer, 1)
+    list = ElixirSense.suggestions(buffer, 2, 11)
 
     assert list == [
       %{type: :hint, value: "is_b"},
@@ -64,11 +64,11 @@ defmodule ElixirSense.SuggestionsTest do
     buffer = """
     defmodule MyModule do
       alias List, as: MyList
-
+      MyList.flat
     end
     """
 
-    list = ElixirSense.suggestions("MyList.flat", buffer, 3)
+    list = ElixirSense.suggestions(buffer, 3, 14)
 
     assert list  == [
       %{type: :hint, value: "MyList.flatten"},
@@ -86,11 +86,11 @@ defmodule ElixirSense.SuggestionsTest do
   test "COMP request with a module hint" do
     buffer = """
     defmodule MyModule do
-
+      Str
     end
     """
 
-    list = ElixirSense.suggestions("Str", buffer, 1)
+    list = ElixirSense.suggestions(buffer, 2, 6)
 
     assert list == [
       %{type: :hint, value: "Str"},
@@ -115,7 +115,7 @@ defmodule ElixirSense.SuggestionsTest do
     """
 
     list =
-      ElixirSense.suggestions("", buffer, 3)
+      ElixirSense.suggestions(buffer, 3, 7)
       |> Enum.filter(fn s -> s.type == :callback && s.name == :code_change end)
 
     assert list == [%{
@@ -133,14 +133,14 @@ defmodule ElixirSense.SuggestionsTest do
       use GenServer
 
       def handle_call(request, from, state) do
-        var1 = true
+
       end
 
     end
     """
 
     list =
-      ElixirSense.suggestions("", buffer, 5)
+      ElixirSense.suggestions(buffer, 5, 5)
       |> Enum.filter(fn s -> s.type == :return end)
 
     assert list == [
@@ -178,13 +178,14 @@ defmodule ElixirSense.SuggestionsTest do
 
       def handle_call(request, from, state) do
         var1 = true
+
       end
 
     end
     """
 
     list =
-      ElixirSense.suggestions("", buffer, 5)
+      ElixirSense.suggestions(buffer, 6, 5)
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
@@ -200,12 +201,12 @@ defmodule ElixirSense.SuggestionsTest do
     defmodule MyModule do
       @my_attribute1 true
       @my_attribute2 false
-
+      @
     end
     """
 
     list =
-      ElixirSense.suggestions("@", buffer, 4)
+      ElixirSense.suggestions(buffer, 4, 4)
       |> Enum.filter(fn s -> s.type == :attribute end)
 
     assert list == [
