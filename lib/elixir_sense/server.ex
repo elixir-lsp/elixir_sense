@@ -1,5 +1,7 @@
 defmodule ElixirSense.Server do
 
+  alias ElixirSense.Server.ContextLoader
+
   def start([port, env]) do
     IO.puts(:stderr, "Initializing ElixirSense server for environment \"#{env}\" (Elixir version #{System.version})")
     IO.puts(:stderr, "Working directory is \"#{Path.expand(".")}\"")
@@ -8,7 +10,7 @@ defmodule ElixirSense.Server do
     loop()
   end
 
-  defp start_supervisor(host: host, port: port, env: env) do
+  def start_supervisor(host: host, port: port, env: env) do
     import Supervisor.Spec
 
     children = [

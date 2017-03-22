@@ -1,13 +1,17 @@
 defmodule ElixirSense.ServerTest do
   use ExUnit.Case
 
-  setup_all do
-    spawn_link(fn ->
-      ElixirSense.Server.start(["7777", "dev"])
-    end)
+  alias ElixirSense.Server.ContextLoader
+  import ExUnit.CaptureIO
 
-    Process.sleep(50)
-    {:ok, socket} = :gen_tcp.connect('localhost', 7777, [:binary, active: false, packet: 4])
+  setup_all do
+    "ok:localhost:" <> sock = capture_io(fn ->
+       ElixirSense.Server.start_supervisor(host: "localhost", port: String.to_integer("7777"), env: "dev")
+       ContextLoader.set_context("dev", Path.expand("."))
+     end)
+
+    socket_file = sock |> String.trim |> String.to_charlist
+    {:ok, socket} = :gen_tcp.connect({:local, socket_file}, 0, [:binary, active: false, packet: 4])
     {:ok, socket: socket}
   end
 

@@ -1,4 +1,4 @@
-defmodule ContextLoader do
+defmodule ElixirSense.Server.ContextLoader do
   use GenServer
 
   @minimal_reload_time 2000
@@ -49,7 +49,7 @@ defmodule ContextLoader do
   end
 
   defp all_loaded() do
-    Code.ensure_loaded(Inspect)
+    {:module, _} = Code.ensure_loaded(Inspect)
     for {m,_} <- :code.all_loaded, do: m
   end
 

@@ -1,21 +1,25 @@
 defmodule ElixirSense.Server.TCPServer do
 
+  alias ElixirSense.Server.RequestHandler
+  alias ElixirSense.Server.ContextLoader
+
   @connection_handler_supervisor ElixirSense.Server.TCPServer.ConnectionHandlerSupervisor
 
   def start_link([host: host, port: port]) do
     import Supervisor.Spec
 
     children = [
-      supervisor(Task.Supervisor, [[name: @connection_handler_supervisor]]),
-      worker(Task, [__MODULE__, :listen, [host, port]])
+      worker(Task, [__MODULE__, :listen, [host, port]]),
+      supervisor(Task.Supervisor, [[name: @connection_handler_supervisor]])
     ]
 
     opts = [strategy: :one_for_one, name: __MODULE__]
     Supervisor.start_link(children, opts)
   end
 
-  def listen(host, port) do
-    {:ok, socket} = :gen_tcp.listen(port, [:binary, active: false, reuseaddr: true, packet: 4])
+  def listen(host, _port) do
+    opts = [:binary, active: false, reuseaddr: true, packet: 4, ifaddr: {:local, socket_file()}]
+    {:ok, socket} = :gen_tcp.listen(0, opts)
     {:ok, port} = :inet.port(socket)
     IO.puts "ok:#{host}:#{port}"
     accept(socket)
@@ -68,6 +72,11 @@ defmodule ElixirSense.Server.TCPServer do
 
   defp send_response(data, socket) do
     :gen_tcp.send(socket, data)
+  end
+
+  defp socket_file do
+    sock_id = :erlang.system_time()
+    String.to_charlist("/tmp/elixir-sense-#{sock_id}.sock")
   end
 
 end
