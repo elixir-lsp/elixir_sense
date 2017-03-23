@@ -4,7 +4,7 @@ defmodule ElixirSense.Server.ContextLoader do
   @minimal_reload_time 2000
 
   def start_link(env) do
-    GenServer.start_link(__MODULE__, [env], [name: __MODULE__])
+    GenServer.start_link(__MODULE__, env, [name: __MODULE__])
   end
 
   def init(env) do

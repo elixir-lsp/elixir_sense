@@ -1,17 +1,34 @@
+defmodule TCPHelper do
+
+  def send_request(socket, request) do
+    data = :erlang.term_to_binary(request)
+    send_and_recv(socket, data)
+    |> :erlang.binary_to_term
+    |> Map.get(:payload)
+  end
+
+  def send_and_recv(socket, data) do
+    :ok = :gen_tcp.send(socket, data)
+    {:ok, response} = :gen_tcp.recv(socket, 0, 1000)
+    response
+  end
+
+end
+
 defmodule ElixirSense.ServerTest do
   use ExUnit.Case
 
   alias ElixirSense.Server.ContextLoader
   import ExUnit.CaptureIO
+  import TCPHelper
 
   setup_all do
-    "ok:localhost:" <> sock = capture_io(fn ->
-       ElixirSense.Server.start_supervisor(host: "localhost", port: String.to_integer("7777"), env: "dev")
-       ContextLoader.set_context("dev", Path.expand("."))
-     end)
+    "ok:localhost:" <> port_or_file = capture_io(fn ->
+      ElixirSense.Server.start(["tcpip", "0", "dev"])
+    end)
+    port_or_file = port_or_file |> String.trim |> String.to_integer
+    {:ok, socket} = :gen_tcp.connect('localhost', port_or_file, [:binary, active: false, packet: 4])
 
-    socket_file = sock |> String.trim |> String.to_charlist
-    {:ok, socket} = :gen_tcp.connect({:local, socket_file}, 0, [:binary, active: false, packet: 4])
     {:ok, socket: socket}
   end
 
@@ -121,17 +138,35 @@ defmodule ElixirSense.ServerTest do
     assert env == "test"
   end
 
-  defp send_request(socket, request) do
-    data = :erlang.term_to_binary(request)
-    send_and_recv(socket, data)
-    |> :erlang.binary_to_term
-    |> Map.get(:payload)
+end
+
+defmodule ElixirSense.ServerUnixSocketTest do
+  use ExUnit.Case
+
+  import ExUnit.CaptureIO
+  import TCPHelper
+
+  setup_all do
+    "ok:localhost:" <> port_or_file = capture_io(fn ->
+       ElixirSense.Server.start(["unix", "0", "dev"])
+     end)
+    port_or_file = port_or_file |> String.trim |> String.to_charlist
+    {:ok, socket} = :gen_tcp.connect({:local, port_or_file}, 0, [:binary, active: false, packet: 4])
+
+    {:ok, socket: socket}
   end
 
-  defp send_and_recv(socket, data) do
-    :ok = :gen_tcp.send(socket, data)
-    {:ok, response} = :gen_tcp.recv(socket, 0, 1000)
-    response
+  test "suggestions request", %{socket: socket} do
+    request = %{
+      "request_id" => 1,
+      "request" => "suggestions",
+      "payload" => %{
+        "buffer" => "List.",
+        "line" => 1,
+        "column" => 6
+      }
+    }
+    assert send_request(socket, request) |> Enum.at(0) == %{type: :hint, value: "List."}
   end
 
 end
