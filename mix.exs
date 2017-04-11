@@ -13,7 +13,9 @@ defmodule ElixirSense.Mixfile do
        flags: ["-Wunmatched_returns", "-Werror_handling", "-Wrace_conditions", "-Wunderspecs", "-Wno_match"]
      ],
      deps: deps(),
-     docs: docs()
+     docs: docs(),
+     description: description(),
+     package: package(),
    ]
   end
 
@@ -29,6 +31,20 @@ defmodule ElixirSense.Mixfile do
 
   defp docs do
     [main: "ElixirSense"]
+  end
+
+  defp description do
+    """
+    An API/Server for Elixir projects that provides context-aware information
+    for code completion, documentation, go/jump to definition, signature info
+    and more.
+    """
+  end
+
+  defp package do
+    [maintainers: ["Marlus Saraiva (@msaraiva)"],
+     licenses: ["Apache 2.0"],
+     links: %{"GitHub" => "https://github.com/msaraiva/elixir_sense"}]
   end
 
 end
