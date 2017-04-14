@@ -6,7 +6,7 @@ defmodule ElixirSense.Core.Ast do
 
   @partials [:def, :defp, :defmodule, :@, :defmacro, :defmacrop, :defoverridable, :__ENV__, :__CALLER__, :raise, :if, :unless, :in]
 
-  @max_expand_count 10000
+  @max_expand_count 30000
 
   def extract_use_info(use_ast, module) do
     try do

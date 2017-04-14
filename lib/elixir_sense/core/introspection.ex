@@ -231,10 +231,9 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp get_type_doc(module, type) do
-    docs = Code.get_docs(module, :type_docs)
-    case docs do
-      nil -> ""
-      _ ->
+    case Code.get_docs(module, :type_docs) do
+      nil  -> ""
+      docs ->
         {{_, _}, _, _, description} = Enum.find(docs, fn({{name, _}, _, _, _}) ->
           type == name
         end)
