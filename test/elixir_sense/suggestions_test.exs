@@ -59,7 +59,6 @@ defmodule ElixirSense.SuggestionsTest do
       ]
   end
 
-
   test "with an alias" do
     buffer = """
     defmodule MyModule do
@@ -83,7 +82,7 @@ defmodule ElixirSense.SuggestionsTest do
     ]
   end
 
-  test "COMP request with a module hint" do
+  test "with a module hint" do
     buffer = """
     defmodule MyModule do
       Str
@@ -213,6 +212,19 @@ defmodule ElixirSense.SuggestionsTest do
       %{name: "@my_attribute1", type: :attribute},
       %{name: "@my_attribute2", type: :attribute}
     ]
+  end
+
+  test "Elixir module" do
+    buffer = """
+    defmodule MyModule do
+      El
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 2, 5)
+
+    assert Enum.at(list,0) == %{type: :hint, value: "Elixir"}
+    assert Enum.at(list,1) == %{type: :module, name: "Elixir", subtype: nil, summary: ""}
   end
 
 end
