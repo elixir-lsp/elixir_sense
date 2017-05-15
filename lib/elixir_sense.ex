@@ -78,6 +78,10 @@ defmodule ElixirSense do
     Definition.find(subject, imports, aliases, module)
   end
 
+  def all_modules() do
+    Introspection.all_modules()
+  end
+
   @doc """
   Finds suggestions by a given hint.
 

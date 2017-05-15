@@ -38,6 +38,10 @@ defmodule ElixirSense.Server.RequestHandler do
     ElixirSense.match(code)
   end
 
+  def handle_request("all_modules", %{}) do
+    ElixirSense.all_modules()
+  end
+
   def handle_request("set_context", %{"env" => env, "cwd" => cwd}) do
     ContextLoader.set_context(env, cwd) |> Tuple.to_list
   end
