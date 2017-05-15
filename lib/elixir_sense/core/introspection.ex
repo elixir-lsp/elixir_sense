@@ -24,10 +24,6 @@ defmodule ElixirSense.Core.Introspection do
 
   def all_modules() do
     ModuleInfo.all_applications_modules()
-    # IO.puts x
-    # x
-    # |> Enum.map(fn x -> if String.downcase(x) == x do ":" <> x else x end end)
-    # |> Enum.map(&String.replace_prefix(&1, "Elixir.", ''))
   end
 
   @spec get_all_docs(mod_fun) :: docs

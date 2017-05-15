@@ -78,8 +78,24 @@ defmodule ElixirSense do
     Definition.find(subject, imports, aliases, module)
   end
 
+  @doc ~S"""
+  Returns a sorted list of all available modules
+
+  ## Example
+
+      iex> ElixirSense.all_modules() |> Enum.take(4)
+      [":application", ":application_controller", ":application_master", ":application_starter"]
+
+      iex> ElixirSense.all_modules() |> Enum.take(-4)
+      ["Version.Parser", "Version.Parser.DSL", "Version.Requirement", "WithClauseError"]
+
+  """
   def all_modules() do
     Introspection.all_modules()
+    |> Enum.map(&Atom.to_string(&1))
+    |> Enum.map(fn x -> if String.downcase(x) == x do ":" <> x else x end end)
+    |> Enum.map(&String.replace_prefix(&1, "Elixir.", ""))
+    |> Enum.sort()
   end
 
   @doc """
