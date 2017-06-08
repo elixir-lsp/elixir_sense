@@ -22,6 +22,10 @@ defmodule ElixirSense.Core.Introspection do
     :gen_event   => GenEvent
   }
 
+  def all_modules() do
+    ModuleInfo.all_applications_modules()
+  end
+
   @spec get_all_docs(mod_fun) :: docs
   def get_all_docs({mod, nil}) do
     %{docs: get_docs_md(mod), types: get_types_md(mod), callbacks: get_callbacks_md(mod)}
