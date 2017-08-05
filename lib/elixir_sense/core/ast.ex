@@ -1,52 +1,40 @@
 defmodule ElixirSense.Core.Ast do
+  @moduledoc """
+  Abstract Syntax Tree support
+  """
 
   alias ElixirSense.Core.Introspection
 
   @empty_env_info %{requires: [], imports: [], behaviours: []}
 
-  @partials [:def, :defp, :defmodule, :@, :defmacro, :defmacrop, :defoverridable, :__ENV__, :__CALLER__, :raise, :if, :unless, :in]
+  @partials [:def, :defp, :defmodule, :@, :defmacro, :defmacrop, :defoverridable,
+  :__ENV__, :__CALLER__, :raise, :if, :unless, :in]
 
-  @max_expand_count 30000
+  @max_expand_count 30_000
 
   def extract_use_info(use_ast, module) do
-    try do
-      env = Map.put(__ENV__, :module, module)
-      {expanded_ast, _requires} = Macro.prewalk(use_ast, {env, 1}, &do_expand/2)
-      {_ast, env_info} = Macro.prewalk(expanded_ast, @empty_env_info, &pre_walk_expanded/2)
-      env_info
-    rescue
-      _e ->
-        # DEBUG
-        # IO.puts(:stderr, "Expanding #{Macro.to_string(use_ast)} failed.")
-        # IO.puts(:stderr, Exception.message(e) <> "\n" <> Exception.format_stacktrace(System.stacktrace))
-        @empty_env_info
-    catch
-      {:expand_error, _} ->
-        IO.puts(:stderr, "Info: ignoring recursive macro")
-        @empty_env_info
-    end
+    env = Map.put(__ENV__, :module, module)
+    {expanded_ast, _requires} = Macro.prewalk(use_ast, {env, 1}, &do_expand/2)
+    {_ast, env_info} = Macro.prewalk(expanded_ast, @empty_env_info, &pre_walk_expanded/2)
+    env_info
+  catch
+    {:expand_error, _} ->
+      IO.puts(:stderr, "Info: ignoring recursive macro")
+      @empty_env_info
   end
 
   def expand_partial(ast, env) do
-    try do
-      {expanded_ast, _} = Macro.prewalk(ast, {env, 1}, &do_expand_partial/2)
-      expanded_ast
-    rescue
-      _e -> ast
-    catch
-      e -> e
-    end
+    {expanded_ast, _} = Macro.prewalk(ast, {env, 1}, &do_expand_partial/2)
+    expanded_ast
+  catch
+    ast
   end
 
   def expand_all(ast, env) do
-    try do
-      {expanded_ast, _} = Macro.prewalk(ast, {env, 1}, &do_expand_all/2)
-      expanded_ast
-    rescue
-      _e -> ast
-    catch
-      e -> e
-    end
+    {expanded_ast, _} = Macro.prewalk(ast, {env, 1}, &do_expand_all/2)
+    expanded_ast
+  catch
+    ast
   end
 
   def set_module_for_env(env, module) do
@@ -106,7 +94,7 @@ defmodule ElixirSense.Core.Ast do
       throw {:expand_error, "Cannot expand recursive macro"}
     end
     expanded_ast = Macro.expand(ast, env)
-    {expanded_ast, {env, count+1}}
+    {expanded_ast, {env, count + 1}}
   end
 
   defp pre_walk_expanded({:__block__, _, _} = ast, acc) do

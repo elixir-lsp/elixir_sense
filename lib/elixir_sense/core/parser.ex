@@ -1,4 +1,7 @@
 defmodule ElixirSense.Core.Parser do
+  @moduledoc """
+  Core Parser
+  """
 
   alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Metadata
@@ -93,7 +96,7 @@ defmodule ElixirSense.Core.Parser do
     # IO.puts :stderr, "REPLACING LINE: #{line}"
     source
     |> String.split(["\n", "\r\n"])
-    |> List.replace_at(line-1, "(__atom_elixir_marker_#{line}__())")
+    |> List.replace_at(line - 1, "(__atom_elixir_marker_#{line}__())")
     |> Enum.join("\n")
   end
 

@@ -90,7 +90,7 @@ defmodule ElixirSense do
       ["Version.Parser", "Version.Parser.DSL", "Version.Requirement", "WithClauseError"]
 
   """
-  def all_modules() do
+  def all_modules do
     Introspection.all_modules()
     |> Enum.map(&Atom.to_string(&1))
     |> Enum.map(fn x -> if String.downcase(x) == x do ":" <> x else x end end)
