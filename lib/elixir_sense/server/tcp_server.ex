@@ -130,8 +130,8 @@ defmodule ElixirSense.Server.TCPServer do
   defp secure_compare(a, b) when is_nil(a) or is_nil(b), do: false
   defp secure_compare(a, b) when byte_size(a) != byte_size(b), do: false
   defp secure_compare(a, b) when is_binary(a) and is_binary(b) do
-    a_list = String.to_char_list(a)
-    b_list = String.to_char_list(b)
+    a_list = String.to_charlist(a)
+    b_list = String.to_charlist(b)
     secure_compare(a_list, b_list)
   end
   defp secure_compare(a, b) when is_list(a) and is_list(b) do
