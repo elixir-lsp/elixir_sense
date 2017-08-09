@@ -406,11 +406,12 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def extract_fun_args_and_desc({{_fun, _}, _line, _kind, args, doc}) do
-    extracted_args = args
-    |> Enum.map_join(",", &format_doc_arg(&1))
-    |> String.replace(~r/\s+/, " ")
+    formatted_args =
+      args
+      |> Enum.map_join(",", &format_doc_arg(&1))
+      |> String.replace(~r/\s+/, " ")
     desc = extract_summary_from_docs(doc)
-    {args, desc}
+    {formatted_args, desc}
   end
 
   def extract_fun_args_and_desc(nil) do
