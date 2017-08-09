@@ -1,4 +1,7 @@
 defmodule ElixirSense.Core.State do
+  @moduledoc """
+  Core State
+  """
 
   defstruct [
     namespace:  [:Elixir],
@@ -17,6 +20,7 @@ defmodule ElixirSense.Core.State do
   ]
 
   defmodule Env do
+    @moduledoc false
     defstruct imports: [], requires: [], aliases: [], module: nil, vars: [], attributes: [], behaviours: [], scope: nil
   end
 
@@ -52,10 +56,11 @@ defmodule ElixirSense.Core.State do
   end
 
   def get_current_scope_name(state) do
-    case hd(state.scopes) do
+    scope = case hd(state.scopes) do
       {fun, _} -> fun
       mod      -> mod
-    end |> Atom.to_string
+    end
+    scope |> Atom.to_string()
   end
 
   def add_mod_fun_to_line(state, {module, fun, arity}, line, params) do
@@ -65,7 +70,8 @@ defmodule ElixirSense.Core.State do
     new_params = [params|current_params]
     new_lines = [line|current_lines]
 
-    %{state | mods_funs_to_lines: Map.put(state.mods_funs_to_lines, {module, fun, arity}, %{lines: new_lines, params: new_params})}
+    mods_funs_to_lines = Map.put(state.mods_funs_to_lines, {module, fun, arity}, %{lines: new_lines, params: new_params})
+    %{state | mods_funs_to_lines: mods_funs_to_lines}
   end
 
   def new_namespace(state, module) do
@@ -224,8 +230,9 @@ defmodule ElixirSense.Core.State do
       else
         [attribute|attributes_from_scope]
       end
-
-    %{state | attributes: [attributes_from_scope|other_attributes], scope_attributes: [attributes_from_scope|tl(state.scope_attributes)]}
+    attributes = [attributes_from_scope|other_attributes]
+    scope_attributes = [attributes_from_scope|tl(state.scope_attributes)]
+    %{state | attributes: attributes, scope_attributes: scope_attributes}
   end
 
   def add_behaviour(state, module) do

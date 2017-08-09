@@ -1,5 +1,4 @@
 defmodule ElixirSense.Core.Introspection do
-
   @moduledoc """
   A collection of functions to introspect/format docs, specs, types and callbacks.
 
@@ -22,7 +21,7 @@ defmodule ElixirSense.Core.Introspection do
     :gen_event   => GenEvent
   }
 
-  def all_modules() do
+  def all_modules do
     ModuleInfo.all_applications_modules()
   end
 
@@ -52,7 +51,9 @@ defmodule ElixirSense.Core.Introspection do
         nil -> nil
         docs ->
           for {{f, arity}, _, _, args, text} <- docs, f == fun do
-            fun_args_text = Enum.map_join(args, ", ", &format_doc_arg(&1)) |> String.replace("\\\\", "\\\\\\\\")
+            fun_args_text = args
+            |> Enum.map_join(", ", &format_doc_arg(&1))
+            |> String.replace("\\\\", "\\\\\\\\")
             mod_str = module_to_string(mod)
             fun_str = Atom.to_string(fun)
             "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity)}#{text}"
@@ -96,7 +97,8 @@ defmodule ElixirSense.Core.Introspection do
 
         #{doc}
       """
-    end |> Enum.join("\n\n____\n\n")
+    end
+    |> Enum.join("\n\n____\n\n")
   end
 
   def get_callbacks_with_docs(mod) when is_atom(mod) do
@@ -115,7 +117,8 @@ defmodule ElixirSense.Core.Introspection do
       {callbacks, docs} ->
         Enum.map docs, fn
           {{fun, arity}, _, :macrocallback, doc} ->
-            get_callback_with_doc(fun, :macrocallback, doc, {:"MACRO-#{fun}", arity + 1}, callbacks)
+            fun
+            |> get_callback_with_doc(:macrocallback, doc, {:"MACRO-#{fun}", arity + 1}, callbacks)
             |> Map.put(:arity, arity)
           {{fun, arity}, _, kind, doc} ->
             get_callback_with_doc(fun, kind, doc, {fun, arity}, callbacks)
@@ -124,7 +127,9 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_types_with_docs(module) when is_atom(module) do
-    get_types(module) |> Enum.map(fn {_, {t, _, _args}} = type ->
+    module
+    |> get_types()
+    |> Enum.map(fn {_, {t, _, _args}} = type ->
       %{type: format_type(type), doc: get_type_doc(module, t)}
     end)
   end
@@ -191,7 +196,8 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def define_callback?(mod, fun, arity) do
-    Kernel.Typespec.beam_callbacks(mod)
+    mod
+    |> Kernel.Typespec.beam_callbacks()
     |> Enum.any?(fn {{f, a}, _} -> {f, a} == {fun, arity}  end)
   end
 
@@ -249,7 +255,9 @@ defmodule ElixirSense.Core.Introspection do
     {_, [spec | _]} = List.keyfind(callbacks, key, 0)
     {_f, arity} = key
 
-    spec_ast = Typespec.spec_to_ast(name, spec) |> Macro.prewalk(&drop_macro_env/1)
+    spec_ast = name
+    |> Typespec.spec_to_ast(spec)
+    |> Macro.prewalk(&drop_macro_env/1)
     signature = get_typespec_signature(spec_ast, arity)
     definition = format_spec_ast(spec_ast)
 
@@ -328,23 +336,30 @@ defmodule ElixirSense.Core.Introspection do
     {ast, index}
   end
   defp next_snippet(ast, index) do
-    {"${#{index}:#{spec_ast_to_string(ast)}}$", index+1}
+    {"${#{index}:#{spec_ast_to_string(ast)}}$", index + 1}
   end
 
   def param_to_var({{:=, _, [_lhs, {name, _, _} = rhs]}, arg_index}) when is_atom(name) do
-    to_var(rhs, arg_index + 1) |> Macro.to_string
+    rhs
+    |> to_var(arg_index + 1)
+    |> Macro.to_string
   end
 
   def param_to_var({{:=, _, [{name, _, _} = lhs, _rhs]}, arg_index}) when is_atom(name) do
-    to_var(lhs, arg_index + 1) |> Macro.to_string
+    lhs
+    |> to_var(arg_index + 1)
+    |> Macro.to_string
   end
 
   def param_to_var({{:\\, _, _} = ast, _}) do
-    ast |> Macro.to_string
+    ast
+    |> Macro.to_string
   end
 
   def param_to_var({ast, arg_index}) do
-    to_var(ast, arg_index + 1) |> Macro.to_string
+    ast
+    |> to_var(arg_index + 1)
+    |> Macro.to_string
   end
 
   defp to_var({:{}, _, _}, _),
@@ -376,17 +391,24 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_module_subtype(module) do
-    has_func = fn f,a -> Code.ensure_loaded?(module) && Kernel.function_exported?(module,f,a) end
+    has_func = fn f, a -> Code.ensure_loaded?(module) && Kernel.function_exported?(module, f, a) end
     cond do
       has_func.(:__protocol__, 1) -> :protocol
       has_func.(:__impl__,     1) -> :implementation
-      has_func.(:__struct__,   0) -> if Map.get(module.__struct__, :__exception__), do: :exception, else: :struct
+      has_func.(:__struct__,   0) ->
+        if Map.get(module.__struct__, :__exception__) do
+          :exception
+        else
+          :struct
+        end
       true -> nil
     end
   end
 
-  def extract_fun_args_and_desc({ { _fun, _ }, _line, _kind, args, doc }) do
-    args = Enum.map_join(args, ",", &format_doc_arg(&1)) |> String.replace(~r/\s+/, " ")
+  def extract_fun_args_and_desc({{_fun, _}, _line, _kind, args, doc}) do
+    extracted_args = args
+    |> Enum.map_join(",", &format_doc_arg(&1))
+    |> String.replace(~r/\s+/, " ")
     desc = extract_summary_from_docs(doc)
     {args, desc}
   end
@@ -400,7 +422,7 @@ defmodule ElixirSense.Core.Introspection do
       nil   -> %{}
       specs ->
         for {_kind, {{f, a}, _spec}} = spec <- specs, into: %{} do
-          {{f,a}, spec_to_string(spec)}
+          {{f, a}, spec_to_string(spec)}
         end
     end
   end
@@ -433,17 +455,21 @@ defmodule ElixirSense.Core.Introspection do
       {:ok, quoted} when is_atom(quoted) ->
         {quoted, nil}
       {:ok, quoted} ->
-        case Macro.decompose_call(quoted) do
-          {{:__aliases__, _, mod_parts}, fun, _args} ->
-            {Module.concat(mod_parts), fun}
-          {:__aliases__, mod_parts} ->
-            {Module.concat(mod_parts), nil}
-          {mod, func, []} when is_atom(mod) and is_atom(func) ->
-            {mod, func}
-          {func, []} when is_atom(func) ->
-            {nil, func}
-          _ -> {nil, nil}
-        end
+        split_mod_quoted_fun_call(quoted)
+    end
+  end
+
+  def split_mod_quoted_fun_call(quoted) do
+    case Macro.decompose_call(quoted) do
+      {{:__aliases__, _, mod_parts}, fun, _args} ->
+        {Module.concat(mod_parts), fun}
+      {:__aliases__, mod_parts} ->
+        {Module.concat(mod_parts), nil}
+      {mod, func, []} when is_atom(mod) and is_atom(func) ->
+        {mod, func}
+      {func, []} when is_atom(func) ->
+        {nil, func}
+      _ -> {nil, nil}
     end
   end
 
@@ -451,25 +477,25 @@ defmodule ElixirSense.Core.Introspection do
     docs = Code.get_docs(module, :docs) || []
     specs = get_module_specs(module)
     for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false, into: %{} do
-      spec = Map.get(specs, {f,a}, "")
+      spec = Map.get(specs, {f, a}, "")
       {fun_args, desc} = extract_fun_args_and_desc(func_doc)
       {{f, a}, {func_kind, fun_args, desc, spec}}
     end
   end
 
   def get_callback_ast(module, callback, arity) do
-    {{name, _}, [spec | _]} =
-      Kernel.Typespec.beam_callbacks(module)
+    {{name, _}, [spec | _]} = module
+      |> Kernel.Typespec.beam_callbacks()
       |> Enum.find(fn {{f, a}, _} -> {f, a} == {callback, arity}  end)
 
     Kernel.Typespec.spec_to_ast(name, spec)
   end
 
-  defp format_doc_arg({ :\\, _, [left, right] }) do
+  defp format_doc_arg({:\\, _, [left, right]}) do
     format_doc_arg(left) <> " \\\\ " <> Macro.to_string(right)
   end
 
-  defp format_doc_arg({ var, _, _ }) do
+  defp format_doc_arg({var, _, _}) do
     Atom.to_string(var)
   end
 

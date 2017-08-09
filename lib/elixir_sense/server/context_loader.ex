@@ -1,4 +1,7 @@
 defmodule ElixirSense.Server.ContextLoader do
+  @moduledoc """
+  Server Context Loader
+  """
   use GenServer
 
   @minimal_reload_time 2000
@@ -54,9 +57,9 @@ defmodule ElixirSense.Server.ContextLoader do
     end)
   end
 
-  defp all_loaded() do
+  defp all_loaded do
     preload_modules([Inspect, :base64, :crypto])
-    for {m,_} <- :code.all_loaded, do: m
+    for {m, _} <- :code.all_loaded, do: m
   end
 
   defp load_paths(env, cwd) do

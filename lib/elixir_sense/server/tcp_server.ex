@@ -1,4 +1,7 @@
 defmodule ElixirSense.Server.TCPServer do
+  @moduledoc """
+  TCP Server connection endpoint
+  """
   use Bitwise
 
   alias ElixirSense.Server.{RequestHandler, ContextLoader}
@@ -42,13 +45,15 @@ defmodule ElixirSense.Server.TCPServer do
   defp format_output("tcpip", host, port, auth_token) do
     "ok:#{host}:#{port}:#{auth_token}"
   end
+
   defp format_output("unix", host, file, _auth_token) do
     "ok:#{host}:#{file}"
   end
 
   defp listen_options("tcpip", port) do
-    {String.to_integer(port), @default_listen_options ++ [ip: {127,0,0,1}]}
+    {String.to_integer(port), @default_listen_options ++ [ip: {127, 0, 0, 1}]}
   end
+
   defp listen_options("unix", _port) do
     {0, @default_listen_options ++ [ifaddr: {:local, socket_file()}]}
   end
@@ -97,13 +102,17 @@ defmodule ElixirSense.Server.TCPServer do
     end
   end
 
-  defp dispatch_request(%{ "request_id" => request_id, "auth_token" => req_token, "request" => request, "payload" => payload }, auth_token) do
+  defp dispatch_request(%{
+    "request_id" => request_id,
+    "auth_token" => req_token,
+    "request" => request,
+    "payload" => payload}, auth_token) do
     if secure_compare(auth_token, req_token) do
       ContextLoader.reload()
       payload = RequestHandler.handle_request(request, payload)
-      %{request_id: request_id, payload: payload, error: nil }
+      %{request_id: request_id, payload: payload, error: nil}
     else
-      %{request_id: request_id, payload: nil, error: "unauthorized" }
+      %{request_id: request_id, payload: nil, error: "unauthorized"}
     end
   end
 
@@ -126,7 +135,9 @@ defmodule ElixirSense.Server.TCPServer do
     secure_compare(a_list, b_list)
   end
   defp secure_compare(a, b) when is_list(a) and is_list(b) do
-    res = Enum.zip(a, b) |> Enum.reduce(0, fn({a_byte, b_byte}, acc) ->
+    res = a
+    |> Enum.zip(b)
+    |> Enum.reduce(0, fn({a_byte, b_byte}, acc) ->
       acc ||| bxor(a_byte, b_byte)
     end)
     res == 0

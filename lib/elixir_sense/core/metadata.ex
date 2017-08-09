@@ -1,4 +1,7 @@
 defmodule ElixirSense.Core.Metadata do
+  @moduledoc """
+  Core Metadata
+  """
 
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Introspection
@@ -31,12 +34,15 @@ defmodule ElixirSense.Core.Metadata do
 
   def get_function_params(%__MODULE__{} = metadata, module, function) do
     params =
-      get_function_info(metadata, module, function)
+      metadata
+      |> get_function_info(module, function)
       |> Map.get(:params)
       |> Enum.reverse
 
     Enum.map(params, fn param ->
-      Macro.to_string(param) |> String.slice(1..-2)
+      param
+      |> Macro.to_string()
+      String.slice(1..-2)
     end)
   end
 
@@ -44,7 +50,8 @@ defmodule ElixirSense.Core.Metadata do
     docs = code_docs || Code.get_docs(module, :docs) || []
 
     params_list =
-      get_function_info(metadata, module, function)
+      metadata
+      |> get_function_info(module, function)
       |> Map.get(:params)
       |> Enum.reverse
 
@@ -57,7 +64,7 @@ defmodule ElixirSense.Core.Metadata do
           {Introspection.extract_summary_from_docs(text), Introspection.get_spec(module, function, arity)}
         end)
       %{name: Atom.to_string(function),
-        params: Enum.with_index(params) |> Enum.map(&Introspection.param_to_var/1),
+        params: params |> Enum.with_index() |> Enum.map(&Introspection.param_to_var/1),
         documentation: doc,
         spec: spec
       }

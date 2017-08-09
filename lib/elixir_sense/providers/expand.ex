@@ -28,10 +28,10 @@ defmodule ElixirSense.Providers.Expand do
     try do
       {_, expr} = code |> Code.string_to_quoted
       %{
-        expand_once: Macro.expand_once(expr, env) |> Macro.to_string,
-        expand:  Macro.expand(expr, env) |> Macro.to_string,
-        expand_partial: Ast.expand_partial(expr, env) |> Macro.to_string,
-        expand_all: Ast.expand_all(expr, env) |> Macro.to_string,
+        expand_once:    expr |> Macro.expand_once(env)  |> Macro.to_string,
+        expand:         expr |> Macro.expand(env)       |> Macro.to_string,
+        expand_partial: expr |> Ast.expand_partial(env) |> Macro.to_string,
+        expand_all:     expr |> Ast.expand_all(env)     |> Macro.to_string,
       }
     rescue
       e ->

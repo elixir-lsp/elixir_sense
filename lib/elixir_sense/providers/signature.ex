@@ -28,10 +28,11 @@ defmodule ElixirSense.Providers.Signature do
 
   defp find_signatures({mod, fun}, metadata) do
     docs = Code.get_docs(mod, :docs)
-    case Metadata.get_function_signatures(metadata, mod, fun, docs) do
+    signatures = case Metadata.get_function_signatures(metadata, mod, fun, docs) do
       [] -> Introspection.get_signatures(mod, fun, docs)
       signatures -> signatures
-    end |> Enum.uniq_by(fn sig -> sig.params end)
+    end
+    signatures |> Enum.uniq_by(fn sig -> sig.params end)
   end
 
 end

@@ -1,5 +1,7 @@
 defmodule ElixirSense.Providers.Docs do
-
+  @moduledoc """
+  Doc Provider
+  """
   alias ElixirSense.Core.Introspection
 
   @spec all(String.t, [module], [{module, module}], module) :: {actual_mod_fun :: String.t, docs :: Introspection.docs}
