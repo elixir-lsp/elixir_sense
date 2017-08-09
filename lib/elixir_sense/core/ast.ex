@@ -26,15 +26,20 @@ defmodule ElixirSense.Core.Ast do
   def expand_partial(ast, env) do
     {expanded_ast, _} = Macro.prewalk(ast, {env, 1}, &do_expand_partial/2)
     expanded_ast
+  
+  rescue
+    _e -> ast
   catch
-    ast
+    e -> e
   end
 
   def expand_all(ast, env) do
     {expanded_ast, _} = Macro.prewalk(ast, {env, 1}, &do_expand_all/2)
     expanded_ast
+  rescue
+    _e -> ast
   catch
-    ast
+    e -> e
   end
 
   def set_module_for_env(env, module) do
