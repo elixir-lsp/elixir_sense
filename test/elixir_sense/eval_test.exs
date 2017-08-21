@@ -74,7 +74,7 @@ defmodule ElixirSense.Evaltest do
           def(stop(_state)) do
             :ok
           end
-          defoverridable(stop: 1)
+          defoverridable(Application)
         )
       )
       """ |> String.trim
