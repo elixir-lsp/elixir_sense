@@ -41,7 +41,7 @@ defmodule ElixirSense.Providers.Definition do
     file = if file && File.exists?(file) do
       file
     else
-      erl_file = module |> :code.which |> to_string |> String.replace(~r/(.+)\/ebin\/([^\s]+)\.beam$/, "\\1/src/\\2.erl")
+      erl_file = module |> :code.which |> to_string |> String.replace(Regex.recompile!(~r/(.+)\/ebin\/([^\s]+)\.beam$/), "\\1/src/\\2.erl")
       if File.exists?(erl_file) do
         erl_file
       end
@@ -69,7 +69,7 @@ defmodule ElixirSense.Providers.Definition do
       file
       |> File.read!
       |> String.split(["\n", "\r\n"])
-      |> Enum.find_index(&String.match?(&1, ~r/^#{fun_name}\b/))
+      |> Enum.find_index(&String.match?(&1, Regex.recompile!(~r/^#{fun_name}\b/)))
 
     (index || 0) + 1
   end
