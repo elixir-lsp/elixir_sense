@@ -12,8 +12,12 @@ defmodule ElixirSense.Core.Ast do
 
   @max_expand_count 30_000
 
-  def extract_use_info(use_ast, module) do
-    env = Map.merge(__ENV__, %{module: module, function: nil})
+  def extract_use_info(use_ast, module, state) do
+
+    %{aliases: aliases} = state
+    current_aliases = aliases |> :lists.reverse |> List.flatten
+    env = Map.merge(__ENV__, %{module: module, function: nil, aliases: current_aliases})
+
     {expanded_ast, _requires} = Macro.prewalk(use_ast, {env, 1}, &do_expand/2)
     {_ast, env_info} = Macro.prewalk(expanded_ast, @empty_env_info, &pre_walk_expanded/2)
     env_info
