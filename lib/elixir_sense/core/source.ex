@@ -160,6 +160,10 @@ defmodule ElixirSense.Core.Source do
     updated_pos = update_pos(pos, state.pos)
     scan(tokens, %{state | candidate: [Module.concat([value])|state.candidate], pos: updated_pos})
   end
+  defp scan([{:alias, pos, value}|tokens], %{count: 1} = state) do
+    updated_pos = update_pos(pos, state.pos)
+    scan(tokens, %{state | candidate: [Module.concat([value])|state.candidate], pos: updated_pos})
+  end
   defp scan([{:atom, pos, value}|tokens], %{count: 1} = state) do
     scan(tokens, %{state | candidate: [value|state.candidate], pos: update_pos(pos, state.pos)})
   end
