@@ -20,8 +20,27 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
   test "get_callbacks_with_docs for Elixir behaviours with no docs defined" do
     assert get_callbacks_with_docs(Exception) == [
-      %{name: :exception, arity: 1, callback: "@callback exception(term) :: t\n",   signature: "exception(term)", doc: nil},
-      %{name: :message,   arity: 1, callback: "@callback message(t) :: String.t\n", signature: "message(t)",      doc: nil}
+      %{
+        arity: 2,
+        name: :blame,
+        callback: "@callback blame(t, stacktrace) :: {t, stacktrace}\n",
+        doc: "Called from `Exception.blame/3` to augment the exception struct.\n\nCan be used to collect additional information about the exception\nor do some additional expensive computation.\n",
+        signature: "blame(t, stacktrace)"
+      }, 
+      %{
+        arity: 1,
+        name: :exception,
+        doc: nil,
+        callback: "@callback exception(term) :: t\n",
+        signature: "exception(term)"
+      },
+      %{
+        arity: 1,
+        name: :message,
+        callback: "@callback message(t) :: String.t\n",
+        doc: nil,
+        signature: "message(t)"
+      }
     ]
   end
 
@@ -33,7 +52,8 @@ defmodule ElixirSense.Core.IntrospectionTest do
     assert info.callback  == """
     @callback code_change(old_vsn, state :: term, extra :: term) ::
       {:ok, new_state :: term} |
-      {:error, reason :: term} when old_vsn: term | {:down, term}
+      {:error, reason :: term} |
+      {:down, term} when old_vsn: term
     """
     assert info.doc       =~ "Invoked to change the state of the `GenServer`"
     assert info.signature == "code_change(old_vsn, state, extra)"
@@ -63,16 +83,17 @@ defmodule ElixirSense.Core.IntrospectionTest do
     assert format_spec_ast(ast) == """
     code_change(old_vsn, state :: term, extra :: term) ::
       {:ok, new_state :: term} |
-      {:error, reason :: term} when old_vsn: term | {:down, term}
+      {:error, reason :: term} |
+      {:down, term} when old_vsn: term
     """
   end
 
   test "get_returns_from_callback" do
     returns = get_returns_from_callback(GenServer, :code_change, 3)
     assert returns == [
-      %{description: "{:ok, new_state}", snippet: "{:ok, \"${1:new_state}$\"}", spec: "{:ok, new_state :: term} when old_vsn: term | {:down, term}"},
-      %{description: "{:error, reason}", snippet: "{:error, \"${1:reason}$\"}", spec: "{:error, reason :: term} when old_vsn: term | {:down, term}"}
-    ]
+      %{description: "{:ok, new_state}", snippet: "{:ok, \"${1:new_state}$\"}", spec: "{:ok, new_state :: term} when old_vsn: term"},
+      %{description: "{:error, reason}", snippet: "{:error, \"${1:reason}$\"}", spec: "{:error, reason :: term} when old_vsn: term"},
+      %{description: "{:down, term}", snippet: "{:down, term()}", spec: "{:down, term} when old_vsn: term"}]
   end
 
   test "get_returns_from_callback (all types in 'when')" do

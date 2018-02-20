@@ -63,7 +63,7 @@ defmodule ElixirSense do
       ...> '''
       iex> {path, line} = ElixirSense.definition(code, 3, 11)
       iex> "#{Path.basename(path)}:#{to_string(line)}"
-      "enum.ex:2576"
+      "enum.ex:2583"
   """
   @spec definition(String.t, pos_integer, pos_integer) :: Definition.location
   def definition(code, line, column) do

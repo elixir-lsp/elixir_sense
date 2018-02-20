@@ -17,7 +17,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert result |> Enum.at(4) == %{args: "list", arity: 1, name: "first", origin: "List", spec: "@spec first([elem]) :: nil | elem when elem: var", summary: "Returns the first element in `list` or `nil` if `list` is empty.", type: "function"}
     assert result |> Enum.at(5) == %{args: "list", arity: 1, name: "last", origin: "List", spec: "@spec last([elem]) :: nil | elem when elem: var", summary: "Returns the last element in `list` or `nil` if `list` is empty.", type: "function"}
     assert result |> Enum.at(13) == %{args: "", arity: 1, name: "module_info", origin: "List", spec: nil, summary: "", type: "function"}
-    assert result |> Enum.at(15) == %{args: "list,item", arity: 2, name: "delete", origin: "List", spec: "@spec delete(list, any) :: list", summary: "Deletes the given `item` from the `list`. Returns a new list without\nthe item.", type: "function"}
+    assert result |> Enum.at(15) == %{args: "list,counter \\\\ :infinity", name: "ascii_printable?", arity: 2, origin: "List", type: "function", spec: "", summary: "Checks if a list is a charlist made only of printable ASCII characters."}
   end
 
   test "return completion candidates for 'Str'" do
