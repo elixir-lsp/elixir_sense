@@ -15,7 +15,7 @@ defmodule ElixirSense.Core.ParserTest do
       error: nil,
       mods_funs_to_lines: %{{MyModule, nil, nil} => %{lines: [1]}},
       lines_to_env: %{
-        2 => %Env{imports: []},
+        1 => %Env{imports: []},
         3 => %Env{imports: [List]}
       },
       source: "defmodule MyModule" <> _
@@ -32,7 +32,7 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
       error: nil,
       lines_to_env: %{
-        2 => %Env{imports: []},
+        1 => %Env{imports: []},
         3 => %Env{imports: [List]}
       }
     } = parse_string(source, true, true, 3)
@@ -48,7 +48,7 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
       error: nil,
       lines_to_env: %{
-        2 => %Env{imports: []},
+        1 => %Env{imports: []},
         3 => %Env{imports: [List]}
       }
     } = parse_string(source, true, true, 3)
@@ -64,7 +64,7 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
       error: nil,
       lines_to_env: %{
-        2 => %Env{imports: []},
+        1 => %Env{imports: []},
         3 => %Env{imports: [List]}
       }
     } = parse_string(source, true, true, 3)
@@ -80,7 +80,7 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
       error: nil,
       lines_to_env: %{
-        2 => %Env{imports: []},
+        1 => %Env{imports: []},
         3 => %Env{imports: [List]}
       }
     } = parse_string(source, true, true, 3)
@@ -96,7 +96,7 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
       error: nil,
       lines_to_env: %{
-        2 => %Env{imports: []},
+        1 => %Env{imports: []},
         3 => %Env{imports: [List]}
       }
     } = parse_string(source, true, true, 3)
