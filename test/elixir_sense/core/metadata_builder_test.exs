@@ -443,6 +443,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_requires(state, 3)  == [Mod.Mod2, Mod.Mo1]
   end
 
+  test "requires with :as option" do
+
+    state =
+      """
+      defmodule MyModule do
+        require Integer, as: I
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_requires(state, 3)  == [Integer]
+    assert get_line_aliases(state, 3)  == [{I, Integer}]
+  end
+
   test "current module" do
 
     state =

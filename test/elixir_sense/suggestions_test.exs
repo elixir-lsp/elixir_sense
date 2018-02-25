@@ -227,4 +227,18 @@ defmodule ElixirSense.SuggestionsTest do
     assert Enum.at(list,1) == %{type: :module, name: "Elixir", subtype: nil, summary: ""}
   end
 
+  test "suggestion for aliases modules defined by require clause" do
+
+    buffer =
+      """
+      defmodule Mod do
+        require Integer, as: I
+        I.is_o
+      end
+      """
+
+    list = ElixirSense.suggestions(buffer, 3, 9)
+    assert Enum.at(list,1).name == "is_odd"
+  end
+
 end

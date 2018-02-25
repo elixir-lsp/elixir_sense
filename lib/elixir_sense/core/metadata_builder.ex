@@ -237,6 +237,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre({:require, meta, [module_info, []]}, state)
   end
 
+  # require with `as` option
+  defp pre({:require, [line: line], [{_, _, module_atoms = [mod|_]}, [as: {:__aliases__, _, alias_atoms = [al|_]}]]} = ast, state) when is_atom(mod) and is_atom(al) do
+    alias_tuple = {Module.concat(alias_atoms), Module.concat(module_atoms)}
+    module = module_atoms |> Module.concat
+    {_, new_state} = pre_alias(ast, state, line, alias_tuple)
+    pre_require(ast, new_state, line, module)
+  end
+
   # require with options
   defp pre({:require, [line: line], [{_, _, module_atoms = [mod|_]}, _opts]} = ast, state) when is_atom(mod) do
     module = module_atoms |> Module.concat
