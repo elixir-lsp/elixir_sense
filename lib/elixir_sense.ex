@@ -18,6 +18,7 @@ defmodule ElixirSense do
   alias ElixirSense.Providers.Signature
   alias ElixirSense.Providers.Expand
   alias ElixirSense.Providers.Eval
+  alias ElixirSense.Providers.References
 
   @doc ~S"""
   Returns all documentation related a module or function, including types and callback information.
@@ -295,6 +296,10 @@ defmodule ElixirSense do
   @spec match(String.t) :: Eval.bindings
   def match(code) do
     Eval.match_and_format(code)
+  end
+
+  def references(code, line, column) do
+    References.find(code, line, column)
   end
 
 end
