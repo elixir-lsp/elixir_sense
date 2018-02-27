@@ -5,53 +5,43 @@ defmodule ElixirSense.Providers.References do
   any function or module identified at the provided location.
   """
 
-  alias ElixirSense.Core.{Metadata, Parser, Source}
+  alias ElixirSense.Core.Introspection
 
-  def find(text, line, character) do
-    xref_at_cursor(text, line, character) |> Enum.map(&build_location/1)
+  def find(nil, _, _, _, _) do
+    []
   end
 
-  defp xref_at_cursor(text, line, character) do
-    subject_at_cursor(text, line, character)
-    |> callee_at_cursor(text, line)
+  def find(subject, imports, aliases, module, scope) do
+    subject
+    |> Introspection.split_mod_fun_call
+    |> Introspection.actual_mod_fun(imports, aliases, module)    
+    |> xref_at_cursor(module, scope)
+    |> Enum.map(&build_location/1)
+    |> Enum.uniq()
+  end
+
+  defp xref_at_cursor(actual_mod_fun, module, scope) do
+    actual_mod_fun
+    |> callee_at_cursor(module, scope)
     |> case do
       {:ok, mfa} -> callers(mfa)
       _ -> []
     end
   end
 
-  defp callee_at_cursor(nil, _, _), do: :error
+  defp callee_at_cursor({module, func}, module, {func, arity}) do
+    {:ok, [module, func, arity]}
+  end
 
-  defp callee_at_cursor(subject_at_cursor, text, line) do
-    case function_context_at_cursor(text, line) do
-      [_module, ^subject_at_cursor, _arity] = mfa -> {:ok, mfa}
-      _ -> Mix.Utils.parse_mfa(subject_at_cursor)
-    end
+  defp callee_at_cursor({module, func}, _module, _scope) do
+    {:ok, [module, func]}
   end
 
   def callers(mfa), do: Mix.Tasks.Xref.calls() |> Enum.filter(caller_filter(mfa))
 
   defp caller_filter([module, func, arity]), do: &match?(%{callee: {^module, ^func, ^arity}}, &1)
-
   defp caller_filter([module, func]), do: &match?(%{callee: {^module, ^func, _}}, &1)
-
   defp caller_filter([module]), do: &match?(%{callee: {^module, _, _}}, &1)
-
-  defp subject_at_cursor(text, line, character) do
-    case Source.subject(text, line, character) do
-      nil -> nil
-      subject -> String.to_atom(subject)
-    end
-  end
-
-  defp function_context_at_cursor(text, line) do
-    Parser.parse_string(text, true, true, line)
-    |> Metadata.get_env(line)
-    |> case do
-      %{module: module, scope: {scope, arity}} -> [module, scope, arity]
-      _ -> nil
-    end
-  end
 
   defp build_location(call) do
     %{

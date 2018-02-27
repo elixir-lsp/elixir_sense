@@ -299,7 +299,17 @@ defmodule ElixirSense do
   end
 
   def references(code, line, column) do
-    References.find(code, line, column)
+    subject = Source.subject(code, line, column)
+
+    buffer_file_metadata = Parser.parse_string(code, true, true, line)
+    %State.Env{
+      imports: imports,
+      aliases: aliases,
+      module: module,
+      scope: scope
+    } = Metadata.get_env(buffer_file_metadata, line)
+
+    References.find(subject, imports, aliases, module, scope)
   end
 
 end
