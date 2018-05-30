@@ -564,7 +564,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   defp string_to_state(string) do
     string
-    |> Code.string_to_quoted
+    |> Code.string_to_quoted(columns: true)
     |> (fn {:ok, ast} -> ast end).()
     |> MetadataBuilder.build
   end
@@ -626,7 +626,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     file = module.module_info(:compile)[:source]
     acc =
       File.read!(file)
-      |> Code.string_to_quoted
+      |> Code.string_to_quoted(columns: true)
       |> MetadataBuilder.build
 
     %{lines: lines} = Map.get(acc.mods_funs_to_lines, {module, func, arity})
