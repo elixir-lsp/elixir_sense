@@ -147,20 +147,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert ElixirSense.definition(buffer, 2, 5) == {"non_existing", nil}
   end
 
-  # Call this when running `mix test`, but not when running `elixir run_test.exs`
-  if Process.whereis(Elixir.Mix.Supervisor) do
-    test "erlang modules from deps" do
-      buffer = """
-      defmodule MyModule do
-        :hackney
-      end
-      """
-      {file, line} = ElixirSense.definition(buffer, 2, 5)
-      assert file =~ "deps/hackney/src/hackney.erl"
-      assert line == 1
-    end
-  end
-
   test "find the related module when searching for built-in functions" do
     buffer = """
     defmodule MyModule do
