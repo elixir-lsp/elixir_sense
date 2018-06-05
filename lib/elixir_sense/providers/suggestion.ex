@@ -72,6 +72,7 @@ defmodule ElixirSense.Providers.Suggestion do
   """
   @spec find(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope) :: [suggestion]
   def find(hint, imports, aliases, vars, attributes, behaviours, scope) do
+    vars = Enum.map(vars, fn v -> v.name end)
     %{hint: hint_suggestion, suggestions: mods_and_funcs} = find_hint_mods_funcs(hint, imports, aliases)
 
     callbacks_or_returns =

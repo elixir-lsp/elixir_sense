@@ -7,6 +7,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   import ElixirSense.Core.State
   alias ElixirSense.Core.Ast
   alias ElixirSense.Core.State
+  alias ElixirSense.Core.State.VarInfo
 
   @scope_keywords [:for, :try, :fn]
   @block_keywords [:do, :else, :rescue, :catch, :after]
@@ -358,11 +359,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp find_vars(ast) do
     {_ast, vars} = Macro.prewalk(ast, [], &match_var/2)
-    vars |> Enum.uniq_by(&(&1))
+    vars
   end
 
-  defp match_var({var, [line: _, column: _], context} = ast, vars) when is_atom(var) and context in [nil, Elixir] do
-    {ast, [var|vars]}
+  defp match_var({var, [line: line, column: column], context} = ast, vars) when is_atom(var) and context in [nil, Elixir] do
+    var_info = %VarInfo{name: var, positions: [{line, column}]}
+    {ast, [var_info | vars]}
   end
 
   defp match_var(ast, vars) do

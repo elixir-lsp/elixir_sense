@@ -24,12 +24,17 @@ defmodule ElixirSense.Core.State do
     defstruct imports: [], requires: [], aliases: [], module: nil, vars: [], attributes: [], behaviours: [], scope: nil
   end
 
+  defmodule VarInfo do
+    @moduledoc false
+    defstruct name: nil, positions: []
+  end
+
   def get_current_env(state) do
     current_module     = get_current_module(state)
     current_imports    = state.imports    |> :lists.reverse |> List.flatten
     current_requires   = state.requires   |> :lists.reverse |> List.flatten
     current_aliases    = state.aliases    |> :lists.reverse |> List.flatten
-    current_vars       = state.scope_vars |> :lists.reverse |> List.flatten
+    current_vars       = state.scope_vars |> List.flatten |> reduce_vars() |> Map.values()
     current_attributes = state.scope_attributes |> :lists.reverse |> List.flatten
     current_behaviours = hd(state.behaviours)
     current_scope      = hd(state.scopes)
@@ -203,19 +208,15 @@ defmodule ElixirSense.Core.State do
     Enum.reduce(modules, state, fn(mod, state) -> add_require(state, mod) end)
   end
 
-  def add_var(state, var) do
+  def add_var(state, %{name: var} = var_info) do
     scope = get_current_scope_name(state)
     [vars_from_scope|other_vars] = state.vars
 
     vars_from_scope =
-      if var in vars_from_scope do
-        vars_from_scope
-      else
-        case Atom.to_string(var) do
-          "_" <> _ -> vars_from_scope
-          ^scope   -> vars_from_scope
-          _        -> [var|vars_from_scope]
-        end
+      case Atom.to_string(var) do
+        "_" <> _ -> vars_from_scope
+        ^scope   -> vars_from_scope
+        _        -> [var_info|vars_from_scope]
       end
 
     %{state | vars: [vars_from_scope|other_vars], scope_vars: [vars_from_scope|tl(state.scope_vars)]}
@@ -248,4 +249,11 @@ defmodule ElixirSense.Core.State do
     vars |> Enum.reduce(state, fn(var, state) -> add_var(state, var) end)
   end
 
+  defp reduce_vars(vars) do
+    Enum.reduce(vars, %{}, fn %VarInfo{name: var, positions: positions}, acc ->
+      var_info = Map.get(acc, var, %VarInfo{name: var, positions: []})
+      var_info = %VarInfo{var_info | positions: Enum.sort(var_info.positions ++ positions)}
+      Map.put(acc, var, var_info)
+    end)
+  end
 end
