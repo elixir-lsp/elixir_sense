@@ -73,10 +73,11 @@ defmodule ElixirSense do
     %State.Env{
       imports: imports,
       aliases: aliases,
-      module: module
+      module: module,
+      vars: vars,
     } = Metadata.get_env(buffer_file_metadata, line)
 
-    Definition.find(subject, imports, aliases, module)
+    Definition.find(subject, imports, aliases, module, vars)
   end
 
   @doc ~S"""

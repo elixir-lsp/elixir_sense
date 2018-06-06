@@ -9,6 +9,7 @@ defmodule ElixirSense.Providers.Definition do
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.State.VarInfo
 
   @type file :: String.t
   @type line :: pos_integer
@@ -17,12 +18,18 @@ defmodule ElixirSense.Providers.Definition do
   @doc """
   Finds out where a module, function or macro was defined.
   """
-  @spec find(String.t, [module], [{module, module}], module) :: location
-  def find(subject, imports, aliases, module) do
-    subject
-    |> Introspection.split_mod_fun_call
-    |> Introspection.actual_mod_fun(imports, aliases, module)
-    |> find_source()
+  @spec find(String.t, [module], [{module, module}], module, [%VarInfo{}]) :: location
+  def find(subject, imports, aliases, module, vars) do
+    var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
+    case var_info do
+      %VarInfo{positions: [{line, _col}|_]} ->
+        {nil, line}
+      _ ->
+        subject
+        |> Introspection.split_mod_fun_call
+        |> Introspection.actual_mod_fun(imports, aliases, module)
+        |> find_source()
+    end
   end
 
   defp find_source({mod, fun}) do

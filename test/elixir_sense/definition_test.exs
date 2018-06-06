@@ -120,15 +120,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert ElixirSense.definition(buffer, 3, 16) == {"non_existing", nil}
   end
 
-  test "cannot find vars" do
-    buffer = """
-    defmodule MyModule do
-      var = 1
-    end
-    """
-    assert ElixirSense.definition(buffer, 2, 4) == {"non_existing", nil}
-  end
-
   test "cannot find map fields" do
     buffer = """
     defmodule MyModule do
@@ -156,6 +147,33 @@ defmodule ElixirSense.Providers.DefinitionTest do
     {file, line} = ElixirSense.definition(buffer, 2, 10)
     assert file =~ "lib/elixir/lib/list.ex"
     assert line == nil
+  end
+
+  test "find definition of variables" do
+    buffer = """
+    defmodule MyModule do
+      def func do
+        var1 = 1
+        var2 = 2
+        var1 = 3
+        IO.puts(var1 + var2)
+      end
+    end
+    """
+    assert ElixirSense.definition(buffer, 6, 13) == {nil, 3}
+    assert ElixirSense.definition(buffer, 6, 21) == {nil, 4}
+  end
+
+  test "find definition of params" do
+    buffer = """
+    defmodule MyModule do
+      def func(%{a: [var2|_]}) do
+        var1 = 3
+        IO.puts(var1 + var2)
+      end
+    end
+    """
+    assert ElixirSense.definition(buffer, 4, 21) == {nil, 2}
   end
 
   defp read_line(file, line) do
