@@ -7,7 +7,7 @@ defmodule ElixirSense.Core.Metadata do
   alias ElixirSense.Core.Introspection
 
   defstruct source: nil,
-            mods_funs_to_lines: %{},
+            mods_funs_to_positions: %{},
             lines_to_env: %{},
             error: nil
 
@@ -18,16 +18,16 @@ defmodule ElixirSense.Core.Metadata do
     end
   end
 
-  def get_function_line(%__MODULE__{} = metadata, module, function) do
-    case Map.get(metadata.mods_funs_to_lines, {module, function, nil}) do
-      nil -> get_function_line_using_docs(module, function)
-      %{lines: lines} -> List.last(lines)
+  def get_function_position(%__MODULE__{} = metadata, module, function) do
+    case Map.get(metadata.mods_funs_to_positions, {module, function, nil}) do
+      nil -> get_function_position_using_docs(module, function)
+      %{positions: positions} -> List.last(positions)
     end
   end
 
   def get_function_info(%__MODULE__{} = metadata, module, function) do
-    case Map.get(metadata.mods_funs_to_lines, {module, function, nil}) do
-      nil -> %{lines: [], params: []}
+    case Map.get(metadata.mods_funs_to_positions, {module, function, nil}) do
+      nil -> %{positions: [], params: []}
       info -> info
     end
   end
@@ -71,11 +71,11 @@ defmodule ElixirSense.Core.Metadata do
     end)
   end
 
-  defp get_function_line_using_docs(module, function) do
+  defp get_function_position_using_docs(module, function) do
     docs = Code.get_docs(module, :docs)
 
     for {{func, _arity}, line, _kind, _, _} <- docs, func == function do
-      line
+      {line, 0}
     end |> Enum.at(0)
   end
 

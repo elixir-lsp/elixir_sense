@@ -109,7 +109,7 @@ defmodule ElixirSense.Server.TCPServer do
       result =
         if secure_compare(auth_token, req_token) do
           ContextLoader.reload()
-          payload = RequestHandler.handle_request(request, payload)
+          payload = RequestHandler.handle_request(request, payload) |> format_payload()
           %{request_id: request_id, payload: payload, error: nil}
         else
           %{request_id: request_id, payload: nil, error: "unauthorized"}
@@ -141,6 +141,9 @@ defmodule ElixirSense.Server.TCPServer do
         {:error, "Cannot decode request data. :erlang.binary_to_term/1 failed"}
     end
   end
+
+  defp format_payload(%_{} = data), do: Map.from_struct(data)
+  defp format_payload(data), do: data
 
   # Adapted from https://github.com/plackemacher/secure_compare/blob/master/lib/secure_compare.ex
   defp secure_compare(nil, nil), do: true

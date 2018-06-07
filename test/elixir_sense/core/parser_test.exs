@@ -13,7 +13,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
     assert %Metadata{
       error: nil,
-      mods_funs_to_lines: %{{MyModule, nil, nil} => %{lines: [1]}},
+      mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 11}]}},
       lines_to_env: %{
         1 => %Env{imports: []},
         3 => %Env{imports: [List]}
@@ -111,7 +111,7 @@ defmodule ElixirSense.Core.ParserTest do
       %ElixirSense.Core.Metadata{
         error: {3,"missing terminator: end (for \"do\" starting at line 1)", ""},
         lines_to_env: %{},
-        mods_funs_to_lines: %{},
+        mods_funs_to_positions: %{},
         source: "defmodule MyModule do\n\n"
       }
   end
@@ -121,12 +121,12 @@ defmodule ElixirSense.Core.ParserTest do
     defmodule MyModule do
       use EnumFake
       import List
-      
+
     end
     """
     assert %Metadata{
       error: nil,
-      mods_funs_to_lines: %{{MyModule, nil, nil} => %{lines: [1]}},
+      mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 11}]}},
       lines_to_env: %{
         1 => %Env{imports: []},
         3 => %Env{imports: [List]}

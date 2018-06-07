@@ -719,8 +719,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> Code.string_to_quoted(columns: true)
       |> MetadataBuilder.build
 
-    %{lines: lines} = Map.get(acc.mods_funs_to_lines, {module, func, arity})
-    line_number = List.last(lines)
+    %{positions: positions} = Map.get(acc.mods_funs_to_positions, {module, func, arity})
+    {line_number, _col} = List.last(positions)
 
     File.read!(file) |> String.split("\n") |> Enum.at(line_number-1)
   end

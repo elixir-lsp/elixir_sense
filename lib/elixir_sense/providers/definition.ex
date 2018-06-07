@@ -11,19 +11,26 @@ defmodule ElixirSense.Providers.Definition do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State.VarInfo
 
-  @type file :: String.t
-  @type line :: pos_integer
-  @type location :: {file, line | nil}
+  defmodule Location do
+    @type t :: %Location{
+      found: boolean,
+      type: :module | :function | :variable,
+      file: String.t | nil,
+      line: pos_integer | nil,
+      column: pos_integer | nil
+    }
+    defstruct [:found, :type, :file, :line, :column]
+  end
 
   @doc """
   Finds out where a module, function or macro was defined.
   """
-  @spec find(String.t, [module], [{module, module}], module, [%VarInfo{}]) :: location
+  @spec find(String.t, [module], [{module, module}], module, [%VarInfo{}]) :: %Location{}
   def find(subject, imports, aliases, module, vars) do
     var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
     case var_info do
-      %VarInfo{positions: [{line, _col}|_]} ->
-        {nil, line}
+      %VarInfo{positions: [{line, column}|_]} ->
+        %Location{found: true, type: :variable, file: nil, line: line, column: column}
       _ ->
         subject
         |> Introspection.split_mod_fun_call
@@ -35,7 +42,7 @@ defmodule ElixirSense.Providers.Definition do
   defp find_source({mod, fun}) do
     mod
     |> find_mod_file()
-    |> find_fun_line(fun)
+    |> find_fun_position(fun)
   end
 
   defp find_mod_file(module) do
@@ -56,21 +63,32 @@ defmodule ElixirSense.Providers.Definition do
     {module, file}
   end
 
-  defp find_fun_line({_, file}, _fun) when file in ["non_existing", nil, ""] do
-    {"non_existing", nil}
+  defp find_fun_position({_, file}, _fun) when file in ["non_existing", nil, ""] do
+    %Location{found: false}
   end
 
-  defp find_fun_line({mod, file}, fun) do
-    line = if String.ends_with?(file, ".erl") do
-      find_fun_line_in_erl_file(file, fun)
+  defp find_fun_position({mod, file}, fun) do
+
+    type = case fun do
+      nil -> :module
+      _ -> :function
+    end
+
+    position = if String.ends_with?(file, ".erl") do
+      find_fun_position_in_erl_file(file, fun)
     else
       file_metadata = Parser.parse_file(file, false, false, nil)
-      Metadata.get_function_line(file_metadata, mod, fun)
+      Metadata.get_function_position(file_metadata, mod, fun)
     end
-    {file, line}
+
+    case position do
+      {line, column} -> %Location{found: true, type: type, file: file, line: line, column: column}
+      _ -> %Location{found: true, type: type, file: file, line: 1, column: 1}
+    end
+
   end
 
-  defp find_fun_line_in_erl_file(file, fun) do
+  defp find_fun_position_in_erl_file(file, fun) do
     fun_name = Atom.to_string(fun)
     index =
       file
@@ -78,7 +96,7 @@ defmodule ElixirSense.Providers.Definition do
       |> String.split(["\n", "\r\n"])
       |> Enum.find_index(&String.match?(&1, Regex.recompile!(~r/^#{fun_name}\b/)))
 
-    (index || 0) + 1
+    {(index || 0) + 1, 1}
   end
 
 end

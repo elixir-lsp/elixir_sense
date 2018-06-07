@@ -2,6 +2,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
   use ExUnit.Case
   alias ElixirSense.Providers.Definition
+  alias ElixirSense.Providers.Definition.Location
 
   doctest Definition
 
@@ -12,9 +13,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
       use Generator
     end
     """
-    {file, line} = ElixirSense.definition(buffer, 3, 12)
+    %{found: true, type: :module, file: file, line: line, column: column} = ElixirSense.definition(buffer, 3, 12)
     assert file =~ "lib/mix/lib/mix/generator.ex"
-    assert read_line(file, line) =~ "defmodule Mix.Generator"
+    assert read_line(file, {line, column}) =~ "Mix.Generator"
   end
 
   test "find definition of functions from Kernel" do
@@ -23,9 +24,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
     end
     """
-    {file, line} = ElixirSense.definition(buffer, 1, 2)
+    %{found: true, type: :function, file: file, line: line, column: column} = ElixirSense.definition(buffer, 1, 2)
     assert file =~ "lib/elixir/lib/kernel.ex"
-    assert read_line(file, line) =~ "defmacro defmodule"
+    assert read_line(file, {line, column}) =~ "defmodule("
   end
 
   test "find definition of functions from Kernel.SpecialForms" do
@@ -34,9 +35,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
       import List
     end
     """
-    {file, line} = ElixirSense.definition(buffer, 2, 4)
+    %{found: true, type: :function, file: file, line: line, column: column} = ElixirSense.definition(buffer, 2, 4)
     assert file =~ "lib/elixir/lib/kernel/special_forms.ex"
-    assert read_line(file, line) =~ "defmacro import"
+    assert read_line(file, {line, column}) =~ "import"
   end
 
   test "find definition of functions from imports" do
@@ -46,9 +47,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
       create_file(
     end
     """
-    {file, line} = ElixirSense.definition(buffer, 3, 4)
+    %{found: true, type: :function, file: file, line: line, column: column} = ElixirSense.definition(buffer, 3, 4)
     assert file =~ "lib/mix/lib/mix/generator.ex"
-    assert read_line(file, line) =~ "def create_file"
+    assert read_line(file, {line, column}) =~ "create_file"
   end
 
   test "find definition of functions from aliased modules" do
@@ -58,9 +59,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
       MyList.flatten([[1],[3]])
     end
     """
-    {file, line} = ElixirSense.definition(buffer, 3, 11)
+    %{found: true, type: :function, file: file, line: line, column: column} = ElixirSense.definition(buffer, 3, 11)
     assert file =~ "lib/elixir/lib/list.ex"
-    assert read_line(file, line) =~ "def flatten"
+    assert read_line(file, {line, column}) =~ "flatten"
   end
 
   test "find definition of modules" do
@@ -70,9 +71,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
       String.to_atom("erlang")
     end
     """
-    {file, line} = ElixirSense.definition(buffer, 3, 4)
+    %{found: true, type: :module, file: file, line: line, column: column} = ElixirSense.definition(buffer, 3, 4)
     assert file =~ "lib/elixir/lib/string.ex"
-    assert read_line(file, line) =~ "defmodule String"
+    assert read_line(file, {line, column}) =~ "String do"
   end
 
   test "find definition of erlang modules" do
@@ -83,9 +84,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
       end
     end
     """
-    {file, line} = ElixirSense.definition(buffer, 3, 7)
+
+    %Location{found: true, type: :module, file: file, line: 1, column: 1} = ElixirSense.definition(buffer, 3, 7)
     assert file =~ "/src/lists.erl"
-    assert line == 1
   end
 
   test "find definition of remote erlang functions" do
@@ -96,9 +97,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
       end
     end
     """
-    {file, line} = ElixirSense.definition(buffer, 3, 15)
+    %{found: true, type: :function, file: file, line: line, column: column} = ElixirSense.definition(buffer, 3, 15)
     assert file =~ "/src/lists.erl"
-    assert read_line(file, line) =~ "duplicate(N, X)"
+    assert read_line(file, {line, column}) =~ "duplicate(N, X)"
   end
 
   test "non existing modules" do
@@ -107,7 +108,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       SilverBulletModule.run
     end
     """
-    assert ElixirSense.definition(buffer, 2, 24) == {"non_existing", nil}
+    assert ElixirSense.definition(buffer, 2, 24) == %Location{found: false}
   end
 
   test "cannot find map field calls" do
@@ -117,7 +118,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       IO.puts(env.file)
     end
     """
-    assert ElixirSense.definition(buffer, 3, 16) == {"non_existing", nil}
+    assert ElixirSense.definition(buffer, 3, 16) == %Location{found: false}
   end
 
   test "cannot find map fields" do
@@ -126,7 +127,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       var = %{count: 1}
     end
     """
-    assert ElixirSense.definition(buffer, 2, 12) == {"non_existing", nil}
+    assert ElixirSense.definition(buffer, 2, 12) == %Location{found: false}
   end
 
   test "preloaded modules" do
@@ -135,7 +136,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       :erlang.node
     end
     """
-    assert ElixirSense.definition(buffer, 2, 5) == {"non_existing", nil}
+    assert ElixirSense.definition(buffer, 2, 5) == %Location{found: false}
   end
 
   test "find the related module when searching for built-in functions" do
@@ -144,9 +145,8 @@ defmodule ElixirSense.Providers.DefinitionTest do
       List.module_info()
     end
     """
-    {file, line} = ElixirSense.definition(buffer, 2, 10)
+    %{found: true, type: :function, file: file, line: 1, column: 1} = ElixirSense.definition(buffer, 2, 10)
     assert file =~ "lib/elixir/lib/list.ex"
-    assert line == nil
   end
 
   test "find definition of variables" do
@@ -160,8 +160,8 @@ defmodule ElixirSense.Providers.DefinitionTest do
       end
     end
     """
-    assert ElixirSense.definition(buffer, 6, 13) == {nil, 3}
-    assert ElixirSense.definition(buffer, 6, 21) == {nil, 4}
+    assert ElixirSense.definition(buffer, 6, 13) == %Location{found: true, type: :variable, file: nil, line: 3, column: 5}
+    assert ElixirSense.definition(buffer, 6, 21) ==  %Location{found: true, type: :variable, file: nil, line: 4, column: 5}
   end
 
   test "find definition of params" do
@@ -173,15 +173,21 @@ defmodule ElixirSense.Providers.DefinitionTest do
       end
     end
     """
-    assert ElixirSense.definition(buffer, 4, 21) == {nil, 2}
+    assert ElixirSense.definition(buffer, 4, 21) == %ElixirSense.Providers.Definition.Location{
+      found: true,
+      type: :variable,
+      file: nil,
+      line: 2,
+      column: 18,
+    }
   end
 
-  defp read_line(file, line) do
+  defp read_line(file, {line, column}) do
     file
     |> File.read!
     |> String.split(["\n", "\r\n"])
     |> Enum.at(line-1)
-    |> String.trim
+    |> String.slice((column - 1)..-1)
   end
 
 end

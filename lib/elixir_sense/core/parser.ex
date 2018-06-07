@@ -21,7 +21,7 @@ defmodule ElixirSense.Core.Parser do
         if Map.has_key?(acc.lines_to_env, cursor_line_number) or !try_to_fix_line_not_found  do
           %Metadata{
             source: source,
-            mods_funs_to_lines: acc.mods_funs_to_lines,
+            mods_funs_to_positions: acc.mods_funs_to_positions,
             lines_to_env: acc.lines_to_env
           }
         else

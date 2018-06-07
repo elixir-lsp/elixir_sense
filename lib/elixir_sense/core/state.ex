@@ -15,7 +15,7 @@ defmodule ElixirSense.Core.State do
     scope_behaviours: [[]],
     vars:       [[]],
     scope_vars: [[]],
-    mods_funs_to_lines: %{},
+    mods_funs_to_positions: %{},
     lines_to_env: %{}
   ]
 
@@ -68,15 +68,15 @@ defmodule ElixirSense.Core.State do
     scope |> Atom.to_string()
   end
 
-  def add_mod_fun_to_line(state, {module, fun, arity}, line, params) do
-    current_info = Map.get(state.mods_funs_to_lines, {module, fun, arity}, %{})
+  def add_mod_fun_to_position(state, {module, fun, arity}, position, params) do
+    current_info = Map.get(state.mods_funs_to_positions, {module, fun, arity}, %{})
     current_params = current_info |> Map.get(:params, [])
-    current_lines = current_info |> Map.get(:lines, [])
+    current_positions = current_info |> Map.get(:positions, [])
     new_params = [params|current_params]
-    new_lines = [line|current_lines]
+    new_positions = [position|current_positions]
 
-    mods_funs_to_lines = Map.put(state.mods_funs_to_lines, {module, fun, arity}, %{lines: new_lines, params: new_params})
-    %{state | mods_funs_to_lines: mods_funs_to_lines}
+    mods_funs_to_positions = Map.put(state.mods_funs_to_positions, {module, fun, arity}, %{positions: new_positions, params: new_params})
+    %{state | mods_funs_to_positions: mods_funs_to_positions}
   end
 
   def new_namespace(state, module) do
@@ -100,16 +100,16 @@ defmodule ElixirSense.Core.State do
     %{state | scopes: tl(state.scopes)}
   end
 
-  def add_current_module_to_index(state, line) do
+  def add_current_module_to_index(state, position) do
     current_module = state.namespace |> :lists.reverse |> Module.concat
-    add_mod_fun_to_line(state, {current_module, nil, nil}, line, nil)
+    add_mod_fun_to_position(state, {current_module, nil, nil}, position, nil)
   end
 
-  def add_func_to_index(state, func, params, line) do
+  def add_func_to_index(state, func, params, position) do
     current_module = state.namespace |> :lists.reverse |> Module.concat
     state
-    |> add_mod_fun_to_line({current_module, func, length(params)}, line, params)
-    |> add_mod_fun_to_line({current_module, func, nil}, line, params)
+    |> add_mod_fun_to_position({current_module, func, length(params)}, position, params)
+    |> add_mod_fun_to_position({current_module, func, nil}, position, params)
   end
 
   def new_alias_scope(state) do

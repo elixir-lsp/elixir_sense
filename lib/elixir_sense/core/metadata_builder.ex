@@ -22,10 +22,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
   end
 
-  defp pre_module(ast, state, line, module) do
+  defp pre_module(ast, state, position, module) do
     state
     |> new_namespace(module)
-    |> add_current_module_to_index(line)
+    |> add_current_module_to_index(position)
     |> create_alias_for_current_module
     |> new_attributes_scope
     |> new_behaviours_scope
@@ -48,11 +48,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_func(ast, state, %{line: line}, name, params) do
+  defp pre_func(ast, state, %{line: line, col: col}, name, params) do
     state
     |> new_named_func(name, length(params || []))
     |> add_current_env_to_line(line)
-    |> add_func_to_index(name, params || [], line)
+    |> add_func_to_index(name, params || [], {line, col})
     |> new_alias_scope
     |> new_import_scope
     |> new_require_scope
@@ -177,15 +177,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre({:defmodule, [line: line, column: _column], [{:__aliases__, _, module}, _]} = ast, state) do
-    pre_module(ast, state, line, module)
+  defp pre({:defmodule, _, [{:__aliases__, [line: line, column: column], module}, _]} = ast, state) do
+    pre_module(ast, state, {line, column}, module)
   end
 
   defp pre({def_name, meta, [{:when, _, [head|_]}, body]}, state) when def_name in @defs do
     pre({def_name, meta, [head, body]}, state)
   end
 
-  defp pre({def_name, [line: line, column: column], [{name, _, params}, _body]} = ast, state) when def_name in @defs and is_atom(name) do
+  defp pre({def_name, _, [{name, [line: line, column: column], params}, _body]} = ast, state) when def_name in @defs and is_atom(name) do
     pre_func(ast, state, %{line: line, col: column}, name, params)
   end
 
