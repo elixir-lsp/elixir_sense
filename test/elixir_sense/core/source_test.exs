@@ -376,4 +376,60 @@ defmodule ElixirSense.Core.SourceTest do
     end
 
   end
+
+  describe "which_struct" do
+
+    test "modules without namespace" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %Mod{
+      """
+      assert which_struct(code) == {Mod, []}
+    end
+
+    test "modules with namespace" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %ModA.ModB{
+      """
+      assert which_struct(code) == {ModA.ModB, []}
+    end
+
+    test "nested structs" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %Mod{field1: %InnerMod{}, field2: {}, field3: []}
+        end
+      end
+      """
+      assert which_struct(text_before(code, 3, 16)) == {Mod, []}
+      assert which_struct(text_before(code, 3, 23)) == nil
+      assert which_struct(text_before(code, 3, 34)) == {InnerMod, []}
+      assert which_struct(text_before(code, 3, 37)) == {Mod, [:field1]}
+      assert which_struct(text_before(code, 3, 39)) == {Mod, [:field1]}
+      assert which_struct(text_before(code, 3, 50)) == {Mod, [:field1, :field2]}
+    end
+
+    test "nested structs with multiple lines" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %Mod{
+            field1: %InnerMod{},
+            field2: {},
+            field3: %{
+              field4: %{}
+            },
+          }
+        end
+      end
+      """
+      assert which_struct(text_before(code, 7, 8)) == nil
+      assert which_struct(text_before(code, 8, 9)) == {Mod, [:field1, :field2, :field3]}
+    end
+  end
+
 end

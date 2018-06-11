@@ -30,6 +30,41 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
+  def which_struct(text_before) do
+    code = text_before |> String.reverse()
+    case walk_text(code, &find_struct/5, %{buffer: [], count_open: 0, result: nil}) do
+      %{result: nil} ->
+        nil
+      %{result: result} ->
+        result
+        |> Enum.join
+        |> Kernel.<>("_: _}")
+        |> Code.string_to_quoted()
+        |> extract_struct_module()
+    end
+  end
+
+  defp extract_struct_module({:ok, {:%, _, [{:__aliases__, _, module_list}, {:%{},_, fields}]}}) do
+    fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
+    {Module.concat(module_list), fields_names}
+  end
+  defp extract_struct_module(_) do
+    nil
+  end
+
+  defp find_struct("%" = grapheme, _rest, _line, _col, %{buffer: buffer, count_open: 1} = acc) do
+    {"", %{acc | result: [grapheme|buffer]}}
+  end
+  defp find_struct("{" = grapheme, rest, _line, _col, %{buffer: buffer, count_open: count_open} = acc) do
+    {rest, %{acc | buffer: [grapheme|buffer], count_open: count_open + 1}}
+  end
+  defp find_struct("}" = grapheme, rest, _line, _col, %{buffer: buffer, count_open: count_open} = acc) do
+    {rest, %{acc | buffer: [grapheme|buffer], count_open: count_open - 1}}
+  end
+  defp find_struct(grapheme, rest, _line, _col, %{buffer: buffer} = acc) do
+    {rest, %{acc | buffer: [grapheme|buffer]}}
+  end
+
   defp find_subject(grapheme, rest, line, col, %{pos_found: false, line: line, col: col} = acc) do
     find_subject(grapheme, rest, line, col, %{acc | pos_found: true})
   end

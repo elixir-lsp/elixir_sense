@@ -6,6 +6,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
   alias Alchemist.Helpers.Complete
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Source
 
   @type fun_arity :: {atom, non_neg_integer}
   @type scope :: module | fun_arity
@@ -18,6 +19,12 @@ defmodule ElixirSense.Providers.Suggestion do
   @type variable :: %{
     type: :var,
     name: String.t
+  }
+
+  @type field :: %{
+    type: :field,
+    name: String.t,
+    origin: String.t,
   }
 
   @type return :: %{
@@ -61,6 +68,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
   @type suggestion :: attribute
                     | variable
+                    | field
                     | return
                     | callback
                     | func
@@ -70,8 +78,18 @@ defmodule ElixirSense.Providers.Suggestion do
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope) :: [suggestion]
-  def find(hint, imports, aliases, vars, attributes, behaviours, scope) do
+  @spec find(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope, String.t) :: [suggestion]
+  def find(hint, imports, aliases, vars, attributes, behaviours, scope, text_before) do
+    case find_struct_fields(hint, text_before) do
+      [] ->
+        find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope)
+      fields ->
+        [%{type: :hint, value: "#{hint}"} | fields]
+    end
+  end
+
+  @spec find_all_except_struct_fields(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope) :: [suggestion]
+  defp find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope) do
     vars = Enum.map(vars, fn v -> v.name end)
     %{hint: hint_suggestion, suggestions: mods_and_funcs} = find_hint_mods_funcs(hint, imports, aliases)
 
@@ -87,6 +105,21 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Kernel.++(find_vars(vars, hint))
     |> Kernel.++(mods_and_funcs)
     |> Enum.uniq_by(&(&1))
+  end
+
+  defp find_struct_fields(hint, text_before) do
+    case Source.which_struct(text_before) do
+      {mod, fields_so_far} ->
+        mod
+        |> struct()
+        |> Map.from_struct()
+        |> Map.keys()
+        |> Kernel.--(fields_so_far)
+        |> Enum.filter(fn field -> String.starts_with?("#{field}", hint)end)
+        |> Enum.map(fn field -> %{type: :field, name: field, origin: Introspection.module_to_string(mod)} end)
+      _ ->
+        []
+    end
   end
 
   @spec find_hint_mods_funcs(String.t, [module], [{module, module}]) :: %{hint: hint, suggestions: [mod | func]}

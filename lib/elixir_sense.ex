@@ -136,6 +136,7 @@ defmodule ElixirSense do
   def suggestions(buffer, line, column) do
     hint = Source.prefix(buffer, line, column)
     buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
+    text_before = Source.text_before(buffer, line, column)
     %State.Env{
       imports: imports,
       aliases: aliases,
@@ -146,7 +147,7 @@ defmodule ElixirSense do
       scope: scope
     } = Metadata.get_env(buffer_file_metadata, line)
 
-    Suggestion.find(hint, [module|imports], aliases, vars, attributes, behaviours, scope)
+    Suggestion.find(hint, [module|imports], aliases, vars, attributes, behaviours, scope, text_before)
   end
 
   @doc """
