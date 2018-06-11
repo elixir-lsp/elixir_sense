@@ -23,7 +23,7 @@ defmodule ElixirSense.Providers.Definition do
   end
 
   @doc """
-  Finds out where a module, function or macro was defined.
+  Finds out where a module, function, macro or variable was defined.
   """
   @spec find(String.t, [module], [{module, module}], module, [%VarInfo{}]) :: %Location{}
   def find(subject, imports, aliases, module, vars) do
