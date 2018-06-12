@@ -21,7 +21,16 @@ defmodule ElixirSense.Core.State do
 
   defmodule Env do
     @moduledoc false
-    defstruct imports: [], requires: [], aliases: [], module: nil, vars: [], attributes: [], behaviours: [], scope: nil
+    defstruct [
+      imports: [],
+      requires: [],
+      aliases: [],
+      module: nil,
+      vars: [],
+      attributes: [],
+      behaviours: [],
+      scope: nil,
+    ]
   end
 
   defmodule VarInfo do
@@ -58,6 +67,13 @@ defmodule ElixirSense.Core.State do
   def add_current_env_to_line(state, line) do
     env = get_current_env(state)
     %{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
+  end
+
+  def get_scope_name(state, line) do
+    case state.lines_to_env[line] do
+      nil -> nil
+      %Env{scope: scope} -> scope
+    end
   end
 
   def get_current_scope_name(state) do

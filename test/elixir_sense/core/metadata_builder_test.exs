@@ -3,6 +3,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   use ExUnit.Case
 
   alias ElixirSense.Core.MetadataBuilder
+  alias ElixirSense.Core.State
   alias ElixirSense.Core.State.VarInfo
 
   test "build metadata from kernel.ex" do
@@ -643,13 +644,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_scope_name(state, 3) == {:func, 0}
-    assert get_scope_name(state, 5) == :MyModule
-    assert get_scope_name(state, 7) == {:func_with_when, 1}
-    assert get_scope_name(state, 9) == :MyModule
-    assert get_scope_name(state, 11) == {:macro1, 1}
-    assert get_scope_name(state, 13) == :MyModule
-    assert get_scope_name(state, 15) == :MyModule
+    assert State.get_scope_name(state, 3) == {:func, 0}
+    assert State.get_scope_name(state, 5) == :MyModule
+    assert State.get_scope_name(state, 7) == {:func_with_when, 1}
+    assert State.get_scope_name(state, 9) == :MyModule
+    assert State.get_scope_name(state, 11) == {:macro1, 1}
+    assert State.get_scope_name(state, 13) == :MyModule
+    assert State.get_scope_name(state, 15) == :MyModule
   end
 
   defp string_to_state(string) do
@@ -657,13 +658,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     |> Code.string_to_quoted(columns: true)
     |> (fn {:ok, ast} -> ast end).()
     |> MetadataBuilder.build
-  end
-
-  defp get_scope_name(state, line) do
-    case state.lines_to_env[line] do
-      nil -> nil
-      env -> env.scope
-    end
   end
 
   defp get_line_vars(state, line) do
