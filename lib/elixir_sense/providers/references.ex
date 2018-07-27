@@ -6,18 +6,26 @@ defmodule ElixirSense.Providers.References do
   """
 
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.State.VarInfo
 
   def find(nil, _, _, _, _) do
     []
   end
 
-  def find(subject, imports, aliases, module, scope) do
-    subject
-    |> Introspection.split_mod_fun_call
-    |> Introspection.actual_mod_fun(imports, aliases, module)    
-    |> xref_at_cursor(module, scope)
-    |> Enum.map(&build_location/1)
-    |> Enum.uniq()
+  def find(subject, imports, aliases, module, scope, vars) do
+    var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
+    case var_info do
+      %VarInfo{positions: positions} ->
+        positions
+        |> Enum.map(fn pos -> build_var_location(subject, pos) end)
+      _ ->
+        subject
+        |> Introspection.split_mod_fun_call
+        |> Introspection.actual_mod_fun(imports, aliases, module)
+        |> xref_at_cursor(module, scope)
+        |> Enum.map(&build_location/1)
+        |> Enum.uniq()
+    end
   end
 
   defp xref_at_cursor(actual_mod_fun, module, scope) do
@@ -49,6 +57,16 @@ defmodule ElixirSense.Providers.References do
       range: %{
         start: %{line: call.line, character: 0},
         end: %{line: call.line, character: 0}
+      }
+    }
+  end
+
+  defp build_var_location(subject, {line, column}) do
+    %{
+      uri: nil,
+      range: %{
+        start: %{line: line, character: column},
+        end: %{line: line, character: column + String.length(subject)}
       }
     }
   end

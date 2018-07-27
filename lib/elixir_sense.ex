@@ -308,10 +308,13 @@ defmodule ElixirSense do
       imports: imports,
       aliases: aliases,
       module: module,
-      scope: scope
+      scope: scope,
+      scope_id: scope_id,
     } = Metadata.get_env(buffer_file_metadata, line)
 
-    References.find(subject, imports, aliases, module, scope)
+    vars = buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values
+
+    References.find(subject, imports, aliases, module, scope, vars)
   end
 
 end

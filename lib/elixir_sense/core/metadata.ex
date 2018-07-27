@@ -9,6 +9,7 @@ defmodule ElixirSense.Core.Metadata do
   defstruct source: nil,
             mods_funs_to_positions: %{},
             lines_to_env: %{},
+            vars_info_per_scope_id: %{},
             error: nil
 
   def get_env(%__MODULE__{} = metadata, line_number) do

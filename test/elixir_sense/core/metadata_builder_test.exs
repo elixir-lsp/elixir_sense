@@ -49,8 +49,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     vars = state |> get_line_vars(6)
     assert vars == [
-      %VarInfo{name: :var_in1, positions: [{4, 5}]},
-      %VarInfo{name: :var_in2, positions: [{5, 5}]},
+      %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 3},
+      %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 3},
     ]
   end
 
@@ -71,12 +71,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     vars = state |> get_line_vars(6)
     assert vars == [
-      %VarInfo{name: :par1, positions: [{3, 20}]},
-      %VarInfo{name: :par2, positions: [{3, 33}]},
-      %VarInfo{name: :par3, positions: [{3, 39}]},
-      %VarInfo{name: :par4, positions: [{3, 51}]},
-      %VarInfo{name: :var_in1, positions: [{4, 5}]},
-      %VarInfo{name: :var_in2, positions: [{5, 5}]},
+      %VarInfo{name: :par1, positions: [{3, 20}], scope_id: 2},
+      %VarInfo{name: :par2, positions: [{3, 33}], scope_id: 2},
+      %VarInfo{name: :par3, positions: [{3, 39}], scope_id: 2},
+      %VarInfo{name: :par4, positions: [{3, 51}], scope_id: 2},
+      %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 3},
+      %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 3},
     ]
   end
 
@@ -96,7 +96,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     vars = state |> get_line_vars(6)
-    assert vars == [%VarInfo{name: :var1, positions: [{3, 19}, {3, 37}, {4, 5}, {5, 5}]}]
+    assert vars == [%VarInfo{name: :var1, positions: [{3, 19}, {3, 37}, {4, 5}, {5, 5}], scope_id: 3}]
   end
 
   test "vars defined inside a module" do
@@ -116,8 +116,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     vars = state |> get_line_vars(7)
     assert vars == [
-      %VarInfo{name: :var_out1, positions: [{2, 3}]},
-      %VarInfo{name: :var_out2, positions: [{6, 3}]},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+      %VarInfo{name: :var_out2, positions: [{6, 3}], scope_id: 2},
     ]
   end
 
@@ -139,16 +139,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 3) == [
-      %VarInfo{name: :var_out1, positions: [{2, 3}]},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
     ]
     assert get_line_vars(state, 6) == [
-      %VarInfo{name: :var_in, positions: [{5, 5}]},
-      %VarInfo{name: :var_on, positions: [{4, 7}]},
-      %VarInfo{name: :var_out1, positions: [{2, 3}]},
+      %VarInfo{name: :var_in, positions: [{5, 5}], scope_id: 4},
+      %VarInfo{name: :var_on, positions: [{4, 7}, {4, 24}], scope_id: 3},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
     ]
     assert get_line_vars(state, 9) == [
-      %VarInfo{name: :var_out1, positions: [{2, 3}]},
-      %VarInfo{name: :var_out2, positions: [{8, 3}]},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+      %VarInfo{name: :var_out2, positions: [{8, 3}], scope_id: 2},
     ]
   end
 
@@ -172,14 +172,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 5) == [
-      %VarInfo{name: :var_in_if, positions: [{4, 5}]},
-      %VarInfo{name: :var_on, positions: [{3, 6}]},
-      %VarInfo{name: :var_out1, positions: [{2, 3}]},
+      %VarInfo{name: :var_in_if, positions: [{4, 5}], scope_id: 3},
+      %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
     ]
     assert get_line_vars(state, 8) == [
-      %VarInfo{name: :var_in_else, positions: [{7, 5}]},
-      %VarInfo{name: :var_on, positions: [{3, 6}]},
-      %VarInfo{name: :var_out1, positions: [{2, 3}]},
+      %VarInfo{name: :var_in_else, positions: [{7, 5}], scope_id: 4},
+      %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
     ]
     # This assert fails:
     # assert get_line_vars(state, 11) == [
@@ -207,13 +207,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 5) == [
-      %VarInfo{name: :var_in, positions: [{4, 5}]},
-      %VarInfo{name: :var_on, positions: [{3, 6}]},
-      %VarInfo{name: :var_out1, positions: [{2, 3}]},
+      %VarInfo{name: :var_in, positions: [{4, 5}], scope_id: 4},
+      %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 4},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
     ]
     assert get_line_vars(state, 8) == [
-      %VarInfo{name: :var_out1, positions: [{2, 3}]},
-      %VarInfo{name: :var_out2, positions: [{7, 3}]},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+      %VarInfo{name: :var_out2, positions: [{7, 3}], scope_id: 2},
     ]
   end
 
@@ -238,14 +238,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 6) == [
-      %VarInfo{name: :var_in1, positions: [{5, 7}]},
-      %VarInfo{name: :var_on1, positions: [{4, 6}]},
-      %VarInfo{name: :var_out1, positions: [{2, 3}]},
+      %VarInfo{name: :var_in1, positions: [{5, 7}], scope_id: 4},
+      %VarInfo{name: :var_on1, positions: [{4, 6}], scope_id: 4},
+      %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 8}], scope_id: 2},
     ]
     assert get_line_vars(state, 9) == [
-      %VarInfo{name: :var_in2, positions: [{8, 7}]},
-      %VarInfo{name: :var_on2, positions: [{7, 6}]},
-      %VarInfo{name: :var_out1, positions: [{2, 3}]},
+      %VarInfo{name: :var_in2, positions: [{8, 7}], scope_id: 5},
+      %VarInfo{name: :var_on2, positions: [{7, 6}], scope_id: 5},
+      %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 8}], scope_id: 2},
     ]
     # This assert fails
     # assert get_line_vars(state, 12) == [
@@ -274,8 +274,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 6) == [
-      %VarInfo{name: :var_in, positions: [{5, 7}]},
-      %VarInfo{name: :var_out1, positions: [{2, 3}]}
+      %VarInfo{name: :var_in, positions: [{5, 7}], scope_id: 4},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
     ]
     # This assert fails:
     # assert get_line_vars(state, 9) == [
@@ -298,8 +298,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 3) == [
-      %VarInfo{name: :mynode, positions: [{3, 3}]},
-      %VarInfo{name: :myself, positions: [{2, 3}]},
+      %VarInfo{name: :mynode, positions: [{3, 3}], scope_id: 2},
+      %VarInfo{name: :myself, positions: [{2, 3}], scope_id: 2},
     ]
   end
 
@@ -328,31 +328,31 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 2)  == [
-      %VarInfo{name: :top_level_var, positions: [{1, 1}]},
+      %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0},
     ]
     assert get_line_vars(state, 5)  == [
-      %VarInfo{name: :outer_module_var, positions: [{4, 3}]},
-      %VarInfo{name: :top_level_var, positions: [{1, 1}]},
+      %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
+      %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0},
     ]
     assert get_line_vars(state, 8)  == [
-      %VarInfo{name: :inner_module_var, positions: [{7, 5}]},
-      %VarInfo{name: :outer_module_var, positions: [{4, 3}]},
-      %VarInfo{name: :top_level_var, positions: [{1, 1}]},
+      %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: 4},
+      %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
+      %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0},
     ]
     assert get_line_vars(state, 11) == [
-      %VarInfo{name: :func_var, positions: [{10, 7}]},
+      %VarInfo{name: :func_var, positions: [{10, 7}], scope_id: 5},
     ]
     assert get_line_vars(state, 13) == [
-      %VarInfo{name: :inner_module_var, positions: [{7, 5}]},
-      %VarInfo{name: :outer_module_var, positions: [{4, 3}]},
-      %VarInfo{name: :top_level_var, positions: [{1, 1}]},
+      %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: 4},
+      %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
+      %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0},
     ]
     assert get_line_vars(state, 15) == [
-      %VarInfo{name: :outer_module_var, positions: [{4, 3}]},
-      %VarInfo{name: :top_level_var, positions: [{1, 1}]},
+      %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
+      %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0},
     ]
     assert get_line_vars(state, 17) == [
-      %VarInfo{name: :top_level_var, positions: [{1, 1}]},
+      %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0},
     ]
   end
 

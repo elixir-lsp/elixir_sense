@@ -57,7 +57,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> new_import_scope
     |> new_require_scope
     |> new_func_vars_scope
-    |> add_vars(find_vars(params))
+    |> add_vars(find_vars(params), true)
     |> result(ast)
   end
 
@@ -108,7 +108,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> new_import_scope
     |> new_require_scope
     |> new_vars_scope
-    |> add_vars(find_vars(lhs))
+    |> add_vars(find_vars(lhs), true)
     |> result(ast)
   end
 
@@ -185,8 +185,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre({def_name, meta, [head, body]}, state)
   end
 
-  defp pre({def_name, _, [{name, [line: line, column: column], params}, _body]} = ast, state) when def_name in @defs and is_atom(name) do
-    pre_func(ast, state, %{line: line, col: column}, name, params)
+  defp pre({def_name, meta, [{name, [line: line, column: column] = meta2, params}, body]}, state) when def_name in @defs and is_atom(name) do
+    ast_without_params = {def_name, meta, [{name, meta2, []}, body]}
+    pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
   end
 
   defp pre({def_name, _, _} = ast, state) when def_name in @defs do
@@ -280,20 +281,26 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_block_keyword(ast, state)
   end
 
-  defp pre({:->, [line: _line, column: _column], [lhs, _rhs]} = ast, state) do
-    pre_clause(ast, state, lhs)
+  defp pre({:->, meta, [lhs, rhs]}, state) do
+    pre_clause({:->, meta, [:_, rhs]}, state, lhs)
   end
 
-  defp pre({:=, _meta, [lhs, _rhs]} = ast, state) do
+  defp pre({:=, meta, [lhs, rhs]}, state) do
     state
-    |> add_vars(find_vars(lhs))
+    |> add_vars(find_vars(lhs), true)
+    |> result({:=, meta, [:_, rhs]})
+  end
+
+  defp pre({var_or_func_call, [line: _line, column: _column], context} = ast, state) when is_atom(var_or_func_call) and context in [nil, Elixir] do
+    state
+    |> add_vars(find_vars(ast), false)
     |> result(ast)
   end
 
-  defp pre({:<-, _meta, [lhs, _rhs]} = ast, state) do
+  defp pre({:<-, meta, [lhs, rhs]}, state) do
     state
-    |> add_vars(find_vars(lhs))
-    |> result(ast)
+    |> add_vars(find_vars(lhs), true)
+    |> result({:<-, meta, [:_, rhs]})
   end
 
   # Kernel: defmacro use(module, opts \\ [])
