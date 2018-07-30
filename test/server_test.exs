@@ -49,7 +49,7 @@ defmodule ElixirSense.ServerTest do
       found: true,
       type: :function,
       file: file,
-      line: 2583,
+      line: 2610,
       column: 7
     } = send_request(socket, request)
 

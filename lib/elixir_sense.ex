@@ -64,7 +64,7 @@ defmodule ElixirSense do
       ...> '''
       iex>  %{found: true, file: path, line: line, column: column} = ElixirSense.definition(code, 3, 11)
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
-      "enum.ex:2583:7"
+      "enum.ex:2610:7"
   """
   @spec definition(String.t, pos_integer, pos_integer) :: Definition.location
   def definition(code, line, column) do
