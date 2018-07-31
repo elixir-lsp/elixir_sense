@@ -21,13 +21,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
   test "get_callbacks_with_docs for Elixir behaviours with no docs defined" do
     assert get_callbacks_with_docs(Exception) == [
       %{
-        arity: 2,
-        name: :blame,
-        callback: "@callback blame(t, stacktrace) :: {t, stacktrace}\n",
-        doc: "Called from `Exception.blame/3` to augment the exception struct.\n\nCan be used to collect additional information about the exception\nor do some additional expensive computation.\n",
-        signature: "blame(t, stacktrace)"
-      }, 
-      %{
         arity: 1,
         name: :exception,
         doc: nil,
@@ -40,12 +33,19 @@ defmodule ElixirSense.Core.IntrospectionTest do
         callback: "@callback message(t) :: String.t\n",
         doc: nil,
         signature: "message(t)"
-      }
+      },
+      %{
+        arity: 2,
+        name: :blame,
+        callback: "@callback blame(t, stacktrace) :: {t, stacktrace}\n",
+        doc: "Called from `Exception.blame/3` to augment the exception struct.\n\nCan be used to collect additional information about the exception\nor do some additional expensive computation.\n",
+        signature: "blame(t, stacktrace)"
+      },
     ]
   end
 
   test "get_callbacks_with_docs for Elixir behaviours with docs defined" do
-    info = get_callbacks_with_docs(GenServer) |> Enum.at(0)
+    info = get_callbacks_with_docs(GenServer) |> Enum.find(fn info -> info.name == :code_change end)
 
     assert info.name      == :code_change
     assert info.arity     == 3
@@ -100,9 +100,9 @@ defmodule ElixirSense.Core.IntrospectionTest do
     returns = get_returns_from_callback(:gen_server, :handle_call, 3)
     assert returns == [
       %{description: "{:reply, reply, new_state}", snippet: "{:reply, \"${1:reply}$\", \"${2:new_state}$\"}", spec: "{:reply, reply, new_state} when reply: term, new_state: term, reason: term"},
-      %{description: "{:reply, reply, new_state, timeout | :hibernate}", snippet: "{:reply, \"${1:reply}$\", \"${2:new_state}$\", \"${3:timeout | :hibernate}$\"}", spec: "{:reply, reply, new_state, timeout | :hibernate} when reply: term, new_state: term, reason: term"},
+      %{description: "{:reply, reply, new_state, timeout | :hibernate | {:continue, term}}", snippet: "{:reply, \"${1:reply}$\", \"${2:new_state}$\", \"${3:timeout | :hibernate | {:continue, term}}$\"}", spec: "{:reply, reply, new_state, timeout | :hibernate | {:continue, term}} when reply: term, new_state: term, reason: term"},
       %{description: "{:noreply, new_state}", snippet: "{:noreply, \"${1:new_state}$\"}", spec: "{:noreply, new_state} when reply: term, new_state: term, reason: term"},
-      %{description: "{:noreply, new_state, timeout | :hibernate}", snippet: "{:noreply, \"${1:new_state}$\", \"${2:timeout | :hibernate}$\"}", spec: "{:noreply, new_state, timeout | :hibernate} when reply: term, new_state: term, reason: term"},
+      %{description: "{:noreply, new_state, timeout | :hibernate, {:continue, term}}", snippet: "{:noreply, \"${1:new_state}$\", \"${2:timeout | :hibernate}$\", {:continue, term()}}", spec: "{:noreply, new_state, timeout | :hibernate, {:continue, term}} when reply: term, new_state: term, reason: term"},
       %{description: "{:stop, reason, reply, new_state}", snippet: "{:stop, \"${1:reason}$\", \"${2:reply}$\", \"${3:new_state}$\"}", spec: "{:stop, reason, reply, new_state} when reply: term, new_state: term, reason: term"},
       %{description: "{:stop, reason, new_state}", snippet: "{:stop, \"${1:reason}$\", \"${2:new_state}$\"}", spec: "{:stop, reason, new_state} when reply: term, new_state: term, reason: term"}
     ]

@@ -23,7 +23,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
   test "return completion candidates for 'Str'" do
     assert Suggestion.find("Str", [], [], [], [], [], SomeModule, "") == [
       %{type: :hint, value: "Str"},
-      %{name: "Stream", subtype: :struct, summary: "Module for creating and composing streams.", type: :module},
+      %{name: "Stream", subtype: :struct, summary: "Functions for creating and composing streams.", type: :module},
       %{name: "String", subtype: nil, summary: "A String in Elixir is a UTF-8 encoded binary.", type: :module},
       %{name: "StringIO", subtype: nil, summary: "Controls an IO device process that wraps a string.", type: :module}
     ]
