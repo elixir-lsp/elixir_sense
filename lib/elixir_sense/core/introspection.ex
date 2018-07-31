@@ -7,7 +7,6 @@ defmodule ElixirSense.Core.Introspection do
   https://github.com/elixir-lang/ex_doc/blob/82463a56053b29a406fd271e9e2e2f05e87d6248/lib/ex_doc/retriever.ex
   """
 
-  alias Kernel.Typespec
   alias Alchemist.Helpers.ModuleInfo
 
   @type mod_fun :: {mod :: module | nil, fun :: atom | nil}
@@ -158,7 +157,7 @@ defmodule ElixirSense.Core.Introspection do
     case get_callbacks_and_docs(mod) do
       {callbacks, []} ->
         Enum.map(callbacks, fn {{name, arity}, [spec | _]} ->
-          spec_ast = Typespec.spec_to_ast(name, spec)
+          spec_ast = spec_to_quoted(name, spec)
           signature = get_typespec_signature(spec_ast, arity)
           definition = format_spec_ast(spec_ast)
           %{name: name, arity: arity, callback: "@callback #{definition}", signature: signature, doc: nil}
@@ -183,10 +182,17 @@ defmodule ElixirSense.Core.Introspection do
     end)
   end
 
-  defp get_types(module) when is_atom(module) do
-    case Typespec.beam_types(module) do
-      nil   -> []
-      types -> types
+  def get_types(module) when is_atom(module) do
+    if Code.ensure_loaded?(Code.Typespec) do
+      case Code.Typespec.fetch_types(module) do
+        {:ok, types} -> types
+        _            -> []
+      end
+    else
+      case old_typespec().beam_types(module) do
+        nil   -> []
+        types -> types
+      end
     end
   end
 
@@ -198,12 +204,12 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp format_type({:opaque, type}) do
-    {:::, _, [ast, _]} = Typespec.type_to_ast(type)
+    {:::, _, [ast, _]} = type_to_quoted(type)
     "@opaque #{format_spec_ast(ast)}"
   end
 
   defp format_type({kind, type}) do
-    ast = Typespec.type_to_ast(type)
+    ast = type_to_quoted(type)
     "@#{kind} #{format_spec_ast(ast)}"
   end
 
@@ -246,7 +252,7 @@ defmodule ElixirSense.Core.Introspection do
 
   def define_callback?(mod, fun, arity) do
     mod
-    |> Kernel.Typespec.beam_callbacks()
+    |> get_callbacks()
     |> Enum.any?(fn {{f, a}, _} -> {f, a} == {fun, arity}  end)
   end
 
@@ -305,7 +311,7 @@ defmodule ElixirSense.Core.Introspection do
     {_f, arity} = key
 
     spec_ast = name
-    |> Typespec.spec_to_ast(spec)
+    |> spec_to_quoted(spec)
     |> Macro.prewalk(&drop_macro_env/1)
     signature = get_typespec_signature(spec_ast, arity)
     definition = format_spec_ast(spec_ast)
@@ -314,7 +320,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp get_callbacks_and_docs(mod) do
-    callbacks = Typespec.beam_callbacks(mod)
+    callbacks = get_callbacks(mod)
     docs =
       @wrapped_behaviours
       |> Map.get(mod, mod)
@@ -535,10 +541,10 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_callback_ast(module, callback, arity) do
     {{name, _}, [spec | _]} = module
-      |> Kernel.Typespec.beam_callbacks()
+      |> get_callbacks()
       |> Enum.find(fn {{f, a}, _} -> {f, a} == {callback, arity}  end)
 
-    Kernel.Typespec.spec_to_ast(name, spec)
+    spec_to_quoted(name, spec)
   end
 
   defp format_doc_arg({:\\, _, [left, right]}) do
@@ -555,12 +561,22 @@ defmodule ElixirSense.Core.Introspection do
 
   defp spec_to_string({kind, {{name, _arity}, specs}}) do
     spec = hd(specs)
-    binary = Macro.to_string Typespec.spec_to_ast(name, spec)
+    binary = Macro.to_string spec_to_quoted(name, spec)
     "@#{kind} #{binary}" |> String.replace("()", "")
   end
 
   defp beam_specs(module) do
-    beam_specs_tag(Typespec.beam_specs(module), :spec)
+    specs =
+      if Code.ensure_loaded?(Code.Typespec) do
+        case Code.Typespec.fetch_specs(module) do
+          {:ok, specs} -> specs
+          _            -> []
+        end
+      else
+        old_typespec().beam_specs(module)
+      end
+
+    beam_specs_tag(specs, :spec)
   end
 
   defp beam_specs_tag(nil, _), do: nil
@@ -676,4 +692,36 @@ defmodule ElixirSense.Core.Introspection do
         {{name, arity}, line, kind, docs_en}
     end
   end
+
+  defp get_callbacks(mod) do
+    if Code.ensure_loaded?(Code.Typespec) do
+      case Code.Typespec.fetch_callbacks(mod) do
+        {:ok, callbacks} -> callbacks
+        _ -> []
+      end
+    else
+      old_typespec().beam_callbacks(mod)
+    end
+  end
+
+  def type_to_quoted(type) do
+    if Code.ensure_loaded?(Code.Typespec) do
+      Code.Typespec.type_to_quoted(type)
+    else
+      old_typespec().type_to_ast(type)
+    end
+  end
+
+  def spec_to_quoted(name, spec) do
+    if Code.ensure_loaded?(Code.Typespec) do
+      Code.Typespec.spec_to_quoted(name, spec)
+    else
+      old_typespec().spec_to_ast(name, spec)
+    end
+  end
+
+  defp old_typespec() do
+    Kernel.Typespec
+  end
+
 end

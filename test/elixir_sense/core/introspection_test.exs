@@ -119,9 +119,9 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
   defp get_type_ast(module, type) do
     {_kind, type} =
-      Kernel.Typespec.beam_types(module)
+      get_types(module)
       |> Enum.find(fn {_, {name, _, _}} -> name == type end)
-    Kernel.Typespec.type_to_ast(type)
+    type_to_quoted(type)
   end
 
 end
