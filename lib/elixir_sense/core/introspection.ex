@@ -46,7 +46,7 @@ defmodule ElixirSense.Core.Introspection do
               end
 
             :docs ->
-              Enum.filter(docs, &match?({_, _, :def, _, _}, &1))
+              Enum.filter(docs, &match?({_, _, def_type, _, _} when def_type in [:def, :defmacro], &1))
 
             :callback_docs ->
               Enum.filter(
@@ -456,7 +456,7 @@ defmodule ElixirSense.Core.Introspection do
 
   def extract_fun_args_and_desc({{_fun, _}, _line, _kind, args, doc}) do
     formatted_args =
-      args
+      (args || [])
       |> Enum.map_join(",", &format_doc_arg(&1))
       |> String.replace(Regex.recompile!(~r/\s+/), " ")
     desc = extract_summary_from_docs(doc)
@@ -654,7 +654,7 @@ defmodule ElixirSense.Core.Introspection do
       end
 
     case kind do
-      :function ->
+      kind when kind in [:function, :macro] ->
         args_quoted =
           signatures
           |> Enum.join(" ")
@@ -664,7 +664,13 @@ defmodule ElixirSense.Core.Introspection do
             _ -> []
           end
 
-        {{name, arity}, line, :def, args_quoted, docs_en}
+        def_type =
+          case kind do
+            :function -> :def
+            :macro -> :defmacro
+          end
+
+        {{name, arity}, line, def_type, args_quoted, docs_en}
 
       _ ->
         {{name, arity}, line, kind, docs_en}
