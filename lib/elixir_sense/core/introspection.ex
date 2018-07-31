@@ -21,6 +21,55 @@ defmodule ElixirSense.Core.Introspection do
     :gen_event   => GenEvent
   }
 
+  @doc """
+  Shim to replicate the behavior of `Code.get_docs/2` in Elixir >= 1.7
+  """
+  def get_docs(module, category) do
+    if function_exported?(Code, :fetch_docs, 1) do
+      case Code.fetch_docs(module) do
+        {:docs_v1, moduledoc_line, _beam_language, "text/markdown", moduledoc, _metadata, docs} ->
+          docs = Enum.map(docs, &to_old_format/1)
+
+          case category do
+            :moduledoc ->
+              moduledoc_en =
+                case moduledoc do
+                  %{"en" => moduledoc_en} -> moduledoc_en
+                  false -> false
+                  _ -> nil
+                end
+
+              case {moduledoc_line, moduledoc_en} do
+                {_, nil} -> nil
+                {nil, _} -> nil
+                _ -> {moduledoc_line, moduledoc_en}
+              end
+
+            :docs ->
+              Enum.filter(docs, &match?({_, _, :def, _, _}, &1))
+
+            :callback_docs ->
+              Enum.filter(
+                docs,
+                &match?({_, _, kind, _} when kind in [:callback, :macrocallback], &1)
+              )
+
+            :type_docs ->
+              Enum.filter(docs, &match?({_, _, :type, _}, &1))
+
+            :all ->
+              [:moduledoc, :docs, :callback_docs, :type_docs]
+              |> Enum.map(&{&1, get_docs(module, &1)})
+          end
+
+        _ ->
+          nil
+      end
+    else
+      Code.get_docs(module, category)
+    end
+  end
+
   def all_modules do
     ModuleInfo.all_applications_modules()
   end
@@ -35,7 +84,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_signatures(mod, fun, code_docs \\ nil) do
-    docs = code_docs || Code.get_docs(mod, :docs) || []
+    docs = code_docs || get_docs(mod, :docs) || []
     for {{f, arity}, _, _, args, text} <- docs, f == fun do
       fun_args = Enum.map(args, &format_doc_arg(&1))
       fun_str = Atom.to_string(fun)
@@ -47,7 +96,7 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_func_docs_md(mod, fun) do
     docs =
-      case Code.get_docs(mod, :docs) do
+      case get_docs(mod, :docs) do
         nil -> nil
         docs ->
           for {{f, arity}, _, _, args, text} <- docs, f == fun do
@@ -68,7 +117,7 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_docs_md(mod) when is_atom(mod) do
     mod_str = module_to_string(mod)
-    case Code.get_docs(mod, :moduledoc) do
+    case get_docs(mod, :moduledoc) do
       {_line, doc} when is_binary(doc) ->
         "> #{mod_str}\n\n" <> doc
       _ ->
@@ -241,7 +290,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp get_type_doc(module, type) do
-    case Code.get_docs(module, :type_docs) do
+    case get_docs(module, :type_docs) do
       nil  -> ""
       docs ->
         {{_, _}, _, _, description} = Enum.find(docs, fn({{name, _}, _, _, _}) ->
@@ -269,7 +318,7 @@ defmodule ElixirSense.Core.Introspection do
     docs =
       @wrapped_behaviours
       |> Map.get(mod, mod)
-      |> Code.get_docs(:callback_docs)
+      |> get_docs(:callback_docs)
 
     {callbacks || [], docs || []}
   end
@@ -384,7 +433,7 @@ defmodule ElixirSense.Core.Introspection do
     do: {:"arg#{i}", [], nil}
 
   def get_module_docs_summary(module) do
-    case Code.get_docs module, :moduledoc do
+    case get_docs module, :moduledoc do
       {_, doc} -> extract_summary_from_docs(doc)
       _ -> ""
     end
@@ -475,7 +524,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def module_functions_info(module) do
-    docs = Code.get_docs(module, :docs) || []
+    docs = get_docs(module, :docs) || []
     specs = get_module_specs(module)
     for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false, into: %{} do
       spec = Map.get(specs, {f, a}, "")
@@ -596,4 +645,29 @@ defmodule ElixirSense.Core.Introspection do
     false
   end
 
+  defp to_old_format({{kind, name, arity}, line, signatures, docs, _meta}) do
+    docs_en =
+      case docs do
+        %{"en" => docs_en} -> docs_en
+        false -> false
+        _ -> nil
+      end
+
+    case kind do
+      :function ->
+        args_quoted =
+          signatures
+          |> Enum.join(" ")
+          |> Code.string_to_quoted()
+          |> case do
+            {:ok, {^name, _, args}} -> args
+            _ -> []
+          end
+
+        {{name, arity}, line, :def, args_quoted, docs_en}
+
+      _ ->
+        {{name, arity}, line, kind, docs_en}
+    end
+  end
 end
