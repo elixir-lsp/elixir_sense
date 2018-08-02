@@ -78,9 +78,9 @@ defmodule ElixirSense.Providers.Suggestion do
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope, String.t) :: [suggestion]
-  def find(hint, imports, aliases, vars, attributes, behaviours, scope, text_before) do
-    case find_struct_fields(hint, text_before) do
+  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], scope, String.t) :: [suggestion]
+  def find(hint, imports, aliases, module, vars, attributes, behaviours, scope, text_before) do
+    case find_struct_fields(hint, text_before, imports, aliases, module) do
       [] ->
         find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope)
       fields ->
@@ -107,18 +107,21 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.uniq_by(&(&1))
   end
 
-  defp find_struct_fields(hint, text_before) do
-    case Source.which_struct(text_before) do
-      {mod, fields_so_far} ->
-        mod
-        |> struct()
-        |> Map.from_struct()
-        |> Map.keys()
-        |> Kernel.--(fields_so_far)
-        |> Enum.filter(fn field -> String.starts_with?("#{field}", hint)end)
-        |> Enum.map(fn field -> %{type: :field, name: field, origin: Introspection.module_to_string(mod)} end)
-      _ ->
-        []
+  defp find_struct_fields(hint, text_before, imports, aliases, module) do
+    with \
+      {mod, fields_so_far} <- Source.which_struct(text_before),
+      {actual_mod, _}      <- Introspection.actual_mod_fun({mod, nil}, imports, aliases, module),
+      true                 <- Introspection.module_is_struct?(actual_mod)
+    do
+      actual_mod
+      |> struct()
+      |> Map.from_struct()
+      |> Map.keys()
+      |> Kernel.--(fields_so_far)
+      |> Enum.filter(fn field -> String.starts_with?("#{field}", hint)end)
+      |> Enum.map(fn field -> %{type: :field, name: field, origin: Introspection.module_to_string(actual_mod)} end)
+    else
+      _ -> []
     end
   end
 

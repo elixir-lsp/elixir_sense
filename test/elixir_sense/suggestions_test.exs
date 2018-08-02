@@ -241,4 +241,51 @@ defmodule ElixirSense.SuggestionsTest do
     assert Enum.at(list,1).name == "is_odd"
   end
 
+  test "suggestion for struct fields" do
+    buffer =
+      """
+      defmodule Mod do
+        %IO.Stream{
+      end
+      """
+
+    list = ElixirSense.suggestions(buffer, 2, 14)
+    assert list == [
+      %{type: :hint, value: ""},
+      %{name: :device, origin: "IO.Stream", type: :field},
+      %{name: :line_or_bytes, origin: "IO.Stream", type: :field},
+      %{name: :raw, origin: "IO.Stream", type: :field}
+    ]
+  end
+
+  test "suggestion for aliased struct fields" do
+    buffer =
+      """
+      defmodule Mod do
+        alias IO.Stream
+        %Stream{
+      end
+      """
+
+    list = ElixirSense.suggestions(buffer, 3, 11)
+    assert list == [
+      %{type: :hint, value: ""},
+      %{name: :device, origin: "IO.Stream", type: :field},
+      %{name: :line_or_bytes, origin: "IO.Stream", type: :field},
+      %{name: :raw, origin: "IO.Stream", type: :field}
+    ]
+  end
+
+  test "no suggestion of fields when the module is not a struct" do
+    buffer =
+      """
+      defmodule Mod do
+        %Enum{
+      end
+      """
+
+    list = ElixirSense.suggestions(buffer, 2, 9)
+    assert Enum.any?(list, fn %{type: type} -> type == :field end) == false
+  end
+
 end

@@ -446,7 +446,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_module_subtype(module) do
-    has_func = fn f, a -> Code.ensure_loaded?(module) && Kernel.function_exported?(module, f, a) end
+    has_func = fn f, a -> module_has_function(module, f, a) end
     cond do
       has_func.(:__protocol__, 1) -> :protocol
       has_func.(:__impl__,     1) -> :implementation
@@ -458,6 +458,14 @@ defmodule ElixirSense.Core.Introspection do
         end
       true -> nil
     end
+  end
+
+  def module_has_function(module, func, arity) do
+    Code.ensure_loaded?(module) && Kernel.function_exported?(module, func, arity)
+  end
+
+  def module_is_struct?(module) do
+    module_has_function(module, :__struct__,   0)
   end
 
   def extract_fun_args_and_desc({{_fun, _}, _line, _kind, args, doc}) do
