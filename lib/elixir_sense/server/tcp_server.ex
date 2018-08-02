@@ -94,9 +94,9 @@ defmodule ElixirSense.Server.TCPServer do
       {:invalid_request, message} ->
         IO.puts(:stderr, "Server Error: #{message}")
         :erlang.term_to_binary(%{request_id: nil, payload: nil, error: message})
-      {:error, request_id, exception} ->
-        IO.puts(:stderr, "Server Error: \n" <> Exception.message(exception) <> "\n" <> Exception.format_stacktrace(System.stacktrace))
-        :erlang.term_to_binary(%{request_id: request_id, payload: nil, error: Exception.message(exception)})
+      {:error, request_id, message, details} ->
+        IO.puts(:stderr, "Server Error: \n" <> message <> "\n" <> details)
+        :erlang.term_to_binary(%{request_id: request_id, payload: nil, error: message})
     end
   end
 
@@ -116,7 +116,10 @@ defmodule ElixirSense.Server.TCPServer do
         end
       {:ok, result}
     rescue
-      e -> {:error, request_id, e}
+      e ->
+        message = Exception.message(e)
+        details = Exception.format_stacktrace(System.stacktrace)
+        {:error, request_id, message, details}
     end
   end
 
