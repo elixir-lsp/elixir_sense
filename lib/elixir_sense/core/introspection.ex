@@ -193,7 +193,11 @@ defmodule ElixirSense.Core.Introspection do
         nil   -> []
         types -> types
       end
-    end
+    end |> reject_private_types()
+  end
+
+  defp reject_private_types(types) do
+    types |> Enum.reject(fn {type, _} -> type in [:opaque, :typep] end)
   end
 
   def extract_summary_from_docs(doc) when doc in [nil, "", false], do: ""

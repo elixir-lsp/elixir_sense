@@ -6,6 +6,7 @@ defmodule ElixirSense.Mixfile do
     [app: :elixir_sense,
      version: "1.0.1",
      elixir: "~> 1.5",
+     elixirc_paths: elixirc_paths(Mix.env),
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      test_coverage: [tool: ExCoveralls],
@@ -23,6 +24,9 @@ defmodule ElixirSense.Mixfile do
   def application do
     [applications: [:logger]]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_),     do: ["lib"]
 
   defp deps do
     [{:excoveralls, "~> 0.6", only: :test},

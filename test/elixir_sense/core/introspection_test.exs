@@ -117,6 +117,11 @@ defmodule ElixirSense.Core.IntrospectionTest do
     ]
   end
 
+  test "get_types ignores privates types (:opaque and :typep)" do
+    types = get_types(ModuleWithPrivateTypes)
+    assert types == [type: {:type_t, {:type, 4, :atom, []}, []}]
+  end
+
   defp get_type_ast(module, type) do
     {_kind, type} =
       get_types(module)
