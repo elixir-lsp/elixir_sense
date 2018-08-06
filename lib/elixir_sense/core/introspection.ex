@@ -98,7 +98,7 @@ defmodule ElixirSense.Core.Introspection do
       case get_docs(mod, :docs) do
         nil -> nil
         docs ->
-          for {{f, arity}, _, _, args, text} = k <- docs, f == fun do
+          for {{f, arity}, _, _, args, text} <- docs, f == fun do
             args = args || []
             fun_args_text = args
             |> Enum.map_join(", ", &format_doc_arg(&1))
