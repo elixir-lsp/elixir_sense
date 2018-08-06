@@ -122,6 +122,11 @@ defmodule ElixirSense.Core.IntrospectionTest do
     assert types == [type: {:type_t, {:type, 4, :atom, []}, []}]
   end
 
+  test "get_func_docs_md works for kernel special forms" do
+    docs = get_func_docs_md(Kernel.SpecialForms, :__MODULE__)
+    assert docs == "> Kernel.SpecialForms.__MODULE__()\n\nReturns the current module name as an atom or `nil` otherwise.\n\nAlthough the module can be accessed in the `__ENV__/0`, this macro\nis a convenient shortcut.\n"
+  end
+
   defp get_type_ast(module, type) do
     {_kind, type} =
       get_types(module)
