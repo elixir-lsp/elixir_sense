@@ -25,47 +25,51 @@ defmodule ElixirSense.Core.Introspection do
   """
   def get_docs(module, category) do
     if function_exported?(Code, :fetch_docs, 1) do
-      case Code.fetch_docs(module) do
-        {:docs_v1, moduledoc_line, _beam_language, "text/markdown", moduledoc, _metadata, docs} ->
-          docs = Enum.map(docs, &to_old_format/1)
-
-          case category do
-            :moduledoc ->
-              moduledoc_en =
-                case moduledoc do
-                  %{"en" => moduledoc_en} -> moduledoc_en
-                  false -> false
-                  _ -> nil
-                end
-
-              case {moduledoc_line, moduledoc_en} do
-                {_, nil} -> nil
-                {nil, _} -> nil
-                _ -> {moduledoc_line, moduledoc_en}
-              end
-
-            :docs ->
-              Enum.filter(docs, &match?({_, _, def_type, _, _} when def_type in [:def, :defmacro], &1))
-
-            :callback_docs ->
-              Enum.filter(
-                docs,
-                &match?({_, _, kind, _} when kind in [:callback, :macrocallback], &1)
-              )
-
-            :type_docs ->
-              Enum.filter(docs, &match?({_, _, :type, _}, &1))
-
-            :all ->
-              [:moduledoc, :docs, :callback_docs, :type_docs]
-              |> Enum.map(&{&1, get_docs(module, &1)})
-          end
-
-        _ ->
-          nil
-      end
+      do_something_you_can_do_with_fetch_docs(module, category)
     else
       Code.get_docs(module, category)
+    end
+  end
+
+  defp do_something_you_can_do_with_fetch_docs(module, category) do
+    case Code.fetch_docs(module) do
+      {:docs_v1, moduledoc_line, _beam_language, "text/markdown", moduledoc, _metadata, docs} ->
+        docs = Enum.map(docs, &to_old_format/1)
+
+        case category do
+          :moduledoc ->
+            moduledoc_en =
+              case moduledoc do
+                %{"en" => moduledoc_en} -> moduledoc_en
+                false -> false
+                _ -> nil
+              end
+
+            case {moduledoc_line, moduledoc_en} do
+              {_, nil} -> nil
+              {nil, _} -> nil
+              _ -> {moduledoc_line, moduledoc_en}
+            end
+
+          :docs ->
+            Enum.filter(docs, &match?({_, _, def_type, _, _} when def_type in [:def, :defmacro], &1))
+
+          :callback_docs ->
+            Enum.filter(
+              docs,
+              &match?({_, _, kind, _} when kind in [:callback, :macrocallback], &1)
+            )
+
+          :type_docs ->
+            Enum.filter(docs, &match?({_, _, :type, _}, &1))
+
+          :all ->
+            [:moduledoc, :docs, :callback_docs, :type_docs]
+            |> Enum.map(&{&1, get_docs(module, &1)})
+        end
+
+      _ ->
+        nil
     end
   end
 
@@ -127,25 +131,25 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_types_md(mod) when is_atom(mod) do
     for %{type: type, doc: doc} <- get_types_with_docs(mod) do
-      """
-        `#{type}`
+  """
+  `#{type}`
 
-        #{doc}
-      """
+  #{doc}
+  """
     end |> Enum.join("\n\n____\n\n")
   end
 
   def get_callbacks_md(mod) when is_atom(mod) do
     for %{callback: callback, signature: signature, doc: doc} <- get_callbacks_with_docs(mod) do
-      """
-        > #{signature}
+  """
+  > #{signature}
 
-        ### Specs
+  ### Specs
 
-        `#{callback}`
+  `#{callback}`
 
-        #{doc}
-      """
+  #{doc}
+  """
     end
     |> Enum.join("\n\n____\n\n")
   end
@@ -169,7 +173,7 @@ defmodule ElixirSense.Core.Introspection do
             fun
             |> get_callback_with_doc(:macrocallback, doc, {:"MACRO-#{fun}", arity + 1}, callbacks)
             |> Map.put(:arity, arity)
-          {{fun, arity}, _, kind, doc} ->
+        {{fun, arity}, _, kind, doc} ->
             get_callback_with_doc(fun, kind, doc, {fun, arity}, callbacks)
         end
     end
@@ -305,8 +309,8 @@ defmodule ElixirSense.Core.Introspection do
       nil  -> ""
       docs ->
         {{_, _}, _, _, description} = Enum.find(docs, fn({{name, _}, _, _, _}) ->
-          type == name
-        end)
+        type == name
+      end)
         description || ""
     end
   end
@@ -424,317 +428,317 @@ defmodule ElixirSense.Core.Introspection do
 
   defp to_var({:{}, _, _}, _),
     do: {:tuple, [], nil}
-  defp to_var({_, _}, _),
-    do: {:tuple, [], nil}
-  defp to_var({name, meta, _}, _) when is_atom(name),
-    do: {name, meta, nil}
-  defp to_var({:<<>>, _, _}, _),
-    do: {:binary, [], nil}
-  defp to_var({:%{}, _, _}, _),
-    do: {:map, [], nil}
-  defp to_var(integer, _) when is_integer(integer),
-    do: {:integer, [], nil}
-  defp to_var(float, _) when is_float(float),
-    do: {:float, [], nil}
-  defp to_var(list, _) when is_list(list),
-    do: {:list, [], nil}
-  defp to_var(atom, _) when is_atom(atom),
-    do: {:atom, [], nil}
-  defp to_var(_, i),
-    do: {:"arg#{i}", [], nil}
+    defp to_var({_, _}, _),
+      do: {:tuple, [], nil}
+      defp to_var({name, meta, _}, _) when is_atom(name),
+        do: {name, meta, nil}
+        defp to_var({:<<>>, _, _}, _),
+          do: {:binary, [], nil}
+          defp to_var({:%{}, _, _}, _),
+            do: {:map, [], nil}
+            defp to_var(integer, _) when is_integer(integer),
+              do: {:integer, [], nil}
+              defp to_var(float, _) when is_float(float),
+                do: {:float, [], nil}
+                defp to_var(list, _) when is_list(list),
+                  do: {:list, [], nil}
+                  defp to_var(atom, _) when is_atom(atom),
+                    do: {:atom, [], nil}
+                    defp to_var(_, i),
+                      do: {:"arg#{i}", [], nil}
 
-  def get_module_docs_summary(module) do
-    case get_docs module, :moduledoc do
-      {_, doc} -> extract_summary_from_docs(doc)
-      _ -> ""
-    end
-  end
+                    def get_module_docs_summary(module) do
+                      case get_docs module, :moduledoc do
+                        {_, doc} -> extract_summary_from_docs(doc)
+                        _ -> ""
+                      end
+                    end
 
-  def get_module_subtype(module) do
-    has_func = fn f, a -> module_has_function(module, f, a) end
-    cond do
-      has_func.(:__protocol__, 1) -> :protocol
-      has_func.(:__impl__,     1) -> :implementation
-      has_func.(:__struct__,   0) ->
-        if Map.get(module.__struct__, :__exception__) do
-          :exception
-        else
-          :struct
-        end
-      true -> nil
-    end
-  end
+                    def get_module_subtype(module) do
+                      has_func = fn f, a -> module_has_function(module, f, a) end
+                      cond do
+                        has_func.(:__protocol__, 1) -> :protocol
+                        has_func.(:__impl__,     1) -> :implementation
+                        has_func.(:__struct__,   0) ->
+                          if Map.get(module.__struct__, :__exception__) do
+                            :exception
+                          else
+                            :struct
+                          end
+                        true -> nil
+                      end
+                    end
 
-  def module_has_function(module, func, arity) do
-    Code.ensure_loaded?(module) && Kernel.function_exported?(module, func, arity)
-  end
+                    def module_has_function(module, func, arity) do
+                      Code.ensure_loaded?(module) && Kernel.function_exported?(module, func, arity)
+                    end
 
-  def module_is_struct?(module) do
-    module_has_function(module, :__struct__,   0)
-  end
+                    def module_is_struct?(module) do
+                      module_has_function(module, :__struct__,   0)
+                    end
 
-  def extract_fun_args_and_desc({{_fun, _}, _line, _kind, args, doc}) do
-    formatted_args =
-      (args || [])
-      |> Enum.map_join(",", &format_doc_arg(&1))
-      |> String.replace(Regex.recompile!(~r/\s+/), " ")
-    desc = extract_summary_from_docs(doc)
-    {formatted_args, desc}
-  end
+                    def extract_fun_args_and_desc({{_fun, _}, _line, _kind, args, doc}) do
+                      formatted_args =
+                      (args || [])
+                      |> Enum.map_join(",", &format_doc_arg(&1))
+                      |> String.replace(Regex.recompile!(~r/\s+/), " ")
+                      desc = extract_summary_from_docs(doc)
+                      {formatted_args, desc}
+                    end
 
-  def extract_fun_args_and_desc(nil) do
-    {"", ""}
-  end
+                    def extract_fun_args_and_desc(nil) do
+                      {"", ""}
+                    end
 
-  def get_module_specs(module) do
-    case beam_specs(module) do
-      nil   -> %{}
-      specs ->
-        for {_kind, {{f, a}, _spec}} = spec <- specs, into: %{} do
-          {{f, a}, spec_to_string(spec)}
-        end
-    end
-  end
+                    def get_module_specs(module) do
+                      case beam_specs(module) do
+                        nil   -> %{}
+                        specs ->
+                          for {_kind, {{f, a}, _spec}} = spec <- specs, into: %{} do
+                            {{f, a}, spec_to_string(spec)}
+                          end
+                      end
+                    end
 
-  def get_spec(module, function, arity) when is_atom(module) and is_atom(function) and is_integer(arity) do
-    module
-    |> get_module_specs
-    |> Map.get({function, arity}, "")
-  end
+                    def get_spec(module, function, arity) when is_atom(module) and is_atom(function) and is_integer(arity) do
+                      module
+                      |> get_module_specs
+                      |> Map.get({function, arity}, "")
+                    end
 
-  def get_spec_text(mod, fun, arity) do
-    case get_spec(mod, fun, arity) do
-      ""  -> ""
-      spec ->
-        "### Specs\n\n`#{spec}`\n\n"
-    end
-  end
+                    def get_spec_text(mod, fun, arity) do
+                      case get_spec(mod, fun, arity) do
+                        ""  -> ""
+                        spec ->
+                          "### Specs\n\n`#{spec}`\n\n"
+                      end
+                    end
 
-  def module_to_string(module) do
-    case module |> Atom.to_string do
-      "Elixir." <> name -> name
-      name -> ":#{name}"
-    end
-  end
+                    def module_to_string(module) do
+                      case module |> Atom.to_string do
+                        "Elixir." <> name -> name
+                        name -> ":#{name}"
+                      end
+                    end
 
-  def split_mod_fun_call(call) do
-    case Code.string_to_quoted(call) do
-      {:error, _} ->
-        {nil, nil}
-      {:ok, quoted} when is_atom(quoted) ->
-        {quoted, nil}
-      {:ok, quoted} ->
-        split_mod_quoted_fun_call(quoted)
-    end
-  end
+                    def split_mod_fun_call(call) do
+                      case Code.string_to_quoted(call) do
+                        {:error, _} ->
+                          {nil, nil}
+                        {:ok, quoted} when is_atom(quoted) ->
+                          {quoted, nil}
+                        {:ok, quoted} ->
+                          split_mod_quoted_fun_call(quoted)
+                      end
+                    end
 
-  def split_mod_quoted_fun_call(quoted) do
-    case Macro.decompose_call(quoted) do
-      {{:__aliases__, _, mod_parts}, fun, _args} ->
-        {Module.concat(mod_parts), fun}
-      {:__aliases__, mod_parts} ->
-        {Module.concat(mod_parts), nil}
-      {mod, func, []} when is_atom(mod) and is_atom(func) ->
-        {mod, func}
-      {func, []} when is_atom(func) ->
-        {nil, func}
-      _ -> {nil, nil}
-    end
-  end
+                    def split_mod_quoted_fun_call(quoted) do
+                      case Macro.decompose_call(quoted) do
+                        {{:__aliases__, _, mod_parts}, fun, _args} ->
+                          {Module.concat(mod_parts), fun}
+                        {:__aliases__, mod_parts} ->
+                          {Module.concat(mod_parts), nil}
+                        {mod, func, []} when is_atom(mod) and is_atom(func) ->
+                          {mod, func}
+                        {func, []} when is_atom(func) ->
+                          {nil, func}
+                        _ -> {nil, nil}
+                      end
+                    end
 
-  def module_functions_info(module) do
-    docs = get_docs(module, :docs) || []
-    specs = get_module_specs(module)
-    for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false, into: %{} do
-      spec = Map.get(specs, {f, a}, "")
-      {fun_args, desc} = extract_fun_args_and_desc(func_doc)
-      {{f, a}, {func_kind, fun_args, desc, spec}}
-    end
-  end
+                    def module_functions_info(module) do
+                      docs = get_docs(module, :docs) || []
+                      specs = get_module_specs(module)
+                      for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false, into: %{} do
+                        spec = Map.get(specs, {f, a}, "")
+                        {fun_args, desc} = extract_fun_args_and_desc(func_doc)
+                        {{f, a}, {func_kind, fun_args, desc, spec}}
+                      end
+                    end
 
-  def get_callback_ast(module, callback, arity) do
-    {{name, _}, [spec | _]} = module
-      |> get_callbacks()
-      |> Enum.find(fn {{f, a}, _} -> {f, a} == {callback, arity}  end)
+                    def get_callback_ast(module, callback, arity) do
+                      {{name, _}, [spec | _]} = module
+                      |> get_callbacks()
+                      |> Enum.find(fn {{f, a}, _} -> {f, a} == {callback, arity}  end)
 
-    spec_to_quoted(name, spec)
-  end
+                      spec_to_quoted(name, spec)
+                    end
 
-  defp format_doc_arg({:\\, _, [left, right]}) do
-    format_doc_arg(left) <> " \\\\ " <> Macro.to_string(right)
-  end
+                    defp format_doc_arg({:\\, _, [left, right]}) do
+                      format_doc_arg(left) <> " \\\\ " <> Macro.to_string(right)
+                    end
 
-  defp format_doc_arg({var, _, _}) do
-    Atom.to_string(var)
-  end
+                    defp format_doc_arg({var, _, _}) do
+                      Atom.to_string(var)
+                    end
 
-  defp spec_ast_to_string(ast) do
-    ast |> Macro.to_string |> String.replace("()", "")
-  end
+                    defp spec_ast_to_string(ast) do
+                      ast |> Macro.to_string |> String.replace("()", "")
+                    end
 
-  defp spec_to_string({kind, {{name, _arity}, specs}}) do
-    spec = hd(specs)
-    binary = Macro.to_string spec_to_quoted(name, spec)
-    "@#{kind} #{binary}" |> String.replace("()", "")
-  end
+                    defp spec_to_string({kind, {{name, _arity}, specs}}) do
+                      spec = hd(specs)
+                      binary = Macro.to_string spec_to_quoted(name, spec)
+                      "@#{kind} #{binary}" |> String.replace("()", "")
+                    end
 
-  defp beam_specs(module) do
-    specs =
-      if Code.ensure_loaded?(Code.Typespec) do
-        case Code.Typespec.fetch_specs(module) do
-          {:ok, specs} -> specs
-          _            -> []
-        end
-      else
-        old_typespec().beam_specs(module)
-      end
+                    defp beam_specs(module) do
+                      specs =
+                      if Code.ensure_loaded?(Code.Typespec) do
+                        case Code.Typespec.fetch_specs(module) do
+                          {:ok, specs} -> specs
+                          _            -> []
+                        end
+                      else
+                        old_typespec().beam_specs(module)
+                      end
 
-    beam_specs_tag(specs, :spec)
-  end
+                      beam_specs_tag(specs, :spec)
+                    end
 
-  defp beam_specs_tag(nil, _), do: nil
-  defp beam_specs_tag(specs, tag) do
-    Enum.map(specs, &{tag, &1})
-  end
+                    defp beam_specs_tag(nil, _), do: nil
+                    defp beam_specs_tag(specs, tag) do
+                      Enum.map(specs, &{tag, &1})
+                    end
 
-  def actual_mod_fun(mod_fun, imports, aliases, current_module) do
-    with {nil, nil} <- find_kernel_function(mod_fun),
-         {nil, nil} <- find_imported_function(mod_fun, imports),
-         {nil, nil} <- find_aliased_function(mod_fun, aliases),
-         {nil, nil} <- find_function_in_module(mod_fun),
-         {nil, nil} <- find_function_in_current_module(mod_fun, current_module)
-    do
-      mod_fun
-    else
-      new_mod_fun -> new_mod_fun
-    end
-  end
+                    def actual_mod_fun(mod_fun, imports, aliases, current_module) do
+                      with {nil, nil} <- find_kernel_function(mod_fun),
+                           {nil, nil} <- find_imported_function(mod_fun, imports),
+                           {nil, nil} <- find_aliased_function(mod_fun, aliases),
+                           {nil, nil} <- find_function_in_module(mod_fun),
+                           {nil, nil} <- find_function_in_current_module(mod_fun, current_module)
+                        do
+                        mod_fun
+                        else
+                          new_mod_fun -> new_mod_fun
+                      end
+                    end
 
-  defp find_kernel_function({nil, fun}) do
-    cond do
-      ModuleInfo.docs?(Kernel, fun) ->
-        {Kernel, fun}
-      ModuleInfo.docs?(Kernel.SpecialForms, fun) ->
-        {Kernel.SpecialForms, fun}
-      true -> {nil, nil}
-    end
-  end
+                    defp find_kernel_function({nil, fun}) do
+                      cond do
+                        ModuleInfo.docs?(Kernel, fun) ->
+                          {Kernel, fun}
+                        ModuleInfo.docs?(Kernel.SpecialForms, fun) ->
+                          {Kernel.SpecialForms, fun}
+                        true -> {nil, nil}
+                      end
+                    end
 
-  defp find_kernel_function({_mod, _fun}) do
-    {nil, nil}
-  end
+                    defp find_kernel_function({_mod, _fun}) do
+                      {nil, nil}
+                    end
 
-  defp find_imported_function({nil, fun}, imports) do
-    case imports |> Enum.find(&ModuleInfo.has_function?(&1, fun)) do
-      nil -> {nil, nil}
-      mod  -> {mod, fun}
-    end
-  end
+                    defp find_imported_function({nil, fun}, imports) do
+                      case imports |> Enum.find(&ModuleInfo.has_function?(&1, fun)) do
+                        nil -> {nil, nil}
+                        mod  -> {mod, fun}
+                      end
+                    end
 
-  defp find_imported_function({_mod, _fun}, _imports) do
-    {nil, nil}
-  end
+                    defp find_imported_function({_mod, _fun}, _imports) do
+                      {nil, nil}
+                    end
 
-  defp find_aliased_function({nil, _fun}, _aliases) do
-    {nil, nil}
-  end
+                    defp find_aliased_function({nil, _fun}, _aliases) do
+                      {nil, nil}
+                    end
 
-  defp find_aliased_function({mod, fun}, aliases) do
-    if elixir_module?(mod) do
-      module =
-        mod
-        |> Module.split
-        |> ModuleInfo.expand_alias(aliases)
-      {module, fun}
-    else
-      {nil, nil}
-    end
-  end
+                    defp find_aliased_function({mod, fun}, aliases) do
+                      if elixir_module?(mod) do
+                        module =
+                          mod
+                          |> Module.split
+                          |> ModuleInfo.expand_alias(aliases)
+                        {module, fun}
+                      else
+                        {nil, nil}
+                      end
+                    end
 
-  defp find_function_in_module({mod, fun}) do
-    if elixir_module?(mod) && ModuleInfo.has_function?(mod, fun) do
-      {mod, fun}
-    else
-      {nil, nil}
-    end
-  end
+                    defp find_function_in_module({mod, fun}) do
+                      if elixir_module?(mod) && ModuleInfo.has_function?(mod, fun) do
+                        {mod, fun}
+                      else
+                        {nil, nil}
+                      end
+                    end
 
-  defp find_function_in_current_module({nil, fun}, current_module) do
-    {current_module, fun}
-  end
+                    defp find_function_in_current_module({nil, fun}, current_module) do
+                      {current_module, fun}
+                    end
 
-  defp find_function_in_current_module(_, _) do
-    {nil, nil}
-  end
+                    defp find_function_in_current_module(_, _) do
+                      {nil, nil}
+                    end
 
-  defp elixir_module?(module) when is_atom(module) do
-    module == Module.concat(Elixir, module)
-  end
-  defp elixir_module?(_) do
-    false
-  end
+                    defp elixir_module?(module) when is_atom(module) do
+                      module == Module.concat(Elixir, module)
+                    end
+                    defp elixir_module?(_) do
+                      false
+                    end
 
-  defp to_old_format({{kind, name, arity}, line, signatures, docs, _meta}) do
-    docs_en =
-      case docs do
-        %{"en" => docs_en} -> docs_en
-        false -> false
-        _ -> nil
-      end
+                    defp to_old_format({{kind, name, arity}, line, signatures, docs, _meta}) do
+                      docs_en =
+                        case docs do
+                          %{"en" => docs_en} -> docs_en
+                          false -> false
+                          _ -> nil
+                        end
 
-    case kind do
-      kind when kind in [:function, :macro] ->
-        args_quoted =
-          signatures
-          |> Enum.join(" ")
-          |> Code.string_to_quoted()
-          |> case do
-            {:ok, {^name, _, args}} -> args
-            _ -> []
-          end
+                      case kind do
+                        kind when kind in [:function, :macro] ->
+                          args_quoted =
+                            signatures
+                            |> Enum.join(" ")
+                            |> Code.string_to_quoted()
+                            |> case do
+                                 {:ok, {^name, _, args}} -> args
+                                 _ -> []
+                               end
 
-        def_type =
-          case kind do
-            :function -> :def
-            :macro -> :defmacro
-          end
+                            def_type =
+                              case kind do
+                                :function -> :def
+                                :macro -> :defmacro
+                              end
 
-        {{name, arity}, line, def_type, args_quoted, docs_en}
+                            {{name, arity}, line, def_type, args_quoted, docs_en}
 
-      _ ->
-        {{name, arity}, line, kind, docs_en}
-    end
-  end
+                        _ ->
+                          {{name, arity}, line, kind, docs_en}
+                      end
+                    end
 
-  defp get_callbacks(mod) do
-    if Code.ensure_loaded?(Code.Typespec) do
-      case Code.Typespec.fetch_callbacks(mod) do
-        {:ok, callbacks} -> callbacks
-        _ -> []
-      end
-    else
-      old_typespec().beam_callbacks(mod)
-    end
-  end
+                    defp get_callbacks(mod) do
+                      if Code.ensure_loaded?(Code.Typespec) do
+                        case Code.Typespec.fetch_callbacks(mod) do
+                          {:ok, callbacks} -> callbacks
+                          _ -> []
+                        end
+                      else
+                        old_typespec().beam_callbacks(mod)
+                      end
+                    end
 
-  def type_to_quoted(type) do
-    if Code.ensure_loaded?(Code.Typespec) do
-      Code.Typespec.type_to_quoted(type)
-    else
-      old_typespec().type_to_ast(type)
-    end
-  end
+                    def type_to_quoted(type) do
+                      if Code.ensure_loaded?(Code.Typespec) do
+                        Code.Typespec.type_to_quoted(type)
+                      else
+                        old_typespec().type_to_ast(type)
+                      end
+                    end
 
-  def spec_to_quoted(name, spec) do
-    if Code.ensure_loaded?(Code.Typespec) do
-      Code.Typespec.spec_to_quoted(name, spec)
-    else
-      old_typespec().spec_to_ast(name, spec)
-    end
-  end
+                    def spec_to_quoted(name, spec) do
+                      if Code.ensure_loaded?(Code.Typespec) do
+                        Code.Typespec.spec_to_quoted(name, spec)
+                      else
+                        old_typespec().spec_to_ast(name, spec)
+                      end
+                    end
 
-  defp old_typespec() do
-    Kernel.Typespec
-  end
+                    defp old_typespec() do
+                      Kernel.Typespec
+                    end
 
 end
