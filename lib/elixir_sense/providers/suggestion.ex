@@ -100,11 +100,11 @@ defmodule ElixirSense.Providers.Suggestion do
       end
 
     [hint_suggestion]
-    |> List.concat(callbacks_or_returns)
-    |> List.concat(find_attributes(attributes, hint))
-    |> List.concat(find_vars(vars, hint))
-    |> List.concat(mods_and_funcs)
-    |> Enum.uniq_by(&(&1))
+    |> Enum.concat([callbacks_or_returns])
+    |> Enum.concat([find_attributes(attributes, hint)])
+    |> Enum.concat([find_vars(vars, hint)])
+    |> Enum.concat([mods_and_funcs])
+    |> Enum.uniq
   end
 
   defp find_struct_fields(hint, text_before, imports, aliases, module) do
