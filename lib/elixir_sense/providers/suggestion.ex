@@ -100,10 +100,10 @@ defmodule ElixirSense.Providers.Suggestion do
       end
 
     [hint_suggestion]
-    |> Kernel.++(callbacks_or_returns)
-    |> Kernel.++(find_attributes(attributes, hint))
-    |> Kernel.++(find_vars(vars, hint))
-    |> Kernel.++(mods_and_funcs)
+    |> List.concat(callbacks_or_returns)
+    |> List.concat(find_attributes(attributes, hint))
+    |> List.concat(find_vars(vars, hint))
+    |> List.concat(mods_and_funcs)
     |> Enum.uniq_by(&(&1))
   end
 
