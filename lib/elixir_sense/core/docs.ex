@@ -33,10 +33,10 @@ defmodule ElixirSense.Core.Docs do
   end
 
   defp do_parse_docs_v1(:callback_docs, docs, moduledoc, moduledoc_line, module) do
-        Enum.filter(
-          docs,
-          &match?({_, _, kind, _} when kind in [:callback, :macrocallback], &1)
-        )
+    Enum.filter(
+      docs,
+      &match?({_, _, kind, _} when kind in [:callback, :macrocallback], &1)
+    )
   end
 
   defp do_parse_docs_v1(:type_docs, docs, moduledoc, moduledoc_line, module) do
@@ -46,5 +46,37 @@ defmodule ElixirSense.Core.Docs do
   defp do_parse_docs_v1(:all, docs, moduledoc, moduledoc_line, module) do
     [:moduledoc, :docs, :callback_docs, :type_docs]
     |> Enum.map(&{&1, get_docs(module, &1)})
+  end
+
+  defp to_old_format({{kind, name, arity}, line, signatures, docs, _meta}) do
+    docs_en =
+      case docs do
+        %{"en" => docs_en} -> docs_en
+        false -> false
+        _ -> nil
+      end
+
+    case kind do
+      kind when kind in [:function, :macro] ->
+        args_quoted =
+          signatures
+          |> Enum.join(" ")
+          |> Code.string_to_quoted()
+          |> case do
+               {:ok, {^name, _, args}} -> args
+               _ -> []
+             end
+
+          def_type =
+            case kind do
+              :function -> :def
+              :macro -> :defmacro
+            end
+
+          {{name, arity}, line, def_type, args_quoted, docs_en}
+
+      _ ->
+        {{name, arity}, line, kind, docs_en}
+    end
   end
 end
