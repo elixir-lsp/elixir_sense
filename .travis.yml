@@ -9,7 +9,7 @@ before_script:
   - make compile
   - rm -rf .git
   - make test
-  - make install
+  - sudo make install
 
 script:
   - mix test
