@@ -1,7 +1,14 @@
-language: elixir
-
-elixir:
-  - '1.7.0'
+language: erlang
 
 otp_release: 
   - '21.2'
+
+before_script:
+  - git clone https://github.com/elixir-lang/elixir.git
+  - make compile
+  - rm -rf .git
+  - make test
+  - make install
+
+script:
+  - mix test
