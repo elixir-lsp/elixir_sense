@@ -10,7 +10,9 @@ before_script:
   - rm -rf .git
   - make test
   - sudo make install
+  - cd ..
 
 script:
   - ls
+  - pwd
   - mix test
