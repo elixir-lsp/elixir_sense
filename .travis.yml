@@ -21,4 +21,4 @@ script:
   - ${ELIXIR} --version
   - ls
   - pwd
-  - ${MIX} test
+  - ${ELIXIR} ${MIX} test
