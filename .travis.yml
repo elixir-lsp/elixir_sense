@@ -16,9 +16,10 @@ before_script:
   - git checkout v${EX_VSN}
   - make
   - popd
+  - ${ELIXIR} ${MIX} local.hex --force
+  - ${ELIXIR} ${MIX} local.rebar --force
 
 script:
-  - ${ELIXIR} --version
-  - ls
-  - pwd
+  - ${ELIXIR} ${MIX} deps.get
+  - MIX_ENV=test ${ELIXIR} ${MIX} deps.compile
   - ${ELIXIR} ${MIX} test
