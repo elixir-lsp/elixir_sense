@@ -3,17 +3,22 @@ language: erlang
 otp_release:
   - '21.2'
 
+env:
+  EX_HOME: ${TRAVIS_BUILD_DIR}/elixir
+  EX_BIN: ${EX_HOME}/bin
+  ELIXIR: ${EX_BIN}/elixir
+  MIX: ${EX_BIN}/mix
+  EX_VSN: 1.7.1
+
 before_script:
-  - git clone https://github.com/elixir-lang/elixir.git
-  - cd elixir
-  - git checkout v1.7.1
-  - make test
-  - sudo make install
-  - cd ..
-  - elixir/bin/elixir --version
+  - git clone https://github.com/elixir-lang/elixir.git ${EX_HOME}
+  - pushd ${EX_HOME}
+  - git checkout v${EX_VSN}
+  - make
+  - popd
 
 script:
-  - elixir --version
+  - ${ELIXIR} --version
   - ls
   - pwd
-  - mix test
+  - ${MIX} test
