@@ -6,9 +6,10 @@ otp_release:
 before_script:
   - git clone https://github.com/elixir-lang/elixir.git
   - cd elixir
+  - git checkout v1.7.1
   - make compile
   - rm -rf .git
-  - make test
+  - make
   - sudo make install
   - cd ..
 
