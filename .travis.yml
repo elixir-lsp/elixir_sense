@@ -14,6 +14,7 @@ before_script:
   - cd ..
 
 script:
+  - elixir --version
   - ls
   - pwd
   - mix test
