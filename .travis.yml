@@ -11,6 +11,10 @@ env:
   EX_VSN: 1.7.1
 
 before_script:
+  - env
+  - echo ${EX_HOME}
+  - echo ${TRAVIS_BUILD_DIR}
+  - echo $ELIXIR
   - git clone https://github.com/elixir-lang/elixir.git ${EX_HOME}
   - pushd ${EX_HOME}
   - git checkout v${EX_VSN}
