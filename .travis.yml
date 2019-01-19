@@ -5,25 +5,19 @@ otp_release:
 
 env:
   EX_HOME: ${TRAVIS_BUILD_DIR}/elixir
-  EX_BIN: ${EX_HOME}/bin
-  ELIXIR: ${EX_BIN}/elixir
-  MIX: ${EX_BIN}/mix
+  EX_BIN: ${TRAVIS_BUILD_DIR}/elixir/bin
   EX_VSN: 1.7.1
 
 before_script:
-  - env
-  - echo ${EX_HOME}
-  - echo ${TRAVIS_BUILD_DIR}
-  - echo $ELIXIR
   - git clone https://github.com/elixir-lang/elixir.git ${EX_HOME}
   - pushd ${EX_HOME}
   - git checkout v${EX_VSN}
   - make
   - popd
-  - ${ELIXIR} ${MIX} local.hex --force
-  - ${ELIXIR} ${MIX} local.rebar --force
+  - ${EX_BIN}/elixir ${EX_BIN}/mix local.hex --force
+  - ${EX_BIN}/elixir ${EX_BIN}/mix local.rebar --force
 
 script:
-  - ${ELIXIR} ${MIX} deps.get
-  - MIX_ENV=test ${ELIXIR} ${MIX} deps.compile
-  - ${ELIXIR} ${MIX} test
+  - ${EX_BIN}/elixir ${EX_BIN}/mix deps.get
+  - MIX_ENV=test ${EX_BIN}/elixir ${EX_BIN}/mix deps.compile
+  - ${EX_BIN}/elixir ${EX_BIN}/mix test
