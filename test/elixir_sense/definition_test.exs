@@ -70,6 +70,17 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "function_arity_one"
   end
 
+  test "find definition of delegated functions" do
+    buffer = """
+    defmodule MyModule do
+      String.length("elixir")
+    end
+    """
+    %{found: true, type: :function, file: file, line: line, column: column} = ElixirSense.definition(buffer, 2, 11)
+    assert file =~ "lib/elixir/lib/string.ex"
+    assert read_line(file, {line, column}) =~ "length"
+  end
+
   test "find definition of modules" do
     buffer = """
     defmodule MyModule do

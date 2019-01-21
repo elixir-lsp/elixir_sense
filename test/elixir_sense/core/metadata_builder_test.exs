@@ -646,6 +646,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         IO.puts ""
         defmacro import(module, opts)
         IO.puts ""
+        defdelegate func_delegated(par), to: OtherModule
+        IO.puts ""
       end
       """
       |> string_to_state
@@ -657,6 +659,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert State.get_scope_name(state, 11) == {:macro1, 1}
     assert State.get_scope_name(state, 13) == :MyModule
     assert State.get_scope_name(state, 15) == :MyModule
+    assert State.get_scope_name(state, 16) == {:func_delegated, 1}
   end
 
   defp string_to_state(string) do
