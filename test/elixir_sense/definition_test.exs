@@ -73,12 +73,14 @@ defmodule ElixirSense.Providers.DefinitionTest do
   test "find definition of delegated functions" do
     buffer = """
     defmodule MyModule do
-      String.length("elixir")
+      alias ElixirSenseExample.ModuleWithFunctions, as: MyMod
+      MyMod.delegated_function()
+      #        ^
     end
     """
-    %{found: true, type: :function, file: file, line: line, column: column} = ElixirSense.definition(buffer, 2, 11)
-    assert file =~ "lib/elixir/lib/string.ex"
-    assert read_line(file, {line, column}) =~ "length"
+    %{found: true, type: :function, file: file, line: line, column: column} = ElixirSense.definition(buffer, 3, 11)
+    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
+    assert read_line(file, {line, column}) =~ "delegated_function"
   end
 
   test "find definition of modules" do
