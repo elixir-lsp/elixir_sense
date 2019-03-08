@@ -159,6 +159,9 @@ defmodule ElixirSense.Core.Source do
   defp normalize_npar(npar, true), do: npar + 1
   defp normalize_npar(npar, _pipe_before), do: npar
 
+  defp scan([{:kw_identifier, _, _}|tokens], %{npar: 1} = state) do
+    scan(tokens, %{state | npar: 0})
+  end
   defp scan([{:",", _}|_], %{count: 1} = state), do: state
   defp scan([{:",", _}|tokens], %{count: 0, count2: 0} = state) do
     scan(tokens, %{state | npar: state.npar + 1, candidate: []})

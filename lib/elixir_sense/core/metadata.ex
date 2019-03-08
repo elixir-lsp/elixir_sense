@@ -62,7 +62,7 @@ defmodule ElixirSense.Core.Metadata do
         Enum.find_value(docs, {"", ""}, fn {{f, a}, _, _, _, text} ->
           f == function &&
           a == arity &&
-          {Introspection.extract_summary_from_docs(text), Introspection.get_spec(module, function, arity)}
+          {Introspection.extract_summary_from_docs(text), Introspection.get_spec_as_string(module, function, arity)}
         end)
       %{name: Atom.to_string(function),
         params: params |> Enum.with_index() |> Enum.map(&Introspection.param_to_var/1),

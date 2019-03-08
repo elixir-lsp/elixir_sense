@@ -348,8 +348,8 @@ defmodule Alchemist.Helpers.Complete do
       funs = if docs = Introspection.get_docs(mod, :docs) do
         specs = Introspection.get_module_specs(mod)
         for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false do
-          spec = Map.get(specs, {f, a}, "")
-          {f, a, func_kind, func_doc, spec}
+          spec = Map.get(specs, {f, a})
+          {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
         end
       else
         macros = :macros

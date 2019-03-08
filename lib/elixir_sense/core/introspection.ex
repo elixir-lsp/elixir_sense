@@ -20,6 +20,59 @@ defmodule ElixirSense.Core.Introspection do
     :gen_event   => GenEvent
   }
 
+  @basic_types %{
+    "any" => "The top type, the set of all terms",
+    "none" => "The bottom type, contains no terms",
+    "atom" => "An atom is a constant whose name is its own value. Some other languages call these symbols",
+    "map" => "Any map",
+    "pid" => "A process identifier, pid, identifies a process",
+    "port" => "A port identifier identifies an Erlang port",
+    "reference" => "A reference is a term that is unique in an Erlang runtime system, created by calling `make_ref/0`",
+    "struct" => "Any struct",
+    "tuple" => "Tuple of any size",
+    "float" => "A floating-point number",
+    "integer" => "An integer number",
+    "neg_integer" => "A negative integer",
+    "non_neg_integer" => "A non-negative integer",
+    "pos_integer" => "A positive integer",
+    "list/1" => "Proper list ([]-terminated)",
+    "nonempty_list/1" => "Non-empty proper list",
+    "maybe_improper_list/2" => "Proper or improper list (type1=contents, type2=termination)",
+    "nonempty_improper_list/2" => "Improper list (type1=contents, type2=termination)",
+    "nonempty_maybe_improper_list/2" => "Non-empty proper or improper list"
+  }
+
+  @builtin_types %{
+    "term" => (quote do: term :: any()),
+    "arity" => (quote do: arity :: 0..255),
+    "as_boolean/1" => (quote do: as_boolean(t) :: t), # A type `t` whose value will be used as a _truthy_ value
+    "binary" => (quote do: binary :: <<_::_*8>>),
+    "bitstring" => (quote do: bitstring :: <<_::_*1>>),
+    "boolean" => (quote do: boolean :: false | true),
+    "byte" => (quote do: byte :: 0..255),
+    "char" => (quote do: char :: 0..0x10FFFF),
+    "charlist" => (quote do: charlist :: [char()]),
+    "nonempty_charlist" => (quote do: nonempty_charlist :: [char(), ...]),
+    "fun" => (quote do: fun :: (... -> any)),
+    "function" => (quote do: function :: fun()),
+    "identifier" => (quote do: identifier :: pid() | port() | reference()),
+    "iodata" => (quote do: iodata :: iolist() | binary()),
+    "iolist" => (quote do: iolist :: maybe_improper_list(byte() | binary() | iolist(), binary() | [])),
+    "keyword" => (quote do: keyword :: [{atom(), any()}]),
+    "keyword/1" => (quote do: keyword(t) :: [{atom(), t}]),
+    "list" => (quote do: list :: [any()]),
+    "nonempty_list" => (quote do: nonempty_list :: nonempty_list(any())),
+    "maybe_improper_list" => (quote do: maybe_improper_list :: maybe_improper_list(any(), any())),
+    "nonempty_maybe_improper_list" => (quote do: nonempty_maybe_improper_list :: nonempty_maybe_improper_list(any(), any())),
+    "mfa" => (quote do: mfa :: {module(), atom(), arity()}),
+    "module" => (quote do: module :: atom()),
+    "no_return" => (quote do: no_return :: none()),
+    "node" => (quote do: node :: atom()),
+    "number" => (quote do: number :: integer() | float()),
+    "struct" => (quote do: struct :: %{:__struct__ => atom(), optional(atom()) => any()}),
+    "timeout" => (quote do: timeout :: :infinity | non_neg_integer())
+  }
+
   @doc """
   Shim to replicate the behavior of `Code.get_docs/2` in Elixir >= 1.7
   """
@@ -65,7 +118,7 @@ defmodule ElixirSense.Core.Introspection do
           nil
       end
     else
-      Code.get_docs(module, category)
+      Module.concat([Code]).get_docs(module, category)
     end
   end
 
@@ -88,7 +141,7 @@ defmodule ElixirSense.Core.Introspection do
       fun_args = Enum.map(args, &format_doc_arg(&1))
       fun_str = Atom.to_string(fun)
       doc = extract_summary_from_docs(text)
-      spec = get_spec(mod, fun, arity)
+      spec = get_spec_as_string(mod, fun, arity)
       %{name: fun_str, params: fun_args, documentation: doc, spec: spec}
     end
   end
@@ -301,14 +354,40 @@ defmodule ElixirSense.Core.Introspection do
     [ast|returns]
   end
 
-  defp get_type_doc(module, type) do
+  def get_type_doc(module, type, type_n_args \\ 0) do
+    # TODO: Use `with`
     case get_docs(module, :type_docs) do
       nil  -> ""
       docs ->
-        {{_, _}, _, _, description} = Enum.find(docs, fn({{name, _}, _, _, _}) ->
-          type == name
-        end)
-        description || ""
+        case Enum.find(docs, fn({{name, n_args}, _, _, _}) -> type == name && type_n_args == n_args end) do
+          {{_, _}, _, _, description} ->
+            description || ""
+          _ ->
+            get_builtin_type_doc(type)
+        end
+    end
+  end
+
+  def get_builtin_type_doc(type, n_args \\ 0) do
+    case @builtin_types[type_key(type, n_args)] do
+      nil -> ""
+      _ -> "Built-in type"
+    end
+  end
+
+  def get_builtin_type_spec(type, n_args \\ 0) do
+    @builtin_types[type_key(type, n_args)]
+  end
+
+  def get_basic_type_doc(type, n_args \\ 0) do
+    @basic_types[type_key(type, n_args)]
+  end
+
+  defp type_key(type, n_args) do
+    if n_args > 0 do
+      "#{type}/#{n_args}"
+    else
+      "#{type}"
     end
   end
 
@@ -492,19 +571,30 @@ defmodule ElixirSense.Core.Introspection do
       nil   -> %{}
       specs ->
         for {_kind, {{f, a}, _spec}} = spec <- specs, into: %{} do
-          {{f, a}, spec_to_string(spec)}
+          {{f, a}, spec}
         end
     end
   end
 
   def get_spec(module, function, arity) when is_atom(module) and is_atom(function) and is_integer(arity) do
     module
-    |> get_module_specs
-    |> Map.get({function, arity}, "")
+    |> get_module_specs()
+    |> Map.get({function, arity})
+  end
+
+  def get_spec_as_string(module, function, arity) do
+    get_spec(module, function, arity) |> spec_to_string()
+  end
+
+  def get_function_specs(module, function) when is_atom(module) and is_atom(function) do
+    specs = module |> get_module_specs()
+    for {{f, _}, spec} <- specs, f == function do
+      spec
+    end
   end
 
   def get_spec_text(mod, fun, arity) do
-    case get_spec(mod, fun, arity) do
+    case get_spec_as_string(mod, fun, arity) do
       ""  -> ""
       spec ->
         "### Specs\n\n`#{spec}`\n\n"
@@ -547,9 +637,9 @@ defmodule ElixirSense.Core.Introspection do
     docs = get_docs(module, :docs) || []
     specs = get_module_specs(module)
     for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false, into: %{} do
-      spec = Map.get(specs, {f, a}, "")
+      spec = Map.get(specs, {f, a})
       {fun_args, desc} = extract_fun_args_and_desc(func_doc)
-      {{f, a}, {func_kind, fun_args, desc, spec}}
+      {{f, a}, {func_kind, fun_args, desc, spec_to_string(spec)}}
     end
   end
 
@@ -569,11 +659,15 @@ defmodule ElixirSense.Core.Introspection do
     Atom.to_string(var)
   end
 
-  defp spec_ast_to_string(ast) do
+  def spec_ast_to_string(ast) do
     ast |> Macro.to_string |> String.replace("()", "")
   end
 
-  defp spec_to_string({kind, {{name, _arity}, specs}}) do
+  def spec_to_string(nil) do
+    ""
+  end
+
+  def spec_to_string({kind, {{name, _arity}, specs}}) do
     specs
     |> Enum.map(fn spec ->
       binary = Macro.to_string(spec_to_quoted(name, spec))
@@ -719,6 +813,12 @@ defmodule ElixirSense.Core.Introspection do
     else
       old_typespec().beam_callbacks(mod)
     end
+  end
+
+  # Workaround because Code.Typespec.typespec_to_quoted/1 is private
+  def typespec_to_quoted(type) do
+    {:::, [], [_, quoted]} = type_to_quoted({:fake_var, type, []})
+    quoted
   end
 
   def type_to_quoted(type) do

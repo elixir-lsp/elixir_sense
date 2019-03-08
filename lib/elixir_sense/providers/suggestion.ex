@@ -82,14 +82,14 @@ defmodule ElixirSense.Providers.Suggestion do
   def find(hint, imports, aliases, module, vars, attributes, behaviours, scope, text_before) do
     case find_struct_fields(hint, text_before, imports, aliases, module) do
       [] ->
-        find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope)
+        find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, text_before)
       fields ->
         [%{type: :hint, value: "#{hint}"} | fields]
     end
   end
 
-  @spec find_all_except_struct_fields(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope) :: [suggestion]
-  defp find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope) do
+  @spec find_all_except_struct_fields(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope, module, String.t) :: [suggestion]
+  defp find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, text_before) do
     vars = Enum.map(vars, fn v -> v.name end)
     %{hint: hint_suggestion, suggestions: mods_and_funcs} = find_hint_mods_funcs(hint, imports, aliases)
 
@@ -104,6 +104,7 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Kernel.++(find_attributes(attributes, hint))
     |> Kernel.++(find_vars(vars, hint))
     |> Kernel.++(mods_and_funcs)
+    |> Kernel.++(find_param_options(text_before, hint, imports, aliases, module))
     |> Enum.uniq_by(&(&1))
   end
 
@@ -184,4 +185,23 @@ defmodule ElixirSense.Providers.Suggestion do
     end) |> Enum.sort
   end
 
+  defp find_param_options(prefix, hint, imports, aliases, module) do
+    case Source.which_func(prefix) do
+      %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} ->
+        {mod, fun} = Introspection.actual_mod_fun({mod, fun}, imports, aliases, module)
+
+        Core.TypeInfo.extract_param_options(mod, fun, npar)
+        |> options_to_suggestions(mod)
+        |> Enum.filter(&String.starts_with?("#{&1.name}", hint))
+      _ ->
+        []
+    end
+  end
+
+  defp options_to_suggestions(options, module) do
+    Enum.map(options, fn {name, type} ->
+      Core.TypeInfo.get_type_info(module, type)
+      |> Map.merge(%{type: :param_option, name: name})
+    end)
+  end
 end
