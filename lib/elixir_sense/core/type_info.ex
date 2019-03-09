@@ -1,9 +1,125 @@
-defmodule Core.TypeInfo do
+defmodule ElixirSense.Core.TypeInfo do
 
-  alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Normalized.Typespec
+  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
+
+  @basic_types %{
+    "any" => "The top type, the set of all terms",
+    "none" => "The bottom type, contains no terms",
+    "atom" => "An atom is a constant whose name is its own value. Some other languages call these symbols",
+    "map" => "Any map",
+    "pid" => "A process identifier, pid, identifies a process",
+    "port" => "A port identifier identifies an Erlang port",
+    "reference" => "A reference is a term that is unique in an Erlang runtime system, created by calling `make_ref/0`",
+    "struct" => "Any struct",
+    "tuple" => "Tuple of any size",
+    "float" => "A floating-point number",
+    "integer" => "An integer number",
+    "neg_integer" => "A negative integer",
+    "non_neg_integer" => "A non-negative integer",
+    "pos_integer" => "A positive integer",
+    "list/1" => "Proper list ([]-terminated)",
+    "nonempty_list/1" => "Non-empty proper list",
+    "maybe_improper_list/2" => "Proper or improper list (type1=contents, type2=termination)",
+    "nonempty_improper_list/2" => "Improper list (type1=contents, type2=termination)",
+    "nonempty_maybe_improper_list/2" => "Non-empty proper or improper list"
+  }
+
+  @builtin_types %{
+    "term" => (quote do: term :: any()),
+    "arity" => (quote do: arity :: 0..255),
+    "as_boolean/1" => (quote do: as_boolean(t) :: t), # A type `t` whose value will be used as a _truthy_ value
+    "binary" => (quote do: binary :: <<_::_*8>>),
+    "bitstring" => (quote do: bitstring :: <<_::_*1>>),
+    "boolean" => (quote do: boolean :: false | true),
+    "byte" => (quote do: byte :: 0..255),
+    "char" => (quote do: char :: 0..0x10FFFF),
+    "charlist" => (quote do: charlist :: [char()]),
+    "nonempty_charlist" => (quote do: nonempty_charlist :: [char(), ...]),
+    "fun" => (quote do: fun :: (... -> any)),
+    "function" => (quote do: function :: fun()),
+    "identifier" => (quote do: identifier :: pid() | port() | reference()),
+    "iodata" => (quote do: iodata :: iolist() | binary()),
+    "iolist" => (quote do: iolist :: maybe_improper_list(byte() | binary() | iolist(), binary() | [])),
+    "keyword" => (quote do: keyword :: [{atom(), any()}]),
+    "keyword/1" => (quote do: keyword(t) :: [{atom(), t}]),
+    "list" => (quote do: list :: [any()]),
+    "nonempty_list" => (quote do: nonempty_list :: nonempty_list(any())),
+    "maybe_improper_list" => (quote do: maybe_improper_list :: maybe_improper_list(any(), any())),
+    "nonempty_maybe_improper_list" => (quote do: nonempty_maybe_improper_list :: nonempty_maybe_improper_list(any(), any())),
+    "mfa" => (quote do: mfa :: {module(), atom(), arity()}),
+    "module" => (quote do: module :: atom()),
+    "no_return" => (quote do: no_return :: none()),
+    "node" => (quote do: node :: atom()),
+    "number" => (quote do: number :: integer() | float()),
+    "struct" => (quote do: struct :: %{:__struct__ => atom(), optional(atom()) => any()}),
+    "timeout" => (quote do: timeout :: :infinity | non_neg_integer())
+  }
+
+  def spec_ast_to_string(ast) do
+    ast |> Macro.to_string |> String.replace("()", "")
+  end
+
+  def get_type_doc(module, type, type_n_args \\ 0) do
+    # TODO: Use `with`
+    case NormalizedCode.get_docs(module, :type_docs) do
+      nil  -> ""
+      docs ->
+        case Enum.find(docs, fn({{name, n_args}, _, _, _}) -> type == name && type_n_args == n_args end) do
+          {{_, _}, _, _, description} ->
+            description || ""
+          _ ->
+            get_builtin_type_doc(type)
+        end
+    end
+  end
+
+  def get_builtin_type_doc(type, n_args \\ 0) do
+    case @builtin_types[type_key(type, n_args)] do
+      nil -> ""
+      _ -> "Built-in type"
+    end
+  end
+
+  def get_builtin_type_spec(type, n_args \\ 0) do
+    @builtin_types[type_key(type, n_args)]
+  end
+
+  def get_basic_type_doc(type, n_args \\ 0) do
+    @basic_types[type_key(type, n_args)]
+  end
+
+  def get_spec(module, function, arity) when is_atom(module) and is_atom(function) and is_integer(arity) do
+    module
+    |> get_module_specs()
+    |> Map.get({function, arity})
+  end
+
+  def get_function_specs(module, function) when is_atom(module) and is_atom(function) do
+    specs = module |> get_module_specs()
+    for {{f, _}, spec} <- specs, f == function do
+      spec
+    end
+  end
+
+  def get_module_specs(module) do
+    case Typespec.beam_specs(module) do
+      nil   -> %{}
+      specs ->
+        for {_kind, {{f, a}, _spec}} = spec <- specs, into: %{} do
+          {{f, a}, spec}
+        end
+    end
+  end
+
+  # Workaround since Code.Typespec.typespec_to_quoted/1 is private
+  def typespec_to_quoted(type) do
+    {:::, [], [_, quoted]} = Typespec.type_to_quoted({:fake_var, type, []})
+    quoted
+  end
 
   def extract_param_options(mod, fun, npar) do
-    Introspection.get_function_specs(mod, fun)
+    get_function_specs(mod, fun)
     |> get_param_type_specs(npar)
     |> expand_type_specs(mod)
     |> Enum.filter(&list_type_spec?/1)
@@ -11,14 +127,14 @@ defmodule Core.TypeInfo do
   end
 
   def get_type_info(module, type) do
-    type_str = Introspection.typespec_to_quoted(type) |> Macro.to_string()
+    type_str = typespec_to_quoted(type) |> Macro.to_string()
     case extract_type_def_info(module, type) do
       {nil, name, n_args} ->
         {_full_name, spec, doc} =
-          case Introspection.get_builtin_type_spec(name, n_args) do
+          case get_builtin_type_spec(name, n_args) do
             # Basic type
             nil ->
-              doc = Introspection.get_basic_type_doc(to_string(name), n_args) || ""
+              doc = get_basic_type_doc(to_string(name), n_args) || ""
               {type_str, "", doc}
 
             # Built-in type
@@ -37,7 +153,7 @@ defmodule Core.TypeInfo do
         %{
           origin: inspect(module),
           type_spec: type_str,
-          doc: Introspection.get_type_doc(module, name, n_args),
+          doc: get_type_doc(module, name, n_args),
           expanded_spec: expand_type_spec(type, module) |> format_type_spec()
         }
 
@@ -46,7 +162,7 @@ defmodule Core.TypeInfo do
         %{
           origin: inspect(remote_mod),
           type_spec: type_str,
-          doc: Introspection.get_type_doc(remote_mod, name),
+          doc: get_type_doc(remote_mod, name),
           expanded_spec: expand_type_spec(type, remote_mod) |> format_type_spec()
         }
 
@@ -87,7 +203,7 @@ defmodule Core.TypeInfo do
 
   defp expand_type_spec({:user_type, _, type_name, type_args}, module) do
     module
-    |> Introspection.get_types()
+    |> Typespec.get_types()
     |> Enum.find(fn {_, {name, _, args}} ->
       name == type_name && length(args) == length(type_args)
     end)
@@ -99,7 +215,7 @@ defmodule Core.TypeInfo do
 
   defp expand_type_spec({:remote_type, _, [_, {:atom, _, type_name}, []]} = type, module) do
     module
-    |> Introspection.get_types()
+    |> Typespec.get_types()
     |> Enum.find(fn {_, {name, _, _}} -> name == type_name end)
     |> case do
         nil -> {:not_found, type}
@@ -183,7 +299,7 @@ defmodule Core.TypeInfo do
 
   defp format_type_spec({kind, type_spec}) do
     type_spec
-    |> Introspection.type_to_quoted()
+    |> Typespec.type_to_quoted()
     |> format_type_spec_ast(kind)
   end
 
@@ -191,7 +307,7 @@ defmodule Core.TypeInfo do
     kind_size = kind |> to_string() |> String.length()
 
     spec_ast
-    |> Introspection.spec_ast_to_string()
+    |> spec_ast_to_string()
     |> (&"@#{kind} #{&1}").()
     |> Code.format_string!(line_length: 35)
     |> to_string()
@@ -220,6 +336,14 @@ defmodule Core.TypeInfo do
         {:type, l, :list, [vars_types[name]]}
       type -> type
     end)
+  end
+
+  defp type_key(type, n_args) do
+    if n_args > 0 do
+      "#{type}/#{n_args}"
+    else
+      "#{type}"
+    end
   end
 
 end

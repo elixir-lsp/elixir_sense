@@ -6,6 +6,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
   alias Alchemist.Helpers.Complete
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Source
 
   @type fun_arity :: {atom, non_neg_integer}
@@ -190,7 +191,7 @@ defmodule ElixirSense.Providers.Suggestion do
       %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} ->
         {mod, fun} = Introspection.actual_mod_fun({mod, fun}, imports, aliases, module)
 
-        Core.TypeInfo.extract_param_options(mod, fun, npar)
+        TypeInfo.extract_param_options(mod, fun, npar)
         |> options_to_suggestions(mod)
         |> Enum.filter(&String.starts_with?("#{&1.name}", hint))
       _ ->
@@ -200,7 +201,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
   defp options_to_suggestions(options, module) do
     Enum.map(options, fn {name, type} ->
-      Core.TypeInfo.get_type_info(module, type)
+      TypeInfo.get_type_info(module, type)
       |> Map.merge(%{type: :param_option, name: name})
     end)
   end

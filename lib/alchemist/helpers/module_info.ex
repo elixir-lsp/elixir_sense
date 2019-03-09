@@ -2,17 +2,17 @@ defmodule Alchemist.Helpers.ModuleInfo do
 
   @moduledoc false
 
-  alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
   def moduledoc?(module) do
-    case Introspection.get_docs module, :moduledoc do
+    case NormalizedCode.get_docs module, :moduledoc do
       {_, doc} -> is_binary doc
       _ -> false
     end
   end
 
   def docs?(module, function) do
-    docs = Introspection.get_docs module, :docs
+    docs = NormalizedCode.get_docs module, :docs
     do_docs?(docs, function)
   end
 

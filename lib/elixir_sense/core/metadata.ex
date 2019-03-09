@@ -5,6 +5,7 @@ defmodule ElixirSense.Core.Metadata do
 
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
   defstruct source: nil,
             mods_funs_to_positions: %{},
@@ -48,7 +49,7 @@ defmodule ElixirSense.Core.Metadata do
   end
 
   def get_function_signatures(%__MODULE__{} = metadata, module, function, code_docs \\ nil) do
-    docs = code_docs || Introspection.get_docs(module, :docs) || []
+    docs = code_docs || NormalizedCode.get_docs(module, :docs) || []
 
     params_list =
       metadata
@@ -73,7 +74,7 @@ defmodule ElixirSense.Core.Metadata do
   end
 
   defp get_function_position_using_docs(module, function) do
-    docs = Introspection.get_docs(module, :docs)
+    docs = NormalizedCode.get_docs(module, :docs)
 
     for {{func, _arity}, line, _kind, _, _} <- docs, func == function do
       {line, 0}

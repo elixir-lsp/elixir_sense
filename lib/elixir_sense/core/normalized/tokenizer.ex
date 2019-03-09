@@ -1,4 +1,4 @@
-defmodule ElixirSense.Core.Tokenizer do
+defmodule ElixirSense.Core.Normalized.Tokenizer do
   @moduledoc """
   Handles tokenization of Elixir code snippets
 

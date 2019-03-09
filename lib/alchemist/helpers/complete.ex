@@ -4,6 +4,8 @@ defmodule Alchemist.Helpers.Complete do
 
   alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
   @moduledoc false
 
@@ -345,8 +347,8 @@ defmodule Alchemist.Helpers.Complete do
 
   defp get_module_funs(mod) do
     if function_exported?(mod, :__info__, 1) do
-      funs = if docs = Introspection.get_docs(mod, :docs) do
-        specs = Introspection.get_module_specs(mod)
+      funs = if docs = NormalizedCode.get_docs(mod, :docs) do
+        specs = TypeInfo.get_module_specs(mod)
         for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false do
           spec = Map.get(specs, {f, a})
           {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}

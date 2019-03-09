@@ -3,6 +3,8 @@ defmodule ElixirSense.Core.Source do
   Source parsing
   """
 
+  alias ElixirSense.Core.Normalized.Tokenizer
+
   @empty_graphemes [" ", "\n", "\r\n"]
   @stop_graphemes ~w/{ } ( ) [ ] < > + - * & ^ , ; ~ % = " ' \\ \/ $ ! ?`#/ ++ @empty_graphemes
 
@@ -131,7 +133,7 @@ defmodule ElixirSense.Core.Source do
   end
 
   def which_func(prefix) do
-    tokens = ElixirSense.Core.Tokenizer.tokenize(prefix)
+    tokens = Tokenizer.tokenize(prefix)
 
     pattern = %{npar: 0, count: 0, count2: 0, candidate: [], pos: nil, pipe_before: false}
     result = scan(tokens, pattern)
