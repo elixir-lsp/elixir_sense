@@ -4,6 +4,8 @@ defmodule Alchemist.Helpers.ModuleInfo do
 
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
+  @builtin_functions [{:__info__, 1}, {:module_info, 0}, {:module_info, 1}]
+
   def moduledoc?(module) do
     case NormalizedCode.get_docs module, :moduledoc do
       {_, doc} -> is_binary doc
@@ -33,7 +35,7 @@ defmodule Alchemist.Helpers.ModuleInfo do
   end
 
   def get_functions(module, hint) do
-    hint        = to_string hint
+    hint        = to_string(hint)
     {module, _} = Code.eval_string(module)
     functions   = get_module_funs(module)
 
@@ -73,14 +75,17 @@ defmodule Alchemist.Helpers.ModuleInfo do
   end
 
   defp filter_module_funs(list) do
-    for fun = {f, _a} <- list, !(f |> Atom.to_string |> String.starts_with?(["MACRO-", "-"])) do
+    for(
+      fun = {f, _a} <- list,
+      !(f |> Atom.to_string |> String.starts_with?(["MACRO-", "-"]))
+    ) do
       fun
     end
   end
 
   defp all_functions(list) do
     for {fun, arities} <- list do
-      for arity <- arities do
+      for arity <- arities, {fun, arity} not in @builtin_functions do
         {fun, arity}
       end
     end |> List.flatten
@@ -88,7 +93,7 @@ defmodule Alchemist.Helpers.ModuleInfo do
 
   defp all_functions(list, hint) do
     for {fun, arities} <- list, name = Atom.to_string(fun), String.starts_with?(name, hint) do
-      for arity <- arities do
+      for arity <- arities, {fun, arity} not in @builtin_functions do
         {fun, arity}
       end
     end |> List.flatten

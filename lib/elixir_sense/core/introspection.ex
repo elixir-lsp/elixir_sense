@@ -23,6 +23,10 @@ defmodule ElixirSense.Core.Introspection do
     :gen_event   => GenEvent
   }
 
+  def get_docs(module, category) do
+    NormalizedCode.get_docs(module, category)
+  end
+
   def all_modules do
     ModuleInfo.all_applications_modules()
   end

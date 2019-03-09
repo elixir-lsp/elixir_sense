@@ -9,40 +9,34 @@ defmodule ElixirSense.Providers.SuggestionTest do
     def say_hi, do: true
   end
 
-  test "find definition of default functions" do
-    result = Suggestion.find("ElixirSenseExample.EmptyModule", [], [], SomeModule, [], [], [], SomeModule, "") |> Enum.take(18)
+  test "find definition of built-in functions" do
+    result = Suggestion.find("ElixirSenseExample.EmptyModule.", [], [], SomeModule, [], [], [], SomeModule, "")
     assert result |> Enum.at(0) == %{type: :hint, value: "ElixirSenseExample.EmptyModule."}
     assert result |> Enum.at(1) == %{
-      name: "EmptyModule",
-      subtype: nil,
-      summary: "Empty module without other functions",
-      type: :module
-    }
-    assert result |> Enum.at(2) == %{
       args: "",
       arity: 1,
       name: "__info__",
-      origin: "ElixirSenseExample.EmptyModule",
+      origin: "",
       spec: nil,
-      summary: "",
+      summary: "Built-in function",
+      type: "function"
+    }
+    assert result |> Enum.at(2) == %{
+      args: "",
+      arity: 0,
+      name: "module_info",
+      origin: "",
+      spec: nil,
+      summary: "Built-in function",
       type: "function"
     }
     assert result |> Enum.at(3) == %{
       args: "",
       arity: 1,
       name: "module_info",
-      origin: "ElixirSenseExample.EmptyModule",
+      origin: "",
       spec: nil,
-      summary: "",
-      type: "function"
-    }
-    assert result |> Enum.at(4) == %{
-      args: "",
-      arity: 0,
-      name: "module_info",
-      origin: "ElixirSenseExample.EmptyModule",
-      spec: nil,
-      summary: "",
+      summary: "Built-in function",
       type: "function"
     }
   end
@@ -77,6 +71,20 @@ defmodule ElixirSense.Providers.SuggestionTest do
       %{type: :hint, value: "say"},
       %{args: "", arity: 0, name: "say_hi", origin: "ElixirSense.Providers.SuggestionTest.MyModule", spec: "", summary: "", type: "public_function"}
     ]
+  end
+
+  test "local calls should not return built-in funcitons" do
+    assert Suggestion.find("mo", [MyModule], [], SomeModule, [], [], [], SomeModule, "") == [
+      %{type: :hint, value: "mo"}
+    ]
+  end
+
+  test "empty hint should not return built-in funcitons" do
+    suggestions_names = Suggestion.find("", [MyModule], [], SomeModule, [], [], [], SomeModule, "")
+      |> Enum.filter(&Map.has_key?(&1, :name))
+      |> Enum.map(&(&1.name))
+
+    refute "module_info" in suggestions_names
   end
 
 end

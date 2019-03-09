@@ -68,7 +68,23 @@ defmodule Alchemist.Helpers.Complete do
         mod_name = module |> Introspection.module_to_string
         %{type: kind, name: func_name, arity: a, args: fun_args, origin: mod_name, summary: desc, spec: spec}
       end
-    end |> List.flatten
+    end |> List.flatten |> add_builtin_functions(hint)
+  end
+
+  defp add_builtin_functions(list, hint) do
+    builtin_list =
+      if String.contains?(hint, ".") do
+        local_hint = String.split(hint, ".") |> List.last()
+        for {f, a} <- @builtin_functions,
+            f_name = to_string(f),
+            String.starts_with?(f_name, local_hint)
+            do
+          %{name: f_name, arity: a, args: "", origin: "", summary: "Built-in function", spec: nil, type: "function"}
+        end
+      else
+        []
+      end
+    list ++ builtin_list
   end
 
   def expand('') do
@@ -347,22 +363,24 @@ defmodule Alchemist.Helpers.Complete do
 
   defp get_module_funs(mod) do
     if function_exported?(mod, :__info__, 1) do
-      funs = if docs = NormalizedCode.get_docs(mod, :docs) do
-        specs = TypeInfo.get_module_specs(mod)
-        for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false do
-          spec = Map.get(specs, {f, a})
-          {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
+      funs =
+        if docs = NormalizedCode.get_docs(mod, :docs) do
+          specs = TypeInfo.get_module_specs(mod)
+          for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false do
+            spec = Map.get(specs, {f, a})
+            {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
+          end
+        else
+          macros = :macros
+          |> mod.__info__()
+          |> Enum.map(fn {f, a} -> {f, a, :macro, nil, nil} end)
+          functions = :functions
+          |> mod.__info__()
+          |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end)
+          macros ++ functions
         end
-      else
-        macros = :macros
-        |> mod.__info__()
-        |> Enum.map(fn {f, a} -> {f, a, :macro, nil, nil} end)
-        functions = :functions
-        |> mod.__info__()
-        |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end)
-        macros ++ functions
-      end
-      funs ++ (@builtin_functions |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end))
+      funs
+      # funs ++ (@builtin_functions |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end))
     else
       for {f, a} <- mod.module_info(:exports) do
         case f |> Atom.to_string do
