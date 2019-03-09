@@ -62,6 +62,15 @@ defmodule ElixirSense.Providers.Suggestion do
     summary: String.t
   }
 
+  @type param_option :: %{
+    type: :param_option,
+    name: String.t,
+    origin: String.t,
+    type_spec: String.t,
+    doc: String.t,
+    expanded_spec: String.t
+  }
+
   @type hint :: %{
     type: :hint,
     value: String.t
@@ -75,6 +84,7 @@ defmodule ElixirSense.Providers.Suggestion do
                     | func
                     | mod
                     | hint
+                    | param_option
 
   @doc """
   Finds all suggestions for a hint based on context information.
@@ -186,6 +196,7 @@ defmodule ElixirSense.Providers.Suggestion do
     end) |> Enum.sort
   end
 
+  @spec find_param_options(String.t, String.t, [module], [{module, module}], module) :: [param_option]
   defp find_param_options(prefix, hint, imports, aliases, module) do
     case Source.which_func(prefix) do
       %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} ->
