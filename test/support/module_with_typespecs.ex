@@ -6,6 +6,8 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
 
     @typedoc "Remote list type"
     @type remote_list_t :: [remote_t]
+
+    @type remote_option_t :: {:remote_option_1, remote_t} | {:remote_option_2, remote_list_t}
   end
 
   defmodule Local do
@@ -57,8 +59,11 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     @typedoc "Extra option"
     @type extra_option_t :: {:option_1, atom} | {:option_2, integer}
 
-    @typedoc "Local keyword list type"
+    @typedoc "Options"
     @type options_t :: [option_t]
+
+    @typedoc "Option | Extra option"
+    @type option_or_extra_option_t :: {:option_1, boolean} | {:option_2, timeout} | Remote.remote_option_t
 
     @spec func_with_options(options_t) :: any
     def func_with_options(options) do
@@ -67,6 +72,16 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
 
     @spec func_with_union_of_options([option_t | extra_option_t]) :: any
     def func_with_union_of_options(options) do
+      options
+    end
+
+    @spec func_with_union_of_options_as_type([option_or_extra_option_t]) :: any
+    def func_with_union_of_options_as_type(options) do
+      options
+    end
+
+    @spec func_with_union_of_options_inline([{:option_1, atom} | {:option_2, integer} | option_t]) :: any
+    def func_with_union_of_options_inline(options) do
       options
     end
 
@@ -94,6 +109,5 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     def func_with_one_option(options) do
       options
     end
-
   end
 end

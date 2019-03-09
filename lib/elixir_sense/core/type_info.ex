@@ -213,8 +213,8 @@ defmodule ElixirSense.Core.TypeInfo do
     {:not_found, {nil, type, []}}
   end
 
-  defp expand_type_spec({:remote_type, _, [_, {:atom, _, type_name}, []]} = type, module) do
-    module
+  defp expand_type_spec({:remote_type, _, [{:atom, _, remote_mod}, {:atom, _, type_name}, []]} = type, _module) do
+    remote_mod
     |> Typespec.get_types()
     |> Enum.find(fn {_, {name, _, _}} -> name == type_name end)
     |> case do

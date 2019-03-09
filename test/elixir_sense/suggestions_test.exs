@@ -500,6 +500,19 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion_by_name(:option_1, buffer).type_spec == "atom()"
     end
 
+    test "union of options inline" do
+      buffer = "Local.func_with_union_of_options_inline("
+
+      assert suggestion_by_name(:local_o, buffer).type_spec == "local_t()"
+      assert suggestion_by_name(:option_1, buffer).type_spec == "atom()"
+    end
+
+    test "union of options as type + inline" do
+      buffer = "Local.func_with_union_of_options_as_type("
+      assert suggestion_by_name(:option_1, buffer).type_spec == "boolean()"
+      assert suggestion_by_name(:remote_option_1, buffer).type_spec == "remote_t()"
+    end
+
     test "format type spec" do
       buffer = "Local.func_with_options("
 
