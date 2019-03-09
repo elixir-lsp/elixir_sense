@@ -1,7 +1,7 @@
 defmodule ElixirSense.Core.TokenizerTest do
   use ExUnit.Case
 
-  alias ElixirSense.Core.Tokenizer
+  alias ElixirSense.Core.Normalized.Tokenizer
 
   describe "tokenize/1" do
     test "functions wihtout namespace" do

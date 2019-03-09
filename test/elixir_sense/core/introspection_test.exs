@@ -2,7 +2,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
   use ExUnit.Case
 
-  alias ElixirSense.Core.NormalizedTypespec
+  alias ElixirSense.Core.Normalized.Typespec
   import ElixirSense.Core.Introspection
 
   test "format_spec_ast with one return option does not aplit the returns" do
@@ -148,9 +148,9 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
   defp get_type_ast(module, type) do
     {_kind, type} =
-      NormalizedTypespec.get_types(module)
+      Typespec.get_types(module)
       |> Enum.find(fn {_, {name, _, _}} -> name == type end)
-      NormalizedTypespec.type_to_quoted(type)
+      Typespec.type_to_quoted(type)
   end
 
 end
