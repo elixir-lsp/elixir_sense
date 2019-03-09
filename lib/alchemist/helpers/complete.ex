@@ -1,11 +1,11 @@
 defmodule Alchemist.Helpers.Complete do
 
-  @builtin_functions [{:__info__, 1}, {:module_info, 0}, {:module_info, 1}]
-
   alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
+
+  @builtin_functions [{:__info__, 1}, {:module_info, 0}, {:module_info, 1}]
 
   @moduledoc false
 
@@ -39,7 +39,7 @@ defmodule Alchemist.Helpers.Complete do
     context_module = modules |> Enum.at(0)
 
     exported? = fn mod, f, a ->
-      !({f, a} in @builtin_functions) and (function_exported?(mod, f, a) or macro_exported?(mod, f, a))
+      (function_exported?(mod, f, a) or macro_exported?(mod, f, a))
     end
     accept_function = fn
       (mod, mod, _, _, _)          -> true
@@ -60,7 +60,7 @@ defmodule Alchemist.Helpers.Complete do
           {_, _, :defmacro}  -> "macro"
           {m, m, :def}       -> "public_function"
           {_, _, :def}       -> "function"
-          {m, m, :undefined} -> if ({f, a} in @builtin_functions) or exported?.(module, f, a), do: "public_function", else: "private_function"
+          {m, m, :undefined} -> if exported?.(module, f, a), do: "public_function", else: "private_function"
           _                  -> "unknown"
         end
 
@@ -363,24 +363,21 @@ defmodule Alchemist.Helpers.Complete do
 
   defp get_module_funs(mod) do
     if function_exported?(mod, :__info__, 1) do
-      funs =
-        if docs = NormalizedCode.get_docs(mod, :docs) do
-          specs = TypeInfo.get_module_specs(mod)
-          for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false do
-            spec = Map.get(specs, {f, a})
-            {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
-          end
-        else
-          macros = :macros
-          |> mod.__info__()
-          |> Enum.map(fn {f, a} -> {f, a, :macro, nil, nil} end)
-          functions = :functions
-          |> mod.__info__()
-          |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end)
-          macros ++ functions
+      if docs = NormalizedCode.get_docs(mod, :docs) do
+        specs = TypeInfo.get_module_specs(mod)
+        for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false do
+          spec = Map.get(specs, {f, a})
+          {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
         end
-      funs
-      # funs ++ (@builtin_functions |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end))
+      else
+        macros = :macros
+        |> mod.__info__()
+        |> Enum.map(fn {f, a} -> {f, a, :macro, nil, nil} end)
+        functions = :functions
+        |> mod.__info__()
+        |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end)
+        macros ++ functions
+      end
     else
       for {f, a} <- mod.module_info(:exports) do
         case f |> Atom.to_string do
