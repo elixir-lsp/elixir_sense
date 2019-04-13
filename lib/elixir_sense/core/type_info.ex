@@ -4,6 +4,13 @@ defmodule ElixirSense.Core.TypeInfo do
   alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
+  def get_type_ast(module, type) do
+    {_kind, type} =
+      Typespec.get_types(module)
+      |> Enum.find(fn {_, {name, _, _}} -> name == type end)
+      Typespec.type_to_quoted(type)
+  end
+
   def spec_ast_to_string(ast) do
     ast |> Macro.to_string |> String.replace("()", "")
   end

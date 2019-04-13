@@ -2,11 +2,11 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
   use ExUnit.Case
 
-  alias ElixirSense.Core.Normalized.Typespec
+  alias ElixirSense.Core.TypeInfo
   import ElixirSense.Core.Introspection
 
   test "format_spec_ast with one return option does not aplit the returns" do
-    type_ast = get_type_ast(GenServer, :debug)
+    type_ast = TypeInfo.get_type_ast(GenServer, :debug)
 
     assert format_spec_ast(type_ast) == """
     debug :: [:trace | :log | :statistics | {:log_to_file, Path.t}]
@@ -14,7 +14,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
   end
 
   test "format_spec_ast with more than one return option aplits the returns" do
-    type_ast = get_type_ast(GenServer, :on_start)
+    type_ast = TypeInfo.get_type_ast(GenServer, :on_start)
 
     assert format_spec_ast(type_ast) == """
     on_start ::
@@ -144,13 +144,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
       %{description: "{:next_state, nextStateName, newStateData, timeout | :hibernate}", snippet: "{:next_state, \"${1:nextStateName}$\", \"${2:newStateData}$\", \"${3:timeout | :hibernate}$\"}", spec: "{:next_state, nextStateName :: atom, newStateData :: term, timeout | :hibernate}"},
       %{description: "{:stop, reason, newStateData}", snippet: "{:stop, \"${1:reason}$\", \"${2:newStateData}$\"}", spec: "{:stop, reason :: term, newStateData :: term}"}
     ]
-  end
-
-  defp get_type_ast(module, type) do
-    {_kind, type} =
-      Typespec.get_types(module)
-      |> Enum.find(fn {_, {name, _, _}} -> name == type end)
-      Typespec.type_to_quoted(type)
   end
 
 end
