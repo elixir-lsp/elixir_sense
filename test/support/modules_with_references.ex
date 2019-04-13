@@ -1,4 +1,3 @@
-# TODO: Only for unit tests. Move to some place else.
 defmodule ElixirSense.Providers.ReferencesTest.Callee do
   def func() do
     IO.puts ""

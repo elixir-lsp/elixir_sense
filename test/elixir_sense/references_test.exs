@@ -16,12 +16,12 @@ defmodule ElixirSense.Providers.ReferencesTest do
 
     assert references == [
       %{
-        range: %{end: %{character: 0, line: 12}, start: %{character: 0, line: 12}},
-        uri: "lib/elixir_sense/providers/references_test_modules.ex"
+        range: %{end: %{character: 0, line: 11}, start: %{character: 0, line: 11}},
+        uri: "test/support/modules_with_references.ex"
       },
       %{
-        range: %{end: %{character: 0, line: 17}, start: %{character: 0, line: 17}},
-        uri: "lib/elixir_sense/providers/references_test_modules.ex"
+        range: %{end: %{character: 0, line: 16}, start: %{character: 0, line: 16}},
+        uri: "test/support/modules_with_references.ex"
       }
     ]
   end
@@ -40,16 +40,16 @@ defmodule ElixirSense.Providers.ReferencesTest do
     references = ElixirSense.references(buffer, 2, 10)
     assert references == [
       %{
-        range: %{end: %{character: 0, line: 12}, start: %{character: 0, line: 12}},
-        uri: "lib/elixir_sense/providers/references_test_modules.ex"
+        range: %{end: %{character: 0, line: 11}, start: %{character: 0, line: 11}},
+        uri: "test/support/modules_with_references.ex"
       }
     ]
 
     references = ElixirSense.references(buffer, 5, 10)
     assert references == [
       %{
-        range: %{end: %{character: 0, line: 17}, start: %{character: 0, line: 17}},
-        uri: "lib/elixir_sense/providers/references_test_modules.ex"
+        range: %{end: %{character: 0, line: 16}, start: %{character: 0, line: 16}},
+        uri: "test/support/modules_with_references.ex"
       }
     ]
   end
@@ -67,12 +67,12 @@ defmodule ElixirSense.Providers.ReferencesTest do
 
     assert references == [
       %{
-        range: %{end: %{character: 0, line: 12}, start: %{character: 0, line: 12}},
-        uri: "lib/elixir_sense/providers/references_test_modules.ex"
+        range: %{end: %{character: 0, line: 11}, start: %{character: 0, line: 11}},
+        uri: "test/support/modules_with_references.ex"
       },
       %{
-        range: %{end: %{character: 0, line: 17}, start: %{character: 0, line: 17}},
-        uri: "lib/elixir_sense/providers/references_test_modules.ex"
+        range: %{end: %{character: 0, line: 16}, start: %{character: 0, line: 16}},
+        uri: "test/support/modules_with_references.ex"
       }
     ]
   end
