@@ -123,7 +123,7 @@ defmodule ElixirSense.Core.TypeInfo do
     |> get_param_type_specs(npar)
     |> expand_type_specs(mod)
     |> Enum.filter(&list_type_spec?/1)
-    |> extract_list_type_spec_options(mod)
+    |> extract_list_type_spec_options()
   end
 
   def get_type_info(module, type) do
@@ -148,22 +148,13 @@ defmodule ElixirSense.Core.TypeInfo do
             expanded_spec: spec
           }
 
-      # Same module
-      {^module, name, n_args} ->
+      {module, name, n_args} ->
+        {_mod, expanded_type} = expand_type_spec(type, module)
         %{
           origin: inspect(module),
           type_spec: type_str,
           doc: get_type_doc(module, name, n_args),
-          expanded_spec: expand_type_spec(type, module) |> format_type_spec()
-        }
-
-      # Remote module
-      {remote_mod, name, _} ->
-        %{
-          origin: inspect(remote_mod),
-          type_spec: type_str,
-          doc: get_type_doc(remote_mod, name),
-          expanded_spec: expand_type_spec(type, remote_mod) |> format_type_spec()
+          expanded_spec: expanded_type |> format_type_spec()
         }
 
       # Inline, non-existent
@@ -177,11 +168,11 @@ defmodule ElixirSense.Core.TypeInfo do
     end
   end
 
-  defp extract_list_type_spec_options(list_type_specs, mod) do
+  defp extract_list_type_spec_options(list_type_specs) do
     Enum.flat_map(list_type_specs, fn type_spec ->
       type_spec
-      |> expand_list_type_spec(mod)
-      |> extract_union_options_name_and_type(mod)
+      |> expand_list_type_spec()
+      |> extract_union_options_name_and_type()
     end)
   end
 
@@ -202,15 +193,21 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   defp expand_type_spec({:user_type, _, type_name, type_args}, module) do
-    module
-    |> Typespec.get_types()
-    |> Enum.find(fn {_, {name, _, args}} ->
-      name == type_name && length(args) == length(type_args)
-    end)
+    type =
+      module
+      |> Typespec.get_types()
+      |> Enum.find(fn {_, {name, _, args}} ->
+        name == type_name && length(args) == length(type_args)
+      end)
+    {module, type}
   end
 
-  defp expand_type_spec({:type, _, _, _} = type, _module) do
-    {:not_found, {nil, type, []}}
+  defp expand_type_spec({:type, _, :list, [_|_]} = type, module) do
+    {module, type}
+  end
+
+  defp expand_type_spec({:type, _, _, _} = type, module) do
+    {module, {:not_found, {nil, type, []}}}
   end
 
   defp expand_type_spec({:remote_type, _, [{:atom, _, remote_mod}, {:atom, _, type_name}, []]} = type, _module) do
@@ -219,39 +216,43 @@ defmodule ElixirSense.Core.TypeInfo do
     |> Enum.find(fn {_, {name, _, _}} -> name == type_name end)
     |> case do
         nil -> {:not_found, type}
-        type_found -> type_found
+        type_found ->
+          {remote_mod, type_found}
       end
   end
 
-  defp expand_type_spec(type, _module) do
-    type
+  defp expand_type_spec(type, module) do
+    {module, type}
   end
 
-  defp expand_list_type_spec({_kind, {_name, {:type, _, :list, [type]}, _}}, module) do
-    expand_type_spec(type, module)
+  defp expand_list_type_spec({mod, {:type, _, :list, [type]}}) do
+    expand_type_spec(type, mod)
+  end
+
+  defp expand_list_type_spec({mod, {_kind, {_name, {:type, _, :list, [type]}, _}}}) do
+    expand_type_spec(type, mod)
   end
 
   # More than one option (union)
-  defp extract_union_options_name_and_type({_kind, {_name, {:type, _, :union, options_types}, _}}, module) do
+  defp extract_union_options_name_and_type({mod, {_kind, {_name, {:type, _, :union, options_types}, _}}}) do
     options_types
-    |> Enum.map(&extract_tagged_tuple_name_and_type(&1, module))
+    |> Enum.map(&extract_tagged_tuple_name_and_type({mod, &1}))
     |> List.flatten()
-    |> Enum.filter(&(&1))
   end
 
   # Only one option (not actually a union)
-  defp extract_union_options_name_and_type({_kind, {_name, {:type, _, :tuple, _} = type, _}}, module) do
-    extract_tagged_tuple_name_and_type(type, module)
+  defp extract_union_options_name_and_type({mod, {_kind, {_name, {:type, _, :tuple, _} = type, _}}}) do
+    extract_tagged_tuple_name_and_type({mod, type})
   end
 
-  defp extract_tagged_tuple_name_and_type({:type, _, :tuple, [{:atom, _, name}, type]}, _module) do
-    [{name, type}]
+  defp extract_tagged_tuple_name_and_type({mod, {:type, _, :tuple, [{:atom, _, name}, type]}}) do
+    [{mod, name, type}]
   end
 
-  defp extract_tagged_tuple_name_and_type(type, module) do
-    case expand_type_spec(type, module) do
-      {_kind, {_name, {:type, _, :union, _}, _}} = expanded_type ->
-        extract_union_options_name_and_type(expanded_type, module)
+  defp extract_tagged_tuple_name_and_type({mod, type}) do
+    case expand_type_spec(type, mod) do
+      {_mod, {_kind, {_name, {:type, _, :union, _}, _}}} = expanded_type ->
+        extract_union_options_name_and_type(expanded_type)
       _ -> []
     end
   end
@@ -281,7 +282,11 @@ defmodule ElixirSense.Core.TypeInfo do
     :not_found
   end
 
-  defp list_type_spec?({_, {_, {:type, _, :list, [_]}, _}}) do
+  defp list_type_spec?({_mod, {:type, _, :list, [_]}}) do
+    true
+  end
+
+  defp list_type_spec?({_mod, {_, {_, {:type, _, :list, [_]}, _}}}) do
     true
   end
 
@@ -293,14 +298,14 @@ defmodule ElixirSense.Core.TypeInfo do
     ""
   end
 
-  defp format_type_spec({:not_found, _}) do
-    ""
-  end
-
   defp format_type_spec({kind, type_spec}) do
     type_spec
     |> Typespec.type_to_quoted()
     |> format_type_spec_ast(kind)
+  end
+
+  defp format_type_spec(_) do
+    ""
   end
 
   defp format_type_spec_ast(spec_ast, kind) do
@@ -345,5 +350,4 @@ defmodule ElixirSense.Core.TypeInfo do
       "#{type}"
     end
   end
-
 end
