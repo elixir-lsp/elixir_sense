@@ -138,7 +138,7 @@ defmodule ElixirSense.Core.Introspection do
     module
     |> Typespec.get_types()
     |> Enum.map(fn {_, {t, _, _args}} = type ->
-      %{type: format_type(type), doc: TypeInfo.get_type_doc(module, t)}
+      %{type: format_type(type), doc: TypeInfo.get_type_doc_desc(module, t)}
     end)
   end
 

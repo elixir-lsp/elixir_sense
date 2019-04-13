@@ -201,7 +201,6 @@ defmodule ElixirSense.Providers.Suggestion do
     case Source.which_func(prefix) do
       %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} ->
         {mod, fun} = Introspection.actual_mod_fun({mod, fun}, imports, aliases, module)
-
         TypeInfo.extract_param_options(mod, fun, npar)
         |> options_to_suggestions()
         |> Enum.filter(&String.starts_with?("#{&1.name}", hint))
