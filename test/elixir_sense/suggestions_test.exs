@@ -398,7 +398,7 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.type_spec == "keyword()"
       assert suggestion.origin == ""
       assert suggestion.expanded_spec == "@type keyword :: [{atom, any}]"
-      assert suggestion.doc == "Built-in type"
+      assert suggestion.doc == "A keyword list"
     end
 
     test "built-in type with params" do
@@ -408,7 +408,7 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.type_spec == "keyword(term())"
       assert suggestion.origin == ""
       assert suggestion.expanded_spec == "@type keyword(t) :: [{atom, t}]"
-      assert suggestion.doc == "Built-in type"
+      assert suggestion.doc == "A keyword list with values of type `t`"
     end
 
     test "union type" do
