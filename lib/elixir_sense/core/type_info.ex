@@ -67,14 +67,14 @@ defmodule ElixirSense.Core.TypeInfo do
     |> extract_list_type_spec_options()
   end
 
-  def get_type_info(module, type) do
+  def get_type_info(module, type, original_module) do
     module
     |> extract_type_def_info(type)
-    |> build_type_info(type)
+    |> build_type_info(type, original_module)
   end
 
   # Built-in types
-  defp build_type_info({nil, name, n_args}, type) do
+  defp build_type_info({nil, name, n_args}, type, _) do
     spec_ast = BuiltinTypes.get_builtin_type_spec(name, n_args)
     spec = format_type_spec_ast(spec_ast, :type)
     doc = BuiltinTypes.get_builtin_type_doc(to_string(name), n_args)
@@ -87,18 +87,26 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   # Custom Types
-  defp build_type_info({module, name, n_args}, type) do
-    {_mod, expanded_type} = expand_type_spec(type, module)
+  defp build_type_info({module, name, n_args}, type, original_module) do
+    {mod, expanded_type} = expand_type_spec(type, module)
+
+    type_spec =
+      if original_module == module || match?({:remote_type, _, _}, type) do
+        type_str(type)
+      else
+        "#{inspect(mod)}.#{type_str(type)}"
+      end
+
     %{
       origin: inspect(module),
-      type_spec: type_str(type),
+      type_spec: type_spec,
       doc: get_type_doc_desc(module, name, n_args),
       expanded_spec: expanded_type |> format_type_spec()
     }
   end
 
   # Inline, non-existent
-  defp build_type_info(_, type) do
+  defp build_type_info(_, type, _) do
     %{
       origin: "",
       type_spec: type_str(type),
@@ -153,15 +161,17 @@ defmodule ElixirSense.Core.TypeInfo do
     {module, {:not_found, {nil, type, []}}}
   end
 
-  defp expand_type_spec({:remote_type, _, [{:atom, _, remote_mod}, {:atom, _, type_name}, []]} = type, _module) do
+  defp expand_type_spec({:remote_type, _, [{:atom, _, remote_mod}, {:atom, _, type_name}, type_args]} = type, _module) do
     remote_mod
     |> Typespec.get_types()
-    |> Enum.find(fn {_, {name, _, _}} -> name == type_name end)
+    |> Enum.find(fn {_, {name, _, args}} ->
+         name == type_name && length(args) == length(type_args)
+       end)
     |> case do
         nil -> {:not_found, type}
         type_found ->
           {remote_mod, type_found}
-      end
+       end
   end
 
   defp expand_type_spec(type, module) do

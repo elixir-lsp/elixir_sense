@@ -4,6 +4,9 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     @typedoc "Remote type"
     @type remote_t :: atom
 
+    @typedoc "Remote type with params"
+    @type remote_t(a, b) :: {a, b}
+
     @typedoc "Remote list type"
     @type remote_list_t :: [remote_t]
 
@@ -49,6 +52,7 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
       | {:builtin_o, keyword}
       | {:builtin_with_params_o, keyword(term)}
       | {:remote_o, Remote.remote_t}
+      | {:remote_with_params_o, Remote.remote_t(atom, integer)}
       | {:remote_aliased_o, remote_aliased_t}
       | {:remote_aliased_inline_o, R.remote_t}
       | {:private_o, private_t}

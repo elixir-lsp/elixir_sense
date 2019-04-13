@@ -202,16 +202,16 @@ defmodule ElixirSense.Providers.Suggestion do
       %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} ->
         {mod, fun} = Introspection.actual_mod_fun({mod, fun}, imports, aliases, module)
         TypeInfo.extract_param_options(mod, fun, npar)
-        |> options_to_suggestions()
+        |> options_to_suggestions(mod)
         |> Enum.filter(&String.starts_with?("#{&1.name}", hint))
       _ ->
         []
     end
   end
 
-  defp options_to_suggestions(options) do
+  defp options_to_suggestions(options, original_module) do
     Enum.map(options, fn {mod, name, type} ->
-      TypeInfo.get_type_info(mod, type)
+      TypeInfo.get_type_info(mod, type, original_module)
       |> Map.merge(%{type: :param_option, name: name})
     end)
   end

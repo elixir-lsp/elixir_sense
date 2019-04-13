@@ -439,6 +439,16 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.doc == "Remote type"
     end
 
+    test "remote type with args" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:remote_with_params_o, buffer)
+
+      assert suggestion.type_spec == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t(atom(), integer())"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
+      assert suggestion.expanded_spec == "@type remote_t(a, b) :: {a, b}"
+      assert suggestion.doc == "Remote type with params"
+    end
+
     test "remote aliased type" do
       buffer = "Local.func_with_options("
       suggestion = suggestion_by_name(:remote_aliased_o, buffer)
@@ -512,7 +522,7 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion_by_name(:option_1, buffer).type_spec == "boolean()"
 
       suggestion = suggestion_by_name(:remote_option_1, buffer)
-      assert suggestion.type_spec == "remote_t()"
+      assert suggestion.type_spec == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t()"
       assert suggestion.expanded_spec == "@type remote_t :: atom"
       assert suggestion.doc == "Remote type"
     end
