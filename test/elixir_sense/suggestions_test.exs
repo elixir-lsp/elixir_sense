@@ -338,7 +338,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "opaque_t()"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
-      assert suggestion.expanded_spec == ""
+      assert suggestion.expanded_spec == "@opaque opaque_t :: atom"
       assert suggestion.doc == "Local opaque type"
     end
 
@@ -348,7 +348,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "private_t()"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
-      assert suggestion.expanded_spec == ""
+      assert suggestion.expanded_spec == "@typep private_t :: atom"
       assert suggestion.doc == ""
     end
 

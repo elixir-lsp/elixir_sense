@@ -173,7 +173,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       #                                      ^
     end
     """
-    %{found: true, type: :function, file: file, line: 1, column: 1} = ElixirSense.definition(buffer, 2, 42)
+    %{found: true, type: :module, file: file, line: 1, column: 1} = ElixirSense.definition(buffer, 2, 42)
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
   end
 
@@ -209,6 +209,61 @@ defmodule ElixirSense.Providers.DefinitionTest do
       line: 2,
       column: 18,
     }
+  end
+
+  test "find local type definition" do
+    buffer = """
+    defmodule ElixirSenseExample.ModuleWithTypespecs.Remote do
+      @type remote_list_t :: [remote_t]
+      #                           ^
+    end
+    """
+
+    %{found: true, type: :typespec, file: file, line: line, column: column} = ElixirSense.definition(buffer, 2, 31)
+    assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
+    assert read_line(file, {line, column}) =~ ~r/^remote_t ::/
+  end
+
+  test "find remote type definition" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.ModuleWithTypespecs.Remote
+      Remote.remote_t
+      #         ^
+    end
+    """
+
+    %{found: true, type: :typespec, file: file, line: line, column: column} = ElixirSense.definition(buffer, 3, 13)
+    assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
+    assert read_line(file, {line, column}) =~ ~r/^remote_t ::/
+  end
+
+  test "find type definition without @typedoc" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.ModuleWithTypespecs.Remote
+      Remote.remote_option_t
+      #         ^
+    end
+    """
+
+    %{found: true, type: :typespec, file: file, line: line, column: column} = ElixirSense.definition(buffer, 3, 13)
+    assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
+    assert read_line(file, {line, column}) =~ ~r/^remote_option_t ::/
+  end
+
+  test "find opaque type definition" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.ModuleWithTypespecs.Local
+      Local.opaque_t
+      #        ^
+    end
+    """
+
+    %{found: true, type: :typespec, file: file, line: line, column: column} = ElixirSense.definition(buffer, 3, 12)
+    assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
+    assert read_line(file, {line, column}) =~ ~r/^opaque_t ::/
   end
 
   defp read_line(file, {line, column}) do

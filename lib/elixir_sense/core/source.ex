@@ -23,6 +23,12 @@ defmodule ElixirSense.Core.Source do
     text
   end
 
+  def text_after(code, line, col) do
+    pos = find_position(code, line, col, {0, 1, 1})
+    {_, rest} = String.split_at(code, pos)
+    rest
+  end
+
   def subject(code, line, col) do
     case walk_text(code, &find_subject/5, %{line: line, col: col, pos_found: false, candidate: []}) do
       %{candidate: []} ->

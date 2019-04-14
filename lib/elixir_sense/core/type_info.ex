@@ -3,16 +3,58 @@ defmodule ElixirSense.Core.TypeInfo do
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
+  alias ElixirSense.Core.Source
 
-  def get_type_ast(module, type) do
-    {_kind, type} =
-      Typespec.get_types(module)
-      |> Enum.find(fn {_, {name, _, _}} -> name == type end)
-      Typespec.type_to_quoted(type)
+  def get_type_spec(module, type_name) do
+    module
+    |> Typespec.get_types()
+    |> Enum.filter(fn {_, {name, _, _}} -> name == type_name end)
+    |> Enum.sort_by(fn {_, {_, _, args}} -> length(args) end)
+    |> Enum.at(0)
+  end
+
+  def get_type_spec(module, type_name, n_args) do
+    module
+    |> Typespec.get_types()
+    |> Enum.find(fn {_, {name, _, args}} ->
+      name == type_name && length(args) == n_args
+    end)
+  end
+
+  def get_type_position_using_docs(module, type_name, file) do
+    case get_type_doc(module, type_name) do
+      {_, doc_line, _, _} ->
+        {kind, _} = get_type_spec(module, type_name)
+        kind_str = "@#{kind}"
+        {str, index} =
+          File.read!(file)
+          |> Source.text_after(doc_line, 1)
+          |> String.split("\n")
+          |> Enum.with_index()
+          |> Enum.find(fn {str, _} -> starts_with_type_def?(str, kind_str) end)
+
+        kind_col = String.split(str, kind_str) |> Enum.at(0) |> String.length()
+        col = kind_col + String.length(kind_str) + 2
+        {doc_line + index, col}
+      _ ->
+        nil
+    end
+  end
+
+  def get_type_ast(module, type_name) do
+    {_kind, type} = get_type_spec(module, type_name)
+    Typespec.type_to_quoted(type)
   end
 
   def spec_ast_to_string(ast) do
     ast |> Macro.to_string |> String.replace("()", "")
+  end
+
+  def get_type_doc(module, type_name) do
+    NormalizedCode.get_docs(module, :type_docs)
+    |> Enum.filter(fn {{name, _}, _, _, _} -> name == type_name end)
+    |> Enum.sort_by(fn {{_, n_args}, _, _, _} -> n_args end)
+    |> Enum.at(0)
   end
 
   def get_type_doc(module, type, type_n_args) do
@@ -151,12 +193,7 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   defp expand_type_spec({:user_type, _, type_name, type_args}, module) do
-    type =
-      module
-      |> Typespec.get_types()
-      |> Enum.find(fn {_, {name, _, args}} ->
-        name == type_name && length(args) == length(type_args)
-      end)
+    type = get_type_spec(module, type_name, length(type_args))
     {module, type}
   end
 
@@ -169,16 +206,12 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   defp expand_type_spec({:remote_type, _, [{:atom, _, remote_mod}, {:atom, _, type_name}, type_args]} = type, _module) do
-    remote_mod
-    |> Typespec.get_types()
-    |> Enum.find(fn {_, {name, _, args}} ->
-         name == type_name && length(args) == length(type_args)
-       end)
-    |> case do
-        nil -> {:not_found, type}
-        type_found ->
-          {remote_mod, type_found}
-       end
+    case get_type_spec(remote_mod, type_name, length(type_args)) do
+      nil ->
+        {:not_found, type}
+      type_found ->
+        {remote_mod, type_found}
+    end
   end
 
   defp expand_type_spec(type, module) do
@@ -305,5 +338,12 @@ defmodule ElixirSense.Core.TypeInfo do
         {:type, l, :list, [vars_types[name]]}
       type -> type
     end)
+  end
+
+  defp starts_with_type_def?(str, kind) do
+    str
+    |> String.trim_leading()
+    |> String.split("#{kind} ")
+    |> (&match?([_,_|_], &1)).()
   end
 end

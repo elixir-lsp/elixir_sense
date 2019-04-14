@@ -25,7 +25,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
         nil   -> []
         types -> types
       end
-    end |> reject_private_types()
+    end
   end
 
   def get_callbacks(mod) do
@@ -62,9 +62,5 @@ defmodule ElixirSense.Core.Normalized.Typespec do
   defp beam_specs_tag(nil, _), do: nil
   defp beam_specs_tag(specs, tag) do
     Enum.map(specs, &{tag, &1})
-  end
-
-  defp reject_private_types(types) do
-    types |> Enum.reject(fn {type, _} -> type in [:opaque, :typep] end)
   end
 end
