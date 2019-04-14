@@ -37,7 +37,18 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_all_docs({mod, fun}) do
-    %{docs: get_func_docs_md(mod, fun), types: get_types_md(mod)}
+    docs =
+      with(
+        [] <- get_func_docs_md(mod, fun),
+        [] <- get_type_docs_md(mod, fun)
+      ) do
+        "No documentation available"
+      else
+        docs ->
+          Enum.join(docs, "\n\n____\n\n")
+      end
+
+    %{docs: docs, types: get_types_md(mod)}
   end
 
   def get_signatures(mod, fun, code_docs \\ nil) do
@@ -52,24 +63,18 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_func_docs_md(mod, fun) do
-    docs =
-      case NormalizedCode.get_docs(mod, :docs) do
-        nil -> nil
-        docs ->
-          for {{f, arity}, _, _, args, text} <- docs, f == fun do
-            args = args || []
-            fun_args_text = args
-            |> Enum.map_join(", ", &format_doc_arg(&1))
-            |> String.replace("\\\\", "\\\\\\\\")
-            mod_str = module_to_string(mod)
-            fun_str = Atom.to_string(fun)
-            "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity)}#{text}"
-          end
-      end
-
-    case docs do
-      [_|_] -> Enum.join(docs, "\n\n____\n\n")
-      _ -> "No documentation available"
+    case NormalizedCode.get_docs(mod, :docs) do
+      nil -> []
+      docs ->
+        for {{f, arity}, _, _, args, text} <- docs, f == fun do
+          args = args || []
+          fun_args_text = args
+          |> Enum.map_join(", ", &format_doc_arg(&1))
+          |> String.replace("\\\\", "\\\\\\\\")
+          mod_str = module_to_string(mod)
+          fun_str = Atom.to_string(fun)
+          "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity)}#{text}"
+        end
     end
   end
 
@@ -80,6 +85,28 @@ defmodule ElixirSense.Core.Introspection do
         "> #{mod_str}\n\n" <> doc
       _ ->
         "No documentation available"
+    end
+  end
+
+  def get_type_docs_md(mod, fun) do
+    case TypeInfo.get_type_docs(mod, fun) do
+      nil -> []
+      docs ->
+        for {{f, arity}, _, _, text} <- docs, f == fun do
+          full_spec = TypeInfo.get_type_spec(mod, f, arity)
+          {_kind, spec} = full_spec
+
+          type_str =
+            spec
+            |> Typespec.type_to_quoted()
+            |> Macro.prewalk(&drop_macro_env/1)
+            |> extract_spec_ast_parts
+            |> Map.get(:name)
+            |> Macro.to_string
+
+          formatted_spec = "\n\n```\n#{format_type(full_spec)}\n```"
+          ":: __*#{type_str}*__\n\n#{text}#{formatted_spec}"
+        end
     end
   end
 

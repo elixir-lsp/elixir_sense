@@ -199,5 +199,45 @@ defmodule ElixirSense.DocsTest do
       assert docs == "No documentation available"
     end
 
+    test "retrieve type documentation" do
+      buffer = """
+      defmodule MyModule do
+        alias ElixirSenseExample.ModuleWithTypespecs.Remote
+        @type my_list :: Remote.remote_t
+        #                           ^
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 31)
+
+      assert subject == "Remote.remote_t"
+      assert actual_subject == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t"
+      assert docs == """
+      :: __*remote_t()*__
+
+      Remote type
+
+      ```
+      @type remote_t :: atom
+
+      ```
+
+      ____
+
+      :: __*remote_t(a, b)*__
+
+      Remote type with params
+
+      ```
+      @type remote_t(a, b) :: {a, b}
+
+      ```
+      """ |> String.trim()
+    end
+
   end
 end

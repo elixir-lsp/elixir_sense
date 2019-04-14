@@ -50,10 +50,16 @@ defmodule ElixirSense.Core.TypeInfo do
     ast |> Macro.to_string |> String.replace("()", "")
   end
 
-  def get_type_doc(module, type_name) do
-    NormalizedCode.get_docs(module, :type_docs)
+  def get_type_docs(module, type_name) do
+    docs = NormalizedCode.get_docs(module, :type_docs) || []
+    docs
     |> Enum.filter(fn {{name, _}, _, _, _} -> name == type_name end)
     |> Enum.sort_by(fn {{_, n_args}, _, _, _} -> n_args end)
+  end
+
+  def get_type_doc(module, type_name) do
+    module
+    |> get_type_docs(type_name)
     |> Enum.at(0)
   end
 
