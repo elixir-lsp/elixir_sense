@@ -156,11 +156,6 @@ defmodule ElixirSense.Core.Introspection do
     TypeInfo.get_type_position_using_docs(mod, type_name, file)
   end
 
-  defp format_type({:opaque, type}) do
-    {:::, _, [ast, _]} = Typespec.type_to_quoted(type)
-    "@opaque #{format_spec_ast(ast)}"
-  end
-
   defp format_type({kind, type}) do
     ast = Typespec.type_to_quoted(type)
     "@#{kind} #{format_spec_ast(ast)}"

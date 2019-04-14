@@ -45,7 +45,7 @@ defmodule ElixirSense.Providers.Definition do
       nil <- find_fun_position({mod, file}, fun),
       nil <- find_type_position({mod, file}, fun)
     ) do
-      %Location{found: true, type: :module, file: file, line: 1, column: 1}
+      %Location{found: false}
     else
       %Location{} = location ->
         location

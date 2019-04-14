@@ -164,7 +164,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert ElixirSense.definition(buffer, 2, 5) == %Location{found: false}
   end
 
-  test "find the related module when searching for built-in functions" do
+  test "cannot find built-in functions" do
     # module_info is defined by default for every elixir and erlang module:
     # https://stackoverflow.com/a/33373107/175830
     buffer = """
@@ -173,8 +173,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       #                                      ^
     end
     """
-    %{found: true, type: :module, file: file, line: 1, column: 1} = ElixirSense.definition(buffer, 2, 42)
-    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
+    assert %{found: false} = ElixirSense.definition(buffer, 2, 42)
   end
 
   test "find definition of variables" do
@@ -264,6 +263,17 @@ defmodule ElixirSense.Providers.DefinitionTest do
     %{found: true, type: :typespec, file: file, line: line, column: column} = ElixirSense.definition(buffer, 3, 12)
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
     assert read_line(file, {line, column}) =~ ~r/^opaque_t ::/
+  end
+
+  test "builtin types cannot now be found" do
+    buffer = """
+    defmodule MyModule do
+      @type my_type :: integer
+      #                   ^
+    end
+    """
+
+    assert %{found: false} = ElixirSense.definition(buffer, 2, 23)
   end
 
   defp read_line(file, {line, column}) do
