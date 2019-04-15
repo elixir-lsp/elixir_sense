@@ -1,20 +1,48 @@
 defmodule ElixirSense.Core.BuiltinTypes do
 
   @basic_types %{
-    "any" => %{doc: "The top type, the set of all terms"},
-    "none" => %{doc: "The bottom type, contains no terms"},
-    "atom" => %{doc: "An atom is a constant whose name is its own value. Some other languages call these symbols"},
-    "map" => %{doc: "Any map"},
-    "pid" => %{doc: "A process identifier, pid, identifies a process"},
-    "port" => %{doc: "A port identifier identifies an Erlang port"},
-    "reference" => %{doc: "A reference is a term that is unique in an Erlang runtime system, created by calling `make_ref/0`"},
-    "struct" => %{doc: "Any struct"},
-    "tuple" => %{doc: "Tuple of any size"},
-    "float" => %{doc: "A floating-point number"},
-    "integer" => %{doc: "An integer number"},
-    "neg_integer" => %{doc: "A negative integer"},
-    "non_neg_integer" => %{doc: "A non-negative integer"},
-    "pos_integer" => %{doc: "A positive integer"},
+    "any" => %{
+      doc: "The top type, the set of all terms"
+    },
+    "none" => %{
+      doc: "The bottom type, contains no terms"
+    },
+    "atom" => %{
+      doc: "An atom is a constant whose name is its own value. Some other languages call these symbols"
+    },
+    "map" => %{
+      doc: "Any map"
+    },
+    "pid" => %{
+      doc: "A process identifier, pid, identifies a process"
+    },
+    "port" => %{
+      doc: "A port identifier identifies an Erlang port"
+    },
+    "reference" => %{
+      doc: "A reference is a term that is unique in an Erlang runtime system, created by calling `make_ref/0`"
+    },
+    "struct" => %{
+      doc: "Any struct"
+    },
+    "tuple" => %{
+      doc: "Tuple of any size"
+    },
+    "float" => %{
+      doc: "A floating-point number"
+    },
+    "integer" => %{
+      doc: "An integer number"
+    },
+    "neg_integer" => %{
+      doc: "A negative integer"
+    },
+    "non_neg_integer" => %{
+      doc: "A non-negative integer"
+    },
+    "pos_integer" => %{
+      doc: "A positive integer"
+    },
     "list/1" => %{
       doc: "Proper list ([]-terminated)",
       signature: "list(t)"
@@ -132,7 +160,7 @@ defmodule ElixirSense.Core.BuiltinTypes do
     },
     "no_return" => %{
       spec: (quote do: no_return :: none()),
-      doc: "A return type indicating that a function throws exceptions or loops forever and never terminates. An alias for `none()`"
+      doc: "A return type indicating that a function throws exceptions or loops forever and never terminates"
     },
     "node" => %{
       spec: (quote do: node :: atom()),

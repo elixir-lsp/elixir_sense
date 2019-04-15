@@ -5,6 +5,9 @@ defmodule ElixirSense.Core.TypeInfo do
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
 
+  @doc_spec_line_length 75
+  @param_option_spec_line_length 35
+
   def get_type_spec(module, type_name) do
     module
     |> Typespec.get_types()
@@ -48,6 +51,43 @@ defmodule ElixirSense.Core.TypeInfo do
 
   def spec_ast_to_string(ast) do
     ast |> Macro.to_string |> String.replace("()", "")
+  end
+
+  def format_type_spec(spec) do
+    format_type_spec(spec, [])
+  end
+
+  def format_type_spec({kind, type_spec}, opts) do
+    type_spec
+    |> Typespec.type_to_quoted()
+    |> format_type_spec_ast(kind, opts)
+  end
+
+  def format_type_spec(_, _) do
+    ""
+  end
+
+  def format_type_spec_ast(spec_ast, kind) do
+    format_type_spec_ast(spec_ast, kind, [])
+  end
+
+  def format_type_spec_ast(nil, _kind, _opts) do
+    ""
+  end
+
+  def format_type_spec_ast(spec_ast, kind, opts) do
+    line_length = opts[:line_length] || @doc_spec_line_length
+    kind_size = kind |> to_string() |> String.length()
+
+    spec_ast
+    |> Macro.to_string()
+    |> (&"@#{kind} #{&1}").()
+    |> Code.format_string!(line_length: line_length)
+    |> to_string()
+    |> String.split("\n")
+    |> Enum.with_index()
+    |> Enum.map(fn {l, i} when i > 0 -> String.slice(l, (kind_size + 2)..-1); {l, _} -> l end)
+    |> Enum.join("\n")
   end
 
   def get_type_docs(module, type_name) do
@@ -131,7 +171,7 @@ defmodule ElixirSense.Core.TypeInfo do
   # Built-in types
   defp build_type_info({nil, name, n_args}, type, _) do
     spec_ast = BuiltinTypes.get_builtin_type_spec(name, n_args)
-    spec = format_type_spec_ast(spec_ast, :type)
+    spec = format_type_spec_ast(spec_ast, :type, line_length: @param_option_spec_line_length)
     doc = BuiltinTypes.get_builtin_type_doc(to_string(name), n_args)
     %{
       origin: "",
@@ -156,7 +196,7 @@ defmodule ElixirSense.Core.TypeInfo do
       origin: inspect(module),
       type_spec: type_spec,
       doc: get_type_doc_desc(module, name, n_args),
-      expanded_spec: expanded_type |> format_type_spec()
+      expanded_spec: expanded_type |> format_type_spec(line_length: @param_option_spec_line_length)
     }
   end
 
@@ -291,38 +331,6 @@ defmodule ElixirSense.Core.TypeInfo do
 
   defp list_type_spec?(_) do
     false
-  end
-
-  defp format_type_spec(nil) do
-    ""
-  end
-
-  defp format_type_spec({kind, type_spec}) do
-    type_spec
-    |> Typespec.type_to_quoted()
-    |> format_type_spec_ast(kind)
-  end
-
-  defp format_type_spec(_) do
-    ""
-  end
-
-  defp format_type_spec_ast(nil, _kind) do
-    ""
-  end
-
-  defp format_type_spec_ast(spec_ast, kind) do
-    kind_size = kind |> to_string() |> String.length()
-
-    spec_ast
-    |> spec_ast_to_string()
-    |> (&"@#{kind} #{&1}").()
-    |> Code.format_string!(line_length: 35)
-    |> to_string()
-    |> String.split("\n")
-    |> Enum.with_index()
-    |> Enum.map(fn {l, i} when i > 0 -> String.slice(l, (kind_size + 2)..-1); {l, _} -> l end)
-    |> Enum.join("\n")
   end
 
   defp extract_params_types({:spec, {_, [{:type, _, :fun, [{:type, _, :product, params_types}, _]}]}}) do

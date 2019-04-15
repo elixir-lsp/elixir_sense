@@ -45,7 +45,7 @@ defmodule ElixirSense.Core.Introspection do
         "No documentation available"
       else
         docs ->
-          Enum.join(docs, "\n\n____\n\n")
+          Enum.join(docs, "\n\n---\n\n")
       end
 
     %{docs: docs, types: get_types_md(mod)}
@@ -94,24 +94,14 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_type_docs_md(nil, fun, _scope) do
     for info <- ElixirSense.Core.BuiltinTypes.get_builtin_type_info(fun) do
-      doc = info[:doc]
-      spec_ast = info[:spec]
-
-      type_str =
+      spec =
         case info do
           %{signature: sig} -> sig
-          %{spec: spec_ast} -> type_signature_from_ast(spec_ast)
+          %{spec: spec_ast} -> TypeInfo.format_type_spec_ast(spec_ast, :type)
           _ -> "#{fun}()"
         end
-
-      spec =
-        case spec_ast do
-          nil -> nil
-          spec_ast -> "@type #{format_spec_ast(spec_ast)}"
-        end
-
-      format_type_doc_md(type_str, doc, spec)
-    end
+      format_type_doc_md(info[:doc], spec)
+    end ++ ["\\<sub\\>\\<sup\\>_* Built-in type_\\</sup\\>\\</sub\\>"]
   end
 
   def get_type_docs_md(mod, fun, _scope) do
@@ -119,15 +109,11 @@ defmodule ElixirSense.Core.Introspection do
       nil -> []
       docs ->
         for {{f, arity}, _, _, text} <- docs, f == fun do
-          full_spec = TypeInfo.get_type_spec(mod, f, arity)
-          {_kind, spec} = full_spec
-
-          type_str =
-            spec
-            |> Typespec.type_to_quoted()
-            |> type_signature_from_ast()
-
-          format_type_doc_md(type_str, text, format_type(full_spec))
+          spec =
+            mod
+            |> TypeInfo.get_type_spec(f, arity)
+            |> TypeInfo.format_type_spec()
+          format_type_doc_md(text, spec)
         end
     end
   end
@@ -139,7 +125,7 @@ defmodule ElixirSense.Core.Introspection do
 
         #{doc}
       """
-    end |> Enum.join("\n\n____\n\n")
+    end |> Enum.join("\n\n---\n\n")
   end
 
   def get_callbacks_md(mod) when is_atom(mod) do
@@ -154,7 +140,7 @@ defmodule ElixirSense.Core.Introspection do
         #{doc}
       """
     end
-    |> Enum.join("\n\n____\n\n")
+    |> Enum.join("\n\n---\n\n")
   end
 
   def get_callbacks_with_docs(mod) when is_atom(mod) do
@@ -640,21 +626,8 @@ defmodule ElixirSense.Core.Introspection do
     false
   end
 
-  defp type_signature_from_ast(spec_ast) do
-    spec_ast
-    |> Macro.prewalk(&drop_macro_env/1)
-    |> extract_spec_ast_parts
-    |> Map.get(:name)
-    |> Macro.to_string
-  end
-
-  defp format_type_doc_md(type_str, doc, spec) do
-    formatted_spec =
-      if spec do
-        "\n\n```\n#{spec}\n```"
-      else
-        ""
-      end
-    "__*#{type_str}*__\n\n#{doc}#{formatted_spec}"
+  defp format_type_doc_md(doc, spec, footer \\ "") do
+    formatted_spec = "```\n#{spec}\n```"
+    "#{doc}\n\n#{formatted_spec}#{footer}"
   end
 end

@@ -305,17 +305,17 @@ defmodule ElixirSense.SuggestionsTest do
     test "options as inline list" do
       buffer = "Local.func_with_options_as_inline_list("
 
-      assert %{type_spec: "local_t()", expanded_spec: "@type local_t :: atom"} =
+      assert %{type_spec: "local_t()", expanded_spec: "@type local_t() :: atom()"} =
         suggestion_by_name(:local_o, buffer)
 
-      assert %{type_spec: "keyword()", expanded_spec: "@type keyword :: [{atom, any}]"} =
+      assert %{type_spec: "keyword()", expanded_spec: "@type keyword :: [{atom(), any()}]"} =
         suggestion_by_name(:builtin_o, buffer)
     end
 
     test "options vars defined in when" do
       type_spec = "local_t()"
       origin = "ElixirSenseExample.ModuleWithTypespecs.Local"
-      spec = "@type local_t :: atom"
+      spec = "@type local_t() :: atom()"
 
       buffer = "Local.func_with_option_var_defined_in_when("
       suggestion = suggestion_by_name(:local_o, buffer)
@@ -338,7 +338,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "opaque_t()"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
-      assert suggestion.expanded_spec == "@opaque opaque_t :: atom"
+      assert suggestion.expanded_spec == "@opaque opaque_t() :: atom()"
       assert suggestion.doc == "Local opaque type"
     end
 
@@ -348,7 +348,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "private_t()"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
-      assert suggestion.expanded_spec == "@typep private_t :: atom"
+      assert suggestion.expanded_spec == "@typep private_t() :: atom()"
       assert suggestion.doc == ""
     end
 
@@ -358,7 +358,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "local_t()"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
-      assert suggestion.expanded_spec == "@type local_t :: atom"
+      assert suggestion.expanded_spec == "@type local_t() :: atom()"
       assert suggestion.doc == "Local type"
     end
 
@@ -397,7 +397,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "keyword()"
       assert suggestion.origin == ""
-      assert suggestion.expanded_spec == "@type keyword :: [{atom, any}]"
+      assert suggestion.expanded_spec == "@type keyword :: [{atom(), any()}]"
       assert suggestion.doc == "A keyword list"
     end
 
@@ -407,7 +407,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "keyword(term())"
       assert suggestion.origin == ""
-      assert suggestion.expanded_spec == "@type keyword(t) :: [{atom, t}]"
+      assert suggestion.expanded_spec == "@type keyword(t) :: [{atom(), t}]"
       assert suggestion.doc == "A keyword list with values of type `t`"
     end
 
@@ -417,7 +417,10 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "union_t()"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
-      assert suggestion.expanded_spec == "@type union_t :: atom | integer"
+      assert suggestion.expanded_spec == """
+      @type union_t() ::
+        atom() | integer()\
+      """
     end
 
     test "list type" do
@@ -426,7 +429,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "list_t()"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
-      assert suggestion.expanded_spec == "@type list_t :: [:trace | :log]"
+      assert suggestion.expanded_spec == "@type list_t() :: [:trace | :log]"
     end
 
     test "remote type" do
@@ -435,7 +438,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t()"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
-      assert suggestion.expanded_spec == "@type remote_t :: atom"
+      assert suggestion.expanded_spec == "@type remote_t() :: atom()"
       assert suggestion.doc == "Remote type"
     end
 
@@ -456,7 +459,7 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.type_spec == "remote_aliased_t()"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
       assert suggestion.expanded_spec == """
-      @type remote_aliased_t ::
+      @type remote_aliased_t() ::
         ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t()
         | ElixirSenseExample.ModuleWithTypespecs.Remote.remote_list_t()\
       """
@@ -469,7 +472,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t()"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
-      assert suggestion.expanded_spec == "@type remote_t :: atom"
+      assert suggestion.expanded_spec == "@type remote_t() :: atom()"
       assert suggestion.doc == "Remote type"
     end
 
@@ -523,7 +526,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       suggestion = suggestion_by_name(:remote_option_1, buffer)
       assert suggestion.type_spec == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t()"
-      assert suggestion.expanded_spec == "@type remote_t :: atom"
+      assert suggestion.expanded_spec == "@type remote_t() :: atom()"
       assert suggestion.doc == "Remote type"
     end
 
@@ -531,12 +534,13 @@ defmodule ElixirSense.SuggestionsTest do
       buffer = "Local.func_with_options("
 
       assert suggestion_by_name(:large_o, buffer).expanded_spec == """
-      @type large_t ::
-        pid
-        | port
-        | (registered_name :: atom)
-        | {registered_name :: atom,
-           node}\
+      @type large_t() ::
+        pid()
+        | port()
+        | (registered_name ::
+             atom())
+        | {registered_name ::
+             atom(), node()}\
       """
     end
   end
