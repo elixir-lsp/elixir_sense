@@ -35,15 +35,16 @@ defmodule ElixirSense.Providers.Definition do
         subject
         |> Introspection.split_mod_fun_call
         |> Introspection.actual_mod_fun(imports, aliases, module)
-        |> find_source()
+        |> find_source(module)
     end
   end
 
-  defp find_source({mod, fun}) do
+  defp find_source({mod, fun}, current_module) do
     with(
       {mod, file} when file not in ["non_existing", nil, ""] <- find_mod_file(mod),
       nil <- find_fun_position({mod, file}, fun),
-      nil <- find_type_position({mod, file}, fun)
+      nil <- find_type_position({mod, file}, fun),
+      nil <- find_type_position({current_module, file}, fun)
     ) do
       %Location{found: false}
     else

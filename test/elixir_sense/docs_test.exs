@@ -217,7 +217,7 @@ defmodule ElixirSense.DocsTest do
       assert subject == "Remote.remote_t"
       assert actual_subject == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t"
       assert docs == """
-      :: __*remote_t()*__
+      __*remote_t()*__
 
       Remote type
 
@@ -228,7 +228,7 @@ defmodule ElixirSense.DocsTest do
 
       ____
 
-      :: __*remote_t(a, b)*__
+      __*remote_t(a, b)*__
 
       Remote type with params
 
@@ -236,6 +236,102 @@ defmodule ElixirSense.DocsTest do
       @type remote_t(a, b) :: {a, b}
 
       ```
+      """ |> String.trim()
+    end
+
+    test "retrieve builtin type documentation" do
+      buffer = """
+      defmodule MyModule do
+        @type options :: keyword
+        #                   ^
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 2, 23)
+
+      assert subject == "keyword"
+      assert actual_subject == "keyword"
+      assert docs == """
+      __*keyword*__
+
+      A keyword list
+
+      ```
+      @type keyword :: [{atom, any}]
+
+      ```
+
+      ____
+
+      __*keyword(t)*__
+
+      A keyword list with values of type `t`
+
+      ```
+      @type keyword(t) :: [{atom, t}]
+
+      ```
+      """ |> String.trim()
+    end
+
+    test "retrieve basic type documentation" do
+      buffer = """
+      defmodule MyModule do
+        @type num :: integer
+        #               ^
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 2, 19)
+
+      assert subject == "integer"
+      assert actual_subject == "integer"
+      assert docs == """
+      __*integer()*__
+
+      An integer number
+      """ |> String.trim()
+    end
+
+    test "retrieve basic and builtin type documentation" do
+      buffer = """
+      defmodule MyModule do
+        @type num :: list(atom)
+        #              ^
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 2, 18)
+
+      assert subject == "list"
+      assert actual_subject == "list"
+      assert docs == """
+      __*list*__
+
+      A list
+
+      ```
+      @type list :: [any]
+
+      ```
+
+      ____
+
+      __*list(t)*__
+
+      Proper list ([]-terminated)
       """ |> String.trim()
     end
 

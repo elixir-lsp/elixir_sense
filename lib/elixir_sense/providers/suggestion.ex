@@ -8,9 +8,7 @@ defmodule ElixirSense.Providers.Suggestion do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Source
-
-  @type fun_arity :: {atom, non_neg_integer}
-  @type scope :: module | fun_arity
+  alias ElixirSense.Core.State
 
   @type attribute :: %{
     type: :attribute,
@@ -89,7 +87,7 @@ defmodule ElixirSense.Providers.Suggestion do
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], scope, String.t) :: [suggestion]
+  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], State.scope, String.t) :: [suggestion]
   def find(hint, imports, aliases, module, vars, attributes, behaviours, scope, text_before) do
     case find_struct_fields(hint, text_before, imports, aliases, module) do
       [] ->
@@ -99,7 +97,7 @@ defmodule ElixirSense.Providers.Suggestion do
     end
   end
 
-  @spec find_all_except_struct_fields(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope, module, String.t) :: [suggestion]
+  @spec find_all_except_struct_fields(String.t, [module], [{module, module}], [String.t], [String.t], [module], State.scope, module, String.t) :: [suggestion]
   defp find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, text_before) do
     vars = Enum.map(vars, fn v -> v.name end)
     %{hint: hint_suggestion, suggestions: mods_and_funcs} = find_hint_mods_funcs(hint, imports, aliases)
@@ -169,7 +167,7 @@ defmodule ElixirSense.Providers.Suggestion do
     end |> Enum.sort
   end
 
-  @spec find_returns([module], String.t, scope) :: [return]
+  @spec find_returns([module], String.t, State.scope) :: [return]
   defp find_returns(behaviours, "", {fun, arity}) do
     for mod <- behaviours, Introspection.define_callback?(mod, fun, arity) do
       for return <- Introspection.get_returns_from_callback(mod, fun, arity) do

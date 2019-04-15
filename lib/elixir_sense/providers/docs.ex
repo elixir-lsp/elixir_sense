@@ -3,14 +3,15 @@ defmodule ElixirSense.Providers.Docs do
   Doc Provider
   """
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.State
 
-  @spec all(String.t, [module], [{module, module}], module) :: {actual_mod_fun :: String.t, docs :: Introspection.docs}
-  def all(subject, imports, aliases, module) do
+  @spec all(String.t, [module], [{module, module}], module, State.scope) :: {actual_mod_fun :: String.t, docs :: Introspection.docs}
+  def all(subject, imports, aliases, module, scope) do
     mod_fun =
       subject
       |> Introspection.split_mod_fun_call
       |> Introspection.actual_mod_fun(imports, aliases, module)
-    {mod_fun_to_string(mod_fun), Introspection.get_all_docs(mod_fun)}
+    {mod_fun_to_string(mod_fun), Introspection.get_all_docs(mod_fun, scope)}
   end
 
   defp mod_fun_to_string({nil, fun}) do

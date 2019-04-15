@@ -44,10 +44,11 @@ defmodule ElixirSense do
     %State.Env{
       imports: imports,
       aliases: aliases,
-      module: module
+      module: module,
+      scope: scope
     } = Metadata.get_env(metadata, line)
 
-    {actual_subject, docs} = Docs.all(subject, imports, aliases, module)
+    {actual_subject, docs} = Docs.all(subject, imports, aliases, module, scope)
     %{subject: subject, actual_subject: actual_subject, docs: docs}
   end
 

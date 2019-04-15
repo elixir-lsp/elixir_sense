@@ -31,16 +31,16 @@ defmodule ElixirSense.Core.Introspection do
     ModuleInfo.all_applications_modules()
   end
 
-  @spec get_all_docs(mod_fun) :: docs
-  def get_all_docs({mod, nil}) do
+  @spec get_all_docs(mod_fun, scope :: any) :: docs
+  def get_all_docs({mod, nil}, _) do
     %{docs: get_docs_md(mod), types: get_types_md(mod), callbacks: get_callbacks_md(mod)}
   end
 
-  def get_all_docs({mod, fun}) do
+  def get_all_docs({mod, fun}, scope) do
     docs =
       with(
         [] <- get_func_docs_md(mod, fun),
-        [] <- get_type_docs_md(mod, fun)
+        [] <- get_type_docs_md(mod, fun, scope)
       ) do
         "No documentation available"
       else
@@ -88,7 +88,33 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  def get_type_docs_md(mod, fun) do
+  def get_type_docs_md(_, _, {_f, _a}) do
+    []
+  end
+
+  def get_type_docs_md(nil, fun, _scope) do
+    for info <- ElixirSense.Core.BuiltinTypes.get_builtin_type_info(fun) do
+      doc = info[:doc]
+      spec_ast = info[:spec]
+
+      type_str =
+        case info do
+          %{signature: sig} -> sig
+          %{spec: spec_ast} -> type_signature_from_ast(spec_ast)
+          _ -> "#{fun}()"
+        end
+
+      spec =
+        case spec_ast do
+          nil -> nil
+          spec_ast -> "@type #{format_spec_ast(spec_ast)}"
+        end
+
+      format_type_doc_md(type_str, doc, spec)
+    end
+  end
+
+  def get_type_docs_md(mod, fun, _scope) do
     case TypeInfo.get_type_docs(mod, fun) do
       nil -> []
       docs ->
@@ -99,13 +125,9 @@ defmodule ElixirSense.Core.Introspection do
           type_str =
             spec
             |> Typespec.type_to_quoted()
-            |> Macro.prewalk(&drop_macro_env/1)
-            |> extract_spec_ast_parts
-            |> Map.get(:name)
-            |> Macro.to_string
+            |> type_signature_from_ast()
 
-          formatted_spec = "\n\n```\n#{format_type(full_spec)}\n```"
-          ":: __*#{type_str}*__\n\n#{text}#{formatted_spec}"
+          format_type_doc_md(type_str, text, format_type(full_spec))
         end
     end
   end
@@ -533,12 +555,25 @@ defmodule ElixirSense.Core.Introspection do
          {nil, nil} <- find_imported_function(mod_fun, imports),
          {nil, nil} <- find_aliased_function(mod_fun, aliases),
          {nil, nil} <- find_function_in_module(mod_fun),
+         {nil, nil} <- find_builtin_type(mod_fun),
          {nil, nil} <- find_function_in_current_module(mod_fun, current_module)
     do
       mod_fun
     else
       new_mod_fun -> new_mod_fun
     end
+  end
+
+  defp find_builtin_type({nil, fun}) do
+    if ElixirSense.Core.BuiltinTypes.builtin_type?(fun) do
+      {nil, fun}
+    else
+      {nil, nil}
+    end
+  end
+
+  defp find_builtin_type({_mod, _fun}) do
+    {nil, nil}
   end
 
   defp find_kernel_function({nil, fun}) do
@@ -605,4 +640,21 @@ defmodule ElixirSense.Core.Introspection do
     false
   end
 
+  defp type_signature_from_ast(spec_ast) do
+    spec_ast
+    |> Macro.prewalk(&drop_macro_env/1)
+    |> extract_spec_ast_parts
+    |> Map.get(:name)
+    |> Macro.to_string
+  end
+
+  defp format_type_doc_md(type_str, doc, spec) do
+    formatted_spec =
+      if spec do
+        "\n\n```\n#{spec}\n```"
+      else
+        ""
+      end
+    "__*#{type_str}*__\n\n#{doc}#{formatted_spec}"
+  end
 end

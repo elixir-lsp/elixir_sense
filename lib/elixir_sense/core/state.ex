@@ -3,6 +3,9 @@ defmodule ElixirSense.Core.State do
   Core State
   """
 
+  @type fun_arity :: {atom, non_neg_integer}
+  @type scope :: module | fun_arity
+
   defstruct [
     namespace:  [:Elixir],
     scopes:     [:Elixir],

@@ -1,25 +1,40 @@
 defmodule ElixirSense.Core.BuiltinTypes do
 
   @basic_types %{
-    "any" => "The top type, the set of all terms",
-    "none" => "The bottom type, contains no terms",
-    "atom" => "An atom is a constant whose name is its own value. Some other languages call these symbols",
-    "map" => "Any map",
-    "pid" => "A process identifier, pid, identifies a process",
-    "port" => "A port identifier identifies an Erlang port",
-    "reference" => "A reference is a term that is unique in an Erlang runtime system, created by calling `make_ref/0`",
-    "struct" => "Any struct",
-    "tuple" => "Tuple of any size",
-    "float" => "A floating-point number",
-    "integer" => "An integer number",
-    "neg_integer" => "A negative integer",
-    "non_neg_integer" => "A non-negative integer",
-    "pos_integer" => "A positive integer",
-    "list/1" => "Proper list ([]-terminated)",
-    "nonempty_list/1" => "Non-empty proper list",
-    "maybe_improper_list/2" => "Proper or improper list (type1=contents, type2=termination)",
-    "nonempty_improper_list/2" => "Improper list (type1=contents, type2=termination)",
-    "nonempty_maybe_improper_list/2" => "Non-empty proper or improper list"
+    "any" => %{doc: "The top type, the set of all terms"},
+    "none" => %{doc: "The bottom type, contains no terms"},
+    "atom" => %{doc: "An atom is a constant whose name is its own value. Some other languages call these symbols"},
+    "map" => %{doc: "Any map"},
+    "pid" => %{doc: "A process identifier, pid, identifies a process"},
+    "port" => %{doc: "A port identifier identifies an Erlang port"},
+    "reference" => %{doc: "A reference is a term that is unique in an Erlang runtime system, created by calling `make_ref/0`"},
+    "struct" => %{doc: "Any struct"},
+    "tuple" => %{doc: "Tuple of any size"},
+    "float" => %{doc: "A floating-point number"},
+    "integer" => %{doc: "An integer number"},
+    "neg_integer" => %{doc: "A negative integer"},
+    "non_neg_integer" => %{doc: "A non-negative integer"},
+    "pos_integer" => %{doc: "A positive integer"},
+    "list/1" => %{
+      doc: "Proper list ([]-terminated)",
+      signature: "list(t)"
+    },
+    "nonempty_list/1" => %{
+      doc: "Non-empty proper list",
+      signature: "nonempty_list(t)"
+    },
+    "maybe_improper_list/2" => %{
+      doc: "Proper or improper list (type1=contents, type2=termination)",
+      signature: "maybe_improper_list(type1, type2)"
+    },
+    "nonempty_improper_list/2" => %{
+      doc: "Improper list (type1=contents, type2=termination)",
+      signature: "nonempty_improper_list(type1, type2)"
+    },
+    "nonempty_maybe_improper_list/2" => %{
+      doc: "Non-empty proper or improper list",
+      signature: "nonempty_maybe_improper_list(type1, type2)"
+    },
   }
 
   @builtin_types %{
@@ -137,17 +152,32 @@ defmodule ElixirSense.Core.BuiltinTypes do
     }
   }
 
+  @types Map.merge(@basic_types, @builtin_types)
+
   def get_builtin_type_doc(type, n_args \\ 0) do
-    with nil <- @builtin_types[type_key(type, n_args)][:doc],
-         nil <- @basic_types[type_key(type, n_args)] do
-      ""
-    else
+    case @types[type_key(type, n_args)][:doc] do
+      nil ->
+        ""
       doc -> doc
     end
   end
 
+  def get_builtin_type_info(type_name) do
+    for {key, value} <- @types, match_key?(type_name, key) do
+      value
+    end
+  end
+
+  def builtin_type?(type_name) do
+    Enum.any?(@types, fn {k, _v} -> match_key?(type_name, k) end)
+  end
+
   def get_builtin_type_spec(type, n_args \\ 0) do
-    @builtin_types[type_key(type, n_args)][:spec]
+    @types[type_key(type, n_args)][:spec]
+  end
+
+  defp match_key?(type_name, key) do
+    key == "#{type_name}" || String.starts_with?(key, "#{type_name}/")
   end
 
   defp type_key(type, n_args) do
