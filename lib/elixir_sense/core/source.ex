@@ -8,6 +8,32 @@ defmodule ElixirSense.Core.Source do
   @empty_graphemes [" ", "\n", "\r\n"]
   @stop_graphemes ~w/{ } ( ) [ ] < > + - * & ^ , ; ~ % = " ' \\ \/ $ ! ?`#/ ++ @empty_graphemes
 
+  def split_module_and_hint(hint) do
+    if String.ends_with?(hint, ".") do
+      {mod, _} =
+        hint
+        |> String.slice(0..-2)
+        |> split_module_and_func()
+      {mod, ""}
+    else
+      {mod, new_hint} =
+        hint
+        |> split_module_and_func()
+      {mod, to_string(new_hint)}
+    end
+  end
+
+  def split_module_and_func(call) do
+    case Code.string_to_quoted(call) do
+      {:error, _} ->
+        {nil, nil}
+      {:ok, quoted} when is_atom(quoted) ->
+        {quoted, nil}
+      {:ok, quoted} ->
+        split_mod_quoted_fun_call(quoted)
+    end
+  end
+
   def prefix(code, line, col) do
     line = code |> String.split("\n") |> Enum.at(line - 1)
     line_str = line |> String.slice(0, col - 1)
@@ -222,6 +248,20 @@ defmodule ElixirSense.Core.Source do
 
   defp pipe_before(state) do
     %{state | pipe_before: true}
+  end
+
+  defp split_mod_quoted_fun_call(quoted) do
+    case Macro.decompose_call(quoted) do
+      {{:__aliases__, _, mod_parts}, fun, _args} ->
+        {Module.concat(mod_parts), fun}
+      {:__aliases__, mod_parts} ->
+        {Module.concat(mod_parts), nil}
+      {mod, func, []} when is_atom(mod) and is_atom(func) ->
+        {mod, func}
+      {func, []} when is_atom(func) ->
+        {nil, func}
+      _ -> {nil, nil}
+    end
   end
 
 end

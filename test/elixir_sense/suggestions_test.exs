@@ -545,6 +545,50 @@ defmodule ElixirSense.SuggestionsTest do
     end
   end
 
+  describe "suggestions for typespecs" do
+
+    test "remote module - suggest list of typespecs" do
+      buffer = "Remote."
+
+      list = suggestions_by_type(:type_spec, buffer)
+      assert length(list) > 1
+    end
+
+    test "remote module - retrieve info from typespecs" do
+      buffer = "Remote."
+
+      suggestion = suggestion_by_name(:remote_list_t, buffer)
+      assert suggestion.spec == """
+      @type remote_list_t() :: [
+        remote_t()
+      ]\
+      """
+      assert suggestion.signature == "remote_list_t()"
+      assert suggestion.arity == 0
+      assert suggestion.doc == "Remote list type"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
+    end
+
+    test "remote module - retrieve info from typespecs with params" do
+      buffer = "Remote."
+
+      [suggestion_1, suggestion_2] = suggestions_by_name(:remote_t, buffer)
+
+      assert suggestion_1.spec == "@type remote_t() :: atom()"
+      assert suggestion_1.signature == "remote_t()"
+      assert suggestion_1.arity == 0
+      assert suggestion_1.doc == "Remote type"
+      assert suggestion_1.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
+
+      assert suggestion_2.spec == "@type remote_t(a, b) :: {a, b}"
+      assert suggestion_2.signature == "remote_t(a, b)"
+      assert suggestion_2.arity == 2
+      assert suggestion_2.doc == "Remote type with params"
+      assert suggestion_2.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
+    end
+
+  end
+
   defp suggestions_by_type(type, buffer) do
     {line, column} = get_last_line_and_column(buffer)
     suggestions_by_type(type, buffer, line, column)
@@ -552,9 +596,21 @@ defmodule ElixirSense.SuggestionsTest do
 
   defp suggestions_by_type(type, buffer, line, column) do
     buffer
-    |> add_aliases("Local")
+    |> add_aliases("Local, Remote")
     |> ElixirSense.suggestions(line + 1, column)
     |> Enum.filter(fn %{type: t} -> t == type end)
+  end
+
+  defp suggestions_by_name(name, buffer) do
+    {line, column} = get_last_line_and_column(buffer)
+    suggestions_by_name(name, buffer, line, column)
+  end
+
+  defp suggestions_by_name(name, buffer, line, column) do
+    buffer
+    |> add_aliases("Local, Remote")
+    |> ElixirSense.suggestions(line + 1, column)
+    |> Enum.filter(fn %{name: n} -> n == name; _ -> false end)
   end
 
   defp suggestion_by_name(name, buffer) do
@@ -563,11 +619,7 @@ defmodule ElixirSense.SuggestionsTest do
   end
 
   defp suggestion_by_name(name, buffer, line, column) do
-    [suggestion] =
-      buffer
-      |> add_aliases("Local")
-      |> ElixirSense.suggestions(line + 1, column)
-      |> Enum.filter(fn %{name: n} -> n == name; _ -> false end)
+    [suggestion] = suggestions_by_name(name, buffer, line, column)
     suggestion
   end
 

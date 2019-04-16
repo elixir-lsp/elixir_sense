@@ -472,31 +472,6 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  def split_mod_fun_call(call) do
-    case Code.string_to_quoted(call) do
-      {:error, _} ->
-        {nil, nil}
-      {:ok, quoted} when is_atom(quoted) ->
-        {quoted, nil}
-      {:ok, quoted} ->
-        split_mod_quoted_fun_call(quoted)
-    end
-  end
-
-  def split_mod_quoted_fun_call(quoted) do
-    case Macro.decompose_call(quoted) do
-      {{:__aliases__, _, mod_parts}, fun, _args} ->
-        {Module.concat(mod_parts), fun}
-      {:__aliases__, mod_parts} ->
-        {Module.concat(mod_parts), nil}
-      {mod, func, []} when is_atom(mod) and is_atom(func) ->
-        {mod, func}
-      {func, []} when is_atom(func) ->
-        {nil, func}
-      _ -> {nil, nil}
-    end
-  end
-
   def module_functions_info(module) do
     docs = NormalizedCode.get_docs(module, :docs) || []
     specs = TypeInfo.get_module_specs(module)
@@ -534,6 +509,16 @@ defmodule ElixirSense.Core.Introspection do
       "@#{kind} #{binary}" |> String.replace("()", "")
     end)
     |> Enum.join("\n")
+  end
+
+  def actual_module(module, aliases) do
+    if elixir_module?(module) do
+      module
+      |> Module.split
+      |> ModuleInfo.expand_alias(aliases)
+    else
+      nil
+    end
   end
 
   def actual_mod_fun(mod_fun, imports, aliases, current_module) do

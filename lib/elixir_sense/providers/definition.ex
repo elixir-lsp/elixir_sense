@@ -8,6 +8,7 @@ defmodule ElixirSense.Providers.Definition do
 
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
+  alias ElixirSense.Core.Source
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State.VarInfo
 
@@ -33,7 +34,7 @@ defmodule ElixirSense.Providers.Definition do
         %Location{found: true, type: :variable, file: nil, line: line, column: column}
       _ ->
         subject
-        |> Introspection.split_mod_fun_call
+        |> Source.split_module_and_func
         |> Introspection.actual_mod_fun(imports, aliases, module)
         |> find_source(module)
     end

@@ -4,12 +4,13 @@ defmodule ElixirSense.Providers.Docs do
   """
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State
+  alias ElixirSense.Core.Source
 
   @spec all(String.t, [module], [{module, module}], module, State.scope) :: {actual_mod_fun :: String.t, docs :: Introspection.docs}
   def all(subject, imports, aliases, module, scope) do
     mod_fun =
       subject
-      |> Introspection.split_mod_fun_call
+      |> Source.split_module_and_func
       |> Introspection.actual_mod_fun(imports, aliases, module)
     {mod_fun_to_string(mod_fun), Introspection.get_all_docs(mod_fun, scope)}
   end

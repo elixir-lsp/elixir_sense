@@ -69,6 +69,16 @@ defmodule ElixirSense.Providers.Suggestion do
     expanded_spec: String.t
   }
 
+  @type type_spec :: %{
+    type: :type_spec,
+    name: String.t,
+    arity: non_neg_integer,
+    origin: String.t,
+    spec: String.t,
+    doc: String.t,
+    signature: String.t
+  }
+
   @type hint :: %{
     type: :hint,
     value: String.t
@@ -83,6 +93,7 @@ defmodule ElixirSense.Providers.Suggestion do
                     | mod
                     | hint
                     | param_option
+                    | type_spec
 
   @doc """
   Finds all suggestions for a hint based on context information.
@@ -114,6 +125,7 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Kernel.++(find_vars(vars, hint))
     |> Kernel.++(mods_and_funcs)
     |> Kernel.++(find_param_options(text_before, hint, imports, aliases, module))
+    |> Kernel.++(find_typespec(hint, aliases, module, scope))
     |> Enum.uniq_by(&(&1))
   end
 
@@ -212,5 +224,34 @@ defmodule ElixirSense.Providers.Suggestion do
       TypeInfo.get_type_info(mod, type, original_module)
       |> Map.merge(%{type: :param_option, name: name})
     end)
+  end
+
+  # We don't show typespecs when inside a function
+  defp find_typespec(_hint, _aliases, _module, {_m, _f}) do
+    []
+  end
+
+  defp find_typespec(hint, aliases, module, _scope) do
+    case Source.split_module_and_hint(hint) do
+      {nil, _} -> []
+      {_, nil} -> []
+      {mod, new_hint} ->
+        actual_mod = Introspection.actual_module(mod, aliases)
+        actual_mod
+        |> TypeInfo.find_all(&String.starts_with?("#{&1.name}", new_hint))
+        |> Enum.map(&type_info_to_suggestion(&1, actual_mod))
+    end
+  end
+
+  defp type_info_to_suggestion(type_info, module) do
+    %{
+      type: :type_spec,
+      name: type_info.name,
+      arity: type_info.arity,
+      signature: type_info.signature,
+      origin: Introspection.module_to_string(module),
+      doc: type_info.doc,
+      spec: type_info.spec
+    }
   end
 end

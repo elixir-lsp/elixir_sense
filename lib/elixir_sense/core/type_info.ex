@@ -8,6 +8,20 @@ defmodule ElixirSense.Core.TypeInfo do
   @doc_spec_line_length 75
   @param_option_spec_line_length 35
 
+  def find_all(module, filter \\ & &1) do
+    for(
+      {{name, arity}, _, _, doc} <- NormalizedCode.get_docs(module, :type_docs) || [],
+      typedef = get_type_spec(module, name, arity),
+      type_ast = ElixirSense.Core.TypeAst.from_typedef(typedef),
+      spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
+      signature = ElixirSense.Core.TypeAst.extract_signature(type_ast),
+      info = %{name: name, arity: arity, doc: doc, spec: spec, signature: signature},
+      filter.(info)
+    ) do
+      info
+    end
+  end
+
   def get_type_spec(module, type_name) do
     module
     |> Typespec.get_types()

@@ -7,6 +7,7 @@ defmodule ElixirSense.Providers.References do
 
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State.VarInfo
+  alias ElixirSense.Core.Source
 
   def find(nil, _, _, _, _) do
     []
@@ -20,7 +21,7 @@ defmodule ElixirSense.Providers.References do
         |> Enum.map(fn pos -> build_var_location(subject, pos) end)
       _ ->
         subject
-        |> Introspection.split_mod_fun_call
+        |> Source.split_module_and_func
         |> Introspection.actual_mod_fun(imports, aliases, module)
         |> xref_at_cursor(module, scope)
         |> Enum.map(&build_location/1)
