@@ -547,14 +547,14 @@ defmodule ElixirSense.SuggestionsTest do
 
   describe "suggestions for typespecs" do
 
-    test "remote module - suggest list of typespecs" do
+    test "remote types - suggest list of typespecs" do
       buffer = "Remote."
 
       list = suggestions_by_type(:type_spec, buffer)
       assert length(list) > 1
     end
 
-    test "remote module - retrieve info from typespecs" do
+    test "remote types - retrieve info from typespecs" do
       buffer = "Remote."
 
       suggestion = suggestion_by_name(:remote_list_t, buffer)
@@ -569,7 +569,7 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
     end
 
-    test "remote module - retrieve info from typespecs with params" do
+    test "remote types - retrieve info from typespecs with params" do
       buffer = "Remote."
 
       [suggestion_1, suggestion_2] = suggestions_by_name(:remote_t, buffer)
@@ -587,6 +587,43 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion_2.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
     end
 
+    test "local types - suggest list of typespecs" do
+      buffer = """
+      defmodule ElixirSenseExample.ModuleWithTypespecs.Local do
+        # The types are defined in `test/support/module_with_typespecs.ex`
+        @type my_type :: l
+        #                 ^
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 3, 21)
+        |> Enum.filter(fn %{type: t} -> t == :type_spec end)
+
+      assert length(list) == 4
+    end
+
+    test "local types - retrieve info from typespecs" do
+      buffer = """
+      defmodule ElixirSenseExample.ModuleWithTypespecs.Local do
+        # The types are defined in `test/support/module_with_typespecs.ex`
+        @type my_type :: local_t
+        #                       ^
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 3, 27)
+        |> Enum.filter(fn %{type: t} -> t == :type_spec end)
+
+      [suggestion, _] = list
+
+      assert suggestion.spec == "@type local_t() :: atom()"
+      assert suggestion.signature == "local_t()"
+      assert suggestion.arity == 0
+      assert suggestion.doc == "Local type"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
+    end
   end
 
   defp suggestions_by_type(type, buffer) do
