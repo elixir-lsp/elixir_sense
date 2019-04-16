@@ -6,6 +6,10 @@ defmodule ElixirSense.Core.TypeAst do
     Typespec.type_to_quoted(type)
   end
 
+  def extract_signature(nil) do
+    ""
+  end
+
   def extract_signature(ast) do
     ast
     |> Macro.prewalk(&drop_macro_env/1)

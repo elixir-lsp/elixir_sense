@@ -22,6 +22,27 @@ defmodule ElixirSense.Core.TypeInfo do
     end
   end
 
+  def find_all_builtin(filter \\ & &1) do
+    extract_name_and_arity = fn key ->
+      name_parts = String.split(key, "/")
+      arity = name_parts |> Enum.at(1, "0") |> String.to_integer()
+      {Enum.at(name_parts, 0), arity}
+    end
+
+    for(
+      {key, value} <- BuiltinTypes.all(),
+      type_ast <- [value[:spec]],
+      spec <- [format_type_spec_ast(type_ast, :type, line_length: @param_option_spec_line_length)],
+      signature <- [value[:signature] || ElixirSense.Core.TypeAst.extract_signature(type_ast)],
+      {name, arity} = extract_name_and_arity.(key),
+      doc = value[:doc] || "",
+      info = %{name: name, arity: arity, doc: doc, spec: spec, signature: signature},
+      filter.(info)
+    ) do
+      info
+    end
+  end
+
   def get_type_spec(module, type_name) do
     module
     |> Typespec.get_types()

@@ -308,8 +308,14 @@ defmodule ElixirSense.SuggestionsTest do
       assert %{type_spec: "local_t()", expanded_spec: "@type local_t() :: atom()"} =
         suggestion_by_name(:local_o, buffer)
 
-      assert %{type_spec: "keyword()", expanded_spec: "@type keyword :: [{atom(), any()}]"} =
-        suggestion_by_name(:builtin_o, buffer)
+      assert %{
+        type_spec: "keyword()",
+        expanded_spec: """
+        @type keyword() :: [
+          {atom(), any()}
+        ]\
+        """
+      } = suggestion_by_name(:builtin_o, buffer)
     end
 
     test "options vars defined in when" do
@@ -397,7 +403,11 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "keyword()"
       assert suggestion.origin == ""
-      assert suggestion.expanded_spec == "@type keyword :: [{atom(), any()}]"
+      assert suggestion.expanded_spec == """
+      @type keyword() :: [
+        {atom(), any()}
+      ]\
+      """
       assert suggestion.doc == "A keyword list"
     end
 
@@ -547,11 +557,11 @@ defmodule ElixirSense.SuggestionsTest do
 
   describe "suggestions for typespecs" do
 
-    test "remote types - suggest list of typespecs" do
-      buffer = "Remote."
+    test "remote types - filter list of typespecs" do
+      buffer = "Remote.remote_t"
 
       list = suggestions_by_type(:type_spec, buffer)
-      assert length(list) > 1
+      assert length(list) == 2
     end
 
     test "remote types - retrieve info from typespecs" do
@@ -587,20 +597,20 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion_2.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
     end
 
-    test "local types - suggest list of typespecs" do
+    test "local types - filter list of typespecs" do
       buffer = """
       defmodule ElixirSenseExample.ModuleWithTypespecs.Local do
         # The types are defined in `test/support/module_with_typespecs.ex`
-        @type my_type :: l
-        #                 ^
+        @type my_type :: local_
+        #                      ^
       end
       """
 
       list =
-        ElixirSense.suggestions(buffer, 3, 21)
+        ElixirSense.suggestions(buffer, 3, 26)
         |> Enum.filter(fn %{type: t} -> t == :type_spec end)
 
-      assert length(list) == 4
+      assert length(list) == 2
     end
 
     test "local types - retrieve info from typespecs" do
@@ -623,6 +633,37 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.arity == 0
       assert suggestion.doc == "Local type"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
+    end
+
+    test "builtin types - filter list of typespecs" do
+      buffer = "@type my_type :: lis"
+
+      list = suggestions_by_type(:type_spec, buffer)
+      assert length(list) == 2
+    end
+
+    test "builtin types - retrieve info from typespecs" do
+      buffer = "@type my_type :: lis"
+
+      [suggestion | _] = suggestions_by_type(:type_spec, buffer)
+
+      assert suggestion.spec == "@type list() :: [any()]"
+      assert suggestion.signature == "list()"
+      assert suggestion.arity == 0
+      assert suggestion.doc == "A list"
+      assert suggestion.origin == ""
+    end
+
+    test "builtin types - retrieve info from typespecs with params" do
+      buffer = "@type my_type :: lis"
+
+      [_, suggestion | _] = suggestions_by_type(:type_spec, buffer)
+
+      assert suggestion.spec == ""
+      assert suggestion.signature == "list(t)"
+      assert suggestion.arity == 1
+      assert suggestion.doc == "Proper list ([]-terminated)"
+      assert suggestion.origin == ""
     end
   end
 

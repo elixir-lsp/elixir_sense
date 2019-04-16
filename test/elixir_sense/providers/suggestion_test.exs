@@ -73,13 +73,15 @@ defmodule ElixirSense.Providers.SuggestionTest do
     ]
   end
 
-  test "local calls should not return built-in funcitons" do
-    assert Suggestion.find("mo", [MyModule], [], SomeModule, [], [], [], SomeModule, "") == [
-      %{type: :hint, value: "mo"}
-    ]
+  test "local calls should not return built-in functions" do
+    list =
+      Suggestion.find("mo", [MyModule], [], SomeModule, [], [], [], SomeModule, "")
+      |> Enum.filter(fn item -> item.type in [:hint, "function", "public_function"] end)
+
+    assert list == [%{type: :hint, value: "mo"}]
   end
 
-  test "empty hint should not return built-in funcitons" do
+  test "empty hint should not return built-in functions" do
     suggestions_names = Suggestion.find("", [MyModule], [], SomeModule, [], [], [], SomeModule, "")
       |> Enum.filter(&Map.has_key?(&1, :name))
       |> Enum.map(&(&1.name))

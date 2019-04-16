@@ -242,7 +242,13 @@ defmodule ElixirSense.Providers.Suggestion do
   end
 
   defp find_typespecs_for_mod_and_hint({nil, hint}, aliases, module) do
-    find_typespecs_for_mod_and_hint({module, hint}, aliases, module)
+    local_module = find_typespecs_for_mod_and_hint({module, hint}, aliases, module)
+
+    builtin_modules =
+      TypeInfo.find_all_builtin(&String.starts_with?("#{&1.name}", hint))
+      |> Enum.map(&type_info_to_suggestion(&1, nil))
+
+    local_module ++ builtin_modules
   end
 
   defp find_typespecs_for_mod_and_hint({mod, hint}, aliases, _module) do
@@ -254,12 +260,18 @@ defmodule ElixirSense.Providers.Suggestion do
   end
 
   defp type_info_to_suggestion(type_info, module) do
+    origin =
+      if module do
+        Introspection.module_to_string(module)
+      else
+        ""
+      end
     %{
       type: :type_spec,
       name: type_info.name,
       arity: type_info.arity,
       signature: type_info.signature,
-      origin: Introspection.module_to_string(module),
+      origin: origin,
       doc: type_info.doc,
       spec: type_info.spec
     }
