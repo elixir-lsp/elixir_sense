@@ -34,6 +34,10 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
+  def get_line_text(code, line) do
+    code |> String.split("\n") |> Enum.at(line - 1)
+  end
+
   def prefix(code, line, col) do
     line = code |> String.split("\n") |> Enum.at(line - 1)
     line_str = line |> String.slice(0, col - 1)

@@ -299,6 +299,36 @@ defmodule ElixirSense do
     Eval.match_and_format(code)
   end
 
+  @doc ~S"""
+  Returns all references to a function, module or variable identified at the provided location.
+
+  ## Example
+
+      iex> code = ~S'''
+      ...> defmodule MyModule do
+      ...>   alias ElixirSense.Providers.ReferencesTest.Modules.Callee1
+      ...>   Callee1.func()
+      ...> end
+      ...> '''
+      iex> ElixirSense.references(code, 3, 12) |> Enum.take(2)
+      [
+        %{
+          uri: "test/support/modules_with_references.ex",
+          range: %{
+            start: %{line: 26, character: 60},
+            end: %{line: 26, character: 64}
+          }
+        },
+        %{
+          uri: "test/support/modules_with_references.ex",
+          range: %{
+            start: %{line: 32, character: 60},
+            end: %{line: 32, character: 64}
+          }
+        }
+      ]
+  """
+  @spec references(String.t, pos_integer, pos_integer) :: [References.reference_info]
   def references(code, line, column) do
     subject = Source.subject(code, line, column)
 

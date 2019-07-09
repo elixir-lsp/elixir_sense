@@ -6,33 +6,44 @@ defmodule ElixirSense.Providers.ReferencesTest do
 
   test "find references with cursor over a function call" do
     buffer = """
-    defmodule ElixirSense.Providers.ReferencesTest.Caller2 do
+    defmodule Caller do
       def func() do
-        ElixirSense.Providers.ReferencesTest.Callee.func()
+        ElixirSense.Providers.ReferencesTest.Modules.Callee1.func()
+        #                                                     ^
       end
     end
     """
-    references = ElixirSense.references(buffer, 3, 52)
+    references = ElixirSense.references(buffer, 3, 59)
 
     assert references == [
       %{
-        range: %{end: %{character: 0, line: 11}, start: %{character: 0, line: 11}},
-        uri: "test/support/modules_with_references.ex"
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 26, character: 60}, end: %{line: 26, character: 64}}
       },
       %{
-        range: %{end: %{character: 0, line: 16}, start: %{character: 0, line: 16}},
-        uri: "test/support/modules_with_references.ex"
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 32, character: 60}, end: %{line: 32, character: 64}}
+      },
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 42, character: 16}, end: %{line: 42, character: 20}}
+      },
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 42, character: 63}, end: %{line: 42, character: 67}}
       }
     ]
   end
 
   test "find references with cursor over a function definition" do
     buffer = """
-    defmodule ElixirSense.Providers.ReferencesTest.Callee do
+    defmodule ElixirSense.Providers.ReferencesTest.Modules.Callee1 do
       def func() do
+        #    ^
         IO.puts ""
       end
       def func(par1) do
+        #    ^
         IO.puts par1
       end
     end
@@ -40,39 +51,75 @@ defmodule ElixirSense.Providers.ReferencesTest do
     references = ElixirSense.references(buffer, 2, 10)
     assert references == [
       %{
-        range: %{end: %{character: 0, line: 11}, start: %{character: 0, line: 11}},
-        uri: "test/support/modules_with_references.ex"
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 26, character: 60}, end: %{line: 26, character: 64}}
+      },
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 42, character: 16}, end: %{line: 42, character: 20}}
+      },
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 42, character: 63}, end: %{line: 42, character: 67}}
       }
     ]
 
-    references = ElixirSense.references(buffer, 5, 10)
+    references = ElixirSense.references(buffer, 6, 10)
     assert references == [
       %{
-        range: %{end: %{character: 0, line: 16}, start: %{character: 0, line: 16}},
-        uri: "test/support/modules_with_references.ex"
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 32, character: 60}, end: %{line: 32, character: 64}}
       }
     ]
   end
 
-  test "with aliased modules" do
+  test "find references with cursor over a function call from an aliased module" do
     buffer = """
-    defmodule ElixirSense.Providers.ReferencesTest.Caller2 do
+    defmodule Caller do
       def func() do
-        alias ElixirSense.Providers.ReferencesTest.Callee, as: C
+        alias ElixirSense.Providers.ReferencesTest.Modules.Callee1, as: C
         C.func()
+        #  ^
       end
     end
     """
-    references = ElixirSense.references(buffer, 4, 10)
+    references = ElixirSense.references(buffer, 4, 8)
 
     assert references == [
       %{
-        range: %{end: %{character: 0, line: 11}, start: %{character: 0, line: 11}},
-        uri: "test/support/modules_with_references.ex"
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 26, character: 60}, end: %{line: 26, character: 64}}
       },
       %{
-        range: %{end: %{character: 0, line: 16}, start: %{character: 0, line: 16}},
-        uri: "test/support/modules_with_references.ex"
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 32, character: 60}, end: %{line: 32, character: 64}}
+      },
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 42, character: 16}, end: %{line: 42, character: 20}}
+      },
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 42, character: 63}, end: %{line: 42, character: 67}}
+      }
+    ]
+  end
+
+  test "find imported references" do
+    buffer = """
+    defmodule Caller do
+      def func() do
+        ElixirSense.Providers.ReferencesTest.Modules.Callee3.func()
+        #                                                     ^
+      end
+    end
+    """
+    references = ElixirSense.references(buffer, 3, 59)
+
+    assert references == [
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 42, character: 47}, end: %{line: 42, character: 51}}
       }
     ]
   end
@@ -91,7 +138,6 @@ defmodule ElixirSense.Providers.ReferencesTest do
       end
     end
     """
-    # references = ElixirSense.references(buffer, 3, 6)
     references = ElixirSense.references(buffer, 6, 13)
 
     assert references == [
