@@ -34,10 +34,6 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  def get_line_text(code, line) do
-    code |> String.split("\n") |> Enum.at(line - 1)
-  end
-
   def prefix(code, line, col) do
     line = code |> String.split("\n") |> Enum.at(line - 1)
     line_str = line |> String.slice(0, col - 1)
@@ -60,7 +56,8 @@ defmodule ElixirSense.Core.Source do
   end
 
   def subject(code, line, col) do
-    case walk_text(code, &find_subject/5, %{line: line, col: col, pos_found: false, candidate: []}) do
+    acc = %{line: line, col: col, pos_found: false, candidate: [], pos: nil}
+    case walk_text(code, acc, &find_subject/5) do
       %{candidate: []} ->
         nil
       %{candidate: candidate} ->
@@ -68,9 +65,30 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
+  def subject_with_position(code, line, col) do
+    acc = %{line: line, col: col, pos_found: false, candidate: [], pos: nil}
+    case walk_text(code, acc, &find_subject/5) do
+      %{candidate: []} ->
+        nil
+      %{candidate: candidate, pos: {line, col}} ->
+        subject = candidate |> Enum.reverse |> Enum.join
+        last_part = subject |> String.reverse() |> String.split(".", parts: 2) |> Enum.at(0) |> String.reverse()
+        {subject, {line, col - String.length(last_part)}}
+    end
+  end
+
+  def find_next_word(code) do
+    walk_text(code, nil, fn
+      grapheme, rest, _, _, _ when grapheme in @empty_graphemes ->
+        {rest, nil}
+      _grapheme, rest, line, col, _ ->
+        {"", {rest, line - 1, col - 1}}
+    end)
+  end
+
   def which_struct(text_before) do
     code = text_before |> String.reverse()
-    case walk_text(code, &find_struct/5, %{buffer: [], count_open: 0, result: nil}) do
+    case walk_text(code, %{buffer: [], count_open: 0, result: nil}, &find_struct/5) do
       %{result: nil} ->
         nil
       %{result: result} ->
@@ -109,8 +127,8 @@ defmodule ElixirSense.Core.Source do
   defp find_subject("." = grapheme, rest, _line, _col, %{pos_found: false} = acc) do
     {rest, %{acc | candidate: [grapheme|acc.candidate]}}
   end
-  defp find_subject(".", _rest, _line, _col, %{pos_found: true} = acc) do
-    {"", acc}
+  defp find_subject(".", _rest, line, col, %{pos_found: true} = acc) do
+    {"", %{acc | pos: {line, col-1}}}
   end
   defp find_subject(grapheme, rest, _line, _col, %{candidate: [_|_]} = acc) when grapheme in ["!", "?"] do
     {rest, %{acc | candidate: [grapheme|acc.candidate]}}
@@ -121,14 +139,14 @@ defmodule ElixirSense.Core.Source do
   defp find_subject(grapheme, rest, _line, _col, %{pos_found: false} = acc) when grapheme in @stop_graphemes do
     {rest, %{acc | candidate: []}}
   end
-  defp find_subject(grapheme, _rest, _line, _col, %{pos_found: true} = acc) when grapheme in @stop_graphemes do
-    {"", acc}
+  defp find_subject(grapheme, _rest, line, col, %{pos_found: true} = acc) when grapheme in @stop_graphemes do
+    {"", %{acc | pos: {line, col-1}}}
   end
   defp find_subject(grapheme, rest, _line, _col, acc) do
     {rest, %{acc | candidate: [grapheme|acc.candidate]}}
   end
 
-  defp walk_text(text, func, acc) do
+  defp walk_text(text, acc, func) do
     do_walk_text(text, func, 1, 1, acc)
   end
 

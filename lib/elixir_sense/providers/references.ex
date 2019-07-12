@@ -25,11 +25,11 @@ defmodule ElixirSense.Providers.References do
     range: range
   }
 
-  def find(nil, _, _, _, _) do
+  def find(nil, _, _, _, _, _) do
     []
   end
 
-  def find(subject, imports, aliases, module, scope, vars) do
+  def find(subject, arity, imports, aliases, module, scope, vars) do
     var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
     case var_info do
       %VarInfo{positions: positions} ->
@@ -39,41 +39,50 @@ defmodule ElixirSense.Providers.References do
         subject
         |> Source.split_module_and_func
         |> Introspection.actual_mod_fun(imports, aliases, module)
-        |> xref_at_cursor(module, scope)
+        |> xref_at_cursor(arity, module, scope)
         |> Enum.map(&build_location/1)
         |> Enum.sort_by(fn %{uri: a, range: %{start: %{line: b, character: c}}} -> {a, b, c} end)
-        |> Enum.uniq()
     end
   end
 
-  defp xref_at_cursor(actual_mod_fun, module, scope) do
+  defp xref_at_cursor(actual_mod_fun, arity, module, scope) do
     actual_mod_fun
-    |> callee_at_cursor(module, scope)
+    |> callee_at_cursor(module, scope, arity)
     |> case do
-      {:ok, mfa} -> callers(mfa, actual_mod_fun)
+      {:ok, mfa} -> callers(mfa)
       _ -> []
     end
   end
 
-  defp callee_at_cursor({module, func}, module, {func, arity}) do
+  # Cursor at a function definition
+  defp callee_at_cursor({module, func}, module, {func, arity}, _) do
     {:ok, [module, func, arity]}
   end
 
-  defp callee_at_cursor({module, func}, _module, _scope) do
+  # Cursor at a function call but we couldn't introspect the arity
+  defp callee_at_cursor({module, func}, _module, _scope, nil) do
     {:ok, [module, func]}
   end
 
-  def callers(mfa, actual_mod_fun) do
-    for original_call <- Xref.calls(),
-        caller_filter(mfa).(original_call),
-        call <- expand_line_calls(original_call, actual_mod_fun) do
-      call
+  # Cursor at a function call
+  defp callee_at_cursor({module, func}, _module, _scope, arity) do
+    {:ok, [module, func, arity]}
+  end
+
+  def callers(mfa) do
+    calls =
+      Xref.calls()
+      |> Enum.filter(caller_filter(mfa))
+      |> fix_caller_module()
+
+    for call <- calls,
+        new_call <- expand_xref_line_calls(call) do
+      new_call
     end
   end
 
-  defp expand_line_calls(call, actual_mod_fun) do
-    %{callee: {_, f, _}, file: file, line: line} = call
-    func = to_string(f)
+  defp expand_xref_line_calls(xref_call) do
+    %{callee: {mod, func, arity}, file: file, line: line} = xref_call
 
     case File.read(file) do
       {:ok, code} ->
@@ -84,24 +93,20 @@ defmodule ElixirSense.Providers.References do
           module: module,
         } = Metadata.get_env(metadata, line)
 
-        line_text = Source.get_line_text(code, line)
-        cols = find_refererences_in_line(line_text, func)
-        for col <- cols,
-            found_mod_fun = find_actual_mod_fun(code, line, col, imports, aliases, module),
-            found_mod_fun == actual_mod_fun do
-          Map.put(call, :column, col)
+        calls =
+          metadata
+          |> Metadata.get_calls(line)
+          |> fix_calls_positions(code)
+
+        for call <- calls,
+            found_mod_fun = find_actual_mod_fun(code, call.line, call.col, imports, aliases, module),
+            found_mod_fun == {mod, func},
+            arity == call.arity do
+          Map.merge(xref_call, %{column: call.col, line: call.line})
         end
       _ ->
-        [call]
+        [xref_call]
     end
-  end
-
-  defp find_refererences_in_line(line_text, func) do
-    {_, [_|cols]} = line_text |> String.split(func) |> Enum.reduce({1, []}, fn str, {count, list} ->
-      count = count + String.length(str)
-      {count + String.length(func), [count|list]}
-    end)
-    Enum.reverse(cols)
   end
 
   defp find_actual_mod_fun(code, line, col, imports, aliases, module) do
@@ -138,4 +143,25 @@ defmodule ElixirSense.Providers.References do
     }
   end
 
+  # For Elixir < v1.10.0
+  defp fix_caller_module(calls) do
+    calls
+    |> Enum.map(fn c -> Map.delete(c, :caller_module) end)
+    |> Enum.uniq()
+  end
+
+  defp fix_calls_positions(calls, code) do
+    for call <- calls do
+      case call do
+        %{mod: nil} ->
+          call
+        %{line: line, col: col} ->
+          text_after = Source.text_after(code, line, col+1)
+          {_rest, line_offset, col_offset} = Source.find_next_word(text_after)
+          col_offset = if line_offset == 0, do: col + 1, else: col_offset
+
+          %{call | line: line + line_offset, col: col_offset}
+      end
+    end
+  end
 end

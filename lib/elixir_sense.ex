@@ -306,11 +306,11 @@ defmodule ElixirSense do
 
       iex> code = ~S'''
       ...> defmodule MyModule do
-      ...>   alias ElixirSense.Providers.ReferencesTest.Modules.Callee1
-      ...>   Callee1.func()
+      ...>   alias ElixirSense.Providers.ReferencesTest.Modules.Callee1, as: C
+      ...>   C.func()
       ...> end
       ...> '''
-      iex> ElixirSense.references(code, 3, 12) |> Enum.take(2)
+      iex> ElixirSense.references(code, 3, 6) |> Enum.take(2)
       [
         %{
           uri: "test/support/modules_with_references.ex",
@@ -330,7 +330,7 @@ defmodule ElixirSense do
   """
   @spec references(String.t, pos_integer, pos_integer) :: [References.reference_info]
   def references(code, line, column) do
-    subject = Source.subject(code, line, column)
+    {subject, {line, col}} = Source.subject_with_position(code, line, column)
 
     buffer_file_metadata = Parser.parse_string(code, true, true, line)
     %State.Env{
@@ -342,8 +342,8 @@ defmodule ElixirSense do
     } = Metadata.get_env(buffer_file_metadata, line)
 
     vars = buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values
+    arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
 
-    References.find(subject, imports, aliases, module, scope, vars)
+    References.find(subject, arity, imports, aliases, module, scope, vars)
   end
-
 end

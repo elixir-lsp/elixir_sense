@@ -22,10 +22,6 @@ defmodule ElixirSense.Providers.ReferencesTest do
       },
       %{
         uri: "test/support/modules_with_references.ex",
-        range: %{start: %{line: 32, character: 60}, end: %{line: 32, character: 64}}
-      },
-      %{
-        uri: "test/support/modules_with_references.ex",
         range: %{start: %{line: 42, character: 16}, end: %{line: 42, character: 20}}
       },
       %{
@@ -69,6 +65,33 @@ defmodule ElixirSense.Providers.ReferencesTest do
       %{
         uri: "test/support/modules_with_references.ex",
         range: %{start: %{line: 32, character: 60}, end: %{line: 32, character: 64}}
+      },
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 42, character: 79}, end: %{line: 42, character: 83}}
+      }
+    ]
+  end
+
+  test "find references with cursor over a function with arity 1" do
+    buffer = """
+    defmodule Caller do
+      def func() do
+        ElixirSense.Providers.ReferencesTest.Modules.Callee1.func("test")
+        #                                                     ^
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 3, 59)
+    assert references == [
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 32, character: 60}, end: %{line: 32, character: 64}}
+      },
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 42, character: 79}, end: %{line: 42, character: 83}}
       }
     ]
   end
@@ -92,10 +115,6 @@ defmodule ElixirSense.Providers.ReferencesTest do
       },
       %{
         uri: "test/support/modules_with_references.ex",
-        range: %{start: %{line: 32, character: 60}, end: %{line: 32, character: 64}}
-      },
-      %{
-        uri: "test/support/modules_with_references.ex",
         range: %{start: %{line: 42, character: 16}, end: %{line: 42, character: 20}}
       },
       %{
@@ -114,14 +133,29 @@ defmodule ElixirSense.Providers.ReferencesTest do
       end
     end
     """
-    references = ElixirSense.references(buffer, 3, 59)
+    reference = ElixirSense.references(buffer, 3, 59) |> Enum.at(0)
 
-    assert references == [
-      %{
-        uri: "test/support/modules_with_references.ex",
-        range: %{start: %{line: 42, character: 47}, end: %{line: 42, character: 51}}
-      }
-    ]
+    assert reference == %{
+      uri: "test/support/modules_with_references.ex",
+      range: %{start: %{line: 42, character: 47}, end: %{line: 42, character: 51}}
+    }
+  end
+
+  test "find references from remote calls with the function in the next line" do
+    buffer = """
+    defmodule Caller do
+      def func() do
+        ElixirSense.Providers.ReferencesTest.Modules.Callee3.func()
+        #                                                     ^
+      end
+    end
+    """
+    reference = ElixirSense.references(buffer, 3, 59) |> Enum.at(1)
+
+    assert reference == %{
+      uri: "test/support/modules_with_references.ex",
+      range: %{start: %{line: 47, character: 8}, end: %{line: 47, character: 12}}
+    }
   end
 
   test "find references of variables" do

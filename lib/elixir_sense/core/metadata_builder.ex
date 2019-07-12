@@ -13,6 +13,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   @block_keywords [:do, :else, :rescue, :catch, :after]
   @defs [:def, :defp, :defmacro, :defmacrop, :defdelegate]
 
+  defguard is_call(call, params) when is_atom(call) and is_list(params) and call not in [:., :__aliases__, :::, :{}]
+
   @doc """
   Traverses the AST building/retrieving the environment information.
   It returns a `ElixirSense.Core.State` struct containing the information.
@@ -186,7 +188,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre({def_name, meta, [{name, [line: line, column: column] = meta2, params}, body]}, state) when def_name in @defs and is_atom(name) do
-    ast_without_params = {def_name, meta, [{name, meta2, []}, body]}
+    ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, body]}
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
   end
 
@@ -203,8 +205,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_behaviour(ast, state, line, erlang_module)
   end
 
-  defp pre({:@, [line: line, column: _column], [{name, _, _}]} = ast, state) do
-    pre_module_attribute(ast, state, line, name)
+  defp pre({:@, [line: line, column: _column] = meta_attr, [{name, meta, params}]}, state) do
+    new_ast = {:@, meta_attr, [{name, add_no_call(meta), params}]}
+    pre_module_attribute(new_ast, state, line, name)
   end
 
   # import with v1.2 notation
@@ -291,7 +294,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result({:=, meta, [:_, rhs]})
   end
 
-  defp pre({var_or_func_call, [line: _line, column: _column], context} = ast, state) when is_atom(var_or_func_call) and context in [nil, Elixir] do
+  defp pre({var_or_call, [line: _line, column: _column], context} = ast, state) when is_atom(var_or_call) and context in [nil, Elixir] do
     state
     |> add_vars(find_vars(ast), false)
     |> result(ast)
@@ -317,6 +320,28 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> add_requires(requires)
     |> add_imports(imports)
     |> add_behaviours(behaviours)
+    |> result(ast)
+  end
+
+  defp pre({call, [line: line, column: column], params} = ast, state) when is_call(call, params) do
+    state =
+      if !String.starts_with?(to_string(call), "__atom_elixir_marker_") do
+        add_call_to_line(state, {nil, call, length(params)}, line, column)
+      else
+        state
+      end
+
+    state
+    |> add_current_env_to_line(line)
+    |> result(ast)
+  end
+
+  defp pre({{:., _, [{:__aliases__, _, mod_path}, call]}, [line: line, column: col], params} = ast, state)
+       when is_call(call, params) do
+    mod = Module.concat(mod_path)
+    state
+    |> add_call_to_line({mod, call, length(params)}, line, col)
+    |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -378,4 +403,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, vars}
   end
 
+  defp add_no_call(meta) do
+    [{:no_call, true}|meta]
+  end
 end

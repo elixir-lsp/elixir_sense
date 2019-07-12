@@ -39,7 +39,12 @@ defmodule ElixirSense.Providers.ReferencesTest.Modules do
     import ElixirSense.Providers.ReferencesTest.Modules.Callee3
 
     def call_all() do
-      [Callee1.func(), AliasedCallee2.func(), func(), Callee1.func()]
+      [Callee1.func(), AliasedCallee2.func(), func(), Callee1.func(), Callee1.func("1")]
+    end
+
+    def call_on_different_line() do
+      Callee3.
+        func()
     end
   end
 end

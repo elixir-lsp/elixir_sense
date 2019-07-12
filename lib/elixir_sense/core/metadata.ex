@@ -10,13 +10,29 @@ defmodule ElixirSense.Core.Metadata do
   defstruct source: nil,
             mods_funs_to_positions: %{},
             lines_to_env: %{},
+            calls: %{},
             vars_info_per_scope_id: %{},
             error: nil
 
-  def get_env(%__MODULE__{} = metadata, line_number) do
-    case Map.get(metadata.lines_to_env, line_number) do
+  def get_env(%__MODULE__{} = metadata, line) do
+    case Map.get(metadata.lines_to_env, line) do
       nil -> %State.Env{}
       ctx -> ctx
+    end
+  end
+
+  def get_calls(%__MODULE__{} = metadata, line) do
+    case Map.get(metadata.calls, line) do
+      nil -> []
+      calls -> Enum.sort_by(calls, fn %{col: col} -> col end)
+    end
+  end
+
+  def get_call_arity(%__MODULE__{} = metadata, line, col) do
+    calls = get_calls(metadata, line)
+    case Enum.find(calls, fn c -> c.col == col end) do
+      %{arity: arity} -> arity
+      _ -> nil
     end
   end
 
@@ -80,5 +96,4 @@ defmodule ElixirSense.Core.Metadata do
       {line, 0}
     end |> Enum.at(0)
   end
-
 end
