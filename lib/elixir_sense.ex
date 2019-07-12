@@ -322,8 +322,8 @@ defmodule ElixirSense do
         %{
           uri: "test/support/modules_with_references.ex",
           range: %{
-            start: %{line: 32, character: 60},
-            end: %{line: 32, character: 64}
+            start: %{line: 42, character: 16},
+            end: %{line: 42, character: 20}
           }
         }
       ]
