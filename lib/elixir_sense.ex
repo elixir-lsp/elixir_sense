@@ -315,15 +315,15 @@ defmodule ElixirSense do
         %{
           uri: "test/support/modules_with_references.ex",
           range: %{
-            start: %{line: 26, character: 60},
-            end: %{line: 26, character: 64}
+            start: %{line: 26, column: 60},
+            end: %{line: 26, column: 64}
           }
         },
         %{
           uri: "test/support/modules_with_references.ex",
           range: %{
-            start: %{line: 42, character: 16},
-            end: %{line: 42, character: 20}
+            start: %{line: 42, column: 16},
+            end: %{line: 42, column: 20}
           }
         }
       ]

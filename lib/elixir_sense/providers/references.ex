@@ -13,7 +13,7 @@ defmodule ElixirSense.Providers.References do
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
 
-  @type position :: %{line: pos_integer, character: pos_integer}
+  @type position :: %{line: pos_integer, column: pos_integer}
 
   @type range :: %{
     start: position,
@@ -41,7 +41,7 @@ defmodule ElixirSense.Providers.References do
         |> Introspection.actual_mod_fun(imports, aliases, module)
         |> xref_at_cursor(arity, module, scope)
         |> Enum.map(&build_location/1)
-        |> Enum.sort_by(fn %{uri: a, range: %{start: %{line: b, character: c}}} -> {a, b, c} end)
+        |> Enum.sort_by(fn %{uri: a, range: %{start: %{line: b, column: c}}} -> {a, b, c} end)
     end
   end
 
@@ -127,8 +127,8 @@ defmodule ElixirSense.Providers.References do
     %{
       uri: call.file,
       range: %{
-        start: %{line: call.line, character: call.column},
-        end: %{line: call.line, character: call.column + func_length}
+        start: %{line: call.line, column: call.column},
+        end: %{line: call.line, column: call.column + func_length}
       }
     }
   end
@@ -137,8 +137,8 @@ defmodule ElixirSense.Providers.References do
     %{
       uri: nil,
       range: %{
-        start: %{line: line, character: column},
-        end: %{line: line, character: column + String.length(subject)}
+        start: %{line: line, column: column},
+        end: %{line: line, column: column + String.length(subject)}
       }
     }
   end
