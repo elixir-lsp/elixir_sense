@@ -133,7 +133,7 @@ defmodule ElixirSense.Server.TCPServer do
 
   defp socket_file do
     sock_id = :erlang.system_time()
-    String.to_charlist("#{System.tmp_dir()}elixir-sense-#{sock_id}.sock")
+    String.to_charlist(Path.join([System.tmp_dir(), "elixir-sense-#{sock_id}.sock"]))
   end
 
   defp decode_request_data(data) do
