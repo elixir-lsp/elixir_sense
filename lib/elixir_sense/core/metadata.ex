@@ -38,7 +38,7 @@ defmodule ElixirSense.Core.Metadata do
       metadata
       |> get_function_info(module, function)
       |> Map.get(:params)
-      |> Enum.reverse
+      |> Enum.reverse()
 
     Enum.map(params, fn param ->
       param
@@ -54,17 +54,21 @@ defmodule ElixirSense.Core.Metadata do
       metadata
       |> get_function_info(module, function)
       |> Map.get(:params)
-      |> Enum.reverse
+      |> Enum.reverse()
 
     Enum.map(params_list, fn params ->
       arity = length(params)
+
       {doc, spec} =
         Enum.find_value(docs, {"", ""}, fn {{f, a}, _, _, _, text} ->
           f == function &&
-          a == arity &&
-          {Introspection.extract_summary_from_docs(text), Introspection.get_spec(module, function, arity)}
+            a == arity &&
+            {Introspection.extract_summary_from_docs(text),
+             Introspection.get_spec(module, function, arity)}
         end)
-      %{name: Atom.to_string(function),
+
+      %{
+        name: Atom.to_string(function),
         params: params |> Enum.with_index() |> Enum.map(&Introspection.param_to_var/1),
         documentation: doc,
         spec: spec
@@ -77,7 +81,7 @@ defmodule ElixirSense.Core.Metadata do
 
     for {{func, _arity}, line, _kind, _, _} <- docs, func == function do
       {line, 0}
-    end |> Enum.at(0)
+    end
+    |> Enum.at(0)
   end
-
 end

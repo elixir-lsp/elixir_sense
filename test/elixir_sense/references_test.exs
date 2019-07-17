@@ -1,5 +1,4 @@
 defmodule ElixirSense.Providers.ReferencesTest do
-
   use ExUnit.Case
 
   # doctest References
@@ -12,18 +11,19 @@ defmodule ElixirSense.Providers.ReferencesTest do
       end
     end
     """
+
     references = ElixirSense.references(buffer, 3, 52)
 
     assert references == [
-      %{
-        range: %{end: %{character: 0, line: 12}, start: %{character: 0, line: 12}},
-        uri: "lib/elixir_sense/providers/references_test_modules.ex"
-      },
-      %{
-        range: %{end: %{character: 0, line: 17}, start: %{character: 0, line: 17}},
-        uri: "lib/elixir_sense/providers/references_test_modules.ex"
-      }
-    ]
+             %{
+               range: %{end: %{character: 0, line: 12}, start: %{character: 0, line: 12}},
+               uri: "lib/elixir_sense/providers/references_test_modules.ex"
+             },
+             %{
+               range: %{end: %{character: 0, line: 17}, start: %{character: 0, line: 17}},
+               uri: "lib/elixir_sense/providers/references_test_modules.ex"
+             }
+           ]
   end
 
   test "find references with cursor over a function definition" do
@@ -37,21 +37,24 @@ defmodule ElixirSense.Providers.ReferencesTest do
       end
     end
     """
+
     references = ElixirSense.references(buffer, 2, 10)
+
     assert references == [
-      %{
-        range: %{end: %{character: 0, line: 12}, start: %{character: 0, line: 12}},
-        uri: "lib/elixir_sense/providers/references_test_modules.ex"
-      }
-    ]
+             %{
+               range: %{end: %{character: 0, line: 12}, start: %{character: 0, line: 12}},
+               uri: "lib/elixir_sense/providers/references_test_modules.ex"
+             }
+           ]
 
     references = ElixirSense.references(buffer, 5, 10)
+
     assert references == [
-      %{
-        range: %{end: %{character: 0, line: 17}, start: %{character: 0, line: 17}},
-        uri: "lib/elixir_sense/providers/references_test_modules.ex"
-      }
-    ]
+             %{
+               range: %{end: %{character: 0, line: 17}, start: %{character: 0, line: 17}},
+               uri: "lib/elixir_sense/providers/references_test_modules.ex"
+             }
+           ]
   end
 
   test "with aliased modules" do
@@ -63,18 +66,19 @@ defmodule ElixirSense.Providers.ReferencesTest do
       end
     end
     """
+
     references = ElixirSense.references(buffer, 4, 10)
 
     assert references == [
-      %{
-        range: %{end: %{character: 0, line: 12}, start: %{character: 0, line: 12}},
-        uri: "lib/elixir_sense/providers/references_test_modules.ex"
-      },
-      %{
-        range: %{end: %{character: 0, line: 17}, start: %{character: 0, line: 17}},
-        uri: "lib/elixir_sense/providers/references_test_modules.ex"
-      }
-    ]
+             %{
+               range: %{end: %{character: 0, line: 12}, start: %{character: 0, line: 12}},
+               uri: "lib/elixir_sense/providers/references_test_modules.ex"
+             },
+             %{
+               range: %{end: %{character: 0, line: 17}, start: %{character: 0, line: 17}},
+               uri: "lib/elixir_sense/providers/references_test_modules.ex"
+             }
+           ]
   end
 
   test "find references of variables" do
@@ -91,14 +95,23 @@ defmodule ElixirSense.Providers.ReferencesTest do
       end
     end
     """
+
     # references = ElixirSense.references(buffer, 3, 6)
     references = ElixirSense.references(buffer, 6, 13)
 
     assert references == [
-      %{uri: nil, range: %{start: %{line: 3, character: 5}, end: %{line: 3, character: 9}}},
-      %{uri: nil, range: %{start: %{line: 5, character: 5}, end: %{line: 5, character: 9}}},
-      %{uri: nil, range: %{start: %{line: 6, character: 13}, end: %{line: 6, character: 17}}},
-    ]
+             %{
+               uri: nil,
+               range: %{start: %{line: 3, character: 5}, end: %{line: 3, character: 9}}
+             },
+             %{
+               uri: nil,
+               range: %{start: %{line: 5, character: 5}, end: %{line: 5, character: 9}}
+             },
+             %{
+               uri: nil,
+               range: %{start: %{line: 6, character: 13}, end: %{line: 6, character: 17}}
+             }
+           ]
   end
-
 end

@@ -1,5 +1,4 @@
 defmodule ElixirSense.Core.MetadataBuilderTest do
-
   use ExUnit.Case
 
   alias ElixirSense.Core.MetadataBuilder
@@ -8,20 +7,27 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   @tag requires_source: true
   test "build metadata from kernel.ex" do
-    assert get_subject_definition_line(Kernel, :defmodule, nil) =~ "defmacro defmodule(alias, do: block) do"
+    assert get_subject_definition_line(Kernel, :defmodule, nil) =~
+             "defmacro defmodule(alias, do: block) do"
   end
 
   @tag requires_source: true
   test "build metadata from kernel/special_forms.ex" do
-    assert get_subject_definition_line(Kernel.SpecialForms, :alias, nil) =~ "defmacro alias(module, opts)"
+    assert get_subject_definition_line(Kernel.SpecialForms, :alias, nil) =~
+             "defmacro alias(module, opts)"
   end
 
   test "build_metadata from a module" do
-    assert get_subject_definition_line(ElixirSenseExample.ModuleWithFunctions, :function_arity_zero, nil) =~ "def function_arity_zero"
+    assert get_subject_definition_line(
+             ElixirSenseExample.ModuleWithFunctions,
+             :function_arity_zero,
+             nil
+           ) =~ "def function_arity_zero"
   end
 
   test "module attributes" do
-    state = """
+    state =
+      """
       defmodule MyModule do
         @myattribute 1
         IO.puts @myattribute
@@ -40,7 +46,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   test "vars defined inside a function without params" do
-    state = """
+    state =
+      """
       defmodule MyModule do
         var_out1 = 1
         def func do
@@ -54,15 +61,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     vars = state |> get_line_vars(6)
+
     assert vars == [
-      %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 3},
-      %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 3},
-    ]
+             %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 3},
+             %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 3}
+           ]
   end
 
   test "vars defined inside a function with params" do
-
-    state = """
+    state =
+      """
       defmodule MyModule do
         var_out1 = 1
         def func(%{key1: par1, key2: [par2|[par3, _]]}, par4) do
@@ -76,19 +84,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     vars = state |> get_line_vars(6)
+
     assert vars == [
-      %VarInfo{name: :par1, positions: [{3, 20}], scope_id: 2},
-      %VarInfo{name: :par2, positions: [{3, 33}], scope_id: 2},
-      %VarInfo{name: :par3, positions: [{3, 39}], scope_id: 2},
-      %VarInfo{name: :par4, positions: [{3, 51}], scope_id: 2},
-      %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 3},
-      %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 3},
-    ]
+             %VarInfo{name: :par1, positions: [{3, 20}], scope_id: 2},
+             %VarInfo{name: :par2, positions: [{3, 33}], scope_id: 2},
+             %VarInfo{name: :par3, positions: [{3, 39}], scope_id: 2},
+             %VarInfo{name: :par4, positions: [{3, 51}], scope_id: 2},
+             %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 3},
+             %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 3}
+           ]
   end
 
   test "rebinding vars" do
-
-    state = """
+    state =
+      """
       defmodule MyModule do
         var1 = 1
         def func(%{var: var1, key: [_|[_, var1]]}) do
@@ -102,11 +111,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     vars = state |> get_line_vars(6)
-    assert vars == [%VarInfo{name: :var1, positions: [{3, 19}, {3, 37}, {4, 5}, {5, 5}], scope_id: 3}]
+
+    assert vars == [
+             %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}, {4, 5}, {5, 5}], scope_id: 3}
+           ]
   end
 
   test "vars defined inside a module" do
-
     state =
       """
       defmodule MyModule do
@@ -121,14 +132,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     vars = state |> get_line_vars(7)
+
     assert vars == [
-      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-      %VarInfo{name: :var_out2, positions: [{6, 3}], scope_id: 2},
-    ]
+             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+             %VarInfo{name: :var_out2, positions: [{6, 3}], scope_id: 2}
+           ]
   end
 
   test "vars defined in a `for` comprehension" do
-
     state =
       """
       defmodule MyModule do
@@ -145,21 +156,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 3) == [
-      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-    ]
+             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+           ]
+
     assert get_line_vars(state, 6) == [
-      %VarInfo{name: :var_in, positions: [{5, 5}], scope_id: 4},
-      %VarInfo{name: :var_on, positions: [{4, 7}, {4, 24}], scope_id: 3},
-      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-    ]
+             %VarInfo{name: :var_in, positions: [{5, 5}], scope_id: 4},
+             %VarInfo{name: :var_on, positions: [{4, 7}, {4, 24}], scope_id: 3},
+             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+           ]
+
     assert get_line_vars(state, 9) == [
-      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-      %VarInfo{name: :var_out2, positions: [{8, 3}], scope_id: 2},
-    ]
+             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+             %VarInfo{name: :var_out2, positions: [{8, 3}], scope_id: 2}
+           ]
   end
 
   test "vars defined in a `if/else` statement" do
-
     state =
       """
       defmodule MyModule do
@@ -178,15 +190,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 5) == [
-      %VarInfo{name: :var_in_if, positions: [{4, 5}], scope_id: 3},
-      %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
-      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-    ]
+             %VarInfo{name: :var_in_if, positions: [{4, 5}], scope_id: 3},
+             %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
+             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+           ]
+
     assert get_line_vars(state, 8) == [
-      %VarInfo{name: :var_in_else, positions: [{7, 5}], scope_id: 4},
-      %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
-      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-    ]
+             %VarInfo{name: :var_in_else, positions: [{7, 5}], scope_id: 4},
+             %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
+             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+           ]
+
     # This assert fails:
     # assert get_line_vars(state, 11) == [
     #   %VarInfo{name: :var_on, positions: [{3, 6}]},
@@ -197,7 +211,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   test "vars defined inside a `fn`" do
-
     state =
       """
       defmodule MyModule do
@@ -213,18 +226,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 5) == [
-      %VarInfo{name: :var_in, positions: [{4, 5}], scope_id: 4},
-      %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 4},
-      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-    ]
+             %VarInfo{name: :var_in, positions: [{4, 5}], scope_id: 4},
+             %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 4},
+             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+           ]
+
     assert get_line_vars(state, 8) == [
-      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-      %VarInfo{name: :var_out2, positions: [{7, 3}], scope_id: 2},
-    ]
+             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+             %VarInfo{name: :var_out2, positions: [{7, 3}], scope_id: 2}
+           ]
   end
 
   test "vars defined inside a `case`" do
-
     state =
       """
       defmodule MyModule do
@@ -244,15 +257,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 6) == [
-      %VarInfo{name: :var_in1, positions: [{5, 7}], scope_id: 4},
-      %VarInfo{name: :var_on1, positions: [{4, 6}], scope_id: 4},
-      %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 8}], scope_id: 2},
-    ]
+             %VarInfo{name: :var_in1, positions: [{5, 7}], scope_id: 4},
+             %VarInfo{name: :var_on1, positions: [{4, 6}], scope_id: 4},
+             %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 8}], scope_id: 2}
+           ]
+
     assert get_line_vars(state, 9) == [
-      %VarInfo{name: :var_in2, positions: [{8, 7}], scope_id: 5},
-      %VarInfo{name: :var_on2, positions: [{7, 6}], scope_id: 5},
-      %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 8}], scope_id: 2},
-    ]
+             %VarInfo{name: :var_in2, positions: [{8, 7}], scope_id: 5},
+             %VarInfo{name: :var_on2, positions: [{7, 6}], scope_id: 5},
+             %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 8}], scope_id: 2}
+           ]
+
     # This assert fails
     # assert get_line_vars(state, 12) == [
     #   %VarInfo{name: :var_out1, positions: [{2, 3}]},
@@ -263,7 +278,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   test "vars defined inside a `cond`" do
-
     state =
       """
       defmodule MyModule do
@@ -280,9 +294,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 6) == [
-      %VarInfo{name: :var_in, positions: [{5, 7}], scope_id: 4},
-      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-    ]
+             %VarInfo{name: :var_in, positions: [{5, 7}], scope_id: 4},
+             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+           ]
+
     # This assert fails:
     # assert get_line_vars(state, 9) == [
     #   %VarInfo{name: :var_out1, positions: [{2, 3}]},
@@ -292,7 +307,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   test "functions of arity 0 should not be in the vars list" do
-
     state =
       """
       defmodule MyModule do
@@ -304,13 +318,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_vars(state, 3) == [
-      %VarInfo{name: :mynode, positions: [{3, 3}], scope_id: 2},
-      %VarInfo{name: :myself, positions: [{2, 3}], scope_id: 2},
-    ]
+             %VarInfo{name: :mynode, positions: [{3, 3}], scope_id: 2},
+             %VarInfo{name: :myself, positions: [{2, 3}], scope_id: 2}
+           ]
   end
 
   test "inherited vars" do
-
     state =
       """
       top_level_var = 1
@@ -333,37 +346,42 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_vars(state, 2)  == [
-      %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0},
-    ]
-    assert get_line_vars(state, 5)  == [
-      %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
-      %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0},
-    ]
-    assert get_line_vars(state, 8)  == [
-      %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: 4},
-      %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
-      %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0},
-    ]
+    assert get_line_vars(state, 2) == [
+             %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+           ]
+
+    assert get_line_vars(state, 5) == [
+             %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
+             %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+           ]
+
+    assert get_line_vars(state, 8) == [
+             %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: 4},
+             %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
+             %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+           ]
+
     assert get_line_vars(state, 11) == [
-      %VarInfo{name: :func_var, positions: [{10, 7}], scope_id: 5},
-    ]
+             %VarInfo{name: :func_var, positions: [{10, 7}], scope_id: 5}
+           ]
+
     assert get_line_vars(state, 13) == [
-      %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: 4},
-      %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
-      %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0},
-    ]
+             %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: 4},
+             %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
+             %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+           ]
+
     assert get_line_vars(state, 15) == [
-      %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
-      %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0},
-    ]
+             %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
+             %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+           ]
+
     assert get_line_vars(state, 17) == [
-      %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0},
-    ]
+             %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+           ]
   end
 
   test "aliases" do
-
     state =
       """
       defmodule OuterModule do
@@ -389,17 +407,50 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 3)  == [{MyList, List}]
-    assert get_line_aliases(state, 6)  == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 9)  == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 12) == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
-    assert get_line_aliases(state, 14) == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 16) == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 19) == [{MyCode, Code}, {InnerModule, OuterModule.InnerModule}, {MyList, List}]
+    assert get_line_aliases(state, 3) == [{MyList, List}]
+
+    assert get_line_aliases(state, 6) == [
+             {InnerModule, OuterModule.InnerModule},
+             {MyList, List},
+             {MyEnum, Enum}
+           ]
+
+    assert get_line_aliases(state, 9) == [
+             {InnerModule, OuterModule.InnerModule},
+             {MyList, List},
+             {MyEnum, Enum},
+             {MyString, String}
+           ]
+
+    assert get_line_aliases(state, 12) == [
+             {InnerModule, OuterModule.InnerModule},
+             {MyList, List},
+             {MyEnum, Enum},
+             {MyString, String},
+             {MyMacro, Macro}
+           ]
+
+    assert get_line_aliases(state, 14) == [
+             {InnerModule, OuterModule.InnerModule},
+             {MyList, List},
+             {MyEnum, Enum},
+             {MyString, String}
+           ]
+
+    assert get_line_aliases(state, 16) == [
+             {InnerModule, OuterModule.InnerModule},
+             {MyList, List},
+             {MyEnum, Enum}
+           ]
+
+    assert get_line_aliases(state, 19) == [
+             {MyCode, Code},
+             {InnerModule, OuterModule.InnerModule},
+             {MyList, List}
+           ]
   end
 
   test "aliases with `fn`" do
-
     state =
       """
       defmodule MyModule do
@@ -420,7 +471,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   test "aliases defined with v1.2 notation" do
-
     state =
       """
       defmodule MyModule do
@@ -434,7 +484,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   test "aliases defined with v1.2 notation (multiline)" do
-
     state =
       """
       defmodule A do
@@ -449,7 +498,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   test "aliases without options" do
-
     state =
       """
       defmodule MyModule do
@@ -463,7 +511,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   test "imports defined with v1.2 notation" do
-
     state =
       """
       defmodule MyModule do
@@ -477,7 +524,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   test "imports" do
-
     state =
       """
       defmodule OuterModule do
@@ -503,17 +549,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 3)   == [List]
-    assert get_line_imports(state, 6)   == [List, Enum]
-    assert get_line_imports(state, 9)   == [List, Enum, String]
-    assert get_line_imports(state, 12)  == [List, Enum, String, Macro]
-    assert get_line_imports(state, 14)  == [List, Enum, String]
-    assert get_line_imports(state, 16)  == [List, Enum]
-    assert get_line_imports(state, 19)  == [Code, List]
+    assert get_line_imports(state, 3) == [List]
+    assert get_line_imports(state, 6) == [List, Enum]
+    assert get_line_imports(state, 9) == [List, Enum, String]
+    assert get_line_imports(state, 12) == [List, Enum, String, Macro]
+    assert get_line_imports(state, 14) == [List, Enum, String]
+    assert get_line_imports(state, 16) == [List, Enum]
+    assert get_line_imports(state, 19) == [Code, List]
   end
 
   test "requires" do
-
     state =
       """
       defmodule MyModule do
@@ -523,11 +568,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 3)  == [Mod]
+    assert get_line_requires(state, 3) == [Mod]
   end
 
   test "requires with 1.2 notation" do
-
     state =
       """
       defmodule MyModule do
@@ -537,11 +581,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 3)  == [Mod.Mod2, Mod.Mo1]
+    assert get_line_requires(state, 3) == [Mod.Mod2, Mod.Mo1]
   end
 
   test "requires with :as option" do
-
     state =
       """
       defmodule MyModule do
@@ -551,12 +594,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 3)  == [Integer]
-    assert get_line_aliases(state, 3)  == [{I, Integer}]
+    assert get_line_requires(state, 3) == [Integer]
+    assert get_line_aliases(state, 3) == [{I, Integer}]
   end
 
   test "current module" do
-
     state =
       """
       IO.puts ""
@@ -574,14 +616,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_module(state, 1)  == Elixir
-    assert get_line_module(state, 3)  == OuterModule
-    assert get_line_module(state, 7)  == OuterModule.InnerModule
+    assert get_line_module(state, 1) == Elixir
+    assert get_line_module(state, 3) == OuterModule
+    assert get_line_module(state, 7) == OuterModule.InnerModule
     assert get_line_module(state, 11) == OuterModule
   end
 
   test "behaviours" do
-
     state =
       """
       IO.puts ""
@@ -605,16 +646,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_behaviours(state, 1)  == []
-    assert get_line_behaviours(state, 5)  == [Application, SomeModule.SomeBehaviour]
-    assert get_line_behaviours(state, 8)  == [GenServer]
-    assert get_line_behaviours(state, 12)  == [SomeOtherBehaviour]
-    assert get_line_behaviours(state, 15)  == []
-    assert get_line_behaviours(state, 17)  == [Application, SomeModule.SomeBehaviour]
+    assert get_line_behaviours(state, 1) == []
+    assert get_line_behaviours(state, 5) == [Application, SomeModule.SomeBehaviour]
+    assert get_line_behaviours(state, 8) == [GenServer]
+    assert get_line_behaviours(state, 12) == [SomeOtherBehaviour]
+    assert get_line_behaviours(state, 15) == []
+    assert get_line_behaviours(state, 17) == [Application, SomeModule.SomeBehaviour]
   end
 
   test "behaviour from erlang module" do
-
     state =
       """
       defmodule OuterModule do
@@ -624,11 +664,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_behaviours(state, 3)  == [:gen_server]
+    assert get_line_behaviours(state, 3) == [:gen_server]
   end
 
   test "current scope" do
-
     state =
       """
       defmodule MyModule do
@@ -666,14 +705,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     string
     |> Code.string_to_quoted(columns: true)
     |> (fn {:ok, ast} -> ast end).()
-    |> MetadataBuilder.build
+    |> MetadataBuilder.build()
   end
 
   defp get_line_vars(state, line) do
     case state.lines_to_env[line] do
       nil -> []
       env -> env.vars
-    end |> Enum.sort
+    end
+    |> Enum.sort()
   end
 
   defp get_line_aliases(state, line) do
@@ -701,14 +741,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     case state.lines_to_env[line] do
       nil -> []
       env -> env.attributes
-    end |> Enum.sort
+    end
+    |> Enum.sort()
   end
 
   defp get_line_behaviours(state, line) do
     case state.lines_to_env[line] do
       nil -> []
       env -> env.behaviours
-    end |> Enum.sort
+    end
+    |> Enum.sort()
   end
 
   defp get_line_module(state, line) do
@@ -717,15 +759,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   defp get_subject_definition_line(module, func, arity) do
     file = module.module_info(:compile)[:source]
+
     acc =
       File.read!(file)
       |> Code.string_to_quoted(columns: true)
-      |> MetadataBuilder.build
+      |> MetadataBuilder.build()
 
     %{positions: positions} = Map.get(acc.mods_funs_to_positions, {module, func, arity})
     {line_number, _col} = List.last(positions)
 
-    File.read!(file) |> String.split("\n") |> Enum.at(line_number-1)
+    File.read!(file) |> String.split("\n") |> Enum.at(line_number - 1)
   end
-
 end

@@ -21,3 +21,4 @@ script:
   - ${EX_BIN}/elixir ${EX_BIN}/mix deps.get
   - MIX_ENV=test ${EX_BIN}/elixir ${EX_BIN}/mix deps.compile
   - ${EX_BIN}/elixir ${EX_BIN}/mix test
+  - ${EX_BIN}/mix format --check-formatted

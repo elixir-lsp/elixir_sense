@@ -1,5 +1,4 @@
 defmodule Alchemist.Helpers.ModuleTest do
-
   use ExUnit.Case
 
   alias Alchemist.Helpers.ModuleInfo

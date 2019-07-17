@@ -11,15 +11,16 @@ defmodule ElixirSense.Core.ParserTest do
 
     end
     """
+
     assert %Metadata{
-      error: nil,
-      mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 11}]}},
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      },
-      source: "defmodule MyModule" <> _
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 11}]}},
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             },
+             source: "defmodule MyModule" <> _
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with syntax error" do
@@ -29,13 +30,14 @@ defmodule ElixirSense.Core.ParserTest do
       Enum +
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with syntax error (missing param)" do
@@ -45,13 +47,14 @@ defmodule ElixirSense.Core.ParserTest do
       IO.puts(:stderr, )
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing terminator \")\"" do
@@ -61,13 +64,14 @@ defmodule ElixirSense.Core.ParserTest do
       func(
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing terminator \"]\"" do
@@ -77,13 +81,14 @@ defmodule ElixirSense.Core.ParserTest do
       list = [
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing terminator \"}\"" do
@@ -93,13 +98,14 @@ defmodule ElixirSense.Core.ParserTest do
       tuple = {
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing terminator \"end\"" do
@@ -107,13 +113,14 @@ defmodule ElixirSense.Core.ParserTest do
     defmodule MyModule do
 
     """
+
     assert parse_string(source, true, true, 2) ==
-      %ElixirSense.Core.Metadata{
-        error: {3,"missing terminator: end (for \"do\" starting at line 1)", ""},
-        lines_to_env: %{},
-        mods_funs_to_positions: %{},
-        source: "defmodule MyModule do\n\n"
-      }
+             %ElixirSense.Core.Metadata{
+               error: {3, "missing terminator: end (for \"do\" starting at line 1)", ""},
+               lines_to_env: %{},
+               mods_funs_to_positions: %{},
+               source: "defmodule MyModule do\n\n"
+             }
   end
 
   test "parse_string ignores non existing modules in `use`" do
@@ -124,16 +131,15 @@ defmodule ElixirSense.Core.ParserTest do
 
     end
     """
+
     assert %Metadata{
-      error: nil,
-      mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 11}]}},
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      },
-      source: "defmodule MyModule" <> _
-    } = parse_string(source, true, true, 4)
-
+             error: nil,
+             mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 11}]}},
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             },
+             source: "defmodule MyModule" <> _
+           } = parse_string(source, true, true, 4)
   end
-
 end

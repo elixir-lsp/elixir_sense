@@ -9,6 +9,7 @@ defmodule ElixirSense.Core.Source do
   def prefix(code, line, col) do
     line = code |> String.split("\n") |> Enum.at(line - 1)
     line_str = line |> String.slice(0, col - 1)
+
     case Regex.run(Regex.recompile!(~r/[\w0-9\._!\?\:@]+$/), line_str) do
       nil -> ""
       [prefix] -> prefix
@@ -25,69 +26,99 @@ defmodule ElixirSense.Core.Source do
     case walk_text(code, &find_subject/5, %{line: line, col: col, pos_found: false, candidate: []}) do
       %{candidate: []} ->
         nil
+
       %{candidate: candidate} ->
-        candidate |> Enum.reverse |> Enum.join
+        candidate |> Enum.reverse() |> Enum.join()
     end
   end
 
   def which_struct(text_before) do
     code = text_before |> String.reverse()
+
     case walk_text(code, &find_struct/5, %{buffer: [], count_open: 0, result: nil}) do
       %{result: nil} ->
         nil
+
       %{result: result} ->
         result
-        |> Enum.join
+        |> Enum.join()
         |> Kernel.<>("_: _}")
         |> Code.string_to_quoted()
         |> extract_struct_module()
     end
   end
 
-  defp extract_struct_module({:ok, {:%, _, [{:__aliases__, _, module_list}, {:%{},_, fields}]}}) do
+  defp extract_struct_module({:ok, {:%, _, [{:__aliases__, _, module_list}, {:%{}, _, fields}]}}) do
     fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
     {Module.concat(module_list), fields_names}
   end
+
   defp extract_struct_module(_) do
     nil
   end
 
   defp find_struct("%" = grapheme, _rest, _line, _col, %{buffer: buffer, count_open: 1} = acc) do
-    {"", %{acc | result: [grapheme|buffer]}}
+    {"", %{acc | result: [grapheme | buffer]}}
   end
-  defp find_struct("{" = grapheme, rest, _line, _col, %{buffer: buffer, count_open: count_open} = acc) do
-    {rest, %{acc | buffer: [grapheme|buffer], count_open: count_open + 1}}
+
+  defp find_struct(
+         "{" = grapheme,
+         rest,
+         _line,
+         _col,
+         %{buffer: buffer, count_open: count_open} = acc
+       ) do
+    {rest, %{acc | buffer: [grapheme | buffer], count_open: count_open + 1}}
   end
-  defp find_struct("}" = grapheme, rest, _line, _col, %{buffer: buffer, count_open: count_open} = acc) do
-    {rest, %{acc | buffer: [grapheme|buffer], count_open: count_open - 1}}
+
+  defp find_struct(
+         "}" = grapheme,
+         rest,
+         _line,
+         _col,
+         %{buffer: buffer, count_open: count_open} = acc
+       ) do
+    {rest, %{acc | buffer: [grapheme | buffer], count_open: count_open - 1}}
   end
+
   defp find_struct(grapheme, rest, _line, _col, %{buffer: buffer} = acc) do
-    {rest, %{acc | buffer: [grapheme|buffer]}}
+    {rest, %{acc | buffer: [grapheme | buffer]}}
   end
 
   defp find_subject(grapheme, rest, line, col, %{pos_found: false, line: line, col: col} = acc) do
     find_subject(grapheme, rest, line, col, %{acc | pos_found: true})
   end
+
   defp find_subject("." = grapheme, rest, _line, _col, %{pos_found: false} = acc) do
-    {rest, %{acc | candidate: [grapheme|acc.candidate]}}
+    {rest, %{acc | candidate: [grapheme | acc.candidate]}}
   end
+
   defp find_subject(".", _rest, _line, _col, %{pos_found: true} = acc) do
     {"", acc}
   end
-  defp find_subject(grapheme, rest, _line, _col, %{candidate: [_|_]} = acc) when grapheme in ["!", "?"] do
-    {rest, %{acc | candidate: [grapheme|acc.candidate]}}
+
+  defp find_subject(grapheme, rest, _line, _col, %{candidate: [_ | _]} = acc)
+       when grapheme in ["!", "?"] do
+    {rest, %{acc | candidate: [grapheme | acc.candidate]}}
   end
-  defp find_subject(grapheme, rest, _line, _col, %{candidate: ["."|_]} = acc) when grapheme in @stop_graphemes do
+
+  defp find_subject(grapheme, rest, _line, _col, %{candidate: ["." | _]} = acc)
+       when grapheme in @stop_graphemes do
     {rest, acc}
   end
-  defp find_subject(grapheme, rest, _line, _col, %{pos_found: false} = acc) when grapheme in @stop_graphemes do
+
+  defp find_subject(grapheme, rest, _line, _col, %{pos_found: false} = acc)
+       when grapheme in @stop_graphemes do
     {rest, %{acc | candidate: []}}
   end
-  defp find_subject(grapheme, _rest, _line, _col, %{pos_found: true} = acc) when grapheme in @stop_graphemes do
+
+  defp find_subject(grapheme, _rest, _line, _col, %{pos_found: true} = acc)
+       when grapheme in @stop_graphemes do
     {"", acc}
   end
+
   defp find_subject(grapheme, rest, _line, _col, acc) do
-    {rest, %{acc | candidate: [grapheme|acc.candidate]}}
+    {rest, %{acc | candidate: [grapheme | acc.candidate]}}
   end
 
   defp walk_text(text, func, acc) do
@@ -98,8 +129,10 @@ defmodule ElixirSense.Core.Source do
     case String.next_grapheme(text) do
       nil ->
         acc
+
       {grapheme, rest} ->
         {new_rest, new_acc} = func.(grapheme, rest, line, col, acc)
+
         {new_line, new_col} =
           if grapheme in ["\n", "\r\n"] do
             {line + 1, 1}
@@ -124,7 +157,9 @@ defmodule ElixirSense.Core.Source do
           else
             {pos + 1, current_line, current_col + 1}
           end
-          find_position(rest, line, col, {new_pos, new_line, new_col})
+
+        find_position(rest, line, col, {new_pos, new_line, new_col})
+
       nil ->
         pos
     end
@@ -147,11 +182,17 @@ defmodule ElixirSense.Core.Source do
 
   defp normalize_candidate(candidate) do
     case candidate do
-      []          -> :none
-      [func]      -> {nil, func}
-      [mod, func] -> {mod, func}
-      list        ->
-        [func|mods] = Enum.reverse(list)
+      [] ->
+        :none
+
+      [func] ->
+        {nil, func}
+
+      [mod, func] ->
+        {mod, func}
+
+      list ->
+        [func | mods] = Enum.reverse(list)
         {Module.concat(Enum.reverse(mods)), func}
     end
   end
@@ -159,52 +200,76 @@ defmodule ElixirSense.Core.Source do
   defp normalize_npar(npar, true), do: npar + 1
   defp normalize_npar(npar, _pipe_before), do: npar
 
-  defp scan([{:",", _}|_], %{count: 1} = state), do: state
-  defp scan([{:",", _}|tokens], %{count: 0, count2: 0} = state) do
+  defp scan([{:",", _} | _], %{count: 1} = state), do: state
+
+  defp scan([{:",", _} | tokens], %{count: 0, count2: 0} = state) do
     scan(tokens, %{state | npar: state.npar + 1, candidate: []})
   end
-  defp scan([{:"(", _}|_], %{count: 1} = state), do: state
-  defp scan([{:"(", _}|tokens], state) do
+
+  defp scan([{:"(", _} | _], %{count: 1} = state), do: state
+
+  defp scan([{:"(", _} | tokens], state) do
     scan(tokens, %{state | count: state.count + 1, candidate: []})
   end
-  defp scan([{:")", _}|tokens], state) do
+
+  defp scan([{:")", _} | tokens], state) do
     scan(tokens, %{state | count: state.count - 1, candidate: []})
   end
-  defp scan([{token, _}|tokens], %{count2: 0} = state) when token in [:"[", :"{"] do
+
+  defp scan([{token, _} | tokens], %{count2: 0} = state) when token in [:"[", :"{"] do
     scan(tokens, %{state | npar: 0, count2: 0})
   end
-  defp scan([{token, _}|tokens], state) when token in [:"[", :"{"] do
+
+  defp scan([{token, _} | tokens], state) when token in [:"[", :"{"] do
     scan(tokens, %{state | count2: state.count2 + 1})
   end
-  defp scan([{token, _}|tokens], state) when token in [:"]", :"}"]do
+
+  defp scan([{token, _} | tokens], state) when token in [:"]", :"}"] do
     scan(tokens, %{state | count2: state.count2 - 1})
   end
-  defp scan([{:paren_identifier, pos, value}|tokens], %{count: 1} = state) do
-    scan(tokens, %{state | candidate: [value|state.candidate], pos: update_pos(pos, state.pos)})
+
+  defp scan([{:paren_identifier, pos, value} | tokens], %{count: 1} = state) do
+    scan(tokens, %{state | candidate: [value | state.candidate], pos: update_pos(pos, state.pos)})
   end
-  defp scan([{:aliases, pos, [value]}|tokens], %{count: 1} = state) do
+
+  defp scan([{:aliases, pos, [value]} | tokens], %{count: 1} = state) do
     updated_pos = update_pos(pos, state.pos)
-    scan(tokens, %{state | candidate: [Module.concat([value])|state.candidate], pos: updated_pos})
+
+    scan(tokens, %{
+      state
+      | candidate: [Module.concat([value]) | state.candidate],
+        pos: updated_pos
+    })
   end
-  defp scan([{:alias, pos, value}|tokens], %{count: 1} = state) do
+
+  defp scan([{:alias, pos, value} | tokens], %{count: 1} = state) do
     updated_pos = update_pos(pos, state.pos)
-    scan(tokens, %{state | candidate: [Module.concat([value])|state.candidate], pos: updated_pos})
+
+    scan(tokens, %{
+      state
+      | candidate: [Module.concat([value]) | state.candidate],
+        pos: updated_pos
+    })
   end
-  defp scan([{:atom, pos, value}|tokens], %{count: 1} = state) do
-    scan(tokens, %{state | candidate: [value|state.candidate], pos: update_pos(pos, state.pos)})
+
+  defp scan([{:atom, pos, value} | tokens], %{count: 1} = state) do
+    scan(tokens, %{state | candidate: [value | state.candidate], pos: update_pos(pos, state.pos)})
   end
-  defp scan([{:fn, _}|tokens], %{count: 1} = state) do
+
+  defp scan([{:fn, _} | tokens], %{count: 1} = state) do
     scan(tokens, %{state | npar: 0, count: 0})
   end
-  defp scan([{:., _}|tokens], state), do: scan(tokens, state)
-  defp scan([{:arrow_op, _, :|>}|_], %{count: 1} = state), do: pipe_before(state)
-  defp scan([_|_], %{count: 1} = state), do: state
-  defp scan([_token|tokens], state), do: scan(tokens, state)
+
+  defp scan([{:., _} | tokens], state), do: scan(tokens, state)
+  defp scan([{:arrow_op, _, :|>} | _], %{count: 1} = state), do: pipe_before(state)
+  defp scan([_ | _], %{count: 1} = state), do: state
+  defp scan([_token | tokens], state), do: scan(tokens, state)
   defp scan([], state), do: state
 
   defp update_pos({line, init_col, end_col}, nil) do
     {{line, init_col}, {line, end_col}}
   end
+
   defp update_pos({new_init_line, new_init_col, _}, {{_, _}, {end_line, end_col}}) do
     {{new_init_line, new_init_col}, {end_line, end_col}}
   end
@@ -212,5 +277,4 @@ defmodule ElixirSense.Core.Source do
   defp pipe_before(state) do
     %{state | pipe_before: true}
   end
-
 end
