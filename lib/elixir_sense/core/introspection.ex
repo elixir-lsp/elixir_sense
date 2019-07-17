@@ -233,7 +233,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp format_type({:opaque, type}) do
-    {:"::", _, [ast, _]} = type_to_quoted(type)
+    {:::, _, [ast, _]} = type_to_quoted(type)
     "@opaque #{format_spec_ast(ast)}"
   end
 
@@ -311,11 +311,11 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  defp extract_spec_ast_parts({:when, _, [{:"::", _, [name_part, return_part]}, when_part]}) do
+  defp extract_spec_ast_parts({:when, _, [{:::, _, [name_part, return_part]}, when_part]}) do
     %{name: name_part, returns: extract_return_part(return_part, []), when_part: when_part}
   end
 
-  defp extract_spec_ast_parts({:"::", _, [name_part, return_part]}) do
+  defp extract_spec_ast_parts({:::, _, [name_part, return_part]}) do
     %{name: name_part, returns: extract_return_part(return_part, [])}
   end
 
@@ -374,16 +374,16 @@ defmodule ElixirSense.Core.Introspection do
     {callbacks || [], docs || []}
   end
 
-  defp drop_macro_env({name, meta, [{:"::", _, [{:env, _, _}, _ | _]} | args]}),
+  defp drop_macro_env({name, meta, [{:::, _, [{:env, _, _}, _ | _]} | args]}),
     do: {name, meta, args}
 
   defp drop_macro_env(other), do: other
 
-  defp get_typespec_signature({:when, _, [{:"::", _, [{name, meta, args}, _]}, _]}, arity) do
+  defp get_typespec_signature({:when, _, [{:::, _, [{name, meta, args}, _]}, _]}, arity) do
     Macro.to_string({name, meta, strip_types(args, arity)})
   end
 
-  defp get_typespec_signature({:"::", _, [{name, meta, args}, _]}, arity) do
+  defp get_typespec_signature({:::, _, [{name, meta, args}, _]}, arity) do
     Macro.to_string({name, meta, strip_types(args, arity)})
   end
 
@@ -396,7 +396,7 @@ defmodule ElixirSense.Core.Introspection do
     |> Enum.take(-arity)
     |> Enum.with_index()
     |> Enum.map(fn
-      {{:"::", _, [left, _]}, i} -> to_var(left, i)
+      {{:::, _, [left, _]}, i} -> to_var(left, i)
       {{:|, _, _}, i} -> to_var({}, i)
       {left, i} -> to_var(left, i)
     end)
@@ -406,7 +406,7 @@ defmodule ElixirSense.Core.Introspection do
     returns |> Enum.map(&strip_return_types/1)
   end
 
-  defp strip_return_types({:"::", _, [left, _]}) do
+  defp strip_return_types({:::, _, [left, _]}) do
     left
   end
 
