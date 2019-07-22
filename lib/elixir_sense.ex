@@ -128,7 +128,7 @@ defmodule ElixirSense do
       iex> ElixirSense.suggestions(code, 3, 12)
       [%{type: :hint, value: "MyList.first"},
        %{type: "function", name: "first", arity: 1, origin: "List",
-         spec: "@spec first([elem]) :: nil | elem when elem: var",
+         spec: "@spec first([]) :: nil\n    @spec first([elem, ...]) :: elem when elem: var",
          summary: "Returns the first element in `list` or `nil` if `list` is empty.",
          args: "list"}]
   """

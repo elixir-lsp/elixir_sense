@@ -574,9 +574,12 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp spec_to_string({kind, {{name, _arity}, specs}}) do
-    spec = hd(specs)
-    binary = Macro.to_string spec_to_quoted(name, spec)
-    "@#{kind} #{binary}" |> String.replace("()", "")
+    specs
+    |> Enum.map(fn spec ->
+      binary = Macro.to_string(spec_to_quoted(name, spec))
+      "@#{kind} #{binary}" |> String.replace("()", "")
+    end)
+    |> Enum.join("\n")
   end
 
   defp beam_specs(module) do
