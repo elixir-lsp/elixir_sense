@@ -173,6 +173,7 @@ defmodule ElixirSense.Core.Introspection do
             get_callback_with_doc(fun, kind, doc, {fun, arity}, callbacks)
         end
     end
+    |> Enum.sort_by(& {&1.name, &1.arity})
   end
 
   def get_types_with_docs(module) when is_atom(module) do

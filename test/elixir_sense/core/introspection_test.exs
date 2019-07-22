@@ -21,6 +21,13 @@ defmodule ElixirSense.Core.IntrospectionTest do
   test "get_callbacks_with_docs for Elixir behaviours with no docs defined" do
     assert get_callbacks_with_docs(Exception) == [
       %{
+        arity: 2,
+        name: :blame,
+        callback: "@callback blame(t, stacktrace) :: {t, stacktrace}\n",
+        doc: "Called from `Exception.blame/3` to augment the exception struct.\n\nCan be used to collect additional information about the exception\nor do some additional expensive computation.\n",
+        signature: "blame(t, stacktrace)"
+      },
+      %{
         arity: 1,
         name: :exception,
         doc: nil,
@@ -33,13 +40,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
         callback: "@callback message(t) :: String.t\n",
         doc: nil,
         signature: "message(t)"
-      },
-      %{
-        arity: 2,
-        name: :blame,
-        callback: "@callback blame(t, stacktrace) :: {t, stacktrace}\n",
-        doc: "Called from `Exception.blame/3` to augment the exception struct.\n\nCan be used to collect additional information about the exception\nor do some additional expensive computation.\n",
-        signature: "blame(t, stacktrace)"
       },
     ]
   end
