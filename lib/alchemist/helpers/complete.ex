@@ -457,8 +457,12 @@ defmodule Alchemist.Helpers.Complete do
     to_entries(fun)
   end
 
+  defp to_hint(%{kind: :module, name: name}, hint) when name == hint do
+    format_hint(name, name) <> "."
+  end
+
   defp to_hint(%{kind: :module, name: name}, hint) do
-    format_hint(name, hint) <> "."
+    format_hint(name, hint)
   end
 
   defp to_hint(%{kind: :function, name: name}, hint) do

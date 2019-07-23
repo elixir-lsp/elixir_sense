@@ -6,7 +6,7 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "erlang module completion" do
-    assert expand(':zl') == {:yes, 'ib.', [%{name: "zlib", subtype: nil, summary: "", type: :module}]}
+    assert expand(':zl') == {:yes, 'ib', [%{name: "zlib", subtype: nil, summary: "", type: :module}]}
   end
 
   test "erlang module no completion" do
@@ -33,7 +33,7 @@ defmodule Alchemist.Helpers.CompleteTest do
 
   test "elixir completion" do
     assert expand('En') == {:yes, 'um', []}
-    assert {:yes, 'ble.', [%{name: "Enumerable", subtype: :protocol, type: :module}]} = expand('Enumera')
+    assert {:yes, 'ble', [%{name: "Enumerable", subtype: :protocol, type: :module}]} = expand('Enumera')
   end
 
   test "elixir completion with self" do
@@ -51,7 +51,7 @@ defmodule Alchemist.Helpers.CompleteTest do
       %{name: "MapSet"},
       %{name: "MatchError"},
     ]} = expand('Ma')
-    assert {:yes, 't.', [%{name: "Dict"}]} = expand('Dic')
+    assert {:yes, 't', [%{name: "Dict"}]} = expand('Dic')
     assert {:yes, [], [
       %{name: "ExUnit"},
       %{name: "Exception"}]} = expand('Ex')
@@ -106,11 +106,11 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "elixir root submodule completion" do
-    assert {:yes, 'ss.', [%{name: "Access"}]} = expand('Elixir.Acce')
+    assert {:yes, 'ss', [%{name: "Access"}]} = expand('Elixir.Acce')
   end
 
   test "elixir submodule completion" do
-    assert {:yes, 'rs.', [%{name: "Chars", subtype: :protocol}]} = expand('String.Cha')
+    assert {:yes, 'rs', [%{name: "Chars", subtype: :protocol}]} = expand('String.Cha')
   end
 
   test "elixir submodule no completion" do
@@ -158,9 +158,9 @@ defmodule Alchemist.Helpers.CompleteTest do
   test "completion inside expression" do
     assert expand('1 En') == {:yes, 'um', []}
     assert expand('Test(En') == {:yes, 'um', []}
-    assert {:yes, 'ib.', [_]} = expand('Test :zl')
-    assert {:yes, 'ib.', [_]} = expand('[:zl')
-    assert {:yes, 'ib.', [_]} = expand('{:zl')
+    assert {:yes, 'ib', [_]} = expand('Test :zl')
+    assert {:yes, 'ib', [_]} = expand('[:zl')
+    assert {:yes, 'ib', [_]} = expand('{:zl')
   end
 
   test "ampersand completion" do
@@ -183,7 +183,7 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "elixir completion sublevel" do
-    assert {:yes, 'LevelA.', [%{name: "LevelA"}]} = expand('Alchemist.Helpers.CompleteTest.SublevelTest.')
+    assert {:yes, 'LevelA', [%{name: "LevelA"}]} = expand('Alchemist.Helpers.CompleteTest.SublevelTest.')
   end
 
   defmodule MyServer do
@@ -195,7 +195,7 @@ defmodule Alchemist.Helpers.CompleteTest do
   test "complete aliases of elixir modules" do
     Application.put_env(:"alchemist.el", :aliases, [{MyList, List}])
 
-    assert {:yes, 'ist.', [%{name: "MyList"}]} = expand('MyL')
+    assert {:yes, 'ist', [%{name: "MyList"}]} = expand('MyL')
     assert {:yes, '.', [%{name: "MyList"}]} = expand('MyList')
     assert {:yes, [], [%{arity: 2, name: "to_integer"}, %{arity: 1, name: "to_integer"}]} = expand('MyList.to_integer')
   end
@@ -203,7 +203,7 @@ defmodule Alchemist.Helpers.CompleteTest do
   test "complete aliases of erlang modules" do
     Application.put_env(:"alchemist.el", :aliases, [{EList, :lists}])
 
-    assert {:yes, 'ist.', [%{name: "EList"}]} = expand('EL')
+    assert {:yes, 'ist', [%{name: "EList"}]} = expand('EL')
     assert {:yes, '.', [%{name: "EList"}]} = expand('EList')
     assert {:yes, [], [
       %{arity: 2, name: "map"},
@@ -216,7 +216,6 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
    test "completion for structs" do
-    # TODO IEx returns uct here
-    assert {:yes, 'uct.', [%{name: "MyStruct"}]} = expand('%Alchemist.Helpers.CompleteTest.MyStr')
+    assert {:yes, 'uct', [%{name: "MyStruct"}]} = expand('%Alchemist.Helpers.CompleteTest.MyStr')
   end
 end
