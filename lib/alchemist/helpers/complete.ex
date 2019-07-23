@@ -118,6 +118,8 @@ defmodule Alchemist.Helpers.Complete do
         expand_call(atom, "")
       {:ok, {:__aliases__, _, list}} ->
         expand_elixir_modules(list, "")
+      {:ok, {_, _, _} = ast_node} ->
+        expand_call(ast_node, "")
       _ ->
         no()
     end
@@ -135,8 +137,8 @@ defmodule Alchemist.Helpers.Complete do
         hint = Atom.to_string(List.last(list))
         list = Enum.take(list, length(list) - 1)
         expand_elixir_modules(list, hint)
-      {:ok, {{:., _, [mod, fun]}, _, []}} when is_atom(fun) ->
-        expand_call(mod, Atom.to_string(fun))
+      {:ok, {{:., _, [ast_node, fun]}, _, []}} when is_atom(fun) ->
+        expand_call(ast_node, Atom.to_string(fun))
       _ ->
         no()
     end
@@ -197,10 +199,21 @@ defmodule Alchemist.Helpers.Complete do
 
   # Elixir.fun
   defp expand_call({:__aliases__, _, list}, hint) do
-    list
-    |> expand_alias()
-    |> normalize_module()
-    |> expand_require(hint)
+    case expand_alias(list) do
+      {:ok, alias} -> expand_require(alias, hint)
+      :error -> no()
+    end
+  end
+
+  # variable.fun_or_key
+  defp expand_call({_, _, _} = _ast_node, _hint) do
+    # FIXME not supported
+    no()
+    # case value_from_binding(ast_node, server) do
+    #   {:ok, mod} when is_atom(mod) -> expand_call(mod, hint, server)
+    #   {:ok, map} when is_map(map) -> expand_map_field_access(map, hint)
+    #   _otherwise -> no()
+    # end
   end
 
   defp expand_call(_, _) do
@@ -233,38 +246,36 @@ defmodule Alchemist.Helpers.Complete do
   ## Elixir modules
 
   defp expand_elixir_modules([], hint) do
-    expand_elixir_modules(Elixir, hint, match_aliases(hint))
+    expand_elixir_modules_from_aliases(Elixir, hint, match_aliases(hint))
   end
 
   defp expand_elixir_modules(list, hint) do
-    list
-    |> expand_alias()
-    |> normalize_module()
-    |> expand_elixir_modules(hint, [])
+    case expand_alias(list) do
+      {:ok, alias} -> expand_elixir_modules_from_aliases(alias, hint, [])
+      :error -> no()
+    end
   end
 
-  defp expand_elixir_modules(mod, hint, aliases) do
+  defp expand_elixir_modules_from_aliases(mod, hint, aliases) do
     aliases
     |> Kernel.++(match_elixir_modules(mod, hint))
     |> Kernel.++(match_module_funs(mod, hint))
     |> format_expansion(hint)
   end
 
-  defp expand_alias([name | rest] = list) do
-    module = Module.concat(Elixir, name)
-    Enum.find_value env_aliases(), list, fn {alias, mod} ->
-      if alias === module do
-        case Atom.to_string(mod) do
-          "Elixir." <> mod ->
-            Module.concat [mod|rest]
-          _ ->
-            mod
-        end
-      end
+  defp expand_alias([name | rest]) when is_atom(name)
+  do
+    case Keyword.fetch(aliases_from_env(), Module.concat(Elixir, name)) do
+      {:ok, name} when rest == [] -> {:ok, name}
+      {:ok, name} -> {:ok, Module.concat([name | rest])}
+      :error -> {:ok, Module.concat([name | rest])}
     end
   end
+  defp expand_alias([_ | _]) do
+    :error
+  end
 
-  defp env_aliases do
+  defp aliases_from_env do
     :"alchemist.el"
     |> Application.get_env(:aliases)
     |> format_aliases
@@ -274,7 +285,7 @@ defmodule Alchemist.Helpers.Complete do
   defp format_aliases(list), do: list
 
   defp match_aliases(hint) do
-    for {alias, _mod} <- env_aliases(),
+    for {alias, _mod} <- aliases_from_env(),
     [name] = Module.split(alias),
     starts_with?(name, hint) do
       %{kind: :module, type: :alias, name: name, desc: ""}
@@ -299,14 +310,6 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   ## Helpers
-
-   defp normalize_module(mod) do
-    if is_list(mod) do
-      Module.concat(mod)
-    else
-      mod
-    end
-  end
 
   defp match_modules(hint, root) do
     root

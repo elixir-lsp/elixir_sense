@@ -103,6 +103,7 @@ defmodule Alchemist.Helpers.CompleteTest do
     assert expand('.') == {:no, '', []}
     assert expand('Xyz') == {:no, '', []}
     assert expand('x.Foo') == {:no, '', []}
+    assert expand('x.Foo.get_by') == {:no, '', []}
   end
 
   test "elixir root submodule completion" do
