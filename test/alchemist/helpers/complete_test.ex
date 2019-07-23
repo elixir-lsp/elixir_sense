@@ -67,6 +67,7 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     File.write!("Elixir.Sample.beam", bytecode)
     assert {:docs_v1, _, _, _, _, _, _} = Code.fetch_docs(Sample)
+    # IEx version asserts expansion on Sample._ but we also include :__info__ and there is more than 1 match
     assert {:yes, 'ar__', [%{name: "__bar__"}]} = expand('Sample.__b')
   after
     File.rm("Elixir.Sample.beam")
@@ -134,10 +135,10 @@ defmodule Alchemist.Helpers.CompleteTest do
   test "imports completion" do
     {:yes, '', list} = expand('')
     assert is_list(list)
-    # IEx.Helpers import
-    # assert list |> Enum.find(& &1.name == "h")
+
     assert list |> Enum.find(& &1.name == "unquote")
-    # IEx.Helpers import
+    # IEX version asserts IEx.Helpers are imported
+    # assert list |> Enum.find(& &1.name == "h")
     # assert list |> Enum.find(& &1.name == "pwd")
   end
 
@@ -164,7 +165,17 @@ defmodule Alchemist.Helpers.CompleteTest do
 
   test "ampersand completion" do
     assert expand('&Enu') == {:yes, 'm', []}
-    assert {:yes, [], [%{name: "all?"}, %{name: "any?"}, %{name: "at"}]} = expand('&Enum.a')
+    # TODO IEx version returns entry per arity here
+    # assert {:yes, [], [
+    #   %{name: "all?", arity: 1}, %{name: "all?", arity: 2},
+    #   %{name: "any?", arity: 1}, %{name: "any?", arity: 2},
+    #   %{name: "at", arity: 2}, %{name: "at", arity: 3},
+    #   ]} = expand('&Enum.a')
+    assert {:yes, [], [
+      %{name: "all?", arity: 2},
+      %{name: "any?", arity: 2},
+      %{name: "at", arity: 3},
+      ]} = expand('&Enum.a')
     assert {:yes, [], [%{name: "all?"}, %{name: "any?"}, %{name: "at"}]} = expand('f = &Enum.a')
   end
 

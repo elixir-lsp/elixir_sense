@@ -370,7 +370,7 @@ defmodule Alchemist.Helpers.Complete do
     if function_exported?(mod, :__info__, 1) do
       if docs = NormalizedCode.get_docs(mod, :docs) do
         specs = TypeInfo.get_module_specs(mod)
-        for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, not hidden_fun?({f, a}, docs) do
+        for {{f, a}, _line, func_kind, _sign, _doc} = func_doc <- docs, not hidden_fun?({f, a}, docs) do
           spec = Map.get(specs, {f, a})
           {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
         end
@@ -411,7 +411,7 @@ defmodule Alchemist.Helpers.Complete do
      do: true
 
   defp underscored_fun?({name, _}),
-     do: hd(Atom.to_char_list(name)) == ?_
+     do: hd(Atom.to_charlist(name)) == ?_
 
   defp ensure_loaded(Elixir), do: {:error, :nofile}
   defp ensure_loaded(mod), do: Code.ensure_compiled(mod)
