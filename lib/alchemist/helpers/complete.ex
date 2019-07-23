@@ -398,7 +398,7 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp get_module_funs(mod) do
-    if function_exported?(mod, :__info__, 1) do
+    if Code.ensure_loaded?(mod) and function_exported?(mod, :__info__, 1) do
       if docs = NormalizedCode.get_docs(mod, :docs) do
         specs = TypeInfo.get_module_specs(mod)
         for {{f, a}, _line, func_kind, _sign, _doc} = func_doc <- docs, not hidden_fun?({f, a}, docs) do
@@ -418,7 +418,8 @@ defmodule Alchemist.Helpers.Complete do
       end
     else
       # TODO should we reject underscored funs here?
-      for {f, a} <- mod.module_info(:exports) do
+      funs = mod.module_info(:exports) -- [module_info: 0, module_info: 1]
+      for {f, a} <- funs do
         case f |> Atom.to_string do
           "MACRO-" <> name -> {String.to_atom(name), a, :macro, nil, nil}
           _name            -> {f, a, :function, nil, nil}
