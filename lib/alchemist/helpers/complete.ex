@@ -186,7 +186,7 @@ defmodule Alchemist.Helpers.Complete do
     if prefix in [0, length] do
       yes("", Enum.flat_map(entries, &to_entries/1))
     else
-      yes(:binary.part(first.name, prefix, length - prefix), [])
+      yes(binary_part(first.name, prefix, length - prefix), [])
     end
   end
 
@@ -339,7 +339,8 @@ defmodule Alchemist.Helpers.Complete do
   defp match_modules(hint, root) do
     root
     |> get_modules()
-    |> :lists.usort()
+    |> Enum.sort()
+    |> Enum.dedup()
     |> Enum.drop_while(& not starts_with?(&1, hint))
     |> Enum.take_while(& starts_with?(&1, hint))
   end
@@ -499,7 +500,7 @@ defmodule Alchemist.Helpers.Complete do
 
   defp format_hint(name, hint) do
     hint_size = byte_size(hint)
-    :binary.part(name, hint_size, byte_size(name) - hint_size)
+    binary_part(name, hint_size, byte_size(name) - hint_size)
   end
 
 end
