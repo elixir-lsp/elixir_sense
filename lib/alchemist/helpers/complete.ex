@@ -301,7 +301,8 @@ defmodule Alchemist.Helpers.Complete do
     parts = String.split(mod, "."),
     depth <= length(parts),
     name = Enum.at(parts, depth - 1),
-    valid_alias_piece?("." <> name) do
+    valid_alias_piece?("." <> name),
+    uniq: true do
       mod_as_atom = mod |> String.to_atom
       desc = Introspection.get_module_docs_summary(mod_as_atom)
       subtype = Introspection.get_module_subtype(mod_as_atom)
