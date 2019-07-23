@@ -211,4 +211,12 @@ defmodule Alchemist.Helpers.CompleteTest do
       %{arity: 3, name: "mapfoldr"}]} = expand('EList.map')
   end
 
+  defmodule MyStruct do
+    defstruct my_val: "val"
+  end
+
+   test "completion for structs" do
+    # TODO IEx returns uct here
+    assert {:yes, 'uct.', [%{name: "MyStruct"}]} = expand('%Alchemist.Helpers.CompleteTest.MyStr')
+  end
 end
