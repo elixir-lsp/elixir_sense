@@ -41,7 +41,7 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "List.flatten"
       assert actual_subject == "List.flatten"
-      assert docs == """
+      assert docs =~ """
       > List.flatten(list)
 
       ### Specs
@@ -49,31 +49,6 @@ defmodule ElixirSense.DocsTest do
       `@spec flatten(deep_list) :: list when deep_list: [any | deep_list]`
 
       Flattens the given `list` of nested lists.
-
-      ## Examples
-
-          iex> List.flatten([1, [[2], 3]])
-          [1, 2, 3]
-
-
-
-      ____
-
-      > List.flatten(list, tail)
-
-      ### Specs
-
-      `@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var`
-
-      Flattens the given `list` of nested lists.
-      The list `tail` will be added at the end of
-      the flattened list.
-
-      ## Examples
-
-          iex> List.flatten([1, [[2], 3]], [4, 5])
-          [1, 2, 3, 4, 5]
-
       """
     end
 
@@ -93,7 +68,7 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "MyList.flatten"
       assert actual_subject == "List.flatten"
-      assert docs == """
+      assert docs =~ """
       > List.flatten(list)
 
       ### Specs
@@ -101,31 +76,6 @@ defmodule ElixirSense.DocsTest do
       `@spec flatten(deep_list) :: list when deep_list: [any | deep_list]`
 
       Flattens the given `list` of nested lists.
-
-      ## Examples
-
-          iex> List.flatten([1, [[2], 3]])
-          [1, 2, 3]
-
-
-
-      ____
-
-      > List.flatten(list, tail)
-
-      ### Specs
-
-      `@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var`
-
-      Flattens the given `list` of nested lists.
-      The list `tail` will be added at the end of
-      the flattened list.
-
-      ## Examples
-
-          iex> List.flatten([1, [[2], 3]], [4, 5])
-          [1, 2, 3, 4, 5]
-
       """
     end
 
@@ -147,24 +97,6 @@ defmodule ElixirSense.DocsTest do
       assert actual_subject == "Mix.Generator.create_file"
       assert docs =~ """
       > Mix.Generator.create_file(path, contents, opts \\\\\\\\ [])
-
-      ### Specs
-
-      `@spec create_file(Path.t, iodata, keyword) :: any`
-
-      Creates a file with the given contents.
-      If the file already exists, asks for user confirmation.
-
-      ## Options
-
-        * `:force` - forces installation without a shell prompt.
-
-      ## Examples
-
-          iex> Mix.Generator.create_file(".gitignore", "_build\\ndeps\\n\")
-          * creating .gitignore
-          :ok
-
       """
     end
 
@@ -226,21 +158,6 @@ defmodule ElixirSense.DocsTest do
       `
 
         Tuple describing the client of a call request.
-
-      `pid` is the PID of the caller and `tag` is a unique term used to identify the
-      call.
-
-
-
-      ____
-
-        `@type server ::
-        pid |
-        name |
-        {atom, node}
-      `
-
-        The server reference
       """
     end
 

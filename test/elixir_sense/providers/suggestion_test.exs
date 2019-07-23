@@ -59,7 +59,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
   test "return completion candidates for 'List.del'" do
     assert [
       %{type: :hint, value: "List.delete"},
-      %{args: "list,item", arity: 2, name: "delete", origin: "List", spec: "@spec delete(list, any) :: list", summary: "Deletes the given" <> _, type: "function"},
+      %{args: "list," <> _, arity: 2, name: "delete", origin: "List", spec: "@spec delete(" <> _, summary: "Deletes the given" <> _, type: "function"},
       %{args: "list,index", arity: 2, name: "delete_at", origin: "List", spec: "@spec delete_at(list, integer) :: list", summary: "Produces a new list by " <> _, type: "function"}
     ] = Suggestion.find("List.del", [], [], SomeModule, [], [], [], SomeModule, "")
   end
@@ -67,7 +67,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
   test "return completion candidates for module with alias" do
     assert [
       %{type: :hint, value: "MyList.delete"},
-      %{args: "list,item", arity: 2, name: "delete", origin: "List", spec: "@spec delete(list, any) :: list", summary: "Deletes the given " <> _, type: "function"},
+      %{args: "list," <> _, arity: 2, name: "delete", origin: "List", spec: "@spec delete(" <> _, summary: "Deletes the given " <> _, type: "function"},
       %{args: "list,index", arity: 2, name: "delete_at", origin: "List", spec: "@spec delete_at(list, integer) :: list", summary: "Produces a new list " <> _, type: "function"}
     ] = Suggestion.find("MyList.del", [], [{MyList, List}], SomeModule, [], [], [], SomeModule, "")
   end

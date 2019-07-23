@@ -122,15 +122,13 @@ defmodule ElixirSense do
       iex> code = ~S'''
       ...> defmodule MyModule do
       ...>   alias List, as: MyList
-      ...>   MyList.fi
+      ...>   MyList.ins
       ...> end
       ...> '''
       iex> ElixirSense.suggestions(code, 3, 12)
-      [%{type: :hint, value: "MyList.first"},
-       %{type: "function", name: "first", arity: 1, origin: "List",
-         spec: "@spec first([elem]) :: nil | elem when elem: var",
-         summary: "Returns the first element in `list` or `nil` if `list` is empty.",
-         args: "list"}]
+      [%{type: :hint, value: "MyList.insert_at"},
+        %{origin: "List", type: "function", args: "list,index,value", arity: 3, name: "insert_at",
+        spec: "@spec insert_at(list, integer, any) :: list", summary: "Returns a list with `value` inserted at the specified `index`."}]
   """
   @spec suggestions(String.t, non_neg_integer, non_neg_integer) :: [Suggestion.suggestion]
   def suggestions(buffer, line, column) do

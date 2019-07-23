@@ -127,7 +127,12 @@ defmodule ElixirSense.Core.Ast do
   defp pre_walk_expanded({:@, _, [{:behaviour, _, [behaviour]}]} = ast, acc) do
     {ast, %{acc | behaviours: [behaviour|acc.behaviours]}}
   end
+  # Elixir < 1.9
   defp pre_walk_expanded({{:., _, [Module, :put_attribute]}, _, [_module, :behaviour, behaviour | _]} = ast, acc) do
+    {ast, %{acc | behaviours: [behaviour|acc.behaviours]}}
+  end
+  # Elixir 1.9
+  defp pre_walk_expanded({{:., _, [Module, :__put_attribute__]}, _, [_module, :behaviour, behaviour | _]} = ast, acc) do
     {ast, %{acc | behaviours: [behaviour|acc.behaviours]}}
   end
   defp pre_walk_expanded({_name, _meta, _args}, acc) do

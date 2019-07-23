@@ -173,6 +173,7 @@ defmodule ElixirSense.Core.Introspection do
             get_callback_with_doc(fun, kind, doc, {fun, arity}, callbacks)
         end
     end
+    |> Enum.sort_by(& {&1.name, &1.arity})
   end
 
   def get_types_with_docs(module) when is_atom(module) do
@@ -573,9 +574,12 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp spec_to_string({kind, {{name, _arity}, specs}}) do
-    spec = hd(specs)
-    binary = Macro.to_string spec_to_quoted(name, spec)
-    "@#{kind} #{binary}" |> String.replace("()", "")
+    specs
+    |> Enum.map(fn spec ->
+      binary = Macro.to_string(spec_to_quoted(name, spec))
+      "@#{kind} #{binary}" |> String.replace("()", "")
+    end)
+    |> Enum.join("\n")
   end
 
   defp beam_specs(module) do

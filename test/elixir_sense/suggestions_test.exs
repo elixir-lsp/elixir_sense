@@ -117,13 +117,13 @@ defmodule ElixirSense.SuggestionsTest do
       ElixirSense.suggestions(buffer, 3, 7)
       |> Enum.filter(fn s -> s.type == :callback && s.name == :code_change end)
 
-    assert list == [%{
+    assert [%{
       args: "old_vsn,state,extra", arity: 3, name: :code_change,
       origin: "GenServer",
-      spec: "@callback code_change(old_vsn, state :: term, extra :: term) ::\n  {:ok, new_state :: term} |\n  {:error, reason :: term} |\n  {:down, term} when old_vsn: term\n",
+      spec: "@callback code_change(old_vsn, state :: term, extra :: term) ::" <> _,
       summary: "Invoked to change the state of the `GenServer` when a different version of a\nmodule is loaded (hot code swapping) and the state's term structure should be\nchanged.",
       type: :callback
-    }]
+    }] = list
   end
 
   test "lists function return values" do
