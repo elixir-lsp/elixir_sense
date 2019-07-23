@@ -95,7 +95,7 @@ defmodule Alchemist.Helpers.Complete do
     cond do
       h === ?. and t != [] ->
         expand_dot(reduce(t))
-      h === ?: ->
+      h === ?: and t == [] ->
         expand_erlang_modules()
       identifier?(h) ->
         expand_expr(reduce(expr))
