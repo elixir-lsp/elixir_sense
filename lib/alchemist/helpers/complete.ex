@@ -143,10 +143,15 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp reduce(expr) do
-    Enum.reverse Enum.reduce ' ([{', expr, fn token, acc ->
+    Enum.reduce(' ([{', expr, fn token, acc ->
       hd(:string.tokens(acc, [token]))
-    end
+    end)
+    |> Enum.reverse
+    |> strip_ampersand
   end
+
+  defp strip_ampersand([?&|t]), do: t
+  defp strip_ampersand(expr), do: expr
 
   defp yes(hint, entries) do
     {:yes, String.to_charlist(hint), entries}

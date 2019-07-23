@@ -121,6 +121,12 @@ defmodule Alchemist.Helpers.CompleteTest do
     assert {:yes, 'ib.', [_]} = expand('{:zl')
   end
 
+  test "ampersand completion" do
+    assert expand('&Enu') == {:yes, 'm', []}
+    assert {:yes, [], [%{name: "all?"}, %{name: "any?"}, %{name: "at"}]} = expand('&Enum.a')
+    assert {:yes, [], [%{name: "all?"}, %{name: "any?"}, %{name: "at"}]} = expand('f = &Enum.a')
+  end
+
   defmodule SublevelTest.LevelA.LevelB do
   end
 
