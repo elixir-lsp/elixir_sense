@@ -205,7 +205,7 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp expand_require(mod, hint) do
-    format_expansion match_module_funs(mod, hint), hint
+    format_expansion(match_module_funs(mod, hint), hint)
   end
 
   defp expand_import(hint) do
@@ -370,7 +370,7 @@ defmodule Alchemist.Helpers.Complete do
     if function_exported?(mod, :__info__, 1) do
       if docs = NormalizedCode.get_docs(mod, :docs) do
         specs = TypeInfo.get_module_specs(mod)
-        for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false do
+        for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, not hidden_fun?({f, a}, docs) do
           spec = Map.get(specs, {f, a})
           {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
         end
@@ -380,10 +380,13 @@ defmodule Alchemist.Helpers.Complete do
         |> Enum.map(fn {f, a} -> {f, a, :macro, nil, nil} end)
         functions = :functions
         |> mod.__info__()
+        # TODO should we reject :__info__ like in IEx?
         |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end)
-        macros ++ functions
+        (macros ++ functions)
+        |> Enum.reject(fn {f, a, _, nil, nil} -> underscored_fun?({f, a}) end)
       end
     else
+      # TODO should we reject underscored funs here?
       for {f, a} <- mod.module_info(:exports) do
         case f |> Atom.to_string do
           "MACRO-" <> name -> {String.to_atom(name), a, :macro, nil, nil}
@@ -392,6 +395,23 @@ defmodule Alchemist.Helpers.Complete do
       end
     end
   end
+
+  defp hidden_fun?(fun, docs) do
+    case Enum.find(docs, &match?({^fun, _, _, _, _}, &1)) do
+      nil -> underscored_fun?(fun)
+      doc -> not has_content?(doc)
+    end
+  end
+
+  defp has_content?({_, _, _, _, false}),
+     do: false
+  defp has_content?({fun, _, _, _, nil}),
+     do: not underscored_fun?(fun)
+   defp has_content?({_, _, _, _, _}),
+     do: true
+
+  defp underscored_fun?({name, _}),
+     do: hd(Atom.to_char_list(name)) == ?_
 
   defp ensure_loaded(Elixir), do: {:error, :nofile}
   defp ensure_loaded(mod), do: Code.ensure_compiled(mod)

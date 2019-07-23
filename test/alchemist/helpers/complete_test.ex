@@ -57,6 +57,47 @@ defmodule Alchemist.Helpers.CompleteTest do
       %{name: "Exception"}]} = expand('Ex')
   end
 
+  test "Elixir no completion for underscored functions with no doc" do
+    {:module, _, bytecode, _} =
+      defmodule Elixir.Sample do
+        def __foo__(), do: 0
+        @doc "Bar doc"
+        def __bar__(), do: 1
+      end
+
+    File.write!("Elixir.Sample.beam", bytecode)
+    assert {:docs_v1, _, _, _, _, _, _} = Code.fetch_docs(Sample)
+    assert {:yes, 'ar__', [%{name: "__bar__"}]} = expand('Sample.__b')
+  after
+    File.rm("Elixir.Sample.beam")
+    :code.purge(Sample)
+    :code.delete(Sample)
+  end
+
+  test "completion for functions added when compiled module is reloaded" do
+    {:module, _, bytecode, _} =
+      defmodule Sample do
+        def foo(), do: 0
+      end
+
+    File.write!("Alchemist.Helpers.CompleteTest.Sample.beam", bytecode)
+    assert {:yes, '', [%{name: "foo"}]} = expand('Alchemist.Helpers.CompleteTest.Sample.foo')
+
+    Code.compiler_options(ignore_module_conflict: true)
+
+    defmodule Sample do
+      def foo(), do: 0
+      def foobar(), do: 0
+    end
+
+    assert {:yes, '', [%{name: "foo"}, %{name: "foobar"}]} = expand('Alchemist.Helpers.CompleteTest.Sample.foo')
+  after
+    File.rm("Alchemist.Helpers.CompleteTest.Sample.beam")
+    Code.compiler_options(ignore_module_conflict: false)
+    :code.purge(Sample)
+    :code.delete(Sample)
+  end
+
   test "elixir no completion" do
     assert expand('.') == {:no, '', []}
     assert expand('Xyz') == {:no, '', []}
