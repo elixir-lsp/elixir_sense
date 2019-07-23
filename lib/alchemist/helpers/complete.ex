@@ -238,7 +238,7 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp match_erlang_modules(hint) do
-    for mod <- match_modules(hint, true) do
+    for mod <- match_modules(hint, true), usable_as_unquoted_module?(mod) do
       %{kind: :module, name: mod, type: :erlang, desc: ""}
     end
   end
@@ -299,17 +299,41 @@ defmodule Alchemist.Helpers.Complete do
 
     for mod <- match_modules(base, module === Elixir),
     parts = String.split(mod, "."),
-    depth <= length(parts) do
+    depth <= length(parts),
+    name = Enum.at(parts, depth - 1),
+    valid_alias_piece?("." <> name) do
       mod_as_atom = mod |> String.to_atom
       desc = Introspection.get_module_docs_summary(mod_as_atom)
       subtype = Introspection.get_module_subtype(mod_as_atom)
-      %{kind: :module, type: :elixir, name: Enum.at(parts, depth - 1),
+      %{kind: :module, type: :elixir, name: name,
         desc: desc, subtype: subtype}
     end
     |> Enum.uniq_by(fn %{name: name} -> name end)
   end
 
+  defp valid_alias_piece?(<<?., char, rest::binary>>) when char in ?A..?Z,
+     do: valid_alias_rest?(rest)
+   defp valid_alias_piece?(_),
+     do: false
+
+    defp valid_alias_rest?(<<char, rest::binary>>)
+        when char in ?A..?Z
+        when char in ?a..?z
+        when char in ?0..?9
+        when char == ?_,
+        do: valid_alias_rest?(rest)
+   defp valid_alias_rest?(<<>>),
+     do: true
+   defp valid_alias_rest?(rest),
+     do: valid_alias_piece?(rest)
+
   ## Helpers
+
+  defp usable_as_unquoted_module?(name) do
+    # Conversion to atom is not a problem because
+    # it is only called with existing modules names.
+    Code.Identifier.classify(String.to_atom(name)) != :other
+  end
 
   defp match_modules(hint, root) do
     root

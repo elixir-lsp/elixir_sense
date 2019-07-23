@@ -219,4 +219,12 @@ defmodule Alchemist.Helpers.CompleteTest do
    test "completion for structs" do
     assert {:yes, 'uct', [%{name: "MyStruct"}]} = expand('%Alchemist.Helpers.CompleteTest.MyStr')
   end
+
+  test "ignore invalid Elixir module literals" do
+    defmodule :"Alchemist.Helpers.CompleteTest.Unicodé", do: nil
+    assert expand('Alchemist.Helpers.CompleteTest.Unicod') == {:no, '', []}
+  after
+    :code.purge(:"Alchemist.Helpers.CompleteTest.Unicodé")
+    :code.delete(:"Alchemist.Helpers.CompleteTest.Unicodé")
+  end
 end
