@@ -212,7 +212,7 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   defmodule MyStruct do
-    defstruct my_val: "val"
+    defstruct [:my_val]
   end
 
    test "completion for structs" do

@@ -147,15 +147,14 @@ defmodule Alchemist.Helpers.Complete do
       hd(:string.tokens(acc, [token]))
     end)
     |> Enum.reverse
-    |> strip_ampersand
-    |> strip_percent
+    |> trim_leading(?&)
+	  |> trim_leading(?%)
   end
 
-  defp strip_percent([?% | t]), do: t
-  defp strip_percent(expr), do: expr
-
-  defp strip_ampersand([?&|t]), do: t
-  defp strip_ampersand(expr), do: expr
+  defp trim_leading([char | rest], char),
+	    do: rest
+  defp trim_leading(expr, _char),
+    do: expr
 
   defp yes(hint, entries) do
     {:yes, String.to_charlist(hint), entries}
