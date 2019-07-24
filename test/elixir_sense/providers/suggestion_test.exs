@@ -89,4 +89,25 @@ defmodule ElixirSense.Providers.SuggestionTest do
     refute "module_info" in suggestions_names
   end
 
+  defmodule MyStruct do
+    defstruct [:my_val]
+  end
+
+  # TODO
+  test "return completion candidates for struct starting with %" do
+    assert [%{type: :hint, value: "%ElixirSense.Providers.SuggestionTest.MyStruct."} | _] = Suggestion.find("%ElixirSense.Providers.SuggestionTest.MyStr", [MyModule], [], SomeModule, [], [], [], SomeModule, "")
+  end
+
+  test "return completion candidates for &func" do
+    assert [%{type: :hint, value: "f = &Enum.all?"} | _] = Suggestion.find("f = &Enum.al", [MyModule], [], SomeModule, [], [], [], SomeModule, "")
+  end
+
+  test "do not return completion candidates for unknown erlang modules" do
+    assert [%{type: :hint, value: "Enum:"}] = Suggestion.find("Enum:", [MyModule], [], SomeModule, [], [], [], SomeModule, "")
+  end
+
+  test "do not return completion candidates for unknown modules" do
+    assert [%{type: :hint, value: "x.Foo.get_by"}] = Suggestion.find("x.Foo.get_by", [MyModule], [], SomeModule, [], [], [], SomeModule, "")
+  end
+
 end
