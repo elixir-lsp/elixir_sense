@@ -424,7 +424,7 @@ defmodule Alchemist.Helpers.Complete do
             end
             {func_kind, func_doc} = find_doc({f, new_arity}, docs)
             spec = Map.get(specs, {f, new_arity})
-            {f, a, func_kind, func_doc, spec}
+            {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
           end
         else
           macros = for {f, a} <- mod.__info__(:macros), do: {f, a, :defmacro, nil, nil}
