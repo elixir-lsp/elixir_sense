@@ -34,8 +34,11 @@ defmodule Alchemist.Helpers.Complete do
       {:no, _, _}  -> ''
       {:yes, [], _} -> List.insert_at(list, 0, %{type: :hint, value: "#{exp}"})
       {:yes, _, []} -> run(code ++ result)
-      {:yes, _,  _} -> List.insert_at(run(code ++ result), 1, Enum.at(list, 0))
-      #
+      {:yes, _,  r} ->
+        case r do
+          [%{subtype: :struct}] -> List.insert_at(list, 0, %{type: :hint, value: "#{exp}#{result}"})
+          _ -> List.insert_at(run(code ++ result), 1, Enum.at(list, 0))
+        end
     end
   end
 

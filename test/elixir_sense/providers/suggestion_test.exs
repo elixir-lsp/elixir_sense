@@ -95,7 +95,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
   # TODO
   test "return completion candidates for struct starting with %" do
-    assert [%{type: :hint, value: "%ElixirSense.Providers.SuggestionTest.MyStruct."} | _] = Suggestion.find("%ElixirSense.Providers.SuggestionTest.MyStr", [MyModule], [], SomeModule, [], [], [], SomeModule, "")
+    assert [%{type: :hint, value: "%ElixirSense.Providers.SuggestionTest.MyStruct"} | _] = Suggestion.find("%ElixirSense.Providers.SuggestionTest.MyStr", [MyModule], [], SomeModule, [], [], [], {:func, 0}, "")
   end
 
   test "return completion candidates for &func" do
