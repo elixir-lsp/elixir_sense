@@ -399,52 +399,103 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp get_module_funs(mod) do
-    if Code.ensure_loaded?(mod) and function_exported?(mod, :__info__, 1) do
-      if docs = NormalizedCode.get_docs(mod, :docs) do
-        specs = TypeInfo.get_module_specs(mod)
-        for {{f, a}, _line, func_kind, _sign, _doc} = func_doc <- docs, not hidden_fun?({f, a}, docs) do
-          spec = Map.get(specs, {f, a})
-          {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
+    cond do
+      not ensure_loaded?(mod) ->
+        []
+
+      function_exported?(mod, :__info__, 1) ->
+        docs = NormalizedCode.get_docs(mod, :docs)
+        if docs != nil do
+          exports = (mod.__info__(:macros) ++ mod.__info__(:functions) ++ @builtin_functions)
+          |> Kernel.--(default_arg_functions_with_doc_false(docs))
+          |> Enum.reject(&hidden_fun?(&1, docs))
+
+          default_arg_functions = default_arg_functions(docs)
+
+          specs = TypeInfo.get_module_specs(mod)
+
+          for {f, a} <- exports do
+            {f, new_arity} = case default_arg_functions[{f, a}] do
+              nil -> {f, a}
+              new_arity -> {f, new_arity}
+            end
+            {func_kind, func_doc} = find_doc({f, new_arity}, docs)
+            spec = Map.get(specs, {f, new_arity})
+            {f, a, func_kind, func_doc, spec}
+          end
+        else
+          macros = for {f, a} <- mod.__info__(:macros), do: {f, a, :defmacro, nil, nil}
+          functions = for {f, a} <- (mod.__info__(:functions) ++ @builtin_functions), do: {f, a, :def, nil, nil}
+          macros ++ functions
         end
-      else
-        macros = :macros
-        |> mod.__info__()
-        |> Enum.map(fn {f, a} -> {f, a, :macro, nil, nil} end)
-        functions = :functions
-        |> mod.__info__()
-        # TODO should we reject :__info__ like in IEx?
-        |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end)
-        (macros ++ functions)
-        |> Enum.reject(fn {f, a, _, nil, nil} -> underscored_fun?({f, a}) end)
-      end
-    else
-      # TODO should we reject underscored funs here?
-      funs = mod.module_info(:exports) -- [module_info: 0, module_info: 1]
-      for {f, a} <- funs do
-        case f |> Atom.to_string do
-          "MACRO-" <> name -> {String.to_atom(name), a, :macro, nil, nil}
-          _name            -> {f, a, :function, nil, nil}
+
+      true ->
+        for {f, a} <- mod.module_info(:exports) do
+          case f |> Atom.to_string do
+            "MACRO-" <> name ->
+              {String.to_atom(name), a, :defmacro, nil, nil}
+            _name            -> {f, a, :def, nil, nil}
+          end
         end
-      end
+
+    end
+    |> Enum.sort_by(fn {f, a, _, _, _} -> {f, -a} end)
+  end
+
+  def find_doc(fun, _docs) when fun in @builtin_functions, do:
+    {:def, nil}
+  def find_doc(fun, docs) do
+    doc = docs
+    |> Enum.find(& match?({^fun, _, _, _, _}, &1))
+    case doc do
+      nil -> {nil, nil}
+      {_, _, func_kind, _, _} = d -> {func_kind, d}
     end
   end
 
+  defp default_arg_functions(docs) do
+    for {{fun_name, arity}, _, :def, args, x} when x != false <- docs,
+        count = count_defaults(args),
+        count > 0,
+        new_arity <- (arity-count)..(arity - 1),
+        into: %{},
+        do: {{fun_name, new_arity}, arity}
+  end
+
+  defp default_arg_functions_with_doc_false(docs) do
+    for {{fun_name, arity}, _, _, args, false} <- docs,
+        count = count_defaults(args),
+        count > 0,
+        new_arity <- (arity-count)..arity,
+        do: {fun_name, new_arity}
+  end
+
+  defp count_defaults(args) do
+    Enum.count(args, &match?({:\\, _, _}, &1))
+  end
+
+  defp hidden_fun?({:__info__, 1}, _docs), do: false
+  defp hidden_fun?({:__protocol__, 1}, _docs), do: false
+  defp hidden_fun?({:impl_for, 1}, _docs), do: false
+  defp hidden_fun?({:impl_for!, 1}, _docs), do: false
   defp hidden_fun?(fun, docs) do
-    case Enum.find(docs, &match?({^fun, _, _, _, _}, &1)) do
-      nil -> underscored_fun?(fun)
-      doc -> not has_content?(doc)
+    case List.keyfind(docs, fun, 0) do
+      nil ->
+        underscored_fun?(fun)
+      {_, _, _, _, false} ->
+        true
+      {fun, _, _, _, nil} ->
+        underscored_fun?(fun)
+      {_, _, _, _, _}  ->
+        false
     end
   end
-
-  defp has_content?({_, _, _, _, false}),
-     do: false
-  defp has_content?({fun, _, _, _, nil}),
-     do: not underscored_fun?(fun)
-   defp has_content?({_, _, _, _, _}),
-     do: true
 
   defp underscored_fun?({name, _}),
      do: hd(Atom.to_charlist(name)) == ?_
+
+  defp ensure_loaded?(Elixir), do: false
+  defp ensure_loaded?(mod), do: Code.ensure_loaded?(mod)
 
   defp ensure_loaded(Elixir), do: {:error, :nofile}
   defp ensure_loaded(mod), do: Code.ensure_compiled(mod)

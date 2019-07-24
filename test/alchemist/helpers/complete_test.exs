@@ -99,6 +99,82 @@ defmodule Alchemist.Helpers.CompleteTest do
     :code.delete(Sample)
   end
 
+  test "Elixir no completion for default argument functions with doc set to false" do
+    {:yes, '', available} = expand('String.')
+    refute Enum.any?(available, & &1.name == "rjust" and &1.arity == 2)
+    assert Enum.any?(available, & &1.name == "replace" and &1.arity == 3)
+
+    assert expand('String.r') == {:yes, 'e', []}
+
+    {:module, _, bytecode, _} =
+      defmodule Elixir.DefaultArgumentFunctions do
+        def foo(a \\ :a, b, c \\ :c),
+          do: {a, b, c}
+
+        def _do_fizz(a \\ :a, b, c \\ :c),
+          do: {a, b, c}
+
+        @doc false
+        def __fizz__(a \\ :a, b, c \\ :c),
+          do: {a, b, c}
+
+        @doc "bar/0 doc"
+        def bar(),
+          do: :bar
+        @doc false
+        def bar(a \\ :a, b, c \\ :c, d \\ :d),
+          do: {a, b, c, d}
+        @doc false
+        def bar(a, b, c, d, e),
+          do: {a, b, c, d, e}
+
+        @doc false
+        def baz(a \\ :a),
+          do: {a}
+
+        @doc "biz/3 doc"
+        def biz(a, b, c \\ :c),
+          do: {a, b, c}
+      end
+    File.write!("Elixir.DefaultArgumentFunctions.beam", bytecode)
+
+    assert {:yes, '', [
+      %{name: "bar", arity: 0},
+      # IEx version does not have those 3 hints
+      %{
+        arity: 0,
+        name: "module_info",
+      },
+      %{
+        arity: 1,
+        name: "module_info",
+      },
+      %{
+        arity: 1,
+        name: "__info__",
+      },
+      %{name: "foo", arity: 1},
+      %{name: "foo", arity: 2},
+      %{name: "foo", arity: 3},
+      %{name: "biz", arity: 2},
+      %{name: "biz", arity: 3},
+      ]} = expand('DefaultArgumentFunctions.')
+
+    assert {:yes, 'z', [
+      %{name: "biz", arity: 2},
+      %{name: "biz", arity: 3}
+      ]} = expand('DefaultArgumentFunctions.bi')
+    assert {:yes, '', [
+      %{name: "foo", arity: 1},
+      %{name: "foo", arity: 2},
+      %{name: "foo", arity: 3}
+      ]} = expand('DefaultArgumentFunctions.foo')
+  after
+    File.rm("Elixir.DefaultArgumentFunctions.beam")
+    :code.purge(DefaultArgumentFunctions)
+    :code.delete(DefaultArgumentFunctions)
+  end
+
   test "elixir no completion" do
     assert expand('.') == {:no, '', []}
     assert expand('Xyz') == {:no, '', []}
@@ -124,8 +200,15 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "function completion with arity" do
-    assert {:yes, '', [%{name: "printable?", origin: "String"}]} = expand('String.printable?')
-    assert {:yes, '', [%{name: "printable?"}]} = expand('String.printable?/')
+    assert {:yes, '', [
+      %{name: "printable?", arity: 1,
+      spec: "@spec printable?(t, 0) :: true\n@spec printable?(t, pos_integer | :infinity) :: boolean",
+      summary: "Checks if a string contains only printable characters up to `character_limit`.",},
+      %{name: "printable?", arity: 2,
+      spec: "@spec printable?(t, 0) :: true\n@spec printable?(t, pos_integer | :infinity) :: boolean",
+     summary: "Checks if a string contains only printable characters up to `character_limit`.",}
+      ]} = expand('String.printable?')
+    assert {:yes, '', [%{name: "printable?", arity: 1}, %{name: "printable?", arity: 2}]} = expand('String.printable?/')
   end
 
   test "macro completion" do
@@ -166,18 +249,16 @@ defmodule Alchemist.Helpers.CompleteTest do
 
   test "ampersand completion" do
     assert expand('&Enu') == {:yes, 'm', []}
-    # TODO IEx version returns entry per arity here
-    # assert {:yes, [], [
-    #   %{name: "all?", arity: 1}, %{name: "all?", arity: 2},
-    #   %{name: "any?", arity: 1}, %{name: "any?", arity: 2},
-    #   %{name: "at", arity: 2}, %{name: "at", arity: 3},
-    #   ]} = expand('&Enum.a')
     assert {:yes, [], [
-      %{name: "all?", arity: 2},
-      %{name: "any?", arity: 2},
-      %{name: "at", arity: 3},
+      %{name: "all?", arity: 1}, %{name: "all?", arity: 2},
+      %{name: "any?", arity: 1}, %{name: "any?", arity: 2},
+      %{name: "at", arity: 2}, %{name: "at", arity: 3},
       ]} = expand('&Enum.a')
-    assert {:yes, [], [%{name: "all?"}, %{name: "any?"}, %{name: "at"}]} = expand('f = &Enum.a')
+    assert {:yes, [], [
+      %{name: "all?", arity: 1}, %{name: "all?", arity: 2},
+      %{name: "any?", arity: 1}, %{name: "any?", arity: 2},
+      %{name: "at", arity: 2}, %{name: "at", arity: 3},
+      ]} = expand('f = &Enum.a')
   end
 
   defmodule SublevelTest.LevelA.LevelB do
@@ -198,7 +279,7 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'ist', [%{name: "MyList"}]} = expand('MyL')
     assert {:yes, '.', [%{name: "MyList"}]} = expand('MyList')
-    assert {:yes, [], [%{arity: 2, name: "to_integer"}, %{arity: 1, name: "to_integer"}]} = expand('MyList.to_integer')
+    assert {:yes, [], [%{arity: 1, name: "to_integer"}, %{arity: 2, name: "to_integer"}]} = expand('MyList.to_integer')
   end
 
   test "complete aliases of erlang modules" do
@@ -226,5 +307,24 @@ defmodule Alchemist.Helpers.CompleteTest do
   after
     :code.purge(:"Alchemist.Helpers.CompleteTest.Unicodé")
     :code.delete(:"Alchemist.Helpers.CompleteTest.Unicodé")
+  end
+
+  test "complete builtin functions" do
+    assert {:yes, 'fo__', [%{name: "__info__"}]} = expand('Enumerable.__in')
+    assert {:yes, 'fo', [%{name: "module_info", arity: 0}, %{name: "module_info", arity: 1}]} = expand('Enumerable.module_in')
+    assert {:yes, 'otocol__', [%{name: "__protocol__", arity: 1}]} = expand('Enumerable.__pr')
+    assert {:yes, 'r', []} = expand('Enumerable.impl_fo')
+  end
+
+  defmodule MyMacro do
+    defmacro test(do: expr) do
+      expr
+    end
+    def fun, do: :ok
+  end
+
+  test "complete macros and functions from not loaded modules" do
+    assert {:yes, 'st', [%{name: "test", type: "macro"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.te')
+    assert {:yes, 'un', [%{name: "fun", type: "function"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.f')
   end
 end
