@@ -1,9 +1,11 @@
 defmodule Alchemist.Helpers.Complete do
 
-  @builtin_functions [{:__info__, 1}, {:module_info, 0}, {:module_info, 1}]
-
   alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
+
+  @builtin_functions [{:__info__, 1}, {:module_info, 0}, {:module_info, 1}]
 
   @moduledoc false
 
@@ -37,7 +39,7 @@ defmodule Alchemist.Helpers.Complete do
     context_module = modules |> Enum.at(0)
 
     exported? = fn mod, f, a ->
-      !({f, a} in @builtin_functions) and (function_exported?(mod, f, a) or macro_exported?(mod, f, a))
+      (function_exported?(mod, f, a) or macro_exported?(mod, f, a))
     end
     accept_function = fn
       (mod, mod, _, _, _)          -> true
@@ -58,7 +60,7 @@ defmodule Alchemist.Helpers.Complete do
           {_, _, :defmacro}  -> "macro"
           {m, m, :def}       -> "public_function"
           {_, _, :def}       -> "function"
-          {m, m, :undefined} -> if ({f, a} in @builtin_functions) or exported?.(module, f, a), do: "public_function", else: "private_function"
+          {m, m, :undefined} -> if exported?.(module, f, a), do: "public_function", else: "private_function"
           _                  -> "unknown"
         end
 
@@ -66,7 +68,23 @@ defmodule Alchemist.Helpers.Complete do
         mod_name = module |> Introspection.module_to_string
         %{type: kind, name: func_name, arity: a, args: fun_args, origin: mod_name, summary: desc, spec: spec}
       end
-    end |> List.flatten
+    end |> List.flatten |> add_builtin_functions(hint)
+  end
+
+  defp add_builtin_functions(list, hint) do
+    builtin_list =
+      if String.contains?(hint, ".") do
+        local_hint = String.split(hint, ".") |> List.last()
+        for {f, a} <- @builtin_functions,
+            f_name = to_string(f),
+            String.starts_with?(f_name, local_hint)
+            do
+          %{name: f_name, arity: a, args: "", origin: "", summary: "Built-in function", spec: nil, type: "function"}
+        end
+      else
+        []
+      end
+    list ++ builtin_list
   end
 
   def expand('') do
@@ -345,11 +363,11 @@ defmodule Alchemist.Helpers.Complete do
 
   defp get_module_funs(mod) do
     if function_exported?(mod, :__info__, 1) do
-      funs = if docs = Introspection.get_docs(mod, :docs) do
-        specs = Introspection.get_module_specs(mod)
+      if docs = NormalizedCode.get_docs(mod, :docs) do
+        specs = TypeInfo.get_module_specs(mod)
         for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false do
-          spec = Map.get(specs, {f, a}, "")
-          {f, a, func_kind, func_doc, spec}
+          spec = Map.get(specs, {f, a})
+          {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
         end
       else
         macros = :macros
@@ -360,7 +378,6 @@ defmodule Alchemist.Helpers.Complete do
         |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end)
         macros ++ functions
       end
-      funs ++ (@builtin_functions |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end))
     else
       for {f, a} <- mod.module_info(:exports) do
         case f |> Atom.to_string do

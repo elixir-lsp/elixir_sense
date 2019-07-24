@@ -24,6 +24,7 @@ defmodule ElixirSense.Core.Parser do
             mods_funs_to_positions: acc.mods_funs_to_positions,
             lines_to_env: acc.lines_to_env,
             vars_info_per_scope_id: acc.vars_info_per_scope_id,
+            calls: acc.calls
           }
         else
           # IO.puts :stderr, "LINE NOT FOUND"

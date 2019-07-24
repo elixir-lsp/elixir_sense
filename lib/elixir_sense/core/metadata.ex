@@ -5,17 +5,34 @@ defmodule ElixirSense.Core.Metadata do
 
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
   defstruct source: nil,
             mods_funs_to_positions: %{},
             lines_to_env: %{},
+            calls: %{},
             vars_info_per_scope_id: %{},
             error: nil
 
-  def get_env(%__MODULE__{} = metadata, line_number) do
-    case Map.get(metadata.lines_to_env, line_number) do
+  def get_env(%__MODULE__{} = metadata, line) do
+    case Map.get(metadata.lines_to_env, line) do
       nil -> %State.Env{}
       ctx -> ctx
+    end
+  end
+
+  def get_calls(%__MODULE__{} = metadata, line) do
+    case Map.get(metadata.calls, line) do
+      nil -> []
+      calls -> Enum.sort_by(calls, fn %{col: col} -> col end)
+    end
+  end
+
+  def get_call_arity(%__MODULE__{} = metadata, line, col) do
+    calls = get_calls(metadata, line)
+    case Enum.find(calls, fn c -> c.col == col end) do
+      %{arity: arity} -> arity
+      _ -> nil
     end
   end
 
@@ -48,7 +65,7 @@ defmodule ElixirSense.Core.Metadata do
   end
 
   def get_function_signatures(%__MODULE__{} = metadata, module, function, code_docs \\ nil) do
-    docs = code_docs || Introspection.get_docs(module, :docs) || []
+    docs = code_docs || NormalizedCode.get_docs(module, :docs) || []
 
     params_list =
       metadata
@@ -62,7 +79,7 @@ defmodule ElixirSense.Core.Metadata do
         Enum.find_value(docs, {"", ""}, fn {{f, a}, _, _, _, text} ->
           f == function &&
           a == arity &&
-          {Introspection.extract_summary_from_docs(text), Introspection.get_spec(module, function, arity)}
+          {Introspection.extract_summary_from_docs(text), Introspection.get_spec_as_string(module, function, arity)}
         end)
       %{name: Atom.to_string(function),
         params: params |> Enum.with_index() |> Enum.map(&Introspection.param_to_var/1),
@@ -73,11 +90,10 @@ defmodule ElixirSense.Core.Metadata do
   end
 
   defp get_function_position_using_docs(module, function) do
-    docs = Introspection.get_docs(module, :docs)
+    docs = NormalizedCode.get_docs(module, :docs)
 
     for {{func, _arity}, line, _kind, _, _} <- docs, func == function do
       {line, 0}
     end |> Enum.at(0)
   end
-
 end

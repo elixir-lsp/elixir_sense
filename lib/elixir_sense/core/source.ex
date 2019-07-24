@@ -3,8 +3,36 @@ defmodule ElixirSense.Core.Source do
   Source parsing
   """
 
+  alias ElixirSense.Core.Normalized.Tokenizer
+
   @empty_graphemes [" ", "\n", "\r\n"]
   @stop_graphemes ~w/{ } ( ) [ ] < > + - * & ^ , ; ~ % = " ' \\ \/ $ ! ?`#/ ++ @empty_graphemes
+
+  def split_module_and_hint(hint) do
+    if String.ends_with?(hint, ".") do
+      {mod, _} =
+        hint
+        |> String.slice(0..-2)
+        |> split_module_and_func()
+      {mod, ""}
+    else
+      {mod, new_hint} =
+        hint
+        |> split_module_and_func()
+      {mod, to_string(new_hint)}
+    end
+  end
+
+  def split_module_and_func(call) do
+    case Code.string_to_quoted(call) do
+      {:error, _} ->
+        {nil, nil}
+      {:ok, quoted} when is_atom(quoted) ->
+        {quoted, nil}
+      {:ok, quoted} ->
+        split_mod_quoted_fun_call(quoted)
+    end
+  end
 
   def prefix(code, line, col) do
     line = code |> String.split("\n") |> Enum.at(line - 1)
@@ -21,8 +49,15 @@ defmodule ElixirSense.Core.Source do
     text
   end
 
+  def text_after(code, line, col) do
+    pos = find_position(code, line, col, {0, 1, 1})
+    {_, rest} = String.split_at(code, pos)
+    rest
+  end
+
   def subject(code, line, col) do
-    case walk_text(code, &find_subject/5, %{line: line, col: col, pos_found: false, candidate: []}) do
+    acc = %{line: line, col: col, pos_found: false, candidate: [], pos: nil}
+    case walk_text(code, acc, &find_subject/5) do
       %{candidate: []} ->
         nil
       %{candidate: candidate} ->
@@ -30,9 +65,30 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
+  def subject_with_position(code, line, col) do
+    acc = %{line: line, col: col, pos_found: false, candidate: [], pos: nil}
+    case walk_text(code, acc, &find_subject/5) do
+      %{candidate: []} ->
+        nil
+      %{candidate: candidate, pos: {line, col}} ->
+        subject = candidate |> Enum.reverse |> Enum.join
+        last_part = subject |> String.reverse() |> String.split(".", parts: 2) |> Enum.at(0) |> String.reverse()
+        {subject, {line, col - String.length(last_part)}}
+    end
+  end
+
+  def find_next_word(code) do
+    walk_text(code, nil, fn
+      grapheme, rest, _, _, _ when grapheme in @empty_graphemes ->
+        {rest, nil}
+      _grapheme, rest, line, col, _ ->
+        {"", {rest, line - 1, col - 1}}
+    end)
+  end
+
   def which_struct(text_before) do
     code = text_before |> String.reverse()
-    case walk_text(code, &find_struct/5, %{buffer: [], count_open: 0, result: nil}) do
+    case walk_text(code, %{buffer: [], count_open: 0, result: nil}, &find_struct/5) do
       %{result: nil} ->
         nil
       %{result: result} ->
@@ -71,8 +127,8 @@ defmodule ElixirSense.Core.Source do
   defp find_subject("." = grapheme, rest, _line, _col, %{pos_found: false} = acc) do
     {rest, %{acc | candidate: [grapheme|acc.candidate]}}
   end
-  defp find_subject(".", _rest, _line, _col, %{pos_found: true} = acc) do
-    {"", acc}
+  defp find_subject(".", _rest, line, col, %{pos_found: true} = acc) do
+    {"", %{acc | pos: {line, col-1}}}
   end
   defp find_subject(grapheme, rest, _line, _col, %{candidate: [_|_]} = acc) when grapheme in ["!", "?"] do
     {rest, %{acc | candidate: [grapheme|acc.candidate]}}
@@ -83,14 +139,14 @@ defmodule ElixirSense.Core.Source do
   defp find_subject(grapheme, rest, _line, _col, %{pos_found: false} = acc) when grapheme in @stop_graphemes do
     {rest, %{acc | candidate: []}}
   end
-  defp find_subject(grapheme, _rest, _line, _col, %{pos_found: true} = acc) when grapheme in @stop_graphemes do
-    {"", acc}
+  defp find_subject(grapheme, _rest, line, col, %{pos_found: true} = acc) when grapheme in @stop_graphemes do
+    {"", %{acc | pos: {line, col-1}}}
   end
   defp find_subject(grapheme, rest, _line, _col, acc) do
     {rest, %{acc | candidate: [grapheme|acc.candidate]}}
   end
 
-  defp walk_text(text, func, acc) do
+  defp walk_text(text, acc, func) do
     do_walk_text(text, func, 1, 1, acc)
   end
 
@@ -131,7 +187,7 @@ defmodule ElixirSense.Core.Source do
   end
 
   def which_func(prefix) do
-    tokens = ElixirSense.Core.Tokenizer.tokenize(prefix)
+    tokens = Tokenizer.tokenize(prefix)
 
     pattern = %{npar: 0, count: 0, count2: 0, candidate: [], pos: nil, pipe_before: false}
     result = scan(tokens, pattern)
@@ -159,6 +215,9 @@ defmodule ElixirSense.Core.Source do
   defp normalize_npar(npar, true), do: npar + 1
   defp normalize_npar(npar, _pipe_before), do: npar
 
+  defp scan([{:kw_identifier, _, _}|tokens], %{npar: 1} = state) do
+    scan(tokens, %{state | npar: 0})
+  end
   defp scan([{:",", _}|_], %{count: 1} = state), do: state
   defp scan([{:",", _}|tokens], %{count: 0, count2: 0} = state) do
     scan(tokens, %{state | npar: state.npar + 1, candidate: []})
@@ -211,6 +270,20 @@ defmodule ElixirSense.Core.Source do
 
   defp pipe_before(state) do
     %{state | pipe_before: true}
+  end
+
+  defp split_mod_quoted_fun_call(quoted) do
+    case Macro.decompose_call(quoted) do
+      {{:__aliases__, _, mod_parts}, fun, _args} ->
+        {Module.concat(mod_parts), fun}
+      {:__aliases__, mod_parts} ->
+        {Module.concat(mod_parts), nil}
+      {mod, func, []} when is_atom(mod) and is_atom(func) ->
+        {mod, func}
+      {func, []} when is_atom(func) ->
+        {nil, func}
+      _ -> {nil, nil}
+    end
   end
 
 end

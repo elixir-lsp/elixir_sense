@@ -5,6 +5,7 @@ defmodule ElixirSense.Providers.Signature do
   """
 
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.Metadata
 
@@ -27,7 +28,7 @@ defmodule ElixirSense.Providers.Signature do
   end
 
   defp find_signatures({mod, fun}, metadata) do
-    docs = Introspection.get_docs(mod, :docs)
+    docs = NormalizedCode.get_docs(mod, :docs)
     signatures = case Metadata.get_function_signatures(metadata, mod, fun, docs) do
       [] -> Introspection.get_signatures(mod, fun, docs)
       signatures -> signatures

@@ -3,6 +3,9 @@ defmodule ElixirSense.Core.State do
   Core State
   """
 
+  @type fun_arity :: {atom, non_neg_integer}
+  @type scope :: module | fun_arity
+
   defstruct [
     namespace:  [:Elixir],
     scopes:     [:Elixir],
@@ -19,7 +22,8 @@ defmodule ElixirSense.Core.State do
     scope_ids:  [0],
     vars_info_per_scope_id: %{},
     mods_funs_to_positions: %{},
-    lines_to_env: %{}
+    lines_to_env: %{},
+    calls: %{}
   ]
 
   defmodule Env do
@@ -73,6 +77,16 @@ defmodule ElixirSense.Core.State do
   def add_current_env_to_line(state, line) do
     env = get_current_env(state)
     %{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
+  end
+
+  def add_call_to_line(state, {mod, func, arity}, line, col) do
+    call = %{mod: mod, func: func, arity: arity, line: line, col: col}
+    calls =
+      Map.update(state.calls, line, [call], fn line_calls ->
+        [call|line_calls]
+      end)
+
+    %{state | calls: calls}
   end
 
   def get_scope_name(state, line) do

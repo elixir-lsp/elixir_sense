@@ -6,10 +6,9 @@ defmodule ElixirSense.Providers.Suggestion do
 
   alias Alchemist.Helpers.Complete
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Source
-
-  @type fun_arity :: {atom, non_neg_integer}
-  @type scope :: module | fun_arity
+  alias ElixirSense.Core.State
 
   @type attribute :: %{
     type: :attribute,
@@ -61,6 +60,25 @@ defmodule ElixirSense.Providers.Suggestion do
     summary: String.t
   }
 
+  @type param_option :: %{
+    type: :param_option,
+    name: String.t,
+    origin: String.t,
+    type_spec: String.t,
+    doc: String.t,
+    expanded_spec: String.t
+  }
+
+  @type type_spec :: %{
+    type: :type_spec,
+    name: String.t,
+    arity: non_neg_integer,
+    origin: String.t,
+    spec: String.t,
+    doc: String.t,
+    signature: String.t
+  }
+
   @type hint :: %{
     type: :hint,
     value: String.t
@@ -74,22 +92,24 @@ defmodule ElixirSense.Providers.Suggestion do
                     | func
                     | mod
                     | hint
+                    | param_option
+                    | type_spec
 
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], scope, String.t) :: [suggestion]
+  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], State.scope, String.t) :: [suggestion]
   def find(hint, imports, aliases, module, vars, attributes, behaviours, scope, text_before) do
     case find_struct_fields(hint, text_before, imports, aliases, module) do
       [] ->
-        find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope)
+        find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, text_before)
       fields ->
         [%{type: :hint, value: "#{hint}"} | fields]
     end
   end
 
-  @spec find_all_except_struct_fields(String.t, [module], [{module, module}], [String.t], [String.t], [module], scope) :: [suggestion]
-  defp find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope) do
+  @spec find_all_except_struct_fields(String.t, [module], [{module, module}], [String.t], [String.t], [module], State.scope, module, String.t) :: [suggestion]
+  defp find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, text_before) do
     vars = Enum.map(vars, fn v -> v.name end)
     %{hint: hint_suggestion, suggestions: mods_and_funcs} = find_hint_mods_funcs(hint, imports, aliases)
 
@@ -104,6 +124,8 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Kernel.++(find_attributes(attributes, hint))
     |> Kernel.++(find_vars(vars, hint))
     |> Kernel.++(mods_and_funcs)
+    |> Kernel.++(find_param_options(text_before, hint, imports, aliases, module))
+    |> Kernel.++(find_typespecs(hint, aliases, module, scope))
     |> Enum.uniq_by(&(&1))
   end
 
@@ -157,7 +179,7 @@ defmodule ElixirSense.Providers.Suggestion do
     end |> Enum.sort
   end
 
-  @spec find_returns([module], String.t, scope) :: [return]
+  @spec find_returns([module], String.t, State.scope) :: [return]
   defp find_returns(behaviours, "", {fun, arity}) do
     for mod <- behaviours, Introspection.define_callback?(mod, fun, arity) do
       for return <- Introspection.get_returns_from_callback(mod, fun, arity) do
@@ -184,4 +206,74 @@ defmodule ElixirSense.Providers.Suggestion do
     end) |> Enum.sort
   end
 
+  @spec find_param_options(String.t, String.t, [module], [{module, module}], module) :: [param_option]
+  defp find_param_options(prefix, hint, imports, aliases, module) do
+    case Source.which_func(prefix) do
+      %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} ->
+        {mod, fun} = Introspection.actual_mod_fun({mod, fun}, imports, aliases, module)
+        TypeInfo.extract_param_options(mod, fun, npar)
+        |> options_to_suggestions(mod)
+        |> Enum.filter(&String.starts_with?("#{&1.name}", hint))
+      _ ->
+        []
+    end
+  end
+
+  defp options_to_suggestions(options, original_module) do
+    Enum.map(options, fn {mod, name, type} ->
+      TypeInfo.get_type_info(mod, type, original_module)
+      |> Map.merge(%{type: :param_option, name: name})
+    end)
+  end
+
+  # We don't list typespecs when inside a function
+  defp find_typespecs(_hint, _aliases, _module, {_m, _f}) do
+    []
+  end
+
+  defp find_typespecs(hint, aliases, module, _scope) do
+    hint
+    |> Source.split_module_and_hint()
+    |> find_typespecs_for_mod_and_hint(aliases, module)
+  end
+
+  defp find_typespecs_for_mod_and_hint({_, nil}, _aliases, _module) do
+    []
+  end
+
+  defp find_typespecs_for_mod_and_hint({nil, hint}, aliases, module) do
+    local_module = find_typespecs_for_mod_and_hint({module, hint}, aliases, module)
+
+    builtin_modules =
+      TypeInfo.find_all_builtin(&String.starts_with?("#{&1.name}", hint))
+      |> Enum.map(&type_info_to_suggestion(&1, nil))
+
+    local_module ++ builtin_modules
+  end
+
+  defp find_typespecs_for_mod_and_hint({mod, hint}, aliases, _module) do
+    actual_mod = Introspection.actual_module(mod, aliases)
+
+    actual_mod
+    |> TypeInfo.find_all(&String.starts_with?("#{&1.name}", hint))
+    |> Enum.map(&type_info_to_suggestion(&1, actual_mod))
+  end
+
+  defp type_info_to_suggestion(type_info, module) do
+    origin =
+      if module do
+        Introspection.module_to_string(module)
+      else
+        ""
+      end
+    %{
+      type: :type_spec,
+      name: type_info.name,
+      arity: type_info.arity,
+      signature: type_info.signature,
+      origin: origin,
+      doc: type_info.doc,
+      spec: type_info.spec
+    }
+  end
 end

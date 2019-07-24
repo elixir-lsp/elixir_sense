@@ -199,5 +199,142 @@ defmodule ElixirSense.DocsTest do
       assert docs == "No documentation available"
     end
 
+    test "retrieve type documentation" do
+      buffer = """
+      defmodule MyModule do
+        alias ElixirSenseExample.ModuleWithTypespecs.Remote
+        @type my_list :: Remote.remote_t
+        #                           ^
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 31)
+
+      assert subject == "Remote.remote_t"
+      assert actual_subject == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t"
+      assert docs == """
+      Remote type
+
+      ```
+      @type remote_t() :: atom()
+      ```
+
+      ---
+
+      Remote type with params
+
+      ```
+      @type remote_t(a, b) :: {a, b}
+      ```\
+      """
+    end
+
+    test "retrieve builtin type documentation" do
+      buffer = """
+      defmodule MyModule do
+        @type options :: keyword
+        #                   ^
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 2, 23)
+
+      assert subject == "keyword"
+      assert actual_subject == "keyword"
+      assert docs == """
+      A keyword list
+
+      ```
+      @type keyword() :: [{atom(), any()}]
+      ```
+
+      ---
+
+      A keyword list with values of type `t`
+
+      ```
+      @type keyword(t) :: [{atom(), t}]
+      ```
+
+      ---
+
+      \\<sub\\>\\<sup\\>_* Built-in type_\\</sup\\>\\</sub\\>\
+      """
+    end
+
+    test "retrieve basic type documentation" do
+      buffer = """
+      defmodule MyModule do
+        @type num :: integer
+        #               ^
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 2, 19)
+
+      assert subject == "integer"
+      assert actual_subject == "integer"
+      assert docs == """
+      An integer number
+
+      ```
+      integer()
+      ```
+
+      ---
+
+      \\<sub\\>\\<sup\\>_* Built-in type_\\</sup\\>\\</sub\\>\
+      """
+    end
+
+    test "retrieve basic and builtin type documentation" do
+      buffer = """
+      defmodule MyModule do
+        @type num :: list(atom)
+        #              ^
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 2, 18)
+
+      assert subject == "list"
+      assert actual_subject == "list"
+      assert docs == """
+      A list
+
+      ```
+      @type list() :: [any()]
+      ```
+
+      ---
+
+      Proper list ([]-terminated)
+
+      ```
+      list(t)
+      ```
+
+      ---
+
+      \\<sub\\>\\<sup\\>_* Built-in type_\\</sup\\>\\</sub\\>\
+      """
+    end
+
   end
 end

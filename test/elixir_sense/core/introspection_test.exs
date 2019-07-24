@@ -2,7 +2,36 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
   use ExUnit.Case
 
+  alias ElixirSense.Core.TypeInfo
   import ElixirSense.Core.Introspection
+
+  test "format_spec_ast with one return option does not aplit the returns" do
+    type_ast = TypeInfo.get_type_ast(GenServer, :debug)
+
+    assert format_spec_ast(type_ast) == """
+    debug :: [:trace | :log | :statistics | {:log_to_file, Path.t}]
+    """
+  end
+
+  test "format_spec_ast with more than one return option aplits the returns" do
+    type_ast = TypeInfo.get_type_ast(GenServer, :on_start)
+
+    assert format_spec_ast(type_ast) == """
+    on_start ::
+      {:ok, pid} |
+      :ignore |
+      {:error, {:already_started, pid} | term}
+    """
+  end
+
+  test "format_spec_ast for callback" do
+    ast = get_callback_ast(GenServer, :code_change, 3)
+    assert format_spec_ast(ast) == """
+    code_change(old_vsn, state :: term, extra :: term) ::
+      {:ok, new_state :: term} |
+      {:error, reason :: term} when old_vsn: term | {:down, term}
+    """
+  end
 
   test "get_callbacks_with_docs for erlang behaviours" do
     assert get_callbacks_with_docs(:supervisor) == [%{
@@ -57,33 +86,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
     assert info.signature == "code_change(old_vsn, state, extra)"
   end
 
-  test "format_spec_ast with one return option does not aplit the returns" do
-    type_ast = get_type_ast(GenServer, :debug)
-
-    assert format_spec_ast(type_ast) == """
-    debug :: [:trace | :log | :statistics | {:log_to_file, Path.t}]
-    """
-  end
-
-  test "format_spec_ast with more than one return option aplits the returns" do
-    type_ast = get_type_ast(GenServer, :on_start)
-
-    assert format_spec_ast(type_ast) == """
-    on_start ::
-      {:ok, pid} |
-      :ignore |
-      {:error, {:already_started, pid} | term}
-    """
-  end
-
-  test "format_spec_ast for callback" do
-    ast = get_callback_ast(GenServer, :code_change, 3)
-    assert format_spec_ast(ast) =~ """
-    code_change(old_vsn, state :: term, extra :: term) ::
-      {:ok, new_state :: term} |
-    """
-  end
-
   test "get_returns_from_callback" do
     returns = get_returns_from_callback(GenServer, :code_change, 3)
     assert [
@@ -114,23 +116,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
       %{description: "{:next_state, nextStateName, newStateData, timeout | :hibernate}", snippet: "{:next_state, \"${1:nextStateName}$\", \"${2:newStateData}$\", \"${3:timeout | :hibernate}$\"}", spec: "{:next_state, nextStateName :: atom, newStateData :: term, timeout | :hibernate}"},
       %{description: "{:stop, reason, newStateData}", snippet: "{:stop, \"${1:reason}$\", \"${2:newStateData}$\"}", spec: "{:stop, reason :: term, newStateData :: term}"}
     ]
-  end
-
-  test "get_types ignores privates types (:opaque and :typep)" do
-    types = get_types(ModuleWithPrivateTypes)
-    assert types == [type: {:type_t, {:type, 4, :atom, []}, []}]
-  end
-
-  test "get_func_docs_md works for kernel special forms" do
-    docs = get_func_docs_md(Kernel.SpecialForms, :__MODULE__)
-    assert docs == "> Kernel.SpecialForms.__MODULE__()\n\nReturns the current module name as an atom or `nil` otherwise.\n\nAlthough the module can be accessed in the `__ENV__/0`, this macro\nis a convenient shortcut.\n"
-  end
-
-  defp get_type_ast(module, type) do
-    {_kind, type} =
-      get_types(module)
-      |> Enum.find(fn {_, {name, _, _}} -> name == type end)
-    type_to_quoted(type)
   end
 
 end

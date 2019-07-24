@@ -8,6 +8,7 @@ defmodule ElixirSense.Providers.Definition do
 
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
+  alias ElixirSense.Core.Source
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State.VarInfo
 
@@ -33,16 +34,26 @@ defmodule ElixirSense.Providers.Definition do
         %Location{found: true, type: :variable, file: nil, line: line, column: column}
       _ ->
         subject
-        |> Introspection.split_mod_fun_call
+        |> Source.split_module_and_func
         |> Introspection.actual_mod_fun(imports, aliases, module)
-        |> find_source()
+        |> find_source(module)
     end
   end
 
-  defp find_source({mod, fun}) do
-    mod
-    |> find_mod_file()
-    |> find_fun_position(fun)
+  defp find_source({mod, fun}, current_module) do
+    with(
+      {mod, file} when file not in ["non_existing", nil, ""] <- find_mod_file(mod),
+      nil <- find_fun_position({mod, file}, fun),
+      nil <- find_type_position({mod, file}, fun),
+      nil <- find_type_position({current_module, file}, fun)
+    ) do
+      %Location{found: false}
+    else
+      %Location{} = location ->
+        location
+      _ ->
+        %Location{found: false}
+    end
   end
 
   defp find_mod_file(module) do
@@ -63,10 +74,6 @@ defmodule ElixirSense.Providers.Definition do
     {module, file}
   end
 
-  defp find_fun_position({_, file}, _fun) when file in ["non_existing", nil, ""] do
-    %Location{found: false}
-  end
-
   defp find_fun_position({mod, file}, fun) do
 
     type = case fun do
@@ -83,9 +90,8 @@ defmodule ElixirSense.Providers.Definition do
 
     case position do
       {line, column} -> %Location{found: true, type: type, file: file, line: line, column: column}
-      _ -> %Location{found: true, type: type, file: file, line: 1, column: 1}
+      _ -> nil
     end
-
   end
 
   defp find_fun_position_in_erl_file(file, fun) do
@@ -99,4 +105,14 @@ defmodule ElixirSense.Providers.Definition do
     {(index || 0) + 1, 1}
   end
 
+  defp find_type_position({_, file}, _fun) when file in ["non_existing", nil, ""] do
+    %Location{found: false}
+  end
+
+  defp find_type_position({mod, file}, name) do
+    case Introspection.get_type_position(mod, name, file) do
+      {line, column} -> %Location{found: true, type: :typespec, file: file, line: line, column: column}
+      _ -> nil
+    end
+  end
 end

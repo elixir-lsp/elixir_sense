@@ -287,4 +287,428 @@ defmodule ElixirSense.SuggestionsTest do
     assert Enum.any?(list, fn %{type: type} -> type == :field end) == false
   end
 
+  describe "suggestion for param options" do
+
+    test "suggest more than one option" do
+      buffer = "Local.func_with_options("
+
+      list = suggestions_by_type(:param_option, buffer)
+      assert length(list) > 1
+    end
+
+    test "suggest the same list when options are already set" do
+      buffer1 = "Local.func_with_options("
+      buffer2 = "Local.func_with_options(local_o: :an_atom, "
+      assert suggestions_by_type(:param_option, buffer1) == suggestions_by_type(:param_option, buffer2)
+    end
+
+    test "options as inline list" do
+      buffer = "Local.func_with_options_as_inline_list("
+
+      assert %{type_spec: "local_t()", expanded_spec: "@type local_t() :: atom()"} =
+        suggestion_by_name(:local_o, buffer)
+
+      assert %{
+        type_spec: "keyword()",
+        expanded_spec: """
+        @type keyword() :: [
+          {atom(), any()}
+        ]\
+        """
+      } = suggestion_by_name(:builtin_o, buffer)
+    end
+
+    test "options vars defined in when" do
+      type_spec = "local_t()"
+      origin = "ElixirSenseExample.ModuleWithTypespecs.Local"
+      spec = "@type local_t() :: atom()"
+
+      buffer = "Local.func_with_option_var_defined_in_when("
+      suggestion = suggestion_by_name(:local_o, buffer)
+
+      assert suggestion.type_spec == type_spec
+      assert suggestion.origin == origin
+      assert suggestion.expanded_spec == spec
+
+      buffer = "Local.func_with_options_var_defined_in_when("
+      suggestion = suggestion_by_name(:local_o, buffer)
+
+      assert suggestion.type_spec == type_spec
+      assert suggestion.origin == origin
+      assert suggestion.expanded_spec == spec
+    end
+
+    test "opaque type" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:opaque_o, buffer)
+
+      assert suggestion.type_spec == "opaque_t()"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
+      assert suggestion.expanded_spec == "@opaque opaque_t() :: atom()"
+      assert suggestion.doc == "Local opaque type"
+    end
+
+    test "private type" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:private_o, buffer)
+
+      assert suggestion.type_spec == "private_t()"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
+      assert suggestion.expanded_spec == "@typep private_t() :: atom()"
+      assert suggestion.doc == ""
+    end
+
+    test "local type" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:local_o, buffer)
+
+      assert suggestion.type_spec == "local_t()"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
+      assert suggestion.expanded_spec == "@type local_t() :: atom()"
+      assert suggestion.doc == "Local type"
+    end
+
+    test "local type with params" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:local_with_params_o, buffer)
+
+      assert suggestion.type_spec == "local_t(atom(), integer())"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
+      assert suggestion.expanded_spec == "@type local_t(a, b) :: {a, b}"
+    end
+
+    test "basic type" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:basic_o, buffer)
+
+      assert suggestion.type_spec == "pid()"
+      assert suggestion.origin == ""
+      assert suggestion.expanded_spec == ""
+      assert suggestion.doc == "A process identifier, pid, identifies a process"
+    end
+
+    test "basic type with params" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:basic_with_params_o, buffer)
+
+      assert suggestion.type_spec == "[atom(), ...]"
+      assert suggestion.origin == ""
+      assert suggestion.expanded_spec == ""
+      assert suggestion.doc == "Non-empty proper list"
+    end
+
+    test "built-in type" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:builtin_o, buffer)
+
+      assert suggestion.type_spec == "keyword()"
+      assert suggestion.origin == ""
+      assert suggestion.expanded_spec == """
+      @type keyword() :: [
+        {atom(), any()}
+      ]\
+      """
+      assert suggestion.doc == "A keyword list"
+    end
+
+    test "built-in type with params" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:builtin_with_params_o, buffer)
+
+      assert suggestion.type_spec == "keyword(term())"
+      assert suggestion.origin == ""
+      assert suggestion.expanded_spec == "@type keyword(t) :: [{atom(), t}]"
+      assert suggestion.doc == "A keyword list with values of type `t`"
+    end
+
+    test "union type" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:union_o, buffer)
+
+      assert suggestion.type_spec == "union_t()"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
+      assert suggestion.expanded_spec == """
+      @type union_t() ::
+        atom() | integer()\
+      """
+    end
+
+    test "list type" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:list_o, buffer)
+
+      assert suggestion.type_spec == "list_t()"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
+      assert suggestion.expanded_spec == "@type list_t() :: [:trace | :log]"
+    end
+
+    test "remote type" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:remote_o, buffer)
+
+      assert suggestion.type_spec == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t()"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
+      assert suggestion.expanded_spec == "@type remote_t() :: atom()"
+      assert suggestion.doc == "Remote type"
+    end
+
+    test "remote type with args" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:remote_with_params_o, buffer)
+
+      assert suggestion.type_spec == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t(atom(), integer())"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
+      assert suggestion.expanded_spec == "@type remote_t(a, b) :: {a, b}"
+      assert suggestion.doc == "Remote type with params"
+    end
+
+    test "remote aliased type" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:remote_aliased_o, buffer)
+
+      assert suggestion.type_spec == "remote_aliased_t()"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
+      assert suggestion.expanded_spec == """
+      @type remote_aliased_t() ::
+        ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t()
+        | ElixirSenseExample.ModuleWithTypespecs.Remote.remote_list_t()\
+      """
+      assert suggestion.doc == "Remote type from aliased module"
+    end
+
+    test "remote aliased inline type" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:remote_aliased_inline_o, buffer)
+
+      assert suggestion.type_spec == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t()"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
+      assert suggestion.expanded_spec == "@type remote_t() :: atom()"
+      assert suggestion.doc == "Remote type"
+    end
+
+    test "inline list type" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:inline_list_o, buffer)
+
+      assert suggestion.type_spec == "[:trace | :log]"
+      assert suggestion.origin == ""
+      assert suggestion.expanded_spec == ""
+      assert suggestion.doc == ""
+    end
+
+    test "non existent type" do
+      buffer = "Local.func_with_options("
+      suggestion = suggestion_by_name(:non_existent_o, buffer)
+
+      assert suggestion.type_spec == "ElixirSenseExample.ModuleWithTypespecs.Remote.non_existent()"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
+      assert suggestion.expanded_spec == ""
+      assert suggestion.doc == ""
+    end
+
+    test "named options" do
+      buffer = "Local.func_with_named_options("
+      assert suggestion_by_name(:local_o, buffer).type_spec == "local_t()"
+    end
+
+    test "options with only one option" do
+      buffer = "Local.func_with_one_option("
+      assert suggestion_by_name(:option_1, buffer).type_spec == "integer()"
+    end
+
+    test "union of options" do
+      buffer = "Local.func_with_union_of_options("
+
+      assert suggestion_by_name(:local_o, buffer).type_spec == "local_t()"
+      assert suggestion_by_name(:option_1, buffer).type_spec == "atom()"
+    end
+
+    test "union of options inline" do
+      buffer = "Local.func_with_union_of_options_inline("
+
+      assert suggestion_by_name(:local_o, buffer).type_spec == "local_t()"
+      assert suggestion_by_name(:option_1, buffer).type_spec == "atom()"
+    end
+
+    test "union of options (local and remote) as type + inline" do
+      buffer = "Local.func_with_union_of_options_as_type("
+      assert suggestion_by_name(:option_1, buffer).type_spec == "boolean()"
+
+      suggestion = suggestion_by_name(:remote_option_1, buffer)
+      assert suggestion.type_spec == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t()"
+      assert suggestion.expanded_spec == "@type remote_t() :: atom()"
+      assert suggestion.doc == "Remote type"
+    end
+
+    test "format type spec" do
+      buffer = "Local.func_with_options("
+
+      assert suggestion_by_name(:large_o, buffer).expanded_spec == """
+      @type large_t() ::
+        pid()
+        | port()
+        | (registered_name ::
+             atom())
+        | {registered_name ::
+             atom(), node()}\
+      """
+    end
+  end
+
+  describe "suggestions for typespecs" do
+
+    test "remote types - filter list of typespecs" do
+      buffer = "Remote.remote_t"
+
+      list = suggestions_by_type(:type_spec, buffer)
+      assert length(list) == 2
+    end
+
+    test "remote types - retrieve info from typespecs" do
+      buffer = "Remote."
+
+      suggestion = suggestion_by_name(:remote_list_t, buffer)
+      assert suggestion.spec == """
+      @type remote_list_t() :: [
+        remote_t()
+      ]\
+      """
+      assert suggestion.signature == "remote_list_t()"
+      assert suggestion.arity == 0
+      assert suggestion.doc == "Remote list type"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
+    end
+
+    test "remote types - retrieve info from typespecs with params" do
+      buffer = "Remote."
+
+      [suggestion_1, suggestion_2] = suggestions_by_name(:remote_t, buffer)
+
+      assert suggestion_1.spec == "@type remote_t() :: atom()"
+      assert suggestion_1.signature == "remote_t()"
+      assert suggestion_1.arity == 0
+      assert suggestion_1.doc == "Remote type"
+      assert suggestion_1.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
+
+      assert suggestion_2.spec == "@type remote_t(a, b) :: {a, b}"
+      assert suggestion_2.signature == "remote_t(a, b)"
+      assert suggestion_2.arity == 2
+      assert suggestion_2.doc == "Remote type with params"
+      assert suggestion_2.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
+    end
+
+    test "local types - filter list of typespecs" do
+      buffer = """
+      defmodule ElixirSenseExample.ModuleWithTypespecs.Local do
+        # The types are defined in `test/support/module_with_typespecs.ex`
+        @type my_type :: local_
+        #                      ^
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 3, 26)
+        |> Enum.filter(fn %{type: t} -> t == :type_spec end)
+
+      assert length(list) == 2
+    end
+
+    test "local types - retrieve info from typespecs" do
+      buffer = """
+      defmodule ElixirSenseExample.ModuleWithTypespecs.Local do
+        # The types are defined in `test/support/module_with_typespecs.ex`
+        @type my_type :: local_t
+        #                       ^
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 3, 27)
+        |> Enum.filter(fn %{type: t} -> t == :type_spec end)
+
+      [suggestion, _] = list
+
+      assert suggestion.spec == "@type local_t() :: atom()"
+      assert suggestion.signature == "local_t()"
+      assert suggestion.arity == 0
+      assert suggestion.doc == "Local type"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
+    end
+
+    test "builtin types - filter list of typespecs" do
+      buffer = "@type my_type :: lis"
+
+      list = suggestions_by_type(:type_spec, buffer)
+      assert length(list) == 2
+    end
+
+    test "builtin types - retrieve info from typespecs" do
+      buffer = "@type my_type :: lis"
+
+      [suggestion | _] = suggestions_by_type(:type_spec, buffer)
+
+      assert suggestion.spec == "@type list() :: [any()]"
+      assert suggestion.signature == "list()"
+      assert suggestion.arity == 0
+      assert suggestion.doc == "A list"
+      assert suggestion.origin == ""
+    end
+
+    test "builtin types - retrieve info from typespecs with params" do
+      buffer = "@type my_type :: lis"
+
+      [_, suggestion | _] = suggestions_by_type(:type_spec, buffer)
+
+      assert suggestion.spec == ""
+      assert suggestion.signature == "list(t)"
+      assert suggestion.arity == 1
+      assert suggestion.doc == "Proper list ([]-terminated)"
+      assert suggestion.origin == ""
+    end
+  end
+
+  defp suggestions_by_type(type, buffer) do
+    {line, column} = get_last_line_and_column(buffer)
+    suggestions_by_type(type, buffer, line, column)
+  end
+
+  defp suggestions_by_type(type, buffer, line, column) do
+    buffer
+    |> add_aliases("Local, Remote")
+    |> ElixirSense.suggestions(line + 1, column)
+    |> Enum.filter(fn %{type: t} -> t == type end)
+  end
+
+  defp suggestions_by_name(name, buffer) do
+    {line, column} = get_last_line_and_column(buffer)
+    suggestions_by_name(name, buffer, line, column)
+  end
+
+  defp suggestions_by_name(name, buffer, line, column) do
+    buffer
+    |> add_aliases("Local, Remote")
+    |> ElixirSense.suggestions(line + 1, column)
+    |> Enum.filter(fn %{name: n} -> n == name; _ -> false end)
+  end
+
+  defp suggestion_by_name(name, buffer) do
+    {line, column} = get_last_line_and_column(buffer)
+    suggestion_by_name(name, buffer, line, column)
+  end
+
+  defp suggestion_by_name(name, buffer, line, column) do
+    [suggestion] = suggestions_by_name(name, buffer, line, column)
+    suggestion
+  end
+
+  defp get_last_line_and_column(buffer) do
+    str_lines = String.split(buffer, "\n")
+    line = length(str_lines)
+    column = (str_lines |> List.last() |> String.length()) + 1
+    {line, column}
+  end
+
+  defp add_aliases(buffer, aliases) do
+    "alias ElixirSenseExample.ModuleWithTypespecs.{#{aliases}}\n" <> buffer
+  end
 end

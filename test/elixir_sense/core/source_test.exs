@@ -171,6 +171,51 @@ defmodule ElixirSense.Core.SourceTest do
       }
     end
 
+    test "inside a keyword list as last arg" do
+      assert which_func("var = IO.inspect([1,2], limit: 100, ") == %{
+        candidate: {IO, :inspect},
+        npar: 1,
+        pipe_before: false,
+        pos: {{1, 7}, {1, nil}}
+      }
+    end
+
+    test "inside a keyword list as last arg with last key without value" do
+      assert which_func("var = IO.inspect([1,2], limit: 100, labe: ") == %{
+        candidate: {IO, :inspect},
+        npar: 1,
+        pipe_before: false,
+        pos: {{1, 7}, {1, nil}}
+      }
+    end
+
+    test "inside a keyword list as last arg with more than one key" do
+      assert which_func("var = IO.inspect([1,2], limit: 100, label: :a, ") == %{
+        candidate: {IO, :inspect},
+        npar: 1,
+        pipe_before: false,
+        pos: {{1, 7}, {1, nil}}
+      }
+    end
+
+    test "inside a delimited keyword list as last arg" do
+      assert which_func("var = IO.inspect([1,2], [limit: 1, ") == %{
+        candidate: {IO, :inspect},
+        npar: 1,
+        pipe_before: false,
+        pos: {{1, 7}, {1, nil}}
+      }
+    end
+
+    test "inside a map" do
+      assert which_func("var = IO.inspect(%{a: 1, b: ") == %{
+        candidate: {IO, :inspect},
+        npar: 0,
+        pipe_before: false,
+        pos: {{1, 7}, {1, nil}}
+      }
+    end
+
     test "inside a tuple" do
       assert which_func("var = Enum.map({1,2,3") == %{
         candidate: {Enum, :map},
