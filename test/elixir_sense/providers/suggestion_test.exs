@@ -99,15 +99,15 @@ defmodule ElixirSense.Providers.SuggestionTest do
   end
 
   test "return completion candidates for &func" do
-    assert [%{type: :hint, value: "f = &Enum.all?"} | _] = Suggestion.find("f = &Enum.al", [MyModule], [], SomeModule, [], [], [], SomeModule, "")
+    assert [%{type: :hint, value: "f = &Enum.all?"} | _] = Suggestion.find("f = &Enum.al", [MyModule], [], SomeModule, [], [], [], {:func, 0}, "")
   end
 
   test "do not return completion candidates for unknown erlang modules" do
-    assert [%{type: :hint, value: "Enum:"}] = Suggestion.find("Enum:", [MyModule], [], SomeModule, [], [], [], SomeModule, "")
+    assert [%{type: :hint, value: "Enum:"}] = Suggestion.find("Enum:", [MyModule], [], SomeModule, [], [], [], {:func, 0}, "")
   end
 
   test "do not return completion candidates for unknown modules" do
-    assert [%{type: :hint, value: "x.Foo.get_by"}] = Suggestion.find("x.Foo.get_by", [MyModule], [], SomeModule, [], [], [], SomeModule, "")
+    assert [%{type: :hint, value: "x.Foo.get_by"}] = Suggestion.find("x.Foo.get_by", [MyModule], [], SomeModule, [], [], [], {:func, 0}, "")
   end
 
 end
