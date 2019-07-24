@@ -140,19 +140,6 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, '', [
       %{name: "bar", arity: 0},
-      # IEx version does not have those 3 hints
-      %{
-        arity: 0,
-        name: "module_info",
-      },
-      %{
-        arity: 1,
-        name: "module_info",
-      },
-      %{
-        arity: 1,
-        name: "__info__",
-      },
       %{name: "foo", arity: 1},
       %{name: "foo", arity: 2},
       %{name: "foo", arity: 3},
@@ -307,13 +294,6 @@ defmodule Alchemist.Helpers.CompleteTest do
   after
     :code.purge(:"Alchemist.Helpers.CompleteTest.Unicodé")
     :code.delete(:"Alchemist.Helpers.CompleteTest.Unicodé")
-  end
-
-  test "complete builtin functions" do
-    assert {:yes, 'fo__', [%{name: "__info__"}]} = expand('Enumerable.__in')
-    assert {:yes, 'fo', [%{name: "module_info", arity: 0}, %{name: "module_info", arity: 1}]} = expand('Enumerable.module_in')
-    assert {:yes, 'otocol__', [%{name: "__protocol__", arity: 1}]} = expand('Enumerable.__pr')
-    assert {:yes, 'r', []} = expand('Enumerable.impl_fo')
   end
 
   defmodule MyMacro do

@@ -409,7 +409,7 @@ defmodule Alchemist.Helpers.Complete do
       function_exported?(mod, :__info__, 1) ->
         docs = NormalizedCode.get_docs(mod, :docs)
         if docs != nil do
-          exports = (mod.__info__(:macros) ++ mod.__info__(:functions) ++ @builtin_functions)
+          exports = mod.__info__(:macros) ++ mod.__info__(:functions) -- @builtin_functions
           |> Kernel.--(default_arg_functions_with_doc_false(docs))
           |> Enum.reject(&hidden_fun?(&1, docs))
 
@@ -428,12 +428,12 @@ defmodule Alchemist.Helpers.Complete do
           end
         else
           macros = for {f, a} <- mod.__info__(:macros), do: {f, a, :defmacro, nil, nil}
-          functions = for {f, a} <- (mod.__info__(:functions) ++ @builtin_functions), do: {f, a, :def, nil, nil}
+          functions = for {f, a} <- (mod.__info__(:functions) -- @builtin_functions), do: {f, a, :def, nil, nil}
           macros ++ functions
         end
 
       true ->
-        for {f, a} <- mod.module_info(:exports) do
+        for {f, a} <- (mod.module_info(:exports) -- @builtin_functions) do
           case f |> Atom.to_string do
             "MACRO-" <> name ->
               {String.to_atom(name), a, :defmacro, nil, nil}
@@ -477,10 +477,6 @@ defmodule Alchemist.Helpers.Complete do
     Enum.count(args, &match?({:\\, _, _}, &1))
   end
 
-  defp hidden_fun?({:__info__, 1}, _docs), do: false
-  defp hidden_fun?({:__protocol__, 1}, _docs), do: false
-  defp hidden_fun?({:impl_for, 1}, _docs), do: false
-  defp hidden_fun?({:impl_for!, 1}, _docs), do: false
   defp hidden_fun?(fun, docs) do
     case List.keyfind(docs, fun, 0) do
       nil ->
