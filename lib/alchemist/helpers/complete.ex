@@ -9,14 +9,17 @@ defmodule Alchemist.Helpers.Complete do
 
   @moduledoc false
 
-  # This Alchemist.Completer holds a codebase copy of the
-  # IEx.Autocomplete because for the use of context specific
-  # aliases.
-  #
-  # With the release of Elixir v1.1 the IEx.Autocomplete will
-  # look for aliases in a certain environment variable
-  # `Application.get_env(:iex, :autocomplete_server)` and until
-  # then we'll use our own autocomplete codebase.
+  # This module is based on Alchemist.Completer which in
+  # turn was originally based on Elixir IEx.Autocomplete taken
+  # from version ~ 1.1
+  # Since then the codebases have diverged as the requirements
+  # put on editor and REPL autocomplete are different.
+  # However some relevant changes have been merged back
+  # from upstream Elixir (1.9).
+
+  # Alchemist.Helpers.Complete will look for aliases in
+  # an environment variable
+  # `Application.get_env(:"alchemist.el", :aliases)`
 
   def run(exp) do
     code = case is_bitstring(exp) do
