@@ -4,6 +4,7 @@ defmodule Alchemist.Helpers.Complete do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
+  alias ElixirSense.Core.Source
 
   @builtin_functions [{:__info__, 1}, {:module_info, 0}, {:module_info, 1}]
 
@@ -266,16 +267,8 @@ defmodule Alchemist.Helpers.Complete do
     |> format_expansion(hint)
   end
 
-  defp expand_alias([name | rest]) when is_atom(name)
-  do
-    case Keyword.fetch(aliases_from_env(), Module.concat(Elixir, name)) do
-      {:ok, name} when rest == [] -> {:ok, name}
-      {:ok, name} -> {:ok, Module.concat([name | rest])}
-      :error -> {:ok, Module.concat([name | rest])}
-    end
-  end
-  defp expand_alias([_ | _]) do
-    :error
+  defp expand_alias(mod_parts) do
+    Source.concat_module_parts(mod_parts, aliases_from_env())
   end
 
   defp aliases_from_env do

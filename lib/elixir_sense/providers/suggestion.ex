@@ -233,7 +233,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
   defp find_typespecs(hint, aliases, module, _scope) do
     hint
-    |> Source.split_module_and_hint()
+    |> Source.split_module_and_hint(aliases)
     |> find_typespecs_for_mod_and_hint(aliases, module)
   end
 

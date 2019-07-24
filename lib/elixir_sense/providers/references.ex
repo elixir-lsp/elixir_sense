@@ -37,7 +37,7 @@ defmodule ElixirSense.Providers.References do
         |> Enum.map(fn pos -> build_var_location(subject, pos) end)
       _ ->
         subject
-        |> Source.split_module_and_func
+        |> Source.split_module_and_func(aliases)
         |> Introspection.actual_mod_fun(imports, aliases, module)
         |> xref_at_cursor(arity, module, scope)
         |> Enum.map(&build_location/1)
@@ -112,7 +112,7 @@ defmodule ElixirSense.Providers.References do
   defp find_actual_mod_fun(code, line, col, imports, aliases, module) do
     code
     |> Source.subject(line, col)
-    |> Source.split_module_and_func
+    |> Source.split_module_and_func(aliases)
     |> Introspection.actual_mod_fun(imports, aliases, module)
   end
 
