@@ -87,33 +87,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
     assert info.signature == "code_change(old_vsn, state, extra)"
   end
 
-  test "format_spec_ast with one return option does not aplit the returns" do
-    type_ast = get_type_ast(GenServer, :debug)
-
-    assert format_spec_ast(type_ast) == """
-    debug :: [:trace | :log | :statistics | {:log_to_file, Path.t}]
-    """
-  end
-
-  test "format_spec_ast with more than one return option aplits the returns" do
-    type_ast = get_type_ast(GenServer, :on_start)
-
-    assert format_spec_ast(type_ast) == """
-    on_start ::
-      {:ok, pid} |
-      :ignore |
-      {:error, {:already_started, pid} | term}
-    """
-  end
-
-  test "format_spec_ast for callback" do
-    ast = get_callback_ast(GenServer, :code_change, 3)
-    assert format_spec_ast(ast) =~ """
-    code_change(old_vsn, state :: term, extra :: term) ::
-      {:ok, new_state :: term} |
-    """
-  end
-
   test "get_returns_from_callback" do
     returns = get_returns_from_callback(GenServer, :code_change, 3)
     assert [
