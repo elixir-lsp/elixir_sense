@@ -8,29 +8,29 @@ defmodule ElixirSense.Core.Source do
   @empty_graphemes [" ", "\n", "\r\n"]
   @stop_graphemes ~w/{ } ( ) [ ] < > + - * & ^ , ; ~ % = " ' \\ \/ $ ! ?`#/ ++ @empty_graphemes
 
-  def split_module_and_hint(hint) do
+  def split_module_and_hint(hint, aliases \\ []) do
     if String.ends_with?(hint, ".") do
       {mod, _} =
         hint
         |> String.slice(0..-2)
-        |> split_module_and_func()
+        |> split_module_and_func(aliases)
       {mod, ""}
     else
       {mod, new_hint} =
         hint
-        |> split_module_and_func()
+        |> split_module_and_func(aliases)
       {mod, to_string(new_hint)}
     end
   end
 
-  def split_module_and_func(call) do
+  def split_module_and_func(call, aliases \\ []) do
     case Code.string_to_quoted(call) do
       {:error, _} ->
         {nil, nil}
       {:ok, quoted} when is_atom(quoted) ->
         {quoted, nil}
       {:ok, quoted} ->
-        split_mod_quoted_fun_call(quoted)
+        split_mod_quoted_fun_call(quoted, aliases)
     end
   end
 
@@ -272,12 +272,18 @@ defmodule ElixirSense.Core.Source do
     %{state | pipe_before: true}
   end
 
-  defp split_mod_quoted_fun_call(quoted) do
+  defp split_mod_quoted_fun_call(quoted, aliases) do
     case Macro.decompose_call(quoted) do
       {{:__aliases__, _, mod_parts}, fun, _args} ->
-        {Module.concat(mod_parts), fun}
+        case concat_module_parts(mod_parts, aliases) do
+          {:ok, concated} -> {concated, fun}
+          :error -> {nil, nil}
+        end
       {:__aliases__, mod_parts} ->
-        {Module.concat(mod_parts), nil}
+        case concat_module_parts(mod_parts, aliases) do
+          {:ok, concated} -> {concated, nil}
+          :error -> {nil, nil}
+        end
       {mod, func, []} when is_atom(mod) and is_atom(func) ->
         {mod, func}
       {func, []} when is_atom(func) ->
@@ -285,5 +291,14 @@ defmodule ElixirSense.Core.Source do
       _ -> {nil, nil}
     end
   end
+
+  def concat_module_parts([name | rest], aliases) when is_atom(name) do
+    case Keyword.fetch(aliases, Module.concat(Elixir, name)) do
+      {:ok, name} when rest == [] -> {:ok, name}
+      {:ok, name} -> {:ok, Module.concat([name | rest])}
+      :error -> {:ok, Module.concat([name | rest])}
+    end
+  end
+  def concat_module_parts([_ | _], _), do: :error
 
 end

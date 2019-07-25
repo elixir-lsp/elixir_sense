@@ -53,8 +53,8 @@ defmodule ElixirSense.Core.Normalized.Code do
     docs_en =
       case docs do
         %{"en" => docs_en} -> docs_en
-        false -> false
-        _ -> nil
+        :hidden -> false
+        :none -> nil
       end
 
     case kind do

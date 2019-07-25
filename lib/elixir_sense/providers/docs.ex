@@ -10,7 +10,7 @@ defmodule ElixirSense.Providers.Docs do
   def all(subject, imports, aliases, module, scope) do
     mod_fun =
       subject
-      |> Source.split_module_and_func
+      |> Source.split_module_and_func(aliases)
       |> Introspection.actual_mod_fun(imports, aliases, module)
     {mod_fun_to_string(mod_fun), Introspection.get_all_docs(mod_fun, scope)}
   end

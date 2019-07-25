@@ -71,13 +71,13 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list  == [
       %{type: :hint, value: "MyList.flatten"},
-      %{args: "list,tail", arity: 2, name: "flatten", origin: "List",
-       spec: "@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var",
-       summary: "Flattens the given `list` of nested lists.\nThe list `tail` will be added at the end of\nthe flattened list.",
-       type: "function"},
       %{args: "list", arity: 1, name: "flatten", origin: "List",
        spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]",
        summary: "Flattens the given `list` of nested lists.",
+       type: "function"},
+      %{args: "list,tail", arity: 2, name: "flatten", origin: "List",
+       spec: "@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var",
+       summary: "Flattens the given `list` of nested lists.\nThe list `tail` will be added at the end of\nthe flattened list.",
        type: "function"}
     ]
   end

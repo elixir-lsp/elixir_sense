@@ -4,19 +4,23 @@ defmodule Alchemist.Helpers.Complete do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
+  alias ElixirSense.Core.Source
 
   @builtin_functions [{:__info__, 1}, {:module_info, 0}, {:module_info, 1}]
 
   @moduledoc false
 
-  # This Alchemist.Completer holds a codebase copy of the
-  # IEx.Autocomplete because for the use of context specific
-  # aliases.
-  #
-  # With the release of Elixir v1.1 the IEx.Autocomplete will
-  # look for aliases in a certain environment variable
-  # `Application.get_env(:iex, :autocomplete_server)` and until
-  # then we'll use our own autocomplete codebase.
+  # This module is based on Alchemist.Completer which in
+  # turn was originally based on Elixir IEx.Autocomplete taken
+  # from version ~ 1.1
+  # Since then the codebases have diverged as the requirements
+  # put on editor and REPL autocomplete are different.
+  # However some relevant changes have been merged back
+  # from upstream Elixir (1.9).
+
+  # Alchemist.Helpers.Complete will look for aliases in
+  # an environment variable
+  # `Application.get_env(:"alchemist.el", :aliases)`
 
   def run(exp) do
     code = case is_bitstring(exp) do
@@ -30,8 +34,11 @@ defmodule Alchemist.Helpers.Complete do
       {:no, _, _}  -> ''
       {:yes, [], _} -> List.insert_at(list, 0, %{type: :hint, value: "#{exp}"})
       {:yes, _, []} -> run(code ++ result)
-      {:yes, _,  _} -> List.insert_at(run(code ++ result), 1, Enum.at(list, 0))
-      #
+      {:yes, _,  r} ->
+        case r do
+          [%{subtype: :struct}] -> List.insert_at(list, 0, %{type: :hint, value: "#{exp}#{result}"})
+          _ -> List.insert_at(run(code ++ result), 1, Enum.at(list, 0))
+        end
     end
   end
 
@@ -95,7 +102,7 @@ defmodule Alchemist.Helpers.Complete do
     cond do
       h === ?. and t != [] ->
         expand_dot(reduce(t))
-      h === ?: ->
+      h === ?: and t == [] ->
         expand_erlang_modules()
       identifier?(h) ->
         expand_expr(reduce(expr))
@@ -118,6 +125,8 @@ defmodule Alchemist.Helpers.Complete do
         expand_call(atom, "")
       {:ok, {:__aliases__, _, list}} ->
         expand_elixir_modules(list, "")
+      {:ok, {_, _, _} = ast_node} ->
+        expand_call(ast_node, "")
       _ ->
         no()
     end
@@ -135,18 +144,26 @@ defmodule Alchemist.Helpers.Complete do
         hint = Atom.to_string(List.last(list))
         list = Enum.take(list, length(list) - 1)
         expand_elixir_modules(list, hint)
-      {:ok, {{:., _, [mod, fun]}, _, []}} when is_atom(fun) ->
-        expand_call(mod, Atom.to_string(fun))
+      {:ok, {{:., _, [ast_node, fun]}, _, []}} when is_atom(fun) ->
+        expand_call(ast_node, Atom.to_string(fun))
       _ ->
         no()
     end
   end
 
   defp reduce(expr) do
-    Enum.reverse Enum.reduce ' ([{', expr, fn token, acc ->
+    Enum.reduce(' ([{', expr, fn token, acc ->
       hd(:string.tokens(acc, [token]))
-    end
+    end)
+    |> Enum.reverse
+    |> trim_leading(?&)
+	  |> trim_leading(?%)
   end
+
+  defp trim_leading([char | rest], char),
+	    do: rest
+  defp trim_leading(expr, _char),
+    do: expr
 
   defp yes(hint, entries) do
     {:yes, String.to_charlist(hint), entries}
@@ -176,7 +193,7 @@ defmodule Alchemist.Helpers.Complete do
     if prefix in [0, length] do
       yes("", Enum.flat_map(entries, &to_entries/1))
     else
-      yes(:binary.part(first.name, prefix, length - prefix), [])
+      yes(binary_part(first.name, prefix, length - prefix), [])
     end
   end
 
@@ -189,10 +206,21 @@ defmodule Alchemist.Helpers.Complete do
 
   # Elixir.fun
   defp expand_call({:__aliases__, _, list}, hint) do
-    list
-    |> expand_alias()
-    |> normalize_module()
-    |> expand_require(hint)
+    case expand_alias(list) do
+      {:ok, alias} -> expand_require(alias, hint)
+      :error -> no()
+    end
+  end
+
+  # variable.fun_or_key
+  defp expand_call({_, _, _} = _ast_node, _hint) do
+    # FIXME not supported
+    no()
+    # case value_from_binding(ast_node, server) do
+    #   {:ok, mod} when is_atom(mod) -> expand_call(mod, hint, server)
+    #   {:ok, map} when is_map(map) -> expand_map_field_access(map, hint)
+    #   _otherwise -> no()
+    # end
   end
 
   defp expand_call(_, _) do
@@ -200,7 +228,7 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp expand_require(mod, hint) do
-    format_expansion match_module_funs(mod, hint), hint
+    format_expansion(match_module_funs(mod, hint), hint)
   end
 
   defp expand_import(hint) do
@@ -217,7 +245,7 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp match_erlang_modules(hint) do
-    for mod <- match_modules(hint, true) do
+    for mod <- match_modules(hint, true), usable_as_unquoted_module?(mod) do
       %{kind: :module, name: mod, type: :erlang, desc: ""}
     end
   end
@@ -225,38 +253,28 @@ defmodule Alchemist.Helpers.Complete do
   ## Elixir modules
 
   defp expand_elixir_modules([], hint) do
-    expand_elixir_modules(Elixir, hint, match_aliases(hint))
+    expand_elixir_modules_from_aliases(Elixir, hint, match_aliases(hint))
   end
 
   defp expand_elixir_modules(list, hint) do
-    list
-    |> expand_alias()
-    |> normalize_module()
-    |> expand_elixir_modules(hint, [])
+    case expand_alias(list) do
+      {:ok, alias} -> expand_elixir_modules_from_aliases(alias, hint, [])
+      :error -> no()
+    end
   end
 
-  defp expand_elixir_modules(mod, hint, aliases) do
+  defp expand_elixir_modules_from_aliases(mod, hint, aliases) do
     aliases
     |> Kernel.++(match_elixir_modules(mod, hint))
     |> Kernel.++(match_module_funs(mod, hint))
     |> format_expansion(hint)
   end
 
-  defp expand_alias([name | rest] = list) do
-    module = Module.concat(Elixir, name)
-    Enum.find_value env_aliases(), list, fn {alias, mod} ->
-      if alias === module do
-        case Atom.to_string(mod) do
-          "Elixir." <> mod ->
-            Module.concat [mod|rest]
-          _ ->
-            mod
-        end
-      end
-    end
+  defp expand_alias(mod_parts) do
+    Source.concat_module_parts(mod_parts, aliases_from_env())
   end
 
-  defp env_aliases do
+  defp aliases_from_env do
     :"alchemist.el"
     |> Application.get_env(:aliases)
     |> format_aliases
@@ -266,7 +284,7 @@ defmodule Alchemist.Helpers.Complete do
   defp format_aliases(list), do: list
 
   defp match_aliases(hint) do
-    for {alias, _mod} <- env_aliases(),
+    for {alias, _mod} <- aliases_from_env(),
     [name] = Module.split(alias),
     starts_with?(name, hint) do
       %{kind: :module, type: :alias, name: name, desc: ""}
@@ -280,30 +298,48 @@ defmodule Alchemist.Helpers.Complete do
 
     for mod <- match_modules(base, module === Elixir),
     parts = String.split(mod, "."),
-    depth <= length(parts) do
+    depth <= length(parts),
+    name = Enum.at(parts, depth - 1),
+    valid_alias_piece?("." <> name),
+    uniq: true do
       mod_as_atom = mod |> String.to_atom
       desc = Introspection.get_module_docs_summary(mod_as_atom)
       subtype = Introspection.get_module_subtype(mod_as_atom)
-      %{kind: :module, type: :elixir, name: Enum.at(parts, depth - 1),
+      %{kind: :module, type: :elixir, name: name,
         desc: desc, subtype: subtype}
     end
     |> Enum.uniq_by(fn %{name: name} -> name end)
   end
 
+  defp valid_alias_piece?(<<?., char, rest::binary>>) when char in ?A..?Z,
+     do: valid_alias_rest?(rest)
+   defp valid_alias_piece?(_),
+     do: false
+
+    defp valid_alias_rest?(<<char, rest::binary>>)
+        when char in ?A..?Z
+        when char in ?a..?z
+        when char in ?0..?9
+        when char == ?_,
+        do: valid_alias_rest?(rest)
+   defp valid_alias_rest?(<<>>),
+     do: true
+   defp valid_alias_rest?(rest),
+     do: valid_alias_piece?(rest)
+
   ## Helpers
 
-   defp normalize_module(mod) do
-    if is_list(mod) do
-      Module.concat(mod)
-    else
-      mod
-    end
+  defp usable_as_unquoted_module?(name) do
+    # Conversion to atom is not a problem because
+    # it is only called with existing modules names.
+    Code.Identifier.classify(String.to_atom(name)) != :other
   end
 
   defp match_modules(hint, root) do
     root
     |> get_modules()
-    |> :lists.usort()
+    |> Enum.sort()
+    |> Enum.dedup()
     |> Enum.drop_while(& not starts_with?(&1, hint))
     |> Enum.take_while(& starts_with?(&1, hint))
   end
@@ -362,31 +398,99 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp get_module_funs(mod) do
-    if function_exported?(mod, :__info__, 1) do
-      if docs = NormalizedCode.get_docs(mod, :docs) do
-        specs = TypeInfo.get_module_specs(mod)
-        for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false do
-          spec = Map.get(specs, {f, a})
-          {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
+    cond do
+      not ensure_loaded?(mod) ->
+        []
+
+      function_exported?(mod, :__info__, 1) ->
+        docs = NormalizedCode.get_docs(mod, :docs)
+        if docs != nil do
+          exports = mod.__info__(:macros) ++ mod.__info__(:functions) -- @builtin_functions
+          |> Kernel.--(default_arg_functions_with_doc_false(docs))
+          |> Enum.reject(&hidden_fun?(&1, docs))
+
+          default_arg_functions = default_arg_functions(docs)
+
+          specs = TypeInfo.get_module_specs(mod)
+
+          for {f, a} <- exports do
+            {f, new_arity} = case default_arg_functions[{f, a}] do
+              nil -> {f, a}
+              new_arity -> {f, new_arity}
+            end
+            {func_kind, func_doc} = find_doc({f, new_arity}, docs)
+            spec = Map.get(specs, {f, new_arity})
+            {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
+          end
+        else
+          macros = for {f, a} <- mod.__info__(:macros), do: {f, a, :defmacro, nil, nil}
+          functions = for {f, a} <- (mod.__info__(:functions) -- @builtin_functions), do: {f, a, :def, nil, nil}
+          macros ++ functions
         end
-      else
-        macros = :macros
-        |> mod.__info__()
-        |> Enum.map(fn {f, a} -> {f, a, :macro, nil, nil} end)
-        functions = :functions
-        |> mod.__info__()
-        |> Enum.map(fn {f, a} -> {f, a, :function, nil, nil} end)
-        macros ++ functions
-      end
-    else
-      for {f, a} <- mod.module_info(:exports) do
-        case f |> Atom.to_string do
-          "MACRO-" <> name -> {String.to_atom(name), a, :macro, nil, nil}
-          _name            -> {f, a, :function, nil, nil}
+
+      true ->
+        for {f, a} <- (mod.module_info(:exports) -- @builtin_functions) do
+          case f |> Atom.to_string do
+            "MACRO-" <> name ->
+              {String.to_atom(name), a, :defmacro, nil, nil}
+            _name            -> {f, a, :def, nil, nil}
+          end
         end
-      end
+
+    end
+    |> Enum.sort_by(fn {f, a, _, _, _} -> {f, -a} end)
+  end
+
+  def find_doc(fun, _docs) when fun in @builtin_functions, do:
+    {:def, nil}
+  def find_doc(fun, docs) do
+    doc = docs
+    |> Enum.find(& match?({^fun, _, _, _, _}, &1))
+    case doc do
+      nil -> {nil, nil}
+      {_, _, func_kind, _, _} = d -> {func_kind, d}
     end
   end
+
+  defp default_arg_functions(docs) do
+    for {{fun_name, arity}, _, :def, args, x} when x != false <- docs,
+        count = count_defaults(args),
+        count > 0,
+        new_arity <- (arity-count)..(arity - 1),
+        into: %{},
+        do: {{fun_name, new_arity}, arity}
+  end
+
+  defp default_arg_functions_with_doc_false(docs) do
+    for {{fun_name, arity}, _, _, args, false} <- docs,
+        count = count_defaults(args),
+        count > 0,
+        new_arity <- (arity-count)..arity,
+        do: {fun_name, new_arity}
+  end
+
+  defp count_defaults(args) do
+    Enum.count(args, &match?({:\\, _, _}, &1))
+  end
+
+  defp hidden_fun?(fun, docs) do
+    case List.keyfind(docs, fun, 0) do
+      nil ->
+        underscored_fun?(fun)
+      {_, _, _, _, false} ->
+        true
+      {fun, _, _, _, nil} ->
+        underscored_fun?(fun)
+      {_, _, _, _, _}  ->
+        false
+    end
+  end
+
+  defp underscored_fun?({name, _}),
+     do: hd(Atom.to_charlist(name)) == ?_
+
+  defp ensure_loaded?(Elixir), do: false
+  defp ensure_loaded?(mod), do: Code.ensure_loaded?(mod)
 
   defp ensure_loaded(Elixir), do: {:error, :nofile}
   defp ensure_loaded(mod), do: Code.ensure_compiled(mod)
@@ -428,8 +532,12 @@ defmodule Alchemist.Helpers.Complete do
     to_entries(fun)
   end
 
+  defp to_hint(%{kind: :module, name: name}, hint) when name == hint do
+    format_hint(name, name) <> "."
+  end
+
   defp to_hint(%{kind: :module, name: name}, hint) do
-    format_hint(name, hint) <> "."
+    format_hint(name, hint)
   end
 
   defp to_hint(%{kind: :function, name: name}, hint) do
@@ -438,7 +546,7 @@ defmodule Alchemist.Helpers.Complete do
 
   defp format_hint(name, hint) do
     hint_size = byte_size(hint)
-    :binary.part(name, hint_size, byte_size(name) - hint_size)
+    binary_part(name, hint_size, byte_size(name) - hint_size)
   end
 
 end
