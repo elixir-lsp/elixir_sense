@@ -121,9 +121,9 @@ defmodule ElixirSense.Core.Introspection do
   def get_types_md(mod) when is_atom(mod) do
     for %{type: type, doc: doc} <- get_types_with_docs(mod) do
       """
-        `#{type}`
+      `#{type}`
 
-        #{doc}
+      #{doc}
       """
     end |> Enum.join("\n\n---\n\n")
   end
@@ -131,13 +131,13 @@ defmodule ElixirSense.Core.Introspection do
   def get_callbacks_md(mod) when is_atom(mod) do
     for %{callback: callback, signature: signature, doc: doc} <- get_callbacks_with_docs(mod) do
       """
-        > #{signature}
+      > #{signature}
 
-        ### Specs
+      ### Specs
 
-        `#{callback}`
+      `#{callback}`
 
-        #{doc}
+      #{doc}
       """
     end
     |> Enum.join("\n\n---\n\n")

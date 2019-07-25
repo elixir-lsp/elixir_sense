@@ -157,7 +157,7 @@ defmodule ElixirSense.DocsTest do
       `@type from :: {pid, tag :: term}
       `
 
-        Tuple describing the client of a call request.
+      Tuple describing the client of a call request.
       """
     end
 
@@ -172,17 +172,14 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "Application"
       assert docs =~ """
-        > start(start_type, start_args)
+      > config_change(changed, new, removed)
 
-        ### Specs
+      ### Specs
 
-        `@callback start(start_type, start_args :: term) ::
-        {:ok, pid} |
-        {:ok, pid, state} |
-        {:error, reason :: term}
+      `@callback config_change(changed, new, removed) :: :ok when changed: keyword, new: keyword, removed: [atom]
       `
 
-        Called when an application is started.
+      Callback invoked after code upgrade\
       """
     end
 
