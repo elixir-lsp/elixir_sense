@@ -33,7 +33,7 @@ defmodule ElixirSense.Core.TypeInfo do
       {key, value} <- BuiltinTypes.all(),
       type_ast <- [value[:spec]],
       spec <- [format_type_spec_ast(type_ast, :type, line_length: @param_option_spec_line_length)],
-      signature <- [value[:signature] || ElixirSense.Core.TypeAst.extract_signature(type_ast)],
+      signature <- [value[:signature] || ElixirSense.Core.TypeAst.extract_signature(type_ast) || "#{key}()"],
       {name, arity} = extract_name_and_arity.(key),
       doc = value[:doc] || "",
       info = %{name: name, arity: arity, doc: doc, spec: spec, signature: signature},

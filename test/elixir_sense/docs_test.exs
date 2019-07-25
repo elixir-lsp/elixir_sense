@@ -266,7 +266,7 @@ defmodule ElixirSense.DocsTest do
 
       ---
 
-      \\<sub\\>\\<sup\\>_* Built-in type_\\</sup\\>\\</sub\\>\
+      _* Built-in type_\
       """
     end
 
@@ -295,7 +295,7 @@ defmodule ElixirSense.DocsTest do
 
       ---
 
-      \\<sub\\>\\<sup\\>_* Built-in type_\\</sup\\>\\</sub\\>\
+      _* Built-in type_\
       """
     end
 
@@ -332,7 +332,7 @@ defmodule ElixirSense.DocsTest do
 
       ---
 
-      \\<sub\\>\\<sup\\>_* Built-in type_\\</sup\\>\\</sub\\>\
+      _* Built-in type_\
       """
     end
 

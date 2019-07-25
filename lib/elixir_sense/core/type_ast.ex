@@ -7,7 +7,7 @@ defmodule ElixirSense.Core.TypeAst do
   end
 
   def extract_signature(nil) do
-    ""
+    nil
   end
 
   def extract_signature(ast) do

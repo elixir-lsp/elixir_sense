@@ -101,7 +101,7 @@ defmodule ElixirSense.Core.Introspection do
           _ -> "#{fun}()"
         end
       format_type_doc_md(info[:doc], spec)
-    end ++ ["\\<sub\\>\\<sup\\>_* Built-in type_\\</sup\\>\\</sub\\>"]
+    end ++ ["_* Built-in type_"]
   end
 
   def get_type_docs_md(mod, fun, _scope) do
