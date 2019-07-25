@@ -136,4 +136,18 @@ defmodule ElixirSense.Core.ParserTest do
 
   end
 
+  test "parse_string with malformed `do` expression" do
+    source = """
+    defmodule MyModule, do
+    """
+    assert %ElixirSense.Core.Metadata{
+      calls: %{},
+      error: {1, {"unexpected token: ", _}, "do"},
+      lines_to_env: %{},
+      mods_funs_to_positions: %{},
+      source: "defmodule MyModule, do\n",
+      vars_info_per_scope_id: %{}
+    } = parse_string(source, true, true, 4)
+  end
+
 end

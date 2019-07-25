@@ -64,11 +64,13 @@ defmodule ElixirSense.Core.Parser do
     |> replace_line_with_marker(line)
   end
 
-  defp fix_parse_error(source, _cursor_line_number, {:error, {_line, {_error_type, text}, _token}}) do
-    [_, line] = Regex.run(Regex.recompile!(~r/line\s(\d+)/), text)
-    line = line |> String.to_integer
+  defp fix_parse_error(source, _cursor_line_number, {:error, {line, {_error_type, text}, _token}}) do
+    line_to_replace = case Regex.run(Regex.recompile!(~r/line\s(\d+)/), text) do
+      [_, line] -> line |> String.to_integer
+      nil -> line
+    end
     source
-    |> replace_line_with_marker(line)
+    |> replace_line_with_marker(line_to_replace)
   end
 
   defp fix_parse_error(source, cursor_line_number, {:error, {line, "syntax" <> _, "'end'"}}) when is_integer(line) do
