@@ -1,6 +1,7 @@
 defmodule ElixirSense.Core.ParserTest do
   use ExUnit.Case
 
+  import ExUnit.CaptureIO
   import ElixirSense.Core.Parser
   alias ElixirSense.Core.{Metadata, State.Env}
 
@@ -148,6 +149,41 @@ defmodule ElixirSense.Core.ParserTest do
       source: "defmodule MyModule, do\n",
       vars_info_per_scope_id: %{}
     } = parse_string(source, true, true, 4)
+  end
+
+  test "parse_string with literal strings" do
+    source = ~S'''
+    defmodule MyMod do
+      @doc """
+      Some docs.
+      """
+      def func do
+        1
+      end
+    end
+    '''
+
+    err = capture_io(:stderr, fn ->
+      parse_string(source, true, true, 3)
+    end)
+    assert err == ""
+  end
+
+  test "parse_string with literal strings in sigils" do
+    source = ~S'''
+    defmodule MyMod do
+      def render(y) do
+        x = y
+        ~E"""
+        <h1><%= x %></h1>
+        """
+      end
+    end
+    '''
+    output = capture_io(:stderr, fn ->
+      parse_string(source, true, true, 5)
+    end)
+    assert output == ""
   end
 
 end

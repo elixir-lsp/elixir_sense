@@ -179,6 +179,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
+  defp post_string_literal(ast, state, line, str) do
+    str
+    |> String.split(["\n", "\r\n"])
+    |> Enum.with_index()
+    |> Enum.reduce(state, fn {_s, i}, acc -> add_current_env_to_line(acc, line + i) end)
+    |> result(ast)
+  end
+
   defp pre({:defmodule, _, [{:__aliases__, [line: line, column: column], module}, _]} = ast, state) do
     pre_module(ast, state, {line, column}, module)
   end
@@ -379,6 +387,16 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp post({:->, [line: _line, column: _column], [_lhs, _rhs]} = ast, state) do
     post_clause(ast, state)
+  end
+
+  # String literal
+  defp post({_, [no_call: true, line: line, column: _column], [str]} = ast, state) when is_binary(str) do
+    post_string_literal(ast, state, line, str)
+  end
+
+  # String literal in sigils
+  defp post({:<<>>, [line: line, column: _column], [str]} = ast, state) when is_binary(str) do
+    post_string_literal(ast, state, line, str)
   end
 
   defp post(ast, state) do
