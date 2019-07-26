@@ -241,7 +241,7 @@ defmodule ElixirSense.Providers.Suggestion do
     []
   end
 
-  defp find_typespecs_for_mod_and_hint({nil, hint}, aliases, module) do
+  defp find_typespecs_for_mod_and_hint({nil, hint}, aliases, module) when not is_nil(module) do
     local_module = find_typespecs_for_mod_and_hint({module, hint}, aliases, module)
 
     builtin_modules =
