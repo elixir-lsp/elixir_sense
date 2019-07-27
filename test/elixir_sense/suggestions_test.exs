@@ -667,6 +667,35 @@ defmodule ElixirSense.SuggestionsTest do
     end
   end
 
+  defmodule ElixirSenseExample.SameModule do
+    def test_fun(), do: :ok
+  end
+
+  test "suggestion understands alias shadowing" do
+    # ordinary alias
+    buffer = """
+    defmodule ElixirSenseExample.OtherModule do
+      alias ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule
+      def some_fun() do
+        SameModule.te
+      end
+    end
+    """
+    assert [%{type: :hint, value: "SameModule.test_fun"}, %{origin: "ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule"}] = ElixirSense.suggestions(buffer, 4, 17)
+
+    # alias shadowing scope/inherited aliases
+    buffer = """
+    defmodule ElixirSenseExample.SameModule do
+      alias List, as: SameModule
+      alias ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule
+      def some_fun() do
+        SameModule.te
+      end
+    end
+    """
+    assert [%{type: :hint, value: "SameModule.test_fun"}, %{origin: "ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule"}] = ElixirSense.suggestions(buffer, 5, 17)
+  end
+
   defp suggestions_by_type(type, buffer) do
     {line, column} = get_last_line_and_column(buffer)
     suggestions_by_type(type, buffer, line, column)

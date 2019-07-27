@@ -40,13 +40,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp post_module(ast, state, module) do
     state
-    |> remove_module_from_namespace(module)
     |> remove_attributes_scope
     |> remove_behaviours_scope
     |> remove_alias_scope
     |> remove_import_scope
     |> remove_require_scope
     |> remove_vars_scope
+    |> remove_alias_for_current_module(module)
+    |> remove_module_from_namespace(module)
     |> result(ast)
   end
 

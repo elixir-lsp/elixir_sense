@@ -385,17 +385,73 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         end
         alias Code, as: MyCode
         IO.puts ""
+        defmodule AnotherInnerModule do
+          IO.puts ""
+        end
+        IO.puts ""
       end
+      IO.puts ""
       """
       |> string_to_state
 
     assert get_line_aliases(state, 3)  == [{MyList, List}]
-    assert get_line_aliases(state, 6)  == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 9)  == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 12) == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
-    assert get_line_aliases(state, 14) == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 16) == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 19) == [{MyCode, Code}, {InnerModule, OuterModule.InnerModule}, {MyList, List}]
+    assert get_line_aliases(state, 6)  == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyEnum, Enum}]
+    assert get_line_aliases(state, 9)  == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyEnum, Enum}, {MyString, String}]
+    assert get_line_aliases(state, 12) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
+    assert get_line_aliases(state, 14) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyEnum, Enum}, {MyString, String}]
+    assert get_line_aliases(state, 16) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyEnum, Enum}]
+    assert get_line_aliases(state, 19) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyCode, Code}]
+    assert get_line_aliases(state, 21) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyCode, Code}, {AnotherInnerModule, OuterModule.AnotherInnerModule}]
+    assert get_line_aliases(state, 23) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyCode, Code}, {AnotherInnerModule, OuterModule.AnotherInnerModule}]
+    assert get_line_aliases(state, 25) == []
+  end
+
+  test "aliases 1" do
+
+    state =
+      """
+      defmodule OuterModule.Nested do
+        alias List, as: MyList
+        IO.puts ""
+        defmodule InnerModule do
+          alias Enum, as: MyEnum
+          IO.puts ""
+          def func do
+            alias String, as: MyString
+            IO.puts ""
+            if true do
+              alias Macro, as: MyMacro
+              IO.puts ""
+            end
+            IO.puts ""
+          end
+          IO.puts ""
+        end
+        alias Code, as: MyCode
+        IO.puts ""
+      end
+      defmodule OuterModule.Nested1 do
+        IO.puts ""
+        defmodule InnerModule.Nested do
+          IO.puts ""
+        end
+        IO.puts ""
+      end
+      IO.puts ""
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3)  == [{Nested, OuterModule.Nested}, {MyList, List}]
+    assert get_line_aliases(state, 6)  == [{Nested, OuterModule.Nested}, {MyList, List}, {InnerModule, OuterModule.Nested.InnerModule}, {MyEnum, Enum}]
+    assert get_line_aliases(state, 9)  == [{Nested, OuterModule.Nested}, {MyList, List}, {InnerModule, OuterModule.Nested.InnerModule}, {MyEnum, Enum}, {MyString, String}]
+    assert get_line_aliases(state, 12) == [{Nested, OuterModule.Nested}, {MyList, List}, {InnerModule, OuterModule.Nested.InnerModule}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
+    assert get_line_aliases(state, 14) == [{Nested, OuterModule.Nested}, {MyList, List}, {InnerModule, OuterModule.Nested.InnerModule}, {MyEnum, Enum}, {MyString, String}]
+    assert get_line_aliases(state, 16) == [{Nested, OuterModule.Nested}, {MyList, List}, {InnerModule, OuterModule.Nested.InnerModule}, {MyEnum, Enum}]
+    assert get_line_aliases(state, 19) == [{Nested, OuterModule.Nested}, {MyList, List}, {InnerModule, OuterModule.Nested.InnerModule}, {MyCode, Code}]
+    assert get_line_aliases(state, 22) == [{Nested1, OuterModule.Nested1}]
+    assert get_line_aliases(state, 24) == [{Nested1, OuterModule.Nested1}, {Nested, OuterModule.Nested1.InnerModule.Nested}]
+    assert get_line_aliases(state, 26) == [{Nested1, OuterModule.Nested1}]
+    assert get_line_aliases(state, 28) == []
   end
 
   test "aliases with `fn`" do
@@ -430,7 +486,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 3) == [{Email, Foo.Email}, {User, Foo.User}]
+    assert get_line_aliases(state, 3) == [{User, Foo.User}, {Email, Foo.Email}]
   end
 
   test "aliases defined with v1.2 notation (multiline)" do
