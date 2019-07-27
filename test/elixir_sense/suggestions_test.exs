@@ -669,6 +669,11 @@ defmodule ElixirSense.SuggestionsTest do
 
   defmodule ElixirSenseExample.SameModule do
     def test_fun(), do: :ok
+    defmacro some_test_macro() do
+      quote do
+        @attr "val"
+      end
+    end
   end
 
   test "suggestion understands alias shadowing" do
@@ -694,6 +699,15 @@ defmodule ElixirSense.SuggestionsTest do
     end
     """
     assert [%{type: :hint, value: "SameModule.test_fun"}, %{origin: "ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule"}] = ElixirSense.suggestions(buffer, 5, 17)
+
+    buffer = """
+    defmodule ElixirSenseExample.SameModule do
+      require Logger, as: ModuleB
+      require ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule, as: SameModule
+      SameModule.so
+    end
+    """
+    assert [%{type: :hint, value: "SameModule.some_test_macro"}, %{origin: "ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule"}] = ElixirSense.suggestions(buffer, 4, 15)
   end
 
   defp suggestions_by_type(type, buffer) do

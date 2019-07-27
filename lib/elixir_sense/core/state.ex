@@ -239,7 +239,7 @@ defmodule ElixirSense.Core.State do
     Enum.reduce(aliases_tuples, state, fn(tuple, state) -> add_alias(state, tuple) end)
   end
 
-  def remove_alias(state, alias_tuple = {alias, _}) do
+  def remove_alias(state, _alias_tuple = {alias, _}) do
     [aliases_from_scope|inherited_aliases] = state.aliases
     aliases_from_scope = aliases_from_scope |> Enum.reject(& match?({^alias, _}, &1))
     %{state | aliases: [aliases_from_scope|inherited_aliases]}
@@ -263,6 +263,7 @@ defmodule ElixirSense.Core.State do
 
   def add_import(state, module) do
     [imports_from_scope|inherited_imports] = state.imports
+    imports_from_scope = imports_from_scope -- [module]
     %{state | imports: [[module|imports_from_scope]|inherited_imports]}
   end
 
@@ -272,6 +273,7 @@ defmodule ElixirSense.Core.State do
 
   def add_require(state, module) do
     [requires_from_scope|inherited_requires] = state.requires
+    requires_from_scope = requires_from_scope -- [module]
     %{state | requires: [[module|requires_from_scope]|inherited_requires]}
   end
 
@@ -313,6 +315,7 @@ defmodule ElixirSense.Core.State do
 
   def add_behaviour(state, module) do
     [behaviours_from_scope|other_behaviours] = state.behaviours
+    behaviours_from_scope = behaviours_from_scope -- [module]
     %{state | behaviours: [[module|behaviours_from_scope]|other_behaviours]}
   end
 

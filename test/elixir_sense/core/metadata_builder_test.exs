@@ -39,6 +39,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_attributes(state, 8) == [:myattribute]
   end
 
+  test "module attributes duplicated" do
+    state = """
+      defmodule MyModule do
+        @myattribute 1
+        @myattribute 2
+        IO.puts @myattribute
+      end
+      """
+      |> string_to_state
+
+    assert get_line_attributes(state, 4) == [:myattribute]
+  end
+
   test "vars defined inside a function without params" do
     state = """
       defmodule MyModule do
@@ -406,7 +419,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 25) == []
   end
 
-  test "aliases 1" do
+  test "aliases nested" do
 
     state =
       """
@@ -518,6 +531,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 3) == [{User, Foo.User}]
   end
 
+  test "aliases duplicated" do
+
+    state =
+      """
+      defmodule MyModule do
+        alias Foo.User
+        alias Foo.User
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 4) == [{User, Foo.User}]
+  end
+
   test "imports defined with v1.2 notation" do
 
     state =
@@ -556,6 +584,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         import Code
         IO.puts ""
       end
+      IO.puts ""
       """
       |> string_to_state
 
@@ -566,6 +595,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_imports(state, 14)  == [List, Enum, String]
     assert get_line_imports(state, 16)  == [List, Enum]
     assert get_line_imports(state, 19)  == [Code, List]
+    assert get_line_imports(state, 21)  == []
+  end
+
+  test "imports duplicated" do
+
+    state =
+      """
+      defmodule OuterModule do
+        import List
+        import List
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_imports(state, 4)   == [List]
   end
 
   test "requires" do
@@ -575,11 +620,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule MyModule do
         require Mod
         IO.puts ""
+        defmodule Inner do
+          require OtherMod
+          IO.puts ""
+        end
+        IO.puts ""
       end
+      IO.puts ""
       """
       |> string_to_state
 
     assert get_line_requires(state, 3)  == [Mod]
+    assert get_line_requires(state, 6)  == [Mod, OtherMod]
+    assert get_line_requires(state, 8)  == [Mod]
+    assert get_line_requires(state, 10)  == []
   end
 
   test "requires with 1.2 notation" do
@@ -594,6 +648,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_requires(state, 3)  == [Mod.Mod2, Mod.Mo1]
+  end
+
+  test "requires duplicated" do
+
+    state =
+      """
+      defmodule MyModule do
+        require Mod.Mo1
+        require Mod.Mo1
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_requires(state, 4)  == [Mod.Mo1]
   end
 
   test "requires with :as option" do
@@ -681,6 +750,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_behaviours(state, 3)  == [:gen_server]
+  end
+
+  test "behaviour duplicated" do
+    state =
+      """
+      defmodule OuterModule do
+        @behaviour :gen_server
+        @behaviour :gen_server
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_behaviours(state, 4)  == [:gen_server]
   end
 
   test "current scope" do
