@@ -28,7 +28,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
     |> new_namespace(module)
     |> add_current_module_to_index(position)
-    |> create_alias_for_current_module
     |> new_attributes_scope
     |> new_behaviours_scope
     |> new_alias_scope
@@ -46,7 +45,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> remove_import_scope
     |> remove_require_scope
     |> remove_vars_scope
-    |> remove_alias_for_current_module(module)
     |> remove_module_from_namespace(module)
     |> result(ast)
   end

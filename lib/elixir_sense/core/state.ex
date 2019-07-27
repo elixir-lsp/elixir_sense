@@ -166,26 +166,6 @@ defmodule ElixirSense.Core.State do
     %{state | aliases: [[]|state.aliases]}
   end
 
-  def create_alias_for_current_module(state) do
-    if length(state.namespace) > 2 do
-      current_module = state.namespace |> :lists.reverse |> Module.concat
-      alias_tuple = {Module.concat([hd(state.namespace)]), current_module}
-      state |> add_alias(alias_tuple)
-    else
-      state
-    end
-  end
-
-  def remove_alias_for_current_module(state, module) do
-    if length(module) >= 2 do
-      current_module = state.namespace |> :lists.reverse |> Module.concat
-      alias_tuple = {Module.concat([hd(state.namespace)]), current_module}
-      state |> remove_alias(alias_tuple)
-    else
-      state
-    end
-  end
-
   def remove_alias_scope(state) do
     %{state | aliases: tl(state.aliases)}
   end
@@ -265,10 +245,20 @@ defmodule ElixirSense.Core.State do
     [imports_from_scope|inherited_imports] = state.imports
     imports_from_scope = imports_from_scope -- [module]
     %{state | imports: [[module|imports_from_scope]|inherited_imports]}
+    |> maybe_add_import_alias(module)
   end
 
   def add_imports(state, modules) do
     Enum.reduce(modules, state, fn(mod, state) -> add_import(state, mod) end)
+  end
+
+  defp maybe_add_import_alias(state, module) do
+    case module |> Atom.to_string() |> String.split(".") |> Enum.map(& &1 |> String.to_atom()) |> Enum.drop(1) |> Enum.reverse do
+      [_] -> state
+      [head|_] = parts ->
+        state
+        |> add_alias({:"Elixir.#{head}", module})
+    end
   end
 
   def add_require(state, module) do

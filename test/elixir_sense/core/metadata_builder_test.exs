@@ -408,14 +408,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_aliases(state, 3)  == [{MyList, List}]
-    assert get_line_aliases(state, 6)  == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 9)  == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 12) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
-    assert get_line_aliases(state, 14) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 16) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 19) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyCode, Code}]
-    assert get_line_aliases(state, 21) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyCode, Code}, {AnotherInnerModule, OuterModule.AnotherInnerModule}]
-    assert get_line_aliases(state, 23) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyCode, Code}, {AnotherInnerModule, OuterModule.AnotherInnerModule}]
+    assert get_line_aliases(state, 6)  == [{MyList, List}, {MyEnum, Enum}]
+    assert get_line_aliases(state, 9)  == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
+    assert get_line_aliases(state, 12) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
+    assert get_line_aliases(state, 14) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
+    assert get_line_aliases(state, 16) == [{MyList, List}, {MyEnum, Enum}]
+    assert get_line_aliases(state, 19) == [{MyList, List}, {MyCode, Code}]
+    assert get_line_aliases(state, 21) == [{MyList, List}, {MyCode, Code}]
+    assert get_line_aliases(state, 23) == [{MyList, List}, {MyCode, Code}]
     assert get_line_aliases(state, 25) == []
   end
 
@@ -454,16 +454,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 3)  == [{Nested, OuterModule.Nested}, {MyList, List}]
-    assert get_line_aliases(state, 6)  == [{Nested, OuterModule.Nested}, {MyList, List}, {InnerModule, OuterModule.Nested.InnerModule}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 9)  == [{Nested, OuterModule.Nested}, {MyList, List}, {InnerModule, OuterModule.Nested.InnerModule}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 12) == [{Nested, OuterModule.Nested}, {MyList, List}, {InnerModule, OuterModule.Nested.InnerModule}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
-    assert get_line_aliases(state, 14) == [{Nested, OuterModule.Nested}, {MyList, List}, {InnerModule, OuterModule.Nested.InnerModule}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 16) == [{Nested, OuterModule.Nested}, {MyList, List}, {InnerModule, OuterModule.Nested.InnerModule}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 19) == [{Nested, OuterModule.Nested}, {MyList, List}, {InnerModule, OuterModule.Nested.InnerModule}, {MyCode, Code}]
-    assert get_line_aliases(state, 22) == [{Nested1, OuterModule.Nested1}]
-    assert get_line_aliases(state, 24) == [{Nested1, OuterModule.Nested1}, {Nested, OuterModule.Nested1.InnerModule.Nested}]
-    assert get_line_aliases(state, 26) == [{Nested1, OuterModule.Nested1}]
+    assert get_line_aliases(state, 3)  == [{MyList, List}]
+    assert get_line_aliases(state, 6)  == [{MyList, List}, {MyEnum, Enum}]
+    assert get_line_aliases(state, 9)  == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
+    assert get_line_aliases(state, 12) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
+    assert get_line_aliases(state, 14) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
+    assert get_line_aliases(state, 16) == [{MyList, List}, {MyEnum, Enum}]
+    assert get_line_aliases(state, 19) == [{MyList, List}, {MyCode, Code}]
+    assert get_line_aliases(state, 22) == []
+    assert get_line_aliases(state, 24) == []
+    assert get_line_aliases(state, 26) == []
     assert get_line_aliases(state, 28) == []
   end
 
@@ -611,6 +611,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_imports(state, 4)   == [List]
+  end
+
+  test "imports nested" do
+
+    state =
+      """
+      defmodule OuterModule do
+        import List
+        import SomeModule.Inner
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_imports(state, 4) == [SomeModule.Inner, List]
+    assert get_line_aliases(state, 4) == [{Inner, SomeModule.Inner}]
   end
 
   test "requires" do
