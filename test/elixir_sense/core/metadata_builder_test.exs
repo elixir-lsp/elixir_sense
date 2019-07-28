@@ -507,12 +507,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       defmodule MyModule do
         alias :ets, as: Ets
+        alias :erlang_module
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 3) == [{Ets, :ets}]
+    assert get_line_aliases(state, 4) == [{Ets, :ets}]
   end
 
   test "aliases defined with v1.2 notation (multiline)" do
