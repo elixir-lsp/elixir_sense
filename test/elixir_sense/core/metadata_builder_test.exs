@@ -39,6 +39,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_attributes(state, 8) == [:myattribute]
   end
 
+  test "module attributes duplicated" do
+    state = """
+      defmodule MyModule do
+        @myattribute 1
+        @myattribute 2
+        IO.puts @myattribute
+      end
+      """
+      |> string_to_state
+
+    assert get_line_attributes(state, 4) == [:myattribute]
+  end
+
   test "vars defined inside a function without params" do
     state = """
       defmodule MyModule do
@@ -385,17 +398,73 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         end
         alias Code, as: MyCode
         IO.puts ""
+        defmodule AnotherInnerModule do
+          IO.puts ""
+        end
+        IO.puts ""
       end
+      IO.puts ""
       """
       |> string_to_state
 
     assert get_line_aliases(state, 3)  == [{MyList, List}]
-    assert get_line_aliases(state, 6)  == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 9)  == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 12) == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
-    assert get_line_aliases(state, 14) == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 16) == [{InnerModule, OuterModule.InnerModule}, {MyList, List}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 19) == [{MyCode, Code}, {InnerModule, OuterModule.InnerModule}, {MyList, List}]
+    assert get_line_aliases(state, 6)  == [{MyList, List}, {MyEnum, Enum}]
+    assert get_line_aliases(state, 9)  == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
+    assert get_line_aliases(state, 12) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
+    assert get_line_aliases(state, 14) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
+    assert get_line_aliases(state, 16) == [{MyList, List}, {MyEnum, Enum}]
+    assert get_line_aliases(state, 19) == [{MyList, List}, {MyCode, Code}]
+    assert get_line_aliases(state, 21) == [{MyList, List}, {MyCode, Code}]
+    assert get_line_aliases(state, 23) == [{MyList, List}, {MyCode, Code}]
+    assert get_line_aliases(state, 25) == []
+  end
+
+  test "aliases nested" do
+
+    state =
+      """
+      defmodule OuterModule.Nested do
+        alias List, as: MyList
+        IO.puts ""
+        defmodule InnerModule do
+          alias Enum, as: MyEnum
+          IO.puts ""
+          def func do
+            alias String, as: MyString
+            IO.puts ""
+            if true do
+              alias Macro, as: MyMacro
+              IO.puts ""
+            end
+            IO.puts ""
+          end
+          IO.puts ""
+        end
+        alias Code, as: MyCode
+        IO.puts ""
+      end
+      defmodule OuterModule.Nested1 do
+        IO.puts ""
+        defmodule InnerModule.Nested do
+          IO.puts ""
+        end
+        IO.puts ""
+      end
+      IO.puts ""
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3)  == [{MyList, List}]
+    assert get_line_aliases(state, 6)  == [{MyList, List}, {MyEnum, Enum}]
+    assert get_line_aliases(state, 9)  == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
+    assert get_line_aliases(state, 12) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
+    assert get_line_aliases(state, 14) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
+    assert get_line_aliases(state, 16) == [{MyList, List}, {MyEnum, Enum}]
+    assert get_line_aliases(state, 19) == [{MyList, List}, {MyCode, Code}]
+    assert get_line_aliases(state, 22) == []
+    assert get_line_aliases(state, 24) == []
+    assert get_line_aliases(state, 26) == []
+    assert get_line_aliases(state, 28) == []
   end
 
   test "aliases with `fn`" do
@@ -430,7 +499,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 3) == [{Email, Foo.Email}, {User, Foo.User}]
+    assert get_line_aliases(state, 3) == [{User, Foo.User}, {Email, Foo.Email}]
+  end
+
+  test "aliases erlang module" do
+    state =
+      """
+      defmodule MyModule do
+        alias :ets, as: Ets
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [{Ets, :ets}]
   end
 
   test "aliases defined with v1.2 notation (multiline)" do
@@ -460,6 +542,35 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_aliases(state, 3) == [{User, Foo.User}]
+  end
+
+  test "aliases single level without options" do
+    state =
+      """
+      defmodule MyModule do
+        alias Foo
+        alias :erlang_module
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 4) == []
+  end
+
+  test "aliases duplicated" do
+
+    state =
+      """
+      defmodule MyModule do
+        alias Foo.User
+        alias Foo.User
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 4) == [{User, Foo.User}]
   end
 
   test "imports defined with v1.2 notation" do
@@ -500,6 +611,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         import Code
         IO.puts ""
       end
+      IO.puts ""
       """
       |> string_to_state
 
@@ -510,9 +622,65 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_imports(state, 14)  == [List, Enum, String]
     assert get_line_imports(state, 16)  == [List, Enum]
     assert get_line_imports(state, 19)  == [Code, List]
+    assert get_line_imports(state, 21)  == []
+  end
+
+  test "imports duplicated" do
+
+    state =
+      """
+      defmodule OuterModule do
+        import List
+        import List
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_imports(state, 4)   == [List]
+  end
+
+  test "imports nested" do
+
+    state =
+      """
+      defmodule OuterModule do
+        import List
+        import SomeModule.Inner
+        import :erlang_module
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    refute get_line_imports(state, 5) == [SomeModule.Inner, List, :erlang_module]
+    assert get_line_aliases(state, 5) == [{Inner, SomeModule.Inner}]
   end
 
   test "requires" do
+
+    state =
+      """
+      defmodule MyModule do
+        require Mod
+        IO.puts ""
+        defmodule Inner do
+          require OtherMod
+          IO.puts ""
+        end
+        IO.puts ""
+      end
+      IO.puts ""
+      """
+      |> string_to_state
+
+    assert get_line_requires(state, 3)  == [Mod]
+    assert get_line_requires(state, 6)  == [Mod, OtherMod]
+    assert get_line_requires(state, 8)  == [Mod]
+    assert get_line_requires(state, 10)  == []
+  end
+
+  test "requires single level" do
 
     state =
       """
@@ -540,19 +708,35 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_requires(state, 3)  == [Mod.Mod2, Mod.Mo1]
   end
 
+  test "requires duplicated" do
+
+    state =
+      """
+      defmodule MyModule do
+        require Mod.Mo1
+        require Mod.Mo1
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_requires(state, 4)  == [Mod.Mo1]
+  end
+
   test "requires with :as option" do
 
     state =
       """
       defmodule MyModule do
         require Integer, as: I
+        require :ets, as: E
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_requires(state, 3)  == [Integer]
-    assert get_line_aliases(state, 3)  == [{I, Integer}]
+    assert get_line_requires(state, 4)  == [:ets, Integer]
+    assert get_line_aliases(state, 4)  == [{I, Integer}, {E, :ets}]
   end
 
   test "current module" do
@@ -625,6 +809,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_behaviours(state, 3)  == [:gen_server]
+  end
+
+  test "behaviour duplicated" do
+    state =
+      """
+      defmodule OuterModule do
+        @behaviour :gen_server
+        @behaviour :gen_server
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_behaviours(state, 4)  == [:gen_server]
   end
 
   test "current scope" do

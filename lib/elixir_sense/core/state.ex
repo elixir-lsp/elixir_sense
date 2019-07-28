@@ -50,7 +50,7 @@ defmodule ElixirSense.Core.State do
     current_module     = get_current_module(state)
     current_imports    = state.imports    |> :lists.reverse |> List.flatten
     current_requires   = state.requires   |> :lists.reverse |> List.flatten
-    current_aliases    = state.aliases    |> :lists.reverse |> List.flatten
+    current_aliases    = state.aliases    |> List.flatten |> Enum.uniq_by(& elem(&1, 0)) |> Enum.reverse
     current_vars       = state |> get_current_vars()
     current_attributes = state.scope_attributes |> :lists.reverse |> List.flatten
     current_behaviours = hd(state.behaviours)
@@ -166,16 +166,6 @@ defmodule ElixirSense.Core.State do
     %{state | aliases: [[]|state.aliases]}
   end
 
-  def create_alias_for_current_module(state) do
-    if length(state.namespace) > 2 do
-      current_module = state.namespace |> :lists.reverse |> Module.concat
-      alias_tuple = {Module.concat([hd(state.namespace)]), current_module}
-      state |> add_alias(alias_tuple)
-    else
-      state
-    end
-  end
-
   def remove_alias_scope(state) do
     %{state | aliases: tl(state.aliases)}
   end
@@ -219,13 +209,21 @@ defmodule ElixirSense.Core.State do
     %{state | behaviours: behaviours, scope_behaviours: behaviours}
   end
 
-  def add_alias(state, alias_tuple) do
+  def add_alias(state, {alias, module}) when alias == module, do: state
+  def add_alias(state, alias_tuple = {alias, _}) do
     [aliases_from_scope|inherited_aliases] = state.aliases
+    aliases_from_scope = aliases_from_scope |> Enum.reject(& match?({^alias, _}, &1))
     %{state | aliases: [[alias_tuple|aliases_from_scope]|inherited_aliases]}
   end
 
   def add_aliases(state, aliases_tuples) do
     Enum.reduce(aliases_tuples, state, fn(tuple, state) -> add_alias(state, tuple) end)
+  end
+
+  def remove_alias(state, _alias_tuple = {alias, _}) do
+    [aliases_from_scope|inherited_aliases] = state.aliases
+    aliases_from_scope = aliases_from_scope |> Enum.reject(& match?({^alias, _}, &1))
+    %{state | aliases: [aliases_from_scope|inherited_aliases]}
   end
 
   def new_import_scope(state) do
@@ -246,15 +244,27 @@ defmodule ElixirSense.Core.State do
 
   def add_import(state, module) do
     [imports_from_scope|inherited_imports] = state.imports
+    imports_from_scope = imports_from_scope -- [module]
     %{state | imports: [[module|imports_from_scope]|inherited_imports]}
+    |> maybe_add_import_alias(module)
   end
 
   def add_imports(state, modules) do
     Enum.reduce(modules, state, fn(mod, state) -> add_import(state, mod) end)
   end
 
+  defp maybe_add_import_alias(state, module) do
+    case module |> Module.split() |> Enum.reverse do
+      [_] -> state
+      [head|_] ->
+        state
+        |> add_alias({Module.concat([head]), module})
+    end
+  end
+
   def add_require(state, module) do
     [requires_from_scope|inherited_requires] = state.requires
+    requires_from_scope = requires_from_scope -- [module]
     %{state | requires: [[module|requires_from_scope]|inherited_requires]}
   end
 
@@ -296,6 +306,7 @@ defmodule ElixirSense.Core.State do
 
   def add_behaviour(state, module) do
     [behaviours_from_scope|other_behaviours] = state.behaviours
+    behaviours_from_scope = behaviours_from_scope -- [module]
     %{state | behaviours: [[module|behaviours_from_scope]|other_behaviours]}
   end
 
