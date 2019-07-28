@@ -236,6 +236,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_import(ast, state, line, module)
   end
 
+  # erlang module
+  defp pre({:import, [line: line, column: _column], [atom] = ast}, state) when is_atom(atom) do
+    pre_import(ast, state, line, atom)
+  end
+
   # require with v1.2 notation
   defp pre({:require, [line: line, column: _column], [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, requires}]} = ast, state) do
     requires_modules = requires |> Enum.map(fn {:__aliases__, _, mods} ->
@@ -255,6 +260,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     module = module_atoms |> Module.concat
     {_, new_state} = pre_alias(ast, state, line, alias_tuple)
     pre_require(ast, new_state, line, module)
+  end
+
+  # require erlang module with `as` option
+  defp pre({:require, [line: line, column: _column], [mod, [as: {:__aliases__, _, alias_atoms = [al|_]}]]} = ast, state) when is_atom(mod) and is_atom(al) do
+    alias_tuple = {Module.concat(alias_atoms), mod}
+    {_, new_state} = pre_alias(ast, state, line, alias_tuple)
+    pre_require(ast, new_state, line, mod)
   end
 
   # require with options
@@ -280,6 +292,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # alias with `as` option
   defp pre({:alias, [line: line, column: _column], [{_, _, module_atoms = [mod|_]}, [as: {:__aliases__, _, alias_atoms = [al|_]}]]} = ast, state) when is_atom(mod) and is_atom(al) do
     alias_tuple = {Module.concat(alias_atoms), Module.concat(module_atoms)}
+    pre_alias(ast, state, line, alias_tuple)
+  end
+
+  # alias erlang module with `as` option
+  defp pre({:alias, [line: line, column: _column], [mod, [as: {:__aliases__, _, alias_atoms = [al|_]}]]} = ast, state) when is_atom(mod) and is_atom(al) do
+    alias_tuple = {Module.concat(alias_atoms), mod}
     pre_alias(ast, state, line, alias_tuple)
   end
 

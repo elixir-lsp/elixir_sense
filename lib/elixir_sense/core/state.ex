@@ -209,6 +209,7 @@ defmodule ElixirSense.Core.State do
     %{state | behaviours: behaviours, scope_behaviours: behaviours}
   end
 
+  def add_alias(state, {alias, module}) when alias == module, do: state
   def add_alias(state, alias_tuple = {alias, _}) do
     [aliases_from_scope|inherited_aliases] = state.aliases
     aliases_from_scope = aliases_from_scope |> Enum.reject(& match?({^alias, _}, &1))
@@ -253,11 +254,11 @@ defmodule ElixirSense.Core.State do
   end
 
   defp maybe_add_import_alias(state, module) do
-    case module |> Atom.to_string() |> String.split(".") |> Enum.map(& &1 |> String.to_atom()) |> Enum.drop(1) |> Enum.reverse do
+    case module |> Module.split() |> Enum.reverse do
       [_] -> state
-      [head|_] = parts ->
+      [head|_] ->
         state
-        |> add_alias({:"Elixir.#{head}", module})
+        |> add_alias({Module.concat([head]), module})
     end
   end
 

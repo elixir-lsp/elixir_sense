@@ -502,6 +502,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 3) == [{User, Foo.User}, {Email, Foo.Email}]
   end
 
+  test "aliases erlang module" do
+    state =
+      """
+      defmodule MyModule do
+        alias :ets, as: Ets
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [{Ets, :ets}]
+  end
+
   test "aliases defined with v1.2 notation (multiline)" do
 
     state =
@@ -529,6 +542,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_aliases(state, 3) == [{User, Foo.User}]
+  end
+
+  test "aliases single level without options" do
+    state =
+      """
+      defmodule MyModule do
+        alias Foo
+        alias :erlang_module
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 4) == []
   end
 
   test "aliases duplicated" do
@@ -620,13 +647,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule OuterModule do
         import List
         import SomeModule.Inner
+        import :erlang_module
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_imports(state, 4) == [SomeModule.Inner, List]
-    assert get_line_aliases(state, 4) == [{Inner, SomeModule.Inner}]
+    refute get_line_imports(state, 5) == [SomeModule.Inner, List, :erlang_module]
+    assert get_line_aliases(state, 5) == [{Inner, SomeModule.Inner}]
   end
 
   test "requires" do
@@ -650,6 +678,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_requires(state, 6)  == [Mod, OtherMod]
     assert get_line_requires(state, 8)  == [Mod]
     assert get_line_requires(state, 10)  == []
+  end
+
+  test "requires single level" do
+
+    state =
+      """
+      defmodule MyModule do
+        require Mod
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_requires(state, 3)  == [Mod]
   end
 
   test "requires with 1.2 notation" do
@@ -687,13 +729,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       defmodule MyModule do
         require Integer, as: I
+        require :ets, as: E
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_requires(state, 3)  == [Integer]
-    assert get_line_aliases(state, 3)  == [{I, Integer}]
+    assert get_line_requires(state, 4)  == [:ets, Integer]
+    assert get_line_aliases(state, 4)  == [{I, Integer}, {E, :ets}]
   end
 
   test "current module" do
