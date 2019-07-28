@@ -103,13 +103,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_clause(ast, state, lhs) do
+  defp pre_clause(ast = {_, [line: line, column: _column], _}, state, lhs) do
     state
     |> new_alias_scope
     |> new_import_scope
     |> new_require_scope
     |> new_vars_scope
     |> add_vars(find_vars(lhs), true)
+    |> add_current_env_to_line(line)
     |> result(ast)
   end
 

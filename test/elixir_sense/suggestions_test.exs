@@ -174,7 +174,7 @@ defmodule ElixirSense.SuggestionsTest do
     defmodule MyServer do
       use GenServer
 
-      def handle_call(request, from, state) do
+      def handle_call(request, _from, state) do
         var1 = true
 
       end
@@ -187,10 +187,80 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-      %{name: :from, type: :variable},
       %{name: :request, type: :variable},
       %{name: :state, type: :variable},
       %{name: :var1, type: :variable}
+    ]
+  end
+
+  test "lists params and vars in case expression" do
+    buffer = """
+    defmodule MyServer do
+      use GenServer
+
+      def handle_call(request, _from, state) do
+        case request do
+          {:atom, var} -> :ok
+        end
+
+      end
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 6, 22)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :request, type: :variable},
+      %{name: :state, type: :variable},
+      %{name: :var, type: :variable}
+    ]
+
+    list =
+      ElixirSense.suggestions(buffer, 8, 7)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :request, type: :variable},
+      %{name: :state, type: :variable}
+    ]
+  end
+
+  test "lists params and vars in case expression 1" do
+    buffer = """
+    defmodule MyServer do
+      use GenServer
+
+      def handle_call(request, _from, state) do
+        case request do
+          {:atom, var} ->
+            :ok
+        end
+
+      end
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 7, 8)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :request, type: :variable},
+      %{name: :state, type: :variable},
+      %{name: :var, type: :variable}
+    ]
+
+    list =
+      ElixirSense.suggestions(buffer, 9, 7)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :request, type: :variable},
+      %{name: :state, type: :variable}
     ]
   end
 
