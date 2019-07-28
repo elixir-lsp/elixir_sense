@@ -214,6 +214,22 @@ defmodule ElixirSense.SuggestionsTest do
     ]
   end
 
+  test "lists params in fn's" do
+    buffer = """
+    defmodule MyServer do
+      my = fn arg -> arg + 1 end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 2, 19)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :arg, type: :variable}
+    ]
+  end
+
   test "lists params and vars in case clauses" do
     buffer = """
     defmodule MyServer do
