@@ -181,4 +181,39 @@ defmodule ElixirSense.Providers.ReferencesTest do
     ]
   end
 
+  test "find references with cursor over a module" do
+    buffer = """
+    defmodule Caller do
+      def func() do
+        ElixirSense.Providers.ReferencesTest.Modules.Callee1.func()
+        #                                               ^
+      end
+    end
+    """
+    references = ElixirSense.references(buffer, 3, 53)
+
+    assert references == [
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 26, column: 60}, end: %{line: 26, column: 64}}
+      },
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 32, column: 60}, end: %{line: 32, column: 64}}
+      },
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 42, column: 16}, end: %{line: 42, column: 20}}
+      },
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 42, column: 63}, end: %{line: 42, column: 67}}
+      },
+      %{
+        uri: "test/support/modules_with_references.ex",
+        range: %{start: %{line: 42, column: 79}, end: %{line: 42, column: 83}}
+      }
+    ]
+  end
+
 end
