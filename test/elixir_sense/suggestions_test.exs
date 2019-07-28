@@ -193,74 +193,86 @@ defmodule ElixirSense.SuggestionsTest do
     ]
   end
 
-  test "lists params and vars in case expression" do
+  test "lists params and vars in case clauses" do
     buffer = """
     defmodule MyServer do
-      use GenServer
-
-      def handle_call(request, _from, state) do
+      def fun(request) do
         case request do
-          {:atom, var} -> :ok
+          {:atom1, vara} ->
+            :ok
+          {:atom2, varb} -> :ok
         end
 
       end
-
     end
     """
 
     list =
-      ElixirSense.suggestions(buffer, 6, 22)
+      ElixirSense.suggestions(buffer, 5, 9)
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
       %{name: :request, type: :variable},
-      %{name: :state, type: :variable},
-      %{name: :var, type: :variable}
+      %{name: :vara, type: :variable}
     ]
 
     list =
-      ElixirSense.suggestions(buffer, 8, 7)
+      ElixirSense.suggestions(buffer, 6, 25)
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
       %{name: :request, type: :variable},
-      %{name: :state, type: :variable}
+      %{name: :varb, type: :variable}
+    ]
+
+    list =
+      ElixirSense.suggestions(buffer, 8, 4)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :request, type: :variable}
     ]
   end
 
-  test "lists params and vars in case expression 1" do
+  test "lists params and vars in cond clauses" do
     buffer = """
     defmodule MyServer do
-      use GenServer
-
-      def handle_call(request, _from, state) do
-        case request do
-          {:atom, var} ->
+      def fun(request) do
+        cond do
+          vara = Enum.find(request, 4) ->
             :ok
+          varb = Enum.find(request, 5) -> :ok
+          true -> :error
         end
 
       end
-
     end
     """
 
     list =
-      ElixirSense.suggestions(buffer, 7, 8)
+      ElixirSense.suggestions(buffer, 5, 9)
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
       %{name: :request, type: :variable},
-      %{name: :state, type: :variable},
-      %{name: :var, type: :variable}
+      %{name: :vara, type: :variable}
     ]
 
     list =
-      ElixirSense.suggestions(buffer, 9, 7)
+      ElixirSense.suggestions(buffer, 6, 39)
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
       %{name: :request, type: :variable},
-      %{name: :state, type: :variable}
+      %{name: :varb, type: :variable}
+    ]
+
+    list =
+      ElixirSense.suggestions(buffer, 9, 4)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :request, type: :variable}
     ]
   end
 
