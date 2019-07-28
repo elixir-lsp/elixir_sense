@@ -62,6 +62,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           IO.puts ""
         end
         var_out2 = 1
+        IO.puts ""
       end
       """
       |> string_to_state
@@ -70,6 +71,36 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert vars == [
       %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 3},
       %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 3},
+    ]
+  end
+
+  test "vars defined inside a function `after`/`rescue`/`catch`" do
+    state = """
+      defmodule MyModule do
+        var_out1 = 1
+        def func(var_arg) do
+          var_in1 = 1
+          var_in2 = 1
+          IO.puts ""
+        after
+          var_after = 1
+          IO.puts ""
+        end
+      end
+      """
+      |> string_to_state
+
+    vars = state |> get_line_vars(6)
+    assert vars == [
+      %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: 2},
+      %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 3},
+      %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 3},
+    ]
+
+    vars = state |> get_line_vars(9)
+    assert vars == [
+      %VarInfo{name: :var_after, positions: [{8, 5}], scope_id: 4},
+      %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: 2},
     ]
   end
 
@@ -83,6 +114,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           var_in2 = 1
           IO.puts ""
         end
+        defp func1(arg), do: arg + 1
         var_out2 = 1
       end
       """
@@ -96,6 +128,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       %VarInfo{name: :par4, positions: [{3, 51}], scope_id: 2},
       %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 3},
       %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 3},
+    ]
+
+    vars = state |> get_line_vars(8)
+    assert vars == [
+      %VarInfo{name: :arg, positions: [{8, 14}], scope_id: 2},
     ]
   end
 
@@ -147,7 +184,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule MyModule do
         var_out1 = 1
         IO.puts ""
-        for var_on <- [1,2], var_on != 2 do
+        for var_on <- [1,2], var_on != 2, var_on1 = var_on + 1 do
           var_in = 1
           IO.puts ""
         end
@@ -162,7 +199,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     ]
     assert get_line_vars(state, 6) == [
       %VarInfo{name: :var_in, positions: [{5, 5}], scope_id: 4},
-      %VarInfo{name: :var_on, positions: [{4, 7}, {4, 24}], scope_id: 3},
+      %VarInfo{name: :var_on, positions: [{4, 7}, {4, 24}, {4, 47}], scope_id: 3},
+      %VarInfo{name: :var_on1, positions: [{4, 37}], scope_id: 3},
       %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
     ]
     assert get_line_vars(state, 9) == [
@@ -171,7 +209,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     ]
   end
 
-  test "vars defined in a `if/else` statement" do
+  test "vars defined in a `if/else` expression" do
 
     state =
       """
@@ -200,13 +238,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
       %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
     ]
-    # This assert fails:
-    # assert get_line_vars(state, 11) == [
-    #   %VarInfo{name: :var_on, positions: [{3, 6}]},
-    #   %VarInfo{name: :var_out1, positions: [{2, 3}]},
-    #   %VarInfo{name: :var_out2, positions: [{10, 3}]},
-    #   %VarInfo{name: :var_in_else, positions: [{7, 5}]},
-    # ]
+
+    assert get_line_vars(state, 11) == [
+      %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+      %VarInfo{name: :var_out2, positions: [{10, 3}], scope_id: 2}
+    ]
   end
 
   test "vars defined inside a `fn`" do
@@ -242,13 +279,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       defmodule MyModule do
         var_out1 = 1
-        case var_out1 do
+        case var_on0 = var_out1 do
           {var_on1} ->
             var_in1 = 1
             IO.puts ""
           {var_on2} ->
             var_in2 = 2
             IO.puts ""
+          var_on3 -> IO.puts ""
         end
         var_out2 = 1
         IO.puts ""
@@ -258,21 +296,27 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert get_line_vars(state, 6) == [
       %VarInfo{name: :var_in1, positions: [{5, 7}], scope_id: 4},
+      %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
       %VarInfo{name: :var_on1, positions: [{4, 6}], scope_id: 4},
-      %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 8}], scope_id: 2},
+      %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2}
     ]
     assert get_line_vars(state, 9) == [
       %VarInfo{name: :var_in2, positions: [{8, 7}], scope_id: 5},
+      %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
       %VarInfo{name: :var_on2, positions: [{7, 6}], scope_id: 5},
-      %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 8}], scope_id: 2},
+      %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2},
     ]
-    # This assert fails
-    # assert get_line_vars(state, 12) == [
-    #   %VarInfo{name: :var_out1, positions: [{2, 3}]},
-    #   %VarInfo{name: :var_out2, positions: [{11, 3}]},
-    #   %VarInfo{name: :var_in1, positions: [{5, 7}]},
-    #   %VarInfo{name: :var_in2, positions: [{8, 7}]},
-    # ]
+    assert get_line_vars(state, 10) == [
+      %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
+      %VarInfo{name: :var_on3, positions: [{10, 5}], scope_id: 6},
+      %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2},
+    ]
+
+    assert get_line_vars(state, 13) == [
+      %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
+      %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2},
+      %VarInfo{name: :var_out2, positions: [{12, 3}], scope_id: 2},
+    ]
   end
 
   test "vars defined inside a `cond`" do
@@ -285,6 +329,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           1 == 1 ->
             var_in = 1
             IO.puts ""
+          var_in1 = Enum.find([], 1) ->
+            IO.puts ""
+          var_in2 = Enum.find([], 2) -> IO.puts ""
         end
         var_out2 = 1
         IO.puts ""
@@ -296,12 +343,147 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       %VarInfo{name: :var_in, positions: [{5, 7}], scope_id: 4},
       %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
     ]
-    # This assert fails:
-    # assert get_line_vars(state, 9) == [
-    #   %VarInfo{name: :var_out1, positions: [{2, 3}]},
-    #   %VarInfo{name: :var_out2, positions: [{8, 3}]},
-    #   %VarInfo{name: :var_in, positions: [{5, 7}]},
-    # ]
+
+    assert get_line_vars(state, 8) == [
+      %VarInfo{name: :var_in1, positions: [{7, 5}], scope_id: 5},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 9) == [
+      %VarInfo{name: :var_in2, positions: [{9, 5}], scope_id: 6},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 12) == [
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+      %VarInfo{name: :var_out2, positions: [{11, 3}], scope_id: 2},
+    ]
+  end
+
+  test "vars defined inside a `try`" do
+
+    state =
+      """
+      defmodule MyModule do
+        var_out1 = 1
+        try do
+          var_in_try = 1
+          IO.puts ""
+        rescue
+          e1 in ArgumentError -> IO.puts ""
+          e2 in KeyError ->
+            var_in_rescue = 0
+            IO.puts ""
+        catch
+          :exit, reason1 -> IO.puts ""
+          reason2 ->
+            var_in_catch = 0
+            IO.puts ""
+        else
+          {:atom, var_on_else} -> IO.puts ""
+          :atom ->
+            var_in_else = 0
+            IO.puts ""
+        after
+          var_in_after = 0
+          IO.puts ""
+        end
+        var_out2 = 1
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_vars(state, 5) == [
+      %VarInfo{name: :var_in_try, positions: [{4, 5}], scope_id: 4},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 7) == [
+      %VarInfo{name: :e1, positions: [{7, 5}], scope_id: 6},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 10) == [
+      %VarInfo{name: :e2, positions: [{8, 5}], scope_id: 7},
+      %VarInfo{name: :var_in_rescue, positions: [{9, 7}], scope_id: 7},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 12) == [
+      %VarInfo{name: :reason1, positions: [{12, 12}], scope_id: 9},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 15) == [
+      %VarInfo{name: :reason2, positions: [{13, 5}], scope_id: 10},
+      %VarInfo{name: :var_in_catch, positions: [{14, 7}], scope_id: 10},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 17) == [
+      %VarInfo{name: :var_on_else, positions: [{17, 13}], scope_id: 12},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 20) == [
+      %VarInfo{name: :var_in_else, positions: [{19, 7}], scope_id: 13},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 23) == [
+      %VarInfo{name: :var_in_after, positions: [{22, 5}], scope_id: 14},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 26) == [
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+      %VarInfo{name: :var_out2, positions: [{25, 3}], scope_id: 2}
+    ]
+
+  end
+
+  test "vars defined inside a `receive`" do
+
+    state =
+      """
+      defmodule MyModule do
+        var_out1 = 1
+        receive do
+          {:atom, msg1} -> IO.puts ""
+          :msg ->
+            var_in = 0
+            IO.puts ""
+        after
+          300 ->
+            var_in_after = 0
+            IO.puts ""
+        end
+        var_out2 = 1
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_vars(state, 4) == [
+      %VarInfo{name: :msg1, positions: [{4, 13}], scope_id: 4},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 7) == [
+      %VarInfo{name: :var_in, positions: [{6, 7}], scope_id: 5},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 11) == [
+      %VarInfo{name: :var_in_after, positions: [{10, 7}], scope_id: 7},
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+    ]
+
+    assert get_line_vars(state, 14) == [
+      %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+      %VarInfo{name: :var_out2, positions: [{13, 3}], scope_id: 2},
+    ]
   end
 
   test "functions of arity 0 should not be in the vars list" do
