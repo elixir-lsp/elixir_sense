@@ -179,6 +179,11 @@ defmodule ElixirSense.SuggestionsTest do
 
       end
 
+      def init(arg), do: arg
+
+      def handle_cast(arg, _state) when is_atom(arg) do
+        :ok
+      end
     end
     """
 
@@ -190,6 +195,22 @@ defmodule ElixirSense.SuggestionsTest do
       %{name: :request, type: :variable},
       %{name: :state, type: :variable},
       %{name: :var1, type: :variable}
+    ]
+
+    list =
+      ElixirSense.suggestions(buffer, 9, 22)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :arg, type: :variable}
+    ]
+
+    list =
+      ElixirSense.suggestions(buffer, 11, 45)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :arg, type: :variable}
     ]
   end
 

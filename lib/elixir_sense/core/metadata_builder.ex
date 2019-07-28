@@ -52,13 +52,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp pre_func(ast, state, %{line: line, col: col}, name, params) do
     state
     |> new_named_func(name, length(params || []))
-    |> add_current_env_to_line(line)
     |> add_func_to_index(name, params || [], {line, col})
     |> new_alias_scope
     |> new_import_scope
     |> new_require_scope
     |> new_func_vars_scope
     |> add_vars(find_vars(params), true)
+    |> add_current_env_to_line(line)
     |> result(ast)
   end
 
