@@ -174,11 +174,16 @@ defmodule ElixirSense.SuggestionsTest do
     defmodule MyServer do
       use GenServer
 
-      def handle_call(request, from, state) do
+      def handle_call(request, _from, state) do
         var1 = true
 
       end
 
+      def init(arg), do: arg
+
+      def handle_cast(arg, _state) when is_atom(arg) do
+        :ok
+      end
     end
     """
 
@@ -187,10 +192,124 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-      %{name: :from, type: :variable},
       %{name: :request, type: :variable},
       %{name: :state, type: :variable},
       %{name: :var1, type: :variable}
+    ]
+
+    list =
+      ElixirSense.suggestions(buffer, 9, 22)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :arg, type: :variable}
+    ]
+
+    list =
+      ElixirSense.suggestions(buffer, 11, 45)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :arg, type: :variable}
+    ]
+  end
+
+  test "lists params in fn's" do
+    buffer = """
+    defmodule MyServer do
+      my = fn arg -> arg + 1 end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 2, 19)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :arg, type: :variable}
+    ]
+  end
+
+  test "lists params and vars in case clauses" do
+    buffer = """
+    defmodule MyServer do
+      def fun(request) do
+        case request do
+          {:atom1, vara} ->
+            :ok
+          {:atom2, varb} -> :ok
+        end
+
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 5, 9)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :request, type: :variable},
+      %{name: :vara, type: :variable}
+    ]
+
+    list =
+      ElixirSense.suggestions(buffer, 6, 25)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :request, type: :variable},
+      %{name: :varb, type: :variable}
+    ]
+
+    list =
+      ElixirSense.suggestions(buffer, 8, 4)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :request, type: :variable}
+    ]
+  end
+
+  test "lists params and vars in cond clauses" do
+    buffer = """
+    defmodule MyServer do
+      def fun(request) do
+        cond do
+          vara = Enum.find(request, 4) ->
+            :ok
+          varb = Enum.find(request, 5) -> :ok
+          true -> :error
+        end
+
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 5, 9)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :request, type: :variable},
+      %{name: :vara, type: :variable}
+    ]
+
+    list =
+      ElixirSense.suggestions(buffer, 6, 39)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :request, type: :variable},
+      %{name: :varb, type: :variable}
+    ]
+
+    list =
+      ElixirSense.suggestions(buffer, 9, 4)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :request, type: :variable}
     ]
   end
 
