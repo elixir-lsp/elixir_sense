@@ -35,7 +35,13 @@ defmodule ElixirSense.Core.Source do
   end
 
   def prefix(code, line, col) do
-    line = code |> String.split("\n") |> Enum.at(line - 1)
+    line = code |> String.split("\n") |> Enum.at(line - 1, "")
+    line = if String.length(line) < col do
+      line_padding = for _ <- 1..(String.length(line) - col), into: "", do: " "
+      line <> line_padding
+    else
+      line
+    end
     line_str = line |> String.slice(0, col - 1)
     case Regex.run(Regex.recompile!(~r/[\w0-9\._!\?\:@]+$/), line_str) do
       nil -> ""

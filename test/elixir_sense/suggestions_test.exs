@@ -40,7 +40,7 @@ defmodule ElixirSense.SuggestionsTest do
     end
     """
 
-    list = ElixirSense.suggestions(buffer, 2, 11)
+    list = ElixirSense.suggestions(buffer, 2, 7)
 
     assert list == [
       %{type: :hint, value: "is_b"},
@@ -223,6 +223,261 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 2, 19)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :arg, type: :variable}
+    ]
+  end
+
+  test "lists vars in []" do
+    buffer = """
+    defmodule MyServer do
+      my = %{}
+      x = 4
+      my[]
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 4, 6)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :my, type: :variable},
+      %{name: :x, type: :variable},
+    ]
+  end
+
+  test "lists vars in unfinished []" do
+    buffer = """
+    defmodule MyServer do
+      my = %{}
+      x = 4
+      my[
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 4, 6)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :my, type: :variable},
+      %{name: :x, type: :variable},
+    ]
+  end
+
+  test "lists vars in string interpolation" do
+    buffer = """
+    defmodule MyServer do
+      x = 4
+      "abc\#{}"
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 9)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :x, type: :variable},
+    ]
+  end
+
+  test "lists vars in unfinished string interpolation" do
+    buffer = """
+    defmodule MyServer do
+      x = 4
+      "abc\#{
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 9)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :x, type: :variable},
+    ]
+
+    buffer = """
+    defmodule MyServer do
+      x = 4
+      "abc\#{"
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 9)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :x, type: :variable},
+    ]
+
+    buffer = """
+    defmodule MyServer do
+      x = 4
+      "abc\#{}
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 9)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :x, type: :variable},
+    ]
+
+    buffer = """
+    defmodule MyServer do
+      x = 4
+      "abc\#{x[
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 9)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :x, type: :variable},
+    ]
+  end
+
+  test "lists vars in heredoc interpolation" do
+    buffer = """
+    defmodule MyServer do
+      x = 4
+      \"\"\"
+      abc\#{}
+      \"\"\"
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 4, 8)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :x, type: :variable},
+    ]
+  end
+
+  test "lists vars in unfinished heredoc interpolation" do
+    # The cases below are not supported as elixir parser returns unexpected error
+    # {:error, {5, "unexpected token: ", <<34, 0, 34, 32, 40, 99, 111, 108, 117, 109, 110, 32, 49, 44, 32, 99, 111, 100, 101, 32, 112, 111, 105, 110, 116, 32, 85, 43, 48, 48, 48, 48, 41>>}}
+    # see https://github.com/elixir-lang/elixir/issues/9252
+
+    # buffer = """
+    # defmodule MyServer do
+    #   x = 4
+    #   \"\"\"
+    #   abc\#{
+    #   \"\"\"
+
+    # end
+    # """
+
+    # list =
+    #   ElixirSense.suggestions(buffer, 4, 8)
+    #   |> Enum.filter(fn s -> s.type == :variable end)
+
+    # assert list == [
+    #   %{name: :x, type: :variable},
+    # ]
+
+
+    # buffer = """
+    # defmodule MyServer do
+    #   x = 4
+    #   \"\"\"
+    #   abc\#{
+
+    # end
+    # """
+
+    # list =
+    #   ElixirSense.suggestions(buffer, 4, 8)
+    #   |> Enum.filter(fn s -> s.type == :variable end)
+
+    # assert list == [
+    #   %{name: :x, type: :variable},
+    # ]
+
+    buffer = """
+    defmodule MyServer do
+      x = 4
+      \"\"\"
+      abc\#{}
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 4, 8)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :x, type: :variable},
+    ]
+  end
+
+  test "lists params in fn's not finished multiline" do
+    buffer = """
+    defmodule MyServer do
+      my = fn arg ->
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 5)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :arg, type: :variable},
+      %{name: :my, type: :variable},
+    ]
+  end
+
+  test "lists params in fn's not finished" do
+    buffer = """
+    defmodule MyServer do
+      my = fn arg ->
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 2, 19)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :arg, type: :variable},
+      # TODO my is not defined
+      %{name: :my, type: :variable}
+    ]
+  end
+
+  test "lists params in defs not finished" do
+    buffer = """
+    defmodule MyServer do
+      def my(arg), do:
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 2, 20)
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [

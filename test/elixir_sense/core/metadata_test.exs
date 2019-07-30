@@ -28,7 +28,7 @@ defmodule ElixirSense.Core.MetadataTest do
       """
 
     params =
-      Parser.parse_string(code, true, true, 0)
+      Parser.parse_string(code, true, true, 1)
       |> Metadata.get_function_params(MyModule, :func)
 
     assert params == [
@@ -74,7 +74,7 @@ defmodule ElixirSense.Core.MetadataTest do
       """
 
     signatures =
-      Parser.parse_string(code, true, true, 0)
+      Parser.parse_string(code, true, true, 1)
       |> Metadata.get_function_signatures(MyModule, :func)
 
     assert signatures == [

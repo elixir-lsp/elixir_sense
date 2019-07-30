@@ -15,22 +15,30 @@ defmodule ElixirSense.Core.Parser do
   end
 
   def parse_string(source, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
-    case string_to_ast(source, try_to_fix_parse_error, cursor_line_number) do
-      {:ok, ast} ->
+    case string_to_ast(source, if(try_to_fix_parse_error, do: 6, else: 0), cursor_line_number) do
+      {:ok, ast, modified_source} ->
         acc = MetadataBuilder.build(ast)
         if Map.has_key?(acc.lines_to_env, cursor_line_number) or !try_to_fix_line_not_found  do
-          %Metadata{
-            source: source,
-            mods_funs_to_positions: acc.mods_funs_to_positions,
-            lines_to_env: acc.lines_to_env,
-            vars_info_per_scope_id: acc.vars_info_per_scope_id,
-            calls: acc.calls
-          }
+          create_metadata(source, acc)
         else
           # IO.puts :stderr, "LINE NOT FOUND"
-          source
+          # match here as fix_line_not_found should not introduce syntax errors
+          {:ok, ast, _modified_source} = modified_source
           |> fix_line_not_found(cursor_line_number)
-          |> parse_string(false, false, cursor_line_number)
+          |> string_to_ast(0, cursor_line_number)
+
+          acc = MetadataBuilder.build(ast)
+          # a line has been inserted, insert a fake lines_to_env
+          fixed_Lines_to_env = for {line, env} <- acc.lines_to_env, into: %{}, do: (
+            if line > cursor_line_number do
+              {line - 1, env}
+            else
+              {line , env}
+            end
+          )
+          acc = %ElixirSense.Core.State{acc | lines_to_env: fixed_Lines_to_env}
+
+          create_metadata(source, acc)
         end
       {:error, error} ->
         # IO.puts :stderr, "CAN'T FIX IT"
@@ -42,17 +50,30 @@ defmodule ElixirSense.Core.Parser do
     end
   end
 
-  defp string_to_ast(source, try_to_fix_parse_error, cursor_line_number) do
+  defp create_metadata(modified_source, acc) do
+    %Metadata{
+      source: modified_source,
+      mods_funs_to_positions: acc.mods_funs_to_positions,
+      lines_to_env: acc.lines_to_env,
+      vars_info_per_scope_id: acc.vars_info_per_scope_id,
+      calls: acc.calls
+    }
+  end
+
+  defp string_to_ast(source, errors_threshold, cursor_line_number) do
     case Code.string_to_quoted(source, columns: true) do
       {:ok, ast} ->
-        {:ok, ast}
+        {:ok, ast, source}
       error ->
         # IO.puts :stderr, "PARSE ERROR"
         # IO.inspect :stderr, error, []
-        if try_to_fix_parse_error do
+        # IO.inspect source
+        # IO.inspect error
+
+        if errors_threshold > 0 do
           source
           |> fix_parse_error(cursor_line_number, error)
-          |> string_to_ast(false, cursor_line_number)
+          |> string_to_ast(errors_threshold - 1, cursor_line_number)
         else
           error
         end
@@ -64,18 +85,61 @@ defmodule ElixirSense.Core.Parser do
     |> replace_line_with_marker(line)
   end
 
-  defp fix_parse_error(source, _cursor_line_number, {:error, {line, {_error_type, text}, _token}}) do
-    line_to_replace = case Regex.run(Regex.recompile!(~r/line\s(\d+)/), text) do
-      [_, line] -> line |> String.to_integer
-      nil -> line
-    end
+  defp fix_parse_error(source, _cursor_line_number, {:error, {line_number, {"unexpected token: ", _text}, "do"}}) do
     source
-    |> replace_line_with_marker(line_to_replace)
+    |> String.split(["\n", "\r\n"])
+    |> List.update_at(line_number - 1, fn line ->
+       # try to replace token do with do: marker
+      line
+      |> String.replace("do", "do: " <> marker(line_number), global: false)
+    end)
+    |> Enum.join("\n")
   end
 
-  defp fix_parse_error(source, cursor_line_number, {:error, {line, "syntax" <> _, "'end'"}}) when is_integer(line) do
+  defp fix_parse_error(source, cursor_line_number, {:error, {line_number, {"unexpected token: ", text}, token}}) do
+    terminator = case Regex.run(Regex.recompile!(~r/terminator\s\"([^\s\"]+)/), text) do
+      [_, terminator] -> terminator
+      nil -> nil
+    end
+
+    if terminator != nil do
+      source
+      |> String.split(["\n", "\r\n"])
+      |> List.update_at(cursor_line_number - 1, fn line ->
+        if cursor_line_number != line_number do
+          # try to close the line with with missing terminator
+          line <> " " <> terminator
+        else
+          # try to prepend first occurence of unexpected token with missing terminator
+          line
+          |> String.replace(token, terminator <> " " <> token, global: false)
+        end
+      end)
+      |> Enum.join("\n")
+    else
+      source
+      |> String.split(["\n", "\r\n"])
+      |> List.update_at(line_number - 1, fn line ->
+        # drop unexpected token
+        line
+        |> String.replace(token, "", global: false)
+      end)
+      |> Enum.join("\n")
+    end
+  end
+
+  defp fix_parse_error(source, _cursor_line_number, {:error, {line_number, "syntax" <> _, terminator_quoted}})
+    when is_integer(line_number) and terminator_quoted in ["'end'", "')'", "']'"] do
+
+    terminator = Regex.replace(~r/[\"\']/, terminator_quoted, "")
     source
-    |> replace_line_with_marker(cursor_line_number)
+    |> String.split(["\n", "\r\n"])
+    |> List.update_at(line_number - 1, fn line ->
+       # try to prepend unexpected terminator with marker
+      line
+      |> String.replace(terminator, marker(line_number) <> " " <> terminator, global: false)
+    end)
+    |> Enum.join("\n")
   end
 
   defp fix_parse_error(source, _cursor_line_number, {:error, {line, "syntax" <> _, _token}}) when is_integer(line) do
@@ -87,21 +151,113 @@ defmodule ElixirSense.Core.Parser do
     error
   end
 
+  defp fix_parse_error(source, cursor_line_number, {:error, {line_end, text = "missing terminator: " <> _, _} }) do
+    terminator = case Regex.run(Regex.recompile!(~r/terminator:\s([^\s]+)/), text) do
+      [_, terminator] -> terminator
+    end
+
+    line_start = case Regex.run(Regex.recompile!(~r/line\s(\d+)/), text) do
+      [_, line] -> line |> String.to_integer
+    end
+
+    if terminator in ["\"", "\'"] do
+      source
+      |> String.split(["\n", "\r\n"])
+      |> List.update_at(max(cursor_line_number, line_start) - 1, fn line ->
+        # try to close line with terminator
+        line <> terminator
+      end)
+      |> Enum.join("\n")
+    else
+
+      compare_mode = case terminator do
+        "\"\"\"" -> :lt
+        _ -> :eq
+      end
+
+      line_intendations = source
+      |> String.split(["\n", "\r\n"])
+      |> Enum.map(fn line ->
+        line = normalize_intendation(line)
+        {line, get_intendation_level(line)}
+      end)
+
+      line_intendation_at_start = line_intendations |> Enum.at(line_start - 1) |> elem(1)
+
+      {source, _, missing_end} = line_intendations
+      |> Enum.reduce({[], 1, true}, fn {line, intendation}, {source_acc, current_line, missing_end} ->
+        {modified_lines, missing_end} = cond do
+          current_line <= line_start ->
+            {[line | source_acc], true}
+          missing_end and line != "" and compare_intendation(compare_mode, intendation, line_intendation_at_start) and current_line < line_end ->
+            [previous | rest] = source_acc
+            {[line, previous <> " " <> terminator | rest], false}
+          true ->
+            {[line | source_acc], missing_end}
+        end
+        {modified_lines, current_line + 1, missing_end}
+      end)
+
+      if missing_end do
+        [last | rest] = source
+        [last <> " " <> terminator | rest]
+      else
+        source
+      end
+      |> Enum.reverse
+      |> Enum.join("\n")
+    end
+  end
+
+  defp fix_parse_error(source, cursor_line_number, {:error, {_line_end, text = "missing interpolation terminator: \"}\"" <> _, _} }) do
+    line_start = case Regex.run(Regex.recompile!(~r/line\s(\d+)/), text) do
+      [_, line] -> line |> String.to_integer
+    end
+
+    source
+    |> String.split(["\n", "\r\n"])
+    |> List.update_at(max(cursor_line_number, line_start) - 1, fn line ->
+      # try to close line with terminator
+      line <> "}"
+    end)
+    |> Enum.join("\n")
+  end
+
   defp fix_parse_error(source, cursor_line_number, _error) do
     source
     |> replace_line_with_marker(cursor_line_number)
   end
 
-  defp fix_line_not_found(source, line_number) do
-    source |> replace_line_with_marker(line_number)
+  defp compare_intendation(:eq, left, right), do: left == right
+  defp compare_intendation(:lt, left, right), do: left < right
+
+  defp normalize_intendation(line) do
+    line
+    |> String.replace_leading("\t", "  ")
   end
 
-  defp replace_line_with_marker(source, line) do
+  def get_intendation_level(line) do
+    trimmed_line = String.trim_leading(line)
+    String.length(line) - String.length(trimmed_line)
+  end
+
+  defp fix_line_not_found(source, line_number) do
+    source
+    |> String.split(["\n", "\r\n"])
+    # by replacing a line here we risk introducing a syntax error
+    # instead we insert a line with marker
+    |> List.insert_at(line_number - 1, marker(line_number))
+    |> Enum.join("\n")
+  end
+
+  defp replace_line_with_marker(source, line_number) do
     # IO.puts :stderr, "REPLACING LINE: #{line}"
     source
     |> String.split(["\n", "\r\n"])
-    |> List.replace_at(line - 1, "(__atom_elixir_marker_#{line}__())")
+    |> List.replace_at(line_number - 1, marker(line_number))
     |> Enum.join("\n")
   end
+
+  defp marker(line_number), do: "(__atom_elixir_marker_#{line_number}__())"
 
 end
