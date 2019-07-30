@@ -60,22 +60,20 @@ defmodule ElixirSense.Core.Parser do
     }
   end
 
-  defp string_to_ast(source, errors_threshold, cursor_line_number) do
+  defp string_to_ast(source, errors_threshold, cursor_line_number, original_error \\ nil) do
     case Code.string_to_quoted(source, columns: true) do
       {:ok, ast} ->
         {:ok, ast, source}
       error ->
         # IO.puts :stderr, "PARSE ERROR"
         # IO.inspect :stderr, error, []
-        # IO.inspect source
-        # IO.inspect error
 
         if errors_threshold > 0 do
           source
           |> fix_parse_error(cursor_line_number, error)
-          |> string_to_ast(errors_threshold - 1, cursor_line_number)
+          |> string_to_ast(errors_threshold - 1, cursor_line_number, original_error)
         else
-          error
+          original_error || error
         end
     end
   end
