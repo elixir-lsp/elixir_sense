@@ -355,6 +355,41 @@ defmodule ElixirSense.Core.ParserTest do
       parse_string(source, true, true, 5)
     end)
     assert output == ""
+
+  test "parse struct" do
+    source = """
+    defmodule MyModule do
+      def func() do
+        %{
+          data: "foo"
+        }
+      end
+    end
+    """
+
+    assert %ElixirSense.Core.Metadata{
+      calls: %{
+        3 => [%{func: :%{}}]
+      }
+    } = parse_string(source, true, true, 4)
+  end
+
+  test "parse struct with missing terminator" do
+    source = """
+    defmodule MyModule do
+      def func() do
+        %{
+          data: "foo"
+
+      end
+    end
+    """
+
+    assert %ElixirSense.Core.Metadata{
+      calls: %{
+        3 => [%{func: :%{}}]
+      }
+    } = parse_string(source, true, true, 4)
   end
 
 end

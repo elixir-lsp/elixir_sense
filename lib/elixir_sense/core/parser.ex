@@ -19,40 +19,66 @@ defmodule ElixirSense.Core.Parser do
       {:ok, ast, modified_source} ->
         acc = MetadataBuilder.build(ast)
         if Map.has_key?(acc.lines_to_env, cursor_line_number) or !try_to_fix_line_not_found  do
-          create_metadata(source, acc)
+          create_metadata(source, {:ok, acc})
         else
           # IO.puts :stderr, "LINE NOT FOUND"
-          # match here as fix_line_not_found should not introduce syntax errors
-          {:ok, ast, _modified_source} = modified_source
-          |> fix_line_not_found(cursor_line_number)
-          |> string_to_ast(0, cursor_line_number)
+          result = case try_fix_line_not_found_by_inserting_marker(modified_source, cursor_line_number) do
+            {:ok, acc} -> {:ok, acc}
+            _ -> try_fix_line_not_found_by_taking_previous_line(acc, cursor_line_number)
+          end
 
-          acc = MetadataBuilder.build(ast)
-          # a line has been inserted, insert a fake lines_to_env
-          fixed_Lines_to_env = for {line, env} <- acc.lines_to_env, into: %{}, do: (
-            if line > cursor_line_number do
-              {line - 1, env}
-            else
-              {line , env}
-            end
-          )
-          acc = %ElixirSense.Core.State{acc | lines_to_env: fixed_Lines_to_env}
-
-          create_metadata(source, acc)
+          create_metadata(source, result)
         end
-      {:error, error} ->
+      {:error, reason} = error ->
         # IO.puts :stderr, "CAN'T FIX IT"
-        # IO.inspect :stderr, error, []
-        %Metadata{
-          source: source,
-          error: error
-        }
+        # IO.inspect :stderr, reason, []
+        create_metadata(source, error)
     end
   end
 
-  defp create_metadata(modified_source, acc) do
+  defp try_fix_line_not_found_by_taking_previous_line(acc, cursor_line_number) do
+    with {line, env} <- acc.lines_to_env
+    |> Enum.max_by(fn
+      {line, _} when line < cursor_line_number -> line
+      _ -> 0
+    end, fn -> nil end)
+    do
+      fixed_lines_to_env = acc.lines_to_env |> Map.put(cursor_line_number, env)
+      acc = %ElixirSense.Core.State{acc | lines_to_env: fixed_lines_to_env}
+      {:ok, acc}
+    else
+      nil -> {:error, :line_env_not_found}
+    end
+  end
+
+  defp try_fix_line_not_found_by_inserting_marker(modified_source, cursor_line_number) do
+    with {:ok, ast, _modified_source} <- modified_source
+    |> fix_line_not_found(cursor_line_number)
+    |> string_to_ast(0, cursor_line_number)
+    do
+      acc = MetadataBuilder.build(ast)
+      # a line has been inserted, insert a fake lines_to_env
+      fixed_lines_to_env = for {line, env} <- acc.lines_to_env, into: %{}, do: (
+        if line > cursor_line_number do
+          {line - 1, env}
+        else
+          {line , env}
+        end
+      )
+      acc = %ElixirSense.Core.State{acc | lines_to_env: fixed_lines_to_env}
+      {:ok, acc}
+    end
+  end
+
+  defp create_metadata(source, {:error, error}) do
     %Metadata{
-      source: modified_source,
+      source: source,
+      error: error
+    }
+  end
+  defp create_metadata(source, {:ok, acc}) do
+    %Metadata{
+      source: source,
       mods_funs_to_positions: acc.mods_funs_to_positions,
       lines_to_env: acc.lines_to_env,
       vars_info_per_scope_id: acc.vars_info_per_scope_id,
