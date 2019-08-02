@@ -11,7 +11,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   @scope_keywords [:for, :try, :fn]
   @block_keywords [:do, :else, :rescue, :catch, :after]
-  @defs [:def, :defp, :defmacro, :defmacrop, :defdelegate]
+  @defs [:def, :defp, :defmacro, :defmacrop, :defdelegate, :defguard, :defguardp]
 
   defguard is_call(call, params) when is_atom(call) and is_list(params) and call not in [:., :__aliases__, :::, :{}]
 
@@ -200,7 +200,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
   end
 
-  defp pre({def_name, _, _} = ast, state) when def_name in @defs do
+  # defguard and defguardp
+  defp pre({def_name, meta, [{:when, [line: _, column: _],[{name, [line: line, column: column] = meta2, params}, body]}]}, state) when def_name in [:defguard, :defguardp] do
+    ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, body]}
+    pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
+  end
+
+  defp pre({def_name, _meta, _} = ast, state) when def_name in @defs do
     {ast, state}
   end
 
