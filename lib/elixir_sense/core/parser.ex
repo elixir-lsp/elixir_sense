@@ -5,6 +5,7 @@ defmodule ElixirSense.Core.Parser do
 
   alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.State
 
   def parse_file(file, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
     case File.read(file) do
@@ -23,11 +24,11 @@ defmodule ElixirSense.Core.Parser do
         else
           # IO.puts :stderr, "LINE NOT FOUND"
           result = case try_fix_line_not_found_by_inserting_marker(modified_source, cursor_line_number) do
-            {:ok, acc} -> {:ok, acc}
-            _ -> try_fix_line_not_found_by_taking_previous_line(acc, cursor_line_number)
+            {:ok, acc} -> acc
+            _ -> fix_line_not_found_by_taking_previous_line(acc, cursor_line_number)
           end
 
-          create_metadata(source, result)
+          create_metadata(source, {:ok, result})
         end
       {:error, reason} = error ->
         # IO.puts :stderr, "CAN'T FIX IT"
@@ -36,19 +37,11 @@ defmodule ElixirSense.Core.Parser do
     end
   end
 
-  defp try_fix_line_not_found_by_taking_previous_line(acc, cursor_line_number) do
-    with {line, env} <- acc.lines_to_env
-    |> Enum.max_by(fn
-      {line, _} when line < cursor_line_number -> line
-      _ -> 0
-    end, fn -> nil end)
-    do
-      fixed_lines_to_env = acc.lines_to_env |> Map.put(cursor_line_number, env)
-      acc = %ElixirSense.Core.State{acc | lines_to_env: fixed_lines_to_env}
-      {:ok, acc}
-    else
-      nil -> {:error, :line_env_not_found}
-    end
+  defp fix_line_not_found_by_taking_previous_line(acc, cursor_line_number) do
+    previous_env_or_default = State.get_closest_previous_env(acc, cursor_line_number)
+
+    fixed_lines_to_env = acc.lines_to_env |> Map.put(cursor_line_number, previous_env_or_default)
+    %State{acc | lines_to_env: fixed_lines_to_env}
   end
 
   defp try_fix_line_not_found_by_inserting_marker(modified_source, cursor_line_number) do
@@ -65,7 +58,7 @@ defmodule ElixirSense.Core.Parser do
           {line , env}
         end
       )
-      acc = %ElixirSense.Core.State{acc | lines_to_env: fixed_lines_to_env}
+      acc = %State{acc | lines_to_env: fixed_lines_to_env}
       {:ok, acc}
     end
   end

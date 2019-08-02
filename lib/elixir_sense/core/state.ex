@@ -325,4 +325,14 @@ defmodule ElixirSense.Core.State do
       Map.put(acc, var, var_info)
     end)
   end
+
+  def get_closest_previous_env(%__MODULE__{} = metadata, line) do
+    metadata.lines_to_env
+    |> Enum.max_by(fn
+      {env_line, _} when env_line < line -> env_line
+      _ -> 0
+    end, fn -> default_env() end)
+  end
+
+  def default_env(), do: %ElixirSense.Core.State.Env{}
 end
