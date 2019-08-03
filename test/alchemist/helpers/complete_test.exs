@@ -1,8 +1,10 @@
 defmodule Alchemist.Helpers.CompleteTest do
   use ExUnit.Case, async: true
 
-  def expand(expr) do
-    Alchemist.Helpers.Complete.expand(Enum.reverse expr)
+  alias Alchemist.Helpers.Complete.Env
+
+  def expand(expr, env \\ %Env{}) do
+    Alchemist.Helpers.Complete.expand(Enum.reverse(expr), env)
   end
 
   test "erlang module completion" do
@@ -262,22 +264,99 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "complete aliases of elixir modules" do
-    Application.put_env(:"alchemist.el", :aliases, [{MyList, List}])
+    env = %Env{
+      aliases: [{MyList, List}]
+    }
 
-    assert {:yes, 'ist', [%{name: "MyList"}]} = expand('MyL')
-    assert {:yes, '.', [%{name: "MyList"}]} = expand('MyList')
-    assert {:yes, [], [%{arity: 1, name: "to_integer"}, %{arity: 2, name: "to_integer"}]} = expand('MyList.to_integer')
+    assert {:yes, 'ist', [%{name: "MyList"}]} = expand('MyL', env)
+    assert {:yes, '.', [%{name: "MyList"}]} = expand('MyList', env)
+    assert {:yes, [], [%{arity: 1, name: "to_integer"}, %{arity: 2, name: "to_integer"}]} = expand('MyList.to_integer', env)
   end
 
   test "complete aliases of erlang modules" do
-    Application.put_env(:"alchemist.el", :aliases, [{EList, :lists}])
+    env = %Env{
+      aliases: [{EList, :lists}]
+    }
 
-    assert {:yes, 'ist', [%{name: "EList"}]} = expand('EL')
-    assert {:yes, '.', [%{name: "EList"}]} = expand('EList')
+    assert {:yes, 'ist', [%{name: "EList"}]} = expand('EL', env)
+    assert {:yes, '.', [%{name: "EList"}]} = expand('EList', env)
     assert {:yes, [], [
       %{arity: 2, name: "map"},
       %{arity: 3, name: "mapfoldl"},
-      %{arity: 3, name: "mapfoldr"}]} = expand('EList.map')
+      %{arity: 3, name: "mapfoldr"}]} = expand('EList.map', env)
+  end
+
+  test "complete local funs from scope module" do
+    env = %Env{
+      scope_module: MyModule,
+      mods_and_funs: %{
+        MyModule => %{
+          {:my_fun_priv, 1} => %{type: :defp},
+          {:my_fun_pub, 1} => %{type: :def},
+        },
+        OtherModule => %{
+          {:my_fun_pub_other, 1} => %{type: :def},
+        }
+      }
+    }
+
+    assert {:yes, 'un_p', []} = expand('my_f', env)
+    assert {:yes, 'iv', [
+      %{name: "my_fun_priv", origin: "MyModule"}
+    ]} = expand('my_fun_pr', env)
+    assert {:yes, 'b', [
+      %{name: "my_fun_pub", origin: "MyModule"}
+    ]} = expand('my_fun_pu', env)
+  end
+
+  test "complete remote funs from imported module" do
+    env = %Env{
+      scope_module: MyModule,
+      imports: [OtherModule],
+      mods_and_funs: %{
+        OtherModule => %{
+          {:my_fun_other_pub, 1} => %{type: :def},
+          {:my_fun_other_priv, 1} => %{type: :defp},
+        }
+      }
+    }
+
+    assert {:yes, 'un_other_pub', [
+      %{name: "my_fun_other_pub", origin: "OtherModule"}
+    ]} = expand('my_f', env)
+  end
+
+  test "complete remote funs" do
+    env = %Env{
+      scope_module: MyModule,
+      mods_and_funs: %{
+        Some.OtherModule => %{
+          {:my_fun_other_pub, 1} => %{type: :def},
+          {:my_fun_other_priv, 1} => %{type: :defp},
+        }
+      }
+    }
+
+    assert {:yes, 'un_other_pub', [
+      %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+    ]} = expand('Some.OtherModule.my_f', env)
+  end
+
+  test "complete remote funs froma aliased module" do
+    env = %Env{
+      scope_module: MyModule,
+      aliases: [{S, Some.OtherModule}],
+      mods_and_funs: %{
+        Some.OtherModule => %{
+          {:my_fun_other_pub, 1} => %{type: :def},
+          {:my_fun_other_priv, 1} => %{type: :defp},
+        }
+      }
+    }
+
+    assert {:yes, 'un_other_pub', [
+      %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+    ]} = expand('S.my_f', env)
   end
 
   defmodule MyStruct do
