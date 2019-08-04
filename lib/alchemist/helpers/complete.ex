@@ -112,7 +112,7 @@ defmodule Alchemist.Helpers.Complete do
       h === ?. and t != [] ->
         expand_dot(reduce(t), env)
       h === ?: and t == [] ->
-        expand_erlang_modules()
+        expand_erlang_modules(env)
       identifier?(h) ->
         expand_expr(reduce(expr), env)
       (h == ?/) and t != [] and identifier?(hd(t)) ->
@@ -144,7 +144,7 @@ defmodule Alchemist.Helpers.Complete do
   defp expand_expr(expr, env) do
     case Code.string_to_quoted expr do
       {:ok, atom} when is_atom(atom) ->
-        expand_erlang_modules(Atom.to_string(atom))
+        expand_erlang_modules(Atom.to_string(atom), env)
       {:ok, {atom, _, nil}} when is_atom(atom) ->
         expand_import(Atom.to_string(atom), env)
       {:ok, {:__aliases__, _, [root]}} ->
@@ -251,12 +251,12 @@ defmodule Alchemist.Helpers.Complete do
 
   ## Erlang modules
 
-  defp expand_erlang_modules(hint \\ "") do
-    format_expansion match_erlang_modules(hint), hint
+  defp expand_erlang_modules(hint \\ "", env) do
+    format_expansion match_erlang_modules(hint, env), hint
   end
 
-  defp match_erlang_modules(hint) do
-    for mod <- match_modules(hint, true), usable_as_unquoted_module?(mod) do
+  defp match_erlang_modules(hint, env) do
+    for mod <- match_modules(hint, true, env), usable_as_unquoted_module?(mod) do
       %{kind: :module, name: mod, type: :erlang, desc: ""}
     end
   end
@@ -276,7 +276,7 @@ defmodule Alchemist.Helpers.Complete do
 
   defp expand_elixir_modules_from_aliases(mod, hint, aliases, env) do
     aliases
-    |> Kernel.++(match_elixir_modules(mod, hint))
+    |> Kernel.++(match_elixir_modules(mod, hint, env))
     |> Kernel.++(match_module_funs(mod, hint, env))
     |> format_expansion(hint)
   end
@@ -296,12 +296,12 @@ defmodule Alchemist.Helpers.Complete do
     end
   end
 
-  defp match_elixir_modules(module, hint) do
+  defp match_elixir_modules(module, hint, env) do
     name  = Atom.to_string(module)
     depth = length(String.split(name, ".")) + 1
     base  = name <> "." <> hint
 
-    for mod <- match_modules(base, module === Elixir),
+    for mod <- match_modules(base, module === Elixir, env),
     parts = String.split(mod, "."),
     depth <= length(parts),
     name = Enum.at(parts, depth - 1),
@@ -340,24 +340,24 @@ defmodule Alchemist.Helpers.Complete do
     Code.Identifier.classify(String.to_atom(name)) != :other
   end
 
-  defp match_modules(hint, root) do
+  defp match_modules(hint, root, env) do
     root
-    |> get_modules()
+    |> get_modules(env)
     |> Enum.sort()
     |> Enum.dedup()
     |> Enum.drop_while(& not starts_with?(&1, hint))
     |> Enum.take_while(& starts_with?(&1, hint))
   end
 
-  defp get_modules(true) do
-    ["Elixir.Elixir"] ++ get_modules(false)
+  defp get_modules(true, env) do
+    ["Elixir.Elixir"] ++ get_modules(false, env)
   end
 
-  defp get_modules(false) do
+  defp get_modules(false, env) do
     modules = Enum.map(:code.all_loaded(), &Atom.to_string(elem(&1, 0)))
     case :code.get_mode() do
-      :interactive -> modules ++ get_modules_from_applications()
-      _otherwise -> modules
+      :interactive -> modules ++ get_modules_from_applications() ++ get_modules_from_metadata(env)
+      _otherwise -> modules ++ get_modules_from_metadata(env)
     end
   end
 
@@ -367,6 +367,10 @@ defmodule Alchemist.Helpers.Complete do
     module <- modules do
       Atom.to_string(module)
     end
+  end
+
+  defp get_modules_from_metadata(env) do
+    for {k, _} <- env.mods_and_funs, do: Atom.to_string(k)
   end
 
   defp loaded_applications do

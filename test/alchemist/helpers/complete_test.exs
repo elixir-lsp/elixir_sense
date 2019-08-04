@@ -359,6 +359,20 @@ defmodule Alchemist.Helpers.CompleteTest do
     ]} = expand('S.my_f', env)
   end
 
+  test "complete modules" do
+    env = %Env{
+      scope_module: MyModule,
+      aliases: [{MyAlias, Some.OtherModule.Nested}],
+      mods_and_funs: %{
+        Some.OtherModule => %{}
+      }
+    }
+
+    assert {:yes, 'me', [%{name: "Some", type: :module}]} = expand('So', env)
+    assert {:yes, 'OtherModule', [%{name: "OtherModule", type: :module}]} = expand('Some.', env)
+    assert {:yes, 'lias', [%{name: "MyAlias", type: :module}]} = expand('MyA', env)
+  end
+
   defmodule MyStruct do
     defstruct [:my_val]
   end
