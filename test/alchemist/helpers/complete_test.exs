@@ -293,6 +293,11 @@ defmodule Alchemist.Helpers.CompleteTest do
         MyModule => %{
           {:my_fun_priv, 1} => %{type: :defp},
           {:my_fun_pub, 1} => %{type: :def},
+          {:my_macro_priv, 1} => %{type: :defmacrop},
+          {:my_macro_pub, 1} => %{type: :defmacro},
+          {:my_guard_priv, 1} => %{type: :defguardp},
+          {:my_guard_pub, 1} => %{type: :defguard},
+          {:my_delegated, 1} => %{type: :defdelegate},
         },
         OtherModule => %{
           {:my_fun_pub_other, 1} => %{type: :def},
@@ -301,12 +306,31 @@ defmodule Alchemist.Helpers.CompleteTest do
     }
 
     assert {:yes, 'un_p', []} = expand('my_f', env)
+
     assert {:yes, 'iv', [
-      %{name: "my_fun_priv", origin: "MyModule"}
+      %{name: "my_fun_priv", origin: "MyModule", type: "function"}
     ]} = expand('my_fun_pr', env)
     assert {:yes, 'b', [
-      %{name: "my_fun_pub", origin: "MyModule"}
+      %{name: "my_fun_pub", origin: "MyModule", type: "function"}
     ]} = expand('my_fun_pu', env)
+
+    assert {:yes, 'iv', [
+      %{name: "my_macro_priv", origin: "MyModule", type: "macro"}
+    ]} = expand('my_macro_pr', env)
+    assert {:yes, 'b', [
+      %{name: "my_macro_pub", origin: "MyModule", type: "macro"}
+    ]} = expand('my_macro_pu', env)
+
+    assert {:yes, 'iv', [
+      %{name: "my_guard_priv", origin: "MyModule", type: "macro"}
+    ]} = expand('my_guard_pr', env)
+    assert {:yes, 'b', [
+      %{name: "my_guard_pub", origin: "MyModule", type: "macro"}
+    ]} = expand('my_guard_pu', env)
+
+    assert {:yes, 'legated', [
+      %{name: "my_delegated", origin: "MyModule", type: "function"}
+    ]} = expand('my_de', env)
   end
 
   test "complete remote funs from imported module" do
@@ -394,10 +418,14 @@ defmodule Alchemist.Helpers.CompleteTest do
       expr
     end
     def fun, do: :ok
+    defguard guard(value) when is_integer(value) and rem(value, 2) == 0
+    defdelegate delegated(par), to: OtherModule
   end
 
   test "complete macros and functions from not loaded modules" do
     assert {:yes, 'st', [%{name: "test", type: "macro"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.te')
     assert {:yes, 'un', [%{name: "fun", type: "function"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.f')
+    assert {:yes, 'uard', [%{name: "guard", type: "macro"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.g')
+    assert {:yes, 'legated', [%{name: "delegated", type: "function"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.de')
   end
 end

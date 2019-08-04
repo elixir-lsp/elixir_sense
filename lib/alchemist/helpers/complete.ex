@@ -537,7 +537,7 @@ defmodule Alchemist.Helpers.Complete do
     for {a, {doc, spec}} <- arities_docs_specs do
       {fun_args, desc} = Introspection.extract_fun_args_and_desc(doc)
       kind = case func_kind do
-        :defmacro -> "macro"
+        k when k in [:defmacro, :defmacrop, :defguard, :defguardp] -> "macro"
         _         -> "function"
       end
       mod_name = mod
