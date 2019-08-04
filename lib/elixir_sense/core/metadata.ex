@@ -12,6 +12,7 @@ defmodule ElixirSense.Core.Metadata do
             lines_to_env: %{},
             calls: %{},
             vars_info_per_scope_id: %{},
+            mods_funs: %{},
             error: nil
 
   def get_env(%__MODULE__{} = metadata, line) do
