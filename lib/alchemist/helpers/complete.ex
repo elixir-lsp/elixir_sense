@@ -40,13 +40,15 @@ defmodule Alchemist.Helpers.Complete do
     {status, result, list} = expand(code |> Enum.reverse, env)
 
     case {status, result, list} do
-      {:no, _, _}  -> ''
-      {:yes, [], _} -> List.insert_at(list, 0, %{type: :hint, value: "#{exp}"})
+      {:no, _, _}  -> {%{type: :hint, value: "#{exp}"}, []}
+      {:yes, [], _} -> {%{type: :hint, value: "#{exp}"}, list}
       {:yes, _, []} -> run(code ++ result, env)
       {:yes, _,  r} ->
         case r do
-          [%{subtype: :struct}] -> List.insert_at(list, 0, %{type: :hint, value: "#{exp}#{result}"})
-          _ -> List.insert_at(run(code ++ result, env), 1, Enum.at(list, 0))
+          [%{subtype: :struct}] -> {%{type: :hint, value: "#{exp}#{result}"}, list}
+          # TODO maybe eval in some cases
+          [_] -> {%{type: :hint, value: "#{exp}#{result}"}, list}
+          [_ | _] -> run(code ++ result, env)
         end
     end
   end
