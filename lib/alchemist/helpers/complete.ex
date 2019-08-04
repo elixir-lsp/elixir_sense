@@ -46,63 +46,11 @@ defmodule Alchemist.Helpers.Complete do
       {:yes, _,  r} ->
         case r do
           [%{subtype: :struct}] -> {%{type: :hint, value: "#{exp}#{result}"}, list}
-          # TODO maybe eval in some cases
+          # TODO maybe run recursively in some cases
           [_] -> {%{type: :hint, value: "#{exp}#{result}"}, list}
           [_ | _] -> run(code ++ result, env)
         end
     end
-  end
-
-  def run(hint, modules) do
-    context_module = modules |> Enum.at(0)
-
-    exported? = fn mod, f, a ->
-      (function_exported?(mod, f, a) or macro_exported?(mod, f, a))
-    end
-    accept_function = fn
-      (mod, mod, _, _, _)          -> true
-      (_  , _  , _, _, :undefined) -> false
-      (_  , mod, f, a, _)          -> exported?.(mod, f, a)
-    end
-
-    for module <- modules, module != Elixir do
-      funs = ModuleInfo.get_functions(module, hint)
-      funs_info = Introspection.module_functions_info(module)
-
-      for {f, a} <- funs,
-          {func_kind, fun_args, desc, spec} = Map.get(funs_info, {f, a}, {:undefined, "", "", ""}),
-          accept_function.(context_module, module, f, a, func_kind)
-      do
-        kind = case {context_module, module, func_kind} do
-          {m, m, :defmacro}  -> "public_macro"
-          {_, _, :defmacro}  -> "macro"
-          {m, m, :def}       -> "public_function"
-          {_, _, :def}       -> "function"
-          {m, m, :undefined} -> if exported?.(module, f, a), do: "public_function", else: "private_function"
-          _                  -> "unknown"
-        end
-
-        func_name = Atom.to_string(f)
-        mod_name = module |> Introspection.module_to_string
-        %{type: kind, name: func_name, arity: a, args: fun_args, origin: mod_name, summary: desc, spec: spec}
-      end
-    end |> List.flatten |> add_builtin_functions(hint)
-  end
-
-  defp add_builtin_functions(list, hint) do
-    builtin_list =
-      if String.contains?(hint, ".") do
-        local_hint = String.split(hint, ".") |> List.last()
-        for {f, a} <- @builtin_functions,
-            f_name = to_string(f),
-            String.starts_with?(f_name, local_hint)
-            do
-          %{name: f_name, arity: a, args: "", origin: "", summary: "Built-in function", spec: nil, type: "function"}
-        end
-      else
-        []
-      end
-    list ++ builtin_list
   end
 
   def expand('', env) do
