@@ -1079,6 +1079,48 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       } = state
   end
 
+  test "registers mods and func" do
+    state =
+      """
+      defmodule MyModuleWithoutFuns do
+      end
+      defmodule MyModuleWithFuns do
+        def func do
+          IO.puts ""
+        end
+        defp funcp do
+          IO.puts ""
+        end
+        defmacro macro1(ast) do
+          IO.puts ""
+        end
+        defmacrop macro1p(ast) do
+          IO.puts ""
+        end
+        defguard is_even(value) when is_integer(value) and rem(value, 2) == 0
+        defguardp is_evenp(value) when is_integer(value) and rem(value, 2) == 0
+        defdelegate func_delegated(par), to: OtherModule
+        defmodule Nested do
+        end
+      end
+      """
+      |> string_to_state
+
+      assert %{
+        MyModuleWithFuns => %{
+          {:func, 0} => %ElixirSense.Core.State.ModFunInfo{type: :def},
+          {:func_delegated, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defdelegate},
+          {:funcp, 0} => %ElixirSense.Core.State.ModFunInfo{type: :defp},
+          {:is_even, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defguard},
+          {:is_evenp, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defguardp},
+          {:macro1, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defmacro},
+          {:macro1p, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defmacrop}
+        },
+        MyModuleWithoutFuns => %{},
+        MyModuleWithFuns.Nested => %{},
+      } == state.mods_funs
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true)

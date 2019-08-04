@@ -22,6 +22,7 @@ defmodule ElixirSense.Core.State do
     scope_ids:  [0],
     vars_info_per_scope_id: %{},
     mods_funs_to_positions: %{},
+    mods_funs: %{},
     lines_to_env: %{},
     calls: %{}
   ]
@@ -44,6 +45,11 @@ defmodule ElixirSense.Core.State do
   defmodule VarInfo do
     @moduledoc false
     defstruct name: nil, positions: [], scope_id: nil, is_definition: nil
+  end
+
+  defmodule ModFunInfo do
+    @moduledoc false
+    defstruct type: nil
   end
 
   def get_current_env(state) do
@@ -142,8 +148,12 @@ defmodule ElixirSense.Core.State do
     %{state | namespace: outer_mods, scopes: outer_scopes}
   end
 
-  def new_named_func(state, name, arity) do
-    %{state | scopes: [{name, arity}|state.scopes]}
+  def new_named_func(state, name, arity, type) do
+    %{state |
+      scopes: [{name, arity}|state.scopes],
+      mods_funs: state.mods_funs
+      |> Map.update(get_current_module(state), %{{name, arity} => %ModFunInfo{type: type}}, & &1 |> Map.put({name, arity}, %ModFunInfo{type: type}))
+    }
   end
 
   def remove_last_scope_from_scopes(state) do
@@ -152,6 +162,8 @@ defmodule ElixirSense.Core.State do
 
   def add_current_module_to_index(state, position) do
     current_module = state.namespace |> :lists.reverse |> Module.concat
+    state = %{state | mods_funs: state.mods_funs
+    |> Map.update(current_module, %{}, & &1)}
     add_mod_fun_to_position(state, {current_module, nil, nil}, position, nil)
   end
 

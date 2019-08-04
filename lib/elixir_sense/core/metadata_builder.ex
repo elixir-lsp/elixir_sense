@@ -49,9 +49,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_func(ast, state, %{line: line, col: col}, name, params) do
+  defp pre_func(ast = {type, _, _}, state, %{line: line, col: col}, name, params) do
     state
-    |> new_named_func(name, length(params || []))
+    |> new_named_func(name, length(params || []), type)
     |> add_func_to_index(name, params || [], {line, col})
     |> new_alias_scope
     |> new_import_scope
