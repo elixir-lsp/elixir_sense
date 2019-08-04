@@ -1,12 +1,13 @@
 defmodule Alchemist.Helpers.Complete do
 
-  alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
 
-  @builtin_functions [{:__info__, 1}, {:module_info, 0}, {:module_info, 1}]
+  @erlang_module_builtin_functions [{:module_info, 0}, {:module_info, 1}]
+  @elixir_module_builtin_functions [{:__info__, 1}]
+  @builtin_functions @erlang_module_builtin_functions ++ @elixir_module_builtin_functions
 
   @moduledoc false
 
@@ -187,15 +188,16 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp expand_require(mod, hint, env) do
-    format_expansion(match_module_funs(mod, hint, env), hint)
+    format_expansion(match_module_funs(mod, hint, true, env), hint)
   end
 
   defp expand_import(hint, env) do
+    # import calls of buildin functions are not possible
     funs =
-      match_module_funs(Kernel, hint, env) ++
-      match_module_funs(Kernel.SpecialForms, hint, env) ++
-      match_module_funs(env.scope_module, hint, env) ++
-      (env.imports |> Enum.flat_map(fn scope_import -> match_module_funs(scope_import, hint, env) end))
+      match_module_funs(Kernel, hint, false, env) ++
+      match_module_funs(Kernel.SpecialForms, hint, false, env) ++
+      match_module_funs(env.scope_module, hint, false, env) ++
+      (env.imports |> Enum.flat_map(fn scope_import -> match_module_funs(scope_import, hint, false, env) end))
     format_expansion funs, hint
   end
 
@@ -227,16 +229,13 @@ defmodule Alchemist.Helpers.Complete do
   defp expand_elixir_modules_from_aliases(mod, hint, aliases, env) do
     aliases
     |> Kernel.++(match_elixir_modules(mod, hint, env))
-    |> Kernel.++(match_module_funs(mod, hint, env))
+    |> Kernel.++(match_module_funs(mod, hint, true, env))
     |> format_expansion(hint)
   end
 
   defp expand_alias(mod_parts, env) do
     Source.concat_module_parts(mod_parts, env.aliases)
   end
-
-  defp format_aliases(nil), do: []
-  defp format_aliases(list), do: list
 
   defp match_aliases(hint, env) do
     for {alias, _mod} <- env.aliases,
@@ -332,14 +331,15 @@ defmodule Alchemist.Helpers.Complete do
     :ets.match(:ac_tab, {{:loaded, :"$1"}, :_})
   end
 
-  defp match_module_funs(mod, hint, env) do
+  defp match_module_funs(mod, hint, include_builtin, env) do
     falist = case ensure_loaded(mod) do
       {:module, _} ->
-        get_module_funs(mod)
+        get_module_funs(mod, include_builtin)
 
       _otherwise ->
-        get_metadata_module_funs(mod, env)
+        get_metadata_module_funs(mod, include_builtin, env)
     end
+    |> Enum.sort_by(fn {f, a, _, _, _} -> {f, -a} end)
 
     list = Enum.reduce falist, [], fn {f, a, func_kind, doc, spec}, acc ->
       case :lists.keyfind(f, 1, acc) do
@@ -357,27 +357,25 @@ defmodule Alchemist.Helpers.Complete do
     end |> :lists.sort()
   end
 
-  defp get_metadata_module_funs(mod, env) do
+  defp get_metadata_module_funs(mod, include_builtin, env) do
     case env.mods_and_funs[mod] do
       nil -> []
       funs ->
         for {{f, a}, info} <- funs, (mod == env.scope_module || is_pub(info.type)) do
           {f, a, info.type, nil, nil}
         end
+        |> Kernel.++((for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :def, nil, nil}))
     end
   end
 
   def is_pub(type), do: type in [:def, :defmacro, :defdelegate, :defguard]
 
-  defp get_module_funs(mod) do
+  defp get_module_funs(mod, include_builtin) do
     cond do
-      not ensure_loaded?(mod) ->
-        []
-
       function_exported?(mod, :__info__, 1) ->
         docs = NormalizedCode.get_docs(mod, :docs)
         if docs != nil do
-          exports = mod.__info__(:macros) ++ mod.__info__(:functions) -- @builtin_functions
+          exports = mod.__info__(:macros) ++ mod.__info__(:functions)
           |> Kernel.--(default_arg_functions_with_doc_false(docs))
           |> Enum.reject(&hidden_fun?(&1, docs))
 
@@ -396,12 +394,16 @@ defmodule Alchemist.Helpers.Complete do
           end
         else
           macros = for {f, a} <- mod.__info__(:macros), do: {f, a, :defmacro, nil, nil}
-          functions = for {f, a} <- (mod.__info__(:functions) -- @builtin_functions), do: {f, a, :def, nil, nil}
+          functions = for {f, a} <- mod.__info__(:functions), do: {f, a, :def, nil, nil}
           macros ++ functions
         end
+        |> Kernel.++((for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :def, nil, nil}))
 
       true ->
-        for {f, a} <- (mod.module_info(:exports) -- @builtin_functions) do
+        funs = mod.module_info(:exports)
+        |> Kernel.--(if include_builtin, do: [], else: @builtin_functions)
+
+        for {f, a} <- funs do
           case f |> Atom.to_string do
             "MACRO-" <> name ->
               {String.to_atom(name), a, :defmacro, nil, nil}
@@ -410,7 +412,6 @@ defmodule Alchemist.Helpers.Complete do
         end
 
     end
-    |> Enum.sort_by(fn {f, a, _, _, _} -> {f, -a} end)
   end
 
   def find_doc(fun, _docs) when fun in @builtin_functions, do:
@@ -461,9 +462,6 @@ defmodule Alchemist.Helpers.Complete do
   defp underscored_fun?({name, _}),
      do: hd(Atom.to_charlist(name)) == ?_
 
-  defp ensure_loaded?(Elixir), do: false
-  defp ensure_loaded?(mod), do: Code.ensure_loaded?(mod)
-
   defp ensure_loaded(Elixir), do: {:error, :nofile}
   defp ensure_loaded(mod), do: Code.ensure_compiled(mod)
 
@@ -492,7 +490,12 @@ defmodule Alchemist.Helpers.Complete do
       end
       mod_name = mod
       |> Introspection.module_to_string
-      %{type: kind, name: name, arity: a, args: fun_args, origin: mod_name, summary: desc, spec: spec}
+
+      unless {name |> String.to_atom, a} in @builtin_functions do
+        %{type: kind, name: name, arity: a, args: fun_args, origin: mod_name, summary: desc, spec: spec}
+      else
+        %{type: kind, name: name, arity: a, args: "", origin: mod_name, summary: "Built-in function", spec: spec}
+      end
     end
   end
 

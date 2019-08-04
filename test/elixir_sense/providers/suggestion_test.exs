@@ -14,18 +14,18 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert result |> Enum.at(0) == %{type: :hint, value: "ElixirSenseExample.EmptyModule."}
     assert result |> Enum.at(1) == %{
       args: "",
-      arity: 1,
-      name: "__info__",
-      origin: "",
+      arity: 0,
+      name: "module_info",
+      origin: "ElixirSenseExample.EmptyModule",
       spec: nil,
       summary: "Built-in function",
       type: "function"
     }
     assert result |> Enum.at(2) == %{
       args: "",
-      arity: 0,
+      arity: 1,
       name: "module_info",
-      origin: "",
+      origin: "ElixirSenseExample.EmptyModule",
       spec: nil,
       summary: "Built-in function",
       type: "function"
@@ -33,12 +33,13 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert result |> Enum.at(3) == %{
       args: "",
       arity: 1,
-      name: "module_info",
-      origin: "",
+      name: "__info__",
+      origin: "ElixirSenseExample.EmptyModule",
       spec: nil,
       summary: "Built-in function",
       type: "function"
     }
+
   end
 
   test "return completion candidates for 'Str'" do
@@ -76,7 +77,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
   test "local calls should not return built-in functions" do
     list =
       Suggestion.find("mo", [MyModule], [], SomeModule, [], [], [], SomeModule, %{}, "")
-      |> Enum.filter(fn item -> item.type in [:hint, "function", "public_function"] end)
+      |> Enum.filter(fn item -> item.type in [:hint, "function", "function"] end)
 
     assert list == [%{type: :hint, value: "mo"}]
   end

@@ -110,7 +110,7 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     {:module, _, bytecode, _} =
       defmodule Elixir.DefaultArgumentFunctions do
-        def foo(a \\ :a, b, c \\ :c),
+        def afoo(a \\ :a, b, c \\ :c),
           do: {a, b, c}
 
         def _do_fizz(a \\ :a, b, c \\ :c),
@@ -121,43 +121,43 @@ defmodule Alchemist.Helpers.CompleteTest do
           do: {a, b, c}
 
         @doc "bar/0 doc"
-        def bar(),
+        def abar(),
           do: :bar
         @doc false
-        def bar(a \\ :a, b, c \\ :c, d \\ :d),
+        def abar(a \\ :a, b, c \\ :c, d \\ :d),
           do: {a, b, c, d}
         @doc false
-        def bar(a, b, c, d, e),
+        def abar(a, b, c, d, e),
           do: {a, b, c, d, e}
 
         @doc false
-        def baz(a \\ :a),
+        def abaz(a \\ :a),
           do: {a}
 
         @doc "biz/3 doc"
-        def biz(a, b, c \\ :c),
+        def abiz(a, b, c \\ :c),
           do: {a, b, c}
       end
     File.write!("Elixir.DefaultArgumentFunctions.beam", bytecode)
 
     assert {:yes, '', [
-      %{name: "bar", arity: 0},
-      %{name: "foo", arity: 1},
-      %{name: "foo", arity: 2},
-      %{name: "foo", arity: 3},
-      %{name: "biz", arity: 2},
-      %{name: "biz", arity: 3},
-      ]} = expand('DefaultArgumentFunctions.')
+      %{name: "abar", arity: 0},
+      %{name: "afoo", arity: 1},
+      %{name: "afoo", arity: 2},
+      %{name: "afoo", arity: 3},
+      %{name: "abiz", arity: 2},
+      %{name: "abiz", arity: 3},
+      ]} = expand('DefaultArgumentFunctions.a')
 
     assert {:yes, 'z', [
-      %{name: "biz", arity: 2},
-      %{name: "biz", arity: 3}
-      ]} = expand('DefaultArgumentFunctions.bi')
+      %{name: "abiz", arity: 2},
+      %{name: "abiz", arity: 3}
+      ]} = expand('DefaultArgumentFunctions.abi')
     assert {:yes, '', [
-      %{name: "foo", arity: 1},
-      %{name: "foo", arity: 2},
-      %{name: "foo", arity: 3}
-      ]} = expand('DefaultArgumentFunctions.foo')
+      %{name: "afoo", arity: 1},
+      %{name: "afoo", arity: 2},
+      %{name: "afoo", arity: 3}
+      ]} = expand('DefaultArgumentFunctions.afoo')
   after
     File.rm("Elixir.DefaultArgumentFunctions.beam")
     :code.purge(DefaultArgumentFunctions)
@@ -173,6 +173,7 @@ defmodule Alchemist.Helpers.CompleteTest do
 
   test "elixir root submodule completion" do
     assert {:yes, 'ss', [%{name: "Access"}]} = expand('Elixir.Acce')
+    assert {:yes, '', _} = expand('Elixir.')
   end
 
   test "elixir submodule completion" do
@@ -427,5 +428,42 @@ defmodule Alchemist.Helpers.CompleteTest do
     assert {:yes, 'un', [%{name: "fun", type: "function"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.f')
     assert {:yes, 'uard', [%{name: "guard", type: "macro"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.g')
     assert {:yes, 'legated', [%{name: "delegated", type: "function"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.de')
+  end
+
+  test "complete build in functions on non local calls" do
+    assert {:no, _, _} = expand('mo')
+    assert {:no, _, _} = expand('__in')
+
+    assert {:no, _, _} = expand('Elixir.mo')
+    assert {:no, _, _} = expand('Elixir.__in')
+
+    assert {:yes, 'dule_info', [
+      %{name: "module_info", type: "function", arity: 0},
+      %{name: "module_info", type: "function", arity: 1}
+      ]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.mo')
+    assert {:yes, 'fo__', [%{name: "__info__", type: "function"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.__in')
+
+    assert {:yes, 'dule_info', [
+      %{name: "module_info", type: "function", arity: 0},
+      %{name: "module_info", type: "function", arity: 1}
+      ]} = expand(':ets.mo')
+    assert {:no, _, _} = expand(':ets.__in')
+
+    env = %Env{
+      scope_module: MyModule,
+      aliases: [{MyAlias, Some.OtherModule.Nested}],
+      mods_and_funs: %{
+        MyModule => %{}
+      }
+    }
+
+    assert {:no, _, _} = expand('mo', env)
+    assert {:no, _, _} = expand('__in', env)
+
+    assert {:yes, 'dule_info', [
+      %{name: "module_info", type: "function", arity: 0},
+      %{name: "module_info", type: "function", arity: 1}
+      ]} = expand('MyModule.mo', env)
+    assert {:yes, 'fo__', [%{name: "__info__", type: "function"}]} = expand('MyModule.__in', env)
   end
 end
