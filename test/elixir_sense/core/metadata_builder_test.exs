@@ -995,6 +995,98 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       Reversible.My.List.Other.My.Map
     ]
   end
+
+  test "registers positions" do
+
+    state =
+      """
+      IO.puts ""
+      defmodule OuterModule do
+        IO.puts ""
+        defmodule InnerModule do
+          def func do
+            if true do
+              IO.puts ""
+            end
+          end
+        end
+        IO.puts ""
+      end
+
+      defmodule Some.Nested do
+        IO.puts ""
+      end
+
+      defprotocol Reversible do
+        def reverse(term)
+        IO.puts ""
+      end
+
+      defimpl Reversible, for: String do
+        def reverse(term), do: String.reverse(term)
+        IO.puts ""
+      end
+
+      defimpl Reversible, for: [Map, My.List] do
+        def reverse(term), do: Enum.reverse(term)
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert %{
+      {OuterModule, nil, nil} => %{params: [nil], positions: [{2, 11}]},
+      {OuterModule.InnerModule, :func, 0} => %{
+        params: [[]],
+        positions: [{5, 9}]
+      },
+      {OuterModule.InnerModule, :func, nil} => %{
+        params: [[]],
+        positions: [{5, 9}]
+      },
+      {OuterModule.InnerModule, nil, nil} => %{
+        params: [nil],
+        positions: [{4, 13}]
+      },
+      {Reversible, nil, nil} => %{params: [nil], positions: [{18, 13}]},
+      {Reversible.Map, nil, nil} => %{
+        params: [nil],
+        positions: [{28, 9}]
+      },
+      {Reversible.Map, :reverse, 1} => %{
+        params: [[{:term, [line: 29, column: 15], nil}]],
+        positions: [{29, 7}]
+      },
+      {Reversible.Map, :reverse, nil} => %{
+        params: [[{:term, [line: 29, column: 15], nil}]],
+        positions: [{29, 7}]
+      },
+      {Reversible.My.List, nil, nil} => %{
+        params: [nil],
+        positions: [{28, 9}]
+      },
+      {Reversible.My.List, :reverse, 1} => %{
+        params: [[{:term, [line: 29, column: 15], nil}]],
+        positions: [{29, 7}]
+      },
+      {Reversible.My.List, :reverse, nil} => %{
+        params: [[{:term, [line: 29, column: 15], nil}]],
+        positions: [{29, 7}]
+      },
+      {Reversible.String, nil, nil} => %{
+        params: [nil],
+        positions: [{23, 9}]
+      },
+      {Reversible.String, :reverse, 1} => %{
+        params: [[{:term, [line: 24, column: 15], nil}]],
+        positions: [{24, 7}]
+      },
+      {Reversible.String, :reverse, nil} => %{
+        params: [[{:term, [line: 24, column: 15], nil}]],
+        positions: [{24, 7}]
+      },
+      {Some.Nested, nil, nil} => %{params: [nil], positions: [{14, 11}]}
+    } = state.mods_funs_to_positions
   end
 
   test "behaviours" do
@@ -1221,7 +1313,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   defp get_line_module(state, line) do
-    (env = state.lines_to_env[line]) && env.module
+    if env = state.lines_to_env[line] do
+      case env.module_variants do
+        [single] -> single
+        other -> other
+      end
+    end
   end
 
   defp get_subject_definition_line(module, func, arity) do
