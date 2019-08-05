@@ -18,10 +18,14 @@ defmodule Alchemist.Helpers.Complete do
   # put on editor and REPL autocomplete are different.
   # However some relevant changes have been merged back
   # from upstream Elixir (1.9).
-
-  # Alchemist.Helpers.Complete will look for aliases in
-  # an environment variable
-  # `Application.get_env(:"alchemist.el", :aliases)
+  # Changes made to the original version include:
+  # - different result format with added docs and spec
+  # - built in funcss are not excluded
+  # - recursive evalutor `run/2` added on top of `expand/2`
+  # - added expansion basing on metadata besides introspection
+  # - uses custom docs extraction function
+  # - gets metadata by argument instead of environment variables
+  # (original Elixir 1.1) and later GenServer
 
   defmodule Env do
     defstruct [
