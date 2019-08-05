@@ -33,7 +33,7 @@ defmodule ElixirSense.Core.State do
       imports: [],
       requires: [],
       aliases: [],
-      # TODO check usages
+      # NOTE for protocol impementation this will be the first variant
       module: nil,
       module_variants: [],
       vars: [],
@@ -74,7 +74,8 @@ defmodule ElixirSense.Core.State do
       vars: current_vars,
       attributes: current_attributes,
       behaviours: current_behaviours,
-      # TODO this may be broken for protocol implementations
+      # NOTE  for protocol implementations the scope will be
+      # escaped with `escape_protocol_implemntations`
       scope: current_scope,
       scope_id: current_scope_id,
     }
