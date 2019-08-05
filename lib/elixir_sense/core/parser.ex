@@ -30,7 +30,7 @@ defmodule ElixirSense.Core.Parser do
 
           create_metadata(source, {:ok, result})
         end
-      {:error, reason} = error ->
+      {:error, _reason} = error ->
         # IO.puts :stderr, "CAN'T FIX IT"
         # IO.inspect :stderr, reason, []
         create_metadata(source, error)
