@@ -939,6 +939,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         IO.puts ""
       end
 
+      defmodule Some.Nested do
+        IO.puts ""
+      end
+
       defprotocol Reversible do
         def reverse(term)
         IO.puts ""
@@ -949,9 +953,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         IO.puts ""
       end
 
-      defimpl Reversible, for: [Map, List] do
+      defimpl Reversible, for: [Map, My.List] do
         def reverse(term), do: Enum.reverse(term)
         IO.puts ""
+
+        defmodule OuterModule do
+          IO.puts ""
+        end
+
+        defprotocol Other do
+          def other(term)
+          IO.puts ""
+        end
+
+        defimpl Other, for: [Map, My.Map] do
+          def other(term), do: nil
+          IO.puts ""
+        end
       end
       """
       |> string_to_state
@@ -961,9 +979,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_module(state, 7)  == OuterModule.InnerModule
     assert get_line_module(state, 11) == OuterModule
 
-    assert get_line_module(state, 16) == Reversible
-    assert get_line_module(state, 21) == Reversible.String
-    assert get_line_module(state, 26) == [Reversible.Map, Reversible.List]
+    assert get_line_module(state, 15) == Some.Nested
+
+    assert get_line_module(state, 20) == Reversible
+    assert get_line_module(state, 25) == Reversible.String
+    assert get_line_module(state, 30) == [Reversible.Map, Reversible.My.List]
+
+    assert get_line_module(state, 33) == [Reversible.Map.OuterModule, Reversible.My.List.OuterModule]
+
+    assert get_line_module(state, 38) == [Reversible.Map.Other, Reversible.My.List.Other]
+    assert get_line_module(state, 43) == [
+      Reversible.Map.Other.Map,
+      Reversible.Map.Other.My.Map,
+      Reversible.My.List.Other.Map,
+      Reversible.My.List.Other.My.Map
+    ]
+  end
   end
 
   test "behaviours" do

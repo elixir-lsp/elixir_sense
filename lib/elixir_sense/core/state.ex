@@ -135,7 +135,48 @@ defmodule ElixirSense.Core.State do
     %{state | mods_funs_to_positions: mods_funs_to_positions}
   end
 
+  def escape_protocol_impementations({protocol, implementations}) do
+    joined_implementations = implementations
+    |> Enum.map(fn parts ->
+      "Elixir." <> rest = parts |> Module.concat |> Atom.to_string()
+      rest
+      |> String.replace(".", "(__dot__)")
+    end)
+    |> Enum.join("(__or__)")
+    |> String.to_atom()
+
+    protocol ++ [joined_implementations]
+  end
+  def escape_protocol_impementations(module), do: module
+
+  def unescape_protocol_impementations(module) do
+    parts = module
+    |> Atom.to_string()
+    |> String.split(".")
+    |> Enum.reverse()
+
+    variants = parts
+    |> Enum.reduce([[]], fn part, acc ->
+      part_variants = part |> String.replace("(__dot__)", ".") |> String.split("(__or__)")
+      for part_variant <- part_variants, acc_variant <- acc do
+        [part_variant | acc_variant]
+      end
+    end)
+
+    result = for variant <- variants do
+      variant
+      |> Enum.join(".")
+      |> String.to_atom()
+    end
+
+    case result do
+      [single] -> single
+      other -> other
+    end
+  end
+
   def new_namespace(state, module) do
+    module = escape_protocol_impementations(module)
     module_reversed = :lists.reverse(module)
     namespace = module_reversed ++ state.namespace
     scopes  = module_reversed ++ state.scopes
@@ -143,6 +184,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def remove_module_from_namespace(state, module) do
+    module = escape_protocol_impementations(module)
     outer_mods = Enum.drop(state.namespace, length(module))
     outer_scopes = Enum.drop(state.scopes, length(module))
     %{state | namespace: outer_mods, scopes: outer_scopes}

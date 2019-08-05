@@ -195,6 +195,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_module(ast, state, {line, column}, module)
   end
 
+  defp pre({:defimpl, _, [{:__aliases__, [line: line, column: column], protocol}, [for: implementations], _]} = ast, state) do
+    case implementations do
+      list when is_list(list) ->
+        modules = list
+        |> Enum.map(fn {:__aliases__, _, implementation} ->
+          implementation
+        end)
+        pre_module(ast, state, {line, column}, {protocol, modules})
+
+      {:__aliases__, _, implementation} ->
+        pre_module(ast, state, {line, column}, protocol ++ implementation)
+    end
+  end
+
   defp pre({def_name, meta, [{:when, _, [head|_]}, body]}, state) when def_name in @defs do
     pre({def_name, meta, [head, body]}, state)
   end
@@ -399,6 +413,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp post({:defprotocol, _, [{:__aliases__, _, module}, _]} = ast, state) do
     post_module(ast, state, module)
+  end
+
+  defp post({:defimpl, _, [{:__aliases__, _, protocol}, [for: implementations], _]} = ast, state) do
+    case implementations do
+      list when is_list(list) ->
+        modules = list
+        |> Enum.map(fn {:__aliases__, _, implementation} ->
+          implementation
+        end)
+        post_module(ast, state, {protocol, modules})
+
+      {:__aliases__, _, implementation} ->
+        post_module(ast, state, protocol ++ implementation)
+    end
   end
 
   defp post({def_name, [line: _line, column: _column], [{name, _, _params}, _]} = ast, state) when def_name in @defs and is_atom(name) do
