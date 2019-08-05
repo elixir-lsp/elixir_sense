@@ -1029,6 +1029,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         IO.puts ""
         defdelegate func_delegated(par), to: OtherModule
         IO.puts ""
+        defguard is_even(value) when is_integer(value) and rem(value, 2) == 0
+        IO.puts ""
       end
       """
       |> string_to_state
@@ -1041,6 +1043,40 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert State.get_scope_name(state, 13) == :MyModule
     assert State.get_scope_name(state, 15) == :MyModule
     assert State.get_scope_name(state, 16) == {:func_delegated, 1}
+    assert State.get_scope_name(state, 18) == {:is_even, 1}
+  end
+
+  test "finds positions for guards" do
+    state =
+      """
+      defmodule MyModule do
+        defguard is_even(value) when is_integer(value) and rem(value, 2) == 0
+        defguardp is_odd(value) when is_integer(value) and rem(value, 2) == 1
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+      assert %{
+        mods_funs_to_positions: %{
+          {MyModule, :is_even, 1} => %{
+            params: [[{:value, [line: 2, column: 20], nil}]],
+            positions: [{2, 12}]
+          },
+          {MyModule, :is_even, nil} => %{
+            params: [[{:value, [line: 2, column: 20], nil}]],
+            positions: [{2, 12}]
+          },
+          {MyModule, :is_odd, 1} => %{
+            params: [[{:value, [line: 3, column: 20], nil}]],
+            positions: [{3, 13}]
+          },
+          {MyModule, :is_odd, nil} => %{
+            params: [[{:value, [line: 3, column: 20], nil}]],
+            positions: [{3, 13}]
+          }
+        }
+      } = state
   end
 
   defp string_to_state(string) do
