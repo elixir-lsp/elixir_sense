@@ -1,7 +1,6 @@
 defmodule ElixirSense.Core.ParserTest do
   use ExUnit.Case
 
-  import ExUnit.CaptureIO
   import ElixirSense.Core.Parser
   alias ElixirSense.Core.{Metadata, State.Env, State.VarInfo}
 
@@ -334,10 +333,13 @@ defmodule ElixirSense.Core.ParserTest do
     end
     '''
 
-    err = capture_io(:stderr, fn ->
-      parse_string(source, true, true, 3)
-    end)
-    assert err == ""
+    assert %ElixirSense.Core.Metadata{
+      lines_to_env: %{
+        6 => %ElixirSense.Core.State.Env{
+          attributes: [:doc],
+        }
+      }
+    } = parse_string(source, true, true, 6)
   end
 
   test "parse_string with literal strings in sigils" do
@@ -351,10 +353,53 @@ defmodule ElixirSense.Core.ParserTest do
       end
     end
     '''
-    output = capture_io(:stderr, fn ->
-      parse_string(source, true, true, 5)
-    end)
-    assert output == ""
+
+    assert %ElixirSense.Core.Metadata{
+      lines_to_env: %{
+        5 => %ElixirSense.Core.State.Env{
+          vars: [
+            %ElixirSense.Core.State.VarInfo{name: :x},
+            %ElixirSense.Core.State.VarInfo{name: :y}
+          ]
+        }
+      }
+    } = parse_string(source, true, true, 5)
+  end
+
+  test "parse struct" do
+    source = """
+    defmodule MyModule do
+      def func() do
+        %{
+          data: "foo"
+        }
+      end
+    end
+    """
+
+    assert %ElixirSense.Core.Metadata{
+      calls: %{
+        3 => [%{func: :%{}}]
+      }
+    } = parse_string(source, true, true, 4)
+  end
+
+  test "parse struct with missing terminator" do
+    source = """
+    defmodule MyModule do
+      def func() do
+        %{
+          data: "foo"
+
+      end
+    end
+    """
+
+    assert %ElixirSense.Core.Metadata{
+      calls: %{
+        3 => [%{func: :%{}}]
+      }
+    } = parse_string(source, true, true, 4)
   end
 
 end

@@ -16,7 +16,7 @@ defmodule ElixirSense.Core.Metadata do
 
   def get_env(%__MODULE__{} = metadata, line) do
     case Map.get(metadata.lines_to_env, line) do
-      nil -> %State.Env{}
+      nil -> State.default_env()
       ctx -> ctx
     end
   end
@@ -96,4 +96,5 @@ defmodule ElixirSense.Core.Metadata do
       {line, 0}
     end |> Enum.at(0)
   end
+
 end
