@@ -191,6 +191,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_module(ast, state, {line, column}, module)
   end
 
+  defp pre({:defprotocol, _, [{:__aliases__, [line: line, column: column], module}, _]} = ast, state) do
+    pre_module(ast, state, {line, column}, module)
+  end
+
   defp pre({def_name, meta, [{:when, _, [head|_]}, body]}, state) when def_name in @defs do
     pre({def_name, meta, [head, body]}, state)
   end
@@ -390,6 +394,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp post({:defmodule, _, [{:__aliases__, _, module}, _]} = ast, state) do
+    post_module(ast, state, module)
+  end
+
+  defp post({:defprotocol, _, [{:__aliases__, _, module}, _]} = ast, state) do
     post_module(ast, state, module)
   end
 

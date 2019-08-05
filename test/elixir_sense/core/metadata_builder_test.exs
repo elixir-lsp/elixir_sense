@@ -938,6 +938,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         end
         IO.puts ""
       end
+
+      defprotocol Reversible do
+        def reverse(term)
+        IO.puts ""
+      end
+
+      defimpl Reversible, for: String do
+        def reverse(term), do: String.reverse(term)
+        IO.puts ""
+      end
+
+      defimpl Reversible, for: [Map, List] do
+        def reverse(term), do: Enum.reverse(term)
+        IO.puts ""
+      end
       """
       |> string_to_state
 
@@ -945,6 +960,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_module(state, 3)  == OuterModule
     assert get_line_module(state, 7)  == OuterModule.InnerModule
     assert get_line_module(state, 11) == OuterModule
+
+    assert get_line_module(state, 16) == Reversible
+    assert get_line_module(state, 21) == Reversible.String
+    assert get_line_module(state, 26) == [Reversible.Map, Reversible.List]
   end
 
   test "behaviours" do
