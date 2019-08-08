@@ -684,6 +684,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 3) == [{User, Foo.User}, {Email, Foo.Email}]
   end
 
+  test "aliases of aliases" do
+
+    state =
+      """
+      defmodule MyModule do
+        alias Foo.Bar, as: Fb
+        alias Fb.Sub, as: S
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 4) == [{Fb, Foo.Bar}, {S, Foo.Bar.Sub}]
+  end
+
   test "aliases erlang module" do
     state =
       """
@@ -823,6 +838,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_imports(state, 4)   == [List]
   end
 
+  test "imports aliased module" do
+
+    state =
+      """
+      defmodule OuterModule do
+        alias Some.Other.Module, as: S
+        import S
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_imports(state, 4) == [Some.Other.Module]
+  end
+
   test "imports nested" do
 
     state =
@@ -920,6 +950,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert get_line_requires(state, 4)  == [:ets, Integer]
     assert get_line_aliases(state, 4)  == [{I, Integer}, {E, :ets}]
+  end
+
+  test "requires aliased module" do
+
+    state =
+      """
+      defmodule MyModule do
+        alias Some.Other.Module, as: S
+        require S
+        require S.Sub
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_requires(state, 5)  == [Some.Other.Module.Sub, Some.Other.Module]
   end
 
   test "current module" do
@@ -1213,6 +1259,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_behaviours(state, 4)  == [:gen_server]
+  end
+
+  test "behaviour from aliased module" do
+    state =
+      """
+      defmodule OuterModule do
+        alias Some.Module, as: S
+        @behaviour S
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_behaviours(state, 4)  == [Some.Module]
   end
 
   test "current scope" do
