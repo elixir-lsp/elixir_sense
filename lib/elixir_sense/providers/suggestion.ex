@@ -98,25 +98,26 @@ defmodule ElixirSense.Providers.Suggestion do
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], State.scope, %{}, String.t) :: [suggestion]
-  def find(hint, imports, aliases, module, vars, attributes, behaviours, scope, mods_and_funs, text_before) do
+  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], State.scope, any, %{}, String.t) :: [suggestion]
+  def find(hint, imports, aliases, module, vars, attributes, behaviours, scope, protocol, mods_and_funs, text_before) do
     case find_struct_fields(hint, text_before, imports, aliases, module) do
       [] ->
-        find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, mods_and_funs, text_before)
+        find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, protocol, mods_and_funs, text_before)
+
       fields ->
         [%{type: :hint, value: "#{hint}"} | fields]
     end
   end
 
-  @spec find_all_except_struct_fields(String.t, [module], [{module, module}], [String.t], [String.t], [module], State.scope, module, %{}, String.t) :: [suggestion]
-  defp find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, mods_and_funs, text_before) do
+  @spec find_all_except_struct_fields(String.t, [module], [{module, module}], [String.t], [String.t], [module], State.scope, module, any, %{}, String.t) :: [suggestion]
+  defp find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, protocol, mods_and_funs, text_before) do
     vars = Enum.map(vars, fn v -> v.name end)
     %{hint: hint_suggestion, suggestions: mods_and_funcs} = find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs)
 
     callbacks_or_returns =
       case scope do
         {_f, _a} -> find_returns(behaviours, hint, scope)
-        _mod   -> find_callbacks(behaviours, hint)
+        _mod   -> find_callbacks(behaviours, hint) ++ find_protocol_functions(protocol, hint)
       end
 
     [hint_suggestion]
@@ -199,6 +200,17 @@ defmodule ElixirSense.Providers.Suggestion do
         %{type: :callback, name: name, arity: arity, args: args, origin: mod_name, summary: desc, spec: spec}
       end
     end) |> Enum.sort
+  end
+
+  defp find_protocol_functions(nil, _hint), do: []
+  defp find_protocol_functions({protocol, _implementations}, hint) do
+    for {{name, arity}, {type, args, docs, spec}} <- Introspection.module_functions_info(protocol),
+    hint == "" or String.starts_with?("#{name}", hint)
+    do
+      "Elixir." <> protocol_name = protocol |> Atom.to_string
+      %{type: :protocol_function, name: name, arity: arity, args: args, origin: protocol_name, summary: docs, spec: spec}
+    end
+    |> Enum.sort
   end
 
   @spec find_param_options(String.t, String.t, [module], [{module, module}], module) :: [param_option]

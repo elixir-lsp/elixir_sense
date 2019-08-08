@@ -126,6 +126,26 @@ defmodule ElixirSense.SuggestionsTest do
     }] = list
   end
 
+  test "lists protocol functions" do
+    buffer = """
+    defimpl Enumerable, for: MyStruct do
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 2, 3)
+      |> Enum.filter(fn s -> s[:name] == :reduce end)
+
+    assert [%{
+      args: "enumerable,acc,fun", arity: 3, name: :reduce,
+      origin: "Enumerable",
+      spec: "@spec reduce(t, acc, reducer) :: result",
+      summary: "Reduces the `enumerable` into an element.",
+      type: :protocol_function
+    }] = list
+  end
+
   test "lists function return values" do
     buffer = """
     defmodule MyServer do
@@ -227,6 +247,22 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
       %{name: :arg, type: :variable}
+    ]
+  end
+
+  test "lists params in protocol implementations" do
+    buffer = """
+    defimpl Enum, for: [MyStruct, MyOtherStruct] do
+      def count(term), do:
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 2, 24)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+      %{name: :term, type: :variable}
     ]
   end
 
