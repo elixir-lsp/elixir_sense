@@ -197,6 +197,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def new_namespace(state, module) do
+    # TODO refactor to allow {:implementation, protocol, [implementations]} in scope
     module = escape_protocol_impementations(module)
     module_reversed = :lists.reverse(module)
     namespace = module_reversed ++ state.namespace
@@ -466,6 +467,7 @@ defmodule ElixirSense.Core.State do
     end
   end
 
+  # TODO refactor to use mods_funs
   def get_known_module(state, module) do
     if ElixirSense.Core.Introspection.elixir_module?(module) do
       case state.mods_funs_to_positions[{module, nil, nil}] do

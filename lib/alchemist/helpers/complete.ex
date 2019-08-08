@@ -362,6 +362,7 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp get_metadata_module_funs(mod, include_builtin, env) do
+    # TODO add builtin functions for protocols, protocol_implementations, structs, behaviours and exceptions
     case env.mods_and_funs[mod] do
       nil -> []
       funs ->
