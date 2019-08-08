@@ -131,21 +131,9 @@ defmodule ElixirSense.Core.State do
     end
   end
 
-  defp drop_elixir_prefix(module) do
-    "Elixir." <> rest = module |> Atom.to_string()
-    rest
-  end
-
   def get_current_scope_name(state) do
     case hd(state.scopes) do
       {fun, _} -> fun |> Atom.to_string()
-      {:implementation, protocol, [implementation]} ->
-        "#{protocol |> Atom.to_string}.#{drop_elixir_prefix(implementation)}"
-      {:implementation, protocol, implementations} ->
-        joined = implementations
-        |> Enum.map(&drop_elixir_prefix/1)
-        |> Enum.join(", ")
-        "#{protocol |> Atom.to_string}.{#{joined}}"
       mod -> mod |> Atom.to_string()
     end
   end

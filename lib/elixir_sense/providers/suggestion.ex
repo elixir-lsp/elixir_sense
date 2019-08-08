@@ -207,8 +207,7 @@ defmodule ElixirSense.Providers.Suggestion do
     for {{name, arity}, {type, args, docs, spec}} <- Introspection.module_functions_info(protocol),
     hint == "" or String.starts_with?("#{name}", hint)
     do
-      "Elixir." <> protocol_name = protocol |> Atom.to_string
-      %{type: :protocol_function, name: name, arity: arity, args: args, origin: protocol_name, summary: docs, spec: spec}
+      %{type: :protocol_function, name: name, arity: arity, args: args, origin: Introspection.module_to_string(protocol), summary: docs, spec: spec}
     end
     |> Enum.sort
   end
