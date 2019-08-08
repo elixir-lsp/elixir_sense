@@ -1141,9 +1141,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         IO.puts ""
       end
 
-      defimpl Reversible, for: [Map, My.List] do
-        def reverse(term), do: Enum.reverse(term)
-        IO.puts ""
+      defmodule Impls do
+        alias Reversible, as: R
+        alias My.List, as: Ml
+        defimpl R, for: [Map, Ml] do
+          def reverse(term), do: Enum.reverse(term)
+          IO.puts ""
+        end
       end
       """
       |> string_to_state
@@ -1162,30 +1166,33 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         params: [nil],
         positions: [{4, 13}]
       },
+      {Impls, nil, nil} => %{params: [nil], positions: [{28, 11}]},
+      {Reversible, :reverse, 1} => %{params: [[{:term, [line: 19, column: 15], nil}]], positions: [{19, 7}]},
+      {Reversible, :reverse, nil} => %{params: [[{:term, [line: 19, column: 15], nil}]], positions: [{19, 7}]},
       {Reversible, nil, nil} => %{params: [nil], positions: [{18, 13}]},
       {Reversible.Map, nil, nil} => %{
         params: [nil],
-        positions: [{28, 9}]
+        positions: [{31, 11}]
       },
       {Reversible.Map, :reverse, 1} => %{
-        params: [[{:term, [line: 29, column: 15], nil}]],
-        positions: [{29, 7}]
+        params: [[{:term, [line: 32, column: 17], nil}]],
+        positions: [{32, 9}]
       },
       {Reversible.Map, :reverse, nil} => %{
-        params: [[{:term, [line: 29, column: 15], nil}]],
-        positions: [{29, 7}]
+        params: [[{:term, [line: 32, column: 17], nil}]],
+        positions: [{32, 9}]
       },
       {Reversible.My.List, nil, nil} => %{
         params: [nil],
-        positions: [{28, 9}]
+        positions: [{31, 11}]
       },
       {Reversible.My.List, :reverse, 1} => %{
-        params: [[{:term, [line: 29, column: 15], nil}]],
-        positions: [{29, 7}]
+        params: [[{:term, [line: 32, column: 17], nil}]],
+        positions: [{32, 9}]
       },
       {Reversible.My.List, :reverse, nil} => %{
-        params: [[{:term, [line: 29, column: 15], nil}]],
-        positions: [{29, 7}]
+        params: [[{:term, [line: 32, column: 17], nil}]],
+        positions: [{32, 9}]
       },
       {Reversible.String, nil, nil} => %{
         params: [nil],
@@ -1200,7 +1207,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         positions: [{24, 7}]
       },
       {Some.Nested, nil, nil} => %{params: [nil], positions: [{14, 11}]}
-    } = state.mods_funs_to_positions
+    } == state.mods_funs_to_positions
   end
 
   test "behaviours" do
@@ -1412,6 +1419,80 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         },
         MyModuleWithoutFuns => %{},
         MyModuleWithFuns.Nested => %{},
+      } == state.mods_funs
+  end
+
+  test "registers mods and func for protocols" do
+    state =
+      """
+      defmodule MyModuleWithoutFuns do
+      end
+      defmodule MyModuleWithFuns do
+        def func do
+          IO.puts ""
+        end
+        defp funcp do
+          IO.puts ""
+        end
+        defmacro macro1(ast) do
+          IO.puts ""
+        end
+        defmacrop macro1p(ast) do
+          IO.puts ""
+        end
+        defguard is_even(value) when is_integer(value) and rem(value, 2) == 0
+        defguardp is_evenp(value) when is_integer(value) and rem(value, 2) == 0
+        defdelegate func_delegated(par), to: OtherModule
+        defmodule Nested do
+        end
+      end
+
+      defprotocol Reversible do
+        def reverse(term)
+        IO.puts ""
+      end
+
+      defimpl Reversible, for: String do
+        def reverse(term), do: String.reverse(term)
+        IO.puts ""
+      end
+
+      defmodule Impls do
+        alias Reversible, as: R
+        alias My.List, as: Ml
+        defimpl R, for: [Map, Ml] do
+          def reverse(term), do: Enum.reverse(term)
+          IO.puts ""
+        end
+      end
+      """
+      |> string_to_state
+
+      assert %{
+        MyModuleWithFuns => %{
+          {:func, 0} => %ElixirSense.Core.State.ModFunInfo{type: :def},
+          {:func_delegated, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defdelegate},
+          {:funcp, 0} => %ElixirSense.Core.State.ModFunInfo{type: :defp},
+          {:is_even, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defguard},
+          {:is_evenp, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defguardp},
+          {:macro1, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defmacro},
+          {:macro1p, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defmacrop}
+        },
+        MyModuleWithoutFuns => %{},
+        MyModuleWithFuns.Nested => %{},
+        Impls => %{},
+        Reversible => %{
+          {:reverse, 1} => %ElixirSense.Core.State.ModFunInfo{type: :def}
+        },
+        Reversible.Map => %{
+          {:reverse, 1} => %ElixirSense.Core.State.ModFunInfo{type: :def}
+        },
+        Reversible.My.List => %{
+          {:reverse, 1} => %ElixirSense.Core.State.ModFunInfo{type: :def}
+        },
+        Reversible.String => %{
+          {:reverse, 1} => %ElixirSense.Core.State.ModFunInfo{type: :def}
+        }
       } == state.mods_funs
   end
 

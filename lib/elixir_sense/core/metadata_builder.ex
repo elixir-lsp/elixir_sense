@@ -226,6 +226,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
   end
 
+  # protocol function
+  defp pre({def_name, meta, [{name, [line: line, column: column] = meta2, params}]} = ast, state) when def_name in @defs do
+    ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, nil]}
+    pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
+  end
+
   defp pre({def_name, _meta, _} = ast, state) when def_name in @defs do
     {ast, state}
   end
