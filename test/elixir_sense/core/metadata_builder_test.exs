@@ -1556,7 +1556,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   defp get_line_protocol(state, line) do
     if env = state.lines_to_env[line] do
-      case env.protocols do
+      case env.protocol_variants do
         [] -> nil
         [single] -> single
         other -> other

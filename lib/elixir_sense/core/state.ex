@@ -37,8 +37,9 @@ defmodule ElixirSense.Core.State do
       # NOTE for protocol impementation this will be the first variant
       module: nil,
       module_variants: [],
+      # NOTE for protocol impementation this will be the first variant
       protocol: nil,
-      protocols: nil,
+      protocol_variants: nil,
       vars: [],
       attributes: [],
       behaviours: [],
@@ -82,7 +83,7 @@ defmodule ElixirSense.Core.State do
       vars: current_vars,
       attributes: current_attributes,
       behaviours: current_behaviours,
-      # NOTE  for protocol implementations the scope will be
+      # NOTE for protocol implementations the scope and namespace will be
       # escaped with `escape_protocol_implemntations`
       scope: current_scope,
       scope_id: current_scope_id,
@@ -90,7 +91,7 @@ defmodule ElixirSense.Core.State do
         [] -> nil
         [head|_] -> head
       end),
-      protocols: current_scope_protocols
+      protocol_variants: current_scope_protocols
     }
   end
 
@@ -101,7 +102,7 @@ defmodule ElixirSense.Core.State do
   def get_current_module_variants(state = %{protocols: [[]|_]}) do
     state.namespace |> unescape_protocol_impementations
   end
-  def get_current_module_variants(state = %{protocols: [protocols|_]}) do
+  def get_current_module_variants(%{protocols: [protocols|_]}) do
     for {protocol, implementations} <- protocols,
     implementation <- implementations
     do
