@@ -988,7 +988,27 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule Some.Nested do
         IO.puts ""
       end
+      """
+      |> string_to_state
 
+    assert get_line_module(state, 1)  == Elixir
+    assert get_line_protocol(state, 1)  == nil
+    assert get_line_module(state, 3)  == OuterModule
+    assert get_line_protocol(state, 3)  == nil
+    assert get_line_module(state, 7)  == OuterModule.InnerModule
+    assert get_line_protocol(state, 7)  == nil
+    assert get_line_module(state, 11) == OuterModule
+    assert get_line_protocol(state, 11)  == nil
+
+    assert get_line_module(state, 15) == Some.Nested
+    assert get_line_protocol(state, 15)  == nil
+  end
+
+
+  test "current module and protocol implementation" do
+
+    state =
+      """
       defprotocol My.Reversible do
         def reverse(term)
         IO.puts ""
@@ -1017,7 +1037,36 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           IO.puts ""
         end
       end
+      """
+      |> string_to_state
 
+    # protocol and implementations create modules
+    assert get_line_module(state, 3) == My.Reversible
+    assert get_line_protocol(state, 3)  == nil
+    assert get_line_module(state, 8) == My.Reversible.String
+    assert get_line_protocol(state, 8) == {My.Reversible, [String]}
+    assert get_line_module(state, 13) == [My.Reversible.Map, My.Reversible.My.List]
+    assert get_line_protocol(state, 13) == {My.Reversible, [Map, My.List]}
+
+    # multiple implementations create multiple modules
+    assert get_line_module(state, 16) == [My.Reversible.Map.OuterModule, My.Reversible.My.List.OuterModule]
+    assert get_line_protocol(state, 16)  == nil
+
+    # protocol and implementations inside protocol implementation creates a cross product
+    assert get_line_module(state, 21) == [My.Reversible.Map.Other, My.Reversible.My.List.Other]
+    assert get_line_protocol(state, 21)  == nil
+    assert get_line_module(state, 26) == [
+      My.Reversible.Map.Other.Map,
+      My.Reversible.Map.Other.My.Map,
+      My.Reversible.My.List.Other.Map,
+      My.Reversible.My.List.Other.My.Map
+    ]
+    assert get_line_protocol(state, 26)  == [{My.Reversible.Map.Other, [Map, My.Map]}, {My.Reversible.My.List.Other, [Map, My.Map]}]
+  end
+
+  test "protocol implementation module naming rules" do
+    state =
+      """
       defprotocol NiceProto do
         def reverse(term)
       end
@@ -1045,66 +1094,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           IO.puts ""
         end
       end
-
-      # TODO
-      # defimpl My.Reversible, for: [Atom, Bitstring] do
-      #   def reverse(term), do: String.reverse(term)
-      #   defstruct [a: nil]
-
-      #   defprotocol Other do
-      #     def reverse(term)
-      #   end
-
-      #   defimpl Other, for: __MODULE__ do
-      #     def reverse(term), do: String.reverse(term)
-      #   end
       """
       |> string_to_state
 
-    assert get_line_module(state, 1)  == Elixir
-    assert get_line_protocol(state, 1)  == nil
-    assert get_line_module(state, 3)  == OuterModule
-    assert get_line_protocol(state, 3)  == nil
-    assert get_line_module(state, 7)  == OuterModule.InnerModule
-    assert get_line_protocol(state, 7)  == nil
-    assert get_line_module(state, 11) == OuterModule
-    assert get_line_protocol(state, 11)  == nil
-
-    assert get_line_module(state, 15) == Some.Nested
-    assert get_line_protocol(state, 15)  == nil
-
-    # protocol and implementations create modules
-    assert get_line_module(state, 20) == My.Reversible
-    assert get_line_protocol(state, 20)  == nil
-    assert get_line_module(state, 25) == My.Reversible.String
-    assert get_line_protocol(state, 25) == {My.Reversible, [String]}
-    assert get_line_module(state, 30) == [My.Reversible.Map, My.Reversible.My.List]
-    assert get_line_protocol(state, 30) == {My.Reversible, [Map, My.List]}
-
-    # multiple implementations create multiple modules
-    assert get_line_module(state, 33) == [My.Reversible.Map.OuterModule, My.Reversible.My.List.OuterModule]
-    assert get_line_protocol(state, 33)  == nil
-
-    # protocol and implementations inside protocol implementation
-    assert get_line_module(state, 38) == [My.Reversible.Map.Other, My.Reversible.My.List.Other]
-    assert get_line_protocol(state, 38)  == nil
-    assert get_line_module(state, 43) == [
-      My.Reversible.Map.Other.Map,
-      My.Reversible.Map.Other.My.Map,
-      My.Reversible.My.List.Other.Map,
-      My.Reversible.My.List.Other.My.Map
-    ]
-    assert get_line_protocol(state, 43)  == [{My.Reversible.Map.Other, [Map, My.Map]}, {My.Reversible.My.List.Other, [Map, My.Map]}]
-
     # protocol implementation module name does not inherit enclosing module, only protocol
-    assert get_line_module(state, 54) == NiceProto.String
-    assert get_line_protocol(state, 54)  == {NiceProto, [String]}
+    assert get_line_module(state, 8) == NiceProto.String
+    assert get_line_protocol(state, 8)  == {NiceProto, [String]}
 
-    assert get_line_module(state, 63) == NiceProto.NiceProtoImplementations.Some
-    assert get_line_protocol(state, 63)  == {NiceProto, [NiceProtoImplementations.Some]}
+    # properly gets implementation name inherited from enclosing module
+    assert get_line_module(state, 16) == NiceProto.NiceProtoImplementations.Some
+    assert get_line_protocol(state, 16)  == {NiceProto, [NiceProtoImplementations.Some]}
 
-    assert get_line_module(state, 71) == NiceProto.Enumerable.Date.Range
-    assert get_line_protocol(state, 71) == {NiceProto, [Enumerable.Date.Range]}
+    # aliases are expanded on protocol and implementation
+    assert get_line_module(state, 24) == NiceProto.Enumerable.Date.Range
+    assert get_line_protocol(state, 24) == {NiceProto, [Enumerable.Date.Range]}
   end
 
   test "registers positions" do
