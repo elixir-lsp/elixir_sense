@@ -26,6 +26,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre_module(ast, state, position, module) do
     state
+    |> maybe_add_protocol_implementation(module)
     |> new_namespace(module)
     |> add_current_module_to_index(position)
     |> new_attributes_scope
@@ -45,6 +46,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> remove_import_scope
     |> remove_require_scope
     |> remove_vars_scope
+    |> remove_protocol_implementation
     |> remove_module_from_namespace(module)
     |> result(ast)
   end
@@ -205,7 +207,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         pre_module(ast, state, {line, column}, {protocol, modules})
 
       {:__aliases__, _, implementation} ->
-        pre_module(ast, state, {line, column}, protocol ++ implementation)
+        pre_module(ast, state, {line, column}, {protocol, [implementation]})
     end
   end
 
@@ -427,7 +429,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         post_module(ast, state, {protocol, modules})
 
       {:__aliases__, _, implementation} ->
-        post_module(ast, state, protocol ++ implementation)
+        post_module(ast, state, {protocol, [implementation]})
     end
   end
 

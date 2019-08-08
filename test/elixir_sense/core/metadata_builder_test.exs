@@ -943,17 +943,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         IO.puts ""
       end
 
-      defprotocol Reversible do
+      defprotocol My.Reversible do
         def reverse(term)
         IO.puts ""
       end
 
-      defimpl Reversible, for: String do
+      defimpl My.Reversible, for: String do
         def reverse(term), do: String.reverse(term)
         IO.puts ""
       end
 
-      defimpl Reversible, for: [Map, My.List] do
+      defimpl My.Reversible, for: [Map, My.List] do
         def reverse(term), do: Enum.reverse(term)
         IO.puts ""
 
@@ -971,29 +971,94 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           IO.puts ""
         end
       end
+
+      defprotocol NiceProto do
+        def reverse(term)
+      end
+
+      defmodule NiceProtoImplementations do
+        defimpl NiceProto, for: String do
+          def reverse(term), do: String.reverse(term)
+          IO.puts ""
+        end
+
+        defmodule Some do
+          defstruct [a: nil]
+        end
+
+        defimpl NiceProto, for: Some do
+          def reverse(term), do: String.reverse(term)
+          IO.puts ""
+        end
+
+        alias Enumerable.Date.Range, as: R
+        alias NiceProto, as: N
+
+        defimpl N, for: R do
+          def reverse(term), do: String.reverse(term)
+          IO.puts ""
+        end
+      end
+
+      # TODO
+      # defimpl My.Reversible, for: [Atom, Bitstring] do
+      #   def reverse(term), do: String.reverse(term)
+      #   defstruct [a: nil]
+
+      #   defprotocol Other do
+      #     def reverse(term)
+      #   end
+
+      #   defimpl Other, for: __MODULE__ do
+      #     def reverse(term), do: String.reverse(term)
+      #   end
       """
       |> string_to_state
 
     assert get_line_module(state, 1)  == Elixir
+    assert get_line_protocol(state, 1)  == nil
     assert get_line_module(state, 3)  == OuterModule
+    assert get_line_protocol(state, 3)  == nil
     assert get_line_module(state, 7)  == OuterModule.InnerModule
+    assert get_line_protocol(state, 7)  == nil
     assert get_line_module(state, 11) == OuterModule
+    assert get_line_protocol(state, 11)  == nil
 
     assert get_line_module(state, 15) == Some.Nested
+    assert get_line_protocol(state, 15)  == nil
 
-    assert get_line_module(state, 20) == Reversible
-    assert get_line_module(state, 25) == Reversible.String
-    assert get_line_module(state, 30) == [Reversible.Map, Reversible.My.List]
+    # protocol and implementations create modules
+    assert get_line_module(state, 20) == My.Reversible
+    assert get_line_protocol(state, 20)  == nil
+    assert get_line_module(state, 25) == My.Reversible.String
+    assert get_line_protocol(state, 25) == {My.Reversible, [String]}
+    assert get_line_module(state, 30) == [My.Reversible.Map, My.Reversible.My.List]
+    assert get_line_protocol(state, 30) == {My.Reversible, [Map, My.List]}
 
-    assert get_line_module(state, 33) == [Reversible.Map.OuterModule, Reversible.My.List.OuterModule]
+    # multiple implementations create multiple modules
+    assert get_line_module(state, 33) == [My.Reversible.Map.OuterModule, My.Reversible.My.List.OuterModule]
+    assert get_line_protocol(state, 33)  == nil
 
-    assert get_line_module(state, 38) == [Reversible.Map.Other, Reversible.My.List.Other]
+    # protocol and implementations inside protocol implementation
+    assert get_line_module(state, 38) == [My.Reversible.Map.Other, My.Reversible.My.List.Other]
+    assert get_line_protocol(state, 38)  == nil
     assert get_line_module(state, 43) == [
-      Reversible.Map.Other.Map,
-      Reversible.Map.Other.My.Map,
-      Reversible.My.List.Other.Map,
-      Reversible.My.List.Other.My.Map
+      My.Reversible.Map.Other.Map,
+      My.Reversible.Map.Other.My.Map,
+      My.Reversible.My.List.Other.Map,
+      My.Reversible.My.List.Other.My.Map
     ]
+    assert get_line_protocol(state, 43)  == [{My.Reversible.Map.Other, [Map, My.Map]}, {My.Reversible.My.List.Other, [Map, My.Map]}]
+
+    # protocol implementation module name does not inherit enclosing module, only protocol
+    assert get_line_module(state, 54) == NiceProto.String
+    assert get_line_protocol(state, 54)  == {NiceProto, [String]}
+
+    assert get_line_module(state, 63) == NiceProto.NiceProtoImplementations.Some
+    assert get_line_protocol(state, 63)  == {NiceProto, [NiceProtoImplementations.Some]}
+
+    assert get_line_module(state, 71) == NiceProto.Enumerable.Date.Range
+    assert get_line_protocol(state, 71) == {NiceProto, [Enumerable.Date.Range]}
   end
 
   test "registers positions" do
@@ -1173,6 +1238,25 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         IO.puts ""
         defguard is_even(value) when is_integer(value) and rem(value, 2) == 0
         IO.puts ""
+        defmodule Nester.Module1 do
+          IO.puts ""
+        end
+      end
+
+      defmodule AnotherNester.Module2 do
+        IO.puts ""
+      end
+
+      defprotocol Reversible do
+        def reverse(term)
+        IO.puts ""
+      end
+
+      defimpl Reversible, for: [Map, My.List] do
+        IO.puts ""
+        def reverse(term) do
+          IO.puts ""
+        end
       end
       """
       |> string_to_state
@@ -1186,6 +1270,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert State.get_scope_name(state, 15) == :MyModule
     assert State.get_scope_name(state, 16) == {:func_delegated, 1}
     assert State.get_scope_name(state, 18) == {:is_even, 1}
+    assert State.get_scope_name(state, 21) == :Module1
+    assert State.get_scope_name(state, 26) == :Module2
+    assert State.get_scope_name(state, 31) == :Reversible
+    assert State.get_scope_name(state, 35) == :"Map(__or__)My(__dot__)List"
+    assert State.get_scope_name(state, 37) == {:reverse, 1}
   end
 
   test "finds positions for guards" do
@@ -1315,6 +1404,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   defp get_line_module(state, line) do
     if env = state.lines_to_env[line] do
       case env.module_variants do
+        [single] -> single
+        other -> other
+      end
+    end
+  end
+
+  defp get_line_protocol(state, line) do
+    if env = state.lines_to_env[line] do
+      case env.protocols do
+        [] -> nil
         [single] -> single
         other -> other
       end

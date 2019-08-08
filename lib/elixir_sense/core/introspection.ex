@@ -621,10 +621,10 @@ defmodule ElixirSense.Core.Introspection do
     {nil, nil}
   end
 
-  defp elixir_module?(module) when is_atom(module) do
+  def elixir_module?(module) when is_atom(module) do
     module == Module.concat(Elixir, module)
   end
-  defp elixir_module?(_) do
+  def elixir_module?(_) do
     false
   end
 
