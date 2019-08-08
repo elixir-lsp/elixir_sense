@@ -146,7 +146,7 @@ defmodule ElixirSense do
       scope: scope
     } = Metadata.get_env(buffer_file_metadata, line)
 
-    Suggestion.find(hint, [module|imports], aliases, module, vars, attributes, behaviours, scope, text_before)
+    Suggestion.find(hint, [module|imports], aliases, module, vars, attributes, behaviours, scope, buffer_file_metadata.mods_funs, text_before)
   end
 
   @doc """

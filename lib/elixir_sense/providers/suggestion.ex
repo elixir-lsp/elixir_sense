@@ -98,20 +98,20 @@ defmodule ElixirSense.Providers.Suggestion do
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], State.scope, String.t) :: [suggestion]
-  def find(hint, imports, aliases, module, vars, attributes, behaviours, scope, text_before) do
+  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], State.scope, %{}, String.t) :: [suggestion]
+  def find(hint, imports, aliases, module, vars, attributes, behaviours, scope, mods_and_funs, text_before) do
     case find_struct_fields(hint, text_before, imports, aliases, module) do
       [] ->
-        find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, text_before)
+        find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, mods_and_funs, text_before)
       fields ->
         [%{type: :hint, value: "#{hint}"} | fields]
     end
   end
 
-  @spec find_all_except_struct_fields(String.t, [module], [{module, module}], [String.t], [String.t], [module], State.scope, module, String.t) :: [suggestion]
-  defp find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, text_before) do
+  @spec find_all_except_struct_fields(String.t, [module], [{module, module}], [String.t], [String.t], [module], State.scope, module, %{}, String.t) :: [suggestion]
+  defp find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, mods_and_funs, text_before) do
     vars = Enum.map(vars, fn v -> v.name end)
-    %{hint: hint_suggestion, suggestions: mods_and_funcs} = find_hint_mods_funcs(hint, imports, aliases)
+    %{hint: hint_suggestion, suggestions: mods_and_funcs} = find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs)
 
     callbacks_or_returns =
       case scope do
@@ -147,21 +147,16 @@ defmodule ElixirSense.Providers.Suggestion do
     end
   end
 
-  @spec find_hint_mods_funcs(String.t, [module], [{module, module}]) :: %{hint: hint, suggestions: [mod | func]}
-  defp find_hint_mods_funcs(hint, imports, aliases) do
-    Application.put_env(:"alchemist.el", :aliases, aliases)
+  @spec find_hint_mods_funcs(String.t, [module], [{module, module}], module, %{}) :: %{hint: hint, suggestions: [mod | func]}
+  defp find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs) do
+    env = %Complete.Env{
+      aliases: aliases,
+      scope_module: module,
+      imports: imports,
+      mods_and_funs: mods_and_funs
+    }
 
-    list1 = Complete.run(hint, imports)
-    list2 = Complete.run(hint)
-
-    {hint_suggestion, suggestions} =
-      case List.first(list2) do
-        %{type: :hint} = sug ->
-          {sug, list1 ++ List.delete_at(list2, 0)}
-        _ ->
-          {%{type: :hint, value: "#{hint}"}, list1 ++ list2}
-      end
-
+    {hint_suggestion, suggestions} = Complete.run(hint, env)
     %{hint: hint_suggestion, suggestions: suggestions}
   end
 

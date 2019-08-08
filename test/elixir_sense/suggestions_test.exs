@@ -587,6 +587,160 @@ defmodule ElixirSense.SuggestionsTest do
     ]
   end
 
+  test "functions defined in the module" do
+    buffer = """
+    defmodule ElixirSenseExample.ModuleA do
+      def test_fun_pub(a), do: :ok
+
+      def some_fun() do
+        te
+        a = &test_fun_pr
+        is_bo
+        del
+        my_
+      end
+
+      defp test_fun_priv(), do: :ok
+      defp is_boo_overlaps_kernel(), do: :ok
+      defdelegate delegate_defined, to: Kernel, as: :is_binary
+      defdelegate delegate_not_defined, to: Dummy, as: :hello
+      defguard my_guard_pub(value) when is_integer(value) and rem(value, 2) == 0
+      defguardp my_guard_priv(value) when is_integer(value)
+      defmacro some_macro(a) do
+        quote do: :ok
+      end
+    end
+    """
+
+    assert [%{type: :hint, value: "test_fun_p"}, %{
+      arity: 0,
+      name: "test_fun_priv",
+      origin: "ElixirSenseExample.ModuleA",
+      type: "function"
+    },
+    %{
+      arity: 1,
+      name: "test_fun_pub",
+      origin: "ElixirSenseExample.ModuleA",
+      type: "function"
+    }] = ElixirSense.suggestions(buffer, 5, 7)
+
+    assert [%{type: :hint, value: "test_fun_priv"}, %{
+      arity: 0,
+      name: "test_fun_priv",
+      origin: "ElixirSenseExample.ModuleA",
+      type: "function"
+    }] = ElixirSense.suggestions(buffer, 6, 21)
+
+    assert [%{type: :hint, value: "is_boo"}, %{
+      arity: 1,
+      name: "is_boolean",
+      origin: "Kernel",
+      type: "function"
+    }, %{
+      arity: 0,
+      name: "is_boo_overlaps_kernel",
+      origin: "ElixirSenseExample.ModuleA",
+      type: "function"
+    }] = ElixirSense.suggestions(buffer, 7, 10)
+
+    assert [%{type: :hint, value: "delegate_"}, %{
+      arity: 0,
+      name: "delegate_defined",
+      origin: "ElixirSenseExample.ModuleA",
+      type: "function"
+    }, %{
+      arity: 0,
+      name: "delegate_not_defined",
+      origin: "ElixirSenseExample.ModuleA",
+      type: "function"
+    }] = ElixirSense.suggestions(buffer, 8, 8)
+
+    assert [%{type: :hint, value: "my_guard_p"}, %{
+      arity: 1,
+      name: "my_guard_pub",
+      origin: "ElixirSenseExample.ModuleA",
+      type: "macro"
+    }, %{
+      arity: 1,
+      name: "my_guard_priv",
+      origin: "ElixirSenseExample.ModuleA",
+      type: "macro"
+    }] = ElixirSense.suggestions(buffer, 9, 8)
+  end
+
+  test "functions defined in other module fully qualified" do
+    buffer = """
+    defmodule ElixirSenseExample.ModuleO do
+      def test_fun_pub(a), do: :ok
+      defp test_fun_priv(), do: :ok
+    end
+
+    defmodule ElixirSenseExample.ModuleA do
+      def some_fun() do
+        ElixirSenseExample.ModuleO.te
+      end
+    end
+    """
+
+    assert [%{type: :hint, value: "ElixirSenseExample.ModuleO.test_fun_pub"},
+    %{
+      arity: 1,
+      name: "test_fun_pub",
+      origin: "ElixirSenseExample.ModuleO",
+      type: "function"
+    }] = ElixirSense.suggestions(buffer, 8, 34)
+
+  end
+
+  test "functions defined in other module aliased" do
+    buffer = """
+    defmodule ElixirSenseExample.ModuleO do
+      def test_fun_pub(a), do: :ok
+      defp test_fun_priv(), do: :ok
+    end
+
+    defmodule ElixirSenseExample.ModuleA do
+      alias ElixirSenseExample.ModuleO
+      def some_fun() do
+        ModuleO.te
+      end
+    end
+    """
+
+    assert [%{type: :hint, value: "ModuleO.test_fun_pub"},
+    %{
+      arity: 1,
+      name: "test_fun_pub",
+      origin: "ElixirSenseExample.ModuleO",
+      type: "function"
+    }] = ElixirSense.suggestions(buffer, 9, 15)
+  end
+
+  test "functions defined in other module imported" do
+    buffer = """
+    defmodule ElixirSenseExample.ModuleO do
+      def test_fun_pub(a), do: :ok
+      defp test_fun_priv(), do: :ok
+    end
+
+    defmodule ElixirSenseExample.ModuleA do
+      import ElixirSenseExample.ModuleO
+      def some_fun() do
+        te
+      end
+    end
+    """
+
+    assert [%{type: :hint, value: "test_fun_pub"},
+    %{
+      arity: 1,
+      name: "test_fun_pub",
+      origin: "ElixirSenseExample.ModuleO",
+      type: "function"
+    }] = ElixirSense.suggestions(buffer, 9, 7)
+  end
+
   test "Elixir module" do
     buffer = """
     defmodule MyModule do

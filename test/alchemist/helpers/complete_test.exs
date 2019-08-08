@@ -1,8 +1,10 @@
 defmodule Alchemist.Helpers.CompleteTest do
   use ExUnit.Case, async: true
 
-  def expand(expr) do
-    Alchemist.Helpers.Complete.expand(Enum.reverse expr)
+  alias Alchemist.Helpers.Complete.Env
+
+  def expand(expr, env \\ %Env{}) do
+    Alchemist.Helpers.Complete.expand(Enum.reverse(expr), env)
   end
 
   test "erlang module completion" do
@@ -108,7 +110,7 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     {:module, _, bytecode, _} =
       defmodule Elixir.DefaultArgumentFunctions do
-        def foo(a \\ :a, b, c \\ :c),
+        def afoo(a \\ :a, b, c \\ :c),
           do: {a, b, c}
 
         def _do_fizz(a \\ :a, b, c \\ :c),
@@ -119,43 +121,43 @@ defmodule Alchemist.Helpers.CompleteTest do
           do: {a, b, c}
 
         @doc "bar/0 doc"
-        def bar(),
+        def abar(),
           do: :bar
         @doc false
-        def bar(a \\ :a, b, c \\ :c, d \\ :d),
+        def abar(a \\ :a, b, c \\ :c, d \\ :d),
           do: {a, b, c, d}
         @doc false
-        def bar(a, b, c, d, e),
+        def abar(a, b, c, d, e),
           do: {a, b, c, d, e}
 
         @doc false
-        def baz(a \\ :a),
+        def abaz(a \\ :a),
           do: {a}
 
         @doc "biz/3 doc"
-        def biz(a, b, c \\ :c),
+        def abiz(a, b, c \\ :c),
           do: {a, b, c}
       end
     File.write!("Elixir.DefaultArgumentFunctions.beam", bytecode)
 
     assert {:yes, '', [
-      %{name: "bar", arity: 0},
-      %{name: "foo", arity: 1},
-      %{name: "foo", arity: 2},
-      %{name: "foo", arity: 3},
-      %{name: "biz", arity: 2},
-      %{name: "biz", arity: 3},
-      ]} = expand('DefaultArgumentFunctions.')
+      %{name: "abar", arity: 0},
+      %{name: "afoo", arity: 1},
+      %{name: "afoo", arity: 2},
+      %{name: "afoo", arity: 3},
+      %{name: "abiz", arity: 2},
+      %{name: "abiz", arity: 3},
+      ]} = expand('DefaultArgumentFunctions.a')
 
     assert {:yes, 'z', [
-      %{name: "biz", arity: 2},
-      %{name: "biz", arity: 3}
-      ]} = expand('DefaultArgumentFunctions.bi')
+      %{name: "abiz", arity: 2},
+      %{name: "abiz", arity: 3}
+      ]} = expand('DefaultArgumentFunctions.abi')
     assert {:yes, '', [
-      %{name: "foo", arity: 1},
-      %{name: "foo", arity: 2},
-      %{name: "foo", arity: 3}
-      ]} = expand('DefaultArgumentFunctions.foo')
+      %{name: "afoo", arity: 1},
+      %{name: "afoo", arity: 2},
+      %{name: "afoo", arity: 3}
+      ]} = expand('DefaultArgumentFunctions.afoo')
   after
     File.rm("Elixir.DefaultArgumentFunctions.beam")
     :code.purge(DefaultArgumentFunctions)
@@ -171,6 +173,7 @@ defmodule Alchemist.Helpers.CompleteTest do
 
   test "elixir root submodule completion" do
     assert {:yes, 'ss', [%{name: "Access"}]} = expand('Elixir.Acce')
+    assert {:yes, '', _} = expand('Elixir.')
   end
 
   test "elixir submodule completion" do
@@ -262,22 +265,137 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "complete aliases of elixir modules" do
-    Application.put_env(:"alchemist.el", :aliases, [{MyList, List}])
+    env = %Env{
+      aliases: [{MyList, List}]
+    }
 
-    assert {:yes, 'ist', [%{name: "MyList"}]} = expand('MyL')
-    assert {:yes, '.', [%{name: "MyList"}]} = expand('MyList')
-    assert {:yes, [], [%{arity: 1, name: "to_integer"}, %{arity: 2, name: "to_integer"}]} = expand('MyList.to_integer')
+    assert {:yes, 'ist', [%{name: "MyList"}]} = expand('MyL', env)
+    assert {:yes, '.', [%{name: "MyList"}]} = expand('MyList', env)
+    assert {:yes, [], [%{arity: 1, name: "to_integer"}, %{arity: 2, name: "to_integer"}]} = expand('MyList.to_integer', env)
   end
 
   test "complete aliases of erlang modules" do
-    Application.put_env(:"alchemist.el", :aliases, [{EList, :lists}])
+    env = %Env{
+      aliases: [{EList, :lists}]
+    }
 
-    assert {:yes, 'ist', [%{name: "EList"}]} = expand('EL')
-    assert {:yes, '.', [%{name: "EList"}]} = expand('EList')
+    assert {:yes, 'ist', [%{name: "EList"}]} = expand('EL', env)
+    assert {:yes, '.', [%{name: "EList"}]} = expand('EList', env)
     assert {:yes, [], [
       %{arity: 2, name: "map"},
       %{arity: 3, name: "mapfoldl"},
-      %{arity: 3, name: "mapfoldr"}]} = expand('EList.map')
+      %{arity: 3, name: "mapfoldr"}]} = expand('EList.map', env)
+  end
+
+  test "complete local funs from scope module" do
+    env = %Env{
+      scope_module: MyModule,
+      mods_and_funs: %{
+        MyModule => %{
+          {:my_fun_priv, 1} => %{type: :defp},
+          {:my_fun_pub, 1} => %{type: :def},
+          {:my_macro_priv, 1} => %{type: :defmacrop},
+          {:my_macro_pub, 1} => %{type: :defmacro},
+          {:my_guard_priv, 1} => %{type: :defguardp},
+          {:my_guard_pub, 1} => %{type: :defguard},
+          {:my_delegated, 1} => %{type: :defdelegate},
+        },
+        OtherModule => %{
+          {:my_fun_pub_other, 1} => %{type: :def},
+        }
+      }
+    }
+
+    assert {:yes, 'un_p', []} = expand('my_f', env)
+
+    assert {:yes, 'iv', [
+      %{name: "my_fun_priv", origin: "MyModule", type: "function"}
+    ]} = expand('my_fun_pr', env)
+    assert {:yes, 'b', [
+      %{name: "my_fun_pub", origin: "MyModule", type: "function"}
+    ]} = expand('my_fun_pu', env)
+
+    assert {:yes, 'iv', [
+      %{name: "my_macro_priv", origin: "MyModule", type: "macro"}
+    ]} = expand('my_macro_pr', env)
+    assert {:yes, 'b', [
+      %{name: "my_macro_pub", origin: "MyModule", type: "macro"}
+    ]} = expand('my_macro_pu', env)
+
+    assert {:yes, 'iv', [
+      %{name: "my_guard_priv", origin: "MyModule", type: "macro"}
+    ]} = expand('my_guard_pr', env)
+    assert {:yes, 'b', [
+      %{name: "my_guard_pub", origin: "MyModule", type: "macro"}
+    ]} = expand('my_guard_pu', env)
+
+    assert {:yes, 'legated', [
+      %{name: "my_delegated", origin: "MyModule", type: "function"}
+    ]} = expand('my_de', env)
+  end
+
+  test "complete remote funs from imported module" do
+    env = %Env{
+      scope_module: MyModule,
+      imports: [OtherModule],
+      mods_and_funs: %{
+        OtherModule => %{
+          {:my_fun_other_pub, 1} => %{type: :def},
+          {:my_fun_other_priv, 1} => %{type: :defp},
+        }
+      }
+    }
+
+    assert {:yes, 'un_other_pub', [
+      %{name: "my_fun_other_pub", origin: "OtherModule"}
+    ]} = expand('my_f', env)
+  end
+
+  test "complete remote funs" do
+    env = %Env{
+      scope_module: MyModule,
+      mods_and_funs: %{
+        Some.OtherModule => %{
+          {:my_fun_other_pub, 1} => %{type: :def},
+          {:my_fun_other_priv, 1} => %{type: :defp},
+        }
+      }
+    }
+
+    assert {:yes, 'un_other_pub', [
+      %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+    ]} = expand('Some.OtherModule.my_f', env)
+  end
+
+  test "complete remote funs froma aliased module" do
+    env = %Env{
+      scope_module: MyModule,
+      aliases: [{S, Some.OtherModule}],
+      mods_and_funs: %{
+        Some.OtherModule => %{
+          {:my_fun_other_pub, 1} => %{type: :def},
+          {:my_fun_other_priv, 1} => %{type: :defp},
+        }
+      }
+    }
+
+    assert {:yes, 'un_other_pub', [
+      %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+    ]} = expand('S.my_f', env)
+  end
+
+  test "complete modules" do
+    env = %Env{
+      scope_module: MyModule,
+      aliases: [{MyAlias, Some.OtherModule.Nested}],
+      mods_and_funs: %{
+        Some.OtherModule => %{}
+      }
+    }
+
+    assert {:yes, 'me', [%{name: "Some", type: :module}]} = expand('So', env)
+    assert {:yes, 'OtherModule', [%{name: "OtherModule", type: :module}]} = expand('Some.', env)
+    assert {:yes, 'lias', [%{name: "MyAlias", type: :module}]} = expand('MyA', env)
   end
 
   defmodule MyStruct do
@@ -301,10 +419,51 @@ defmodule Alchemist.Helpers.CompleteTest do
       expr
     end
     def fun, do: :ok
+    defguard guard(value) when is_integer(value) and rem(value, 2) == 0
+    defdelegate delegated(par), to: OtherModule
   end
 
   test "complete macros and functions from not loaded modules" do
     assert {:yes, 'st', [%{name: "test", type: "macro"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.te')
     assert {:yes, 'un', [%{name: "fun", type: "function"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.f')
+    assert {:yes, 'uard', [%{name: "guard", type: "macro"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.g')
+    assert {:yes, 'legated', [%{name: "delegated", type: "function"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.de')
+  end
+
+  test "complete build in functions on non local calls" do
+    assert {:no, _, _} = expand('mo')
+    assert {:no, _, _} = expand('__in')
+
+    assert {:no, _, _} = expand('Elixir.mo')
+    assert {:no, _, _} = expand('Elixir.__in')
+
+    assert {:yes, 'dule_info', [
+      %{name: "module_info", type: "function", arity: 0},
+      %{name: "module_info", type: "function", arity: 1}
+      ]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.mo')
+    assert {:yes, 'fo__', [%{name: "__info__", type: "function"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.__in')
+
+    assert {:yes, 'dule_info', [
+      %{name: "module_info", type: "function", arity: 0},
+      %{name: "module_info", type: "function", arity: 1}
+      ]} = expand(':ets.mo')
+    assert {:no, _, _} = expand(':ets.__in')
+
+    env = %Env{
+      scope_module: MyModule,
+      aliases: [{MyAlias, Some.OtherModule.Nested}],
+      mods_and_funs: %{
+        MyModule => %{}
+      }
+    }
+
+    assert {:no, _, _} = expand('mo', env)
+    assert {:no, _, _} = expand('__in', env)
+
+    assert {:yes, 'dule_info', [
+      %{name: "module_info", type: "function", arity: 0},
+      %{name: "module_info", type: "function", arity: 1}
+      ]} = expand('MyModule.mo', env)
+    assert {:yes, 'fo__', [%{name: "__info__", type: "function"}]} = expand('MyModule.__in', env)
   end
 end
