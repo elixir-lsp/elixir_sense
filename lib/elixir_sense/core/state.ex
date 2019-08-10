@@ -13,6 +13,7 @@ defmodule ElixirSense.Core.State do
     requires:   [[]],
     aliases:    [[]],
     attributes: [[]],
+    protocols: [[]],
     scope_attributes: [[]],
     behaviours: [[]],
     scope_behaviours: [[]],
@@ -33,7 +34,12 @@ defmodule ElixirSense.Core.State do
       imports: [],
       requires: [],
       aliases: [],
+      # NOTE for protocol impementation this will be the first variant
       module: nil,
+      module_variants: [],
+      # NOTE for protocol impementation this will be the first variant
+      protocol: nil,
+      protocol_variants: nil,
       vars: [],
       attributes: [],
       behaviours: [],
@@ -52,32 +58,56 @@ defmodule ElixirSense.Core.State do
     defstruct type: nil
   end
 
+  def current_aliases(state) do
+    state.aliases    |> List.flatten |> Enum.uniq_by(& elem(&1, 0)) |> Enum.reverse
+  end
+
   def get_current_env(state) do
-    current_module     = get_current_module(state)
+    current_module_variants     = get_current_module_variants(state)
     current_imports    = state.imports    |> :lists.reverse |> List.flatten
     current_requires   = state.requires   |> :lists.reverse |> List.flatten
-    current_aliases    = state.aliases    |> List.flatten |> Enum.uniq_by(& elem(&1, 0)) |> Enum.reverse
+    current_aliases    = current_aliases(state)
     current_vars       = state |> get_current_vars()
     current_attributes = state.scope_attributes |> :lists.reverse |> List.flatten
     current_behaviours = hd(state.behaviours)
     current_scope      = hd(state.scopes)
     current_scope_id   = hd(state.scope_ids)
+    current_scope_protocols = hd(state.protocols)
 
     %Env{
       imports: current_imports,
       requires: current_requires,
       aliases: current_aliases,
-      module: current_module,
+      module: current_module_variants |> hd,
+      module_variants: current_module_variants,
       vars: current_vars,
       attributes: current_attributes,
       behaviours: current_behaviours,
+      # NOTE for protocol implementations the scope and namespace will be
+      # escaped with `escape_protocol_implemntations`
       scope: current_scope,
       scope_id: current_scope_id,
+      protocol: (case current_scope_protocols do
+        [] -> nil
+        [head|_] -> head
+      end),
+      protocol_variants: current_scope_protocols
     }
   end
 
   def get_current_module(state) do
-    state.namespace |> :lists.reverse |> Module.concat
+    get_current_module_variants(state) |> hd
+  end
+
+  def get_current_module_variants(state = %{protocols: [[]|_]}) do
+    state.namespace |> unescape_protocol_impementations
+  end
+  def get_current_module_variants(%{protocols: [protocols|_]}) do
+    for {protocol, implementations} <- protocols,
+    implementation <- implementations
+    do
+      Module.concat(protocol, implementation)
+    end
   end
 
   def add_current_env_to_line(state, line) do
@@ -103,11 +133,10 @@ defmodule ElixirSense.Core.State do
   end
 
   def get_current_scope_name(state) do
-    scope = case hd(state.scopes) do
-      {fun, _} -> fun
-      mod      -> mod
+    case hd(state.scopes) do
+      {fun, _} -> fun |> Atom.to_string()
+      mod -> mod |> Atom.to_string()
     end
-    scope |> Atom.to_string()
   end
 
   def get_current_vars(state) do
@@ -135,7 +164,41 @@ defmodule ElixirSense.Core.State do
     %{state | mods_funs_to_positions: mods_funs_to_positions}
   end
 
+  @dot_marker "(__dot__)"
+  @or_marker "(__or__)"
+
+  def escape_protocol_impementations({protocol, implementations}) do
+    joined_implementations = implementations
+    |> Enum.map(fn parts ->
+      parts
+      |> Enum.map(&Atom.to_string/1)
+      |> Enum.join(@dot_marker)
+    end)
+    |> Enum.join(@or_marker)
+    |> String.to_atom()
+
+    protocol ++ [joined_implementations]
+  end
+  def escape_protocol_impementations(module_parts), do: module_parts
+
+  def unescape_protocol_impementations(parts) do
+    parts
+    |> Enum.reduce([[]], fn part, acc ->
+      part_variants = part
+      |> Atom.to_string
+      |> String.replace(@dot_marker, ".")
+      |> String.split(@or_marker)
+
+      for part_variant <- part_variants, acc_variant <- acc do
+        [part_variant | acc_variant]
+      end
+    end)
+    |> Enum.map(&Module.concat/1)
+  end
+
   def new_namespace(state, module) do
+    # TODO refactor to allow {:implementation, protocol, [implementations]} in scope
+    module = escape_protocol_impementations(module)
     module_reversed = :lists.reverse(module)
     namespace = module_reversed ++ state.namespace
     scopes  = module_reversed ++ state.scopes
@@ -143,17 +206,44 @@ defmodule ElixirSense.Core.State do
   end
 
   def remove_module_from_namespace(state, module) do
+    module = escape_protocol_impementations(module)
     outer_mods = Enum.drop(state.namespace, length(module))
     outer_scopes = Enum.drop(state.scopes, length(module))
     %{state | namespace: outer_mods, scopes: outer_scopes}
   end
 
+
   def new_named_func(state, name, arity, type) do
+    mods_funs = get_current_module_variants(state)
+    |> Enum.reduce(state.mods_funs, fn variant, acc ->
+      acc
+      |> Map.update(variant, %{{name, arity} => %ModFunInfo{type: type}}, & &1 |> Map.put({name, arity}, %ModFunInfo{type: type}))
+    end)
+
     %{state |
       scopes: [{name, arity}|state.scopes],
-      mods_funs: state.mods_funs
-      |> Map.update(get_current_module(state), %{{name, arity} => %ModFunInfo{type: type}}, & &1 |> Map.put({name, arity}, %ModFunInfo{type: type}))
+      mods_funs: mods_funs
     }
+  end
+
+  def maybe_add_protocol_implementation(state, {protocol, implementations}) do
+    implementation_modules = implementations |> Enum.flat_map(fn module ->
+      expanded = expand_alias(state, Module.concat(module))
+      get_known_module(state, expanded)
+    end)
+
+    candidate = expand_alias(state, Module.concat(protocol))
+    protocols = get_known_module(state, candidate)
+    |> Enum.map(& {&1, implementation_modules})
+
+    %{state | protocols: [protocols | state.protocols]}
+  end
+  def maybe_add_protocol_implementation(state, _) do
+    %{state | protocols: [[] | state.protocols]}
+  end
+
+  def remove_protocol_implementation(state) do
+    %{state | protocols: tl(state.protocols)}
   end
 
   def remove_last_scope_from_scopes(state) do
@@ -161,17 +251,25 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_current_module_to_index(state, position) do
-    current_module = state.namespace |> :lists.reverse |> Module.concat
-    state = %{state | mods_funs: state.mods_funs
-    |> Map.update(current_module, %{}, & &1)}
-    add_mod_fun_to_position(state, {current_module, nil, nil}, position, nil)
+    current_module_variants = get_current_module_variants(state)
+
+    current_module_variants
+    |> Enum.reduce(state, fn variant, acc ->
+      acc = %{acc | mods_funs: state.mods_funs
+      |> Map.update(variant, %{}, & &1)}
+      add_mod_fun_to_position(acc, {variant, nil, nil}, position, nil)
+    end)
   end
 
   def add_func_to_index(state, func, params, position) do
-    current_module = state.namespace |> :lists.reverse |> Module.concat
-    state
-    |> add_mod_fun_to_position({current_module, func, length(params)}, position, params)
-    |> add_mod_fun_to_position({current_module, func, nil}, position, params)
+    current_module_variants = get_current_module_variants(state)
+
+    current_module_variants
+    |> Enum.reduce(state, fn variant, acc ->
+      acc
+      |> add_mod_fun_to_position({variant, func, length(params)}, position, params)
+      |> add_mod_fun_to_position({variant, func, nil}, position, params)
+    end)
   end
 
   def new_alias_scope(state) do
@@ -222,10 +320,10 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_alias(state, {alias, module}) when alias == module, do: state
-  def add_alias(state, alias_tuple = {alias, _}) do
+  def add_alias(state, {alias, aliased}) do
     [aliases_from_scope|inherited_aliases] = state.aliases
     aliases_from_scope = aliases_from_scope |> Enum.reject(& match?({^alias, _}, &1))
-    %{state | aliases: [[alias_tuple|aliases_from_scope]|inherited_aliases]}
+    %{state | aliases: [[{alias, expand_alias(state, aliased)}|aliases_from_scope]|inherited_aliases]}
   end
 
   def add_aliases(state, aliases_tuples) do
@@ -255,6 +353,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_import(state, module) do
+    module = expand_alias(state, module)
     [imports_from_scope|inherited_imports] = state.imports
     imports_from_scope = imports_from_scope -- [module]
     %{state | imports: [[module|imports_from_scope]|inherited_imports]}
@@ -275,6 +374,8 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_require(state, module) do
+    module = expand_alias(state, module)
+
     [requires_from_scope|inherited_requires] = state.requires
     requires_from_scope = requires_from_scope -- [module]
     %{state | requires: [[module|requires_from_scope]|inherited_requires]}
@@ -317,6 +418,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_behaviour(state, module) do
+    module = expand_alias(state, module)
     [behaviours_from_scope|other_behaviours] = state.behaviours
     behaviours_from_scope = behaviours_from_scope -- [module]
     %{state | behaviours: [[module|behaviours_from_scope]|other_behaviours]}
@@ -347,4 +449,48 @@ defmodule ElixirSense.Core.State do
   end
 
   def default_env(), do: %ElixirSense.Core.State.Env{}
+
+  def expand_alias(state, module) do
+    if ElixirSense.Core.Introspection.elixir_module?(module) do
+      current_aliases = current_aliases(state)
+      module_parts = Module.split(module)
+
+      case current_aliases |> Enum.find(fn {alias, _} ->
+        [alis_split] = Module.split(alias)
+        alis_split == hd(module_parts)
+      end) do
+        nil -> module
+        {_alias, alias_expanded} -> Module.concat(Module.split(alias_expanded) ++ tl(module_parts))
+      end
+    else
+      module
+    end
+  end
+
+  # TODO refactor to use mods_funs
+  def get_known_module(state, module) do
+    if ElixirSense.Core.Introspection.elixir_module?(module) do
+      case state.mods_funs_to_positions[{module, nil, nil}] do
+        nil ->
+          # no registered protocol found
+          # try variants
+          current_module_variants = get_current_module_variants(state)
+          variant_candidates = for variant <- current_module_variants, do: Module.concat(variant, module)
+          case state.mods_funs_to_positions[{variant_candidates |> hd, nil, nil}] do
+            nil ->
+              # variant not found
+              # external protocol
+              [module]
+            _ ->
+              # variant found in metadata
+              variant_candidates
+          end
+        _ ->
+          # candidate found in metadata
+          [module]
+      end
+    else
+      [module]
+    end
+  end
 end

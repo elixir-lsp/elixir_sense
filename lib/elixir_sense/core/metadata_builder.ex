@@ -26,6 +26,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre_module(ast, state, position, module) do
     state
+    |> maybe_add_protocol_implementation(module)
     |> new_namespace(module)
     |> add_current_module_to_index(position)
     |> new_attributes_scope
@@ -45,6 +46,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> remove_import_scope
     |> remove_require_scope
     |> remove_vars_scope
+    |> remove_protocol_implementation
     |> remove_module_from_namespace(module)
     |> result(ast)
   end
@@ -191,6 +193,24 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_module(ast, state, {line, column}, module)
   end
 
+  defp pre({:defprotocol, _, [{:__aliases__, [line: line, column: column], module}, _]} = ast, state) do
+    pre_module(ast, state, {line, column}, module)
+  end
+
+  defp pre({:defimpl, _, [{:__aliases__, [line: line, column: column], protocol}, [for: implementations], _]} = ast, state) do
+    case implementations do
+      list when is_list(list) ->
+        modules = list
+        |> Enum.map(fn {:__aliases__, _, implementation} ->
+          implementation
+        end)
+        pre_module(ast, state, {line, column}, {protocol, modules})
+
+      {:__aliases__, _, implementation} ->
+        pre_module(ast, state, {line, column}, {protocol, [implementation]})
+    end
+  end
+
   defp pre({def_name, meta, [{:when, _, [head|_]}, body]}, state) when def_name in @defs do
     pre({def_name, meta, [head, body]}, state)
   end
@@ -203,6 +223,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # defguard and defguardp
   defp pre({def_name, meta, [{:when, [line: _, column: _],[{name, [line: line, column: column] = meta2, params}, body]}]}, state) when def_name in [:defguard, :defguardp] do
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, body]}
+    pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
+  end
+
+  # protocol function
+  defp pre({def_name, meta, [{name, [line: line, column: column] = meta2, params}]}, state) when def_name == :def do
+    ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, nil]}
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
   end
 
@@ -345,7 +371,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre({:use, [line: line, column: _column], _} = ast, state) do
-    %{requires: requires, imports: imports, behaviours: behaviours} = Ast.extract_use_info(ast, get_current_module(state), state)
+    # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
+    current_module = get_current_module(state)
+    %{requires: requires, imports: imports, behaviours: behaviours} = Ast.extract_use_info(ast, current_module, state)
 
     state
     |> add_current_env_to_line(line)
@@ -391,6 +419,24 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp post({:defmodule, _, [{:__aliases__, _, module}, _]} = ast, state) do
     post_module(ast, state, module)
+  end
+
+  defp post({:defprotocol, _, [{:__aliases__, _, module}, _]} = ast, state) do
+    post_module(ast, state, module)
+  end
+
+  defp post({:defimpl, _, [{:__aliases__, _, protocol}, [for: implementations], _]} = ast, state) do
+    case implementations do
+      list when is_list(list) ->
+        modules = list
+        |> Enum.map(fn {:__aliases__, _, implementation} ->
+          implementation
+        end)
+        post_module(ast, state, {protocol, modules})
+
+      {:__aliases__, _, implementation} ->
+        post_module(ast, state, {protocol, [implementation]})
+    end
   end
 
   defp post({def_name, [line: _line, column: _column], [{name, _, _params}, _]} = ast, state) when def_name in @defs and is_atom(name) do
