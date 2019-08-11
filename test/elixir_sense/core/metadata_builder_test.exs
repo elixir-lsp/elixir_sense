@@ -1496,6 +1496,54 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       } == state.mods_funs
   end
 
+  test "use" do
+    state = """
+      defmodule InheritMod do
+        use ElixirSenseExample.ExampleBehaviour
+
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+      |> IO.inspect
+
+      assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
+      assert get_line_requires(state, 4) == [ElixirSenseExample.ExampleBehaviour]
+  end
+
+  test "use aliased" do
+    state = """
+      defmodule InheritMod do
+        alias ElixirSenseExample.ExampleBehaviour, as: S
+        use S
+
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+
+      ElixirSenseExample.ExampleBehaviourT.a
+
+      assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
+      assert get_line_requires(state, 5) == [MyMacros.Two.Three, MyMacros.One, :ets, MyMacros.Nested, MyMacros, ElixirSenseExample.ExampleBehaviour]
+      assert get_line_imports(state, 5) == [:lists, MyImports.Two.ThreeImports, MyImports.OneImports, MyImports.NestedImports, MyImports]
+      assert get_line_aliases(state, 5) == [
+        {S, ElixirSenseExample.ExampleBehaviour},
+        {Utils, MyModule.Some.Nested},
+        {Nested, MyModule.Other.Nested},
+        {Ets, :ets},
+        {One, MyModule.One},
+        {Three, MyModule.Two.Three},
+        {Four, MyModule.Four},
+        {NestedMacros, MyMacros.Nested},
+        {ErlangMacros, :ets},
+        {NestedImports, MyImports.NestedImports},
+        {OneImports, MyImports.OneImports},
+        {ThreeImports, MyImports.Two.ThreeImports}
+      ]
+      assert get_line_attributes(state, 5) == [:before_compile, :doc, :my_attribute]
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true)

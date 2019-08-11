@@ -59,6 +59,23 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       end
 
       defoverridable handle_call: 3
+
+      alias MyModule.Some.Nested, as: Utils
+      alias MyModule.Other.Nested
+      alias :ets, as: Ets
+      alias MyModule.{One, Two.Three}
+      alias MyModule.{Four}
+
+      require MyMacros
+      require MyMacros.Nested, as: NestedMacros
+      require :ets, as: ErlangMacros
+      require MyMacros.{One, Two.Three}
+
+      import MyImports
+      import MyImports.NestedImports
+      import MyImports.{OneImports, Two.ThreeImports}
+      import :lists
+      @my_attribute "my_attr"
     end
   end
 

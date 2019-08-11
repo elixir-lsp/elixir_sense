@@ -365,11 +365,15 @@ defmodule ElixirSense.Core.State do
   end
 
   defp maybe_add_import_alias(state, module) do
-    case module |> Module.split() |> Enum.reverse do
-      [_] -> state
-      [head|_] ->
-        state
-        |> add_alias({Module.concat([head]), module})
+    if ElixirSense.Core.Introspection.elixir_module?(module) do
+      case module |> Module.split() |> Enum.reverse do
+        [_] -> state
+        [head|_] ->
+          state
+          |> add_alias({Module.concat([head]), module})
+      end
+    else
+      state
     end
   end
 
@@ -401,6 +405,10 @@ defmodule ElixirSense.Core.State do
       end
 
     %{state | vars: [vars_from_scope|other_vars], scope_vars: [vars_from_scope|tl(state.scope_vars)]}
+  end
+
+  def add_attributes(state, attributes) do
+    Enum.reduce(attributes, state, fn(attribute, state) -> add_attribute(state, attribute) end)
   end
 
   def add_attribute(state, attribute) do

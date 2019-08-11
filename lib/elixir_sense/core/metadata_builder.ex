@@ -373,13 +373,21 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp pre({:use, [line: line, column: _column], _} = ast, state) do
     # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
     current_module = get_current_module(state)
-    %{requires: requires, imports: imports, behaviours: behaviours} = Ast.extract_use_info(ast, current_module, state)
+    %{
+      requires: requires,
+      imports: imports,
+      behaviours: behaviours,
+      aliases: aliases,
+      attributes: attributes
+    } = Ast.extract_use_info(ast, current_module, state) |> IO.inspect
 
     state
-    |> add_current_env_to_line(line)
+    |> add_aliases(aliases)
     |> add_requires(requires)
     |> add_imports(imports)
     |> add_behaviours(behaviours)
+    |> add_attributes(attributes)
+    |> add_current_env_to_line(line)
     |> result(ast)
   end
 
