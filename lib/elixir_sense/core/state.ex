@@ -181,6 +181,12 @@ defmodule ElixirSense.Core.State do
   end
   def escape_protocol_impementations(module_parts), do: module_parts
 
+  def unescape_protocol_impementations(module) when is_atom(module) do
+    Module.split(module)
+    |> Enum.reverse
+    |> Enum.map(&String.to_atom/1)
+    |> unescape_protocol_impementations
+  end
   def unescape_protocol_impementations(parts) do
     parts
     |> Enum.reduce([[]], fn part, acc ->
@@ -206,34 +212,39 @@ defmodule ElixirSense.Core.State do
   end
 
   def remove_module_from_namespace(state, module) do
+    namespace = state.namespace
     module = escape_protocol_impementations(module)
     outer_mods = Enum.drop(state.namespace, length(module))
     outer_scopes = Enum.drop(state.scopes, length(module))
-    %{state | namespace: outer_mods, scopes: outer_scopes}
+
+    state = %{state | namespace: outer_mods, scopes: outer_scopes}
+
+    if length(outer_scopes) > 1 and state.protocols |> hd == [] do
+      # submodule defined, create alias in outer module namespace
+
+      # take only outermost submodule part as deeply nested submodules do not create aliases
+      alias = module |> Enum.take(1) |> Module.concat
+      expanded = namespace |> Enum.drop(length(module) - 1) |> Enum.reverse() |> Module.concat()
+
+      state
+      |> add_alias({alias, expanded})
+    else
+      state
+    end
   end
 
-
-  def new_named_func(state, name, arity, type) do
-    mods_funs = get_current_module_variants(state)
-    |> Enum.reduce(state.mods_funs, fn variant, acc ->
-      acc
-      |> Map.update(variant, %{{name, arity} => %ModFunInfo{type: type}}, & &1 |> Map.put({name, arity}, %ModFunInfo{type: type}))
-    end)
-
-    %{state |
-      scopes: [{name, arity}|state.scopes],
-      mods_funs: mods_funs
-    }
+  def new_named_func(state, name, arity) do
+    %{state | scopes: [{name, arity}|state.scopes]}
   end
 
   def maybe_add_protocol_implementation(state, {protocol, implementations}) do
     implementation_modules = implementations |> Enum.flat_map(fn module ->
       expanded = expand_alias(state, Module.concat(module))
-      get_known_module(state, expanded)
+      unescape_protocol_impementations(expanded)
     end)
 
     candidate = expand_alias(state, Module.concat(protocol))
-    protocols = get_known_module(state, candidate)
+    protocols = unescape_protocol_impementations(candidate)
     |> Enum.map(& {&1, implementation_modules})
 
     %{state | protocols: [protocols | state.protocols]}
@@ -255,21 +266,34 @@ defmodule ElixirSense.Core.State do
 
     current_module_variants
     |> Enum.reduce(state, fn variant, acc ->
-      acc = %{acc | mods_funs: state.mods_funs
-      |> Map.update(variant, %{}, & &1)}
-      add_mod_fun_to_position(acc, {variant, nil, nil}, position, nil)
+      acc
+      |> add_module_to_index(variant, position)
     end)
   end
 
-  def add_func_to_index(state, func, params, position) do
-    current_module_variants = get_current_module_variants(state)
+  def add_module_to_index(state, module, position) do
+    state = %{state | mods_funs: state.mods_funs
+      |> Map.update(module, %{}, & &1)}
+    add_mod_fun_to_position(state, {module, nil, nil}, position, nil)
+  end
 
-    current_module_variants
+  def add_func_to_index(state, func, params, position, type) do
+    current_module_variants = get_current_module_variants(state)
+    arity = length(params)
+
+    mods_funs = current_module_variants
+    |> Enum.reduce(state.mods_funs, fn variant, acc ->
+      acc
+      |> Map.update(variant, %{{func, arity} => %ModFunInfo{type: type}}, & &1 |> Map.put({func, arity}, %ModFunInfo{type: type}))
+    end)
+
+    state = current_module_variants
     |> Enum.reduce(state, fn variant, acc ->
       acc
-      |> add_mod_fun_to_position({variant, func, length(params)}, position, params)
+      |> add_mod_fun_to_position({variant, func, arity}, position, params)
       |> add_mod_fun_to_position({variant, func, nil}, position, params)
     end)
+    %{state | mods_funs: mods_funs}
   end
 
   def new_alias_scope(state) do
@@ -475,30 +499,4 @@ defmodule ElixirSense.Core.State do
     end
   end
 
-  # TODO refactor to use mods_funs
-  def get_known_module(state, module) do
-    if ElixirSense.Core.Introspection.elixir_module?(module) do
-      case state.mods_funs_to_positions[{module, nil, nil}] do
-        nil ->
-          # no registered protocol found
-          # try variants
-          current_module_variants = get_current_module_variants(state)
-          variant_candidates = for variant <- current_module_variants, do: Module.concat(variant, module)
-          case state.mods_funs_to_positions[{variant_candidates |> hd, nil, nil}] do
-            nil ->
-              # variant not found
-              # external protocol
-              [module]
-            _ ->
-              # variant found in metadata
-              variant_candidates
-          end
-        _ ->
-          # candidate found in metadata
-          [module]
-      end
-    else
-      [module]
-    end
-  end
 end

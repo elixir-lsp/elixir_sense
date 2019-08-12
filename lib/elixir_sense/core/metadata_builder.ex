@@ -46,15 +46,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> remove_import_scope
     |> remove_require_scope
     |> remove_vars_scope
-    |> remove_protocol_implementation
     |> remove_module_from_namespace(module)
+    |> remove_protocol_implementation
     |> result(ast)
   end
 
   defp pre_func(ast = {type, _, _}, state, %{line: line, col: col}, name, params) do
     state
-    |> new_named_func(name, length(params || []), type)
-    |> add_func_to_index(name, params || [], {line, col})
+    |> new_named_func(name, length(params || []))
+    |> add_func_to_index(name, params || [], {line, col}, type)
     |> new_alias_scope
     |> new_import_scope
     |> new_require_scope
@@ -370,23 +370,44 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre({:use, [line: line, column: _column], _} = ast, state) do
+  defp pre({:use, [line: line, column: column], _} = ast, state) do
     # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
     current_module = get_current_module(state)
+    current_module_length = length(Module.split(current_module))
+    current_module_variants = get_current_module_variants(state)
+
     %{
       requires: requires,
       imports: imports,
       behaviours: behaviours,
       aliases: aliases,
-      attributes: attributes
-    } = Ast.extract_use_info(ast, current_module, state) |> IO.inspect
+      attributes: attributes,
+      mods_funs: mods_funs
+    } = Ast.extract_use_info(ast, current_module, state)
 
-    state
+    state = state
     |> add_aliases(aliases)
     |> add_requires(requires)
     |> add_imports(imports)
     |> add_behaviours(behaviours)
     |> add_attributes(attributes)
+
+    state = Enum.reduce(mods_funs, state, fn
+      {name, args, type}, acc ->
+        acc
+        |> add_func_to_index(name, args, {line, column}, type)
+      module, acc ->
+        submodule_parts = Module.split(module) |> Enum.drop(current_module_length)
+        Enum.reduce(current_module_variants, acc, fn variant, acc_1 ->
+          module = (Module.split(variant) ++ submodule_parts)
+          |> Module.concat
+
+          acc_1
+          |> add_module_to_index(module, {line, column})
+        end)
+    end)
+
+    state
     |> add_current_env_to_line(line)
     |> result(ast)
   end

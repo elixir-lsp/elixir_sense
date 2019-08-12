@@ -6,7 +6,7 @@ defmodule ElixirSense.Core.Ast do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State
 
-  @empty_env_info %{requires: [], imports: [], behaviours: [], aliases: [], attributes: []}
+  @empty_env_info %{requires: [], imports: [], behaviours: [], aliases: [], attributes: [], mods_funs: []}
 
   @partials [:def, :defp, :defmodule, :@, :defmacro, :defmacrop, :defoverridable,
   :__ENV__, :__CALLER__, :raise, :if, :unless, :in]
@@ -129,11 +129,12 @@ defmodule ElixirSense.Core.Ast do
     {ast, %{acc | aliases: (acc.aliases ++ alias_tuples)}}
   end
   defp pre_walk_expanded({:@, _, [{:behaviour, _, [behaviour]}]} = ast, acc) do
+    # TODO is it needed? no tests cover reach this branch
     {ast, %{acc | behaviours: [behaviour|acc.behaviours]}}
   end
-  defp pre_walk_expanded({:@, _, ast}, acc) do
-    IO.inspect ast, label: "@"
-    {ast, acc}
+  defp pre_walk_expanded({:@, _, [{attribute, _, _}]} = ast, acc) do
+    # TODO is it needed? no tests cover reach this branch
+    {ast, %{acc | attributes: [attribute|acc.attributes]}}
   end
   # Elixir < 1.9
   defp pre_walk_expanded({{:., _, [Module, :put_attribute]}, _, [_module, :behaviour, behaviour | _]} = ast, acc) do
@@ -149,12 +150,25 @@ defmodule ElixirSense.Core.Ast do
   defp pre_walk_expanded({{:., _, [Module, :__put_attribute__]}, _, [_module, attribute | _]} = ast, acc) do
     {ast, %{acc | attributes: [attribute|acc.attributes]}}
   end
-  defp pre_walk_expanded({_name, _meta, _args} = ast, acc) do
-    IO.inspect(ast)
+  defp pre_walk_expanded({type, _, [{name, _, args}, _]} = ast, acc) when type in [:def, :defp, :defmacro, :defmacrop] and is_list(args) do
+    {ast, %{acc | mods_funs: [{name, args, type}|acc.mods_funs]}}
+  end
+  defp pre_walk_expanded({type, _, [{name, _, _}, _]} = ast, acc) when type in [:def, :defp, :defmacro, :defmacrop] do
+    {ast, %{acc | mods_funs: [{name, [], type}|acc.mods_funs]}}
+  end
+  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, args}, _]}]} = ast, acc) when type in [:defguardp, :defguard] and is_list(args) do
+    {ast, %{acc | mods_funs: [{name, args, type}|acc.mods_funs]}}
+  end
+  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, _}, _]}]} = ast, acc) when type in [:defguardp, :defguard] do
+    {ast, %{acc | mods_funs: [{name, [], type}|acc.mods_funs]}}
+  end
+  defp pre_walk_expanded({{:., _, [:elixir_module, :compile]}, _, [mod| _]} = ast, acc) when is_atom(mod) do
+    {ast, %{acc | mods_funs: [mod|acc.mods_funs]}}
+  end
+  defp pre_walk_expanded({_name, _meta, _args}, acc) do
     {nil, acc}
   end
   defp pre_walk_expanded(ast, acc) do
-    IO.inspect(ast)
     {ast, acc}
   end
 
@@ -162,18 +176,15 @@ defmodule ElixirSense.Core.Ast do
     case ast do
       # v1.2 notation
       {^directive, _, [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, aliases}]} ->
-        IO.puts "0"
         list = aliases |> Enum.map(fn {:__aliases__, _, mods} ->
           Module.concat(prefix_atoms ++ mods)
         end)
         {list, []}
       # with options
       {^directive, _, [{_, _, module_atoms = [mod|_]}, _opts]} when is_atom(mod) ->
-        IO.puts "1"
         {[module_atoms |> Module.concat], []}
       # with options
       {^directive, _, [module, opts]} when is_atom(module) ->
-        IO.puts "2"
         alias_tuples = case opts |> Keyword.get(:as) do
           nil -> []
           alias -> [{alias, module}]
@@ -181,19 +192,17 @@ defmodule ElixirSense.Core.Ast do
         {[module], alias_tuples}
       # with options
       {^directive, _, [{:__aliases__, _, module_parts}, _opts]} ->
-        IO.puts "3"
+        # TODO is it needed? no tests cover reach this branch
         {[module_parts |> Module.concat], []}
       # without options
       {^directive, _, [{:__aliases__, _, module_parts}]} ->
-        IO.puts "4"
         {[module_parts |> Module.concat], []}
       # without options
       {^directive, _, [{:__aliases__, [alias: false, counter: _], module_parts}]} ->
-        IO.puts "5"
+        # TODO is it needed? no tests cover reach this branch
         {[module_parts |> Module.concat], []}
       # without options
       {^directive, _, [module]} when is_atom(module) ->
-        IO.puts "6"
         {[module], []}
       {^directive, _, [{{:., _, [prefix, :{}]}, _, suffixes}]} when is_list(suffixes) ->
         list = for suffix <- suffixes, do: Module.concat(prefix, suffix)
@@ -201,8 +210,11 @@ defmodule ElixirSense.Core.Ast do
     end
   end
 
-  defp extract_aliases([mod, [as: alias]]) do
-    [{alias, mod}]
+  defp extract_aliases([mod, opts]) when is_list(opts) do
+    case Keyword.get(opts, :as) do
+      nil -> extract_aliases([mod])
+      alias -> [{alias, mod}]
+    end
   end
 
   defp extract_aliases([mod]) when is_atom(mod) do
@@ -217,4 +229,7 @@ defmodule ElixirSense.Core.Ast do
       {alias, mod}
     end
   end
+
 end
+
+
