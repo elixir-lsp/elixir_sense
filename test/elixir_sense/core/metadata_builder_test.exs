@@ -967,6 +967,43 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_protocol(state, 15)  == nil
   end
 
+  test "current module with `Elixir` prefix" do
+
+    state =
+      """
+      IO.puts ""
+      defmodule Elixir.OuterModule do
+        IO.puts ""
+        defmodule InnerModule do
+          def func do
+            if true do
+              IO.puts ""
+            end
+          end
+        end
+        IO.puts ""
+      end
+
+      defmodule Elixir.Some.Nested do
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+      |> IO.inspect
+
+    assert get_line_module(state, 1)  == Elixir
+    assert get_line_protocol(state, 1)  == nil
+    assert get_line_module(state, 3)  == OuterModule
+    assert get_line_protocol(state, 3)  == nil
+    assert get_line_module(state, 7)  == OuterModule.InnerModule
+    assert get_line_protocol(state, 7)  == nil
+    assert get_line_module(state, 11) == OuterModule
+    assert get_line_protocol(state, 11)  == nil
+
+    assert get_line_module(state, 15) == Some.Nested
+    assert get_line_protocol(state, 15)  == nil
+  end
+
 
   test "current module and protocol implementation" do
 
