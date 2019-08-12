@@ -7,8 +7,8 @@ defmodule ElixirSense.Core.State do
   @type scope :: module | fun_arity
 
   defstruct [
-    namespace:  [:Elixir],
-    scopes:     [:Elixir],
+    namespace:  [[:Elixir]],
+    scopes:     [[:Elixir]],
     imports:    [[]],
     requires:   [[]],
     aliases:    [[]],
@@ -70,7 +70,7 @@ defmodule ElixirSense.Core.State do
     current_vars       = state |> get_current_vars()
     current_attributes = state.scope_attributes |> :lists.reverse |> List.flatten
     current_behaviours = hd(state.behaviours)
-    current_scope      = hd(state.scopes)
+    current_scope      = hd(hd(state.scopes))
     current_scope_id   = hd(state.scope_ids)
     current_scope_protocols = hd(state.protocols)
 
@@ -100,7 +100,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def get_current_module_variants(state = %{protocols: [[]|_]}) do
-    state.namespace |> unescape_protocol_impementations
+    state.namespace |> hd |> unescape_protocol_impementations
   end
   def get_current_module_variants(%{protocols: [protocols|_]}) do
     for {protocol, implementations} <- protocols,
@@ -133,7 +133,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def get_current_scope_name(state) do
-    case hd(state.scopes) do
+    case hd(hd(state.scopes)) do
       {fun, _} -> fun |> Atom.to_string()
       mod -> mod |> Atom.to_string()
     end
@@ -205,17 +205,38 @@ defmodule ElixirSense.Core.State do
   def new_namespace(state, module) do
     # TODO refactor to allow {:implementation, protocol, [implementations]} in scope
     module = escape_protocol_impementations(module)
-    module_reversed = :lists.reverse(module)
-    namespace = module_reversed ++ state.namespace
-    scopes  = module_reversed ++ state.scopes
-    %{state | namespace: namespace, scopes: scopes}
+
+    {namespace, scopes} = case module do
+      [:Elixir | module] ->
+        case state.namespace do
+          [[:Elixir]] ->
+            # top level module - drop prefix
+            module_reversed = :lists.reverse(module)
+            namespace = module_reversed ++ hd(state.namespace)
+            scopes = module_reversed ++ hd(state.scopes)
+            {namespace, scopes}
+          [_ | _] ->
+            # external submodule
+            module_reversed = :lists.reverse(module)
+            namespace = module_reversed
+            scopes = module_reversed
+            {namespace, scopes}
+        end
+      module ->
+        module_reversed = :lists.reverse(module)
+        namespace = module_reversed ++ hd(state.namespace)
+        scopes = module_reversed ++ hd(state.scopes)
+        {namespace, scopes}
+    end
+
+    %{state | namespace: [namespace|state.namespace], scopes: [scopes|state.scopes]}
   end
 
   def remove_module_from_namespace(state, module) do
-    namespace = state.namespace
+    namespace = state.namespace |> hd
     module = escape_protocol_impementations(module)
-    outer_mods = Enum.drop(state.namespace, length(module))
-    outer_scopes = Enum.drop(state.scopes, length(module))
+    outer_mods = state.namespace |> tl
+    outer_scopes = state.scopes |> tl
 
     state = %{state | namespace: outer_mods, scopes: outer_scopes}
 
@@ -234,7 +255,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def new_named_func(state, name, arity) do
-    %{state | scopes: [{name, arity}|state.scopes]}
+    %{state | scopes: [[{name, arity}|hd(state.scopes)]|state.scopes]}
   end
 
   def maybe_add_protocol_implementation(state, {protocol, implementations}) do

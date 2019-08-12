@@ -134,6 +134,10 @@ defmodule ElixirSenseExample.ExampleBehaviour do
         end
       end
 
+      defmodule Elixir.Outside do
+        def public_func_nested_arg(a), do: :ok
+      end
+
       defmodule Deeply.Nested do
         def public_func_deeply_nested_arg(a), do: :ok
       end

@@ -975,11 +975,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule Elixir.OuterModule do
         IO.puts ""
         defmodule InnerModule do
-          def func do
-            if true do
-              IO.puts ""
-            end
-          end
+          IO.puts ""
+        end
+
+        defmodule Elixir.ExternalModule do
+          IO.puts ""
+        end
+
+        defprotocol Elixir.Reversible do
+          def reverse(term)
+          IO.puts ""
         end
         IO.puts ""
       end
@@ -989,19 +994,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
       """
       |> string_to_state
-      |> IO.inspect
 
     assert get_line_module(state, 1)  == Elixir
-    assert get_line_protocol(state, 1)  == nil
     assert get_line_module(state, 3)  == OuterModule
-    assert get_line_protocol(state, 3)  == nil
-    assert get_line_module(state, 7)  == OuterModule.InnerModule
-    assert get_line_protocol(state, 7)  == nil
-    assert get_line_module(state, 11) == OuterModule
-    assert get_line_protocol(state, 11)  == nil
+    assert get_line_module(state, 5)  == OuterModule.InnerModule
+    assert get_line_module(state, 9) == ExternalModule
+    assert get_line_module(state, 14) == Reversible
+    assert get_line_module(state, 16) == OuterModule
+    # external submodule does not create an alias
+    assert get_line_aliases(state, 16) == [{InnerModule, OuterModule.InnerModule}]
 
-    assert get_line_module(state, 15) == Some.Nested
-    assert get_line_protocol(state, 15)  == nil
+    assert get_line_module(state, 20) == Some.Nested
   end
 
 
