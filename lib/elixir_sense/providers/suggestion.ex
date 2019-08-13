@@ -204,7 +204,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
   defp find_protocol_functions(nil, _hint), do: []
   defp find_protocol_functions({protocol, _implementations}, hint) do
-    for {{name, arity}, {type, args, docs, spec}} <- Introspection.module_functions_info(protocol),
+    for {{name, arity}, {_type, args, docs, spec}} <- Introspection.module_functions_info(protocol),
     hint == "" or String.starts_with?("#{name}", hint)
     do
       %{type: :protocol_function, name: name, arity: arity, args: args, origin: Introspection.module_to_string(protocol), summary: docs, spec: spec}

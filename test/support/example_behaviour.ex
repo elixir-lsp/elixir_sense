@@ -1,3 +1,35 @@
+defmodule MyMacros do
+  defmodule Nested do
+  end
+  defmodule One do
+  end
+  defmodule Two.Three do
+  end
+end
+
+defmodule MyImports do
+  defmodule NestedImports do
+  end
+  defmodule OneImports do
+  end
+  defmodule Two.ThreeImports do
+  end
+end
+
+defmodule UseWithCallbacks do
+  defmacro __before_compile__(_env) do
+    quote do: :ok
+  end
+end
+
+defmodule ElixirSenseExample.Delegates do
+  def delegated_func(_a), do: :ok
+end
+
+defprotocol ProtocolOutside do
+  def reverse(term)
+end
+
 defmodule ElixirSenseExample.ExampleBehaviour do
   @moduledoc """
   Example of a module that has a __using__ that defines callbacks. Patterned directly off of GenServer from Elixir 1.8.0
@@ -59,6 +91,70 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       end
 
       defoverridable handle_call: 3
+
+      alias MyModule.Some.Nested, as: Utils
+      alias MyModule.Other.Nested
+      alias :ets, as: Ets
+      alias MyModule.{One, Two.Three}
+      alias MyModule.{Four}
+
+      require MyMacros
+      require MyMacros.Nested, as: NestedMacros
+      require :ets, as: ErlangMacros
+      require MyMacros.{One, Two.Three}
+
+      import MyImports
+      import MyImports.NestedImports
+      import MyImports.{OneImports, Two.ThreeImports}
+      import :lists
+      @my_attribute "my_attr"
+
+      defp private_func, do: :ok
+      def public_func, do: :ok
+
+      defp private_func_arg(a), do: :ok
+      def public_func_arg(b, a \\ "def"), do: :ok
+
+      defmacrop private_macro, do: :ok
+      defmacro public_macro, do: :ok
+
+      defmacrop private_macro_arg(a), do: :ok
+      defmacro public_macro_arg(a), do: :ok
+
+      defguardp private_guard when 1 == 1
+      defguard public_guard when 1 == 1
+
+      defguardp private_guard_arg(a) when is_integer(a)
+      defguard public_guard_arg(a) when is_integer(a)
+
+      defmodule Nested do
+        def public_func_nested_arg(a), do: :ok
+        defmodule Nested.Child do
+          def public_func_nested_child_arg(a), do: :ok
+        end
+      end
+
+      defmodule Elixir.Outside do
+        def public_func_nested_arg(a), do: :ok
+      end
+
+      defmodule Deeply.Nested do
+        def public_func_deeply_nested_arg(a), do: :ok
+      end
+
+      defprotocol ProtocolEmbedded do
+        def reverse(term)
+      end
+
+      defimpl ProtocolEmbedded, for: String do
+        def reverse(a), do: :ok
+      end
+
+      defimpl ProtocolOutside, for: String do
+        def reverse(a), do: :ok
+      end
+
+      # defdelegate delegated_func, to: ElixirSenseExample.Delegates
     end
   end
 

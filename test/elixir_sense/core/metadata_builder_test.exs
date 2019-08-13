@@ -578,56 +578,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           end
           IO.puts ""
         end
+        IO.puts ""
         alias Code, as: MyCode
         IO.puts ""
         defmodule AnotherInnerModule do
           IO.puts ""
         end
         IO.puts ""
-      end
-      IO.puts ""
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 3)  == [{MyList, List}]
-    assert get_line_aliases(state, 6)  == [{MyList, List}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 9)  == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 12) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
-    assert get_line_aliases(state, 14) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 16) == [{MyList, List}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 19) == [{MyList, List}, {MyCode, Code}]
-    assert get_line_aliases(state, 21) == [{MyList, List}, {MyCode, Code}]
-    assert get_line_aliases(state, 23) == [{MyList, List}, {MyCode, Code}]
-    assert get_line_aliases(state, 25) == []
-  end
-
-  test "aliases nested" do
-
-    state =
-      """
-      defmodule OuterModule.Nested do
-        alias List, as: MyList
-        IO.puts ""
-        defmodule InnerModule do
-          alias Enum, as: MyEnum
-          IO.puts ""
-          def func do
-            alias String, as: MyString
-            IO.puts ""
-            if true do
-              alias Macro, as: MyMacro
-              IO.puts ""
-            end
-            IO.puts ""
-          end
-          IO.puts ""
-        end
-        alias Code, as: MyCode
-        IO.puts ""
-      end
-      defmodule OuterModule.Nested1 do
-        IO.puts ""
-        defmodule InnerModule.Nested do
+        defmodule SomeInnerModule.Nested do
           IO.puts ""
         end
         IO.puts ""
@@ -642,11 +600,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 12) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}, {MyMacro, Macro}]
     assert get_line_aliases(state, 14) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
     assert get_line_aliases(state, 16) == [{MyList, List}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 19) == [{MyList, List}, {MyCode, Code}]
-    assert get_line_aliases(state, 22) == []
-    assert get_line_aliases(state, 24) == []
-    assert get_line_aliases(state, 26) == []
-    assert get_line_aliases(state, 28) == []
+    # submodule defines an alias in parent module
+    assert get_line_aliases(state, 18) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}]
+    assert get_line_aliases(state, 20) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyCode, Code}]
+    assert get_line_aliases(state, 22) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyCode, Code}]
+    assert get_line_aliases(state, 24) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyCode, Code}, {AnotherInnerModule, OuterModule.AnotherInnerModule}]
+    # submodule aliases are inherited to sibling submodules
+    assert get_line_aliases(state, 26) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyCode, Code}, {AnotherInnerModule, OuterModule.AnotherInnerModule}]
+    # submodule Sub0.Sub1.Sub2 is equivalent to alias Sub0
+    assert get_line_aliases(state, 28) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}, {MyCode, Code}, {AnotherInnerModule, OuterModule.AnotherInnerModule}, {SomeInnerModule, OuterModule.SomeInnerModule}]
+    assert get_line_aliases(state, 30) == []
   end
 
   test "aliases with `fn`" do
@@ -1004,6 +967,46 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_protocol(state, 15)  == nil
   end
 
+  test "current module with `Elixir` prefix" do
+
+    state =
+      """
+      IO.puts ""
+      defmodule Elixir.OuterModule do
+        IO.puts ""
+        defmodule InnerModule do
+          IO.puts ""
+        end
+
+        defmodule Elixir.ExternalModule do
+          IO.puts ""
+        end
+
+        defprotocol Elixir.Reversible do
+          def reverse(term)
+          IO.puts ""
+        end
+        IO.puts ""
+      end
+
+      defmodule Elixir.Some.Nested do
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_module(state, 1)  == Elixir
+    assert get_line_module(state, 3)  == OuterModule
+    assert get_line_module(state, 5)  == OuterModule.InnerModule
+    assert get_line_module(state, 9) == ExternalModule
+    assert get_line_module(state, 14) == Reversible
+    assert get_line_module(state, 16) == OuterModule
+    # external submodule does not create an alias
+    assert get_line_aliases(state, 16) == [{InnerModule, OuterModule.InnerModule}]
+
+    assert get_line_module(state, 20) == Some.Nested
+  end
+
 
   test "current module and protocol implementation" do
 
@@ -1353,6 +1356,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule MyModule do
         defguard is_even(value) when is_integer(value) and rem(value, 2) == 0
         defguardp is_odd(value) when is_integer(value) and rem(value, 2) == 1
+        defguardp useless when 1 == 1
         IO.puts ""
       end
       """
@@ -1375,6 +1379,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           {MyModule, :is_odd, nil} => %{
             params: [[{:value, [line: 3, column: 20], nil}]],
             positions: [{3, 13}]
+          },
+          {MyModule, :useless, 0} => %{
+            params: [[]], positions: [{4, 13}]
+          },
+          {MyModule, :useless, nil} => %{
+            params: [[]],
+            positions: [{4, 13}]
           }
         }
       } = state
@@ -1494,6 +1505,75 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           {:reverse, 1} => %ElixirSense.Core.State.ModFunInfo{type: :def}
         }
       } == state.mods_funs
+  end
+
+  test "use" do
+    state = """
+      defmodule InheritMod do
+        use ElixirSenseExample.ExampleBehaviour
+
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+
+      assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
+      assert get_line_requires(state, 4) == [MyMacros.Two.Three, MyMacros.One, :ets, MyMacros.Nested, MyMacros, ElixirSenseExample.ExampleBehaviour]
+      assert get_line_imports(state, 4) == [:lists, MyImports.Two.ThreeImports, MyImports.OneImports, MyImports.NestedImports, MyImports]
+      assert get_line_aliases(state, 4) == [
+        {Utils, MyModule.Some.Nested},
+        {Ets, :ets},
+        {One, MyModule.One},
+        {Three, MyModule.Two.Three},
+        {Four, MyModule.Four},
+        {NestedMacros, MyMacros.Nested},
+        {ErlangMacros, :ets},
+        {Nested, InheritMod.Nested},
+        {Deeply, InheritMod.Deeply},
+        {ProtocolEmbedded, InheritMod.ProtocolEmbedded},
+        {NestedImports, MyImports.NestedImports},
+        {OneImports, MyImports.OneImports},
+        {ThreeImports, MyImports.Two.ThreeImports}
+      ]
+      assert get_line_attributes(state, 4) == [:before_compile, :doc, :my_attribute]
+
+      # FIXME `defdelegate` inside `__using__/1` macro is not supported
+
+      assert %{InheritMod => %{
+        {:handle_call, 3} => %ElixirSense.Core.State.ModFunInfo{type: :def},
+        {:private_func, 0} => %ElixirSense.Core.State.ModFunInfo{type: :defp},
+        {:private_func_arg, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defp},
+        {:private_guard, 0} => %ElixirSense.Core.State.ModFunInfo{type: :defguardp},
+        {:private_guard_arg, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defguardp},
+        {:private_macro, 0} => %ElixirSense.Core.State.ModFunInfo{type: :defmacrop},
+        {:private_macro_arg, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defmacrop},
+        {:public_func, 0} => %ElixirSense.Core.State.ModFunInfo{type: :def},
+        {:public_func_arg, 2} => %ElixirSense.Core.State.ModFunInfo{type: :def},
+        {:public_guard, 0} => %ElixirSense.Core.State.ModFunInfo{type: :defguard},
+        {:public_guard_arg, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defguard},
+        {:public_macro, 0} => %ElixirSense.Core.State.ModFunInfo{type: :defmacro},
+        {:public_macro_arg, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defmacro}
+      },
+      # FIXME only submodules defined at top level are supported in `__using__/1`
+      # FIXME submofule func and macro extraction is not supported in `__using__/1`
+      InheritMod.Deeply.Nested => %{},
+      InheritMod.Nested => %{},
+      InheritMod.ProtocolEmbedded => %{}
+      } == state.mods_funs
+  end
+
+  test "use aliased" do
+    state = """
+      defmodule InheritMod do
+        alias ElixirSenseExample.ExampleBehaviour, as: S
+        use S
+
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+
+      assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
   end
 
   defp string_to_state(string) do

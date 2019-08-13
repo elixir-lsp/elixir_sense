@@ -4,8 +4,9 @@ defmodule ElixirSense.Core.Ast do
   """
 
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.State
 
-  @empty_env_info %{requires: [], imports: [], behaviours: []}
+  @empty_env_info %{requires: [], imports: [], behaviours: [], aliases: [], attributes: [], mods_funs: []}
 
   @partials [:def, :defp, :defmodule, :@, :defmacro, :defmacrop, :defoverridable,
   :__ENV__, :__CALLER__, :raise, :if, :unless, :in]
@@ -13,9 +14,7 @@ defmodule ElixirSense.Core.Ast do
   @max_expand_count 30_000
 
   def extract_use_info(use_ast, module, state) do
-
-    %{aliases: aliases} = state
-    current_aliases = aliases |> :lists.reverse |> List.flatten
+    current_aliases = State.current_aliases(state)
     env = Map.merge(__ENV__, %{module: module, function: nil, aliases: current_aliases})
 
     {expanded_ast, _requires} = Macro.prewalk(use_ast, {env, 1}, &do_expand/2)
@@ -80,7 +79,8 @@ defmodule ElixirSense.Core.Ast do
   end
 
   defp do_expand({:require, _, _} = ast, {env, count}) do
-    modules = extract_directive_modules(:require, ast)
+    # TODO is it ok to loose alias_tuples here?
+    {modules, _alias_tuples} = extract_directive_modules(:require, ast)
     new_env = add_requires_to_env(env, modules)
     {ast, {new_env, count}}
   end
@@ -117,23 +117,53 @@ defmodule ElixirSense.Core.Ast do
     {ast, acc}
   end
   defp pre_walk_expanded({:require, _, _} = ast, acc) do
-    modules = extract_directive_modules(:require, ast)
-    {ast, %{acc | requires: (acc.requires ++ modules)}}
+    {modules, alias_tuples} = extract_directive_modules(:require, ast)
+    {ast, %{acc | requires: (acc.requires ++ modules), aliases: (acc.aliases ++ alias_tuples)}}
   end
   defp pre_walk_expanded({:import, _, _} = ast, acc) do
-    modules = extract_directive_modules(:import, ast)
-    {ast, %{acc | imports: (acc.imports ++ modules)}}
+    {modules, alias_tuples} = extract_directive_modules(:import, ast)
+    {ast, %{acc | imports: (acc.imports ++ modules), aliases: (acc.aliases ++ alias_tuples)}}
+  end
+  defp pre_walk_expanded({:alias, _, ast}, acc) do
+    alias_tuples = extract_aliases(ast)
+    {ast, %{acc | aliases: (acc.aliases ++ alias_tuples)}}
   end
   defp pre_walk_expanded({:@, _, [{:behaviour, _, [behaviour]}]} = ast, acc) do
+    # TODO is it needed? no tests cover reach this branch
     {ast, %{acc | behaviours: [behaviour|acc.behaviours]}}
+  end
+  defp pre_walk_expanded({:@, _, [{attribute, _, _}]} = ast, acc) do
+    # TODO is it needed? no tests cover reach this branch
+    {ast, %{acc | attributes: [attribute|acc.attributes]}}
   end
   # Elixir < 1.9
   defp pre_walk_expanded({{:., _, [Module, :put_attribute]}, _, [_module, :behaviour, behaviour | _]} = ast, acc) do
     {ast, %{acc | behaviours: [behaviour|acc.behaviours]}}
   end
+  defp pre_walk_expanded({{:., _, [Module, :put_attribute]}, _, [_module, attribute | _]} = ast, acc) do
+    {ast, %{acc | attributes: [attribute|acc.attributes]}}
+  end
   # Elixir 1.9
   defp pre_walk_expanded({{:., _, [Module, :__put_attribute__]}, _, [_module, :behaviour, behaviour | _]} = ast, acc) do
     {ast, %{acc | behaviours: [behaviour|acc.behaviours]}}
+  end
+  defp pre_walk_expanded({{:., _, [Module, :__put_attribute__]}, _, [_module, attribute | _]} = ast, acc) do
+    {ast, %{acc | attributes: [attribute|acc.attributes]}}
+  end
+  defp pre_walk_expanded({type, _, [{name, _, args}, _]} = ast, acc) when type in [:def, :defp, :defmacro, :defmacrop] and is_list(args) do
+    {ast, %{acc | mods_funs: [{name, args, type}|acc.mods_funs]}}
+  end
+  defp pre_walk_expanded({type, _, [{name, _, _}, _]} = ast, acc) when type in [:def, :defp, :defmacro, :defmacrop] do
+    {ast, %{acc | mods_funs: [{name, [], type}|acc.mods_funs]}}
+  end
+  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, args}, _]}]} = ast, acc) when type in [:defguardp, :defguard] and is_list(args) do
+    {ast, %{acc | mods_funs: [{name, args, type}|acc.mods_funs]}}
+  end
+  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, _}, _]}]} = ast, acc) when type in [:defguardp, :defguard] do
+    {ast, %{acc | mods_funs: [{name, [], type}|acc.mods_funs]}}
+  end
+  defp pre_walk_expanded({{:., _, [:elixir_module, :compile]}, _, [mod| _]} = ast, acc) when is_atom(mod) do
+    {ast, %{acc | mods_funs: [mod|acc.mods_funs]}}
   end
   defp pre_walk_expanded({_name, _meta, _args}, acc) do
     {nil, acc}
@@ -146,27 +176,60 @@ defmodule ElixirSense.Core.Ast do
     case ast do
       # v1.2 notation
       {^directive, _, [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, aliases}]} ->
-        aliases |> Enum.map(fn {:__aliases__, _, mods} ->
+        list = aliases |> Enum.map(fn {:__aliases__, _, mods} ->
           Module.concat(prefix_atoms ++ mods)
         end)
+        {list, []}
       # with options
       {^directive, _, [{_, _, module_atoms = [mod|_]}, _opts]} when is_atom(mod) ->
-        [module_atoms |> Module.concat]
+        {[module_atoms |> Module.concat], []}
       # with options
-      {^directive, _, [module, _opts]} when is_atom(module) ->
-        [module]
+      {^directive, _, [module, opts]} when is_atom(module) ->
+        alias_tuples = case opts |> Keyword.get(:as) do
+          nil -> []
+          alias -> [{alias, module}]
+        end
+        {[module], alias_tuples}
       # with options
       {^directive, _, [{:__aliases__, _, module_parts}, _opts]} ->
-        [module_parts |> Module.concat]
+        # TODO is it needed? no tests cover reach this branch
+        {[module_parts |> Module.concat], []}
       # without options
       {^directive, _, [{:__aliases__, _, module_parts}]} ->
-        [module_parts |> Module.concat]
+        {[module_parts |> Module.concat], []}
       # without options
       {^directive, _, [{:__aliases__, [alias: false, counter: _], module_parts}]} ->
-        [module_parts |> Module.concat]
+        # TODO is it needed? no tests cover reach this branch
+        {[module_parts |> Module.concat], []}
       # without options
-      {^directive, _, [module]} ->
-        [module]
+      {^directive, _, [module]} when is_atom(module) ->
+        {[module], []}
+      {^directive, _, [{{:., _, [prefix, :{}]}, _, suffixes}]} when is_list(suffixes) ->
+        list = for suffix <- suffixes, do: Module.concat(prefix, suffix)
+        {list, []}
     end
   end
+
+  defp extract_aliases([mod, opts]) when is_list(opts) do
+    case Keyword.get(opts, :as) do
+      nil -> extract_aliases([mod])
+      alias -> [{alias, mod}]
+    end
+  end
+
+  defp extract_aliases([mod]) when is_atom(mod) do
+    alias = Module.split(mod) |> Enum.take(-1) |> Module.concat()
+    [{alias, mod}]
+  end
+
+  defp extract_aliases([{{:., _, [prefix, :{}]}, _, suffixes}]) when is_list(suffixes) do
+    for suffix <- suffixes do
+      alias = Module.split(suffix) |> Enum.take(-1) |> Module.concat()
+      mod = Module.concat(prefix, suffix)
+      {alias, mod}
+    end
+  end
+
 end
+
+
