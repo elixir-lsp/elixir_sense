@@ -110,7 +110,7 @@ defmodule ElixirSense.Core.State do
     end
   end
 
-  def add_current_env_to_line(state, line) do
+  def add_current_env_to_line(state, line) when is_integer(line) do
     env = get_current_env(state)
     %{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
   end

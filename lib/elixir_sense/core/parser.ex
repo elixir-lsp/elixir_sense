@@ -15,7 +15,7 @@ defmodule ElixirSense.Core.Parser do
     end
   end
 
-  def parse_string(source, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
+  def parse_string(source, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) when is_integer(cursor_line_number) do
     case string_to_ast(source, if(try_to_fix_parse_error, do: 6, else: 0), cursor_line_number) do
       {:ok, ast, modified_source} ->
         acc = MetadataBuilder.build(ast)
@@ -259,7 +259,7 @@ defmodule ElixirSense.Core.Parser do
     String.length(line) - String.length(trimmed_line)
   end
 
-  defp fix_line_not_found(source, line_number) do
+  defp fix_line_not_found(source, line_number) when is_integer(line_number) do
     source
     |> String.split(["\n", "\r\n"])
     # by replacing a line here we risk introducing a syntax error
