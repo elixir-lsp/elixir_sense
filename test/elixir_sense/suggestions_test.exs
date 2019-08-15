@@ -851,6 +851,22 @@ defmodule ElixirSense.SuggestionsTest do
     assert Enum.any?(list, fn %{type: type} -> type == :field end) == false
   end
 
+  test "suggestion for exception fields" do
+    buffer = """
+    defmodule MyServer do
+      def func do
+        raise ArgumentError, m
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 28)
+
+    assert list == [%{type: :hint, value: ""},
+    %{name: :message, origin: "ArgumentError", type: :field}]
+  end
+
   describe "suggestion for param options" do
 
     test "suggest more than one option" do
