@@ -98,9 +98,9 @@ defmodule ElixirSense.Providers.Suggestion do
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], State.scope, any, %{}, String.t) :: [suggestion]
-  def find(hint, imports, aliases, module, vars, attributes, behaviours, scope, protocol, mods_and_funs, text_before) do
-    case find_struct_fields(hint, text_before, imports, aliases, module) do
+  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], State.scope, any, %{}, %{}, String.t) :: [suggestion]
+  def find(hint, imports, aliases, module, vars, attributes, behaviours, scope, protocol, mods_and_funs, structs,  text_before) do
+    case find_struct_fields(hint, text_before, imports, aliases, module, structs) do
       [] ->
         find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, protocol, mods_and_funs, text_before)
 
@@ -130,16 +130,22 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.uniq_by(&(&1))
   end
 
-  defp find_struct_fields(hint, text_before, imports, aliases, module) do
+  defp find_struct_fields(hint, text_before, imports, aliases, module, structs) do
     with \
       {mod, fields_so_far} <- Source.which_struct(text_before),
       {actual_mod, _}      <- Introspection.actual_mod_fun({mod, nil}, imports, aliases, module),
-      true                 <- Introspection.module_is_struct?(actual_mod)
+      true                 <- Introspection.module_is_struct?(actual_mod) or Map.has_key?(structs, actual_mod)
     do
-      actual_mod
-      |> struct()
-      |> Map.from_struct()
-      |> Map.keys()
+      fields = if Introspection.module_is_struct?(actual_mod) do
+        actual_mod
+        |> struct()
+        |> Map.from_struct()
+        |> Map.keys()
+      else
+        structs[actual_mod] |> elem(1) |> Enum.map(& &1 |> elem(0))
+      end
+
+      fields
       |> Kernel.--(fields_so_far)
       |> Enum.filter(fn field -> String.starts_with?("#{field}", hint)end)
       |> Enum.map(fn field -> %{type: :field, name: field, origin: Introspection.module_to_string(actual_mod)} end)

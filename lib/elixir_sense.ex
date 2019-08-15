@@ -144,10 +144,11 @@ defmodule ElixirSense do
       behaviours: behaviours,
       module: module,
       scope: scope,
-      protocol: protocol
+      protocol: protocol,
+      structs: structs
     } = Metadata.get_env(buffer_file_metadata, line)
 
-    Suggestion.find(hint, [module|imports], aliases, module, vars, attributes, behaviours, scope, protocol, buffer_file_metadata.mods_funs, text_before)
+    Suggestion.find(hint, [module|imports], aliases, module, vars, attributes, behaviours, scope, protocol, buffer_file_metadata.mods_funs, structs, text_before)
   end
 
   @doc """

@@ -839,6 +839,59 @@ defmodule ElixirSense.SuggestionsTest do
     ]
   end
 
+  test "suggestion for metadata struct fields" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        field_2: ""
+      ]
+
+      def func do
+        %MyServer{}
+        %MyServer{field_2: "2",}
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 8, 15)
+
+    assert list == [%{type: :hint, value: ""},
+    %{name: :field_1, origin: "MyServer", type: :field},
+    %{name: :field_2, origin: "MyServer", type: :field}]
+
+    list =
+      ElixirSense.suggestions(buffer, 9, 28)
+
+    assert list == [%{type: :hint, value: ""},
+    %{name: :field_1, origin: "MyServer", type: :field}]
+  end
+
+  test "suggestion for metadata struct fields multiline" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        field_2: ""
+      ]
+
+      def func do
+        %MyServer{
+          field_2: "2",
+
+        }
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 10, 7)
+
+    assert list == [%{type: :hint, value: ""},
+    %{name: :field_1, origin: "MyServer", type: :field}]
+  end
+
   test "no suggestion of fields when the module is not a struct" do
     buffer =
       """
