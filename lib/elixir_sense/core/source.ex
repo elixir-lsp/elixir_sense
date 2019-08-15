@@ -182,7 +182,13 @@ defmodule ElixirSense.Core.Source do
       {grapheme, rest} ->
         {new_pos, new_line, new_col} =
           if grapheme in ["\n", "\r\n"] do
-            {pos + 1, current_line + 1, 1}
+            if current_line == line do
+              # this is the line we're lookin for
+              # but it's shorter than expected
+              {pos, current_line, col}
+            else
+              {pos + 1, current_line + 1, 1}
+            end
           else
             {pos + 1, current_line, current_col + 1}
           end
