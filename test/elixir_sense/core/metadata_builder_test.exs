@@ -1587,7 +1587,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert state.structs == %{MyStruct => {:defstruct, [a_field: nil]}}
   end
 
-  test "find struct fields from attr" do
+  test "find struct fields from expression" do
     state = """
       defmodule MyStruct do
         @fields_1 [a: nil]
@@ -1596,7 +1596,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-      assert state.structs == %{MyStruct => {:defstruct, [a_field: nil]}}
+      # TODO expression is not supported
+      assert state.structs == %{MyStruct => {:defstruct, []}}
   end
 
   test "find exception" do
