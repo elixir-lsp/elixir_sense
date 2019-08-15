@@ -412,6 +412,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
+  defp pre({type, [line: line, column: column], fields} = ast, state) when type in [:defstruct, :defexception] do
+    fields = case fields do
+      [fields] -> if Keyword.keyword?(fields), do: fields, else: []
+      _ -> []
+    end
+
+    state
+    |> add_struct(type, fields)
+    |> result(ast)
+  end
+
   defp pre({call, [line: line, column: column], params} = ast, state) when is_call(call, params) do
     state =
       if !String.starts_with?(to_string(call), "__atom_elixir_marker_") do
