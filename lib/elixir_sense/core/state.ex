@@ -498,7 +498,8 @@ defmodule ElixirSense.Core.State do
     |> Enum.max_by(fn
       {env_line, _} when env_line < line -> env_line
       _ -> 0
-    end, fn -> default_env() end)
+    end, fn -> {0, default_env()} end)
+    |> elem(1)
   end
 
   def default_env(), do: %ElixirSense.Core.State.Env{}
