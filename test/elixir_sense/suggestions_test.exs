@@ -813,6 +813,7 @@ defmodule ElixirSense.SuggestionsTest do
       """
 
     list = ElixirSense.suggestions(buffer, 2, 14)
+    |> Enum.filter(& &1.type in [:field, :hint])
     assert list == [
       %{type: :hint, value: ""},
       %{name: :device, origin: "IO.Stream", type: :field},
@@ -831,6 +832,7 @@ defmodule ElixirSense.SuggestionsTest do
       """
 
     list = ElixirSense.suggestions(buffer, 3, 11)
+    |> Enum.filter(& &1.type in [:field, :hint])
     assert list == [
       %{type: :hint, value: ""},
       %{name: :device, origin: "IO.Stream", type: :field},
@@ -849,13 +851,14 @@ defmodule ElixirSense.SuggestionsTest do
 
       def func do
         %MyServer{}
-        %MyServer{field_2: "2",}
+        %MyServer{field_2: "2", }
       end
     end
     """
 
     list =
       ElixirSense.suggestions(buffer, 8, 15)
+      |> Enum.filter(& &1.type in [:field, :hint])
 
     assert list == [%{type: :hint, value: ""},
     %{name: :field_1, origin: "MyServer", type: :field},
@@ -892,6 +895,53 @@ defmodule ElixirSense.SuggestionsTest do
     %{name: :field_1, origin: "MyServer", type: :field}]
   end
 
+  test "suggestion for vars in struct update" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        some_field: ""
+      ]
+
+      def func(%MyServer{} = some_arg) do
+        %MyServer{so
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 8, 17)
+
+    assert list == [%{type: :hint, value: "so"},
+    %{origin: "MyServer", type: :field, name: :some_field},
+    %{name: :some_arg, type: :variable}]
+  end
+
+  test "suggestion for funcs and vars in struct" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        some_field: ""
+      ]
+
+      def other_func(), do: :ok
+
+      def func(%MyServer{} = some_arg, other_arg) do
+        %MyServer{some_arg |
+          field_1: ot
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 11, 18)
+
+    assert list == [%{type: :hint, value: "other_func"},
+    %{name: :other_arg, type: :variable},
+    %{name: "other_func", type: "function", args: "", arity: 0, origin: "MyServer", spec: nil, summary: ""}]
+  end
+
   test "no suggestion of fields when the module is not a struct" do
     buffer =
       """
@@ -902,22 +952,6 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 2, 9)
     assert Enum.any?(list, fn %{type: type} -> type == :field end) == false
-  end
-
-  test "suggestion for exception fields" do
-    buffer = """
-    defmodule MyServer do
-      def func do
-        raise ArgumentError, m
-      end
-    end
-    """
-
-    list =
-      ElixirSense.suggestions(buffer, 3, 28)
-
-    assert list == [%{type: :hint, value: ""},
-    %{name: :message, origin: "ArgumentError", type: :field}]
   end
 
   describe "suggestion for param options" do
