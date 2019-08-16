@@ -412,7 +412,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre({type, [line: line, column: column], fields} = ast, state) when type in [:defstruct, :defexception] do
+  defp pre({type, _, fields} = ast, state) when type in [:defstruct, :defexception] do
     fields = case fields do
       [fields] -> if Keyword.keyword?(fields), do: fields, else: []
       _ -> []
