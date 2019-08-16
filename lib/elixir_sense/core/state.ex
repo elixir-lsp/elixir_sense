@@ -57,7 +57,7 @@ defmodule ElixirSense.Core.State do
 
   defmodule ModFunInfo do
     @moduledoc false
-    defstruct type: nil, fields: nil
+    defstruct type: nil
   end
 
   def current_aliases(state) do
