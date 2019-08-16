@@ -479,6 +479,20 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_struct(text_before(code, 7, 8)) == nil
       assert which_struct(text_before(code, 8, 9)) == {Mod, [:field1, :field2, :field3]}
     end
+
+    test "nested structs with multiple lines when line shorter than col" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %Mod{
+            field1: %InnerMod{},
+
+          }
+        end
+      end
+      """
+      assert which_struct(text_before(code, 5, 7)) == {Mod, [:field1]}
+    end
   end
 
 end
