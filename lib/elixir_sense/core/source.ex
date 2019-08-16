@@ -106,7 +106,11 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  defp extract_struct_module({:ok, {:%, _, [{:__aliases__, _, module_list}, {:%{},_, fields}]}}) do
+  defp extract_struct_module({:ok, {:%, _, [{:__aliases__, _, module_list}, {:%{}, _, [{:|, _, [_expr, fields]}] }]}}) do
+    fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
+    {Module.concat(module_list), fields_names}
+  end
+  defp extract_struct_module({:ok, {:%, _, [{:__aliases__, _, module_list}, {:%{}, _, fields}]}}) do
     fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
     {Module.concat(module_list), fields_names}
   end

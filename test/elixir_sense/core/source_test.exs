@@ -493,6 +493,21 @@ defmodule ElixirSense.Core.SourceTest do
       """
       assert which_struct(text_before(code, 5, 7)) == {Mod, [:field1]}
     end
+
+    test "struct update syntax" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %Mod{par1 |
+            field1: %InnerMod{},
+
+          }
+        end
+      end
+      """
+      assert which_struct(text_before(code, 3, 23)) == {Mod, []}
+      assert which_struct(text_before(code, 5, 7)) == {Mod, [:field1]}
+    end
   end
 
 end
