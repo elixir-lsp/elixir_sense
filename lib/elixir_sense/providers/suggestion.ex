@@ -43,6 +43,16 @@ defmodule ElixirSense.Providers.Suggestion do
     spec: String.t
   }
 
+  @type protocol_function :: %{
+    type: :protocol_function,
+    name: String.t,
+    arity: non_neg_integer,
+    args: String.t,
+    origin: String.t,
+    summary: String.t,
+    spec: String.t
+  }
+
   @type func :: %{
     type: :function,
     name: String.t,
@@ -89,6 +99,7 @@ defmodule ElixirSense.Providers.Suggestion do
                     | field
                     | return
                     | callback
+                    | protocol_function
                     | func
                     | mod
                     | hint
