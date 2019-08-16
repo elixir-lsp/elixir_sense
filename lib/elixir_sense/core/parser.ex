@@ -259,7 +259,7 @@ defmodule ElixirSense.Core.Parser do
     String.length(line) - String.length(trimmed_line)
   end
 
-  defp fix_line_not_found(source, line_number) do
+  defp fix_line_not_found(source, line_number) when is_integer(line_number) do
     source
     |> String.split(["\n", "\r\n"])
     # by replacing a line here we risk introducing a syntax error

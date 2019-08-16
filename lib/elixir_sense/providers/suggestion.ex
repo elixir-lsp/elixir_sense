@@ -43,6 +43,16 @@ defmodule ElixirSense.Providers.Suggestion do
     spec: String.t
   }
 
+  @type protocol_function :: %{
+    type: :protocol_function,
+    name: String.t,
+    arity: non_neg_integer,
+    args: String.t,
+    origin: String.t,
+    summary: String.t,
+    spec: String.t
+  }
+
   @type func :: %{
     type: :function,
     name: String.t,
@@ -89,6 +99,7 @@ defmodule ElixirSense.Providers.Suggestion do
                     | field
                     | return
                     | callback
+                    | protocol_function
                     | func
                     | mod
                     | hint
@@ -98,14 +109,18 @@ defmodule ElixirSense.Providers.Suggestion do
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], State.scope, any, %{}, String.t) :: [suggestion]
-  def find(hint, imports, aliases, module, vars, attributes, behaviours, scope, protocol, mods_and_funs, text_before) do
-    case find_struct_fields(hint, text_before, imports, aliases, module) do
-      [] ->
+  @spec find(String.t, [module], [{module, module}], module, [String.t], [String.t], [module], State.scope, any, %{}, %{}, String.t) :: [suggestion]
+  def find(hint, imports, aliases, module, vars, attributes, behaviours, scope, protocol, mods_and_funs, structs,  text_before) do
+    case find_struct_fields(hint, text_before, imports, aliases, module, structs) do
+      {[], _} ->
         find_all_except_struct_fields(hint, imports, aliases, vars, attributes, behaviours, scope, module, protocol, mods_and_funs, text_before)
 
-      fields ->
+      {fields, nil} ->
         [%{type: :hint, value: "#{hint}"} | fields]
+      {fields, :maybe_struct_update} ->
+        # TODO refactor hint generation
+        [_hint | rest] = find_mods_funs_vars_attributes(hint, imports, aliases, vars, attributes, module, mods_and_funs)
+        [%{type: :hint, value: "#{hint}"} | fields ++ rest]
     end
   end
 
@@ -130,21 +145,38 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.uniq_by(&(&1))
   end
 
-  defp find_struct_fields(hint, text_before, imports, aliases, module) do
+  defp find_mods_funs_vars_attributes(hint, imports, aliases, vars, attributes, module, mods_and_funs) do
+    vars = Enum.map(vars, fn v -> v.name end)
+    %{hint: hint_suggestion, suggestions: mods_and_funcs} = find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs)
+
+    [hint_suggestion]
+    |> Kernel.++(find_attributes(attributes, hint))
+    |> Kernel.++(find_vars(vars, hint))
+    |> Kernel.++(mods_and_funcs)
+  end
+
+  defp find_struct_fields(hint, text_before, imports, aliases, module, structs) do
     with \
       {mod, fields_so_far} <- Source.which_struct(text_before),
       {actual_mod, _}      <- Introspection.actual_mod_fun({mod, nil}, imports, aliases, module),
-      true                 <- Introspection.module_is_struct?(actual_mod)
+      true                 <- Introspection.module_is_struct?(actual_mod) or Map.has_key?(structs, actual_mod)
     do
-      actual_mod
-      |> struct()
-      |> Map.from_struct()
-      |> Map.keys()
+      fields = if Introspection.module_is_struct?(actual_mod) do
+        actual_mod
+        |> struct()
+        |> Map.from_struct()
+        |> Map.keys()
+      else
+        structs[actual_mod] |> elem(1) |> Enum.map(& &1 |> elem(0))
+      end
+
+      result = fields
       |> Kernel.--(fields_so_far)
       |> Enum.filter(fn field -> String.starts_with?("#{field}", hint)end)
       |> Enum.map(fn field -> %{type: :field, name: field, origin: Introspection.module_to_string(actual_mod)} end)
+      {result, if(fields_so_far == [], do: :maybe_struct_update)}
     else
-      _ -> []
+      _ -> {[], nil}
     end
   end
 

@@ -106,7 +106,11 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  defp extract_struct_module({:ok, {:%, _, [{:__aliases__, _, module_list}, {:%{},_, fields}]}}) do
+  defp extract_struct_module({:ok, {:%, _, [{:__aliases__, _, module_list}, {:%{}, _, [{:|, _, [_expr, fields]}] }]}}) do
+    fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
+    {Module.concat(module_list), fields_names}
+  end
+  defp extract_struct_module({:ok, {:%, _, [{:__aliases__, _, module_list}, {:%{}, _, fields}]}}) do
     fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
     {Module.concat(module_list), fields_names}
   end
@@ -182,7 +186,13 @@ defmodule ElixirSense.Core.Source do
       {grapheme, rest} ->
         {new_pos, new_line, new_col} =
           if grapheme in ["\n", "\r\n"] do
-            {pos + 1, current_line + 1, 1}
+            if current_line == line do
+              # this is the line we're lookin for
+              # but it's shorter than expected
+              {pos, current_line, col}
+            else
+              {pos + 1, current_line + 1, 1}
+            end
           else
             {pos + 1, current_line, current_col + 1}
           end

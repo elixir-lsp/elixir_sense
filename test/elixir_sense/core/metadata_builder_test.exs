@@ -1576,6 +1576,41 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
   end
 
+  test "find struct" do
+    state = """
+      defmodule MyStruct do
+        defstruct [a_field: nil]
+      end
+      """
+      |> string_to_state
+
+      assert state.structs == %{MyStruct => {:defstruct, [a_field: nil]}}
+  end
+
+  test "find struct fields from expression" do
+    state = """
+      defmodule MyStruct do
+        @fields_1 [a: nil]
+        defstruct [a_field: nil] ++ @fields_1
+      end
+      """
+      |> string_to_state
+
+      # TODO expression is not supported
+      assert state.structs == %{MyStruct => {:defstruct, []}}
+  end
+
+  test "find exception" do
+    state = """
+      defmodule MyError do
+        defexception [my_field: nil]
+      end
+      """
+      |> string_to_state
+
+      assert state.structs == %{MyError => {:defexception, [my_field: nil]}}
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true)

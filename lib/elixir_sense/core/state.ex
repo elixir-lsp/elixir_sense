@@ -25,7 +25,8 @@ defmodule ElixirSense.Core.State do
     mods_funs_to_positions: %{},
     mods_funs: %{},
     lines_to_env: %{},
-    calls: %{}
+    calls: %{},
+    structs: %{}
   ]
 
   defmodule Env do
@@ -45,6 +46,7 @@ defmodule ElixirSense.Core.State do
       behaviours: [],
       scope: nil,
       scope_id: nil,
+      structs: %{}
     ]
   end
 
@@ -91,7 +93,8 @@ defmodule ElixirSense.Core.State do
         [] -> nil
         [head|_] -> head
       end),
-      protocol_variants: current_scope_protocols
+      protocol_variants: current_scope_protocols,
+      structs: state.structs
     }
   end
 
@@ -110,7 +113,7 @@ defmodule ElixirSense.Core.State do
     end
   end
 
-  def add_current_env_to_line(state, line) do
+  def add_current_env_to_line(state, line) when is_integer(line) do
     env = get_current_env(state)
     %{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
   end
@@ -123,6 +126,15 @@ defmodule ElixirSense.Core.State do
       end)
 
     %{state | calls: calls}
+  end
+
+  def add_struct(state, type, fields) do
+    structs = get_current_module_variants(state)
+    |> Enum.reduce(state.mods_funs, fn variant, acc ->
+      acc |> Map.put(variant, {type, fields})
+    end)
+
+    %{state | structs: structs}
   end
 
   def get_scope_name(state, line) do
@@ -498,7 +510,8 @@ defmodule ElixirSense.Core.State do
     |> Enum.max_by(fn
       {env_line, _} when env_line < line -> env_line
       _ -> 0
-    end, fn -> default_env() end)
+    end, fn -> {0, default_env()} end)
+    |> elem(1)
   end
 
   def default_env(), do: %ElixirSense.Core.State.Env{}

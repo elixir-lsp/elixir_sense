@@ -813,6 +813,7 @@ defmodule ElixirSense.SuggestionsTest do
       """
 
     list = ElixirSense.suggestions(buffer, 2, 14)
+    |> Enum.filter(& &1.type in [:field, :hint])
     assert list == [
       %{type: :hint, value: ""},
       %{name: :device, origin: "IO.Stream", type: :field},
@@ -831,12 +832,114 @@ defmodule ElixirSense.SuggestionsTest do
       """
 
     list = ElixirSense.suggestions(buffer, 3, 11)
+    |> Enum.filter(& &1.type in [:field, :hint])
     assert list == [
       %{type: :hint, value: ""},
       %{name: :device, origin: "IO.Stream", type: :field},
       %{name: :line_or_bytes, origin: "IO.Stream", type: :field},
       %{name: :raw, origin: "IO.Stream", type: :field}
     ]
+  end
+
+  test "suggestion for metadata struct fields" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        field_2: ""
+      ]
+
+      def func do
+        %MyServer{}
+        %MyServer{field_2: "2", }
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 8, 15)
+      |> Enum.filter(& &1.type in [:field, :hint])
+
+    assert list == [%{type: :hint, value: ""},
+    %{name: :field_1, origin: "MyServer", type: :field},
+    %{name: :field_2, origin: "MyServer", type: :field}]
+
+    list =
+      ElixirSense.suggestions(buffer, 9, 28)
+
+    assert list == [%{type: :hint, value: ""},
+    %{name: :field_1, origin: "MyServer", type: :field}]
+  end
+
+  test "suggestion for metadata struct fields multiline" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        field_2: ""
+      ]
+
+      def func do
+        %MyServer{
+          field_2: "2",
+
+        }
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 10, 7)
+
+    assert list == [%{type: :hint, value: ""},
+    %{name: :field_1, origin: "MyServer", type: :field}]
+  end
+
+  test "suggestion for vars in struct update" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        some_field: ""
+      ]
+
+      def func(%MyServer{} = some_arg) do
+        %MyServer{so
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 8, 17)
+
+    assert list == [%{type: :hint, value: "so"},
+    %{origin: "MyServer", type: :field, name: :some_field},
+    %{name: :some_arg, type: :variable}]
+  end
+
+  test "suggestion for funcs and vars in struct" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        some_field: ""
+      ]
+
+      def other_func(), do: :ok
+
+      def func(%MyServer{} = some_arg, other_arg) do
+        %MyServer{some_arg |
+          field_1: ot
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 11, 18)
+
+    assert list == [%{type: :hint, value: "other_func"},
+    %{name: :other_arg, type: :variable},
+    %{name: "other_func", type: "function", args: "", arity: 0, origin: "MyServer", spec: nil, summary: ""}]
   end
 
   test "no suggestion of fields when the module is not a struct" do
