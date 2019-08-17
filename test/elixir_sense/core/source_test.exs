@@ -446,6 +446,24 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_struct(code) == {ModA.ModB, []}
     end
 
+    test "`__MODULE__` special form" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %__MODULE__{
+      """
+      assert which_struct(code) == {:__MODULE__, []}
+    end
+
+    test "modules atom form" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %:"Elixir.IO.Stream"{
+      """
+      assert which_struct(code) == {IO.Stream, []}
+    end
+
     test "nested structs" do
       code = """
       defmodule MyMod do
