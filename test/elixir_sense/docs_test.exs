@@ -1,8 +1,19 @@
 defmodule ElixirSense.DocsTest do
-
   use ExUnit.Case
 
   describe "docs" do
+    test "config docs" do
+      buffer = """
+      use Mix.Config
+
+      config :logger, :console,
+        format: "$time $metadata[$level] $message\n"
+      """
+
+      # Fails with:
+      # ** (ArgumentError) expected an Elixir module, got: Elixir
+      ElixirSense.docs(buffer, 1, 2)
+    end
 
     test "retrieve documentation" do
       buffer = """
