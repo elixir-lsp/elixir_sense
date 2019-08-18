@@ -1611,6 +1611,83 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert state.structs == %{MyError => {:defexception, [my_field: nil]}}
   end
 
+  test "registers calls no arg no parens" do
+    state = """
+      defmodule NyModule do
+        def func do
+          MyMod.func
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 0, col: 10, func: :func, line: 3, mod: MyMod}]}
+  end
+
+  test "registers calls no arg" do
+    state = """
+      defmodule NyModule do
+        def func do
+          MyMod.func()
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 0, col: 10, func: :func, line: 3, mod: MyMod}]}
+  end
+
+  test "registers calls local no arg no parens" do
+    state = """
+      defmodule NyModule do
+        def func do
+          func_1
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 0, col: 5, func: :func_1, line: 3, mod: nil}]}
+  end
+
+  test "registers calls local no arg" do
+    state = """
+      defmodule NyModule do
+        def func do
+          func_1()
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 0, col: 5, func: :func_1, line: 3, mod: nil}]}
+  end
+
+  test "registers calls local arg" do
+    state = """
+      defmodule NyModule do
+        def func do
+          func_1("a")
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 1, col: 5, func: :func_1, line: 3, mod: nil}]}
+  end
+
+  test "registers calls arg" do
+    state = """
+      defmodule NyModule do
+        def func do
+          MyMod.func("test")
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 1, col: 10, func: :func, line: 3, mod: MyMod}]}
+  end
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true)

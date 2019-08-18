@@ -352,9 +352,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result({:=, meta, [:_, rhs]})
   end
 
-  defp pre({var_or_call, [line: _line, column: _column], context} = ast, state) when is_atom(var_or_call) and context in [nil, Elixir] do
-    state
-    |> add_vars(find_vars(ast), false)
+  defp pre({var_or_call, [line: line, column: column], context} = ast, state) when is_atom(var_or_call) and context in [nil, Elixir] do
+    if Enum.any?(get_current_vars(state), & &1.name == var_or_call) do
+      state
+      |> add_vars(find_vars(ast), false)
+    else
+      # pre Elixir 1.4 local call syntax
+      # TODO remove on Elixir 2.0
+      state
+      |> add_call_to_line({nil, var_or_call, 0}, line, column)
+      |> add_current_env_to_line(line)
+    end
     |> result(ast)
   end
 
@@ -436,8 +444,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre({{:., _, [{:__aliases__, _, mod_path}, call]}, [line: line, column: col], params} = ast, state)
-       when is_call(call, params) do
+  defp pre({{:., _, [{:__aliases__, _, mod_path}, call]}, [line: line, column: col], params} = ast, state) when is_call(call, params) do
     mod = Module.concat(mod_path)
     state
     |> add_call_to_line({mod, call, length(params)}, line, col)
