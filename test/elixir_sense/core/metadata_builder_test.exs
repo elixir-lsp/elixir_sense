@@ -1804,6 +1804,33 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       %{arity: 1, col: 27, func: :other, line: 3, mod: nil},
       ]}
   end
+
+  test "registers calls capture operator external" do
+    state = """
+      defmodule NyModule do
+        def func do
+          &MyMod.func/1
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 1, col: 11, func: :func, line: 3, mod: MyMod}]}
+  end
+
+  test "registers calls capture operator local" do
+    state = """
+      defmodule NyModule do
+        def func do
+          &func/1
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 1, col: 6, func: :func, line: 3, mod: nil}]}
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true)

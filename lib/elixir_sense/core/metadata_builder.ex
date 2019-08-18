@@ -432,9 +432,25 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # transform `a |> b(c)` calls into `b(a, c)`
-  defp pre({:|>, _, [params_1, {call, [line: line, column: column], params_rest}]} = ast, state) do
+  defp pre({:|>, _, [params_1, {call, [line: line, column: column], params_rest}]}, state) do
     params = [params_1 | (params_rest || [])]
     pre({call, [line: line, column: column], params}, state)
+  end
+
+  # transform external and local func capture into fake call
+  defp pre({:&, _, [{:/, _, [fun, arity]}]}, state) when is_integer(arity) do
+    fake_params = if arity == 0 do
+      []
+    else
+      for _ <- 1..arity, do: nil
+    end
+
+    call = case fun do
+      {func, position, nil} -> {func, position, fake_params}
+      {{:., _, [{:__aliases__, _, _}, _]} = ast_part, position, []} -> {ast_part, position, fake_params}
+    end
+
+    pre(call, state)
   end
 
   defp pre({call, [line: line, column: column], params} = ast, state) when is_call(call, params) do
