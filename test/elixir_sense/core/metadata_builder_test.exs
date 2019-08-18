@@ -691,6 +691,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 3) == [{B, A.B}]
   end
 
+  test "aliases defined with v1.2 notation nested" do
+
+    state =
+      """
+      defmodule A do
+        alias Components.{Dialog, Dialog.Footer, Button}
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [{Dialog, Components.Dialog}, {Footer, Components.Dialog.Footer}, {Button, Components.Button}]
+  end
+
   test "aliases without options" do
 
     state =
