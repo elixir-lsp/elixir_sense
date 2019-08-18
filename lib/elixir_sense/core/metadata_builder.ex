@@ -373,7 +373,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp pre({:use, [line: line, column: column], _} = ast, state) do
     # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
     current_module = get_current_module(state)
-    current_module_length = length(Module.split(current_module))
+    current_module_length = case current_module do
+      Elixir -> 0
+      other -> length(Module.split(other))
+    end
     current_module_variants = get_current_module_variants(state)
 
     %{
