@@ -13,7 +13,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   @block_keywords [:do, :else, :rescue, :catch, :after]
   @defs [:def, :defp, :defmacro, :defmacrop, :defdelegate, :defguard, :defguardp]
 
-  defguard is_call(call, params) when is_atom(call) and is_list(params) and call not in [:., :__aliases__, :::, :{}]
+  defguard is_call(call, params) when is_atom(call) and is_list(params) and call not in [:., :__aliases__, :::, :{}, :|>]
 
   @doc """
   Traverses the AST building/retrieving the environment information.
@@ -429,6 +429,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
     |> add_struct(type, fields)
     |> result(ast)
+  end
+
+  # transform `a |> b(c)` calls into `b(a, c)`
+  defp pre({:|>, _, [params_1, {call, [line: line, column: column], params_rest}]} = ast, state) do
+    params = [params_1 | (params_rest || [])]
+    pre({call, [line: line, column: column], params}, state)
   end
 
   defp pre({call, [line: line, column: column], params} = ast, state) when is_call(call, params) do

@@ -1688,6 +1688,122 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert state.calls == %{3 => [%{arity: 1, col: 10, func: :func, line: 3, mod: MyMod}]}
   end
+
+  test "registers calls pipe operator no parens" do
+    state = """
+      defmodule NyModule do
+        def func do
+          "test" |> MyMod.func
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 1, col: 20, func: :func, line: 3, mod: MyMod}]}
+  end
+
+  test "registers calls pipe operator" do
+    state = """
+      defmodule NyModule do
+        def func do
+          "test" |> MyMod.func()
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 1, col: 20, func: :func, line: 3, mod: MyMod}]}
+  end
+
+  test "registers calls pipe operator with arg" do
+    state = """
+      defmodule NyModule do
+        def func do
+          "test" |> MyMod.func("arg")
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 2, col: 20, func: :func, line: 3, mod: MyMod}]}
+  end
+
+  test "registers calls pipe operator local" do
+    state = """
+      defmodule NyModule do
+        def func do
+          "test" |> func("arg")
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 2, col: 15, func: :func, line: 3, mod: nil}]}
+  end
+
+  test "registers calls pipe operator nested external into local" do
+    state = """
+      defmodule NyModule do
+        def func do
+          "test" |> MyMod.func() |> other
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [
+      %{arity: 1, col: 20, func: :func, line: 3, mod: MyMod},
+      %{arity: 1, col: 31, func: :other, line: 3, mod: nil}
+      ]}
+  end
+
+  test "registers calls pipe operator nested external into external" do
+    state = """
+      defmodule NyModule do
+        def func do
+          "test" |> MyMod.func() |> Other.other
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [
+      %{arity: 1, col: 20, func: :func, line: 3, mod: MyMod},
+      %{arity: 1, col: 36, func: :other, line: 3, mod: Other},
+      ]}
+  end
+
+  test "registers calls pipe operator nested local into external" do
+    state = """
+      defmodule NyModule do
+        def func do
+          "test" |> func_1() |> Some.other
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [
+      %{arity: 1, col: 15, func: :func_1, line: 3, mod: nil},
+      %{arity: 1, col: 31, func: :other, line: 3, mod: Some}
+      ]}
+  end
+
+  test "registers calls pipe operator nested local into local" do
+    state = """
+      defmodule NyModule do
+        def func do
+          "test" |> func_1() |> other
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [
+      %{arity: 1, col: 15, func: :func_1, line: 3, mod: nil},
+      %{arity: 1, col: 27, func: :other, line: 3, mod: nil},
+      ]}
+  end
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true)
