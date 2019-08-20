@@ -378,6 +378,7 @@ defmodule ElixirSense.Core.State do
 
   def add_alias(state, {alias, module}) when alias == module, do: state
   def add_alias(state, {alias, aliased}) do
+    alias = Module.split(alias) |> Enum.take(-1) |> Module.concat()
     [aliases_from_scope|inherited_aliases] = state.aliases
     aliases_from_scope = aliases_from_scope |> Enum.reject(& match?({^alias, _}, &1))
     %{state | aliases: [[{alias, expand_alias(state, aliased)}|aliases_from_scope]|inherited_aliases]}
