@@ -13,7 +13,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   @block_keywords [:do, :else, :rescue, :catch, :after]
   @defs [:def, :defp, :defmacro, :defmacrop, :defdelegate, :defguard, :defguardp]
 
-  defguard is_call(call, params) when is_atom(call) and is_list(params) and call not in [:., :__aliases__, :::, :{}]
+  defguard is_call(call, params) when is_atom(call) and is_list(params) and call not in [:., :__aliases__, :::, :{}, :|>]
 
   @doc """
   Traverses the AST building/retrieving the environment information.
@@ -352,9 +352,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result({:=, meta, [:_, rhs]})
   end
 
-  defp pre({var_or_call, [line: _line, column: _column], context} = ast, state) when is_atom(var_or_call) and context in [nil, Elixir] do
-    state
-    |> add_vars(find_vars(ast), false)
+  defp pre({var_or_call, [line: line, column: column], context} = ast, state) when is_atom(var_or_call) and context in [nil, Elixir] do
+    if Enum.any?(get_current_vars(state), & &1.name == var_or_call) do
+      state
+      |> add_vars(find_vars(ast), false)
+    else
+      # pre Elixir 1.4 local call syntax
+      # TODO remove on Elixir 2.0
+      state
+      |> add_call_to_line({nil, var_or_call, 0}, line, column)
+      |> add_current_env_to_line(line)
+    end
     |> result(ast)
   end
 
@@ -426,6 +434,28 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
+  # transform `a |> b(c)` calls into `b(a, c)`
+  defp pre({:|>, _, [params_1, {call, [line: line, column: column], params_rest}]}, state) do
+    params = [params_1 | (params_rest || [])]
+    pre({call, [line: line, column: column], params}, state)
+  end
+
+  # transform external and local func capture into fake call
+  defp pre({:&, _, [{:/, _, [fun, arity]}]}, state) when is_integer(arity) do
+    fake_params = if arity == 0 do
+      []
+    else
+      for _ <- 1..arity, do: nil
+    end
+
+    call = case fun do
+      {func, position, nil} -> {func, position, fake_params}
+      {{:., _, [{:__aliases__, _, _}, _]} = ast_part, position, []} -> {ast_part, position, fake_params}
+    end
+
+    pre(call, state)
+  end
+
   defp pre({call, [line: line, column: column], params} = ast, state) when is_call(call, params) do
     state =
       if !String.starts_with?(to_string(call), "__atom_elixir_marker_") do
@@ -439,8 +469,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre({{:., _, [{:__aliases__, _, mod_path}, call]}, [line: line, column: col], params} = ast, state)
-       when is_call(call, params) do
+  defp pre({{:., _, [{:__aliases__, _, mod_path}, call]}, [line: line, column: col], params} = ast, state) when is_call(call, params) do
     mod = Module.concat(mod_path)
     state
     |> add_call_to_line({mod, call, length(params)}, line, col)
