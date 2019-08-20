@@ -242,7 +242,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
 
     assert reference == %{
              uri: "test/support/modules_with_references.ex",
-             range: %{start: %{line: 70, column: 8}, end: %{line: 70, column: 12}}
+             range: %{start: %{line: 69, column: 15}, end: %{line: 69, column: 19}}
            }
   end
 
