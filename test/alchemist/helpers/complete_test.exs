@@ -8,7 +8,8 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "erlang module completion" do
-    assert expand(':zl') == {:yes, 'ib', [%{name: "zlib", subtype: nil, summary: "", type: :module}]}
+    assert expand(':zl') ==
+             {:yes, 'ib', [%{name: "zlib", subtype: nil, summary: "", type: :module}]}
   end
 
   test "erlang module no completion" do
@@ -18,24 +19,26 @@ defmodule Alchemist.Helpers.CompleteTest do
 
   test "erlang module multiple values completion" do
     {:yes, '', list} = expand(':user')
-    assert list |> Enum.find(& &1.name == "user")
-    assert list |> Enum.find(& &1.name == "user_drv")
+    assert list |> Enum.find(&(&1.name == "user"))
+    assert list |> Enum.find(&(&1.name == "user_drv"))
   end
 
   test "erlang root completion" do
     {:yes, '', list} = expand(':')
     assert is_list(list)
-    assert list |> Enum.find(& &1.name == "lists")
+    assert list |> Enum.find(&(&1.name == "lists"))
   end
 
   test "elixir proxy" do
     {:yes, '', list} = expand('E')
-    assert list |> Enum.find(& &1.name == "Elixir")
+    assert list |> Enum.find(&(&1.name == "Elixir"))
   end
 
   test "elixir completion" do
     assert expand('En') == {:yes, 'um', []}
-    assert {:yes, 'ble', [%{name: "Enumerable", subtype: :protocol, type: :module}]} = expand('Enumera')
+
+    assert {:yes, 'ble', [%{name: "Enumerable", subtype: :protocol, type: :module}]} =
+             expand('Enumera')
   end
 
   test "elixir completion with self" do
@@ -43,20 +46,23 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "elixir completion on modules from load path" do
-    assert {:yes, [], [
-      %{name: "Stream", subtype: :struct, type: :module},
-      %{name: "String", subtype: nil, type: :module},
-      %{name: "StringIO", subtype: nil, type: :module}]} = expand('Str')
-    assert {:yes, '', [
-      %{name: "Macro"},
-      %{name: "Map"},
-      %{name: "MapSet"},
-      %{name: "MatchError"},
-    ]} = expand('Ma')
+    assert {:yes, [],
+            [
+              %{name: "Stream", subtype: :struct, type: :module},
+              %{name: "String", subtype: nil, type: :module},
+              %{name: "StringIO", subtype: nil, type: :module}
+            ]} = expand('Str')
+
+    assert {:yes, '',
+            [
+              %{name: "Macro"},
+              %{name: "Map"},
+              %{name: "MapSet"},
+              %{name: "MatchError"}
+            ]} = expand('Ma')
+
     assert {:yes, 't', [%{name: "Dict"}]} = expand('Dic')
-    assert {:yes, [], [
-      %{name: "ExUnit"},
-      %{name: "Exception"}]} = expand('Ex')
+    assert {:yes, [], [%{name: "ExUnit"}, %{name: "Exception"}]} = expand('Ex')
   end
 
   test "Elixir no completion for underscored functions with no doc" do
@@ -69,6 +75,7 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     File.write!("Elixir.Sample.beam", bytecode)
     assert {:docs_v1, _, _, _, _, _, _} = Code.fetch_docs(Sample)
+
     # IEx version asserts expansion on Sample._ but we also include :__info__ and there is more than 1 match
     assert {:yes, 'ar__', [%{name: "__bar__"}]} = expand('Sample.__b')
   after
@@ -93,7 +100,8 @@ defmodule Alchemist.Helpers.CompleteTest do
       def foobar(), do: 0
     end
 
-    assert {:yes, '', [%{name: "foo"}, %{name: "foobar"}]} = expand('Alchemist.Helpers.CompleteTest.Sample.foo')
+    assert {:yes, '', [%{name: "foo"}, %{name: "foobar"}]} =
+             expand('Alchemist.Helpers.CompleteTest.Sample.foo')
   after
     File.rm("Alchemist.Helpers.CompleteTest.Sample.beam")
     Code.compiler_options(ignore_module_conflict: false)
@@ -103,8 +111,8 @@ defmodule Alchemist.Helpers.CompleteTest do
 
   test "Elixir no completion for default argument functions with doc set to false" do
     {:yes, '', available} = expand('String.')
-    refute Enum.any?(available, & &1.name == "rjust" and &1.arity == 2)
-    assert Enum.any?(available, & &1.name == "replace" and &1.arity == 3)
+    refute Enum.any?(available, &(&1.name == "rjust" and &1.arity == 2))
+    assert Enum.any?(available, &(&1.name == "replace" and &1.arity == 3))
 
     assert expand('String.r') == {:yes, 'e', []}
 
@@ -123,9 +131,11 @@ defmodule Alchemist.Helpers.CompleteTest do
         @doc "bar/0 doc"
         def abar(),
           do: :bar
+
         @doc false
         def abar(a \\ :a, b, c \\ :c, d \\ :d),
           do: {a, b, c, d}
+
         @doc false
         def abar(a, b, c, d, e),
           do: {a, b, c, d, e}
@@ -138,26 +148,31 @@ defmodule Alchemist.Helpers.CompleteTest do
         def abiz(a, b, c \\ :c),
           do: {a, b, c}
       end
+
     File.write!("Elixir.DefaultArgumentFunctions.beam", bytecode)
 
-    assert {:yes, '', [
-      %{name: "abar", arity: 0},
-      %{name: "afoo", arity: 1},
-      %{name: "afoo", arity: 2},
-      %{name: "afoo", arity: 3},
-      %{name: "abiz", arity: 2},
-      %{name: "abiz", arity: 3},
-      ]} = expand('DefaultArgumentFunctions.a')
+    assert {:yes, '',
+            [
+              %{name: "abar", arity: 0},
+              %{name: "afoo", arity: 1},
+              %{name: "afoo", arity: 2},
+              %{name: "afoo", arity: 3},
+              %{name: "abiz", arity: 2},
+              %{name: "abiz", arity: 3}
+            ]} = expand('DefaultArgumentFunctions.a')
 
-    assert {:yes, 'z', [
-      %{name: "abiz", arity: 2},
-      %{name: "abiz", arity: 3}
-      ]} = expand('DefaultArgumentFunctions.abi')
-    assert {:yes, '', [
-      %{name: "afoo", arity: 1},
-      %{name: "afoo", arity: 2},
-      %{name: "afoo", arity: 3}
-      ]} = expand('DefaultArgumentFunctions.afoo')
+    assert {:yes, 'z',
+            [
+              %{name: "abiz", arity: 2},
+              %{name: "abiz", arity: 3}
+            ]} = expand('DefaultArgumentFunctions.abi')
+
+    assert {:yes, '',
+            [
+              %{name: "afoo", arity: 1},
+              %{name: "afoo", arity: 2},
+              %{name: "afoo", arity: 3}
+            ]} = expand('DefaultArgumentFunctions.afoo')
   after
     File.rm("Elixir.DefaultArgumentFunctions.beam")
     :code.purge(DefaultArgumentFunctions)
@@ -190,15 +205,28 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "function completion with arity" do
-    assert {:yes, '', [
-      %{name: "printable?", arity: 1,
-      spec: "@spec printable?(t, 0) :: true\n@spec printable?(t, pos_integer | :infinity) :: boolean",
-      summary: "Checks if a string contains only printable characters up to `character_limit`.",},
-      %{name: "printable?", arity: 2,
-      spec: "@spec printable?(t, 0) :: true\n@spec printable?(t, pos_integer | :infinity) :: boolean",
-     summary: "Checks if a string contains only printable characters up to `character_limit`.",}
-      ]} = expand('String.printable?')
-    assert {:yes, '', [%{name: "printable?", arity: 1}, %{name: "printable?", arity: 2}]} = expand('String.printable?/')
+    assert {:yes, '',
+            [
+              %{
+                name: "printable?",
+                arity: 1,
+                spec:
+                  "@spec printable?(t, 0) :: true\n@spec printable?(t, pos_integer | :infinity) :: boolean",
+                summary:
+                  "Checks if a string contains only printable characters up to `character_limit`."
+              },
+              %{
+                name: "printable?",
+                arity: 2,
+                spec:
+                  "@spec printable?(t, 0) :: true\n@spec printable?(t, pos_integer | :infinity) :: boolean",
+                summary:
+                  "Checks if a string contains only printable characters up to `character_limit`."
+              }
+            ]} = expand('String.printable?')
+
+    assert {:yes, '', [%{name: "printable?", arity: 1}, %{name: "printable?", arity: 2}]} =
+             expand('String.printable?/')
   end
 
   test "macro completion" do
@@ -210,23 +238,37 @@ defmodule Alchemist.Helpers.CompleteTest do
     {:yes, '', list} = expand('')
     assert is_list(list)
 
-    assert list |> Enum.find(& &1.name == "unquote")
+    assert list |> Enum.find(&(&1.name == "unquote"))
     # IEX version asserts IEx.Helpers are imported
     # assert list |> Enum.find(& &1.name == "h")
     # assert list |> Enum.find(& &1.name == "pwd")
   end
 
   test "kernel import completion" do
-    assert {:yes, 'ct', [%{args: "fields", arity: 1, name: "defstruct", origin: "Kernel", spec: "", summary: "Defines a struct.", type: "macro"}]} = expand('defstru')
-    assert {:yes, '', [
-      %{arity: 2, name: "put_in"},
-      %{arity: 3, name: "put_in"},
-      %{arity: 3, name: "put_elem"},
-    ]} = expand('put_')
+    assert {:yes, 'ct',
+            [
+              %{
+                args: "fields",
+                arity: 1,
+                name: "defstruct",
+                origin: "Kernel",
+                spec: "",
+                summary: "Defines a struct.",
+                type: "macro"
+              }
+            ]} = expand('defstru')
+
+    assert {:yes, '',
+            [
+              %{arity: 2, name: "put_in"},
+              %{arity: 3, name: "put_in"},
+              %{arity: 3, name: "put_elem"}
+            ]} = expand('put_')
   end
 
   test "kernel special form completion" do
-    assert {:yes, 'icing', [%{name: "unquote_splicing", origin: "Kernel.SpecialForms"}]} = expand('unquote_spl')
+    assert {:yes, 'icing', [%{name: "unquote_splicing", origin: "Kernel.SpecialForms"}]} =
+             expand('unquote_spl')
   end
 
   test "completion inside expression" do
@@ -239,23 +281,34 @@ defmodule Alchemist.Helpers.CompleteTest do
 
   test "ampersand completion" do
     assert expand('&Enu') == {:yes, 'm', []}
-    assert {:yes, [], [
-      %{name: "all?", arity: 1}, %{name: "all?", arity: 2},
-      %{name: "any?", arity: 1}, %{name: "any?", arity: 2},
-      %{name: "at", arity: 2}, %{name: "at", arity: 3},
-      ]} = expand('&Enum.a')
-    assert {:yes, [], [
-      %{name: "all?", arity: 1}, %{name: "all?", arity: 2},
-      %{name: "any?", arity: 1}, %{name: "any?", arity: 2},
-      %{name: "at", arity: 2}, %{name: "at", arity: 3},
-      ]} = expand('f = &Enum.a')
+
+    assert {:yes, [],
+            [
+              %{name: "all?", arity: 1},
+              %{name: "all?", arity: 2},
+              %{name: "any?", arity: 1},
+              %{name: "any?", arity: 2},
+              %{name: "at", arity: 2},
+              %{name: "at", arity: 3}
+            ]} = expand('&Enum.a')
+
+    assert {:yes, [],
+            [
+              %{name: "all?", arity: 1},
+              %{name: "all?", arity: 2},
+              %{name: "any?", arity: 1},
+              %{name: "any?", arity: 2},
+              %{name: "at", arity: 2},
+              %{name: "at", arity: 3}
+            ]} = expand('f = &Enum.a')
   end
 
   defmodule SublevelTest.LevelA.LevelB do
   end
 
   test "elixir completion sublevel" do
-    assert {:yes, 'LevelA', [%{name: "LevelA"}]} = expand('Alchemist.Helpers.CompleteTest.SublevelTest.')
+    assert {:yes, 'LevelA', [%{name: "LevelA"}]} =
+             expand('Alchemist.Helpers.CompleteTest.SublevelTest.')
   end
 
   defmodule MyServer do
@@ -271,7 +324,9 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'ist', [%{name: "MyList"}]} = expand('MyL', env)
     assert {:yes, '.', [%{name: "MyList"}]} = expand('MyList', env)
-    assert {:yes, [], [%{arity: 1, name: "to_integer"}, %{arity: 2, name: "to_integer"}]} = expand('MyList.to_integer', env)
+
+    assert {:yes, [], [%{arity: 1, name: "to_integer"}, %{arity: 2, name: "to_integer"}]} =
+             expand('MyList.to_integer', env)
   end
 
   test "complete aliases of erlang modules" do
@@ -281,10 +336,13 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'ist', [%{name: "EList"}]} = expand('EL', env)
     assert {:yes, '.', [%{name: "EList"}]} = expand('EList', env)
-    assert {:yes, [], [
-      %{arity: 2, name: "map"},
-      %{arity: 3, name: "mapfoldl"},
-      %{arity: 3, name: "mapfoldr"}]} = expand('EList.map', env)
+
+    assert {:yes, [],
+            [
+              %{arity: 2, name: "map"},
+              %{arity: 3, name: "mapfoldl"},
+              %{arity: 3, name: "mapfoldr"}
+            ]} = expand('EList.map', env)
   end
 
   test "complete local funs from scope module" do
@@ -298,40 +356,50 @@ defmodule Alchemist.Helpers.CompleteTest do
           {:my_macro_pub, 1} => %{type: :defmacro},
           {:my_guard_priv, 1} => %{type: :defguardp},
           {:my_guard_pub, 1} => %{type: :defguard},
-          {:my_delegated, 1} => %{type: :defdelegate},
+          {:my_delegated, 1} => %{type: :defdelegate}
         },
         OtherModule => %{
-          {:my_fun_pub_other, 1} => %{type: :def},
+          {:my_fun_pub_other, 1} => %{type: :def}
         }
       }
     }
 
     assert {:yes, 'un_p', []} = expand('my_f', env)
 
-    assert {:yes, 'iv', [
-      %{name: "my_fun_priv", origin: "MyModule", type: "function"}
-    ]} = expand('my_fun_pr', env)
-    assert {:yes, 'b', [
-      %{name: "my_fun_pub", origin: "MyModule", type: "function"}
-    ]} = expand('my_fun_pu', env)
+    assert {:yes, 'iv',
+            [
+              %{name: "my_fun_priv", origin: "MyModule", type: "function"}
+            ]} = expand('my_fun_pr', env)
 
-    assert {:yes, 'iv', [
-      %{name: "my_macro_priv", origin: "MyModule", type: "macro"}
-    ]} = expand('my_macro_pr', env)
-    assert {:yes, 'b', [
-      %{name: "my_macro_pub", origin: "MyModule", type: "macro"}
-    ]} = expand('my_macro_pu', env)
+    assert {:yes, 'b',
+            [
+              %{name: "my_fun_pub", origin: "MyModule", type: "function"}
+            ]} = expand('my_fun_pu', env)
 
-    assert {:yes, 'iv', [
-      %{name: "my_guard_priv", origin: "MyModule", type: "macro"}
-    ]} = expand('my_guard_pr', env)
-    assert {:yes, 'b', [
-      %{name: "my_guard_pub", origin: "MyModule", type: "macro"}
-    ]} = expand('my_guard_pu', env)
+    assert {:yes, 'iv',
+            [
+              %{name: "my_macro_priv", origin: "MyModule", type: "macro"}
+            ]} = expand('my_macro_pr', env)
 
-    assert {:yes, 'legated', [
-      %{name: "my_delegated", origin: "MyModule", type: "function"}
-    ]} = expand('my_de', env)
+    assert {:yes, 'b',
+            [
+              %{name: "my_macro_pub", origin: "MyModule", type: "macro"}
+            ]} = expand('my_macro_pu', env)
+
+    assert {:yes, 'iv',
+            [
+              %{name: "my_guard_priv", origin: "MyModule", type: "macro"}
+            ]} = expand('my_guard_pr', env)
+
+    assert {:yes, 'b',
+            [
+              %{name: "my_guard_pub", origin: "MyModule", type: "macro"}
+            ]} = expand('my_guard_pu', env)
+
+    assert {:yes, 'legated',
+            [
+              %{name: "my_delegated", origin: "MyModule", type: "function"}
+            ]} = expand('my_de', env)
   end
 
   test "complete remote funs from imported module" do
@@ -341,14 +409,15 @@ defmodule Alchemist.Helpers.CompleteTest do
       mods_and_funs: %{
         OtherModule => %{
           {:my_fun_other_pub, 1} => %{type: :def},
-          {:my_fun_other_priv, 1} => %{type: :defp},
+          {:my_fun_other_priv, 1} => %{type: :defp}
         }
       }
     }
 
-    assert {:yes, 'un_other_pub', [
-      %{name: "my_fun_other_pub", origin: "OtherModule"}
-    ]} = expand('my_f', env)
+    assert {:yes, 'un_other_pub',
+            [
+              %{name: "my_fun_other_pub", origin: "OtherModule"}
+            ]} = expand('my_f', env)
   end
 
   test "complete remote funs" do
@@ -357,14 +426,15 @@ defmodule Alchemist.Helpers.CompleteTest do
       mods_and_funs: %{
         Some.OtherModule => %{
           {:my_fun_other_pub, 1} => %{type: :def},
-          {:my_fun_other_priv, 1} => %{type: :defp},
+          {:my_fun_other_priv, 1} => %{type: :defp}
         }
       }
     }
 
-    assert {:yes, 'un_other_pub', [
-      %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
-    ]} = expand('Some.OtherModule.my_f', env)
+    assert {:yes, 'un_other_pub',
+            [
+              %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+            ]} = expand('Some.OtherModule.my_f', env)
   end
 
   test "complete remote funs froma aliased module" do
@@ -374,14 +444,15 @@ defmodule Alchemist.Helpers.CompleteTest do
       mods_and_funs: %{
         Some.OtherModule => %{
           {:my_fun_other_pub, 1} => %{type: :def},
-          {:my_fun_other_priv, 1} => %{type: :defp},
+          {:my_fun_other_priv, 1} => %{type: :defp}
         }
       }
     }
 
-    assert {:yes, 'un_other_pub', [
-      %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
-    ]} = expand('S.my_f', env)
+    assert {:yes, 'un_other_pub',
+            [
+              %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+            ]} = expand('S.my_f', env)
   end
 
   test "complete modules" do
@@ -402,7 +473,7 @@ defmodule Alchemist.Helpers.CompleteTest do
     defstruct [:my_val]
   end
 
-   test "completion for structs" do
+  test "completion for structs" do
     assert {:yes, 'uct', [%{name: "MyStruct"}]} = expand('%Alchemist.Helpers.CompleteTest.MyStr')
   end
 
@@ -418,16 +489,24 @@ defmodule Alchemist.Helpers.CompleteTest do
     defmacro test(do: expr) do
       expr
     end
+
     def fun, do: :ok
     defguard guard(value) when is_integer(value) and rem(value, 2) == 0
     defdelegate delegated(par), to: OtherModule
   end
 
   test "complete macros and functions from not loaded modules" do
-    assert {:yes, 'st', [%{name: "test", type: "macro"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.te')
-    assert {:yes, 'un', [%{name: "fun", type: "function"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.f')
-    assert {:yes, 'uard', [%{name: "guard", type: "macro"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.g')
-    assert {:yes, 'legated', [%{name: "delegated", type: "function"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.de')
+    assert {:yes, 'st', [%{name: "test", type: "macro"}]} =
+             expand('Alchemist.Helpers.CompleteTest.MyMacro.te')
+
+    assert {:yes, 'un', [%{name: "fun", type: "function"}]} =
+             expand('Alchemist.Helpers.CompleteTest.MyMacro.f')
+
+    assert {:yes, 'uard', [%{name: "guard", type: "macro"}]} =
+             expand('Alchemist.Helpers.CompleteTest.MyMacro.g')
+
+    assert {:yes, 'legated', [%{name: "delegated", type: "function"}]} =
+             expand('Alchemist.Helpers.CompleteTest.MyMacro.de')
   end
 
   test "complete build in functions on non local calls" do
@@ -437,16 +516,21 @@ defmodule Alchemist.Helpers.CompleteTest do
     assert {:no, _, _} = expand('Elixir.mo')
     assert {:no, _, _} = expand('Elixir.__in')
 
-    assert {:yes, 'dule_info', [
-      %{name: "module_info", type: "function", arity: 0},
-      %{name: "module_info", type: "function", arity: 1}
-      ]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.mo')
-    assert {:yes, 'fo__', [%{name: "__info__", type: "function"}]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.__in')
+    assert {:yes, 'dule_info',
+            [
+              %{name: "module_info", type: "function", arity: 0},
+              %{name: "module_info", type: "function", arity: 1}
+            ]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.mo')
 
-    assert {:yes, 'dule_info', [
-      %{name: "module_info", type: "function", arity: 0},
-      %{name: "module_info", type: "function", arity: 1}
-      ]} = expand(':ets.mo')
+    assert {:yes, 'fo__', [%{name: "__info__", type: "function"}]} =
+             expand('Alchemist.Helpers.CompleteTest.MyMacro.__in')
+
+    assert {:yes, 'dule_info',
+            [
+              %{name: "module_info", type: "function", arity: 0},
+              %{name: "module_info", type: "function", arity: 1}
+            ]} = expand(':ets.mo')
+
     assert {:no, _, _} = expand(':ets.__in')
 
     env = %Env{
@@ -460,10 +544,12 @@ defmodule Alchemist.Helpers.CompleteTest do
     assert {:no, _, _} = expand('mo', env)
     assert {:no, _, _} = expand('__in', env)
 
-    assert {:yes, 'dule_info', [
-      %{name: "module_info", type: "function", arity: 0},
-      %{name: "module_info", type: "function", arity: 1}
-      ]} = expand('MyModule.mo', env)
+    assert {:yes, 'dule_info',
+            [
+              %{name: "module_info", type: "function", arity: 0},
+              %{name: "module_info", type: "function", arity: 1}
+            ]} = expand('MyModule.mo', env)
+
     assert {:yes, 'fo__', [%{name: "__info__", type: "function"}]} = expand('MyModule.__in', env)
   end
 end

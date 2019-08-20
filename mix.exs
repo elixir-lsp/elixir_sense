@@ -3,22 +3,29 @@ defmodule ElixirSense.Mixfile do
   use Mix.Project
 
   def project do
-    [app: :elixir_sense,
-     version: "1.0.1",
-     elixir: "~> 1.5",
-     elixirc_paths: elixirc_paths(Mix.env),
-     build_embedded: Mix.env == :prod,
-     start_permanent: Mix.env == :prod,
-     test_coverage: [tool: ExCoveralls],
-     preferred_cli_env: [coveralls: :test, "coveralls.detail": :test, "coveralls.html": :test],
-     dialyzer: [
-       flags: ["-Wunmatched_returns", "-Werror_handling", "-Wrace_conditions", "-Wunderspecs", "-Wno_match"]
-     ],
-     deps: deps(),
-     docs: docs(),
-     description: description(),
-     package: package(),
-   ]
+    [
+      app: :elixir_sense,
+      version: "1.0.1",
+      elixir: "~> 1.5",
+      elixirc_paths: elixirc_paths(Mix.env()),
+      build_embedded: Mix.env() == :prod,
+      start_permanent: Mix.env() == :prod,
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [coveralls: :test, "coveralls.detail": :test, "coveralls.html": :test],
+      dialyzer: [
+        flags: [
+          "-Wunmatched_returns",
+          "-Werror_handling",
+          "-Wrace_conditions",
+          "-Wunderspecs",
+          "-Wno_match"
+        ]
+      ],
+      deps: deps(),
+      docs: docs(),
+      description: description(),
+      package: package()
+    ]
   end
 
   def application do
@@ -26,13 +33,15 @@ defmodule ElixirSense.Mixfile do
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
-  defp elixirc_paths(_),     do: ["lib"]
+  defp elixirc_paths(_), do: ["lib"]
 
   defp deps do
-    [{:excoveralls, "~> 0.6", only: :test},
-     {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false},
-    {:credo, "~> 1.0", only: [:dev]},
-    {:ex_doc, "~> 0.14", only: [:dev]}]
+    [
+      {:excoveralls, "~> 0.6", only: :test},
+      {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false},
+      {:credo, "~> 1.0", only: [:dev]},
+      {:ex_doc, "~> 0.14", only: [:dev]}
+    ]
   end
 
   defp docs do
@@ -51,9 +60,10 @@ defmodule ElixirSense.Mixfile do
   end
 
   defp package do
-    [maintainers: ["Marlus Saraiva (@msaraiva)"],
-     licenses: ["MIT"],
-     links: %{"GitHub" => "https://github.com/msaraiva/elixir_sense"}]
+    [
+      maintainers: ["Marlus Saraiva (@msaraiva)"],
+      licenses: ["MIT"],
+      links: %{"GitHub" => "https://github.com/msaraiva/elixir_sense"}
+    ]
   end
-
 end

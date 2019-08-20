@@ -1,5 +1,4 @@
 defmodule Alchemist.Helpers.ModuleInfo do
-
   @moduledoc false
 
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
@@ -7,25 +6,27 @@ defmodule Alchemist.Helpers.ModuleInfo do
   @builtin_functions [{:__info__, 1}, {:module_info, 0}, {:module_info, 1}]
 
   def moduledoc?(module) do
-    case NormalizedCode.get_docs module, :moduledoc do
-      {_, doc} -> is_binary doc
+    case NormalizedCode.get_docs(module, :moduledoc) do
+      {_, doc} -> is_binary(doc)
       _ -> false
     end
   end
 
   def docs?(module, function) do
-    docs = NormalizedCode.get_docs module, :docs
+    docs = NormalizedCode.get_docs(module, :docs)
     do_docs?(docs, function)
   end
 
   def expand_alias([name | rest] = list, aliases) do
     module = Module.concat(Elixir, name)
+
     aliases
     |> Enum.find_value(list, fn {alias, mod} ->
       if alias === module do
         case Atom.to_string(mod) do
           "Elixir." <> mod ->
-            Module.concat [mod|rest]
+            Module.concat([mod | rest])
+
           _ ->
             mod
         end
@@ -35,23 +36,25 @@ defmodule Alchemist.Helpers.ModuleInfo do
   end
 
   def get_functions(module, hint) do
-    hint        = to_string(hint)
+    hint = to_string(hint)
     {module, _} = Code.eval_string(module)
-    functions   = get_module_funs(module)
+    functions = get_module_funs(module)
 
-    list = Enum.reduce functions, [], fn({f, a}, acc) ->
-      case :lists.keyfind(f, 1, acc) do
-        {f, aa} -> :lists.keyreplace(f, 1, acc, {f, [a|aa]})
-        false -> [{f, [a]}|acc]
-      end
-    end
+    list =
+      Enum.reduce(functions, [], fn {f, a}, acc ->
+        case :lists.keyfind(f, 1, acc) do
+          {f, aa} -> :lists.keyreplace(f, 1, acc, {f, [a | aa]})
+          false -> [{f, [a]} | acc]
+        end
+      end)
+
     list
     |> do_get_functions(hint)
     |> :lists.sort()
   end
 
   def has_function?(module, function) do
-    List.keymember? get_module_funs(module), function, 0
+    List.keymember?(get_module_funs(module), function, 0)
   end
 
   defp do_get_functions(list, "") do
@@ -66,9 +69,10 @@ defmodule Alchemist.Helpers.ModuleInfo do
     case Code.ensure_loaded(module) do
       {:module, _} ->
         (:functions
-        |> module.module_info()
-        |> filter_module_funs)
-        ++ module.__info__(:macros)
+         |> module.module_info()
+         |> filter_module_funs) ++
+          module.__info__(:macros)
+
       _otherwise ->
         []
     end
@@ -77,7 +81,7 @@ defmodule Alchemist.Helpers.ModuleInfo do
   defp filter_module_funs(list) do
     for(
       fun = {f, _a} <- list,
-      !(f |> Atom.to_string |> String.starts_with?(["MACRO-", "-"]))
+      !(f |> Atom.to_string() |> String.starts_with?(["MACRO-", "-"]))
     ) do
       fun
     end
@@ -88,7 +92,8 @@ defmodule Alchemist.Helpers.ModuleInfo do
       for arity <- arities, {fun, arity} not in @builtin_functions do
         {fun, arity}
       end
-    end |> List.flatten
+    end
+    |> List.flatten()
   end
 
   defp all_functions(list, hint) do
@@ -96,25 +101,28 @@ defmodule Alchemist.Helpers.ModuleInfo do
       for arity <- arities, {fun, arity} not in @builtin_functions do
         {fun, arity}
       end
-    end |> List.flatten
+    end
+    |> List.flatten()
   end
 
   def all_applications_modules do
     for [app] <- loaded_applications(),
-    {:ok, modules} = :application.get_key(app, :modules),
-    module <- modules do
+        {:ok, modules} = :application.get_key(app, :modules),
+        module <- modules do
       module
     end
   end
 
-  defp do_docs?([head|tail], function) do
+  defp do_docs?([head | tail], function) do
     {{func, _}, _, _, _, doc} = head
+
     if func == function and is_binary(doc) do
       true
     else
       do_docs?(tail, function)
     end
   end
+
   defp do_docs?([], _function), do: false
   defp do_docs?(nil, _function), do: false
 
@@ -134,5 +142,4 @@ defmodule Alchemist.Helpers.ModuleInfo do
       mod
     end
   end
-
 end

@@ -1,8 +1,10 @@
 defmodule MyMacros do
   defmodule Nested do
   end
+
   defmodule One do
   end
+
   defmodule Two.Three do
   end
 end
@@ -10,8 +12,10 @@ end
 defmodule MyImports do
   defmodule NestedImports do
   end
+
   defmodule OneImports do
   end
+
   defmodule Two.ThreeImports do
   end
 end
@@ -129,6 +133,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
 
       defmodule Nested do
         def public_func_nested_arg(a), do: :ok
+
         defmodule Nested.Child do
           def public_func_nested_child_arg(a), do: :ok
         end

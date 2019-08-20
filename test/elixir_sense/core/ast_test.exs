@@ -1,5 +1,4 @@
 defmodule ElixirSense.Core.AstTest do
-
   use ExUnit.Case
   alias ElixirSense.Core.Ast
 
@@ -13,20 +12,25 @@ defmodule ElixirSense.Core.AstTest do
 
   test "expand_partial cannot expand recursive macros" do
     import ExpandRecursive
+
     result =
       quote do
         my_macro()
-      end |> Ast.expand_partial(__ENV__)
+      end
+      |> Ast.expand_partial(__ENV__)
+
     assert result == {:expand_error, "Cannot expand recursive macro"}
   end
 
   test "expand_all cannot expand recursive macros" do
     import ExpandRecursive
+
     result =
       quote do
         my_macro()
-      end |> Ast.expand_all(__ENV__)
+      end
+      |> Ast.expand_all(__ENV__)
+
     assert result == {:expand_error, "Cannot expand recursive macro"}
   end
-
 end

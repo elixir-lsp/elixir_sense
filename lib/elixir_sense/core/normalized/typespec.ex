@@ -1,11 +1,10 @@
 defmodule ElixirSense.Core.Normalized.Typespec do
-
   def beam_specs(module) do
     specs =
       if Code.ensure_loaded?(Code.Typespec) do
         case Code.Typespec.fetch_specs(module) do
           {:ok, specs} -> specs
-          _            -> []
+          _ -> []
         end
       else
         old_typespec().beam_specs(module)
@@ -18,11 +17,11 @@ defmodule ElixirSense.Core.Normalized.Typespec do
     if Code.ensure_loaded?(Code.Typespec) do
       case Code.Typespec.fetch_types(module) do
         {:ok, types} -> types
-        _            -> []
+        _ -> []
       end
     else
       case old_typespec().beam_types(module) do
-        nil   -> []
+        nil -> []
         types -> types
       end
     end
@@ -60,6 +59,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
   end
 
   defp beam_specs_tag(nil, _), do: nil
+
   defp beam_specs_tag(specs, tag) do
     Enum.map(specs, &{tag, &1})
   end

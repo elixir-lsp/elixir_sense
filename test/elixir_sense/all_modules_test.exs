@@ -1,5 +1,4 @@
 defmodule ElixirSense.Providers.ModulesTest do
-
   use ExUnit.Case
   alias ElixirSense.Providers.Definition
 
@@ -12,5 +11,4 @@ defmodule ElixirSense.Providers.ModulesTest do
     assert "ElixirSense.Providers.Definition" in modules
     assert ":kernel" in modules
   end
-
 end
