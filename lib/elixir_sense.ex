@@ -1,5 +1,4 @@
 defmodule ElixirSense do
-
   @moduledoc """
   ElxirSense is a Elixir library that implements useful features for any editor/tool that needs
   to introspect context-aware information about Elixir source code.
@@ -37,10 +36,15 @@ defmodule ElixirSense do
       iex> types |> String.split("\n") |> Enum.at(0)
       "`@type default :: any"
   """
-  @spec docs(String.t, pos_integer, pos_integer) :: %{subject: String.t, actual_subject: String.t, docs: Introspection.docs}
+  @spec docs(String.t(), pos_integer, pos_integer) :: %{
+          subject: String.t(),
+          actual_subject: String.t(),
+          docs: Introspection.docs()
+        }
   def docs(code, line, column) do
     subject = Source.subject(code, line, column)
     metadata = Parser.parse_string(code, true, true, line)
+
     %State.Env{
       imports: imports,
       aliases: aliases,
@@ -67,15 +71,16 @@ defmodule ElixirSense do
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
       "module_with_functions.ex:6:7"
   """
-  @spec definition(String.t, pos_integer, pos_integer) :: Definition.location
+  @spec definition(String.t(), pos_integer, pos_integer) :: Definition.location()
   def definition(code, line, column) do
     subject = Source.subject(code, line, column)
     buffer_file_metadata = Parser.parse_string(code, true, true, line)
+
     %State.Env{
       imports: imports,
       aliases: aliases,
       module: module,
-      vars: vars,
+      vars: vars
     } = Metadata.get_env(buffer_file_metadata, line)
 
     Definition.find(subject, imports, aliases, module, vars)
@@ -96,7 +101,13 @@ defmodule ElixirSense do
   def all_modules do
     Introspection.all_modules()
     |> Enum.map(&Atom.to_string(&1))
-    |> Enum.map(fn x -> if String.downcase(x) == x do ":" <> x else x end end)
+    |> Enum.map(fn x ->
+      if String.downcase(x) == x do
+        ":" <> x
+      else
+        x
+      end
+    end)
     |> Enum.map(&String.replace_prefix(&1, "Elixir.", ""))
     |> Enum.sort()
   end
@@ -131,11 +142,12 @@ defmodule ElixirSense do
         %{origin: "List", type: "function", args: "list,index,value", arity: 3, name: "insert_at",
         spec: "@spec insert_at(list, integer, any) :: list", summary: "Returns a list with `value` inserted at the specified `index`."}]
   """
-  @spec suggestions(String.t, non_neg_integer, non_neg_integer) :: [Suggestion.suggestion]
+  @spec suggestions(String.t(), non_neg_integer, non_neg_integer) :: [Suggestion.suggestion()]
   def suggestions(buffer, line, column) do
     hint = Source.prefix(buffer, line, column)
     buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
     text_before = Source.text_before(buffer, line, column)
+
     %State.Env{
       imports: imports,
       aliases: aliases,
@@ -148,7 +160,20 @@ defmodule ElixirSense do
       structs: structs
     } = Metadata.get_env(buffer_file_metadata, line)
 
-    Suggestion.find(hint, [module|imports], aliases, module, vars, attributes, behaviours, scope, protocol, buffer_file_metadata.mods_funs, structs, text_before)
+    Suggestion.find(
+      hint,
+      [module | imports],
+      aliases,
+      module,
+      vars,
+      attributes,
+      behaviours,
+      scope,
+      protocol,
+      buffer_file_metadata.mods_funs,
+      structs,
+      text_before
+    )
   end
 
   @doc """
@@ -177,14 +202,15 @@ defmodule ElixirSense do
         ]
       }
   """
-  @spec signature(String.t, pos_integer, pos_integer) :: Signature.signature_info
+  @spec signature(String.t(), pos_integer, pos_integer) :: Signature.signature_info()
   def signature(code, line, column) do
     prefix = Source.text_before(code, line, column)
     buffer_file_metadata = Parser.parse_string(code, true, true, line)
+
     %State.Env{
       imports: imports,
       aliases: aliases,
-      module: module,
+      module: module
     } = Metadata.get_env(buffer_file_metadata, line)
 
     Signature.find(prefix, imports, aliases, module, buffer_file_metadata)
@@ -264,9 +290,10 @@ defmodule ElixirSense do
   ```
 
   """
-  @spec expand_full(String.t, String.t, pos_integer) :: Expand.expanded_code_map
+  @spec expand_full(String.t(), String.t(), pos_integer) :: Expand.expanded_code_map()
   def expand_full(buffer, code, line) do
     buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
+
     %State.Env{
       requires: requires,
       imports: imports,
@@ -279,7 +306,7 @@ defmodule ElixirSense do
   @doc """
   Converts a string to its quoted form.
   """
-  @spec quote(String.t) :: String.t
+  @spec quote(String.t()) :: String.t()
   def quote(code) do
     Eval.quote(code)
   end
@@ -296,7 +323,7 @@ defmodule ElixirSense do
       iex> ElixirSense.match(code)
       "# Bindings\n\nstatus = 404\n\nmessage = \"Not found\"\n\narg1 = 1"
   """
-  @spec match(String.t) :: Eval.bindings
+  @spec match(String.t()) :: Eval.bindings()
   def match(code) do
     Eval.match_and_format(code)
   end
@@ -330,20 +357,21 @@ defmodule ElixirSense do
         }
       ]
   """
-  @spec references(String.t, pos_integer, pos_integer) :: [References.reference_info]
+  @spec references(String.t(), pos_integer, pos_integer) :: [References.reference_info()]
   def references(code, line, column) do
     {subject, {line, col}} = Source.subject_with_position(code, line, column)
 
     buffer_file_metadata = Parser.parse_string(code, true, true, line)
+
     %State.Env{
       imports: imports,
       aliases: aliases,
       module: module,
       scope: scope,
-      scope_id: scope_id,
+      scope_id: scope_id
     } = Metadata.get_env(buffer_file_metadata, line)
 
-    vars = buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values
+    vars = buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values()
     arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
 
     References.find(subject, arity, imports, aliases, module, scope, vars)

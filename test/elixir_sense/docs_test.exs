@@ -1,9 +1,7 @@
 defmodule ElixirSense.DocsTest do
-
   use ExUnit.Case
 
   describe "docs" do
-
     test "retrieve documentation" do
       buffer = """
       defmodule MyModule do
@@ -19,9 +17,10 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "defmodule"
       assert actual_subject == "Kernel.defmodule"
+
       assert docs =~ """
-      Defines a module given by name with the given contents.
-      """
+             Defines a module given by name with the given contents.
+             """
     end
 
     test "retrieve function documentation" do
@@ -41,15 +40,16 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "List.flatten"
       assert actual_subject == "List.flatten"
+
       assert docs =~ """
-      > List.flatten(list)
+             > List.flatten(list)
 
-      ### Specs
+             ### Specs
 
-      `@spec flatten(deep_list) :: list when deep_list: [any | deep_list]`
+             `@spec flatten(deep_list) :: list when deep_list: [any | deep_list]`
 
-      Flattens the given `list` of nested lists.
-      """
+             Flattens the given `list` of nested lists.
+             """
     end
 
     test "retrieve function documentation from aliased modules" do
@@ -68,15 +68,16 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "MyList.flatten"
       assert actual_subject == "List.flatten"
+
       assert docs =~ """
-      > List.flatten(list)
+             > List.flatten(list)
 
-      ### Specs
+             ### Specs
 
-      `@spec flatten(deep_list) :: list when deep_list: [any | deep_list]`
+             `@spec flatten(deep_list) :: list when deep_list: [any | deep_list]`
 
-      Flattens the given `list` of nested lists.
-      """
+             Flattens the given `list` of nested lists.
+             """
     end
 
     test "retrive function documentation from imported modules" do
@@ -95,9 +96,10 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "create_file"
       assert actual_subject == "Mix.Generator.create_file"
+
       assert docs =~ """
-      > Mix.Generator.create_file(path, contents, opts \\\\\\\\ [])
-      """
+             > Mix.Generator.create_file(path, contents, opts \\\\\\\\ [])
+             """
     end
 
     test "request for defmacro" do
@@ -130,17 +132,18 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "GenServer"
       assert actual_subject == "GenServer"
+
       assert docs =~ """
-      > GenServer
+             > GenServer
 
-      A behaviour module for implementing the server of a client-server relation.
+             A behaviour module for implementing the server of a client-server relation.
 
-      A GenServer is a process like any other Elixir process and it can be used
-      to keep state, execute code asynchronously and so on. The advantage of using
-      a generic server process (GenServer) implemented using this module is that it
-      will have a standard set of interface functions and include functionality for
-      tracing and error reporting. It will also fit into a supervision tree.
-      """
+             A GenServer is a process like any other Elixir process and it can be used
+             to keep state, execute code asynchronously and so on. The advantage of using
+             a generic server process (GenServer) implemented using this module is that it
+             will have a standard set of interface functions and include functionality for
+             tracing and error reporting. It will also fit into a supervision tree.
+             """
     end
 
     test "retrieve type information from modules" do
@@ -153,12 +156,13 @@ defmodule ElixirSense.DocsTest do
       %{subject: subject, docs: %{types: docs}} = ElixirSense.docs(buffer, 2, 8)
 
       assert subject == "GenServer"
-      assert docs =~ """
-      `@type from :: {pid, tag :: term}
-      `
 
-      Tuple describing the client of a call request.
-      """
+      assert docs =~ """
+             `@type from :: {pid, tag :: term}
+             `
+
+             Tuple describing the client of a call request.
+             """
     end
 
     test "retrieve callback information from modules" do
@@ -171,16 +175,17 @@ defmodule ElixirSense.DocsTest do
       %{subject: subject, docs: %{callbacks: docs}} = ElixirSense.docs(buffer, 2, 8)
 
       assert subject == "Application"
+
       assert docs =~ """
-      > config_change(changed, new, removed)
+             > config_change(changed, new, removed)
 
-      ### Specs
+             ### Specs
 
-      `@callback config_change(changed, new, removed) :: :ok when changed: keyword, new: keyword, removed: [atom]
-      `
+             `@callback config_change(changed, new, removed) :: :ok when changed: keyword, new: keyword, removed: [atom]
+             `
 
-      Callback invoked after code upgrade\
-      """
+             Callback invoked after code upgrade\
+             """
     end
 
     test "no docs" do
@@ -213,21 +218,22 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "Remote.remote_t"
       assert actual_subject == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t"
+
       assert docs == """
-      Remote type
+             Remote type
 
-      ```
-      @type remote_t() :: atom()
-      ```
+             ```
+             @type remote_t() :: atom()
+             ```
 
-      ---
+             ---
 
-      Remote type with params
+             Remote type with params
 
-      ```
-      @type remote_t(a, b) :: {a, b}
-      ```\
-      """
+             ```
+             @type remote_t(a, b) :: {a, b}
+             ```\
+             """
     end
 
     test "retrieve builtin type documentation" do
@@ -246,25 +252,26 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "keyword"
       assert actual_subject == "keyword"
+
       assert docs == """
-      A keyword list
+             A keyword list
 
-      ```
-      @type keyword() :: [{atom(), any()}]
-      ```
+             ```
+             @type keyword() :: [{atom(), any()}]
+             ```
 
-      ---
+             ---
 
-      A keyword list with values of type `t`
+             A keyword list with values of type `t`
 
-      ```
-      @type keyword(t) :: [{atom(), t}]
-      ```
+             ```
+             @type keyword(t) :: [{atom(), t}]
+             ```
 
-      ---
+             ---
 
-      _* Built-in type_\
-      """
+             _* Built-in type_\
+             """
     end
 
     test "retrieve basic type documentation" do
@@ -283,17 +290,18 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "integer"
       assert actual_subject == "integer"
+
       assert docs == """
-      An integer number
+             An integer number
 
-      ```
-      integer()
-      ```
+             ```
+             integer()
+             ```
 
-      ---
+             ---
 
-      _* Built-in type_\
-      """
+             _* Built-in type_\
+             """
     end
 
     test "retrieve basic and builtin type documentation" do
@@ -312,25 +320,26 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "list"
       assert actual_subject == "list"
+
       assert docs == """
-      A list
+             A list
 
-      ```
-      @type list() :: [any()]
-      ```
+             ```
+             @type list() :: [any()]
+             ```
 
-      ---
+             ---
 
-      Proper list ([]-terminated)
+             Proper list ([]-terminated)
 
-      ```
-      list(t)
-      ```
+             ```
+             list(t)
+             ```
 
-      ---
+             ---
 
-      _* Built-in type_\
-      """
+             _* Built-in type_\
+             """
     end
 
     test "issue #34" do

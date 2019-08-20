@@ -11,15 +11,16 @@ defmodule ElixirSense.Core.ParserTest do
 
     end
     """
+
     assert %Metadata{
-      error: nil,
-      mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 11}]}},
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      },
-      source: "defmodule MyModule" <> _
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 11}]}},
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             },
+             source: "defmodule MyModule" <> _
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with syntax error" do
@@ -29,14 +30,15 @@ defmodule ElixirSense.Core.ParserTest do
       Enum +
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: [], module: MyModule},
-        2 => %Env{imports: [List], module: MyModule},
-        3 => %Env{imports: [List], module: MyModule}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: [], module: MyModule},
+               2 => %Env{imports: [List], module: MyModule},
+               3 => %Env{imports: [List], module: MyModule}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with syntax error (missing param)" do
@@ -46,13 +48,14 @@ defmodule ElixirSense.Core.ParserTest do
       IO.puts(:stderr, )
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing terminator \")\"" do
@@ -62,13 +65,14 @@ defmodule ElixirSense.Core.ParserTest do
       func(
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing terminator \"]\"" do
@@ -78,13 +82,14 @@ defmodule ElixirSense.Core.ParserTest do
       list = [
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing terminator \"}\"" do
@@ -94,13 +99,14 @@ defmodule ElixirSense.Core.ParserTest do
       tuple = {
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing terminator \"\"\"" do
@@ -110,13 +116,14 @@ defmodule ElixirSense.Core.ParserTest do
       var = "
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing terminator \"\'\"" do
@@ -126,13 +133,14 @@ defmodule ElixirSense.Core.ParserTest do
       var = '
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing heredoc terminator" do
@@ -142,13 +150,14 @@ defmodule ElixirSense.Core.ParserTest do
       var = \"\"\"
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing interpolation terminator in \"\"\"" do
@@ -158,13 +167,14 @@ defmodule ElixirSense.Core.ParserTest do
       var = "\#{
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing interpolation terminator in \"\'\"" do
@@ -174,13 +184,14 @@ defmodule ElixirSense.Core.ParserTest do
       var = '\#{
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing interpolation terminator in heredoc" do
@@ -190,13 +201,14 @@ defmodule ElixirSense.Core.ParserTest do
       var = \"\"\"\#{
     end
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing terminator \"end\" attempts to fix it by inserting end at line from error" do
@@ -210,23 +222,23 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{
-          module: MyModule,
-          scope_id: 1,
-        },
-        3 => %Env{
-          module: MyModule,
-          requires: [],
-          scope: :MyModule,
-          scope_id: 4,
-          vars: [
-            %VarInfo{name: :x,}
-          ]
-        }
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{
+                 module: MyModule,
+                 scope_id: 1
+               },
+               3 => %Env{
+                 module: MyModule,
+                 requires: [],
+                 scope: :MyModule,
+                 scope_id: 4,
+                 vars: [
+                   %VarInfo{name: :x}
+                 ]
+               }
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string with missing terminator \"end\" attemtps to insert `end` at correct intendation" do
@@ -234,13 +246,14 @@ defmodule ElixirSense.Core.ParserTest do
     defmodule MyModule do
 
     """
+
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{module: MyModule},
-        2 => %Env{module: MyModule}
-      }
-    } = parse_string(source, true, true, 2)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{module: MyModule},
+               2 => %Env{module: MyModule}
+             }
+           } = parse_string(source, true, true, 2)
 
     source = """
     defmodule MyModule do
@@ -248,21 +261,22 @@ defmodule ElixirSense.Core.ParserTest do
     defmodule MyModule1 do
     end
     """
-    assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{module: MyModule},
-        3 => %Env{module: MyModule1}
-      }
-    } = parse_string(source, true, true, 3)
 
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{module: MyModule},
-        2 => %Env{module: MyModule}
-      }
-    } = parse_string(source, true, true, 2)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{module: MyModule},
+               3 => %Env{module: MyModule1}
+             }
+           } = parse_string(source, true, true, 3)
+
+    assert %Metadata{
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{module: MyModule},
+               2 => %Env{module: MyModule}
+             }
+           } = parse_string(source, true, true, 2)
 
     source = """
     defmodule MyModule do
@@ -272,21 +286,21 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{module: MyModule},
-        2 => %Env{module: MyModule},
-        3 => %Env{module: MyModule.MyModule1}
-      }
-    } = parse_string(source, true, true, 2)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{module: MyModule},
+               2 => %Env{module: MyModule},
+               3 => %Env{module: MyModule.MyModule1}
+             }
+           } = parse_string(source, true, true, 2)
 
     assert %Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{module: MyModule},
-        3 => %Env{module: MyModule.MyModule1}
-      }
-    } = parse_string(source, true, true, 3)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{module: MyModule},
+               3 => %Env{module: MyModule.MyModule1}
+             }
+           } = parse_string(source, true, true, 3)
   end
 
   test "parse_string ignores non existing modules in `use`" do
@@ -297,28 +311,29 @@ defmodule ElixirSense.Core.ParserTest do
 
     end
     """
-    assert %Metadata{
-      error: nil,
-      mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 11}]}},
-      lines_to_env: %{
-        1 => %Env{imports: []},
-        3 => %Env{imports: [List]}
-      },
-      source: "defmodule MyModule" <> _
-    } = parse_string(source, true, true, 4)
 
+    assert %Metadata{
+             error: nil,
+             mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 11}]}},
+             lines_to_env: %{
+               1 => %Env{imports: []},
+               3 => %Env{imports: [List]}
+             },
+             source: "defmodule MyModule" <> _
+           } = parse_string(source, true, true, 4)
   end
 
   test "parse_string with malformed `do` expression" do
     source = """
     defmodule MyModule, do
     """
+
     assert %ElixirSense.Core.Metadata{
-      error: nil,
-      lines_to_env: %{
-        1 => %Env{module: MyModule}
-      },
-    } = parse_string(source, true, true, 1)
+             error: nil,
+             lines_to_env: %{
+               1 => %Env{module: MyModule}
+             }
+           } = parse_string(source, true, true, 1)
   end
 
   test "parse_string with literal strings" do
@@ -334,12 +349,12 @@ defmodule ElixirSense.Core.ParserTest do
     '''
 
     assert %ElixirSense.Core.Metadata{
-      lines_to_env: %{
-        6 => %ElixirSense.Core.State.Env{
-          attributes: [:doc],
-        }
-      }
-    } = parse_string(source, true, true, 6)
+             lines_to_env: %{
+               6 => %ElixirSense.Core.State.Env{
+                 attributes: [:doc]
+               }
+             }
+           } = parse_string(source, true, true, 6)
   end
 
   test "parse_string with literal strings in sigils" do
@@ -355,15 +370,15 @@ defmodule ElixirSense.Core.ParserTest do
     '''
 
     assert %ElixirSense.Core.Metadata{
-      lines_to_env: %{
-        5 => %ElixirSense.Core.State.Env{
-          vars: [
-            %ElixirSense.Core.State.VarInfo{name: :x},
-            %ElixirSense.Core.State.VarInfo{name: :y}
-          ]
-        }
-      }
-    } = parse_string(source, true, true, 5)
+             lines_to_env: %{
+               5 => %ElixirSense.Core.State.Env{
+                 vars: [
+                   %ElixirSense.Core.State.VarInfo{name: :x},
+                   %ElixirSense.Core.State.VarInfo{name: :y}
+                 ]
+               }
+             }
+           } = parse_string(source, true, true, 5)
   end
 
   test "parse struct" do
@@ -378,10 +393,10 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %ElixirSense.Core.Metadata{
-      calls: %{
-        3 => [%{func: :%{}}]
-      }
-    } = parse_string(source, true, true, 4)
+             calls: %{
+               3 => [%{func: :%{}}]
+             }
+           } = parse_string(source, true, true, 4)
   end
 
   test "parse struct with missing terminator" do
@@ -396,10 +411,9 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %ElixirSense.Core.Metadata{
-      calls: %{
-        3 => [%{func: :%{}}]
-      }
-    } = parse_string(source, true, true, 4)
+             calls: %{
+               3 => [%{func: :%{}}]
+             }
+           } = parse_string(source, true, true, 4)
   end
-
 end

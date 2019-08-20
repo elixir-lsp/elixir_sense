@@ -1,5 +1,4 @@
 defmodule ElixirSense.Core.MetadataBuilder do
-
   @moduledoc """
   This module is responsible for building/retrieving environment information from an AST.
   """
@@ -13,7 +12,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
   @block_keywords [:do, :else, :rescue, :catch, :after]
   @defs [:def, :defp, :defmacro, :defmacrop, :defdelegate, :defguard, :defguardp]
 
-  defguard is_call(call, params) when is_atom(call) and is_list(params) and call not in [:., :__aliases__, :::, :{}, :|>]
+  defguard is_call(call, params)
+           when is_atom(call) and is_list(params) and
+                  call not in [:., :__aliases__, :"::", :{}, :|>]
 
   @doc """
   Traverses the AST building/retrieving the environment information.
@@ -189,21 +190,34 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre({:defmodule, _, [{:__aliases__, [line: line, column: column], module}, _]} = ast, state) do
+  defp pre(
+         {:defmodule, _, [{:__aliases__, [line: line, column: column], module}, _]} = ast,
+         state
+       ) do
     pre_module(ast, state, {line, column}, module)
   end
 
-  defp pre({:defprotocol, _, [{:__aliases__, [line: line, column: column], module}, _]} = ast, state) do
+  defp pre(
+         {:defprotocol, _, [{:__aliases__, [line: line, column: column], module}, _]} = ast,
+         state
+       ) do
     pre_module(ast, state, {line, column}, module)
   end
 
-  defp pre({:defimpl, _, [{:__aliases__, [line: line, column: column], protocol}, [for: implementations], _]} = ast, state) do
+  defp pre(
+         {:defimpl, _,
+          [{:__aliases__, [line: line, column: column], protocol}, [for: implementations], _]} =
+           ast,
+         state
+       ) do
     case implementations do
       list when is_list(list) ->
-        modules = list
-        |> Enum.map(fn {:__aliases__, _, implementation} ->
-          implementation
-        end)
+        modules =
+          list
+          |> Enum.map(fn {:__aliases__, _, implementation} ->
+            implementation
+          end)
+
         pre_module(ast, state, {line, column}, {protocol, modules})
 
       {:__aliases__, _, implementation} ->
@@ -211,23 +225,33 @@ defmodule ElixirSense.Core.MetadataBuilder do
     end
   end
 
-  defp pre({def_name, meta, [{:when, _, [head|_]}, body]}, state) when def_name in @defs do
+  defp pre({def_name, meta, [{:when, _, [head | _]}, body]}, state) when def_name in @defs do
     pre({def_name, meta, [head, body]}, state)
   end
 
-  defp pre({def_name, meta, [{name, [line: line, column: column] = meta2, params}, body]}, state) when def_name in @defs and is_atom(name) do
+  defp pre({def_name, meta, [{name, [line: line, column: column] = meta2, params}, body]}, state)
+       when def_name in @defs and is_atom(name) do
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, body]}
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
   end
 
   # defguard and defguardp
-  defp pre({def_name, meta, [{:when, [line: _, column: _],[{name, [line: line, column: column] = meta2, params}, body]}]}, state) when def_name in [:defguard, :defguardp] do
+  defp pre(
+         {def_name, meta,
+          [
+            {:when, [line: _, column: _],
+             [{name, [line: line, column: column] = meta2, params}, body]}
+          ]},
+         state
+       )
+       when def_name in [:defguard, :defguardp] do
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, body]}
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
   end
 
   # protocol function
-  defp pre({def_name, meta, [{name, [line: line, column: column] = meta2, params}]}, state) when def_name == :def do
+  defp pre({def_name, meta, [{name, [line: line, column: column] = meta2, params}]}, state)
+       when def_name == :def do
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, nil]}
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
   end
@@ -236,8 +260,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, state}
   end
 
-  defp pre({:@, [line: line, column: _column], [{:behaviour, _, [{:__aliases__, _, module_atoms}]}]} = ast, state) do
-    module = module_atoms |> Module.concat
+  defp pre(
+         {:@, [line: line, column: _column], [{:behaviour, _, [{:__aliases__, _, module_atoms}]}]} =
+           ast,
+         state
+       ) do
+    module = module_atoms |> Module.concat()
     pre_behaviour(ast, state, line, module)
   end
 
@@ -251,10 +279,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # import with v1.2 notation
-  defp pre({:import, [line: line, column: _column], [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, imports}]} = ast, state) do
-    imports_modules = imports |> Enum.map(fn {:__aliases__, _, mods} ->
-      Module.concat(prefix_atoms ++ mods)
-    end)
+  defp pre(
+         {:import, [line: line, column: _column],
+          [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, imports}]} = ast,
+         state
+       ) do
+    imports_modules =
+      imports
+      |> Enum.map(fn {:__aliases__, _, mods} ->
+        Module.concat(prefix_atoms ++ mods)
+      end)
+
     pre_import(ast, state, line, imports_modules)
   end
 
@@ -264,8 +299,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # import with options
-  defp pre({:import, [line: line, column: _column], [{_, _, module_atoms = [mod|_]}, _opts]} = ast, state) when is_atom(mod) do
-    module = module_atoms |> Module.concat
+  defp pre(
+         {:import, [line: line, column: _column], [{_, _, module_atoms = [mod | _]}, _opts]} =
+           ast,
+         state
+       )
+       when is_atom(mod) do
+    module = module_atoms |> Module.concat()
     pre_import(ast, state, line, module)
   end
 
@@ -275,10 +315,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # require with v1.2 notation
-  defp pre({:require, [line: line, column: _column], [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, requires}]} = ast, state) do
-    requires_modules = requires |> Enum.map(fn {:__aliases__, _, mods} ->
-      Module.concat(prefix_atoms ++ mods)
-    end)
+  defp pre(
+         {:require, [line: line, column: _column],
+          [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, requires}]} = ast,
+         state
+       ) do
+    requires_modules =
+      requires
+      |> Enum.map(fn {:__aliases__, _, mods} ->
+        Module.concat(prefix_atoms ++ mods)
+      end)
+
     pre_require(ast, state, line, requires_modules)
   end
 
@@ -288,48 +335,87 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # require with `as` option
-  defp pre({:require, [line: line, column: _column], [{_, _, module_atoms = [mod|_]}, [as: {:__aliases__, _, alias_atoms = [al|_]}]]} = ast, state) when is_atom(mod) and is_atom(al) do
+  defp pre(
+         {:require, [line: line, column: _column],
+          [{_, _, module_atoms = [mod | _]}, [as: {:__aliases__, _, alias_atoms = [al | _]}]]} =
+           ast,
+         state
+       )
+       when is_atom(mod) and is_atom(al) do
     alias_tuple = {Module.concat(alias_atoms), Module.concat(module_atoms)}
-    module = module_atoms |> Module.concat
+    module = module_atoms |> Module.concat()
     {_, new_state} = pre_alias(ast, state, line, alias_tuple)
     pre_require(ast, new_state, line, module)
   end
 
   # require erlang module with `as` option
-  defp pre({:require, [line: line, column: _column], [mod, [as: {:__aliases__, _, alias_atoms = [al|_]}]]} = ast, state) when is_atom(mod) and is_atom(al) do
+  defp pre(
+         {:require, [line: line, column: _column],
+          [mod, [as: {:__aliases__, _, alias_atoms = [al | _]}]]} = ast,
+         state
+       )
+       when is_atom(mod) and is_atom(al) do
     alias_tuple = {Module.concat(alias_atoms), mod}
     {_, new_state} = pre_alias(ast, state, line, alias_tuple)
     pre_require(ast, new_state, line, mod)
   end
 
   # require with options
-  defp pre({:require, [line: line, column: _column], [{_, _, module_atoms = [mod|_]}, _opts]} = ast, state) when is_atom(mod) do
-    module = module_atoms |> Module.concat
+  defp pre(
+         {:require, [line: line, column: _column], [{_, _, module_atoms = [mod | _]}, _opts]} =
+           ast,
+         state
+       )
+       when is_atom(mod) do
+    module = module_atoms |> Module.concat()
     pre_require(ast, state, line, module)
   end
 
   # alias with v1.2 notation
-  defp pre({:alias, [line: line, column: _column], [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, aliases}]} = ast, state) do
-    aliases_tuples = aliases |> Enum.map(fn {:__aliases__, _, mods} ->
-      {Module.concat(mods), Module.concat(prefix_atoms ++ mods)}
-    end)
+  defp pre(
+         {:alias, [line: line, column: _column],
+          [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, aliases}]} = ast,
+         state
+       ) do
+    aliases_tuples =
+      aliases
+      |> Enum.map(fn {:__aliases__, _, mods} ->
+        {Module.concat(mods), Module.concat(prefix_atoms ++ mods)}
+      end)
+
     pre_alias(ast, state, line, aliases_tuples)
   end
 
   # alias without options
-  defp pre({:alias, [line: line, column: _column], [{:__aliases__, _, module_atoms = [mod|_]}]} = ast, state) when is_atom(mod) do
+  defp pre(
+         {:alias, [line: line, column: _column], [{:__aliases__, _, module_atoms = [mod | _]}]} =
+           ast,
+         state
+       )
+       when is_atom(mod) do
     alias_tuple = {Module.concat([List.last(module_atoms)]), Module.concat(module_atoms)}
     pre_alias(ast, state, line, alias_tuple)
   end
 
   # alias with `as` option
-  defp pre({:alias, [line: line, column: _column], [{_, _, module_atoms = [mod|_]}, [as: {:__aliases__, _, alias_atoms = [al|_]}]]} = ast, state) when is_atom(mod) and is_atom(al) do
+  defp pre(
+         {:alias, [line: line, column: _column],
+          [{_, _, module_atoms = [mod | _]}, [as: {:__aliases__, _, alias_atoms = [al | _]}]]} =
+           ast,
+         state
+       )
+       when is_atom(mod) and is_atom(al) do
     alias_tuple = {Module.concat(alias_atoms), Module.concat(module_atoms)}
     pre_alias(ast, state, line, alias_tuple)
   end
 
   # alias erlang module with `as` option
-  defp pre({:alias, [line: line, column: _column], [mod, [as: {:__aliases__, _, alias_atoms = [al|_]}]]} = ast, state) when is_atom(mod) and is_atom(al) do
+  defp pre(
+         {:alias, [line: line, column: _column],
+          [mod, [as: {:__aliases__, _, alias_atoms = [al | _]}]]} = ast,
+         state
+       )
+       when is_atom(mod) and is_atom(al) do
     alias_tuple = {Module.concat(alias_atoms), mod}
     pre_alias(ast, state, line, alias_tuple)
   end
@@ -352,8 +438,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result({:=, meta, [:_, rhs]})
   end
 
-  defp pre({var_or_call, [line: line, column: column], context} = ast, state) when is_atom(var_or_call) and context in [nil, Elixir] do
-    if Enum.any?(get_current_vars(state), & &1.name == var_or_call) do
+  defp pre({var_or_call, [line: line, column: column], context} = ast, state)
+       when is_atom(var_or_call) and context in [nil, Elixir] do
+    if Enum.any?(get_current_vars(state), &(&1.name == var_or_call)) do
       state
       |> add_vars(find_vars(ast), false)
     else
@@ -373,7 +460,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # Kernel: defmacro use(module, opts \\ [])
-  defp pre({:use, [line: _, column: _], [{param, _, nil}|_]} = ast, state) when is_atom(param) do
+  defp pre({:use, [line: _, column: _], [{param, _, nil} | _]} = ast, state)
+       when is_atom(param) do
     state
     |> result(ast)
   end
@@ -381,10 +469,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp pre({:use, [line: line, column: column], _} = ast, state) do
     # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
     current_module = get_current_module(state)
-    current_module_length = case current_module do
-      Elixir -> 0
-      other -> length(Module.split(other))
-    end
+
+    current_module_length =
+      case current_module do
+        Elixir -> 0
+        other -> length(Module.split(other))
+      end
+
     current_module_variants = get_current_module_variants(state)
 
     %{
@@ -396,27 +487,32 @@ defmodule ElixirSense.Core.MetadataBuilder do
       mods_funs: mods_funs
     } = Ast.extract_use_info(ast, current_module, state)
 
-    state = state
-    |> add_aliases(aliases)
-    |> add_requires(requires)
-    |> add_imports(imports)
-    |> add_behaviours(behaviours)
-    |> add_attributes(attributes)
+    state =
+      state
+      |> add_aliases(aliases)
+      |> add_requires(requires)
+      |> add_imports(imports)
+      |> add_behaviours(behaviours)
+      |> add_attributes(attributes)
 
-    state = Enum.reduce(mods_funs, state, fn
-      {name, args, type}, acc ->
-        acc
-        |> add_func_to_index(name, args, {line, column}, type)
-      module, acc ->
-        submodule_parts = Module.split(module) |> Enum.drop(current_module_length)
-        Enum.reduce(current_module_variants, acc, fn variant, acc_1 ->
-          module = (Module.split(variant) ++ submodule_parts)
-          |> Module.concat
+    state =
+      Enum.reduce(mods_funs, state, fn
+        {name, args, type}, acc ->
+          acc
+          |> add_func_to_index(name, args, {line, column}, type)
 
-          acc_1
-          |> add_module_to_index(module, {line, column})
-        end)
-    end)
+        module, acc ->
+          submodule_parts = Module.split(module) |> Enum.drop(current_module_length)
+
+          Enum.reduce(current_module_variants, acc, fn variant, acc_1 ->
+            module =
+              (Module.split(variant) ++ submodule_parts)
+              |> Module.concat()
+
+            acc_1
+            |> add_module_to_index(module, {line, column})
+          end)
+      end)
 
     state
     |> add_current_env_to_line(line)
@@ -424,10 +520,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre({type, _, fields} = ast, state) when type in [:defstruct, :defexception] do
-    fields = case fields do
-      [fields] -> if Keyword.keyword?(fields), do: fields, else: []
-      _ -> []
-    end
+    fields =
+      case fields do
+        [fields] -> if Keyword.keyword?(fields), do: fields, else: []
+        _ -> []
+      end
 
     state
     |> add_struct(type, fields)
@@ -436,27 +533,33 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   # transform `a |> b(c)` calls into `b(a, c)`
   defp pre({:|>, _, [params_1, {call, [line: line, column: column], params_rest}]}, state) do
-    params = [params_1 | (params_rest || [])]
+    params = [params_1 | params_rest || []]
     pre({call, [line: line, column: column], params}, state)
   end
 
   # transform external and local func capture into fake call
   defp pre({:&, _, [{:/, _, [fun, arity]}]}, state) when is_integer(arity) do
-    fake_params = if arity == 0 do
-      []
-    else
-      for _ <- 1..arity, do: nil
-    end
+    fake_params =
+      if arity == 0 do
+        []
+      else
+        for _ <- 1..arity, do: nil
+      end
 
-    call = case fun do
-      {func, position, nil} -> {func, position, fake_params}
-      {{:., _, [{:__aliases__, _, _}, _]} = ast_part, position, []} -> {ast_part, position, fake_params}
-    end
+    call =
+      case fun do
+        {func, position, nil} ->
+          {func, position, fake_params}
+
+        {{:., _, [{:__aliases__, _, _}, _]} = ast_part, position, []} ->
+          {ast_part, position, fake_params}
+      end
 
     pre(call, state)
   end
 
-  defp pre({call, [line: line, column: column], params} = ast, state) when is_call(call, params) do
+  defp pre({call, [line: line, column: column], params} = ast, state)
+       when is_call(call, params) do
     state =
       if !String.starts_with?(to_string(call), "__atom_elixir_marker_") do
         add_call_to_line(state, {nil, call, length(params)}, line, column)
@@ -469,8 +572,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre({{:., _, [{:__aliases__, _, mod_path}, call]}, [line: line, column: col], params} = ast, state) when is_call(call, params) do
+  defp pre(
+         {{:., _, [{:__aliases__, _, mod_path}, call]}, [line: line, column: col], params} = ast,
+         state
+       )
+       when is_call(call, params) do
     mod = Module.concat(mod_path)
+
     state
     |> add_call_to_line({mod, call, length(params)}, line, col)
     |> add_current_env_to_line(line)
@@ -500,10 +608,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp post({:defimpl, _, [{:__aliases__, _, protocol}, [for: implementations], _]} = ast, state) do
     case implementations do
       list when is_list(list) ->
-        modules = list
-        |> Enum.map(fn {:__aliases__, _, implementation} ->
-          implementation
-        end)
+        modules =
+          list
+          |> Enum.map(fn {:__aliases__, _, implementation} ->
+            implementation
+          end)
+
         post_module(ast, state, {protocol, modules})
 
       {:__aliases__, _, implementation} ->
@@ -511,7 +621,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
     end
   end
 
-  defp post({def_name, [line: _line, column: _column], [{name, _, _params}, _]} = ast, state) when def_name in @defs and is_atom(name) do
+  defp post({def_name, [line: _line, column: _column], [{name, _, _params}, _]} = ast, state)
+       when def_name in @defs and is_atom(name) do
     post_func(ast, state)
   end
 
@@ -532,7 +643,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # String literal
-  defp post({_, [no_call: true, line: line, column: _column], [str]} = ast, state) when is_binary(str) do
+  defp post({_, [no_call: true, line: line, column: _column], [str]} = ast, state)
+       when is_binary(str) do
     post_string_literal(ast, state, line, str)
   end
 
@@ -554,7 +666,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
     vars
   end
 
-  defp match_var({var, [line: line, column: column], context} = ast, vars) when is_atom(var) and context in [nil, Elixir] do
+  defp match_var({var, [line: line, column: column], context} = ast, vars)
+       when is_atom(var) and context in [nil, Elixir] do
     var_info = %VarInfo{name: var, positions: [{line, column}]}
     {ast, [var_info | vars]}
   end
@@ -564,6 +677,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp add_no_call(meta) do
-    [{:no_call, true}|meta]
+    [{:no_call, true} | meta]
   end
 end

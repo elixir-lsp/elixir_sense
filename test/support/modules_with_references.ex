@@ -1,33 +1,33 @@
 defmodule ElixirSense.Providers.ReferencesTest.Modules do
-
   defmodule Callee1 do
     def func() do
-      IO.puts ""
+      IO.puts("")
     end
+
     def func(par1) do
-      IO.puts par1
+      IO.puts(par1)
     end
   end
 
   defmodule Callee2 do
     def func() do
-      IO.puts ""
+      IO.puts("")
     end
   end
 
   defmodule Callee3 do
     def func() do
-      IO.puts ""
+      IO.puts("")
     end
   end
 
   defmodule Callee4 do
     def func_no_arg() do
-      IO.puts ""
+      IO.puts("")
     end
 
     def func_arg(arg) do
-      IO.puts "" <> arg
+      IO.puts("" <> arg)
     end
   end
 
@@ -66,8 +66,7 @@ defmodule ElixirSense.Providers.ReferencesTest.Modules do
     end
 
     def call_on_different_line() do
-      Callee3.
-        func()
+      Callee3.func()
     end
   end
 end

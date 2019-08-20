@@ -10,8 +10,15 @@ defmodule ElixirSense.Core.Parser do
   def parse_file(file, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
     case File.read(file) do
       {:ok, source} ->
-        parse_string(source, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number)
-      error -> error
+        parse_string(
+          source,
+          try_to_fix_parse_error,
+          try_to_fix_line_not_found,
+          cursor_line_number
+        )
+
+      error ->
+        error
     end
   end
 
@@ -19,17 +26,20 @@ defmodule ElixirSense.Core.Parser do
     case string_to_ast(source, if(try_to_fix_parse_error, do: 6, else: 0), cursor_line_number) do
       {:ok, ast, modified_source} ->
         acc = MetadataBuilder.build(ast)
-        if Map.has_key?(acc.lines_to_env, cursor_line_number) or !try_to_fix_line_not_found  do
+
+        if Map.has_key?(acc.lines_to_env, cursor_line_number) or !try_to_fix_line_not_found do
           create_metadata(source, {:ok, acc})
         else
           # IO.puts :stderr, "LINE NOT FOUND"
-          result = case try_fix_line_not_found_by_inserting_marker(modified_source, cursor_line_number) do
-            {:ok, acc} -> acc
-            _ -> fix_line_not_found_by_taking_previous_line(acc, cursor_line_number)
-          end
+          result =
+            case try_fix_line_not_found_by_inserting_marker(modified_source, cursor_line_number) do
+              {:ok, acc} -> acc
+              _ -> fix_line_not_found_by_taking_previous_line(acc, cursor_line_number)
+            end
 
           create_metadata(source, {:ok, result})
         end
+
       {:error, _reason} = error ->
         # IO.puts :stderr, "CAN'T FIX IT"
         # IO.inspect :stderr, reason, []
@@ -45,19 +55,22 @@ defmodule ElixirSense.Core.Parser do
   end
 
   defp try_fix_line_not_found_by_inserting_marker(modified_source, cursor_line_number) do
-    with {:ok, ast, _modified_source} <- modified_source
-    |> fix_line_not_found(cursor_line_number)
-    |> string_to_ast(0, cursor_line_number)
-    do
+    with {:ok, ast, _modified_source} <-
+           modified_source
+           |> fix_line_not_found(cursor_line_number)
+           |> string_to_ast(0, cursor_line_number) do
       acc = MetadataBuilder.build(ast)
       # a line has been inserted, insert a fake lines_to_env
-      fixed_lines_to_env = for {line, env} <- acc.lines_to_env, into: %{}, do: (
-        if line > cursor_line_number do
-          {line - 1, env}
-        else
-          {line , env}
-        end
-      )
+      fixed_lines_to_env =
+        for {line, env} <- acc.lines_to_env,
+            into: %{},
+            do:
+              (if line > cursor_line_number do
+                 {line - 1, env}
+               else
+                 {line, env}
+               end)
+
       acc = %State{acc | lines_to_env: fixed_lines_to_env}
       {:ok, acc}
     end
@@ -69,6 +82,7 @@ defmodule ElixirSense.Core.Parser do
       error: error
     }
   end
+
   defp create_metadata(source, {:ok, acc}) do
     %Metadata{
       source: source,
@@ -84,6 +98,7 @@ defmodule ElixirSense.Core.Parser do
     case Code.string_to_quoted(source, columns: true) do
       {:ok, ast} ->
         {:ok, ast, source}
+
       error ->
         # IO.puts :stderr, "PARSE ERROR"
         # IO.inspect :stderr, error, []
@@ -98,27 +113,41 @@ defmodule ElixirSense.Core.Parser do
     end
   end
 
-  defp fix_parse_error(source, _cursor_line_number, {:error, {line, {"\"" <> <<_::bytes-size(1)>> <> "\" is missing terminator" <> _, _}, _}}) when is_integer(line) do
+  defp fix_parse_error(
+         source,
+         _cursor_line_number,
+         {:error, {line, {"\"" <> <<_::bytes-size(1)>> <> "\" is missing terminator" <> _, _}, _}}
+       )
+       when is_integer(line) do
     source
     |> replace_line_with_marker(line)
   end
 
-  defp fix_parse_error(source, _cursor_line_number, {:error, {line_number, {"unexpected token: ", _text}, "do"}}) do
+  defp fix_parse_error(
+         source,
+         _cursor_line_number,
+         {:error, {line_number, {"unexpected token: ", _text}, "do"}}
+       ) do
     source
     |> String.split(["\n", "\r\n"])
     |> List.update_at(line_number - 1, fn line ->
-       # try to replace token do with do: marker
+      # try to replace token do with do: marker
       line
       |> String.replace("do", "do: " <> marker(line_number), global: false)
     end)
     |> Enum.join("\n")
   end
 
-  defp fix_parse_error(source, cursor_line_number, {:error, {line_number, {"unexpected token: ", text}, token}}) do
-    terminator = case Regex.run(Regex.recompile!(~r/terminator\s\"([^\s\"]+)/), text) do
-      [_, terminator] -> terminator
-      nil -> nil
-    end
+  defp fix_parse_error(
+         source,
+         cursor_line_number,
+         {:error, {line_number, {"unexpected token: ", text}, token}}
+       ) do
+    terminator =
+      case Regex.run(Regex.recompile!(~r/terminator\s\"([^\s\"]+)/), text) do
+        [_, terminator] -> terminator
+        nil -> nil
+      end
 
     if terminator != nil do
       source
@@ -146,21 +175,26 @@ defmodule ElixirSense.Core.Parser do
     end
   end
 
-  defp fix_parse_error(source, _cursor_line_number, {:error, {line_number, "syntax" <> _, terminator_quoted}})
-    when is_integer(line_number) and terminator_quoted in ["'end'", "')'", "']'"] do
-
+  defp fix_parse_error(
+         source,
+         _cursor_line_number,
+         {:error, {line_number, "syntax" <> _, terminator_quoted}}
+       )
+       when is_integer(line_number) and terminator_quoted in ["'end'", "')'", "']'"] do
     terminator = Regex.replace(~r/[\"\']/, terminator_quoted, "")
+
     source
     |> String.split(["\n", "\r\n"])
     |> List.update_at(line_number - 1, fn line ->
-       # try to prepend unexpected terminator with marker
+      # try to prepend unexpected terminator with marker
       line
       |> String.replace(terminator, marker(line_number) <> " " <> terminator, global: false)
     end)
     |> Enum.join("\n")
   end
 
-  defp fix_parse_error(source, _cursor_line_number, {:error, {line, "syntax" <> _, _token}}) when is_integer(line) do
+  defp fix_parse_error(source, _cursor_line_number, {:error, {line, "syntax" <> _, _token}})
+       when is_integer(line) do
     source
     |> replace_line_with_marker(line)
   end
@@ -169,14 +203,20 @@ defmodule ElixirSense.Core.Parser do
     error
   end
 
-  defp fix_parse_error(source, cursor_line_number, {:error, {line_end, text = "missing terminator: " <> _, _} }) do
-    terminator = case Regex.run(Regex.recompile!(~r/terminator:\s([^\s]+)/), text) do
-      [_, terminator] -> terminator
-    end
+  defp fix_parse_error(
+         source,
+         cursor_line_number,
+         {:error, {line_end, text = "missing terminator: " <> _, _}}
+       ) do
+    terminator =
+      case Regex.run(Regex.recompile!(~r/terminator:\s([^\s]+)/), text) do
+        [_, terminator] -> terminator
+      end
 
-    line_start = case Regex.run(Regex.recompile!(~r/line\s(\d+)/), text) do
-      [_, line] -> line |> String.to_integer
-    end
+    line_start =
+      case Regex.run(Regex.recompile!(~r/line\s(\d+)/), text) do
+        [_, line] -> line |> String.to_integer()
+      end
 
     if terminator in ["\"", "\'"] do
       source
@@ -187,34 +227,43 @@ defmodule ElixirSense.Core.Parser do
       end)
       |> Enum.join("\n")
     else
+      compare_mode =
+        case terminator do
+          "\"\"\"" -> :lt
+          _ -> :eq
+        end
 
-      compare_mode = case terminator do
-        "\"\"\"" -> :lt
-        _ -> :eq
-      end
-
-      line_intendations = source
-      |> String.split(["\n", "\r\n"])
-      |> Enum.map(fn line ->
-        line = normalize_intendation(line)
-        {line, get_intendation_level(line)}
-      end)
+      line_intendations =
+        source
+        |> String.split(["\n", "\r\n"])
+        |> Enum.map(fn line ->
+          line = normalize_intendation(line)
+          {line, get_intendation_level(line)}
+        end)
 
       line_intendation_at_start = line_intendations |> Enum.at(line_start - 1) |> elem(1)
 
-      {source, _, missing_end} = line_intendations
-      |> Enum.reduce({[], 1, true}, fn {line, intendation}, {source_acc, current_line, missing_end} ->
-        {modified_lines, missing_end} = cond do
-          current_line <= line_start ->
-            {[line | source_acc], true}
-          missing_end and line != "" and compare_intendation(compare_mode, intendation, line_intendation_at_start) and current_line < line_end ->
-            [previous | rest] = source_acc
-            {[line, previous <> " " <> terminator | rest], false}
-          true ->
-            {[line | source_acc], missing_end}
-        end
-        {modified_lines, current_line + 1, missing_end}
-      end)
+      {source, _, missing_end} =
+        line_intendations
+        |> Enum.reduce({[], 1, true}, fn {line, intendation},
+                                         {source_acc, current_line, missing_end} ->
+          {modified_lines, missing_end} =
+            cond do
+              current_line <= line_start ->
+                {[line | source_acc], true}
+
+              missing_end and line != "" and
+                compare_intendation(compare_mode, intendation, line_intendation_at_start) and
+                  current_line < line_end ->
+                [previous | rest] = source_acc
+                {[line, previous <> " " <> terminator | rest], false}
+
+              true ->
+                {[line | source_acc], missing_end}
+            end
+
+          {modified_lines, current_line + 1, missing_end}
+        end)
 
       if missing_end do
         [last | rest] = source
@@ -222,15 +271,20 @@ defmodule ElixirSense.Core.Parser do
       else
         source
       end
-      |> Enum.reverse
+      |> Enum.reverse()
       |> Enum.join("\n")
     end
   end
 
-  defp fix_parse_error(source, cursor_line_number, {:error, {_line_end, text = "missing interpolation terminator: \"}\"" <> _, _} }) do
-    line_start = case Regex.run(Regex.recompile!(~r/line\s(\d+)/), text) do
-      [_, line] -> line |> String.to_integer
-    end
+  defp fix_parse_error(
+         source,
+         cursor_line_number,
+         {:error, {_line_end, text = "missing interpolation terminator: \"}\"" <> _, _}}
+       ) do
+    line_start =
+      case Regex.run(Regex.recompile!(~r/line\s(\d+)/), text) do
+        [_, line] -> line |> String.to_integer()
+      end
 
     source
     |> String.split(["\n", "\r\n"])
@@ -277,5 +331,4 @@ defmodule ElixirSense.Core.Parser do
   end
 
   defp marker(line_number), do: "(__atom_elixir_marker_#{line_number}__())"
-
 end

@@ -1,5 +1,4 @@
 defmodule ElixirSense.Server.RequestHandler do
-
   @moduledoc """
   Handles all requests received by the TCP Server and maps those requests to ElixirSense API calls.
   """
@@ -22,7 +21,11 @@ defmodule ElixirSense.Server.RequestHandler do
     ElixirSense.suggestions(buffer, line, column)
   end
 
-  def handle_request("expand_full", %{"buffer" => buffer, "selected_code" => selected_code, "line" => line}) do
+  def handle_request("expand_full", %{
+        "buffer" => buffer,
+        "selected_code" => selected_code,
+        "line" => line
+      }) do
     ElixirSense.expand_full(buffer, selected_code, line)
   end
 
@@ -44,13 +47,12 @@ defmodule ElixirSense.Server.RequestHandler do
 
   def handle_request("version", %{}) do
     %{
-      elixir: System.version,
-      otp: System.otp_release
+      elixir: System.version(),
+      otp: System.otp_release()
     }
   end
 
   def handle_request(request, payload) do
-    IO.puts :stderr, "Cannot handle request \"#{request}\". Payload: #{inspect(payload)}"
+    IO.puts(:stderr, "Cannot handle request \"#{request}\". Payload: #{inspect(payload)}")
   end
-
 end

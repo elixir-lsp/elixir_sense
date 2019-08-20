@@ -16,14 +16,14 @@ defmodule ElixirSense.Providers.References do
   @type position :: %{line: pos_integer, column: pos_integer}
 
   @type range :: %{
-    start: position,
-    end: position
-  }
+          start: position,
+          end: position
+        }
 
   @type reference_info :: %{
-    uri: String.t,
-    range: range
-  }
+          uri: String.t(),
+          range: range
+        }
 
   def find(nil, _, _, _, _, _) do
     []
@@ -31,10 +31,12 @@ defmodule ElixirSense.Providers.References do
 
   def find(subject, arity, imports, aliases, module, scope, vars) do
     var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
+
     case var_info do
       %VarInfo{positions: positions} ->
         positions
         |> Enum.map(fn pos -> build_var_location(subject, pos) end)
+
       _ ->
         subject
         |> Source.split_module_and_func(aliases)
@@ -92,10 +94,11 @@ defmodule ElixirSense.Providers.References do
     case File.read(file) do
       {:ok, code} ->
         metadata = Parser.parse_string(code, true, true, line)
+
         %State.Env{
           imports: imports,
           aliases: aliases,
-          module: module,
+          module: module
         } = Metadata.get_env(metadata, line)
 
         calls =
@@ -104,11 +107,13 @@ defmodule ElixirSense.Providers.References do
           |> fix_calls_positions(code)
 
         for call <- calls,
-            found_mod_fun = find_actual_mod_fun(code, call.line, call.col, imports, aliases, module),
+            found_mod_fun =
+              find_actual_mod_fun(code, call.line, call.col, imports, aliases, module),
             found_mod_fun == {mod, func},
             arity == call.arity do
           Map.merge(xref_call, %{column: call.col, line: call.line})
         end
+
       _ ->
         [xref_call]
     end
@@ -160,8 +165,9 @@ defmodule ElixirSense.Providers.References do
       case call do
         %{mod: nil} ->
           call
+
         %{line: line, col: col} ->
-          text_after = Source.text_after(code, line, col+1)
+          text_after = Source.text_after(code, line, col + 1)
           {_rest, line_offset, col_offset} = Source.find_next_word(text_after)
           col_offset = if line_offset == 0, do: col + 1, else: col_offset
 

@@ -1,5 +1,4 @@
 defmodule ElixirSense.Core.TypeInfo do
-
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
@@ -33,7 +32,9 @@ defmodule ElixirSense.Core.TypeInfo do
       {key, value} <- BuiltinTypes.all(),
       type_ast <- [value[:spec]],
       spec <- [format_type_spec_ast(type_ast, :type, line_length: @param_option_spec_line_length)],
-      signature <- [value[:signature] || ElixirSense.Core.TypeAst.extract_signature(type_ast) || "#{key}()"],
+      signature <- [
+        value[:signature] || ElixirSense.Core.TypeAst.extract_signature(type_ast) || "#{key}()"
+      ],
       {name, arity} = extract_name_and_arity.(key),
       doc = value[:doc] || "",
       info = %{name: name, arity: arity, doc: doc, spec: spec, signature: signature},
@@ -64,6 +65,7 @@ defmodule ElixirSense.Core.TypeInfo do
       {_, doc_line, _, _} ->
         {kind, _} = get_type_spec(module, type_name)
         kind_str = "@#{kind}"
+
         {str, index} =
           File.read!(file)
           |> Source.text_after(doc_line, 1)
@@ -74,6 +76,7 @@ defmodule ElixirSense.Core.TypeInfo do
         kind_col = String.split(str, kind_str) |> Enum.at(0) |> String.length()
         col = kind_col + String.length(kind_str) + 2
         {doc_line + index, col}
+
       _ ->
         nil
     end
@@ -85,7 +88,7 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   def spec_ast_to_string(ast) do
-    ast |> Macro.to_string |> String.replace("()", "")
+    ast |> Macro.to_string() |> String.replace("()", "")
   end
 
   def format_type_spec(spec) do
@@ -121,12 +124,16 @@ defmodule ElixirSense.Core.TypeInfo do
     |> to_string()
     |> String.split("\n")
     |> Enum.with_index()
-    |> Enum.map(fn {l, i} when i > 0 -> String.slice(l, (kind_size + 2)..-1); {l, _} -> l end)
+    |> Enum.map(fn
+      {l, i} when i > 0 -> String.slice(l, (kind_size + 2)..-1)
+      {l, _} -> l
+    end)
     |> Enum.join("\n")
   end
 
   def get_type_docs(module, type_name) do
     docs = NormalizedCode.get_docs(module, :type_docs) || []
+
     docs
     |> Enum.filter(fn {{name, _}, _, _, _} -> name == type_name end)
     |> Enum.sort_by(fn {{_, n_args}, _, _, _} -> n_args end)
@@ -140,7 +147,8 @@ defmodule ElixirSense.Core.TypeInfo do
 
   def get_type_doc(module, type, type_n_args) do
     docs = NormalizedCode.get_docs(module, :type_docs) || []
-    Enum.find(docs, fn({{name, n_args}, _, _, _}) ->
+
+    Enum.find(docs, fn {{name, n_args}, _, _, _} ->
       type == name && type_n_args == n_args
     end)
   end
@@ -160,7 +168,8 @@ defmodule ElixirSense.Core.TypeInfo do
     ""
   end
 
-  def get_spec(module, function, arity) when is_atom(module) and is_atom(function) and is_integer(arity) do
+  def get_spec(module, function, arity)
+      when is_atom(module) and is_atom(function) and is_integer(arity) do
     module
     |> get_module_specs()
     |> Map.get({function, arity})
@@ -168,6 +177,7 @@ defmodule ElixirSense.Core.TypeInfo do
 
   def get_function_specs(module, function) when is_atom(module) and is_atom(function) do
     specs = module |> get_module_specs()
+
     for {{f, _}, spec} <- specs, f == function do
       spec
     end
@@ -175,7 +185,9 @@ defmodule ElixirSense.Core.TypeInfo do
 
   def get_module_specs(module) do
     case Typespec.beam_specs(module) do
-      nil   -> %{}
+      nil ->
+        %{}
+
       specs ->
         for {_kind, {{f, a}, _spec}} = spec <- specs, into: %{} do
           {{f, a}, spec}
@@ -185,7 +197,7 @@ defmodule ElixirSense.Core.TypeInfo do
 
   # Workaround since Code.Typespec.typespec_to_quoted/1 is private
   def typespec_to_quoted(type) do
-    {:::, [], [_, quoted]} = Typespec.type_to_quoted({:fake_var, type, []})
+    {:"::", [], [_, quoted]} = Typespec.type_to_quoted({:fake_var, type, []})
     quoted
   end
 
@@ -208,6 +220,7 @@ defmodule ElixirSense.Core.TypeInfo do
     spec_ast = BuiltinTypes.get_builtin_type_spec(name, n_args)
     spec = format_type_spec_ast(spec_ast, :type, line_length: @param_option_spec_line_length)
     doc = BuiltinTypes.get_builtin_type_doc(to_string(name), n_args)
+
     %{
       origin: "",
       type_spec: type_str(type),
@@ -231,7 +244,8 @@ defmodule ElixirSense.Core.TypeInfo do
       origin: inspect(module),
       type_spec: type_spec,
       doc: get_type_doc_desc(module, name, n_args),
-      expanded_spec: expanded_type |> format_type_spec(line_length: @param_option_spec_line_length)
+      expanded_spec:
+        expanded_type |> format_type_spec(line_length: @param_option_spec_line_length)
     }
   end
 
@@ -278,7 +292,7 @@ defmodule ElixirSense.Core.TypeInfo do
     {module, type}
   end
 
-  defp expand_type_spec({:type, _, :list, [_|_]} = type, module) do
+  defp expand_type_spec({:type, _, :list, [_ | _]} = type, module) do
     {module, type}
   end
 
@@ -286,10 +300,14 @@ defmodule ElixirSense.Core.TypeInfo do
     {module, {:not_found, {nil, type, []}}}
   end
 
-  defp expand_type_spec({:remote_type, _, [{:atom, _, remote_mod}, {:atom, _, type_name}, type_args]} = type, _module) do
+  defp expand_type_spec(
+         {:remote_type, _, [{:atom, _, remote_mod}, {:atom, _, type_name}, type_args]} = type,
+         _module
+       ) do
     case get_type_spec(remote_mod, type_name, length(type_args)) do
       nil ->
         {:not_found, type}
+
       type_found ->
         {remote_mod, type_found}
     end
@@ -308,14 +326,18 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   # More than one option (union)
-  defp extract_union_options_name_and_type({mod, {_kind, {_name, {:type, _, :union, options_types}, _}}}) do
+  defp extract_union_options_name_and_type(
+         {mod, {_kind, {_name, {:type, _, :union, options_types}, _}}}
+       ) do
     options_types
     |> Enum.map(&extract_tagged_tuple_name_and_type({mod, &1}))
     |> List.flatten()
   end
 
   # Only one option (not actually a union)
-  defp extract_union_options_name_and_type({mod, {_kind, {_name, {:type, _, :tuple, _} = type, _}}}) do
+  defp extract_union_options_name_and_type(
+         {mod, {_kind, {_name, {:type, _, :tuple, _} = type, _}}}
+       ) do
     extract_tagged_tuple_name_and_type({mod, type})
   end
 
@@ -327,11 +349,13 @@ defmodule ElixirSense.Core.TypeInfo do
     case expand_type_spec(type, mod) do
       {_mod, {_kind, {_name, {:type, _, :union, _}, _}}} = expanded_type ->
         extract_union_options_name_and_type(expanded_type)
-      _ -> []
+
+      _ ->
+        []
     end
   end
 
-  defp extract_type_def_info(_mod, {:type, _, :list, [_|_]}) do
+  defp extract_type_def_info(_mod, {:type, _, :list, [_ | _]}) do
     :inline_list
   end
 
@@ -343,7 +367,10 @@ defmodule ElixirSense.Core.TypeInfo do
     {nil, type_name, 0}
   end
 
-  defp extract_type_def_info(_mod, {:remote_type, _, [{:atom, _, remote_mod}, {:atom, _, name}, args]}) do
+  defp extract_type_def_info(
+         _mod,
+         {:remote_type, _, [{:atom, _, remote_mod}, {:atom, _, name}, args]}
+       ) do
     remote_mod = if remote_mod == :elixir, do: nil, else: remote_mod
     {remote_mod, name, length(args)}
   end
@@ -368,7 +395,9 @@ defmodule ElixirSense.Core.TypeInfo do
     false
   end
 
-  defp extract_params_types({:spec, {_, [{:type, _, :fun, [{:type, _, :product, params_types}, _]}]}}) do
+  defp extract_params_types(
+         {:spec, {_, [{:type, _, :fun, [{:type, _, :product, params_types}, _]}]}}
+       ) do
     params_types
   end
 
@@ -376,16 +405,21 @@ defmodule ElixirSense.Core.TypeInfo do
     {:type, _, :fun, [{:type, _, :product, params}, _]} = type
 
     vars_types =
-      for {:type, _, :constraint, [{:atom, _, :is_subtype}, [{:var, _, var}, var_type]]} <- constraints, into: %{} do
+      for {:type, _, :constraint, [{:atom, _, :is_subtype}, [{:var, _, var}, var_type]]} <-
+            constraints,
+          into: %{} do
         {var, var_type}
       end
 
     Enum.map(params, fn
       {:var, _, name} ->
         vars_types[name]
+
       {:type, l, :list, [{:var, _, name}]} ->
         {:type, l, :list, [vars_types[name]]}
-      type -> type
+
+      type ->
+        type
     end)
   end
 
@@ -393,6 +427,6 @@ defmodule ElixirSense.Core.TypeInfo do
     str
     |> String.trim_leading()
     |> String.split("#{kind} ")
-    |> (&match?([_,_|_], &1)).()
+    |> (&match?([_, _ | _], &1)).()
   end
 end

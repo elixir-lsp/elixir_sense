@@ -1,5 +1,4 @@
 defmodule ElixirSense.Core.Normalized.Code do
-
   @doc """
   Shim to replicate the behavior of `Code.get_docs/2` in Elixir >= 1.7
   """
@@ -25,7 +24,10 @@ defmodule ElixirSense.Core.Normalized.Code do
               end
 
             :docs ->
-              Enum.filter(docs, &match?({_, _, def_type, _, _} when def_type in [:def, :defmacro], &1))
+              Enum.filter(
+                docs,
+                &match?({_, _, def_type, _, _} when def_type in [:def, :defmacro], &1)
+              )
 
             :callback_docs ->
               Enum.filter(
@@ -80,5 +82,4 @@ defmodule ElixirSense.Core.Normalized.Code do
         {{name, arity}, line, kind, docs_en}
     end
   end
-
 end

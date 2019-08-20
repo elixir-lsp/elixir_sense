@@ -9,7 +9,7 @@ defmodule ElixirSense.Server.TCPServer do
   @connection_handler_supervisor ElixirSense.Server.TCPServer.ConnectionHandlerSupervisor
   @default_listen_options [:binary, active: false, reuseaddr: true, packet: 4]
 
-  def start([socket_type: socket_type, port: port, env: env]) do
+  def start(socket_type: socket_type, port: port, env: env) do
     import Supervisor.Spec
 
     children = [
@@ -30,7 +30,7 @@ defmodule ElixirSense.Server.TCPServer do
 
     socket_type
     |> format_output(host, port_or_file, auth_token)
-    |> IO.puts
+    |> IO.puts()
 
     accept(socket, auth_token)
   end
@@ -38,6 +38,7 @@ defmodule ElixirSense.Server.TCPServer do
   defp create_auth_token("tcpip") do
     :base64.encode(:crypto.strong_rand_bytes(64))
   end
+
   defp create_auth_token("unix") do
     nil
   end
@@ -75,36 +76,41 @@ defmodule ElixirSense.Server.TCPServer do
   defp connection_handler(socket, auth_token) do
     case :gen_tcp.recv(socket, 0) do
       {:error, :closed} ->
-        IO.puts :stderr, "Client socket is closed"
+        IO.puts(:stderr, "Client socket is closed")
+
       {:ok, data} ->
         data
         |> process_request(auth_token)
         |> send_response(socket)
+
         connection_handler(socket, auth_token)
     end
   end
 
   defp process_request(data, auth_token) do
-    with \
-      {:ok, decoded_data} <- decode_request_data(data),
-      {:ok, result} <- dispatch_request(decoded_data, auth_token)
-    do
+    with {:ok, decoded_data} <- decode_request_data(data),
+         {:ok, result} <- dispatch_request(decoded_data, auth_token) do
       :erlang.term_to_binary(result)
     else
       {:invalid_request, message} ->
         IO.puts(:stderr, "Server Error: #{message}")
         :erlang.term_to_binary(%{request_id: nil, payload: nil, error: message})
+
       {:error, request_id, message, details} ->
         IO.puts(:stderr, "Server Error: \n" <> message <> "\n" <> details)
         :erlang.term_to_binary(%{request_id: request_id, payload: nil, error: message})
     end
   end
 
-  defp dispatch_request(%{
-    "request_id" => request_id,
-    "auth_token" => req_token,
-    "request" => request,
-    "payload" => payload}, auth_token) do
+  defp dispatch_request(
+         %{
+           "request_id" => request_id,
+           "auth_token" => req_token,
+           "request" => request,
+           "payload" => payload
+         },
+         auth_token
+       ) do
     try do
       result =
         if secure_compare(auth_token, req_token) do
@@ -114,11 +120,12 @@ defmodule ElixirSense.Server.TCPServer do
         else
           %{request_id: request_id, payload: nil, error: "unauthorized"}
         end
+
       {:ok, result}
     rescue
       e ->
         message = Exception.message(e)
-        details = Exception.format_stacktrace(System.stacktrace)
+        details = Exception.format_stacktrace(System.stacktrace())
         {:error, request_id, message, details}
     end
   end
@@ -152,17 +159,21 @@ defmodule ElixirSense.Server.TCPServer do
   defp secure_compare(nil, nil), do: true
   defp secure_compare(a, b) when is_nil(a) or is_nil(b), do: false
   defp secure_compare(a, b) when byte_size(a) != byte_size(b), do: false
+
   defp secure_compare(a, b) when is_binary(a) and is_binary(b) do
     a_list = String.to_charlist(a)
     b_list = String.to_charlist(b)
     secure_compare(a_list, b_list)
   end
+
   defp secure_compare(a, b) when is_list(a) and is_list(b) do
-    res = a
-    |> Enum.zip(b)
-    |> Enum.reduce(0, fn({a_byte, b_byte}, acc) ->
-      acc ||| bxor(a_byte, b_byte)
-    end)
+    res =
+      a
+      |> Enum.zip(b)
+      |> Enum.reduce(0, fn {a_byte, b_byte}, acc ->
+        acc ||| bxor(a_byte, b_byte)
+      end)
+
     res == 0
   end
 end

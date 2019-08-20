@@ -1,5 +1,4 @@
 defmodule ElixirSenseExample.ModuleWithTypespecs do
-
   defmodule Remote do
     @typedoc "Remote type"
     @type remote_t :: atom
@@ -37,28 +36,28 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     @type large_t :: pid | port | (registered_name :: atom) | {registered_name :: atom, node}
 
     @typedoc "Remote type from aliased module"
-    @type remote_aliased_t :: R.remote_t | R.remote_list_t
+    @type remote_aliased_t :: R.remote_t() | R.remote_list_t()
 
     @typedoc "Local keyword-value type"
     @type option_t ::
-      {:local_o, local_t}
-      | {:local_with_params_o, local_t(atom, integer)}
-      | {:union_o, union_t}
-      | {:inline_union_o, :a | :b}
-      | {:list_o, list_t}
-      | {:inline_list_o, [:trace | :log]}
-      | {:basic_o, pid}
-      | {:basic_with_params_o, nonempty_list(atom)}
-      | {:builtin_o, keyword}
-      | {:builtin_with_params_o, keyword(term)}
-      | {:remote_o, Remote.remote_t}
-      | {:remote_with_params_o, Remote.remote_t(atom, integer)}
-      | {:remote_aliased_o, remote_aliased_t}
-      | {:remote_aliased_inline_o, R.remote_t}
-      | {:private_o, private_t}
-      | {:opaque_o, opaque_t}
-      | {:non_existent_o, Remote.non_existent}
-      | {:large_o, large_t}
+            {:local_o, local_t}
+            | {:local_with_params_o, local_t(atom, integer)}
+            | {:union_o, union_t}
+            | {:inline_union_o, :a | :b}
+            | {:list_o, list_t}
+            | {:inline_list_o, [:trace | :log]}
+            | {:basic_o, pid}
+            | {:basic_with_params_o, nonempty_list(atom)}
+            | {:builtin_o, keyword}
+            | {:builtin_with_params_o, keyword(term)}
+            | {:remote_o, Remote.remote_t()}
+            | {:remote_with_params_o, Remote.remote_t(atom, integer)}
+            | {:remote_aliased_o, remote_aliased_t}
+            | {:remote_aliased_inline_o, R.remote_t()}
+            | {:private_o, private_t}
+            | {:opaque_o, opaque_t}
+            | {:non_existent_o, Remote.non_existent()}
+            | {:large_o, large_t}
 
     @typedoc "Extra option"
     @type extra_option_t :: {:option_1, atom} | {:option_2, integer}
@@ -67,7 +66,8 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     @type options_t :: [option_t]
 
     @typedoc "Option | Extra option"
-    @type option_or_extra_option_t :: {:option_1, boolean} | {:option_2, timeout} | Remote.remote_option_t
+    @type option_or_extra_option_t ::
+            {:option_1, boolean} | {:option_2, timeout} | Remote.remote_option_t()
 
     @spec func_with_options(options_t) :: any
     def func_with_options(options) do
@@ -84,7 +84,8 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
       options
     end
 
-    @spec func_with_union_of_options_inline([{:option_1, atom} | {:option_2, integer} | option_t]) :: any
+    @spec func_with_union_of_options_inline([{:option_1, atom} | {:option_2, integer} | option_t]) ::
+            any
     def func_with_union_of_options_inline(options) do
       options
     end
