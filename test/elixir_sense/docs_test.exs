@@ -333,5 +333,15 @@ defmodule ElixirSense.DocsTest do
       """
     end
 
+    test "issue #34" do
+      buffer = """
+      use Mix.Config
+
+      config :logger, :console,
+        format: "$time $metadata[$level] $message\n"
+      """
+
+      %{actual_subject: "Kernel.use"} = ElixirSense.docs(buffer, 1, 2)
+    end
   end
 end
