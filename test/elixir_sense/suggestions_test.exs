@@ -895,6 +895,27 @@ defmodule ElixirSense.SuggestionsTest do
     %{name: :field_1, origin: "MyServer", type: :field}]
   end
 
+  test "suggestion for metadata struct fields when using `__MODULE__`" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        field_2: ""
+      ]
+
+      def func do
+        %__MODULE__{field_2: "2", }
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 8, 31)
+
+    assert list == [%{type: :hint, value: ""},
+    %{name: :field_1, origin: "MyServer", type: :field}]
+  end
+
   test "suggestion for vars in struct update" do
     buffer = """
     defmodule MyServer do

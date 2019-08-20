@@ -106,13 +106,33 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  defp extract_struct_module({:ok, {:%, _, [{:__aliases__, _, module_list}, {:%{}, _, [{:|, _, [_expr, fields]}] }]}}) do
-    fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
-    {Module.concat(module_list), fields_names}
+  defp extract_module({:__aliases__, _, module_list}) do
+    {:ok, Module.concat(module_list)}
   end
-  defp extract_struct_module({:ok, {:%, _, [{:__aliases__, _, module_list}, {:%{}, _, fields}]}}) do
-    fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
-    {Module.concat(module_list), fields_names}
+  defp extract_module({:__MODULE__, _, nil}) do
+    {:ok, :__MODULE__}
+  end
+  defp extract_module(module) when is_atom(module) do
+    {:ok, module}
+  end
+  defp extract_module(_) do
+    :error
+  end
+
+  defp do_extract_struct_module(module, fields) do
+    with {:ok, extracted_module} <- extract_module(module) do
+      fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
+      {extracted_module, fields_names}
+    else
+      _ -> nil
+    end
+  end
+
+  defp extract_struct_module({:ok, {:%, _, [module, {:%{}, _, [{:|, _, [_expr, fields]}] }]}}) do
+    do_extract_struct_module(module, fields)
+  end
+  defp extract_struct_module({:ok, {:%, _, [module, {:%{}, _, fields}]}}) do
+    do_extract_struct_module(module, fields)
   end
   defp extract_struct_module(_) do
     nil

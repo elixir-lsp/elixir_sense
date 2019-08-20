@@ -155,10 +155,13 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Kernel.++(mods_and_funcs)
   end
 
+  defp expand_current_module(:__MODULE__, current_module), do: current_module
+  defp expand_current_module(module, _current_module), do: module
+
   defp find_struct_fields(hint, text_before, imports, aliases, module, structs) do
     with \
       {mod, fields_so_far} <- Source.which_struct(text_before),
-      {actual_mod, _}      <- Introspection.actual_mod_fun({mod, nil}, imports, aliases, module),
+      {actual_mod, _}      <- Introspection.actual_mod_fun({expand_current_module(mod, module), nil}, imports, aliases, module),
       true                 <- Introspection.module_is_struct?(actual_mod) or Map.has_key?(structs, actual_mod)
     do
       fields = if Introspection.module_is_struct?(actual_mod) do
