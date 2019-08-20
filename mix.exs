@@ -36,7 +36,10 @@ defmodule ElixirSense.Mixfile do
   end
 
   defp docs do
-    [main: "ElixirSense"]
+    [
+      main: "ElixirSense",
+      nest_modules_by_prefix: [ElixirSense.Core, ElixirSense.Providers, ElixirSense.Server]
+    ]
   end
 
   defp description do
