@@ -3,6 +3,42 @@ defmodule ElixirSense.Providers.ReferencesTest do
 
   # doctest References
 
+  test "references function success" do
+    buffer = """
+    defmodule B.Callee do
+      def fun() do
+        :ok
+      end
+
+      def my_fun() do
+           ^
+        :ok
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 6, 7)
+    assert references != []
+  end
+
+  test "references function failure" do
+    buffer = """
+    defmodule B.Callee do
+      def fun() do
+           ^
+        :ok
+      end
+
+      def my_fun() do
+        :ok
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 2, 7)
+    assert references != []
+  end
+
   test "find references with cursor over a function call" do
     buffer = """
     defmodule Caller do
