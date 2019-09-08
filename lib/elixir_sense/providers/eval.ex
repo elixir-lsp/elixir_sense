@@ -53,7 +53,7 @@ defmodule ElixirSense.Providers.Eval do
   Evaluate a pattern matching expression using `ElixirSense.Providers.Eval.match/1`
   and format the results.
   """
-  @spec match_and_format(String.t()) :: bindings
+  @spec match_and_format(String.t()) :: String.t()
   def match_and_format(code) do
     case match(code) do
       :no_match ->
