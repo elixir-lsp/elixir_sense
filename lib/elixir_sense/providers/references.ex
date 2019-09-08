@@ -78,7 +78,7 @@ defmodule ElixirSense.Providers.References do
 
   def callers(mfa) do
     calls =
-      Xref.calls()
+      calls()
       |> Enum.filter(caller_filter(mfa))
       |> fix_caller_module()
 
@@ -86,6 +86,29 @@ defmodule ElixirSense.Providers.References do
         new_call <- expand_xref_line_calls(call) do
       new_call
     end
+  end
+
+  defp calls do
+    if Mix.Project.umbrella?() do
+      umbrella_calls()
+    else
+      Xref.calls()
+    end
+  end
+
+  def umbrella_calls() do
+    build_dir = Path.expand(Mix.Project.config()[:build_path])
+    app_paths = Mix.Project.apps_paths()
+
+    app_paths
+    |> Enum.flat_map(fn {app, path} ->
+      Mix.Project.in_project(app, path, [build_path: build_dir], fn _ ->
+        Mix.Tasks.Xref.calls()
+        |> Enum.map(fn call ->
+          Map.update!(call, :file, fn file -> Path.expand(file) end)
+        end)
+      end)
+    end)
   end
 
   defp expand_xref_line_calls(xref_call) do
