@@ -323,7 +323,7 @@ defmodule ElixirSense do
       iex> ElixirSense.match(code)
       "# Bindings\n\nstatus = 404\n\nmessage = \"Not found\"\n\narg1 = 1"
   """
-  @spec match(String.t()) :: Eval.bindings()
+  @spec match(String.t()) :: String.t()
   def match(code) do
     Eval.match_and_format(code)
   end
