@@ -1,6 +1,8 @@
 defmodule ElixirSense.SuggestionsTest do
   use ExUnit.Case
 
+  import ExUnit.CaptureIO
+
   test "empty hint" do
     buffer = """
     defmodule MyModule do
@@ -549,9 +551,15 @@ defmodule ElixirSense.SuggestionsTest do
     end
     """
 
-    list =
-      ElixirSense.suggestions(buffer, 3, 5)
-      |> Enum.filter(fn s -> s.type == :variable end)
+    assert capture_io(:stderr, fn ->
+             list =
+               ElixirSense.suggestions(buffer, 3, 5)
+               |> Enum.filter(fn s -> s.type == :variable end)
+
+             send(self(), {:result, list})
+           end) =~ "an expression is always required on the right side of ->"
+
+    assert_received {:result, list}
 
     assert list == [
              %{name: :arg, type: :variable},
@@ -566,9 +574,15 @@ defmodule ElixirSense.SuggestionsTest do
     end
     """
 
-    list =
-      ElixirSense.suggestions(buffer, 2, 19)
-      |> Enum.filter(fn s -> s.type == :variable end)
+    assert capture_io(:stderr, fn ->
+             list =
+               ElixirSense.suggestions(buffer, 2, 19)
+               |> Enum.filter(fn s -> s.type == :variable end)
+
+             send(self(), {:result, list})
+           end) =~ "an expression is always required on the right side of ->"
+
+    assert_received {:result, list}
 
     assert list == [
              %{name: :arg, type: :variable},
@@ -1096,8 +1110,14 @@ defmodule ElixirSense.SuggestionsTest do
       buffer1 = "Local.func_with_options("
       buffer2 = "Local.func_with_options(local_o: :an_atom, "
 
-      assert suggestions_by_type(:param_option, buffer1) ==
-               suggestions_by_type(:param_option, buffer2)
+      assert capture_io(:stderr, fn ->
+               result1 = suggestions_by_type(:param_option, buffer1)
+               result2 = suggestions_by_type(:param_option, buffer2)
+               send(self(), {:results, result1, result2})
+             end) =~ "trailing commas are not allowed inside function/macro"
+
+      assert_received {:results, result1, result2}
+      assert result1 == result2
     end
 
     test "options as inline list" do

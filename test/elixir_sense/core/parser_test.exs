@@ -1,6 +1,7 @@
 defmodule ElixirSense.Core.ParserTest do
   use ExUnit.Case
 
+  import ExUnit.CaptureIO
   import ElixirSense.Core.Parser
   alias ElixirSense.Core.{Metadata, State.Env, State.VarInfo}
 
@@ -221,6 +222,13 @@ defmodule ElixirSense.Core.ParserTest do
     end
     """
 
+    assert capture_io(:stderr, fn ->
+             result = parse_string(source, true, true, 3)
+             send(self(), {:result, result})
+           end) =~ "an expression is always required on the right side of ->"
+
+    assert_received {:result, result}
+
     assert %Metadata{
              error: nil,
              lines_to_env: %{
@@ -238,7 +246,7 @@ defmodule ElixirSense.Core.ParserTest do
                  ]
                }
              }
-           } = parse_string(source, true, true, 3)
+           } = result
   end
 
   test "parse_string with missing terminator \"end\" attemtps to insert `end` at correct intendation" do

@@ -30,7 +30,7 @@ defmodule ElixirSense.ServerTest do
 
     port = port |> String.trim() |> String.to_integer()
     auth_token = auth_token |> String.trim()
-    {:ok, socket} = :gen_tcp.connect('localhost', port, [:binary, active: false, packet: 4])
+    {:ok, socket} = :gen_tcp.connect({127, 0, 0, 1}, port, [:binary, active: false, packet: 4])
 
     {:ok, socket: socket, auth_token: auth_token}
   end
