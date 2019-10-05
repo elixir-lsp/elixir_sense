@@ -947,13 +947,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     state =
       """
       defmodule MyModule do
-        require Mod.{Mo1, Mod2}
+        require Mod.{Mo1, Mod2, :"Elixir.Mod3"}
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_requires(state, 3) == [Mod.Mod2, Mod.Mo1]
+    assert get_line_requires(state, 3) == [Mod.Mod3, Mod.Mod2, Mod.Mo1]
   end
 
   test "requires duplicated" do
@@ -983,6 +983,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert get_line_requires(state, 4) == [:ets, Integer]
     assert get_line_aliases(state, 4) == [{I, Integer}, {E, :ets}]
+  end
+
+  test "requires atom module" do
+    state =
+      """
+      defmodule MyModule do
+        require :my_mod
+        require :"Elixir.MyMod.Some"
+        require :"Elixir.MyMod.Other", as: A
+        require :"Elixir.MyMod.Other1", as: :"Elixir.A1"
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_requires(state, 6) == [MyMod.Other1, MyMod.Other, MyMod.Some, :my_mod]
+    assert get_line_aliases(state, 6) == [{A, MyMod.Other}, {A1, MyMod.Other1}]
   end
 
   test "requires aliased module" do
