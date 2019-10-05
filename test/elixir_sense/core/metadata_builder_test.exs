@@ -1060,6 +1060,72 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_module(state, 20) == Some.Nested
   end
 
+  test "current module atom" do
+    state =
+      """
+      IO.puts ""
+      defmodule :outer_module do
+        IO.puts ""
+        defmodule :inner_module do
+          def func do
+            if true do
+              IO.puts ""
+            end
+          end
+        end
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_module(state, 1) == Elixir
+    assert get_line_protocol(state, 1) == nil
+    assert get_line_module(state, 3) == :outer_module
+    assert get_line_protocol(state, 3) == nil
+    assert get_line_module(state, 7) == :inner_module
+    assert get_line_protocol(state, 7) == nil
+    assert get_line_module(state, 11) == :outer_module
+    assert get_line_protocol(state, 11) == nil
+  end
+
+  test "current module as atom" do
+    state =
+      """
+      IO.puts ""
+      defmodule :"Elixir.OuterModule" do
+        IO.puts ""
+        defmodule :"Elixir.InnerModule" do
+          def func do
+            if true do
+              IO.puts ""
+            end
+          end
+        end
+        IO.puts ""
+
+        defmodule :"Elixir.OuterModule.InnerModule1" do
+          def func do
+            if true do
+              IO.puts ""
+            end
+          end
+        end
+      end
+      """
+      |> string_to_state
+
+    assert get_line_module(state, 1) == Elixir
+    assert get_line_protocol(state, 1) == nil
+    assert get_line_module(state, 3) == OuterModule
+    assert get_line_protocol(state, 3) == nil
+    assert get_line_module(state, 7) == InnerModule
+    assert get_line_protocol(state, 7) == nil
+    assert get_line_module(state, 11) == OuterModule
+    assert get_line_protocol(state, 11) == nil
+    assert get_line_module(state, 16) == OuterModule.InnerModule1
+    assert get_line_protocol(state, 16) == nil
+  end
+
   test "current module and protocol implementation" do
     state =
       """
