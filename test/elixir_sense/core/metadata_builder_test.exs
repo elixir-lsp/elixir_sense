@@ -734,12 +734,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule MyModule do
         alias :"Elixir.A.B"
         alias :"Elixir.A.C", as: S
+        alias :"Elixir.A.D", as: :"Elixir.X"
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 4) == [{B, A.B}, {S, A.C}]
+    assert get_line_aliases(state, 5) == [{B, A.B}, {S, A.C}, {X, A.D}]
   end
 
   test "aliases defined with v1.2 notation (multiline)" do
@@ -760,7 +761,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     state =
       """
       defmodule A do
-        alias Components.{Dialog, Dialog.Footer, Button}
+        alias Components.{Dialog, Dialog.Footer, Button, :"Elixir.Other"}
         IO.puts ""
       end
       """
@@ -769,7 +770,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 3) == [
              {Dialog, Components.Dialog},
              {Footer, Components.Dialog.Footer},
-             {Button, Components.Button}
+             {Button, Components.Button},
+             {Other, Components.Other}
            ]
   end
 

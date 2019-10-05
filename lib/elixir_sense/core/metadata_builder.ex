@@ -357,12 +357,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # require with options
-  defp pre(
-         {:require, [line: line, column: _column], [{_, _, module_atoms = [mod | _]}, _opts]} =
-           ast,
-         state
-       )
-       when is_atom(mod) do
+  defp pre({:require, [line: line, column: _column], [{_, _, module_atoms = [mod | _]}, _opts]} = ast, state) when is_atom(mod) do
     module = module_atoms |> Module.concat()
     pre_require(ast, state, line, module)
   end
@@ -372,50 +367,31 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # alias with v1.2 notation
-  defp pre(
-         {:alias, [line: line, column: _column],
-          [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, aliases}]} = ast,
-         state
-       ) do
+  defp pre({:alias, [line: line, column: _column], [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, aliases}]} = ast, state) do
     aliases_tuples =
       aliases
-      |> Enum.map(fn {:__aliases__, _, mods} ->
-        {Module.concat(mods), Module.concat(prefix_atoms ++ mods)}
+      |> Enum.map(fn
+        {:__aliases__, _, mods} -> {Module.concat(mods), Module.concat(prefix_atoms ++ mods)}
+        mod when is_atom(mod) -> {mod, Module.concat(prefix_atoms ++ [mod])}
       end)
 
     pre_alias(ast, state, line, aliases_tuples)
   end
 
   # alias without options
-  defp pre(
-         {:alias, [line: line, column: _column], [{:__aliases__, _, module_atoms = [mod | _]}]} =
-           ast,
-         state
-       )
-       when is_atom(mod) do
+  defp pre({:alias, [line: line, column: _column], [{:__aliases__, _, module_atoms = [mod | _]}]} = ast, state) when is_atom(mod) do
     alias_tuple = {Module.concat([List.last(module_atoms)]), Module.concat(module_atoms)}
     pre_alias(ast, state, line, alias_tuple)
   end
 
   # alias with `as` option
-  defp pre(
-         {:alias, [line: line, column: _column],
-          [{_, _, module_atoms = [mod | _]}, [as: {:__aliases__, _, alias_atoms = [al | _]}]]} =
-           ast,
-         state
-       )
-       when is_atom(mod) and is_atom(al) do
-    alias_tuple = {Module.concat(alias_atoms), Module.concat(module_atoms)}
+  defp pre({:alias, [line: line, column: _column], [{_, _, module_atoms = [mod | _]}, [as: alias_expression]]} = ast, state) when is_atom(mod) do
+    alias_tuple = alias_tuple(Module.concat(module_atoms), alias_expression)
     pre_alias(ast, state, line, alias_tuple)
   end
 
   # alias atom module
-  defp pre(
-         {:alias, [line: line, column: _column],
-          [mod]} = ast,
-         state
-       )
-       when is_atom(mod) do
+  defp pre({:alias, [line: line, column: _column], [mod]} = ast, state) when is_atom(mod) do
     alias_tuple = if Introspection.elixir_module?(mod) do
       {Module.concat([List.last(Module.split(mod))]), mod}
     else
@@ -425,13 +401,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # alias atom module with `as` option
-  defp pre(
-         {:alias, [line: line, column: _column],
-          [mod, [as: {:__aliases__, _, alias_atoms = [al | _]}]]} = ast,
-         state
-       )
-       when is_atom(mod) and is_atom(al) do
-    alias_tuple = {Module.concat(alias_atoms), mod}
+  defp pre({:alias, [line: line, column: _column], [mod, [as: alias_expression]]} = ast, state) when is_atom(mod) do
+    alias_tuple = alias_tuple(mod, alias_expression)
     pre_alias(ast, state, line, alias_tuple)
   end
 
