@@ -820,13 +820,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     state =
       """
       defmodule MyModule do
-        import Foo.Bar.{User, Email}
+        import Foo.Bar.{User, Email, :"Elixir.Other"}
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_imports(state, 3) == [Foo.Bar.Email, Foo.Bar.User]
+    assert get_line_imports(state, 3) == [Foo.Bar.Other, Foo.Bar.Email, Foo.Bar.User]
   end
 
   test "imports" do
@@ -900,14 +900,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule OuterModule do
         import List
         import SomeModule.Inner
+        import :"Elixir.SomeModule.NextInner"
         import :erlang_module
         IO.puts ""
       end
       """
       |> string_to_state
 
-    refute get_line_imports(state, 5) == [SomeModule.Inner, List, :erlang_module]
-    assert get_line_aliases(state, 5) == [{Inner, SomeModule.Inner}]
+    refute get_line_imports(state, 6) == [SomeModule.Inner, List, :erlang_module, SomeModule.NextInner]
+    assert get_line_aliases(state, 6) == [{Inner, SomeModule.Inner}, {NextInner, SomeModule.NextInner}]
   end
 
   test "requires" do

@@ -292,8 +292,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
        ) do
     imports_modules =
       imports
-      |> Enum.map(fn {:__aliases__, _, mods} ->
-        Module.concat(prefix_atoms ++ mods)
+      |> Enum.map(fn
+        {:__aliases__, _, mods} -> Module.concat(prefix_atoms ++ mods)
+        mod when is_atom(mod) -> Module.concat(prefix_atoms ++ [mod])
       end)
 
     pre_import(ast, state, line, imports_modules)
@@ -315,8 +316,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_import(ast, state, line, module)
   end
 
-  # erlang module
-  defp pre({:import, [line: line, column: _column], [atom] = ast}, state) when is_atom(atom) do
+  # atom module
+  defp pre({:import, [line: line, column: _column], [atom | _] = ast}, state) when is_atom(atom) do
     pre_import(ast, state, line, atom)
   end
 
