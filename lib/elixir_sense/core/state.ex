@@ -190,15 +190,22 @@ defmodule ElixirSense.Core.State do
   def escape_protocol_impementations({protocol, implementations}) do
     joined_implementations =
       implementations
-      |> Enum.map(fn parts ->
-        parts
-        |> Enum.map(&Atom.to_string/1)
-        |> Enum.join(@dot_marker)
+      |> Enum.map(fn
+        parts when is_list(parts) ->
+          parts
+          |> Enum.map(&Atom.to_string/1)
+          |> Enum.join(@dot_marker)
+        module when is_atom(module) ->
+          Atom.to_string(module) |> String.replace("Elixir.", "")
       end)
       |> Enum.join(@or_marker)
       |> String.to_atom()
 
-    protocol ++ [joined_implementations]
+    if is_list(protocol) do
+      protocol
+    else
+      [protocol]
+    end ++ [joined_implementations]
   end
 
   def escape_protocol_impementations(module_parts), do: module_parts
@@ -295,12 +302,19 @@ defmodule ElixirSense.Core.State do
   def maybe_add_protocol_implementation(state, {protocol, implementations}) do
     implementation_modules =
       implementations
-      |> Enum.flat_map(fn module ->
-        expanded = expand_alias(state, Module.concat(module))
-        unescape_protocol_impementations(expanded)
+      |> Enum.flat_map(fn
+        module when is_list(module) ->
+          expanded = expand_alias(state, Module.concat(module))
+          unescape_protocol_impementations(expanded)
+        module when is_atom(module) ->
+          unescape_protocol_impementations(module)
       end)
 
-    candidate = expand_alias(state, Module.concat(protocol))
+    candidate = if is_list(protocol) do
+      expand_alias(state, Module.concat(protocol))
+    else
+      protocol
+    end
 
     protocols =
       unescape_protocol_impementations(candidate)

@@ -1193,6 +1193,42 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
   end
 
+  test "protocol implementation for atom modules" do
+    state =
+      """
+      defprotocol :my_reversible do
+        def reverse(term)
+        IO.puts ""
+      end
+
+      defimpl :my_reversible, for: [String, :my_str, :"Elixir.MyStr"] do
+        def reverse(term), do: String.reverse(term)
+        IO.puts ""
+      end
+
+      defprotocol :"Elixir.My.Reversible" do
+        def reverse(term)
+        IO.puts ""
+      end
+
+      defimpl :"Elixir.My.Reversible", for: [String, :my_str, :"Elixir.MyStr"] do
+        def reverse(term), do: String.reverse(term)
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_module(state, 3) == :my_reversible
+    assert get_line_protocol(state, 3) == nil
+    assert get_line_module(state, 8) == [:"Elixir.my_reversible.String", :"Elixir.my_reversible.my_str", :"Elixir.my_reversible.MyStr"]
+    assert get_line_protocol(state, 8) == {:my_reversible, [String, :my_str, MyStr]}
+
+    assert get_line_module(state, 13) == My.Reversible
+    assert get_line_protocol(state, 13) == nil
+    assert get_line_module(state, 18) == [My.Reversible.String, :"Elixir.My.Reversible.my_str", My.Reversible.MyStr]
+    assert get_line_protocol(state, 18) == {My.Reversible, [String, :my_str, MyStr]}
+  end
+
   test "protocol implementation module naming rules" do
     state =
       """
