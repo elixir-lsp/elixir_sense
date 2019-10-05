@@ -7,6 +7,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   alias ElixirSense.Core.Ast
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.VarInfo
+  alias ElixirSense.Core.Introspection
 
   @scope_keywords [:for, :try, :fn]
   @block_keywords [:do, :else, :rescue, :catch, :after]
@@ -414,7 +415,22 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_alias(ast, state, line, alias_tuple)
   end
 
-  # alias erlang module with `as` option
+  # alias atom module
+  defp pre(
+         {:alias, [line: line, column: _column],
+          [mod]} = ast,
+         state
+       )
+       when is_atom(mod) do
+    alias_tuple = if Introspection.elixir_module?(mod) do
+      {Module.concat([List.last(Module.split(mod))]), mod}
+    else
+      {mod, mod}
+    end
+    pre_alias(ast, state, line, alias_tuple)
+  end
+
+  # alias atom module with `as` option
   defp pre(
          {:alias, [line: line, column: _column],
           [mod, [as: {:__aliases__, _, alias_atoms = [al | _]}]]} = ast,

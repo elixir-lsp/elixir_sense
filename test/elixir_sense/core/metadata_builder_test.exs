@@ -728,6 +728,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 4) == [{Ets, :ets}]
   end
 
+  test "aliases atom module" do
+    state =
+      """
+      defmodule MyModule do
+        alias :"Elixir.A.B"
+        alias :"Elixir.A.C", as: S
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 4) == [{B, A.B}, {S, A.C}]
+  end
+
   test "aliases defined with v1.2 notation (multiline)" do
     state =
       """
