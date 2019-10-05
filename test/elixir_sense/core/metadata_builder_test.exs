@@ -1459,6 +1459,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_behaviours(state, 3) == [:gen_server]
   end
 
+  test "behaviour from atom module" do
+    state =
+      """
+      defmodule OuterModule do
+        @behaviour :"Elixir.My.Behavior"
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_behaviours(state, 3) == [My.Behavior]
+  end
+
   test "behaviour duplicated" do
     state =
       """
