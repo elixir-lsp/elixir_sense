@@ -483,6 +483,16 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_struct(code) == {IO.Stream, []}
     end
 
+    test "modules erlang atom" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %:my_module{
+      """
+
+      assert which_struct(code) == {:my_module, []}
+    end
+
     test "nested structs" do
       code = """
       defmodule MyMod do
