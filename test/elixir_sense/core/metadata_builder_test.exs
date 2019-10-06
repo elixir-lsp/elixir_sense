@@ -1690,11 +1690,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       defmodule MyError do
         defexception [my_field: nil]
+
+        IO.puts("")
       end
       """
       |> string_to_state
 
     assert state.structs == %{MyError => {:defexception, [my_field: nil]}}
+    # defexception adds Exception behaviour
+    assert get_line_behaviours(state, 4) == [Exception]
   end
 
   test "registers calls no arg no parens" do
