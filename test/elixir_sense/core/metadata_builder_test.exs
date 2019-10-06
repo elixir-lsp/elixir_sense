@@ -1808,6 +1808,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
   end
 
+  test "use atom module" do
+    state =
+      """
+      defmodule InheritMod do
+        use :"Elixir.ElixirSenseExample.ExampleBehaviour"
+
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+
+    assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
+  end
+
   test "find struct" do
     state =
       """
