@@ -195,6 +195,7 @@ defmodule ElixirSense.Core.State do
           parts
           |> Enum.map(&Atom.to_string/1)
           |> Enum.join(@dot_marker)
+
         module when is_atom(module) ->
           Atom.to_string(module) |> String.replace("Elixir.", "")
       end)
@@ -306,15 +307,17 @@ defmodule ElixirSense.Core.State do
         module when is_list(module) ->
           expanded = expand_alias(state, Module.concat(module))
           unescape_protocol_impementations(expanded)
+
         module when is_atom(module) ->
           unescape_protocol_impementations(module)
       end)
 
-    candidate = if is_list(protocol) do
-      expand_alias(state, Module.concat(protocol))
-    else
-      protocol
-    end
+    candidate =
+      if is_list(protocol) do
+        expand_alias(state, Module.concat(protocol))
+      else
+        protocol
+      end
 
     protocols =
       unescape_protocol_impementations(candidate)
