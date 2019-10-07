@@ -190,23 +190,17 @@ defmodule ElixirSense.Core.State do
   def escape_protocol_impementations({protocol, implementations}) do
     joined_implementations =
       implementations
-      |> Enum.map(fn
+      |> Enum.map_join(@or_marker, fn
         parts when is_list(parts) ->
           parts
-          |> Enum.map(&Atom.to_string/1)
-          |> Enum.join(@dot_marker)
+          |> Enum.map_join(@dot_marker, &Atom.to_string/1)
 
         module when is_atom(module) ->
           Atom.to_string(module) |> String.replace("Elixir.", "")
       end)
-      |> Enum.join(@or_marker)
       |> String.to_atom()
 
-    if is_list(protocol) do
-      protocol
-    else
-      [protocol]
-    end ++ [joined_implementations]
+    List.wrap(protocol) ++ [joined_implementations]
   end
 
   def escape_protocol_impementations(module_parts), do: module_parts
