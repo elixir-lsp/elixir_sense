@@ -291,12 +291,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
           [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, imports}]} = ast,
          state
        ) do
-    imports_modules =
-      imports
-      |> Enum.map(fn
-        {:__aliases__, _, mods} -> Module.concat(prefix_atoms ++ mods)
-        mod when is_atom(mod) -> Module.concat(prefix_atoms ++ [mod])
-      end)
+    imports_modules = modules_from_12_syntax(imports, prefix_atoms)
 
     pre_import(ast, state, line, imports_modules)
   end
@@ -329,12 +324,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
           [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, requires}]} = ast,
          state
        ) do
-    requires_modules =
-      requires
-      |> Enum.map(fn
-        {:__aliases__, _, mods} -> Module.concat(prefix_atoms ++ mods)
-        mod when is_atom(mod) -> Module.concat(prefix_atoms ++ [mod])
-      end)
+    requires_modules = modules_from_12_syntax(requires, prefix_atoms)
 
     pre_require(ast, state, line, requires_modules)
   end
@@ -750,5 +740,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp alias_tuple(module, {:__aliases__, _, alias_atoms = [al | _]})
        when is_atom(module) and is_atom(al) do
     {Module.concat(alias_atoms), module}
+  end
+
+  defp modules_from_12_syntax(expressions, prefix_atoms) do
+    expressions
+    |> Enum.map(fn
+      {:__aliases__, _, mods} -> Module.concat(prefix_atoms ++ mods)
+      mod when is_atom(mod) -> Module.concat(prefix_atoms ++ [mod])
+    end)
   end
 end
