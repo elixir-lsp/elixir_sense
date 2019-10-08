@@ -332,26 +332,28 @@ defmodule ElixirSense.Providers.Suggestion do
   @spec find_callbacks([module], String.t()) :: [callback]
   defp find_callbacks(behaviours, hint) do
     behaviours
-    |> Enum.flat_map(fn mod ->
-      mod_name = mod |> Introspection.module_to_string()
+    |> Enum.flat_map(fn
+      mod when is_atom(mod) ->
+        mod_name = mod |> Introspection.module_to_string()
 
-      for %{name: name, arity: arity, callback: spec, signature: signature, doc: doc} <-
-            Introspection.get_callbacks_with_docs(mod),
-          hint == "" or String.starts_with?("#{name}", hint) do
-        desc = Introspection.extract_summary_from_docs(doc)
-        [_, args_str] = Regex.run(Regex.recompile!(~r/.\((.*)\)/), signature)
-        args = args_str |> String.replace(Regex.recompile!(~r/\s/), "")
+        for %{name: name, arity: arity, callback: spec, signature: signature, doc: doc} <-
+              Introspection.get_callbacks_with_docs(mod),
+            hint == "" or String.starts_with?("#{name}", hint) do
+          desc = Introspection.extract_summary_from_docs(doc)
+          [_, args_str] = Regex.run(Regex.recompile!(~r/.\((.*)\)/), signature)
+          args = args_str |> String.replace(Regex.recompile!(~r/\s/), "")
 
-        %{
-          type: :callback,
-          name: name,
-          arity: arity,
-          args: args,
-          origin: mod_name,
-          summary: desc,
-          spec: spec
-        }
-      end
+          %{
+            type: :callback,
+            name: name,
+            arity: arity,
+            args: args,
+            origin: mod_name,
+            summary: desc,
+            spec: spec
+          }
+        end
+      _ -> []
     end)
     |> Enum.sort()
   end

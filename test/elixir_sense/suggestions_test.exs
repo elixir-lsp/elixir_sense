@@ -179,6 +179,20 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
+  test "callback suggestions should not crash with unquote(__MODULE__)" do
+    buffer = """
+    defmodule Dummy do
+      @doc false
+      defmacro __using__() do
+        quote location: :keep do
+          @behaviour unquote(__MODULE__)
+        end
+      end
+    end
+    """
+    assert [%{} | _] = ElixirSense.suggestions(buffer, 8, 5)
+  end
+
   test "lists protocol functions" do
     buffer = """
     defimpl Enumerable, for: MyStruct do
