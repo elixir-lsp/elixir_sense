@@ -217,19 +217,19 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre(
          {:defimpl, _,
-          [{:__aliases__, [line: line, column: column], protocol}, [for: implementations], _]} =
+          [{:__aliases__, [line: line, column: column], protocol}, [for: for_expression], _]} =
            ast,
          state
        ) do
-    pre_protocol_implementation(ast, state, {line, column}, protocol, implementations)
+    pre_protocol_implementation(ast, state, {line, column}, protocol, for_expression)
   end
 
   defp pre(
-         {:defimpl, [line: line, column: column], [protocol, [for: implementations], _]} = ast,
+         {:defimpl, [line: line, column: column], [protocol, [for: for_expression], _]} = ast,
          state
        )
        when is_atom(protocol) do
-    pre_protocol_implementation(ast, state, {line, column}, protocol, implementations)
+    pre_protocol_implementation(ast, state, {line, column}, protocol, for_expression)
   end
 
   defp pre({def_name, meta, [{:when, _, [head | _]}, body]}, state) when def_name in @defs do
@@ -697,40 +697,32 @@ defmodule ElixirSense.Core.MetadataBuilder do
     [{:no_call, true} | meta]
   end
 
-  defp pre_protocol_implementation(ast, state, position, protocol, list) when is_list(list) do
-    modules =
-      list
-      |> Enum.map(fn
-        {:__aliases__, _, implementation} -> implementation
-        implementation when is_atom(implementation) -> implementation
-      end)
-
-    pre_module(ast, state, position, {protocol, modules})
-  end
-
   defp pre_protocol_implementation(
          ast,
          state,
          position,
          protocol,
-         {:__aliases__, _, implementation}
+         for_expression
        ) do
-    pre_module(ast, state, position, {protocol, [implementation]})
+    implementations = get_implementations_from_for_expression(state, for_expression)
+
+    pre_module(ast, state, position, {protocol, implementations})
   end
 
-  defp post_protocol_implementation(ast, state, protocol, list) when is_list(list) do
-    modules =
-      list
-      |> Enum.map(fn
-        {:__aliases__, _, implementation} -> implementation
-        implementation when is_atom(implementation) -> implementation
-      end)
+  defp post_protocol_implementation(ast, state, protocol, for_expression) do
+    implementations = get_implementations_from_for_expression(state, for_expression)
 
-    post_module(ast, state, {protocol, modules})
+    post_module(ast, state, {protocol, implementations})
   end
 
-  defp post_protocol_implementation(ast, state, protocol, {:__aliases__, _, implementation}) do
-    post_module(ast, state, {protocol, [implementation]})
+  defp get_implementations_from_for_expression(state, for_expression) do
+    for_expression
+    |> List.wrap
+    |> Enum.map(fn
+      {:__aliases__, _, implementation} -> implementation
+      module when is_atom(module) -> module
+      {:__MODULE__, _, nil} -> state |> get_current_module
+    end)
   end
 
   defp alias_tuple(module, alias_module) when is_atom(alias_module) do

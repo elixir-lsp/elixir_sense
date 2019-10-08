@@ -1330,6 +1330,28 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_protocol(state, 24) == {NiceProto, [Enumerable.Date.Range]}
   end
 
+  test "protocol implementation using __MODULE__" do
+    state =
+      """
+      defprotocol NiceProto do
+        def reverse(term)
+      end
+
+      defmodule MyStruct do
+        defstruct [a: nil]
+
+        defimpl NiceProto, for: __MODULE__ do
+          def reverse(term), do: String.reverse(term)
+        end
+      end
+      """
+      |> string_to_state
+
+    # protocol implementation module name does not inherit enclosing module, only protocol
+    assert get_line_module(state, 8) == NiceProto.MyStruct
+    assert get_line_protocol(state, 8) == {NiceProto, [MyStruct]}
+  end
+
   test "registers positions" do
     state =
       """
