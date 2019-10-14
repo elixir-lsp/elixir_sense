@@ -526,6 +526,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
         _ -> []
       end
 
+    state =
+      if type == :defexception do
+        state
+        |> add_behaviour(Exception)
+      else
+        state
+      end
+
     state
     |> add_struct(type, fields)
     |> result(ast)
