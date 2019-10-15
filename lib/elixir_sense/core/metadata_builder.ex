@@ -717,7 +717,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp get_implementations_from_for_expression(state, for_expression) do
     for_expression
-    |> List.wrap
+    |> List.wrap()
     |> Enum.map(fn
       {:__aliases__, _, implementation} -> implementation
       module when is_atom(module) -> module
