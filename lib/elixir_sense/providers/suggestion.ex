@@ -353,7 +353,9 @@ defmodule ElixirSense.Providers.Suggestion do
             spec: spec
           }
         end
-      _ -> []
+
+      _ ->
+        []
     end)
     |> Enum.sort()
   end

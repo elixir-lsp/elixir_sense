@@ -190,6 +190,7 @@ defmodule ElixirSense.SuggestionsTest do
       end
     end
     """
+
     assert [%{} | _] = ElixirSense.suggestions(buffer, 8, 5)
   end
 
