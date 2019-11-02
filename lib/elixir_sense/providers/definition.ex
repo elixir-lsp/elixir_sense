@@ -25,24 +25,22 @@ defmodule ElixirSense.Providers.Definition do
   @doc """
   Finds out where a module, function, macro or variable was defined.
   """
-  @spec find(String.t(), [module], [{module, module}], module, [%VarInfo{}], map, map) :: %Location{}
+  @spec find(String.t(), [module], [{module, module}], module, [%VarInfo{}], map, map) ::
+          %Location{}
   def find(subject, imports, aliases, module, vars, mods_funs, calls) do
-    IO.inspect(subject, label: "subject")
-    var_info = unless subject_is_call?(subject, calls) do
-      vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
-    end
+    var_info =
+      unless subject_is_call?(subject, calls) do
+        vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
+      end
 
-    case var_info |> IO.inspect(label: "var_info") do
+    case var_info do
       %VarInfo{positions: [{line, column} | _]} ->
         %Location{found: true, type: :variable, file: nil, line: line, column: column}
 
       _ ->
         subject
         |> Source.split_module_and_func(aliases)
-        |> IO.inspect(label: "split_module_and_func")
-        |> get_buffer_metadata_function(mods_funs, module, imports, aliases)
-        # |> Introspection.actual_mod_fun(imports, aliases, module)
-        # |> find_source(module)
+        |> find_function_or_module(mods_funs, module, imports, aliases)
     end
   end
 
@@ -50,36 +48,40 @@ defmodule ElixirSense.Providers.Definition do
     Enum.find(calls, fn
       %{mod: nil, func: func} ->
         Atom.to_string(func) == subject
-      _ -> false
+
+      _ ->
+        false
     end) != nil
   end
 
-  defp get_buffer_metadata_function({nil, nil}, mods_funs, current_module, imports, aliases) do
+  defp find_function_or_module({nil, nil}, _mods_funs, current_module, imports, aliases) do
     {nil, nil}
     |> Introspection.actual_mod_fun(imports, aliases, current_module)
     |> find_source(current_module)
   end
-  defp get_buffer_metadata_function({module, function}, mods_funs, current_module, imports, aliases) when is_atom(function) do
-    # TODO arity info would be useful here
-    IO.inspect mods_funs
-    IO.inspect {module, function, nil}
 
-    fun_module = case module do
-      mod when mod in [nil, :"__MODULE__"] -> current_module
-      mod when is_atom(mod) ->
-        # TODO expand alias?
-        mod
-    end
-    |> IO.inspect(label: "fun_module")
+  defp find_function_or_module({module, function}, mods_funs, current_module, imports, aliases)
+       when is_atom(function) do
+    # TODO arity info would be useful here
+    # TODO support local typespecs
+
+    fun_module =
+      case module do
+        mod when mod in [nil, :__MODULE__] -> current_module
+        mod when is_atom(mod) -> mod
+      end
 
     case mods_funs[{fun_module, function, nil}] do
       nil ->
+        # module or function not found in buffer metadata, try in trospection
         {module, function}
         |> Introspection.actual_mod_fun(imports, aliases, current_module)
         |> find_source(current_module)
+
       %{positions: positions} ->
-        # TODO is it ok to take first position here?
-        [{line, column}| _] = positions
+        # for simplicity take first position here
+        [{line, column} | _] = positions
+
         %Location{
           found: true,
           file: nil,
@@ -92,7 +94,7 @@ defmodule ElixirSense.Providers.Definition do
 
   defp find_source({mod, fun}, current_module) do
     with(
-      {mod, file} when file not in ["non_existing", nil, ""] <- find_mod_file(mod) |> IO.inspect(label: "find_mod_file"),
+      {mod, file} when file not in ["non_existing", nil, ""] <- find_mod_file(mod),
       nil <- find_fun_position({mod, file}, fun),
       nil <- find_type_position({mod, file}, fun),
       nil <- find_type_position({current_module, file}, fun)
@@ -104,7 +106,7 @@ defmodule ElixirSense.Providers.Definition do
 
       _ ->
         %Location{found: false}
-    end |> IO.inspect
+    end
   end
 
   defp find_mod_file(module) do
