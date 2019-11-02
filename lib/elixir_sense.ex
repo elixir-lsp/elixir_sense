@@ -83,7 +83,11 @@ defmodule ElixirSense do
       vars: vars
     } = Metadata.get_env(buffer_file_metadata, line) |> IO.inspect(label: "env")
 
-    Definition.find(subject, imports, aliases, module, vars, buffer_file_metadata.mods_funs_to_positions)
+    calls = buffer_file_metadata.calls[line]
+    |> List.wrap()
+    |> Enum.filter(& &1.col <= column)
+
+    Definition.find(subject, imports, aliases, module, vars, buffer_file_metadata.mods_funs_to_positions, calls)
   end
 
   @doc ~S"""

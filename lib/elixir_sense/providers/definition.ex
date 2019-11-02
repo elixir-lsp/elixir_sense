@@ -25,10 +25,12 @@ defmodule ElixirSense.Providers.Definition do
   @doc """
   Finds out where a module, function, macro or variable was defined.
   """
-  @spec find(String.t(), [module], [{module, module}], module, [%VarInfo{}], map) :: %Location{}
-  def find(subject, imports, aliases, module, vars, mods_funs) do
+  @spec find(String.t(), [module], [{module, module}], module, [%VarInfo{}], map, map) :: %Location{}
+  def find(subject, imports, aliases, module, vars, mods_funs, calls) do
     IO.inspect(subject, label: "subject")
-    var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
+    var_info = unless subject_is_call?(subject, calls) do
+      vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
+    end
 
     case var_info |> IO.inspect(label: "var_info") do
       %VarInfo{positions: [{line, column} | _]} ->
@@ -42,6 +44,14 @@ defmodule ElixirSense.Providers.Definition do
         # |> Introspection.actual_mod_fun(imports, aliases, module)
         # |> find_source(module)
     end
+  end
+
+  defp subject_is_call?(subject, calls) do
+    Enum.find(calls, fn
+      %{mod: nil, func: func} ->
+        Atom.to_string(func) == subject
+      _ -> false
+    end) != nil
   end
 
   defp get_buffer_metadata_function({nil, nil}, mods_funs, current_module, imports, aliases) do
