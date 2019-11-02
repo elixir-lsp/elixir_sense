@@ -73,17 +73,17 @@ defmodule ElixirSense do
   """
   @spec definition(String.t(), pos_integer, pos_integer) :: Definition.location()
   def definition(code, line, column) do
-    subject = Source.subject(code, line, column)
-    buffer_file_metadata = Parser.parse_string(code, true, true, line)
+    subject = Source.subject(code, line, column) |> IO.inspect(label: "subject")
+    buffer_file_metadata = Parser.parse_string(code, true, true, line) |> IO.inspect(label: "buffer_file_metadata")
 
     %State.Env{
       imports: imports,
       aliases: aliases,
       module: module,
       vars: vars
-    } = Metadata.get_env(buffer_file_metadata, line)
+    } = Metadata.get_env(buffer_file_metadata, line) |> IO.inspect(label: "env")
 
-    Definition.find(subject, imports, aliases, module, vars)
+    Definition.find(subject, imports, aliases, module, vars, buffer_file_metadata.mods_funs_to_positions)
   end
 
   @doc ~S"""
