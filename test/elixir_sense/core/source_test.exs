@@ -1,5 +1,6 @@
 defmodule ElixirSense.Core.SourceTest do
   use ExUnit.Case
+  doctest ElixirSense.Core.Source
 
   import ElixirSense.Core.Source
 
