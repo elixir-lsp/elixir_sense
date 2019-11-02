@@ -298,6 +298,92 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
+  test "find definition of local functions with __MODULE__" do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(), do: :ok
+
+      def a do
+        my_fun1 = 1
+        __MODULE__.my_fun()
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 6, 17) == %Location{
+             found: true,
+             type: :function,
+             file: nil,
+             line: 2,
+             column: 7
+           }
+  end
+
+  test "find definition of local functions with current module" do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(), do: :ok
+
+      def a do
+        my_fun1 = 1
+        MyModule.my_fun()
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 6, 14) == %Location{
+             found: true,
+             type: :function,
+             file: nil,
+             line: 2,
+             column: 7
+           }
+  end
+
+  test "find definition of local functions with alias" do
+    buffer = """
+    defmodule MyModule do
+      alias MyModule, as: M
+      def my_fun(), do: :ok
+
+      def a do
+        my_fun1 = 1
+        M.my_fun()
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 7, 7) == %Location{
+             found: true,
+             type: :function,
+             file: nil,
+             line: 3,
+             column: 7
+           }
+  end
+
+  test "find definition of local module" do
+    buffer = """
+    defmodule MyModule do
+      defmodule Submodule do
+        def my_fun(), do: :ok
+      end
+
+      def a do
+        MyModule.Submodule.my_fun()
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 7, 16) == %Location{
+             found: true,
+             type: :module,
+             file: nil,
+             line: 2,
+             column: 13
+           }
+  end
+
   test "find definition of params" do
     buffer = """
     defmodule MyModule do
