@@ -25,9 +25,13 @@ defmodule ElixirSense.Providers.Definition do
   @doc """
   Finds out where a module, function, macro or variable was defined.
   """
-  @spec find(String.t(), [module], [{module, module}], module, [%VarInfo{}]) :: %Location{}
-  def find(subject, imports, aliases, module, vars) do
-    var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
+  @spec find(String.t(), [module], [{module, module}], module, [%VarInfo{}], map, map) ::
+          %Location{}
+  def find(subject, imports, aliases, module, vars, mods_funs, calls) do
+    var_info =
+      unless subject_is_call?(subject, calls) do
+        vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
+      end
 
     case var_info do
       %VarInfo{positions: [{line, column} | _]} ->
@@ -36,8 +40,55 @@ defmodule ElixirSense.Providers.Definition do
       _ ->
         subject
         |> Source.split_module_and_func(aliases)
-        |> Introspection.actual_mod_fun(imports, aliases, module)
-        |> find_source(module)
+        |> find_function_or_module(mods_funs, module, imports, aliases)
+    end
+  end
+
+  defp subject_is_call?(subject, calls) do
+    Enum.find(calls, fn
+      %{mod: nil, func: func} ->
+        Atom.to_string(func) == subject
+
+      _ ->
+        false
+    end) != nil
+  end
+
+  defp find_function_or_module({nil, nil}, _mods_funs, current_module, imports, aliases) do
+    {nil, nil}
+    |> Introspection.actual_mod_fun(imports, aliases, current_module)
+    |> find_source(current_module)
+  end
+
+  defp find_function_or_module({module, function}, mods_funs, current_module, imports, aliases)
+       when is_atom(function) do
+    # TODO arity info would be useful here
+    # TODO support local typespecs
+
+    fun_module =
+      case module do
+        mod when mod in [nil, :__MODULE__] -> current_module
+        mod when is_atom(mod) -> mod
+      end
+
+    case mods_funs[{fun_module, function, nil}] do
+      nil ->
+        # module or function not found in buffer metadata, try in trospection
+        {module, function}
+        |> Introspection.actual_mod_fun(imports, aliases, current_module)
+        |> find_source(current_module)
+
+      %{positions: positions} ->
+        # for simplicity take first position here
+        [{line, column} | _] = positions
+
+        %Location{
+          found: true,
+          file: nil,
+          type: fun_to_type(function),
+          line: line,
+          column: column
+        }
     end
   end
 
@@ -86,11 +137,7 @@ defmodule ElixirSense.Providers.Definition do
   end
 
   defp find_fun_position({mod, file}, fun) do
-    type =
-      case fun do
-        nil -> :module
-        _ -> :function
-      end
+    type = fun_to_type(fun)
 
     position =
       if String.ends_with?(file, ".erl") do
@@ -105,6 +152,9 @@ defmodule ElixirSense.Providers.Definition do
       _ -> nil
     end
   end
+
+  defp fun_to_type(nil), do: :module
+  defp fun_to_type(_), do: :function
 
   defp find_fun_position_in_erl_file(file, fun) do
     fun_name = Atom.to_string(fun)

@@ -25,6 +25,39 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
+  @doc ~S"""
+  Splits function call into module and function
+
+  ## Examples
+
+      iex> ElixirSense.Core.Source.split_module_and_func("MyMod.my_func")
+      {MyMod, :my_func}
+      iex> ElixirSense.Core.Source.split_module_and_func("MyAlias.my_func", [{MyAlias, My.Mod}])
+      {My.Mod, :my_func}
+      iex> ElixirSense.Core.Source.split_module_and_func("my_func")
+      {nil, :my_func}
+      iex> ElixirSense.Core.Source.split_module_and_func(":erlang_mod.my_func")
+      {:erlang_mod, :my_func}
+      iex> ElixirSense.Core.Source.split_module_and_func("Elixir.MyMod.my_func")
+      {MyMod, :my_func}
+      iex> ElixirSense.Core.Source.split_module_and_func(":\"Elixir.MyMod\".my_func")
+      {MyMod, :my_func}
+      iex> ElixirSense.Core.Source.split_module_and_func("__MODULE__.my_func")
+      {:__MODULE__, :my_func}
+      iex> ElixirSense.Core.Source.split_module_and_func("MyModule")
+      {MyModule, nil}
+      iex> ElixirSense.Core.Source.split_module_and_func("__MODULE__")
+      {:__MODULE__, nil}
+      iex> ElixirSense.Core.Source.split_module_and_func(":erlang_module")
+      {:erlang_module, nil}
+      iex> ElixirSense.Core.Source.split_module_and_func("Elixir.MyMod")
+      {MyMod, nil}
+      iex> ElixirSense.Core.Source.split_module_and_func(":\"Elixir.MyMod\"")
+      {MyMod, nil}
+      iex> ElixirSense.Core.Source.split_module_and_func("MyAlias", [{MyAlias, My.Mod}])
+      {My.Mod, nil}
+
+  """
   def split_module_and_func(call, aliases \\ []) do
     case Code.string_to_quoted(call) do
       {:error, _} ->
@@ -410,8 +443,14 @@ defmodule ElixirSense.Core.Source do
           :error -> {nil, nil}
         end
 
+      {:__MODULE__, []} ->
+        {:__MODULE__, nil}
+
       {mod, func, []} when is_atom(mod) and is_atom(func) ->
         {mod, func}
+
+      {{:__MODULE__, _, nil}, func, []} when is_atom(func) ->
+        {:__MODULE__, func}
 
       {func, []} when is_atom(func) ->
         {nil, func}
