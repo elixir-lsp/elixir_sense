@@ -56,6 +56,8 @@ defmodule ElixirSense.Core.State do
     defstruct type: nil
   end
 
+  alias ElixirSense.Core.Introspection
+
   def current_aliases(state) do
     state.aliases |> List.flatten() |> Enum.uniq_by(&elem(&1, 0)) |> Enum.reverse()
   end
@@ -188,24 +190,30 @@ defmodule ElixirSense.Core.State do
   def escape_protocol_impementations({protocol, implementations}) do
     joined_implementations =
       implementations
-      |> Enum.map(fn parts ->
-        parts
-        |> Enum.map(&Atom.to_string/1)
-        |> Enum.join(@dot_marker)
+      |> Enum.map_join(@or_marker, fn
+        parts when is_list(parts) ->
+          parts
+          |> Enum.map_join(@dot_marker, &Atom.to_string/1)
+
+        module when is_atom(module) ->
+          Atom.to_string(module) |> String.replace("Elixir.", "")
       end)
-      |> Enum.join(@or_marker)
       |> String.to_atom()
 
-    protocol ++ [joined_implementations]
+    List.wrap(protocol) ++ [joined_implementations]
   end
 
   def escape_protocol_impementations(module_parts), do: module_parts
 
   def unescape_protocol_impementations(module) when is_atom(module) do
-    Module.split(module)
-    |> Enum.reverse()
-    |> Enum.map(&String.to_atom/1)
-    |> unescape_protocol_impementations
+    if Introspection.elixir_module?(module) do
+      Module.split(module)
+      |> Enum.reverse()
+      |> Enum.map(&String.to_atom/1)
+      |> unescape_protocol_impementations
+    else
+      [module]
+    end
   end
 
   def unescape_protocol_impementations(parts) do
@@ -247,11 +255,14 @@ defmodule ElixirSense.Core.State do
               {namespace, scopes}
           end
 
-        module ->
+        module when is_list(module) ->
           module_reversed = :lists.reverse(module)
           namespace = module_reversed ++ hd(state.namespace)
           scopes = module_reversed ++ hd(state.scopes)
           {namespace, scopes}
+
+        module when is_atom(module) ->
+          {module, [module]}
       end
 
     %{state | namespace: [namespace | state.namespace], scopes: [scopes | state.scopes]}
@@ -265,7 +276,7 @@ defmodule ElixirSense.Core.State do
 
     state = %{state | namespace: outer_mods, scopes: outer_scopes}
 
-    if length(outer_scopes) > 1 and state.protocols |> hd == [] do
+    if length(outer_scopes) > 1 and state.protocols |> hd == [] and is_list(module) do
       # submodule defined, create alias in outer module namespace
 
       # take only outermost submodule part as deeply nested submodules do not create aliases
@@ -286,12 +297,21 @@ defmodule ElixirSense.Core.State do
   def maybe_add_protocol_implementation(state, {protocol, implementations}) do
     implementation_modules =
       implementations
-      |> Enum.flat_map(fn module ->
-        expanded = expand_alias(state, Module.concat(module))
-        unescape_protocol_impementations(expanded)
+      |> Enum.flat_map(fn
+        module when is_list(module) ->
+          expanded = expand_alias(state, Module.concat(module))
+          unescape_protocol_impementations(expanded)
+
+        module when is_atom(module) ->
+          unescape_protocol_impementations(module)
       end)
 
-    candidate = expand_alias(state, Module.concat(protocol))
+    candidate =
+      if is_list(protocol) do
+        expand_alias(state, Module.concat(protocol))
+      else
+        protocol
+      end
 
     protocols =
       unescape_protocol_impementations(candidate)

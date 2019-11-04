@@ -728,6 +728,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 4) == [{Ets, :ets}]
   end
 
+  test "aliases atom module" do
+    state =
+      """
+      defmodule MyModule do
+        alias :"Elixir.A.B"
+        alias :"Elixir.A.C", as: S
+        alias :"Elixir.A.D", as: :"Elixir.X"
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 5) == [{B, A.B}, {S, A.C}, {X, A.D}]
+  end
+
   test "aliases defined with v1.2 notation (multiline)" do
     state =
       """
@@ -746,7 +761,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     state =
       """
       defmodule A do
-        alias Components.{Dialog, Dialog.Footer, Button}
+        alias Components.{Dialog, Dialog.Footer, Button, :"Elixir.Other"}
         IO.puts ""
       end
       """
@@ -755,7 +770,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 3) == [
              {Dialog, Components.Dialog},
              {Footer, Components.Dialog.Footer},
-             {Button, Components.Button}
+             {Button, Components.Button},
+             {Other, Components.Other}
            ]
   end
 
@@ -804,13 +820,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     state =
       """
       defmodule MyModule do
-        import Foo.Bar.{User, Email}
+        import Foo.Bar.{User, Email, :"Elixir.Other"}
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_imports(state, 3) == [Foo.Bar.Email, Foo.Bar.User]
+    assert get_line_imports(state, 3) == [Foo.Bar.Other, Foo.Bar.Email, Foo.Bar.User]
   end
 
   test "imports" do
@@ -884,14 +900,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule OuterModule do
         import List
         import SomeModule.Inner
+        import :"Elixir.SomeModule.NextInner"
         import :erlang_module
         IO.puts ""
       end
       """
       |> string_to_state
 
-    refute get_line_imports(state, 5) == [SomeModule.Inner, List, :erlang_module]
-    assert get_line_aliases(state, 5) == [{Inner, SomeModule.Inner}]
+    refute get_line_imports(state, 6) == [
+             SomeModule.Inner,
+             List,
+             :erlang_module,
+             SomeModule.NextInner
+           ]
+
+    assert get_line_aliases(state, 6) == [
+             {Inner, SomeModule.Inner},
+             {NextInner, SomeModule.NextInner}
+           ]
   end
 
   test "requires" do
@@ -933,13 +959,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     state =
       """
       defmodule MyModule do
-        require Mod.{Mo1, Mod2}
+        require Mod.{Mo1, Mod2, :"Elixir.Mod3"}
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_requires(state, 3) == [Mod.Mod2, Mod.Mo1]
+    assert get_line_requires(state, 3) == [Mod.Mod3, Mod.Mod2, Mod.Mo1]
   end
 
   test "requires duplicated" do
@@ -969,6 +995,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert get_line_requires(state, 4) == [:ets, Integer]
     assert get_line_aliases(state, 4) == [{I, Integer}, {E, :ets}]
+  end
+
+  test "requires atom module" do
+    state =
+      """
+      defmodule MyModule do
+        require :my_mod
+        require :"Elixir.MyMod.Some"
+        require :"Elixir.MyMod.Other", as: A
+        require :"Elixir.MyMod.Other1", as: :"Elixir.A1"
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_requires(state, 6) == [MyMod.Other1, MyMod.Other, MyMod.Some, :my_mod]
+    assert get_line_aliases(state, 6) == [{A, MyMod.Other}, {A1, MyMod.Other1}]
   end
 
   test "requires aliased module" do
@@ -1060,6 +1103,72 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_module(state, 20) == Some.Nested
   end
 
+  test "current module atom" do
+    state =
+      """
+      IO.puts ""
+      defmodule :outer_module do
+        IO.puts ""
+        defmodule :inner_module do
+          def func do
+            if true do
+              IO.puts ""
+            end
+          end
+        end
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_module(state, 1) == Elixir
+    assert get_line_protocol(state, 1) == nil
+    assert get_line_module(state, 3) == :outer_module
+    assert get_line_protocol(state, 3) == nil
+    assert get_line_module(state, 7) == :inner_module
+    assert get_line_protocol(state, 7) == nil
+    assert get_line_module(state, 11) == :outer_module
+    assert get_line_protocol(state, 11) == nil
+  end
+
+  test "current module as atom" do
+    state =
+      """
+      IO.puts ""
+      defmodule :"Elixir.OuterModule" do
+        IO.puts ""
+        defmodule :"Elixir.InnerModule" do
+          def func do
+            if true do
+              IO.puts ""
+            end
+          end
+        end
+        IO.puts ""
+
+        defmodule :"Elixir.OuterModule.InnerModule1" do
+          def func do
+            if true do
+              IO.puts ""
+            end
+          end
+        end
+      end
+      """
+      |> string_to_state
+
+    assert get_line_module(state, 1) == Elixir
+    assert get_line_protocol(state, 1) == nil
+    assert get_line_module(state, 3) == OuterModule
+    assert get_line_protocol(state, 3) == nil
+    assert get_line_module(state, 7) == InnerModule
+    assert get_line_protocol(state, 7) == nil
+    assert get_line_module(state, 11) == OuterModule
+    assert get_line_protocol(state, 11) == nil
+    assert get_line_module(state, 16) == OuterModule.InnerModule1
+    assert get_line_protocol(state, 16) == nil
+  end
+
   test "current module and protocol implementation" do
     state =
       """
@@ -1127,6 +1236,54 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
   end
 
+  test "protocol implementation for atom modules" do
+    state =
+      """
+      defprotocol :my_reversible do
+        def reverse(term)
+        IO.puts ""
+      end
+
+      defimpl :my_reversible, for: [String, :my_str, :"Elixir.MyStr"] do
+        def reverse(term), do: String.reverse(term)
+        IO.puts ""
+      end
+
+      defprotocol :"Elixir.My.Reversible" do
+        def reverse(term)
+        IO.puts ""
+      end
+
+      defimpl :"Elixir.My.Reversible", for: [String, :my_str, :"Elixir.MyStr"] do
+        def reverse(term), do: String.reverse(term)
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_module(state, 3) == :my_reversible
+    assert get_line_protocol(state, 3) == nil
+
+    assert get_line_module(state, 8) == [
+             :"Elixir.my_reversible.String",
+             :"Elixir.my_reversible.my_str",
+             :"Elixir.my_reversible.MyStr"
+           ]
+
+    assert get_line_protocol(state, 8) == {:my_reversible, [String, :my_str, MyStr]}
+
+    assert get_line_module(state, 13) == My.Reversible
+    assert get_line_protocol(state, 13) == nil
+
+    assert get_line_module(state, 18) == [
+             My.Reversible.String,
+             :"Elixir.My.Reversible.my_str",
+             My.Reversible.MyStr
+           ]
+
+    assert get_line_protocol(state, 18) == {My.Reversible, [String, :my_str, MyStr]}
+  end
+
   test "protocol implementation module naming rules" do
     state =
       """
@@ -1171,6 +1328,28 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     # aliases are expanded on protocol and implementation
     assert get_line_module(state, 24) == NiceProto.Enumerable.Date.Range
     assert get_line_protocol(state, 24) == {NiceProto, [Enumerable.Date.Range]}
+  end
+
+  test "protocol implementation using __MODULE__" do
+    state =
+      """
+      defprotocol NiceProto do
+        def reverse(term)
+      end
+
+      defmodule MyStruct do
+        defstruct [a: nil]
+
+        defimpl NiceProto, for: __MODULE__ do
+          def reverse(term), do: String.reverse(term)
+        end
+      end
+      """
+      |> string_to_state
+
+    # protocol implementation module name does not inherit enclosing module, only protocol
+    assert get_line_module(state, 8) == NiceProto.MyStruct
+    assert get_line_protocol(state, 8) == {NiceProto, [MyStruct]}
   end
 
   test "registers positions" do
@@ -1321,6 +1500,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_behaviours(state, 3) == [:gen_server]
+  end
+
+  test "behaviour from atom module" do
+    state =
+      """
+      defmodule OuterModule do
+        @behaviour :"Elixir.My.Behavior"
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_behaviours(state, 3) == [My.Behavior]
   end
 
   test "behaviour duplicated" do
@@ -1657,6 +1849,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
+  end
+
+  test "use atom module" do
+    state =
+      """
+      defmodule InheritMod do
+        use :"Elixir.ElixirSenseExample.ExampleBehaviour"
+
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+
+    assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
   end
 
   test "find struct" do

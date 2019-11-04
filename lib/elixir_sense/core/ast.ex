@@ -289,8 +289,12 @@ defmodule ElixirSense.Core.Ast do
   end
 
   defp extract_aliases([mod]) when is_atom(mod) do
-    alias = Module.split(mod) |> Enum.take(-1) |> Module.concat()
-    [{alias, mod}]
+    if Introspection.elixir_module?(mod) do
+      alias = Module.split(mod) |> Enum.take(-1) |> Module.concat()
+      [{alias, mod}]
+    else
+      [{mod, mod}]
+    end
   end
 
   defp extract_aliases([{{:., _, [prefix, :{}]}, _, suffixes}]) when is_list(suffixes) do

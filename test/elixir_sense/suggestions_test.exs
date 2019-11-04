@@ -965,6 +965,26 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  test "suggestion for aliased struct fields atom module" do
+    buffer = """
+    defmodule Mod do
+      alias IO.Stream
+      %:"Elixir.Stream"{
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 21)
+      |> Enum.filter(&(&1.type in [:field, :hint]))
+
+    assert list == [
+             %{type: :hint, value: ""},
+             %{name: :device, origin: "IO.Stream", type: :field},
+             %{name: :line_or_bytes, origin: "IO.Stream", type: :field},
+             %{name: :raw, origin: "IO.Stream", type: :field}
+           ]
+  end
+
   test "suggestion for metadata struct fields" do
     buffer = """
     defmodule MyServer do
@@ -995,6 +1015,39 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{type: :hint, value: ""},
              %{name: :field_1, origin: "MyServer", type: :field}
+           ]
+  end
+
+  test "suggestion for metadata struct fields atom module" do
+    buffer = """
+    defmodule :my_server do
+      defstruct [
+        field_1: nil,
+        field_2: ""
+      ]
+
+      def func do
+        %:my_server{}
+        %:my_server{field_2: "2", }
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 8, 17)
+      |> Enum.filter(&(&1.type in [:field, :hint]))
+
+    assert list == [
+             %{type: :hint, value: ""},
+             %{name: :field_1, origin: ":my_server", type: :field},
+             %{name: :field_2, origin: ":my_server", type: :field}
+           ]
+
+    list = ElixirSense.suggestions(buffer, 9, 30)
+
+    assert list == [
+             %{type: :hint, value: ""},
+             %{name: :field_1, origin: ":my_server", type: :field}
            ]
   end
 
