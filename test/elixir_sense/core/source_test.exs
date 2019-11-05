@@ -561,4 +561,98 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_struct(text_before(code, 5, 7)) == {Mod, [:field1]}
     end
   end
+
+  describe "alias syntax v1.2" do
+    test "single level" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          alias Mod.{
+      """
+
+      assert get_v12_module_prefix(code) == Mod
+    end
+
+    test "single level with submodule" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          require Mod.{Su
+      """
+
+      assert get_v12_module_prefix(code) == Mod
+    end
+
+    test "single level with submodules" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          use Mod.{Su.Bmod, Other
+      """
+
+      assert get_v12_module_prefix(code) == Mod
+    end
+
+    test "multi level with submodules" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          import Mod.Sub.{
+      """
+
+      assert get_v12_module_prefix(code) == Mod.Sub
+    end
+
+    test "__MODULE__ special form level with submodules" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          alias __MODULE__.{
+      """
+
+      assert get_v12_module_prefix(code) == :__MODULE__
+    end
+
+    test "atom module special form level with submodules" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          alias :"Elixir.Mod".{
+      """
+
+      assert get_v12_module_prefix(code) == Mod
+    end
+
+    test "nil when closed" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          alias Mod.{}
+      """
+
+      assert get_v12_module_prefix(code) == nil
+    end
+
+    test "nil when not on last line" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          alias Mod.{A, B}
+          alias C
+      """
+
+      assert get_v12_module_prefix(code) == nil
+    end
+
+    test "multiline" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          alias Mod.{A,
+            B
+      """
+
+      assert get_v12_module_prefix(code) == Mod
+    end
+  end
 end

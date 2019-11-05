@@ -166,7 +166,8 @@ defmodule ElixirSense.Providers.Suggestion do
             vars,
             attributes,
             module,
-            mods_and_funs
+            mods_and_funs,
+            text_before
           )
 
         [%{type: :hint, value: "#{hint}"} | fields ++ rest]
@@ -202,7 +203,7 @@ defmodule ElixirSense.Providers.Suggestion do
     vars = Enum.map(vars, fn v -> v.name end)
 
     %{hint: hint_suggestion, suggestions: mods_and_funcs} =
-      find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs)
+      find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs, text_before)
 
     callbacks_or_returns =
       case scope do
@@ -227,12 +228,13 @@ defmodule ElixirSense.Providers.Suggestion do
          vars,
          attributes,
          module,
-         mods_and_funs
+         mods_and_funs,
+         text_before
        ) do
     vars = Enum.map(vars, fn v -> v.name end)
 
     %{hint: hint_suggestion, suggestions: mods_and_funcs} =
-      find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs)
+      find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs, text_before)
 
     [hint_suggestion]
     |> Kernel.++(find_attributes(attributes, hint))
@@ -277,11 +279,12 @@ defmodule ElixirSense.Providers.Suggestion do
     end
   end
 
-  @spec find_hint_mods_funcs(String.t(), [module], [{module, module}], module, %{}) :: %{
-          hint: hint,
-          suggestions: [mod | func]
-        }
-  defp find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs) do
+  @spec find_hint_mods_funcs(String.t(), [module], [{module, module}], module, %{}, String.t()) ::
+          %{
+            hint: hint,
+            suggestions: [mod | func]
+          }
+  defp find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs, text_before) do
     env = %Complete.Env{
       aliases: aliases,
       scope_module: module,
@@ -289,8 +292,29 @@ defmodule ElixirSense.Providers.Suggestion do
       mods_and_funs: mods_and_funs
     }
 
-    {hint_suggestion, suggestions} = Complete.run(hint, env)
-    %{hint: hint_suggestion, suggestions: suggestions}
+    {hint, prefix} =
+      case Source.get_v12_module_prefix(text_before) do
+        nil ->
+          {hint, ""}
+
+        module ->
+          # v1.2 alias syntax detected
+          # prepend module prefix before running completion
+          prefix = inspect(module) <> "."
+          {prefix <> hint, prefix}
+      end
+
+    {%{type: :hint, value: prefixed_value}, suggestions} = Complete.run(hint, env)
+
+    # drop module prefix from hint if added
+    value =
+      if prefix != "" do
+        prefixed_value |> String.replace_leading(prefix, "")
+      else
+        prefixed_value
+      end
+
+    %{hint: %{type: :hint, value: value}, suggestions: suggestions}
   end
 
   @spec find_vars([String.t()], String.t()) :: [variable]
