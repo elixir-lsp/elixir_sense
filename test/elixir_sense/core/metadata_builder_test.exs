@@ -700,6 +700,34 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 3) == [{User, Foo.User}, {Email, Foo.Email}]
   end
 
+  test "aliases defined with v1.2 notation __MODULE__" do
+    state =
+      """
+      defmodule MyModule do
+        alias __MODULE__.{User, Email}
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [{User, MyModule.User}, {Email, MyModule.Email}]
+  end
+
+  test "aliases with __MODULE__" do
+    state =
+      """
+      defmodule MyModule do
+        alias __MODULE__.Sub
+        alias __MODULE__
+        alias __MODULE__.A.B, as: C
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 5) == [{Sub, MyModule.Sub}, {C, MyModule.A.B}]
+  end
+
   test "aliases of aliases" do
     state =
       """
@@ -762,6 +790,25 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       defmodule A do
         alias Components.{Dialog, Dialog.Footer, Button, :"Elixir.Other"}
+        alias Some.{}
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 4) == [
+             {Dialog, Components.Dialog},
+             {Footer, Components.Dialog.Footer},
+             {Button, Components.Button},
+             {Other, Components.Other}
+           ]
+  end
+
+  test "aliases defined with v1.2 notation with atom module" do
+    state =
+      """
+      defmodule A do
+        alias :"Elixir.Components".{Dialog, Dialog.Footer, Button, :"Elixir.Other"}
         IO.puts ""
       end
       """
@@ -821,12 +868,27 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       defmodule MyModule do
         import Foo.Bar.{User, Email, :"Elixir.Other"}
+        import Bar.{}
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_imports(state, 3) == [Foo.Bar.Other, Foo.Bar.Email, Foo.Bar.User]
+    assert get_line_imports(state, 4) == [Foo.Bar.Other, Foo.Bar.Email, Foo.Bar.User]
+  end
+
+  test "imports defined with v1.2 notation with atom module" do
+    state =
+      """
+      defmodule MyModule do
+        import :"Elixir.Foo.Bar".{User, Email, :"Elixir.Other"}
+        import Bar.{}
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_imports(state, 4) == [Foo.Bar.Other, Foo.Bar.Email, Foo.Bar.User]
   end
 
   test "imports" do
@@ -878,6 +940,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_imports(state, 4) == [List]
+  end
+
+  test "imports with __MODULE__" do
+    state =
+      """
+      defmodule OuterModule do
+        import __MODULE__.Sub
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_imports(state, 3) == [OuterModule.Sub]
   end
 
   test "imports aliased module" do
@@ -955,17 +1030,45 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_requires(state, 3) == [Mod]
   end
 
-  test "requires with 1.2 notation" do
+  test "requires with __MODULE__" do
     state =
       """
       defmodule MyModule do
-        require Mod.{Mo1, Mod2, :"Elixir.Mod3"}
+        require __MODULE__.Sub
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_requires(state, 3) == [Mod.Mod3, Mod.Mod2, Mod.Mo1]
+    assert get_line_requires(state, 3) == [MyModule.Sub]
+  end
+
+  test "requires with 1.2 notation" do
+    state =
+      """
+      defmodule MyModule do
+        require Mod.{Mo1, Mod2, :"Elixir.Mod3"}
+        require Foo.{}
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_requires(state, 4) == [Mod.Mod3, Mod.Mod2, Mod.Mo1]
+  end
+
+  test "requires with 1.2 notation with atom module" do
+    state =
+      """
+      defmodule MyModule do
+        require :"Elixir.Mod".{Mo1, Mod2, :"Elixir.Mod3"}
+        require Foo.{}
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_requires(state, 4) == [Mod.Mod3, Mod.Mod2, Mod.Mo1]
   end
 
   test "requires duplicated" do
@@ -1502,6 +1605,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_behaviours(state, 3) == [:gen_server]
   end
 
+  test "behaviour from __MODULE__" do
+    state =
+      """
+      defmodule OuterModule do
+        @behaviour __MODULE__.Sub
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_behaviours(state, 3) == [OuterModule.Sub]
+  end
+
   test "behaviour from atom module" do
     state =
       """
@@ -1834,6 +1950,49 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              InheritMod.Nested => %{},
              InheritMod.ProtocolEmbedded => %{}
            } == state.mods_funs
+  end
+
+  test "use v1.2 notation" do
+    state =
+      """
+      defmodule InheritMod do
+        use ElixirSenseExample.{ExampleBehaviour}
+        use Foo.{}
+
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+
+    assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
+  end
+
+  test "use v1.2 notation with atom module" do
+    state =
+      """
+      defmodule InheritMod do
+        use :"Elixir.ElixirSenseExample".{:"Elixir.ExampleBehaviour"}
+
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+
+    assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
+  end
+
+  test "use with __MODULE__" do
+    state =
+      """
+      defmodule ElixirSenseExample do
+        use __MODULE__.ExampleBehaviour
+
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+
+    assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
   end
 
   test "use aliased" do
