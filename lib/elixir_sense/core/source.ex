@@ -161,6 +161,21 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
+  def get_v12_module_prefix(text_before) do
+    with %{"module" => module_str} <-
+           Regex.named_captures(
+             ~r/(alias|require|import|use)\s+(?<module>[^\s^\{^\}]+?)\.\{[^\}]*?$/,
+             text_before
+           ),
+         {:ok, ast} <- Code.string_to_quoted(module_str),
+         {:ok, module} <- extract_module(ast) do
+      module
+    else
+      _ ->
+        nil
+    end
+  end
+
   defp extract_module({:__aliases__, _, module_list}) do
     {:ok, Module.concat(module_list)}
   end

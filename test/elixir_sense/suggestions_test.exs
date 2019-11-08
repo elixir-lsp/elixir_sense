@@ -1166,6 +1166,36 @@ defmodule ElixirSense.SuggestionsTest do
     assert Enum.any?(list, fn %{type: type} -> type == :field end) == false
   end
 
+  test "suggest modules to alias" do
+    buffer = """
+    defmodule MyModule do
+      alias Str
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 2, 12)
+      |> Enum.filter(fn s -> s.type == :module end)
+
+    assert [
+             %{name: "Stream"},
+             %{name: "String"},
+             %{name: "StringIO"}
+           ] = list
+  end
+
+  test "suggest modules to alias v1.2 syntax" do
+    buffer = """
+    defmodule MyModule do
+      alias Stream.{Re
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 2, 19)
+
+    assert [%{type: :hint, value: "Reducers"}, %{name: "Reducers", type: :module}] = list
+  end
+
   describe "suggestion for param options" do
     test "suggest more than one option" do
       buffer = "Local.func_with_options("
