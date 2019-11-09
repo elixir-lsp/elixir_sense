@@ -901,6 +901,52 @@ defmodule ElixirSense.SuggestionsTest do
            ] = ElixirSense.suggestions(buffer, 9, 7)
   end
 
+  test "functions and module suggestions with __MODULE__" do
+    buffer = """
+    defmodule ElixirSenseExample.SmodO do
+      def test_fun_pub(a), do: :ok
+      defp test_fun_priv(), do: :ok
+    end
+
+    defmodule ElixirSenseExample do
+      def test_fun_priv1(a), do: :ok
+      def some_fun() do
+        __MODULE__.Sm
+        __MODULE__.SmodO.te
+        __MODULE__.te
+      end
+    end
+    """
+
+    assert [
+             %{type: :hint, value: "__MODULE__.SmodO"},
+             %{
+               name: "SmodO",
+               type: :module
+             }
+           ] = ElixirSense.suggestions(buffer, 9, 18)
+
+    assert [
+             %{type: :hint, value: "__MODULE__.SmodO.test_fun_pub"},
+             %{
+               arity: 1,
+               name: "test_fun_pub",
+               origin: "ElixirSenseExample.SmodO",
+               type: "function"
+             }
+           ] = ElixirSense.suggestions(buffer, 10, 24)
+
+    assert [
+             %{type: :hint, value: "__MODULE__.test_fun_priv1"},
+             %{
+               arity: 1,
+               name: "test_fun_priv1",
+               origin: "ElixirSenseExample",
+               type: "function"
+             }
+           ] = ElixirSense.suggestions(buffer, 11, 18)
+  end
+
   test "Elixir module" do
     buffer = """
     defmodule MyModule do
@@ -1184,6 +1230,19 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
+  test "suggest modules to alias with __MODULE__" do
+    buffer = """
+    defmodule Stream do
+      alias __MODULE__.Re
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 2, 22)
+
+    assert [%{type: :hint, value: "__MODULE__.Reducers"}, %{name: "Reducers", type: :module} | _] =
+             list
+  end
+
   test "suggest modules to alias v1.2 syntax" do
     buffer = """
     defmodule MyModule do
@@ -1192,6 +1251,18 @@ defmodule ElixirSense.SuggestionsTest do
     """
 
     list = ElixirSense.suggestions(buffer, 2, 19)
+
+    assert [%{type: :hint, value: "Reducers"}, %{name: "Reducers", type: :module}] = list
+  end
+
+  test "suggest modules to alias v1.2 syntax with __MODULE__" do
+    buffer = """
+    defmodule Stream do
+      alias __MODULE__.{Re
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 2, 23)
 
     assert [%{type: :hint, value: "Reducers"}, %{name: "Reducers", type: :module}] = list
   end

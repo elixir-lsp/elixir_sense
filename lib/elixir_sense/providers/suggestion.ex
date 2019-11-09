@@ -297,6 +297,12 @@ defmodule ElixirSense.Providers.Suggestion do
         nil ->
           {hint, ""}
 
+        :__MODULE__ ->
+          # v1.2 alias syntax detected with __MODULE__ special form
+          # prepend module prefix before running completion
+          prefix = "__MODULE__."
+          {prefix <> hint, prefix}
+
         module ->
           # v1.2 alias syntax detected
           # prepend module prefix before running completion
@@ -304,7 +310,21 @@ defmodule ElixirSense.Providers.Suggestion do
           {prefix <> hint, prefix}
       end
 
+    {hint, module_special_form_replaced} =
+      if String.starts_with?(hint, "__MODULE__") do
+        {hint |> String.replace_leading("__MODULE__", inspect(module)), true}
+      else
+        {hint, false}
+      end
+
     {%{type: :hint, value: prefixed_value}, suggestions} = Complete.run(hint, env)
+
+    prefixed_value =
+      if module_special_form_replaced do
+        prefixed_value |> String.replace_leading(inspect(module), "__MODULE__")
+      else
+        prefixed_value
+      end
 
     # drop module prefix from hint if added
     value =
