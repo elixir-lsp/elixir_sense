@@ -2066,6 +2066,70 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_behaviours(state, 4) == [Exception]
   end
 
+  test "registers calls with __MODULE__" do
+    state =
+      """
+      defmodule NyModule do
+        def func1, do: :ok
+        def func2(a), do: :ok
+        def func do
+          __MODULE__.func1
+          __MODULE__.func1()
+          __MODULE__.func2(2)
+          __MODULE__.Sub.func2(2)
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{
+             5 => [%{arity: 0, col: 15, func: :func1, line: 5, mod: NyModule}],
+             6 => [%{arity: 0, col: 15, func: :func1, line: 6, mod: NyModule}],
+             7 => [%{arity: 1, col: 15, func: :func2, line: 7, mod: NyModule}],
+             8 => [%{arity: 1, col: 19, func: :func2, line: 8, mod: NyModule.Sub}]
+           }
+  end
+
+  test "registers calls with erlang module" do
+    state =
+      """
+      defmodule NyModule do
+        def func do
+          :erl_mod.func1
+          :erl_mod.func1()
+          :erl_mod.func2(2)
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{
+             3 => [%{arity: 0, col: 13, func: :func1, line: 3, mod: :erl_mod}],
+             4 => [%{arity: 0, col: 13, func: :func1, line: 4, mod: :erl_mod}],
+             5 => [%{arity: 1, col: 13, func: :func2, line: 5, mod: :erl_mod}]
+           }
+  end
+
+  test "registers calls with atom module" do
+    state =
+      """
+      defmodule NyModule do
+        def func do
+          :"Elixir.MyMod".func1
+          :"Elixir.MyMod".func1()
+          :"Elixir.MyMod".func2(2)
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{
+             3 => [%{arity: 0, col: 20, func: :func1, line: 3, mod: MyMod}],
+             4 => [%{arity: 0, col: 20, func: :func1, line: 4, mod: MyMod}],
+             5 => [%{arity: 1, col: 20, func: :func2, line: 5, mod: MyMod}]
+           }
+  end
+
   test "registers calls no arg no parens" do
     state =
       """
@@ -2150,6 +2214,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert state.calls == %{3 => [%{arity: 1, col: 10, func: :func, line: 3, mod: MyMod}]}
   end
 
+  test "registers calls pipe with __MODULE__ operator no parens" do
+    state =
+      """
+      defmodule NyModule do
+        def func do
+          "test" |> __MODULE__.func
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 1, col: 25, func: :func, line: 3, mod: NyModule}]}
+  end
+
   test "registers calls pipe operator no parens" do
     state =
       """
@@ -2190,6 +2268,34 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert state.calls == %{3 => [%{arity: 2, col: 20, func: :func, line: 3, mod: MyMod}]}
+  end
+
+  test "registers calls pipe operator erlang module" do
+    state =
+      """
+      defmodule NyModule do
+        def func do
+          "test" |> :my_mod.func("arg")
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 2, col: 22, func: :func, line: 3, mod: :my_mod}]}
+  end
+
+  test "registers calls pipe operator atom module" do
+    state =
+      """
+      defmodule NyModule do
+        def func do
+          "test" |> :"Elixir.MyMod".func("arg")
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 2, col: 30, func: :func, line: 3, mod: MyMod}]}
   end
 
   test "registers calls pipe operator local" do
@@ -2282,6 +2388,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            }
   end
 
+  test "registers calls capture operator __MODULE__" do
+    state =
+      """
+      defmodule NyModule do
+        def func do
+          &__MODULE__.func/1
+          &__MODULE__.Sub.func/1
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{
+             3 => [%{arity: 1, col: 16, func: :func, line: 3, mod: NyModule}],
+             4 => [%{arity: 1, col: 20, func: :func, line: 4, mod: NyModule.Sub}]
+           }
+  end
+
   test "registers calls capture operator external" do
     state =
       """
@@ -2294,6 +2418,34 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert state.calls == %{3 => [%{arity: 1, col: 11, func: :func, line: 3, mod: MyMod}]}
+  end
+
+  test "registers calls capture operator external erlang module" do
+    state =
+      """
+      defmodule NyModule do
+        def func do
+          &:erl_mod.func/1
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 1, col: 14, func: :func, line: 3, mod: :erl_mod}]}
+  end
+
+  test "registers calls capture operator external atom module" do
+    state =
+      """
+      defmodule NyModule do
+        def func do
+          &:"Elixir.MyMod".func/1
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{3 => [%{arity: 1, col: 21, func: :func, line: 3, mod: MyMod}]}
   end
 
   test "registers calls capture operator local" do

@@ -447,7 +447,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre({var_or_call, [line: line, column: column], context} = ast, state)
-       when is_atom(var_or_call) and context in [nil, Elixir] do
+       when is_atom(var_or_call) and var_or_call != :__MODULE__ and context in [nil, Elixir] do
     if Enum.any?(get_current_vars(state), &(&1.name == var_or_call)) do
       state
       |> add_vars(find_vars(ast), false)
@@ -567,7 +567,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         {func, position, nil} ->
           {func, position, fake_params}
 
-        {{:., _, [{:__aliases__, _, _}, _]} = ast_part, position, []} ->
+        {{:., _, [_ | _]} = ast_part, position, []} ->
           {ast_part, position, fake_params}
       end
 
@@ -589,14 +589,39 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre(
-         {{:., _, [{:__aliases__, _, mod_path}, call]}, [line: line, column: col], params} = ast,
+         {{:., _, [{:__aliases__, _, module_expression = [_ | _]}, call]},
+          [line: line, column: col], params} = ast,
          state
        )
        when is_call(call, params) do
-    mod = Module.concat(mod_path)
+    module = concat_module_expression(state, module_expression)
 
     state
-    |> add_call_to_line({mod, call, length(params)}, line, col)
+    |> add_call_to_line({module, call, length(params)}, line, col)
+    |> add_current_env_to_line(line)
+    |> result(ast)
+  end
+
+  defp pre(
+         {{:., _, [{:__MODULE__, _, nil}, call]}, [line: line, column: col], params} = ast,
+         state
+       )
+       when is_call(call, params) do
+    module = get_current_module(state)
+
+    state
+    |> add_call_to_line({module, call, length(params)}, line, col)
+    |> add_current_env_to_line(line)
+    |> result(ast)
+  end
+
+  defp pre(
+         {{:., _, [module, call]}, [line: line, column: col], params} = ast,
+         state
+       )
+       when is_atom(module) and is_call(call, params) do
+    state
+    |> add_call_to_line({module, call, length(params)}, line, col)
     |> add_current_env_to_line(line)
     |> result(ast)
   end
