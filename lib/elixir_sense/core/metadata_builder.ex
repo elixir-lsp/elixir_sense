@@ -28,6 +28,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_module(ast, state, position, module) do
+    module = normalize_module(module)
+
     state
     |> maybe_add_protocol_implementation(module)
     |> new_namespace(module)
@@ -42,6 +44,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp post_module(ast, state, module) do
+    module = normalize_module(module)
+
     state
     |> remove_attributes_scope
     |> remove_behaviours_scope
@@ -400,16 +404,21 @@ defmodule ElixirSense.Core.MetadataBuilder do
           [{{:., _, [prefix_expression, :{}]}, _, aliases}]} = ast,
          state
        ) do
-    prefix_atoms = split_module_expression(state, prefix_expression)
+    case split_module_expression(state, prefix_expression) do
+      {:ok, prefix_atoms} ->
+        aliases_tuples =
+          aliases
+          |> Enum.map(fn
+            {:__aliases__, _, mods} -> {Module.concat(mods), Module.concat(prefix_atoms ++ mods)}
+            mod when is_atom(mod) -> {mod, Module.concat(prefix_atoms ++ [mod])}
+          end)
 
-    aliases_tuples =
-      aliases
-      |> Enum.map(fn
-        {:__aliases__, _, mods} -> {Module.concat(mods), Module.concat(prefix_atoms ++ mods)}
-        mod when is_atom(mod) -> {mod, Module.concat(prefix_atoms ++ [mod])}
-      end)
+        pre_alias(ast, state, line, aliases_tuples)
 
-    pre_alias(ast, state, line, aliases_tuples)
+      :error ->
+        state
+        |> result(ast)
+    end
   end
 
   # alias without options
@@ -607,6 +616,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
         {{:., _, [_ | _]} = ast_part, position, []} ->
           {ast_part, position, fake_params}
+
+        _ ->
+          nil
       end
 
     pre(call, state)
@@ -789,6 +801,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       {:__aliases__, _, implementation} -> implementation
       module when is_atom(module) -> module
       {:__MODULE__, _, nil} -> state |> get_current_module
+      _ -> nil
     end)
   end
 
@@ -802,18 +815,41 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp modules_from_12_syntax(state, expressions, prefix_expression) do
-    prefix_atoms = split_module_expression(state, prefix_expression)
+    case split_module_expression(state, prefix_expression) do
+      {:ok, prefix_atoms} ->
+        for expression <- expressions do
+          case split_module_expression(state, expression) do
+            {:ok, suffix_atoms} ->
+              Module.concat(prefix_atoms ++ suffix_atoms)
 
-    expressions
-    |> Enum.map(&Module.concat(prefix_atoms ++ split_module_expression(state, &1)))
+            :error ->
+              :error
+          end
+        end
+        |> Enum.reject(&(&1 == :error))
+
+      :error ->
+        []
+    end
   end
 
-  defp split_module_expression(_state, {:__aliases__, _, mods}), do: mods
-  defp split_module_expression(_state, mod) when is_atom(mod), do: [mod]
-  defp split_module_expression(state, {:__MODULE__, _, nil}), do: [state |> get_current_module]
+  defp split_module_expression(_state, {:__aliases__, _, mods}), do: {:ok, mods}
+  defp split_module_expression(_state, mod) when is_atom(mod), do: {:ok, [mod]}
+
+  defp split_module_expression(state, {:__MODULE__, _, nil}),
+    do: {:ok, [state |> get_current_module]}
+
+  defp split_module_expression(_, _), do: :error
 
   defp concat_module_expression(state, module_parts) do
     # TODO use aliases here?
     Source.concat_module_parts(module_parts, state |> get_current_module, [])
   end
+
+  defp normalize_module([{:__MODULE__, _, nil} | rest]), do: rest
+
+  defp normalize_module({[{:__MODULE__, _, nil} | rest], implementations}),
+    do: {rest, implementations}
+
+  defp normalize_module(other), do: other
 end

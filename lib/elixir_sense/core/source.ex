@@ -524,4 +524,6 @@ defmodule ElixirSense.Core.Source do
   end
 
   def concat_module_parts([_ | _], _, _), do: :error
+
+  def concat_module_parts([], _, _), do: :error
 end

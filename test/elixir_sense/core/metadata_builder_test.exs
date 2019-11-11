@@ -1167,6 +1167,41 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_protocol(state, 15) == nil
   end
 
+  test "current module with __MODULE__" do
+    state =
+      """
+      IO.puts ""
+      defmodule OuterModule do
+        IO.puts ""
+        defmodule __MODULE__.InnerModule do
+          def func do
+            if true do
+              IO.puts ""
+            end
+          end
+        end
+        IO.puts ""
+      end
+
+      defmodule Some.Nested do
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_module(state, 1) == Elixir
+    assert get_line_protocol(state, 1) == nil
+    assert get_line_module(state, 3) == OuterModule
+    assert get_line_protocol(state, 3) == nil
+    assert get_line_module(state, 7) == OuterModule.InnerModule
+    assert get_line_protocol(state, 7) == nil
+    assert get_line_module(state, 11) == OuterModule
+    assert get_line_protocol(state, 11) == nil
+
+    assert get_line_module(state, 15) == Some.Nested
+    assert get_line_protocol(state, 15) == nil
+  end
+
   test "current module with `Elixir` prefix" do
     state =
       """
@@ -1204,6 +1239,34 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 16) == [{InnerModule, OuterModule.InnerModule}]
 
     assert get_line_module(state, 20) == Some.Nested
+  end
+
+  test "current module with `Elixir` submodule" do
+    state =
+      """
+      IO.puts ""
+      defmodule OuterModule do
+        IO.puts ""
+
+        defmodule Elixir do
+          IO.puts ""
+        end
+
+        IO.puts ""
+      end
+
+      defmodule Some.Nested do
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_module(state, 1) == Elixir
+    assert get_line_module(state, 3) == OuterModule
+    assert get_line_module(state, 6) == OuterModule.Elixir
+    assert get_line_module(state, 9) == OuterModule
+
+    assert get_line_module(state, 13) == Some.Nested
   end
 
   test "current module atom" do
@@ -1453,6 +1516,25 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     # protocol implementation module name does not inherit enclosing module, only protocol
     assert get_line_module(state, 8) == NiceProto.MyStruct
     assert get_line_protocol(state, 8) == {NiceProto, [MyStruct]}
+  end
+
+  test "protocol implementation using __MODULE__ 2" do
+    state =
+      """
+      defmodule Nice do
+        defprotocol Proto do
+          def reverse(term)
+        end
+
+        defimpl __MODULE__.Proto, for: String do
+          def reverse(term), do: String.reverse(term)
+        end
+      end
+      """
+      |> string_to_state
+
+    assert get_line_module(state, 7) == Nice.Proto.String
+    assert get_line_protocol(state, 7) == {Nice.Proto, [String]}
   end
 
   test "registers positions" do
@@ -2536,14 +2618,56 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   defp get_subject_definition_line(module, func, arity) do
     file = module.module_info(:compile)[:source]
 
-    acc =
+    {:ok, ast} =
       File.read!(file)
       |> Code.string_to_quoted(columns: true)
-      |> MetadataBuilder.build()
+
+    acc = MetadataBuilder.build(ast)
 
     %{positions: positions} = Map.get(acc.mods_funs_to_positions, {module, func, arity})
     {line_number, _col} = List.last(positions)
 
     File.read!(file) |> String.split("\n") |> Enum.at(line_number - 1)
+  end
+
+  @tag requires_source: true
+  test "all elixir modules" do
+    elixir_sense_src_path =
+      MetadataBuilder.module_info(:compile)[:source]
+      |> Path.join("../../../..")
+      |> Path.expand()
+      |> ls_r
+
+    elixir_src_path =
+      Enum.module_info(:compile)[:source]
+      |> Path.join("../../..")
+      |> Path.expand()
+      |> ls_r
+
+    for path <- elixir_sense_src_path ++ elixir_src_path do
+      case File.read!(path)
+           |> Code.string_to_quoted(columns: true) do
+        {:ok, ast} -> MetadataBuilder.build(ast)
+        _ -> :ok
+      end
+    end
+  end
+
+  def ls_r(path \\ ".") do
+    cond do
+      File.regular?(path) ->
+        [path]
+
+      File.dir?(path) ->
+        File.ls!(path)
+        |> Enum.map(&Path.join(path, &1))
+        |> Enum.map(&ls_r/1)
+        |> Enum.concat()
+
+      true ->
+        []
+    end
+    # .eex?
+    |> Enum.filter(&(String.ends_with?(&1, ".ex") or String.ends_with?(&1, ".exs")))
   end
 end

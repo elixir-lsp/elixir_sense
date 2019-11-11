@@ -238,7 +238,7 @@ defmodule ElixirSense.Core.State do
 
     {namespace, scopes} =
       case module do
-        [:"Elixir" | module] ->
+        [:"Elixir" | module = [_ | _]] ->
           case state.namespace do
             [[:"Elixir"]] ->
               # top level module - drop prefix
@@ -443,18 +443,23 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_alias(state, {alias, module}) when alias == module, do: state
+  def add_alias(state, {Elixir, _module}), do: state
 
   def add_alias(state, {alias, aliased}) do
-    alias = Module.split(alias) |> Enum.take(-1) |> Module.concat()
-    [aliases_from_scope | inherited_aliases] = state.aliases
-    aliases_from_scope = aliases_from_scope |> Enum.reject(&match?({^alias, _}, &1))
+    if Introspection.elixir_module?(alias) do
+      alias = Module.split(alias) |> Enum.take(-1) |> Module.concat()
+      [aliases_from_scope | inherited_aliases] = state.aliases
+      aliases_from_scope = aliases_from_scope |> Enum.reject(&match?({^alias, _}, &1))
 
-    %{
+      %{
+        state
+        | aliases: [
+            [{alias, expand_alias(state, aliased)} | aliases_from_scope] | inherited_aliases
+          ]
+      }
+    else
       state
-      | aliases: [
-          [{alias, expand_alias(state, aliased)} | aliases_from_scope] | inherited_aliases
-        ]
-    }
+    end
   end
 
   def add_aliases(state, aliases_tuples) do
