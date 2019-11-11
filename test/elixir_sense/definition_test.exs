@@ -340,6 +340,27 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
+  test "find definition of local functions with atom module" do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(), do: :ok
+
+      def a do
+        my_fun1 = 1
+        :"Elixir.MyModule".my_fun()
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 6, 24) == %Location{
+             found: true,
+             type: :function,
+             file: nil,
+             line: 2,
+             column: 7
+           }
+  end
+
   test "find definition of local functions with alias" do
     buffer = """
     defmodule MyModule do

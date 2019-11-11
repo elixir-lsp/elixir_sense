@@ -42,6 +42,31 @@ defmodule ElixirSense.Core.SourceTest do
              }
     end
 
+    test "functions with namespace atom module" do
+      assert which_func("var = :\"Elixir.Mod\".func(param1, par") == %{
+               candidate: {Mod, :func},
+               npar: 1,
+               pipe_before: false,
+               pos: {{1, 7}, {1, nil}}
+             }
+    end
+
+    test "functions with namespace __MODULE__" do
+      assert which_func("var = __MODULE__.func(param1, par", Mod) == %{
+               candidate: {Mod, :func},
+               npar: 1,
+               pipe_before: false,
+               pos: {{1, 7}, {1, nil}}
+             }
+
+      assert which_func("var = __MODULE__.Sub.func(param1, par", Mod) == %{
+               candidate: {Mod.Sub, :func},
+               npar: 1,
+               pipe_before: false,
+               pos: {{1, 7}, {1, nil}}
+             }
+    end
+
     test "nested functions calls" do
       assert which_func("var = outer_func(Mod.SubMod.func(param1,") == %{
                candidate: {Mod.SubMod, :func},
@@ -350,7 +375,16 @@ defmodule ElixirSense.Core.SourceTest do
       """
 
       assert subject(code, 1, 5) == ":lists"
-      assert subject(code, 1, 5) == ":lists"
+    end
+
+    test "atom modules" do
+      code = """
+        :"Elixir.List".concat([1,2])
+        :'Elixir.List'.concat([1,2])
+      """
+
+      assert subject(code, 1, 13) == ":\"Elixir.List\""
+      assert subject(code, 2, 13) == ":\'Elixir.List\'"
     end
 
     test "functions from erlang modules" do
@@ -359,6 +393,16 @@ defmodule ElixirSense.Core.SourceTest do
       """
 
       assert subject(code, 1, 12) == ":lists.concat"
+    end
+
+    test "functions from atom modules" do
+      code = """
+        :"Elixir.List".concat([1,2])
+        :'Elixir.List'.concat([1,2])
+      """
+
+      assert subject(code, 1, 20) == ":\"Elixir.List\".concat"
+      assert subject(code, 2, 20) == ":\'Elixir.List\'.concat"
     end
 
     test "capture operator" do

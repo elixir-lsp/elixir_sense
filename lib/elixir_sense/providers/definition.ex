@@ -39,7 +39,7 @@ defmodule ElixirSense.Providers.Definition do
 
       _ ->
         subject
-        |> Source.split_module_and_func(aliases)
+        |> Source.split_module_and_func(module, aliases)
         |> find_function_or_module(mods_funs, module, imports, aliases)
     end
   end
@@ -67,13 +67,13 @@ defmodule ElixirSense.Providers.Definition do
 
     fun_module =
       case module do
-        mod when mod in [nil, :__MODULE__] -> current_module
+        nil -> current_module
         mod when is_atom(mod) -> mod
       end
 
     case mods_funs[{fun_module, function, nil}] do
       nil ->
-        # module or function not found in buffer metadata, try in trospection
+        # module or function not found in buffer metadata, try introspection
         {module, function}
         |> Introspection.actual_mod_fun(imports, aliases, current_module)
         |> find_source(current_module)

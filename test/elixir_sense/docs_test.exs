@@ -52,6 +52,58 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    test "retrieve function documentation atom module" do
+      buffer = """
+      defmodule MyModule do
+        def func(list) do
+          :"Elixir.List".flatten(list)
+        end
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 22)
+
+      assert subject == ":\"Elixir.List\".flatten"
+      assert actual_subject == "List.flatten"
+
+      assert docs =~ """
+             > List.flatten(list)
+
+             ### Specs
+
+             `@spec flatten(deep_list) :: list when deep_list: [any | deep_list]`
+
+             Flattens the given `list` of nested lists.
+             """
+    end
+
+    test "retrieve function documentation with __MODULE__" do
+      buffer = """
+      defmodule Inspect do
+        def func(list) do
+          __MODULE__.Algebra.string(list)
+        end
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 26)
+
+      assert subject == "__MODULE__.Algebra.string"
+      assert actual_subject == "Inspect.Algebra.string"
+
+      assert docs =~ """
+             > Inspect.Algebra.string(string)
+             """
+    end
+
     test "retrieve function documentation from aliased modules" do
       buffer = """
       defmodule MyModule do

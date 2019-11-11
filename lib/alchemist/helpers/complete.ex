@@ -259,7 +259,7 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp expand_alias(mod_parts, env) do
-    Source.concat_module_parts(mod_parts, env.aliases)
+    Source.concat_module_parts(mod_parts, env.scope_module, env.aliases)
   end
 
   defp match_aliases(hint, env) do

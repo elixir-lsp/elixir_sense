@@ -35,6 +35,57 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    test "find signatures from atom modules" do
+      code = """
+      defmodule MyModule do
+        :"Elixir.List".flatten(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 31) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   name: "flatten",
+                   params: ["list"],
+                   documentation: "Flattens the given `list` of nested lists.",
+                   spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]"
+                 },
+                 %{
+                   name: "flatten",
+                   params: ["list", "tail"],
+                   documentation:
+                     "Flattens the given `list` of nested lists.\nThe list `tail` will be added at the end of\nthe flattened list.",
+                   spec:
+                     "@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures from __MODULE__" do
+      code = """
+      defmodule Inspect do
+        __MODULE__.Algebra.glue(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 32) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation:
+                     "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
+                   name: "glue",
+                   params: ["doc1", "break_string \\\\ \" \"", "doc2"],
+                   spec: "@spec glue(t, binary, t) :: t"
+                 }
+               ]
+             }
+    end
+
     test "finds signatures from Kernel functions" do
       code = """
       defmodule MyModule do
