@@ -427,7 +427,7 @@ defmodule ElixirSense.Providers.Suggestion do
           param_option
         ]
   defp find_param_options(prefix, hint, imports, aliases, module) do
-    case Source.which_func(prefix) do
+    case Source.which_func(prefix, module) do
       %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} ->
         {mod, fun} = Introspection.actual_mod_fun({mod, fun}, imports, aliases, module)
 
@@ -454,7 +454,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
   defp find_typespecs(hint, aliases, module, _scope) do
     hint
-    |> Source.split_module_and_hint(aliases)
+    |> Source.split_module_and_hint(module, aliases)
     |> find_typespecs_for_mod_and_hint(aliases, module)
   end
 

@@ -6,20 +6,20 @@ defmodule ElixirSense.Core.Source do
   alias ElixirSense.Core.Normalized.Tokenizer
 
   @empty_graphemes [" ", "\n", "\r\n"]
-  @stop_graphemes ~w/{ } ( ) [ ] < > + - * & ^ , ; ~ % = " ' \\ \/ $ ! ?`#/ ++ @empty_graphemes
+  @stop_graphemes ~w/{ } ( ) [ ] < > + - * & ^ , ; ~ % = \\ \/ $ ! ?`#/ ++ @empty_graphemes
 
-  def split_module_and_hint(hint, aliases \\ []) do
+  def split_module_and_hint(hint, current_module \\ nil, aliases \\ []) do
     if String.ends_with?(hint, ".") do
       {mod, _} =
         hint
         |> String.slice(0..-2)
-        |> split_module_and_func(aliases)
+        |> split_module_and_func(current_module, aliases)
 
       {mod, ""}
     else
       {mod, new_hint} =
         hint
-        |> split_module_and_func(aliases)
+        |> split_module_and_func(current_module, aliases)
 
       {mod, to_string(new_hint)}
     end
@@ -30,35 +30,41 @@ defmodule ElixirSense.Core.Source do
 
   ## Examples
 
-      iex> ElixirSense.Core.Source.split_module_and_func("MyMod.my_func")
+      iex> ElixirSense.Core.Source.split_module_and_func("MyMod.my_func", CurrentMod)
       {MyMod, :my_func}
-      iex> ElixirSense.Core.Source.split_module_and_func("MyAlias.my_func", [{MyAlias, My.Mod}])
+      iex> ElixirSense.Core.Source.split_module_and_func("MyMod.Sub.my_func", CurrentMod)
+      {MyMod.Sub, :my_func}
+      iex> ElixirSense.Core.Source.split_module_and_func("MyAlias.my_func", CurrentMod, [{MyAlias, My.Mod}])
       {My.Mod, :my_func}
-      iex> ElixirSense.Core.Source.split_module_and_func("my_func")
+      iex> ElixirSense.Core.Source.split_module_and_func("my_func", CurrentMod)
       {nil, :my_func}
-      iex> ElixirSense.Core.Source.split_module_and_func(":erlang_mod.my_func")
+      iex> ElixirSense.Core.Source.split_module_and_func(":erlang_mod.my_func", CurrentMod)
       {:erlang_mod, :my_func}
-      iex> ElixirSense.Core.Source.split_module_and_func("Elixir.MyMod.my_func")
+      iex> ElixirSense.Core.Source.split_module_and_func("Elixir.MyMod.my_func", CurrentMod)
       {MyMod, :my_func}
-      iex> ElixirSense.Core.Source.split_module_and_func(":\"Elixir.MyMod\".my_func")
+      iex> ElixirSense.Core.Source.split_module_and_func(":\"Elixir.MyMod\".my_func", CurrentMod)
       {MyMod, :my_func}
-      iex> ElixirSense.Core.Source.split_module_and_func("__MODULE__.my_func")
-      {:__MODULE__, :my_func}
-      iex> ElixirSense.Core.Source.split_module_and_func("MyModule")
+      iex> ElixirSense.Core.Source.split_module_and_func("__MODULE__.my_func", CurrentMod)
+      {CurrentMod, :my_func}
+      iex> ElixirSense.Core.Source.split_module_and_func("__MODULE__.Sub.my_func", CurrentMod)
+      {CurrentMod.Sub, :my_func}
+      iex> ElixirSense.Core.Source.split_module_and_func("MyModule", CurrentMod)
       {MyModule, nil}
-      iex> ElixirSense.Core.Source.split_module_and_func("__MODULE__")
-      {:__MODULE__, nil}
-      iex> ElixirSense.Core.Source.split_module_and_func(":erlang_module")
+      iex> ElixirSense.Core.Source.split_module_and_func("__MODULE__", CurrentMod)
+      {CurrentMod, nil}
+      iex> ElixirSense.Core.Source.split_module_and_func("__MODULE__.Sub", CurrentMod)
+      {CurrentMod.Sub, nil}
+      iex> ElixirSense.Core.Source.split_module_and_func(":erlang_module", CurrentMod)
       {:erlang_module, nil}
-      iex> ElixirSense.Core.Source.split_module_and_func("Elixir.MyMod")
+      iex> ElixirSense.Core.Source.split_module_and_func("Elixir.MyMod", CurrentMod)
       {MyMod, nil}
-      iex> ElixirSense.Core.Source.split_module_and_func(":\"Elixir.MyMod\"")
+      iex> ElixirSense.Core.Source.split_module_and_func(":\"Elixir.MyMod\"", CurrentMod)
       {MyMod, nil}
-      iex> ElixirSense.Core.Source.split_module_and_func("MyAlias", [{MyAlias, My.Mod}])
+      iex> ElixirSense.Core.Source.split_module_and_func("MyAlias", CurrentMod, [{MyAlias, My.Mod}])
       {My.Mod, nil}
 
   """
-  def split_module_and_func(call, aliases \\ []) do
+  def split_module_and_func(call, current_module \\ nil, aliases \\ []) do
     case Code.string_to_quoted(call) do
       {:error, _} ->
         {nil, nil}
@@ -67,7 +73,7 @@ defmodule ElixirSense.Core.Source do
         {quoted, nil}
 
       {:ok, quoted} ->
-        split_mod_quoted_fun_call(quoted, aliases)
+        split_mod_quoted_fun_call(quoted, current_module, aliases)
     end
   end
 
@@ -327,7 +333,7 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  def which_func(prefix) do
+  def which_func(prefix, current_module \\ nil) do
     tokens = Tokenizer.tokenize(prefix)
 
     pattern = %{npar: 0, count: 0, count2: 0, candidate: [], pos: nil, pipe_before: false}
@@ -335,14 +341,14 @@ defmodule ElixirSense.Core.Source do
     %{candidate: candidate, npar: npar, pipe_before: pipe_before, pos: pos} = result
 
     %{
-      candidate: normalize_candidate(candidate),
+      candidate: normalize_candidate(candidate, current_module),
       npar: normalize_npar(npar, pipe_before),
       pipe_before: pipe_before,
       pos: pos
     }
   end
 
-  defp normalize_candidate(candidate) do
+  defp normalize_candidate(candidate, current_module) do
     case candidate do
       [] ->
         :none
@@ -350,12 +356,25 @@ defmodule ElixirSense.Core.Source do
       [func] ->
         {nil, func}
 
+      [:__MODULE__, func] ->
+        {current_module, func}
+
       [mod, func] ->
         {mod, func}
 
       list ->
         [func | mods] = Enum.reverse(list)
-        {Module.concat(Enum.reverse(mods)), func}
+
+        module_parts =
+          case mods |> Enum.reverse() do
+            [:__MODULE__ | rest] ->
+              [current_module | rest]
+
+            rest ->
+              rest
+          end
+
+        {Module.concat(module_parts), func}
     end
   end
 
@@ -418,6 +437,16 @@ defmodule ElixirSense.Core.Source do
     })
   end
 
+  defp scan([{:identifier, pos, :__MODULE__} | tokens], %{count: 1} = state) do
+    updated_pos = update_pos(pos, state.pos)
+
+    scan(tokens, %{
+      state
+      | candidate: [:__MODULE__ | state.candidate],
+        pos: updated_pos
+    })
+  end
+
   defp scan([{:atom, pos, value} | tokens], %{count: 1} = state) do
     scan(tokens, %{state | candidate: [value | state.candidate], pos: update_pos(pos, state.pos)})
   end
@@ -444,28 +473,28 @@ defmodule ElixirSense.Core.Source do
     %{state | pipe_before: true}
   end
 
-  defp split_mod_quoted_fun_call(quoted, aliases) do
+  defp split_mod_quoted_fun_call(quoted, current_module, aliases) do
     case Macro.decompose_call(quoted) do
       {{:__aliases__, _, mod_parts}, fun, _args} ->
-        case concat_module_parts(mod_parts, aliases) do
+        case concat_module_parts(mod_parts, current_module, aliases) do
           {:ok, concated} -> {concated, fun}
           :error -> {nil, nil}
         end
 
       {:__aliases__, mod_parts} ->
-        case concat_module_parts(mod_parts, aliases) do
+        case concat_module_parts(mod_parts, current_module, aliases) do
           {:ok, concated} -> {concated, nil}
           :error -> {nil, nil}
         end
 
       {:__MODULE__, []} ->
-        {:__MODULE__, nil}
+        {current_module, nil}
 
       {mod, func, []} when is_atom(mod) and is_atom(func) ->
         {mod, func}
 
       {{:__MODULE__, _, nil}, func, []} when is_atom(func) ->
-        {:__MODULE__, func}
+        {current_module, func}
 
       {func, []} when is_atom(func) ->
         {nil, func}
@@ -475,7 +504,18 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  def concat_module_parts([name | rest], aliases) when is_atom(name) do
+  def concat_module_parts([{:__MODULE__, _, nil} | rest], current_module, aliases)
+      when is_atom(current_module) and current_module != nil do
+    case concat_module_parts(rest, current_module, aliases) do
+      {:ok, module} ->
+        {:ok, Module.concat(current_module, module)}
+
+      :error ->
+        :error
+    end
+  end
+
+  def concat_module_parts([name | rest], _current_module, aliases) when is_atom(name) do
     case Keyword.fetch(aliases, Module.concat(Elixir, name)) do
       {:ok, name} when rest == [] -> {:ok, name}
       {:ok, name} -> {:ok, Module.concat([name | rest])}
@@ -483,5 +523,5 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  def concat_module_parts([_ | _], _), do: :error
+  def concat_module_parts([_ | _], _, _), do: :error
 end
