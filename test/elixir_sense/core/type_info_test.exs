@@ -127,5 +127,4 @@ defmodule ElixirSense.Core.TypeInfoTest do
   test "dont crash on :tls_record.lowest_protocol_version" do
     assert [] == TypeInfo.extract_param_options(:tls_record, :lowest_protocol_version, 0)
   end
-
 end

@@ -381,6 +381,9 @@ defmodule ElixirSense.Core.TypeInfo do
       {_mod, {_kind, {_name, {:type, _, :union, _}, _}}} = expanded_type ->
         extract_union_options_name_and_type(expanded_type)
 
+      {mod, {:atom, _, name}} ->
+        [{mod, name}]
+
       _ ->
         []
     end
