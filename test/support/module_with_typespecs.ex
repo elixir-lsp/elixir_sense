@@ -114,5 +114,8 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     def func_with_one_option(options) do
       options
     end
+
+    @spec fun_without_options([integer]) :: integer
+    def fun_without_options(a), do: length(a)
   end
 end
