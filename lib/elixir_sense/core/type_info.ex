@@ -273,7 +273,7 @@ defmodule ElixirSense.Core.TypeInfo do
 
   defp get_param_type_specs(func_specs, npar) do
     for func_spec <- func_specs,
-        params_types = extract_params_types(func_spec),
+        params_types <- extract_params_types_variants(func_spec),
         length(params_types) > npar do
       params_types |> Enum.at(npar)
     end
@@ -426,13 +426,16 @@ defmodule ElixirSense.Core.TypeInfo do
     false
   end
 
-  defp extract_params_types(
-         {:spec, {_, [{:type, _, :fun, [{:type, _, :product, params_types}, _]}]}}
-       ) do
+  defp extract_params_types_variants({:spec, {_, list}}) do
+    list
+    |> Enum.map(&extract_params_types/1)
+  end
+
+  defp extract_params_types({:type, _, :fun, [{:type, _, :product, params_types}, _]}) do
     params_types
   end
 
-  defp extract_params_types({:spec, {_, [{:type, _, :bounded_fun, [type, constraints]}]}}) do
+  defp extract_params_types({:type, _, :bounded_fun, [type, constraints]}) do
     {:type, _, :fun, [{:type, _, :product, params}, _]} = type
 
     vars_types =
