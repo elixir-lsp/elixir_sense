@@ -442,16 +442,36 @@ defmodule ElixirSense.Core.TypeInfo do
         {var, var_type}
       end
 
-    Enum.map(params, fn
-      {:var, _, name} ->
-        vars_types[name]
+    Enum.map(params, &expand_var_types(&1, vars_types, []))
+  end
 
-      {:type, l, :list, [{:var, _, name}]} ->
-        {:type, l, :list, [vars_types[name]]}
+  defp expand_var_types(var_type, vars_types, expanded_types) do
+    if var_type in expanded_types do
+      # break recursive type expansion
+      nil
+    else
+      do_expand_var_types(var_type, vars_types, [var_type | expanded_types])
+    end
+  end
 
-      type ->
-        type
-    end)
+  defp do_expand_var_types({:var, _, name}, vars_types, expanded_types) do
+    expand_var_types(vars_types[name], vars_types, expanded_types)
+  end
+
+  defp do_expand_var_types({:type, l, kind, tuple_elements}, vars_types, expanded_types)
+       when kind in [:list, :tuple, :union] and is_list(tuple_elements) do
+    expanded =
+      for element <- tuple_elements, do: expand_var_types(element, vars_types, expanded_types)
+
+    {:type, l, kind, expanded}
+  end
+
+  defp do_expand_var_types({:ann_type, _l, [{:var, _, _}, type]}, vars_types, expanded_types) do
+    expand_var_types(type, vars_types, expanded_types)
+  end
+
+  defp do_expand_var_types(type, _vars_types, _expanded_types) do
+    type
   end
 
   defp starts_with_type_def?(str, kind) do
