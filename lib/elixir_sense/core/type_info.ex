@@ -341,6 +341,37 @@ defmodule ElixirSense.Core.TypeInfo do
     extract_tagged_tuple_name_and_type({mod, type})
   end
 
+  defp extract_union_options_name_and_type({mod, {_kind, {_, {:atom, _, name}, _}}}) do
+    [{mod, name}]
+  end
+
+  defp extract_union_options_name_and_type(
+         {mod, {_kind, {_name, {:remote_type, _, _} = type, _}}}
+       ) do
+    extract_tagged_tuple_name_and_type({mod, type})
+  end
+
+  defp extract_union_options_name_and_type(
+         {mod, {_kind, {_name, {:user_type, _, _, _} = type, _}}}
+       ) do
+    extract_tagged_tuple_name_and_type({mod, type})
+  end
+
+  defp extract_union_options_name_and_type({mod, {:atom, _, atom}}) when is_atom(atom) do
+    [{mod, atom}]
+  end
+
+  defp extract_union_options_name_and_type(
+         {mod, {:type, {_kind, {:remote_type, _, _} = type, _}}}
+       ) do
+    extract_tagged_tuple_name_and_type({mod, type})
+  end
+
+  # skip unknown type
+  defp extract_union_options_name_and_type(_) do
+    []
+  end
+
   defp extract_tagged_tuple_name_and_type({mod, {:type, _, :tuple, [{:atom, _, name}, type]}}) do
     [{mod, name, type}]
   end
