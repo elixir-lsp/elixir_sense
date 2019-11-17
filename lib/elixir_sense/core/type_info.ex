@@ -442,7 +442,10 @@ defmodule ElixirSense.Core.TypeInfo do
         {var, var_type}
       end
 
-    Enum.map(params, &expand_var_types(&1, vars_types, []))
+    params
+    |> Enum.map(&expand_var_types(&1, vars_types, []))
+    # reject failed expansions
+    |> Enum.reject(&is_nil/1)
   end
 
   defp expand_var_types(var_type, vars_types, expanded_types) do
@@ -461,7 +464,9 @@ defmodule ElixirSense.Core.TypeInfo do
   defp do_expand_var_types({:type, l, kind, tuple_elements}, vars_types, expanded_types)
        when kind in [:list, :tuple, :union] and is_list(tuple_elements) do
     expanded =
-      for element <- tuple_elements, do: expand_var_types(element, vars_types, expanded_types)
+      for(element <- tuple_elements, do: expand_var_types(element, vars_types, expanded_types))
+      # reject failed expansions
+      |> Enum.reject(&is_nil/1)
 
     {:type, l, kind, expanded}
   end
