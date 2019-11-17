@@ -62,7 +62,9 @@ defmodule Alchemist.Helpers.CompleteTest do
             ]} = expand('Ma')
 
     assert {:yes, 't', [%{name: "Dict"}]} = expand('Dic')
-    assert {:yes, [], [%{name: "ExUnit"}, %{name: "Exception"}]} = expand('Ex')
+    assert {:yes, [], suggestions} = expand('Ex')
+    assert Enum.any?(suggestions, & &1.name == "ExUnit")
+    assert Enum.any?(suggestions, & &1.name == "Exception")
   end
 
   test "Elixir no completion for underscored functions with no doc" do
