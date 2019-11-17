@@ -361,12 +361,6 @@ defmodule ElixirSense.Core.TypeInfo do
     [{mod, atom}]
   end
 
-  defp extract_union_options_name_and_type(
-         {mod, {:type, {_kind, {:remote_type, _, _} = type, _}}}
-       ) do
-    extract_tagged_tuple_name_and_type({mod, type})
-  end
-
   # skip unknown type
   defp extract_union_options_name_and_type(_) do
     []
