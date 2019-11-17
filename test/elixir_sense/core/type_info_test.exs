@@ -1,7 +1,7 @@
 defmodule ElixirSense.Core.TypeInfoTest do
   use ExUnit.Case
   alias ElixirSense.Core.TypeInfo
-  alias ElixirSenseExample.ModuleWithTypespecs.{Local}
+  alias ElixirSenseExample.ModuleWithTypespecs.{Local, Remote}
 
   @tag timeout: :infinity
   @tag requires_source: true
@@ -15,116 +15,349 @@ defmodule ElixirSense.Core.TypeInfoTest do
     end
   end
 
-  test "return :ets.new options" do
+  test "func_with_options" do
     assert [
-             {:ets, :set},
-             {:ets, :ordered_set},
-             {:ets, :bag},
-             {:ets, :duplicate_bag},
-             {:ets, :public},
-             {:ets, :protected},
-             {:ets, :private},
-             {:ets, :named_table},
-             {:ets, :keypos, {:type, _, :pos_integer, []}},
-             {:ets, :heir, {:atom, _, :none}},
-             {:ets, :write_concurrency, {:type, _, :boolean, []}},
-             {:ets, :read_concurrency, {:type, _, :boolean, []}},
-             {:ets, :compressed}
-           ] = TypeInfo.extract_param_options(:ets, :new, 1)
+             {Local, :local_o, {:user_type, _, :local_t, []}},
+             {Local, :local_with_params_o,
+              {:user_type, _, :local_t, [{:type, _, :atom, []}, {:type, _, :integer, []}]}},
+             {Local, :union_o, {:user_type, _, :union_t, []}},
+             {Local, :inline_union_o, {:type, _, :union, [{:atom, _, :a}, {:atom, _, :b}]}},
+             {Local, :list_o, {:user_type, _, :list_t, []}},
+             {Local, :inline_list_o,
+              {:type, _, :list, [{:type, _, :union, [{:atom, _, :trace}, {:atom, _, :log}]}]}},
+             {Local, :basic_o, {:type, _, :pid, []}},
+             {Local, :basic_with_params_o, {:type, _, :nonempty_list, [{:type, _, :atom, []}]}},
+             {Local, :builtin_o,
+              {:remote_type, _, [{:atom, _, :elixir}, {:atom, _, :keyword}, []]}},
+             {Local, :builtin_with_params_o,
+              {:remote_type, _,
+               [{:atom, _, :elixir}, {:atom, _, :keyword}, [{:type, _, :term, []}]]}},
+             {Local, :remote_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :remote_with_params_o,
+              {:remote_type, _,
+               [
+                 {:atom, _, Remote},
+                 {:atom, _, :remote_t},
+                 [{:type, _, :atom, []}, {:type, _, :integer, []}]
+               ]}},
+             {Local, :remote_aliased_o, {:user_type, _, :remote_aliased_t, []}},
+             {Local, :remote_aliased_inline_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :private_o, {:user_type, _, :private_t, []}},
+             {Local, :opaque_o, {:user_type, _, :opaque_t, []}},
+             {Local, :non_existent_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :non_existent}, []]}},
+             {Local, :large_o, {:user_type, _, :large_t, []}}
+           ] = TypeInfo.extract_param_options(Local, :func_with_options, 0)
   end
 
-  test "dont crash on :lists.reverse" do
-    assert [] == TypeInfo.extract_param_options(:lists, :reverse, 1)
-  end
-
-  test "dont crash on fun_without_options" do
-    assert [] == TypeInfo.extract_param_options(Local, :fun_without_options, 1)
-  end
-
-  test "dont crash on :auth.print" do
-    assert [] == TypeInfo.extract_param_options(:auth, :print, 2)
-  end
-
-  test "dont crash on :code.set_path" do
-    assert [] == TypeInfo.extract_param_options(:auth, :print, 1)
-  end
-
-  test "dont crash on :error_logger.logfile" do
-    assert [] == TypeInfo.extract_param_options(:error_logger, :logfile, 0)
-  end
-
-  test "return :heart.set_option options" do
-    assert [{:heart, :check_schedulers}] ==
-             TypeInfo.extract_param_options(:heart, :set_options, 0)
-  end
-
-  test "dont crash on :beam_jump.remove_unused_labels" do
-    assert [] == TypeInfo.extract_param_options(:beam_jump, :remove_unused_labels, 0)
-  end
-
-  test "dont crash on :beam_ssa_bsm.check_context_call" do
-    assert [] == TypeInfo.extract_param_options(:beam_ssa_bsm, :check_context_call, 2)
-  end
-
-  test "dont crash on :beam_ssa_lint.vvars_assert_unique_1" do
-    assert [] == TypeInfo.extract_param_options(:beam_ssa_lint, :vvars_assert_unique_1, 0)
-  end
-
-  test "dont crash on :cerl_sets.from_list" do
-    assert [] == TypeInfo.extract_param_options(:cerl_sets, :from_list, 0)
-  end
-
-  test "dont crash on :cerl_sets.union" do
-    assert [] == TypeInfo.extract_param_options(:cerl_sets, :union, 0)
-  end
-
-  test "return :beam_lib.chunks options" do
-    assert [{:beam_lib, :allow_missing_chunks}] ==
-             TypeInfo.extract_param_options(:beam_lib, :chunks, 2)
-  end
-
-  test "dont crash on :erl_eval.match_clause" do
-    assert [] == TypeInfo.extract_param_options(:erl_eval, :match_clause, 0)
-  end
-
-  test "dont crash on :ets.test_ms" do
-    assert [] == TypeInfo.extract_param_options(:ets, :test_ms, 0)
-  end
-
-  test "dont crash on :io_lib_pretty.print" do
+  test "func_with_union_of_options" do
     assert [
-             {:io_lib_pretty, :chars_limit, {:user_type, _, :chars_limit, []}},
-             {:io_lib_pretty, :column, {:user_type, _, :column, []}},
-             {:io_lib_pretty, :depth, {:user_type, _, :depth, []}},
-             {:io_lib_pretty, :encoding, {:user_type, _, :encoding, []}},
-             {:io_lib_pretty, :line_length, {:user_type, _, :line_length, []}},
-             {:io_lib_pretty, :line_max_chars, {:user_type, _, :line_max_chars, []}},
-             {:io_lib_pretty, :record_print_fun, {:user_type, _, :rec_print_fun, []}},
-             {:io_lib_pretty, :strings, {:type, _, :boolean, []}}
-           ] = TypeInfo.extract_param_options(:io_lib_pretty, :print, 1)
+             {Local, :local_o, {:user_type, _, :local_t, []}},
+             {Local, :local_with_params_o,
+              {:user_type, _, :local_t, [{:type, _, :atom, []}, {:type, _, :integer, []}]}},
+             {Local, :union_o, {:user_type, _, :union_t, []}},
+             {Local, :inline_union_o, {:type, _, :union, [{:atom, _, :a}, {:atom, _, :b}]}},
+             {Local, :list_o, {:user_type, _, :list_t, []}},
+             {Local, :inline_list_o,
+              {:type, _, :list, [{:type, _, :union, [{:atom, _, :trace}, {:atom, _, :log}]}]}},
+             {Local, :basic_o, {:type, _, :pid, []}},
+             {Local, :basic_with_params_o, {:type, _, :nonempty_list, [{:type, _, :atom, []}]}},
+             {Local, :builtin_o,
+              {:remote_type, _, [{:atom, _, :elixir}, {:atom, _, :keyword}, []]}},
+             {Local, :builtin_with_params_o,
+              {:remote_type, _,
+               [{:atom, _, :elixir}, {:atom, _, :keyword}, [{:type, _, :term, []}]]}},
+             {Local, :remote_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :remote_with_params_o,
+              {:remote_type, _,
+               [
+                 {:atom, _, Remote},
+                 {:atom, _, :remote_t},
+                 [{:type, _, :atom, []}, {:type, _, :integer, []}]
+               ]}},
+             {Local, :remote_aliased_o, {:user_type, _, :remote_aliased_t, []}},
+             {Local, :remote_aliased_inline_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :private_o, {:user_type, _, :private_t, []}},
+             {Local, :opaque_o, {:user_type, _, :opaque_t, []}},
+             {Local, :non_existent_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :non_existent}, []]}},
+             {Local, :large_o, {:user_type, _, :large_t, []}},
+             {Local, :option_1, {:type, _, :atom, []}},
+             {Local, :option_2, {:type, _, :integer, []}}
+           ] = TypeInfo.extract_param_options(Local, :func_with_union_of_options, 0)
   end
 
-  test "dont crash on :lists.append" do
-    assert [] == TypeInfo.extract_param_options(:lists, :append, 0)
+  test "func_with_union_of_options_as_type" do
+    assert [
+             {Local, :option_1, {:type, _, :boolean, []}},
+             {Local, :option_2, {:type, _, :timeout, []}},
+             {Remote, :remote_option_1, {:user_type, _, :remote_t, []}},
+             {Remote, :remote_option_2, {:user_type, _, :remote_list_t, []}}
+           ] = TypeInfo.extract_param_options(Local, :func_with_union_of_options_as_type, 0)
   end
 
-  test "dont do infinite recursion in :lists.flatten" do
-    assert [] == TypeInfo.extract_param_options(:lists, :flatten, 0)
+  test "func_with_union_of_options_inline" do
+    assert [
+             {Local, :option_1, {:type, _, :atom, []}},
+             {Local, :option_2, {:type, _, :integer, []}},
+             {Local, :local_o, {:user_type, _, :local_t, []}},
+             {Local, :local_with_params_o,
+              {:user_type, _, :local_t, [{:type, _, :atom, []}, {:type, _, :integer, []}]}},
+             {Local, :union_o, {:user_type, _, :union_t, []}},
+             {Local, :inline_union_o, {:type, _, :union, [{:atom, _, :a}, {:atom, _, :b}]}},
+             {Local, :list_o, {:user_type, _, :list_t, []}},
+             {Local, :inline_list_o,
+              {:type, _, :list, [{:type, _, :union, [{:atom, _, :trace}, {:atom, _, :log}]}]}},
+             {Local, :basic_o, {:type, _, :pid, []}},
+             {Local, :basic_with_params_o, {:type, _, :nonempty_list, [{:type, _, :atom, []}]}},
+             {Local, :builtin_o,
+              {:remote_type, _, [{:atom, _, :elixir}, {:atom, _, :keyword}, []]}},
+             {Local, :builtin_with_params_o,
+              {:remote_type, _,
+               [{:atom, _, :elixir}, {:atom, _, :keyword}, [{:type, _, :term, []}]]}},
+             {Local, :remote_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :remote_with_params_o,
+              {:remote_type, _,
+               [
+                 {:atom, _, Remote},
+                 {:atom, _, :remote_t},
+                 [{:type, _, :atom, []}, {:type, _, :integer, []}]
+               ]}},
+             {Local, :remote_aliased_o, {:user_type, _, :remote_aliased_t, []}},
+             {Local, :remote_aliased_inline_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :private_o, {:user_type, _, :private_t, []}},
+             {Local, :opaque_o, {:user_type, _, :opaque_t, []}},
+             {Local, :non_existent_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :non_existent}, []]}},
+             {Local, :large_o, {:user_type, _, :large_t, []}}
+           ] = TypeInfo.extract_param_options(Local, :func_with_union_of_options_inline, 0)
   end
 
-  test "dont crash on :ordsets.union" do
-    assert [] == TypeInfo.extract_param_options(:ordsets, :union, 0)
+  test "func_with_named_options" do
+    assert [
+             {Local, :local_o, {:user_type, _, :local_t, []}},
+             {Local, :local_with_params_o,
+              {:user_type, _, :local_t, [{:type, _, :atom, []}, {:type, _, :integer, []}]}},
+             {Local, :union_o, {:user_type, _, :union_t, []}},
+             {Local, :inline_union_o, {:type, _, :union, [{:atom, _, :a}, {:atom, _, :b}]}},
+             {Local, :list_o, {:user_type, _, :list_t, []}},
+             {Local, :inline_list_o,
+              {:type, _, :list, [{:type, _, :union, [{:atom, _, :trace}, {:atom, _, :log}]}]}},
+             {Local, :basic_o, {:type, _, :pid, []}},
+             {Local, :basic_with_params_o, {:type, _, :nonempty_list, [{:type, _, :atom, []}]}},
+             {Local, :builtin_o,
+              {:remote_type, _, [{:atom, _, :elixir}, {:atom, _, :keyword}, []]}},
+             {Local, :builtin_with_params_o,
+              {:remote_type, _,
+               [{:atom, _, :elixir}, {:atom, _, :keyword}, [{:type, _, :term, []}]]}},
+             {Local, :remote_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :remote_with_params_o,
+              {:remote_type, _,
+               [
+                 {:atom, _, Remote},
+                 {:atom, _, :remote_t},
+                 [{:type, _, :atom, []}, {:type, _, :integer, []}]
+               ]}},
+             {Local, :remote_aliased_o, {:user_type, _, :remote_aliased_t, []}},
+             {Local, :remote_aliased_inline_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :private_o, {:user_type, _, :private_t, []}},
+             {Local, :opaque_o, {:user_type, _, :opaque_t, []}},
+             {Local, :non_existent_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :non_existent}, []]}},
+             {Local, :large_o, {:user_type, _, :large_t, []}}
+           ] = TypeInfo.extract_param_options(Local, :func_with_named_options, 0)
   end
 
-  test "dont crash on :sets.union" do
-    assert [] == TypeInfo.extract_param_options(:sets, :union, 0)
+  test "func_with_options_as_inline_list" do
+    assert [
+             {Local, :local_o, {:user_type, _, :local_t, []}},
+             {Local, :builtin_o,
+              {:remote_type, _, [{:atom, _, :elixir}, {:atom, _, :keyword}, []]}}
+           ] = TypeInfo.extract_param_options(Local, :func_with_options_as_inline_list, 0)
   end
 
-  test "dont crash on Config.Reader.read!" do
-    assert [] == TypeInfo.extract_param_options(Config.Reader, :read!, 1)
+  test "func_with_option_var_defined_in_when" do
+    assert [
+             {Local, :local_o, {:user_type, _, :local_t, []}},
+             {Local, :local_with_params_o,
+              {:user_type, _, :local_t, [{:type, _, :atom, []}, {:type, _, :integer, []}]}},
+             {Local, :union_o, {:user_type, _, :union_t, []}},
+             {Local, :inline_union_o, {:type, _, :union, [{:atom, _, :a}, {:atom, _, :b}]}},
+             {Local, :list_o, {:user_type, _, :list_t, []}},
+             {Local, :inline_list_o,
+              {:type, _, :list, [{:type, _, :union, [{:atom, _, :trace}, {:atom, _, :log}]}]}},
+             {Local, :basic_o, {:type, _, :pid, []}},
+             {Local, :basic_with_params_o, {:type, _, :nonempty_list, [{:type, _, :atom, []}]}},
+             {Local, :builtin_o,
+              {:remote_type, _, [{:atom, _, :elixir}, {:atom, _, :keyword}, []]}},
+             {Local, :builtin_with_params_o,
+              {:remote_type, _,
+               [{:atom, _, :elixir}, {:atom, _, :keyword}, [{:type, _, :term, []}]]}},
+             {Local, :remote_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :remote_with_params_o,
+              {:remote_type, _,
+               [
+                 {:atom, _, Remote},
+                 {:atom, _, :remote_t},
+                 [{:type, _, :atom, []}, {:type, _, :integer, []}]
+               ]}},
+             {Local, :remote_aliased_o, {:user_type, _, :remote_aliased_t, []}},
+             {Local, :remote_aliased_inline_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :private_o, {:user_type, _, :private_t, []}},
+             {Local, :opaque_o, {:user_type, _, :opaque_t, []}},
+             {Local, :non_existent_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :non_existent}, []]}},
+             {Local, :large_o, {:user_type, _, :large_t, []}}
+           ] = TypeInfo.extract_param_options(Local, :func_with_option_var_defined_in_when, 0)
   end
 
-  test "dont crash on :tls_record.lowest_protocol_version" do
-    assert [] == TypeInfo.extract_param_options(:tls_record, :lowest_protocol_version, 0)
+  test "func_with_options_var_defined_in_when" do
+    assert [
+             {Local, :local_o, {:user_type, _, :local_t, []}},
+             {Local, :local_with_params_o,
+              {:user_type, _, :local_t, [{:type, _, :atom, []}, {:type, _, :integer, []}]}},
+             {Local, :union_o, {:user_type, _, :union_t, []}},
+             {Local, :inline_union_o, {:type, _, :union, [{:atom, _, :a}, {:atom, _, :b}]}},
+             {Local, :list_o, {:user_type, _, :list_t, []}},
+             {Local, :inline_list_o,
+              {:type, _, :list, [{:type, _, :union, [{:atom, _, :trace}, {:atom, _, :log}]}]}},
+             {Local, :basic_o, {:type, _, :pid, []}},
+             {Local, :basic_with_params_o, {:type, _, :nonempty_list, [{:type, _, :atom, []}]}},
+             {Local, :builtin_o,
+              {:remote_type, _, [{:atom, _, :elixir}, {:atom, _, :keyword}, []]}},
+             {Local, :builtin_with_params_o,
+              {:remote_type, _,
+               [{:atom, _, :elixir}, {:atom, _, :keyword}, [{:type, _, :term, []}]]}},
+             {Local, :remote_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :remote_with_params_o,
+              {:remote_type, _,
+               [
+                 {:atom, _, Remote},
+                 {:atom, _, :remote_t},
+                 [{:type, _, :atom, []}, {:type, _, :integer, []}]
+               ]}},
+             {Local, :remote_aliased_o, {:user_type, _, :remote_aliased_t, []}},
+             {Local, :remote_aliased_inline_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :private_o, {:user_type, _, :private_t, []}},
+             {Local, :opaque_o, {:user_type, _, :opaque_t, []}},
+             {Local, :non_existent_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :non_existent}, []]}},
+             {Local, :large_o, {:user_type, _, :large_t, []}}
+           ] = TypeInfo.extract_param_options(Local, :func_with_options_var_defined_in_when, 0)
+  end
+
+  test "func_with_one_option" do
+    assert [
+             {Local, :local_o, {:user_type, _, :local_t, []}},
+             {Local, :local_with_params_o,
+              {:user_type, _, :local_t, [{:type, _, :atom, []}, {:type, _, :integer, []}]}},
+             {Local, :union_o, {:user_type, _, :union_t, []}},
+             {Local, :inline_union_o, {:type, _, :union, [{:atom, _, :a}, {:atom, _, :b}]}},
+             {Local, :list_o, {:user_type, _, :list_t, []}},
+             {Local, :inline_list_o,
+              {:type, _, :list, [{:type, _, :union, [{:atom, _, :trace}, {:atom, _, :log}]}]}},
+             {Local, :basic_o, {:type, _, :pid, []}},
+             {Local, :basic_with_params_o, {:type, _, :nonempty_list, [{:type, _, :atom, []}]}},
+             {Local, :builtin_o,
+              {:remote_type, _, [{:atom, _, :elixir}, {:atom, _, :keyword}, []]}},
+             {Local, :builtin_with_params_o,
+              {:remote_type, _,
+               [{:atom, _, :elixir}, {:atom, _, :keyword}, [{:type, _, :term, []}]]}},
+             {Local, :remote_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :remote_with_params_o,
+              {:remote_type, _,
+               [
+                 {:atom, _, Remote},
+                 {:atom, _, :remote_t},
+                 [{:type, _, :atom, []}, {:type, _, :integer, []}]
+               ]}},
+             {Local, :remote_aliased_o, {:user_type, _, :remote_aliased_t, []}},
+             {Local, :remote_aliased_inline_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :remote_t}, []]}},
+             {Local, :private_o, {:user_type, _, :private_t, []}},
+             {Local, :opaque_o, {:user_type, _, :opaque_t, []}},
+             {Local, :non_existent_o,
+              {:remote_type, _, [{:atom, _, Remote}, {:atom, _, :non_existent}, []]}},
+             {Local, :large_o, {:user_type, _, :large_t, []}}
+           ] = TypeInfo.extract_param_options(Local, :func_with_named_options, 0)
+  end
+
+  test "fun_without_options" do
+    assert [] = TypeInfo.extract_param_options(Local, :fun_without_options, 0)
+  end
+
+  test "fun_with_atom_option" do
+    assert [{Local, :option_name}] ==
+             TypeInfo.extract_param_options(Local, :fun_with_atom_option, 0)
+  end
+
+  test "fun_with_atom_option_in_when" do
+    assert [{Local, :option_name}] ==
+             TypeInfo.extract_param_options(Local, :fun_with_atom_option_in_when, 0)
+  end
+
+  test "fun_with_recursive_remote_type_option" do
+    assert [
+             {Remote, :remote_option_1, {:user_type, _, :remote_t, []}},
+             {Remote, :remote_option_2, {:user_type, _, :remote_list_t, []}}
+           ] = TypeInfo.extract_param_options(Local, :fun_with_recursive_remote_type_option, 0)
+  end
+
+  test "fun_with_recursive_user_type_option" do
+    assert [
+             {Local, :option_1, {:type, _, :atom, []}},
+             {Local, :option_2, {:type, _, :integer, []}}
+           ] = TypeInfo.extract_param_options(Local, :fun_with_recursive_user_type_option, 0)
+  end
+
+  test "fun_with_tuple_option_in_when" do
+    assert [{Local, :opt_name, {:atom, _, :opt_value}}] =
+             TypeInfo.extract_param_options(Local, :fun_with_tuple_option_in_when, 0)
+  end
+
+  test "fun_with_tuple_option" do
+    assert [{Local, :opt_name, {:atom, _, :opt_value}}] =
+             TypeInfo.extract_param_options(Local, :fun_with_tuple_option, 0)
+  end
+
+  test "fun_with_atom_user_type_option_in_when" do
+    assert [{Local, :atom_opt}] ==
+             TypeInfo.extract_param_options(Local, :fun_with_atom_user_type_option_in_when, 0)
+  end
+
+  test "fun_with_atom_user_type_option" do
+    assert [{Local, :atom_opt}] ==
+             TypeInfo.extract_param_options(Local, :fun_with_atom_user_type_option, 0)
+  end
+
+  test "fun_with_list_of_lists" do
+    assert [] == TypeInfo.extract_param_options(Local, :fun_with_list_of_lists, 0)
+  end
+
+  test "fun_with_recursive_type" do
+    assert [] == TypeInfo.extract_param_options(Local, :fun_with_recursive_type, 0)
+  end
+
+  test "fun_with_multiple_specs" do
+    assert [{Local, :opt_name, {:atom, _, :opt_value}}] =
+             TypeInfo.extract_param_options(Local, :fun_with_multiple_specs, 0)
+  end
+
+  test "fun_with_multiple_specs_when" do
+    assert [{Local, :opt_name, {:atom, _, :opt_value}}] =
+             TypeInfo.extract_param_options(Local, :fun_with_multiple_specs_when, 0)
   end
 end
