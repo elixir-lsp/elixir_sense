@@ -30,6 +30,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
             when is_atom(call) and is_list(params) and
                    call not in [:., :__aliases__, :"::", :{}, :|>]
 
+  defguard is_call_meta_old(list)
+           when elem(hd(list), 0) == :line and elem(hd(tl(list)), 0) == :column
+
+  defguard is_call_meta(list)
+           when (elem(hd(list), 0) == :no_parens and is_call_meta_old(tl(list))) or
+                  is_call_meta_old(list)
+
   @doc """
   Traverses the AST building/retrieving the environment information.
   It returns a `ElixirSense.Core.State` struct containing the information.
@@ -779,9 +786,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # transform `a |> b(c)` calls into `b(a, c)`
-  defp pre({:|>, _, [params_1, {call, [line: line, column: column], params_rest}]}, state) do
+  defp pre({:|>, _, [params_1, {call, meta, params_rest}]}, state) do
     params = [params_1 | params_rest || []]
-    pre({call, [line: line, column: column], params}, state)
+    pre({call, meta, params}, state)
   end
 
   # transform external and local func capture into fake call
@@ -808,8 +815,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre(call, state)
   end
 
-  defp pre({call, [line: line, column: column], params} = ast, state)
-       when is_call(call, params) do
+  defp pre({call, meta, params} = ast, state)
+       when is_call(call, params) and is_call_meta(meta) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
     state =
       if !String.starts_with?(to_string(call), "__atom_elixir_marker_") do
         add_call_to_line(state, {nil, call, length(params)}, {line, column})
@@ -823,15 +833,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre(
-         {{:., _, [{:__aliases__, _, module_expression = [_ | _]}, call]},
-          [line: line, column: col], params} = ast,
+         {{:., _, [{:__aliases__, _, module_expression = [_ | _]}, call]}, meta, params} = ast,
          state
        )
-       when is_call(call, params) do
+       when is_call(call, params) and is_call_meta(meta) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
     case concat_module_expression(state, module_expression) do
       {:ok, module} ->
         state
-        |> add_call_to_line({module, call, length(params)}, {line, col + 1})
+        |> add_call_to_line({module, call, length(params)}, {line, column + 1})
         |> add_current_env_to_line(line)
 
       :error ->
@@ -841,25 +853,30 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre(
-         {{:., _, [{:__MODULE__, _, nil}, call]}, [line: line, column: col], params} = ast,
+         {{:., _, [{:__MODULE__, _, nil}, call]}, meta, params} = ast,
          state
        )
-       when is_call(call, params) do
+       when is_call(call, params) and is_call_meta(meta) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
     module = get_current_module(state)
 
     state
-    |> add_call_to_line({module, call, length(params)}, {line, col + 1})
+    |> add_call_to_line({module, call, length(params)}, {line, column + 1})
     |> add_current_env_to_line(line)
     |> result(ast)
   end
 
   defp pre(
-         {{:., _, [module, call]}, [line: line, column: col], params} = ast,
+         {{:., _, [module, call]}, meta, params} = ast,
          state
        )
-       when is_atom(module) and is_call(call, params) do
+       when is_atom(module) and is_call(call, params) and is_call_meta(meta) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
     state
-    |> add_call_to_line({module, call, length(params)}, {line, col + 1})
+    |> add_call_to_line({module, call, length(params)}, {line, column + 1})
     |> add_current_env_to_line(line)
     |> result(ast)
   end
