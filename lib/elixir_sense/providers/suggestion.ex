@@ -441,9 +441,20 @@ defmodule ElixirSense.Providers.Suggestion do
   end
 
   defp options_to_suggestions(options, original_module) do
-    Enum.map(options, fn {mod, name, type} ->
-      TypeInfo.get_type_info(mod, type, original_module)
-      |> Map.merge(%{type: :param_option, name: name})
+    Enum.map(options, fn
+      {mod, name, type} ->
+        TypeInfo.get_type_info(mod, type, original_module)
+        |> Map.merge(%{type: :param_option, name: name})
+
+      {mod, name} ->
+        %{
+          doc: "",
+          expanded_spec: "",
+          name: name,
+          origin: inspect(mod),
+          type: :param_option,
+          type_spec: ""
+        }
     end)
   end
 

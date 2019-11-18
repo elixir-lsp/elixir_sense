@@ -12,6 +12,10 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     @type remote_option_t :: {:remote_option_1, remote_t} | {:remote_option_2, remote_list_t}
   end
 
+  defmodule OtherRemote do
+    @type other :: Remote.remote_option_t()
+  end
+
   defmodule Local do
     alias Remote, as: R
 
@@ -37,6 +41,8 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
 
     @typedoc "Remote type from aliased module"
     @type remote_aliased_t :: R.remote_t() | R.remote_list_t()
+
+    @type tuple_opt_t :: {:opt_name, :opt_value}
 
     @typedoc "Local keyword-value type"
     @type option_t ::
@@ -68,6 +74,10 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     @typedoc "Option | Extra option"
     @type option_or_extra_option_t ::
             {:option_1, boolean} | {:option_2, timeout} | Remote.remote_option_t()
+
+    @type extra_option_1_t :: extra_option_t
+
+    @type atom_opt_t :: :atom_opt
 
     @spec func_with_options(options_t) :: any
     def func_with_options(options) do
@@ -114,5 +124,46 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     def func_with_one_option(options) do
       options
     end
+
+    @spec fun_without_options([integer]) :: integer
+    def fun_without_options(a), do: length(a)
+
+    @spec fun_with_atom_option([:option_name]) :: any
+    def fun_with_atom_option(a), do: a
+
+    @spec fun_with_atom_option_in_when(opts) :: any when opts: [:option_name]
+    def fun_with_atom_option_in_when(a), do: a
+
+    @spec fun_with_recursive_remote_type_option([OtherRemote.other()]) :: any
+    def fun_with_recursive_remote_type_option(a), do: a
+
+    @spec fun_with_recursive_user_type_option([extra_option_1_t]) :: any
+    def fun_with_recursive_user_type_option(a), do: a
+
+    @spec fun_with_tuple_option_in_when(opt) :: any when opt: [tuple_opt_t]
+    def fun_with_tuple_option_in_when(a), do: a
+
+    @spec fun_with_tuple_option([tuple_opt_t]) :: any
+    def fun_with_tuple_option(a), do: a
+
+    @spec fun_with_atom_user_type_option_in_when(opt) :: any when opt: [atom_opt_t]
+    def fun_with_atom_user_type_option_in_when(a), do: a
+
+    @spec fun_with_atom_user_type_option([atom_opt_t]) :: any
+    def fun_with_atom_user_type_option(a), do: a
+
+    @spec fun_with_list_of_lists([opt]) :: any when opt: [tuple_opt_t]
+    def fun_with_list_of_lists(a), do: a
+
+    @spec fun_with_recursive_type(opt) :: any when opt: [term :: opt]
+    def fun_with_recursive_type(a), do: a
+
+    @spec fun_with_multiple_specs(nil) :: any
+    @spec fun_with_multiple_specs([tuple_opt_t]) :: any
+    def fun_with_multiple_specs(a), do: a
+
+    @spec fun_with_multiple_specs_when(nil) :: any
+    @spec fun_with_multiple_specs_when([opts]) :: any when opts: tuple_opt_t
+    def fun_with_multiple_specs_when(a), do: a
   end
 end

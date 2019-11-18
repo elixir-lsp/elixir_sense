@@ -273,7 +273,7 @@ defmodule ElixirSense.Core.TypeInfo do
 
   defp get_param_type_specs(func_specs, npar) do
     for func_spec <- func_specs,
-        params_types = extract_params_types(func_spec),
+        params_types <- extract_params_types_variants(func_spec),
         length(params_types) > npar do
       params_types |> Enum.at(npar)
     end
@@ -341,6 +341,31 @@ defmodule ElixirSense.Core.TypeInfo do
     extract_tagged_tuple_name_and_type({mod, type})
   end
 
+  defp extract_union_options_name_and_type({mod, {_kind, {_, {:atom, _, name}, _}}}) do
+    [{mod, name}]
+  end
+
+  defp extract_union_options_name_and_type(
+         {mod, {_kind, {_name, {:remote_type, _, _} = type, _}}}
+       ) do
+    extract_tagged_tuple_name_and_type({mod, type})
+  end
+
+  defp extract_union_options_name_and_type(
+         {mod, {_kind, {_name, {:user_type, _, _, _} = type, _}}}
+       ) do
+    extract_tagged_tuple_name_and_type({mod, type})
+  end
+
+  defp extract_union_options_name_and_type({mod, {:atom, _, atom}}) when is_atom(atom) do
+    [{mod, atom}]
+  end
+
+  # skip unknown type
+  defp extract_union_options_name_and_type(_) do
+    []
+  end
+
   defp extract_tagged_tuple_name_and_type({mod, {:type, _, :tuple, [{:atom, _, name}, type]}}) do
     [{mod, name, type}]
   end
@@ -349,6 +374,9 @@ defmodule ElixirSense.Core.TypeInfo do
     case expand_type_spec(type, mod) do
       {_mod, {_kind, {_name, {:type, _, :union, _}, _}}} = expanded_type ->
         extract_union_options_name_and_type(expanded_type)
+
+      {mod, {:atom, _, name}} ->
+        [{mod, name}]
 
       _ ->
         []
@@ -395,13 +423,16 @@ defmodule ElixirSense.Core.TypeInfo do
     false
   end
 
-  defp extract_params_types(
-         {:spec, {_, [{:type, _, :fun, [{:type, _, :product, params_types}, _]}]}}
-       ) do
+  defp extract_params_types_variants({:spec, {_, list}}) do
+    list
+    |> Enum.map(&extract_params_types/1)
+  end
+
+  defp extract_params_types({:type, _, :fun, [{:type, _, :product, params_types}, _]}) do
     params_types
   end
 
-  defp extract_params_types({:spec, {_, [{:type, _, :bounded_fun, [type, constraints]}]}}) do
+  defp extract_params_types({:type, _, :bounded_fun, [type, constraints]}) do
     {:type, _, :fun, [{:type, _, :product, params}, _]} = type
 
     vars_types =
@@ -411,16 +442,41 @@ defmodule ElixirSense.Core.TypeInfo do
         {var, var_type}
       end
 
-    Enum.map(params, fn
-      {:var, _, name} ->
-        vars_types[name]
+    params
+    |> Enum.map(&expand_var_types(&1, vars_types, []))
+    # reject failed expansions
+    |> Enum.reject(&is_nil/1)
+  end
 
-      {:type, l, :list, [{:var, _, name}]} ->
-        {:type, l, :list, [vars_types[name]]}
+  defp expand_var_types(var_type, vars_types, expanded_types) do
+    if var_type in expanded_types do
+      # break recursive type expansion
+      nil
+    else
+      do_expand_var_types(var_type, vars_types, [var_type | expanded_types])
+    end
+  end
 
-      type ->
-        type
-    end)
+  defp do_expand_var_types({:var, _, name}, vars_types, expanded_types) do
+    expand_var_types(vars_types[name], vars_types, expanded_types)
+  end
+
+  defp do_expand_var_types({:type, l, kind, tuple_elements}, vars_types, expanded_types)
+       when kind in [:list, :tuple, :union] and is_list(tuple_elements) do
+    expanded =
+      for(element <- tuple_elements, do: expand_var_types(element, vars_types, expanded_types))
+      # reject failed expansions
+      |> Enum.reject(&is_nil/1)
+
+    {:type, l, kind, expanded}
+  end
+
+  defp do_expand_var_types({:ann_type, _l, [{:var, _, _}, type]}, vars_types, expanded_types) do
+    expand_var_types(type, vars_types, expanded_types)
+  end
+
+  defp do_expand_var_types(type, _vars_types, _expanded_types) do
+    type
   end
 
   defp starts_with_type_def?(str, kind) do

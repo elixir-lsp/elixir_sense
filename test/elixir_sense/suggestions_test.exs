@@ -1536,6 +1536,13 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.doc == "Remote type"
     end
 
+    test "atom only options" do
+      buffer = ":ets.new(:name,"
+
+      assert suggestion_by_name(:duplicate_bag, buffer).type_spec == ""
+      assert suggestion_by_name(:named_table, buffer).doc == ""
+    end
+
     test "format type spec" do
       buffer = "Local.func_with_options("
 
