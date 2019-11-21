@@ -6,13 +6,13 @@ defmodule ElixirSense.Providers.Docs do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Source
 
-  @spec all(String.t(), [module], [{module, module}], module, State.scope()) ::
+  @spec all(String.t(), [module], [{module, module}], module, State.scope(), map) ::
           {actual_mod_fun :: String.t(), docs :: Introspection.docs()}
-  def all(subject, imports, aliases, module, scope) do
+  def all(subject, imports, aliases, module, scope, mods_funs) do
     mod_fun =
       subject
       |> Source.split_module_and_func(module, aliases)
-      |> Introspection.actual_mod_fun(imports, aliases, module)
+      |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs)
 
     {mod_fun_to_string(mod_fun), Introspection.get_all_docs(mod_fun, scope)}
   end
