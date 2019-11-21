@@ -3,6 +3,29 @@ defmodule ElixirSense.Providers.ReferencesTest do
 
   # doctest References
 
+  test "finds reference tu local function shadowing builtin type" do
+    buffer = """
+    defmodule B.Callee do
+      def fun() do
+           ^
+        :ok
+      end
+      def my_fun() do
+        :ok
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 2, 8)
+
+    assert references == [
+             %{
+               range: %{start: %{column: 14, line: 3}, end: %{column: 17, line: 3}},
+               uri: "test/support/module_with_builtin_type_shadowing.ex"
+             }
+           ]
+  end
+
   test "find references with cursor over a function call" do
     buffer = """
     defmodule Caller do
