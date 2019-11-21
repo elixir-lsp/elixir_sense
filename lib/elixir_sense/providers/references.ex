@@ -198,9 +198,9 @@ defmodule ElixirSense.Providers.References do
           call
 
         %{line: line, col: col} ->
-          text_after = Source.text_after(code, line, col + 1)
+          text_after = Source.text_after(code, line, col)
           {_rest, line_offset, col_offset} = Source.find_next_word(text_after)
-          col_offset = if line_offset == 0, do: col + 1, else: col_offset
+          col_offset = if line_offset == 0, do: col, else: col_offset
 
           %{call | line: line + line_offset, col: col_offset}
       end
