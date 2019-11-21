@@ -68,5 +68,9 @@ defmodule ElixirSense.Providers.ReferencesTest.Modules do
     def call_on_different_line() do
       Callee3.func()
     end
+
+    def call_erlang() do
+      :ets.new(:a, [])
+    end
   end
 end

@@ -35,6 +35,36 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    test "find signatures from imported modules" do
+      code = """
+      defmodule MyModule do
+        import List
+        flatten(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 16) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   name: "flatten",
+                   params: ["list"],
+                   documentation: "Flattens the given `list` of nested lists.",
+                   spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]"
+                 },
+                 %{
+                   name: "flatten",
+                   params: ["list", "tail"],
+                   documentation:
+                     "Flattens the given `list` of nested lists.\nThe list `tail` will be added at the end of\nthe flattened list.",
+                   spec:
+                     "@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var"
+                 }
+               ]
+             }
+    end
+
     test "find signatures from atom modules" do
       code = """
       defmodule MyModule do
@@ -134,6 +164,45 @@ defmodule ElixirSense.SignatureTest do
       """
 
       assert ElixirSense.signature(code, 4, 12) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   name: "sum",
+                   params: ["a", "b"],
+                   documentation: "",
+                   spec: ""
+                 },
+                 %{
+                   name: "sum",
+                   params: ["tuple"],
+                   documentation: "",
+                   spec: ""
+                 }
+               ]
+             }
+    end
+
+    test "finds signatures from metadata module functions" do
+      code = """
+      defmodule MyModule do
+        defp sum(a, b) do
+          a + b
+        end
+
+        defp sum({a, b}) do
+          a + b
+        end
+      end
+
+      defmodule Other do
+        def run do
+          MyModule.sum(a,
+        end
+      end
+      """
+
+      assert ElixirSense.signature(code, 13, 21) == %{
                active_param: 1,
                pipe_before: false,
                signatures: [
