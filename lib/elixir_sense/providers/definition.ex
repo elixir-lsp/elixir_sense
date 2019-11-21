@@ -87,45 +87,6 @@ defmodule ElixirSense.Providers.Definition do
     end
   end
 
-  # defp find_function_or_module({nil, nil}, mods_funs_to_positions, mods_funs, current_module, imports, aliases) do
-  #   {nil, nil}
-  #   |> Introspection.actual_mod_fun(imports, aliases, current_module, mods_funs)
-  #   |> find_source(current_module)
-  # end
-
-  # defp find_function_or_module({module, function}, mods_funs_to_positions, mods_funs, current_module, imports, aliases)
-  #      when is_atom(function) do
-  #   # TODO arity info would be useful here
-  #   # TODO support local typespecs
-
-  #   fun_module =
-  #     case module do
-  #       nil -> current_module
-  #       mod when is_atom(mod) -> mod
-  #     end
-
-  #   case mods_funs[{fun_module, function, nil}] do
-  #     nil ->
-  #       # module or function not found in buffer metadata, try introspection
-  #       {module, function}
-  #       # TODO
-  #       |> Introspection.actual_mod_fun(imports, aliases, current_module, mods_funs)
-  #       |> find_source(current_module)
-
-  #     %{positions: positions} ->
-  #       # for simplicity take first position here
-  #       [{line, column} | _] = positions
-
-  #       %Location{
-  #         found: true,
-  #         file: nil,
-  #         type: fun_to_type(function),
-  #         line: line,
-  #         column: column
-  #       }
-  #   end
-  # end
-
   defp find_source({mod, fun}, current_module) do
     with(
       {mod, file} when file not in ["non_existing", nil, ""] <- find_mod_file(mod),
