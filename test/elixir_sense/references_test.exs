@@ -7,7 +7,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     buffer = """
     defmodule B.Callee do
       def fun() do
-           ^
+        #  ^
         :ok
       end
       def my_fun() do
@@ -453,7 +453,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     defmodule Caller do
       def func() do
         :ets.new(:s, [])
-        #                                               ^
+        # ^                                              ^
       end
     end
     """
@@ -473,7 +473,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     defmodule Caller do
       def func() do
         :ets.new(:s, [])
-        #                                               ^
+        #     ^                                            ^
       end
     end
     """
