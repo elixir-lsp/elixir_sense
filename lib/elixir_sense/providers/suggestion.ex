@@ -218,7 +218,7 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Kernel.++(mods_and_funcs)
     |> Kernel.++(find_param_options(text_before, hint, imports, aliases, module, mods_and_funs))
     |> Kernel.++(find_typespecs(hint, aliases, module, scope))
-    |> Enum.uniq_by(& &1)
+    |> Enum.uniq()
   end
 
   defp find_mods_funs_vars_attributes(
