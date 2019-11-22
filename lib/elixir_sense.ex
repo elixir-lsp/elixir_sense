@@ -375,32 +375,34 @@ defmodule ElixirSense do
   """
   @spec references(String.t(), pos_integer, pos_integer) :: [References.reference_info()]
   def references(code, line, column) do
-    with {subject, {line, col}} <- Source.subject_with_position(code, line, column) do
-      buffer_file_metadata = Parser.parse_string(code, true, true, line)
+    case Source.subject_with_position(code, line, column) do
+      {subject, {line, col}} ->
+        buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-      %State.Env{
-        imports: imports,
-        aliases: aliases,
-        module: module,
-        scope: scope,
-        scope_id: scope_id
-      } = Metadata.get_env(buffer_file_metadata, line)
+        %State.Env{
+          imports: imports,
+          aliases: aliases,
+          module: module,
+          scope: scope,
+          scope_id: scope_id
+        } = Metadata.get_env(buffer_file_metadata, line)
 
-      vars = buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values()
-      arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
+        vars = buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values()
+        arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
 
-      References.find(
-        subject,
-        arity,
-        imports,
-        aliases,
-        module,
-        scope,
-        vars,
-        buffer_file_metadata.mods_funs
-      )
-    else
-      _ -> []
+        References.find(
+          subject,
+          arity,
+          imports,
+          aliases,
+          module,
+          scope,
+          vars,
+          buffer_file_metadata.mods_funs
+        )
+
+      _ ->
+        []
     end
   end
 end
