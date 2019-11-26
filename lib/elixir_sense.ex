@@ -52,7 +52,9 @@ defmodule ElixirSense do
       scope: scope
     } = Metadata.get_env(metadata, line)
 
-    {actual_subject, docs} = Docs.all(subject, imports, aliases, module, scope)
+    {actual_subject, docs} =
+      Docs.all(subject, imports, aliases, module, scope, metadata.mods_funs)
+
     %{subject: subject, actual_subject: actual_subject, docs: docs}
   end
 
@@ -95,6 +97,7 @@ defmodule ElixirSense do
       module,
       vars,
       buffer_file_metadata.mods_funs_to_positions,
+      buffer_file_metadata.mods_funs,
       calls
     )
   end
@@ -372,21 +375,34 @@ defmodule ElixirSense do
   """
   @spec references(String.t(), pos_integer, pos_integer) :: [References.reference_info()]
   def references(code, line, column) do
-    {subject, {line, col}} = Source.subject_with_position(code, line, column)
+    case Source.subject_with_position(code, line, column) do
+      {subject, {line, col}} ->
+        buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-    buffer_file_metadata = Parser.parse_string(code, true, true, line)
+        %State.Env{
+          imports: imports,
+          aliases: aliases,
+          module: module,
+          scope: scope,
+          scope_id: scope_id
+        } = Metadata.get_env(buffer_file_metadata, line)
 
-    %State.Env{
-      imports: imports,
-      aliases: aliases,
-      module: module,
-      scope: scope,
-      scope_id: scope_id
-    } = Metadata.get_env(buffer_file_metadata, line)
+        vars = buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values()
+        arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
 
-    vars = buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values()
-    arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
+        References.find(
+          subject,
+          arity,
+          imports,
+          aliases,
+          module,
+          scope,
+          vars,
+          buffer_file_metadata.mods_funs
+        )
 
-    References.find(subject, arity, imports, aliases, module, scope, vars)
+      _ ->
+        []
+    end
   end
 end

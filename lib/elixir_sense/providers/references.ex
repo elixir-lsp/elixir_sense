@@ -29,7 +29,7 @@ defmodule ElixirSense.Providers.References do
     []
   end
 
-  def find(subject, arity, imports, aliases, module, scope, vars) do
+  def find(subject, arity, imports, aliases, module, scope, vars, modules_funs) do
     var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
 
     case var_info do
@@ -40,7 +40,7 @@ defmodule ElixirSense.Providers.References do
       _ ->
         subject
         |> Source.split_module_and_func(module, aliases)
-        |> Introspection.actual_mod_fun(imports, aliases, module)
+        |> Introspection.actual_mod_fun(imports, aliases, module, modules_funs)
         |> xref_at_cursor(arity, module, scope)
         |> Enum.map(&build_location/1)
         |> Enum.sort_by(fn %{uri: a, range: %{start: %{line: b, column: c}}} -> {a, b, c} end)
@@ -131,7 +131,15 @@ defmodule ElixirSense.Providers.References do
 
         for call <- calls,
             found_mod_fun =
-              find_actual_mod_fun(code, call.line, call.col, imports, aliases, module),
+              find_actual_mod_fun(
+                code,
+                call.line,
+                call.col,
+                imports,
+                aliases,
+                module,
+                metadata.mods_funs
+              ),
             found_mod_fun == {mod, func},
             arity == call.arity do
           Map.merge(xref_call, %{column: call.col, line: call.line})
@@ -142,11 +150,11 @@ defmodule ElixirSense.Providers.References do
     end
   end
 
-  defp find_actual_mod_fun(code, line, col, imports, aliases, module) do
+  defp find_actual_mod_fun(code, line, col, imports, aliases, module, mods_funs) do
     code
     |> Source.subject(line, col)
     |> Source.split_module_and_func(module, aliases)
-    |> Introspection.actual_mod_fun(imports, aliases, module)
+    |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs)
   end
 
   defp caller_filter([module, func, arity]), do: &match?(%{callee: {^module, ^func, ^arity}}, &1)
@@ -190,9 +198,9 @@ defmodule ElixirSense.Providers.References do
           call
 
         %{line: line, col: col} ->
-          text_after = Source.text_after(code, line, col + 1)
+          text_after = Source.text_after(code, line, col)
           {_rest, line_offset, col_offset} = Source.find_next_word(text_after)
-          col_offset = if line_offset == 0, do: col + 1, else: col_offset
+          col_offset = if line_offset == 0, do: col, else: col_offset
 
           %{call | line: line + line_offset, col: col_offset}
       end

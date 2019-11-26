@@ -25,9 +25,9 @@ defmodule ElixirSense.Providers.Definition do
   @doc """
   Finds out where a module, function, macro or variable was defined.
   """
-  @spec find(String.t(), [module], [{module, module}], module, [%VarInfo{}], map, map) ::
+  @spec find(String.t(), [module], [{module, module}], module, [%VarInfo{}], map, map, map) ::
           %Location{}
-  def find(subject, imports, aliases, module, vars, mods_funs, calls) do
+  def find(subject, imports, aliases, module, vars, mods_funs_to_positions, mods_funs, calls) do
     var_info =
       unless subject_is_call?(subject, calls) do
         vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
@@ -40,7 +40,7 @@ defmodule ElixirSense.Providers.Definition do
       _ ->
         subject
         |> Source.split_module_and_func(module, aliases)
-        |> find_function_or_module(mods_funs, module, imports, aliases)
+        |> find_function_or_module(mods_funs_to_positions, mods_funs, module, imports, aliases)
     end
   end
 
@@ -54,41 +54,36 @@ defmodule ElixirSense.Providers.Definition do
     end) != nil
   end
 
-  defp find_function_or_module({nil, nil}, _mods_funs, current_module, imports, aliases) do
-    {nil, nil}
-    |> Introspection.actual_mod_fun(imports, aliases, current_module)
-    |> find_source(current_module)
-  end
+  defp find_function_or_module(
+         {module, function},
+         mods_funs_to_positions,
+         mods_funs,
+         current_module,
+         imports,
+         aliases
+       ) do
+    case {module, function}
+         |> Introspection.actual_mod_fun(imports, aliases, current_module, mods_funs) do
+      {nil, nil} ->
+        %Location{found: false}
 
-  defp find_function_or_module({module, function}, mods_funs, current_module, imports, aliases)
-       when is_atom(function) do
-    # TODO arity info would be useful here
-    # TODO support local typespecs
+      {mod, fun} ->
+        case mods_funs_to_positions[{mod, fun, nil}] do
+          nil ->
+            {mod, fun} |> find_source(current_module)
 
-    fun_module =
-      case module do
-        nil -> current_module
-        mod when is_atom(mod) -> mod
-      end
+          %{positions: positions} ->
+            # for simplicity take first position here
+            [{line, column} | _] = positions
 
-    case mods_funs[{fun_module, function, nil}] do
-      nil ->
-        # module or function not found in buffer metadata, try introspection
-        {module, function}
-        |> Introspection.actual_mod_fun(imports, aliases, current_module)
-        |> find_source(current_module)
-
-      %{positions: positions} ->
-        # for simplicity take first position here
-        [{line, column} | _] = positions
-
-        %Location{
-          found: true,
-          file: nil,
-          type: fun_to_type(function),
-          line: line,
-          column: column
-        }
+            %Location{
+              found: true,
+              file: nil,
+              type: fun_to_type(function),
+              line: line,
+              column: column
+            }
+        end
     end
   end
 

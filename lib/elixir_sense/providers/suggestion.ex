@@ -137,7 +137,7 @@ defmodule ElixirSense.Providers.Suggestion do
         structs,
         text_before
       ) do
-    case find_struct_fields(hint, text_before, imports, aliases, module, structs) do
+    case find_struct_fields(hint, text_before, imports, aliases, module, structs, mods_and_funs) do
       {[], _} ->
         find_all_except_struct_fields(
           hint,
@@ -216,9 +216,9 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Kernel.++(find_attributes(attributes, hint))
     |> Kernel.++(find_vars(vars, hint))
     |> Kernel.++(mods_and_funcs)
-    |> Kernel.++(find_param_options(text_before, hint, imports, aliases, module))
+    |> Kernel.++(find_param_options(text_before, hint, imports, aliases, module, mods_and_funs))
     |> Kernel.++(find_typespecs(hint, aliases, module, scope))
-    |> Enum.uniq_by(& &1)
+    |> Enum.uniq()
   end
 
   defp find_mods_funs_vars_attributes(
@@ -245,14 +245,15 @@ defmodule ElixirSense.Providers.Suggestion do
   defp expand_current_module(:__MODULE__, current_module), do: current_module
   defp expand_current_module(module, _current_module), do: module
 
-  defp find_struct_fields(hint, text_before, imports, aliases, module, structs) do
+  defp find_struct_fields(hint, text_before, imports, aliases, module, structs, mods_funs) do
     with {mod, fields_so_far} <- Source.which_struct(text_before),
          {actual_mod, _} <-
            Introspection.actual_mod_fun(
              {expand_current_module(mod, module), nil},
              imports,
              aliases,
-             module
+             module,
+             mods_funs
            ),
          true <- Introspection.module_is_struct?(actual_mod) or Map.has_key?(structs, actual_mod) do
       fields =
@@ -423,13 +424,13 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.sort()
   end
 
-  @spec find_param_options(String.t(), String.t(), [module], [{module, module}], module) :: [
+  @spec find_param_options(String.t(), String.t(), [module], [{module, module}], module, map) :: [
           param_option
         ]
-  defp find_param_options(prefix, hint, imports, aliases, module) do
+  defp find_param_options(prefix, hint, imports, aliases, module, mods_funs) do
     case Source.which_func(prefix, module) do
       %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} ->
-        {mod, fun} = Introspection.actual_mod_fun({mod, fun}, imports, aliases, module)
+        {mod, fun} = Introspection.actual_mod_fun({mod, fun}, imports, aliases, module, mods_funs)
 
         TypeInfo.extract_param_options(mod, fun, npar)
         |> options_to_suggestions(mod)

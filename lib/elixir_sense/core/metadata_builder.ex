@@ -647,7 +647,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     case concat_module_expression(state, module_expression) do
       {:ok, module} ->
         state
-        |> add_call_to_line({module, call, length(params)}, line, col)
+        |> add_call_to_line({module, call, length(params)}, line, col + 1)
         |> add_current_env_to_line(line)
 
       :error ->
@@ -664,7 +664,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     module = get_current_module(state)
 
     state
-    |> add_call_to_line({module, call, length(params)}, line, col)
+    |> add_call_to_line({module, call, length(params)}, line, col + 1)
     |> add_current_env_to_line(line)
     |> result(ast)
   end
@@ -675,7 +675,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when is_atom(module) and is_call(call, params) do
     state
-    |> add_call_to_line({module, call, length(params)}, line, col)
+    |> add_call_to_line({module, call, length(params)}, line, col + 1)
     |> add_current_env_to_line(line)
     |> result(ast)
   end

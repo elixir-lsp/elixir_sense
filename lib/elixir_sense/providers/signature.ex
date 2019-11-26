@@ -18,7 +18,9 @@ defmodule ElixirSense.Providers.Signature do
   def find(prefix, imports, aliases, module, metadata) do
     case Source.which_func(prefix, module) do
       %{candidate: {mod, fun}, npar: npar, pipe_before: pipe_before} ->
-        {mod, fun} = Introspection.actual_mod_fun({mod, fun}, imports, aliases, module)
+        {mod, fun} =
+          Introspection.actual_mod_fun({mod, fun}, imports, aliases, module, metadata.mods_funs)
+
         signatures = find_signatures({mod, fun}, metadata)
         %{active_param: npar, pipe_before: pipe_before, signatures: signatures}
 

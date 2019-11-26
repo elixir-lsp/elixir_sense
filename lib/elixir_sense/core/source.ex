@@ -137,7 +137,7 @@ defmodule ElixirSense.Core.Source do
           |> Enum.at(0)
           |> String.reverse()
 
-        {subject, {line, col - String.length(last_part)}}
+        {subject, {line, col - String.length(last_part) + 1}}
     end
   end
 

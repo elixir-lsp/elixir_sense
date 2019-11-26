@@ -84,6 +84,38 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "function_arity_one"
   end
 
+  test "find definition of functions piped from aliased modules" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.ModuleWithFunctions, as: MyMod
+      42 |> MyMod.function_arity_one()
+      #              ^
+    end
+    """
+
+    %{found: true, type: :function, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 3, 17)
+
+    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
+    assert read_line(file, {line, column}) =~ "function_arity_one"
+  end
+
+  test "find definition of functions captured from aliased modules" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.ModuleWithFunctions, as: MyMod
+      &MyMod.function_arity_one/1
+      #              ^
+    end
+    """
+
+    %{found: true, type: :function, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 3, 17)
+
+    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
+    assert read_line(file, {line, column}) =~ "function_arity_one"
+  end
+
   test "find definition of delegated functions" do
     buffer = """
     defmodule MyModule do
