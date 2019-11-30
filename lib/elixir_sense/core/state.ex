@@ -25,7 +25,8 @@ defmodule ElixirSense.Core.State do
             mods_funs: %{},
             lines_to_env: %{},
             calls: %{},
-            structs: %{}
+            structs: %{},
+            types: %{}
 
   defmodule Env do
     @moduledoc false
@@ -49,6 +50,11 @@ defmodule ElixirSense.Core.State do
   defmodule VarInfo do
     @moduledoc false
     defstruct name: nil, positions: [], scope_id: nil, is_definition: nil
+  end
+
+  defmodule TypeInfo do
+    @moduledoc false
+    defstruct name: nil, args: nil, kind: nil, position: nil
   end
 
   defmodule ModFunInfo do
@@ -504,6 +510,29 @@ defmodule ElixirSense.Core.State do
 
   def add_requires(state, modules) do
     Enum.reduce(modules, state, fn mod, state -> add_require(state, mod) end)
+  end
+
+  def add_type(state, type_name, type_args, kind, %{line: line, col: col}) do
+    arg_names = for {arg_name, _, _} <- type_args, do: arg_name
+
+    type_info = %TypeInfo{
+      name: type_name,
+      args: arg_names,
+      kind: kind,
+      position: %{line: line, col: col}
+    }
+
+    current_module_variants = get_current_module_variants(state)
+
+    types =
+      current_module_variants
+      |> Enum.reduce(state.types, fn current_module, acc ->
+        acc
+        |> Map.put({current_module, type_name, nil}, type_info)
+        |> Map.put({current_module, type_name, length(arg_names)}, type_info)
+      end)
+
+    %{state | types: types}
   end
 
   def add_var(state, %{name: var_name} = var_info, is_definition) do

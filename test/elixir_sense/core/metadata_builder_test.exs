@@ -2520,6 +2520,59 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert state.calls == %{3 => [%{arity: 1, col: 6, func: :func, line: 3, mod: nil}]}
   end
 
+  test "registers types" do
+    state =
+      """
+      defmodule My do
+        @type no_arg_no_parens :: integer
+        @typep no_args() :: integer
+        @opaque with_args(a, b) :: {a, b}
+        IO.puts("")
+      end
+      IO.puts("")
+      """
+      |> string_to_state
+
+    assert state.types == %{
+             {My, :no_arg_no_parens, 0} => %ElixirSense.Core.State.TypeInfo{
+               args: [],
+               kind: :type,
+               name: :no_arg_no_parens,
+               position: %{col: 3, line: 2}
+             },
+             {My, :no_arg_no_parens, nil} => %ElixirSense.Core.State.TypeInfo{
+               args: [],
+               kind: :type,
+               name: :no_arg_no_parens,
+               position: %{col: 3, line: 2}
+             },
+             {My, :no_args, 0} => %ElixirSense.Core.State.TypeInfo{
+               args: [],
+               kind: :typep,
+               name: :no_args,
+               position: %{col: 3, line: 3}
+             },
+             {My, :no_args, nil} => %ElixirSense.Core.State.TypeInfo{
+               args: [],
+               kind: :typep,
+               name: :no_args,
+               position: %{col: 3, line: 3}
+             },
+             {My, :with_args, 2} => %ElixirSense.Core.State.TypeInfo{
+               args: [:a, :b],
+               kind: :opaque,
+               name: :with_args,
+               position: %{col: 3, line: 4}
+             },
+             {My, :with_args, nil} => %ElixirSense.Core.State.TypeInfo{
+               args: [:a, :b],
+               kind: :opaque,
+               name: :with_args,
+               position: %{col: 3, line: 4}
+             }
+           }
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true)
