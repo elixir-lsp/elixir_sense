@@ -919,6 +919,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_imports(state, 3) == [List]
+
+    # import requires module to make module's macros available
+    assert get_line_requires(state, 3) == [List]
+
     assert get_line_imports(state, 6) == [List, Enum]
     assert get_line_imports(state, 9) == [List, Enum, String]
     assert get_line_imports(state, 12) == [List, Enum, String, Macro]
@@ -967,32 +971,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_imports(state, 4) == [Some.Other.Module]
-  end
-
-  test "imports nested" do
-    state =
-      """
-      defmodule OuterModule do
-        import List
-        import SomeModule.Inner
-        import :"Elixir.SomeModule.NextInner"
-        import :erlang_module
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    refute get_line_imports(state, 6) == [
-             SomeModule.Inner,
-             List,
-             :erlang_module,
-             SomeModule.NextInner
-           ]
-
-    assert get_line_aliases(state, 6) == [
-             {Inner, SomeModule.Inner},
-             {NextInner, SomeModule.NextInner}
-           ]
   end
 
   test "requires" do
@@ -2000,10 +1978,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {ErlangMacros, :ets},
              {Nested, InheritMod.Nested},
              {Deeply, InheritMod.Deeply},
-             {ProtocolEmbedded, InheritMod.ProtocolEmbedded},
-             {NestedImports, MyImports.NestedImports},
-             {OneImports, MyImports.OneImports},
-             {ThreeImports, MyImports.Two.ThreeImports}
+             {ProtocolEmbedded, InheritMod.ProtocolEmbedded}
            ]
 
     assert get_line_attributes(state, 4) == [:before_compile, :doc, :my_attribute]

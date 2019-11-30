@@ -132,45 +132,27 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_alias(ast, state, line, aliases_tuples) when is_list(aliases_tuples) do
+  defp pre_alias(ast, state, line, aliases_tuples) do
     state
     |> add_current_env_to_line(line)
-    |> add_aliases(aliases_tuples)
+    |> add_aliases(List.wrap(aliases_tuples))
     |> result(ast)
   end
 
-  defp pre_alias(ast, state, line, alias_tuple) do
-    state
-    |> add_current_env_to_line(line)
-    |> add_alias(alias_tuple)
-    |> result(ast)
-  end
+  defp pre_import(ast, state, line, modules) do
+    modules = List.wrap(modules)
 
-  defp pre_import(ast, state, line, modules) when is_list(modules) do
     state
     |> add_current_env_to_line(line)
+    |> add_requires(modules)
     |> add_imports(modules)
     |> result(ast)
   end
 
-  defp pre_import(ast, state, line, module) do
+  defp pre_require(ast, state, line, modules) do
     state
     |> add_current_env_to_line(line)
-    |> add_import(module)
-    |> result(ast)
-  end
-
-  defp pre_require(ast, state, line, modules) when is_list(modules) do
-    state
-    |> add_current_env_to_line(line)
-    |> add_requires(modules)
-    |> result(ast)
-  end
-
-  defp pre_require(ast, state, line, module) do
-    state
-    |> add_current_env_to_line(line)
-    |> add_require(module)
+    |> add_requires(List.wrap(modules))
     |> result(ast)
   end
 

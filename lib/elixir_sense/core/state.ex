@@ -488,26 +488,10 @@ defmodule ElixirSense.Core.State do
     imports_from_scope = imports_from_scope -- [module]
 
     %{state | imports: [[module | imports_from_scope] | inherited_imports]}
-    |> maybe_add_import_alias(module)
   end
 
   def add_imports(state, modules) do
     Enum.reduce(modules, state, fn mod, state -> add_import(state, mod) end)
-  end
-
-  defp maybe_add_import_alias(state, module) do
-    if ElixirSense.Core.Introspection.elixir_module?(module) do
-      case module |> Module.split() |> Enum.reverse() do
-        [_] ->
-          state
-
-        [head | _] ->
-          state
-          |> add_alias({Module.concat([head]), module})
-      end
-    else
-      state
-    end
   end
 
   def add_require(state, module) do
