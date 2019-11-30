@@ -554,8 +554,8 @@ defmodule Alchemist.Helpers.Complete do
 
       kind =
         case func_kind do
-          k when k in [:defmacro, :defmacrop, :defguard, :defguardp] -> "macro"
-          _ -> "function"
+          k when k in [:defmacro, :defmacrop, :defguard, :defguardp] -> :macro
+          _ -> :function
         end
 
       mod_name =

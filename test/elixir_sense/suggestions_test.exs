@@ -19,14 +19,14 @@ defmodule ElixirSense.SuggestionsTest do
              origin: "Kernel.SpecialForms",
              spec: "",
              summary: "Imports functions and macros from other modules.",
-             type: "macro"
+             type: :macro
            }
 
     assert Enum.find(list, fn s -> match?(%{name: "quote", arity: 2}, s) end) == %{
              arity: 2,
              origin: "Kernel.SpecialForms",
              spec: "",
-             type: "macro",
+             type: :macro,
              args: "opts,block",
              name: "quote",
              summary: "Gets the representation of any expression."
@@ -36,7 +36,7 @@ defmodule ElixirSense.SuggestionsTest do
              arity: 2,
              origin: "Kernel.SpecialForms",
              spec: "",
-             type: "macro",
+             type: :macro,
              args: "module,opts",
              name: "require",
              summary: "Requires a module in order to use its macros."
@@ -61,7 +61,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "Kernel",
                spec: "@spec is_binary(term) :: boolean",
                summary: "Returns `true` if `term` is a binary; otherwise returns `false`.",
-               type: "function"
+               type: :function
              },
              %{
                args: "term",
@@ -71,7 +71,7 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "@spec is_bitstring(term) :: boolean",
                summary:
                  "Returns `true` if `term` is a bitstring (including a binary); otherwise returns `false`.",
-               type: "function"
+               type: :function
              },
              %{
                args: "term",
@@ -81,7 +81,7 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "@spec is_boolean(term) :: boolean",
                summary:
                  "Returns `true` if `term` is either the atom `true` or the atom `false` (i.e.,\na boolean); otherwise returns `false`.",
-               type: "function"
+               type: :function
              }
            ]
   end
@@ -105,7 +105,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "List",
                spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]",
                summary: "Flattens the given `list` of nested lists.",
-               type: "function"
+               type: :function
              },
              %{
                args: "list,tail",
@@ -116,7 +116,7 @@ defmodule ElixirSense.SuggestionsTest do
                  "@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var",
                summary:
                  "Flattens the given `list` of nested lists.\nThe list `tail` will be added at the end of\nthe flattened list.",
-               type: "function"
+               type: :function
              }
            ]
   end
@@ -163,13 +163,13 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 3, 7)
-      |> Enum.filter(fn s -> s.type == :callback && s.name == :code_change end)
+      |> Enum.filter(fn s -> s.type == :callback && s.name == "code_change" end)
 
     assert [
              %{
                args: "old_vsn,state,extra",
                arity: 3,
-               name: :code_change,
+               name: "code_change",
                origin: "GenServer",
                spec: "@callback code_change(old_vsn, state :: term, extra :: term) ::" <> _,
                summary:
@@ -203,13 +203,13 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 2, 3)
-      |> Enum.filter(fn s -> s[:name] == :reduce end)
+      |> Enum.filter(fn s -> s[:name] == "reduce" end)
 
     assert [
              %{
                args: "enumerable,acc,fun",
                arity: 3,
-               name: :reduce,
+               name: "reduce",
                origin: "Enumerable",
                spec: "@spec reduce(t, acc, reducer) :: result",
                summary: "Reduces the `enumerable` into an element.",
@@ -302,9 +302,9 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :request, type: :variable},
-             %{name: :state, type: :variable},
-             %{name: :var1, type: :variable}
+             %{name: "request", type: :variable},
+             %{name: "state", type: :variable},
+             %{name: "var1", type: :variable}
            ]
 
     list =
@@ -312,7 +312,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :arg, type: :variable}
+             %{name: "arg", type: :variable}
            ]
 
     list =
@@ -320,7 +320,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :arg, type: :variable}
+             %{name: "arg", type: :variable}
            ]
   end
 
@@ -336,7 +336,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :arg, type: :variable}
+             %{name: "arg", type: :variable}
            ]
   end
 
@@ -352,7 +352,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :term, type: :variable}
+             %{name: "term", type: :variable}
            ]
   end
 
@@ -371,8 +371,8 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :my, type: :variable},
-             %{name: :x, type: :variable}
+             %{name: "my", type: :variable},
+             %{name: "x", type: :variable}
            ]
   end
 
@@ -391,8 +391,8 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :my, type: :variable},
-             %{name: :x, type: :variable}
+             %{name: "my", type: :variable},
+             %{name: "x", type: :variable}
            ]
   end
 
@@ -410,7 +410,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :x, type: :variable}
+             %{name: "x", type: :variable}
            ]
   end
 
@@ -428,7 +428,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :x, type: :variable}
+             %{name: "x", type: :variable}
            ]
 
     buffer = """
@@ -444,7 +444,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :x, type: :variable}
+             %{name: "x", type: :variable}
            ]
 
     buffer = """
@@ -460,7 +460,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :x, type: :variable}
+             %{name: "x", type: :variable}
            ]
 
     buffer = """
@@ -476,7 +476,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :x, type: :variable}
+             %{name: "x", type: :variable}
            ]
   end
 
@@ -496,7 +496,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :x, type: :variable}
+             %{name: "x", type: :variable}
            ]
   end
 
@@ -520,7 +520,7 @@ defmodule ElixirSense.SuggestionsTest do
     #   |> Enum.filter(fn s -> s.type == :variable end)
 
     # assert list == [
-    #   %{name: :x, type: :variable},
+    #   %{name: "x, type: :variable},
     # ]
 
     # buffer = """
@@ -537,7 +537,7 @@ defmodule ElixirSense.SuggestionsTest do
     #   |> Enum.filter(fn s -> s.type == :variable end)
 
     # assert list == [
-    #   %{name: :x, type: :variable},
+    #   %{name: "x, type: :variable},
     # ]
 
     buffer = """
@@ -554,7 +554,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :x, type: :variable}
+             %{name: "x", type: :variable}
            ]
   end
 
@@ -577,8 +577,8 @@ defmodule ElixirSense.SuggestionsTest do
     assert_received {:result, list}
 
     assert list == [
-             %{name: :arg, type: :variable},
-             %{name: :my, type: :variable}
+             %{name: "arg", type: :variable},
+             %{name: "my", type: :variable}
            ]
   end
 
@@ -600,9 +600,9 @@ defmodule ElixirSense.SuggestionsTest do
     assert_received {:result, list}
 
     assert list == [
-             %{name: :arg, type: :variable},
+             %{name: "arg", type: :variable},
              # TODO my is not defined
-             %{name: :my, type: :variable}
+             %{name: "my", type: :variable}
            ]
   end
 
@@ -618,7 +618,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :arg, type: :variable}
+             %{name: "arg", type: :variable}
            ]
   end
 
@@ -641,8 +641,8 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :request, type: :variable},
-             %{name: :vara, type: :variable}
+             %{name: "request", type: :variable},
+             %{name: "vara", type: :variable}
            ]
 
     list =
@@ -650,8 +650,8 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :request, type: :variable},
-             %{name: :varb, type: :variable}
+             %{name: "request", type: :variable},
+             %{name: "varb", type: :variable}
            ]
 
     list =
@@ -659,7 +659,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :request, type: :variable}
+             %{name: "request", type: :variable}
            ]
   end
 
@@ -683,8 +683,8 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :request, type: :variable},
-             %{name: :vara, type: :variable}
+             %{name: "request", type: :variable},
+             %{name: "vara", type: :variable}
            ]
 
     list =
@@ -692,8 +692,8 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :request, type: :variable},
-             %{name: :varb, type: :variable}
+             %{name: "request", type: :variable},
+             %{name: "varb", type: :variable}
            ]
 
     list =
@@ -701,7 +701,7 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
-             %{name: :request, type: :variable}
+             %{name: "request", type: :variable}
            ]
   end
 
@@ -755,13 +755,13 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 0,
                name: "test_fun_priv",
                origin: "ElixirSenseExample.ModuleA",
-               type: "function"
+               type: :function
              },
              %{
                arity: 1,
                name: "test_fun_pub",
                origin: "ElixirSenseExample.ModuleA",
-               type: "function"
+               type: :function
              }
            ] = ElixirSense.suggestions(buffer, 5, 7)
 
@@ -771,7 +771,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 0,
                name: "test_fun_priv",
                origin: "ElixirSenseExample.ModuleA",
-               type: "function"
+               type: :function
              }
            ] = ElixirSense.suggestions(buffer, 6, 21)
 
@@ -781,13 +781,13 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 1,
                name: "is_boolean",
                origin: "Kernel",
-               type: "function"
+               type: :function
              },
              %{
                arity: 0,
                name: "is_boo_overlaps_kernel",
                origin: "ElixirSenseExample.ModuleA",
-               type: "function"
+               type: :function
              }
            ] = ElixirSense.suggestions(buffer, 7, 10)
 
@@ -797,13 +797,13 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 0,
                name: "delegate_defined",
                origin: "ElixirSenseExample.ModuleA",
-               type: "function"
+               type: :function
              },
              %{
                arity: 0,
                name: "delegate_not_defined",
                origin: "ElixirSenseExample.ModuleA",
-               type: "function"
+               type: :function
              }
            ] = ElixirSense.suggestions(buffer, 8, 8)
 
@@ -813,13 +813,13 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 1,
                name: "my_guard_pub",
                origin: "ElixirSenseExample.ModuleA",
-               type: "macro"
+               type: :macro
              },
              %{
                arity: 1,
                name: "my_guard_priv",
                origin: "ElixirSenseExample.ModuleA",
-               type: "macro"
+               type: :macro
              }
            ] = ElixirSense.suggestions(buffer, 9, 8)
   end
@@ -844,7 +844,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 1,
                name: "test_fun_pub",
                origin: "ElixirSenseExample.ModuleO",
-               type: "function"
+               type: :function
              }
            ] = ElixirSense.suggestions(buffer, 8, 34)
   end
@@ -870,7 +870,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 1,
                name: "test_fun_pub",
                origin: "ElixirSenseExample.ModuleO",
-               type: "function"
+               type: :function
              }
            ] = ElixirSense.suggestions(buffer, 9, 15)
   end
@@ -896,7 +896,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 1,
                name: "test_fun_pub",
                origin: "ElixirSenseExample.ModuleO",
-               type: "function"
+               type: :function
              }
            ] = ElixirSense.suggestions(buffer, 9, 7)
   end
@@ -932,7 +932,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 1,
                name: "test_fun_pub",
                origin: "ElixirSenseExample.SmodO",
-               type: "function"
+               type: :function
              }
            ] = ElixirSense.suggestions(buffer, 10, 24)
 
@@ -942,7 +942,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 1,
                name: "test_fun_priv1",
                origin: "ElixirSenseExample",
-               type: "function"
+               type: :function
              }
            ] = ElixirSense.suggestions(buffer, 11, 18)
   end
@@ -985,9 +985,9 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: :device, origin: "IO.Stream", type: :field},
-             %{name: :line_or_bytes, origin: "IO.Stream", type: :field},
-             %{name: :raw, origin: "IO.Stream", type: :field}
+             %{name: "device", origin: "IO.Stream", type: :field},
+             %{name: "line_or_bytes", origin: "IO.Stream", type: :field},
+             %{name: "raw", origin: "IO.Stream", type: :field}
            ]
   end
 
@@ -1005,9 +1005,9 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: :device, origin: "IO.Stream", type: :field},
-             %{name: :line_or_bytes, origin: "IO.Stream", type: :field},
-             %{name: :raw, origin: "IO.Stream", type: :field}
+             %{name: "device", origin: "IO.Stream", type: :field},
+             %{name: "line_or_bytes", origin: "IO.Stream", type: :field},
+             %{name: "raw", origin: "IO.Stream", type: :field}
            ]
   end
 
@@ -1025,9 +1025,9 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: :device, origin: "IO.Stream", type: :field},
-             %{name: :line_or_bytes, origin: "IO.Stream", type: :field},
-             %{name: :raw, origin: "IO.Stream", type: :field}
+             %{name: "device", origin: "IO.Stream", type: :field},
+             %{name: "line_or_bytes", origin: "IO.Stream", type: :field},
+             %{name: "raw", origin: "IO.Stream", type: :field}
            ]
   end
 
@@ -1052,15 +1052,15 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: :field_1, origin: "MyServer", type: :field},
-             %{name: :field_2, origin: "MyServer", type: :field}
+             %{name: "field_1", origin: "MyServer", type: :field},
+             %{name: "field_2", origin: "MyServer", type: :field}
            ]
 
     list = ElixirSense.suggestions(buffer, 9, 28)
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: :field_1, origin: "MyServer", type: :field}
+             %{name: "field_1", origin: "MyServer", type: :field}
            ]
   end
 
@@ -1085,15 +1085,15 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: :field_1, origin: ":my_server", type: :field},
-             %{name: :field_2, origin: ":my_server", type: :field}
+             %{name: "field_1", origin: ":my_server", type: :field},
+             %{name: "field_2", origin: ":my_server", type: :field}
            ]
 
     list = ElixirSense.suggestions(buffer, 9, 30)
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: :field_1, origin: ":my_server", type: :field}
+             %{name: "field_1", origin: ":my_server", type: :field}
            ]
   end
 
@@ -1118,7 +1118,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: :field_1, origin: "MyServer", type: :field}
+             %{name: "field_1", origin: "MyServer", type: :field}
            ]
   end
 
@@ -1140,7 +1140,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: :field_1, origin: "MyServer", type: :field}
+             %{name: "field_1", origin: "MyServer", type: :field}
            ]
   end
 
@@ -1162,8 +1162,8 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: "so"},
-             %{origin: "MyServer", type: :field, name: :some_field},
-             %{name: :some_arg, type: :variable}
+             %{origin: "MyServer", type: :field, name: "some_field"},
+             %{name: "some_arg", type: :variable}
            ]
   end
 
@@ -1188,10 +1188,10 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: "other_func"},
-             %{name: :other_arg, type: :variable},
+             %{name: "other_arg", type: :variable},
              %{
                name: "other_func",
-               type: "function",
+               type: :function,
                args: "",
                arity: 0,
                origin: "MyServer",

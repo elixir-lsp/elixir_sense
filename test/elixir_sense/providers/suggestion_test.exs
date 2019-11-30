@@ -34,7 +34,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              origin: "ElixirSenseExample.EmptyModule",
              spec: nil,
              summary: "Built-in function",
-             type: "function"
+             type: :function
            }
 
     assert result |> Enum.at(2) == %{
@@ -44,7 +44,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              origin: "ElixirSenseExample.EmptyModule",
              spec: nil,
              summary: "Built-in function",
-             type: "function"
+             type: :function
            }
 
     assert result |> Enum.at(3) == %{
@@ -54,7 +54,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              origin: "ElixirSenseExample.EmptyModule",
              spec: nil,
              summary: "Built-in function",
-             type: "function"
+             type: :function
            }
   end
 
@@ -93,7 +93,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                origin: "List",
                spec: "@spec delete(" <> _,
                summary: "Deletes the given" <> _,
-               type: "function"
+               type: :function
              },
              %{
                args: "list,index",
@@ -102,7 +102,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                origin: "List",
                spec: "@spec delete_at(list, integer) :: list",
                summary: "Produces a new list by " <> _,
-               type: "function"
+               type: :function
              }
            ] =
              Suggestion.find(
@@ -131,7 +131,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                origin: "List",
                spec: "@spec delete(" <> _,
                summary: "Deletes the given " <> _,
-               type: "function"
+               type: :function
              },
              %{
                args: "list,index",
@@ -140,7 +140,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                origin: "List",
                spec: "@spec delete_at(list, integer) :: list",
                summary: "Produces a new list " <> _,
-               type: "function"
+               type: :function
              }
            ] =
              Suggestion.find(
@@ -182,7 +182,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                origin: "ElixirSense.Providers.SuggestionTest.MyModule",
                spec: nil,
                summary: "",
-               type: "function"
+               type: :function
              }
            ]
   end
@@ -190,7 +190,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
   test "local calls should not return built-in functions" do
     list =
       Suggestion.find("mo", [MyModule], [], SomeModule, [], [], [], SomeModule, nil, %{}, %{}, "")
-      |> Enum.filter(fn item -> item.type in [:hint, "function", "function"] end)
+      |> Enum.filter(fn item -> item.type in [:hint, :function, :function] end)
 
     assert list == [%{type: :hint, value: "mo"}]
   end
@@ -323,7 +323,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
   test "return completion candidates for metadata structs" do
     assert [
              %{type: :hint, value: "str_"},
-             %{name: :str_field, origin: "SomeModule", type: :field}
+             %{name: "str_field", origin: "SomeModule", type: :field}
            ] =
              Suggestion.find(
                "str_",

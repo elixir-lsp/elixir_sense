@@ -271,7 +271,7 @@ defmodule ElixirSense.Providers.Suggestion do
         |> Kernel.--(fields_so_far)
         |> Enum.filter(fn field -> String.starts_with?("#{field}", hint) end)
         |> Enum.map(fn field ->
-          %{type: :field, name: field, origin: Introspection.module_to_string(actual_mod)}
+          %{type: :field, name: Atom.to_string(field), origin: Introspection.module_to_string(actual_mod)}
         end)
 
       {result, if(fields_so_far == [], do: :maybe_struct_update)}
@@ -341,7 +341,7 @@ defmodule ElixirSense.Providers.Suggestion do
   @spec find_vars([String.t()], String.t()) :: [variable]
   defp find_vars(vars, hint) do
     for var <- vars, hint == "" or String.starts_with?("#{var}", hint) do
-      %{type: :variable, name: var}
+      %{type: :variable, name: Atom.to_string(var)}
     end
     |> Enum.sort()
   end
@@ -390,7 +390,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
           %{
             type: :callback,
-            name: name,
+            name: Atom.to_string(name),
             arity: arity,
             args: args,
             origin: mod_name,
@@ -413,7 +413,7 @@ defmodule ElixirSense.Providers.Suggestion do
         hint == "" or String.starts_with?("#{name}", hint) do
       %{
         type: :protocol_function,
-        name: name,
+        name: Atom.to_string(name),
         arity: arity,
         args: args,
         origin: Introspection.module_to_string(protocol),

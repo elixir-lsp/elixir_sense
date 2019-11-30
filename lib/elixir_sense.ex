@@ -155,7 +155,7 @@ defmodule ElixirSense do
       ...> '''
       iex> ElixirSense.suggestions(code, 3, 12)
       [%{type: :hint, value: "MyList.insert_at"},
-        %{origin: "List", type: "function", args: "list,index,value", arity: 3, name: "insert_at",
+        %{origin: "List", type: :function, args: "list,index,value", arity: 3, name: "insert_at",
         spec: "@spec insert_at(list, integer, any) :: list", summary: "Returns a list with `value` inserted at the specified `index`."}]
   """
   @spec suggestions(String.t(), non_neg_integer, non_neg_integer) :: [Suggestion.suggestion()]

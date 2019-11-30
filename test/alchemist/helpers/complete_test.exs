@@ -256,7 +256,7 @@ defmodule Alchemist.Helpers.CompleteTest do
                 origin: "Kernel",
                 spec: "",
                 summary: "Defines a struct.",
-                type: "macro"
+                type: :macro
               }
             ]} = expand('defstru')
 
@@ -370,37 +370,37 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'iv',
             [
-              %{name: "my_fun_priv", origin: "MyModule", type: "function"}
+              %{name: "my_fun_priv", origin: "MyModule", type: :function}
             ]} = expand('my_fun_pr', env)
 
     assert {:yes, 'b',
             [
-              %{name: "my_fun_pub", origin: "MyModule", type: "function"}
+              %{name: "my_fun_pub", origin: "MyModule", type: :function}
             ]} = expand('my_fun_pu', env)
 
     assert {:yes, 'iv',
             [
-              %{name: "my_macro_priv", origin: "MyModule", type: "macro"}
+              %{name: "my_macro_priv", origin: "MyModule", type: :macro}
             ]} = expand('my_macro_pr', env)
 
     assert {:yes, 'b',
             [
-              %{name: "my_macro_pub", origin: "MyModule", type: "macro"}
+              %{name: "my_macro_pub", origin: "MyModule", type: :macro}
             ]} = expand('my_macro_pu', env)
 
     assert {:yes, 'iv',
             [
-              %{name: "my_guard_priv", origin: "MyModule", type: "macro"}
+              %{name: "my_guard_priv", origin: "MyModule", type: :macro}
             ]} = expand('my_guard_pr', env)
 
     assert {:yes, 'b',
             [
-              %{name: "my_guard_pub", origin: "MyModule", type: "macro"}
+              %{name: "my_guard_pub", origin: "MyModule", type: :macro}
             ]} = expand('my_guard_pu', env)
 
     assert {:yes, 'legated',
             [
-              %{name: "my_delegated", origin: "MyModule", type: "function"}
+              %{name: "my_delegated", origin: "MyModule", type: :function}
             ]} = expand('my_de', env)
   end
 
@@ -498,16 +498,16 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "complete macros and functions from not loaded modules" do
-    assert {:yes, 'st', [%{name: "test", type: "macro"}]} =
+    assert {:yes, 'st', [%{name: "test", type: :macro}]} =
              expand('Alchemist.Helpers.CompleteTest.MyMacro.te')
 
-    assert {:yes, 'un', [%{name: "fun", type: "function"}]} =
+    assert {:yes, 'un', [%{name: "fun", type: :function}]} =
              expand('Alchemist.Helpers.CompleteTest.MyMacro.f')
 
-    assert {:yes, 'uard', [%{name: "guard", type: "macro"}]} =
+    assert {:yes, 'uard', [%{name: "guard", type: :macro}]} =
              expand('Alchemist.Helpers.CompleteTest.MyMacro.g')
 
-    assert {:yes, 'legated', [%{name: "delegated", type: "function"}]} =
+    assert {:yes, 'legated', [%{name: "delegated", type: :function}]} =
              expand('Alchemist.Helpers.CompleteTest.MyMacro.de')
   end
 
@@ -520,17 +520,17 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'dule_info',
             [
-              %{name: "module_info", type: "function", arity: 0},
-              %{name: "module_info", type: "function", arity: 1}
+              %{name: "module_info", type: :function, arity: 0},
+              %{name: "module_info", type: :function, arity: 1}
             ]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.mo')
 
-    assert {:yes, 'fo__', [%{name: "__info__", type: "function"}]} =
+    assert {:yes, 'fo__', [%{name: "__info__", type: :function}]} =
              expand('Alchemist.Helpers.CompleteTest.MyMacro.__in')
 
     assert {:yes, 'dule_info',
             [
-              %{name: "module_info", type: "function", arity: 0},
-              %{name: "module_info", type: "function", arity: 1}
+              %{name: "module_info", type: :function, arity: 0},
+              %{name: "module_info", type: :function, arity: 1}
             ]} = expand(':ets.mo')
 
     assert {:no, _, _} = expand(':ets.__in')
@@ -548,10 +548,10 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'dule_info',
             [
-              %{name: "module_info", type: "function", arity: 0},
-              %{name: "module_info", type: "function", arity: 1}
+              %{name: "module_info", type: :function, arity: 0},
+              %{name: "module_info", type: :function, arity: 1}
             ]} = expand('MyModule.mo', env)
 
-    assert {:yes, 'fo__', [%{name: "__info__", type: "function"}]} = expand('MyModule.__in', env)
+    assert {:yes, 'fo__', [%{name: "__info__", type: :function}]} = expand('MyModule.__in', env)
   end
 end
