@@ -1,5 +1,5 @@
 defmodule ElixirSense.Evaltest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   describe "match" do
     test "with bindings" do

@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.TypeInfoTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias ElixirSense.Core.TypeInfo
   alias ElixirSenseExample.ModuleWithTypespecs.{Local, Remote}
 

@@ -1,5 +1,5 @@
 defmodule ElixirSense.SignatureTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias ElixirSense.Providers.Signature
 
   doctest Signature

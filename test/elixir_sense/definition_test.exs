@@ -1,5 +1,5 @@
 defmodule ElixirSense.Providers.DefinitionTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias ElixirSense.Providers.Definition
   alias ElixirSense.Providers.Definition.Location
 

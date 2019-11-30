@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.TokenizerTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   alias ElixirSense.Core.Normalized.Tokenizer
 

@@ -1,5 +1,5 @@
 defmodule ElixirSense.Providers.ModulesTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias ElixirSense.Providers.Definition
 
   doctest Definition

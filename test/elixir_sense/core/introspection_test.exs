@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.IntrospectionTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   alias ElixirSense.Core.TypeInfo
   import ElixirSense.Core.Introspection

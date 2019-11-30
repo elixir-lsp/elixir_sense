@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.MetadataTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Metadata

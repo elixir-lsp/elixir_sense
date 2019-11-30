@@ -1,5 +1,5 @@
 defmodule ElixirSense.DocsTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   describe "docs" do
     test "retrieve documentation" do

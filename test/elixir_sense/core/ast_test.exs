@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.AstTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias ElixirSense.Core.Ast
 
   defmodule ExpandRecursive do

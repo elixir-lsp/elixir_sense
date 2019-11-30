@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.ParserTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   import ExUnit.CaptureIO
   import ElixirSense.Core.Parser
