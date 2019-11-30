@@ -271,7 +271,11 @@ defmodule ElixirSense.Providers.Suggestion do
         |> Kernel.--(fields_so_far)
         |> Enum.filter(fn field -> String.starts_with?("#{field}", hint) end)
         |> Enum.map(fn field ->
-          %{type: :field, name: Atom.to_string(field), origin: Introspection.module_to_string(actual_mod)}
+          %{
+            type: :field,
+            name: Atom.to_string(field),
+            origin: Introspection.module_to_string(actual_mod)
+          }
         end)
 
       {result, if(fields_so_far == [], do: :maybe_struct_update)}
