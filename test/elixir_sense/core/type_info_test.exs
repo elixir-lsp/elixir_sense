@@ -9,7 +9,7 @@ defmodule ElixirSense.Core.TypeInfoTest do
     for {application, _, _} <- Application.started_applications() do
       {:ok, modules} = :application.get_key(application, :modules)
 
-      for mod <- modules, {fun, ar} <- mod.module_info(:functions), i <- 0..ar do
+      for mod <- modules, {fun, ar} <- mod.module_info(:exports), i <- 0..ar do
         TypeInfo.extract_param_options(mod, fun, i)
       end
     end

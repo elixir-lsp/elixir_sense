@@ -68,13 +68,9 @@ defmodule Alchemist.Helpers.ModuleInfo do
   defp get_module_funs(module) do
     case Code.ensure_loaded(module) do
       {:module, _} ->
-        module.module_info(:functions)
+        module.module_info(:exports)
         |> Enum.reduce([], fn {f, a} = fun, acc ->
           case Atom.to_string(f) do
-            "-" <> _ ->
-              # skip anonymous/private
-              acc
-
             "MACRO-" <> macro_name ->
               # extract macro name
               [{String.to_atom(macro_name), a} | acc]
