@@ -920,7 +920,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert get_line_imports(state, 3) == [List]
 
-    # import requires module to make module's macros available
+    # note that `import` causes `require` module's macros available
     assert get_line_requires(state, 3) == [List]
 
     assert get_line_imports(state, 6) == [List, Enum]
@@ -1951,6 +1951,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
 
+    # note that `use` causes `require` to be able to execute `__using__/1` macro
     assert get_line_requires(state, 4) == [
              MyMacros.Two.Three,
              MyMacros.One,
