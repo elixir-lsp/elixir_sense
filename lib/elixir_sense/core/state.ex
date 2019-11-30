@@ -466,12 +466,6 @@ defmodule ElixirSense.Core.State do
     Enum.reduce(aliases_tuples, state, fn tuple, state -> add_alias(state, tuple) end)
   end
 
-  def remove_alias(state, _alias_tuple = {alias, _}) do
-    [aliases_from_scope | inherited_aliases] = state.aliases
-    aliases_from_scope = aliases_from_scope |> Enum.reject(&match?({^alias, _}, &1))
-    %{state | aliases: [aliases_from_scope | inherited_aliases]}
-  end
-
   def new_import_scope(state) do
     %{state | imports: [[] | state.imports]}
   end
