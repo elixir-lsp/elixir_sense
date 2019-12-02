@@ -14,7 +14,7 @@ defmodule ElixirSense.Providers.Definition do
   defmodule Location do
     @type t :: %Location{
             found: boolean,
-            type: :module | :function | :variable,
+            type: :module | :function | :variable | :typespec,
             file: String.t() | nil,
             line: pos_integer | nil,
             column: pos_integer | nil
