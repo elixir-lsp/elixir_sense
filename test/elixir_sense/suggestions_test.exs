@@ -1669,6 +1669,25 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.doc == "Proper list ([]-terminated)"
       assert suggestion.origin == ""
     end
+
+    test "local types from metadata" do
+      buffer = """
+      defmodule MyModule do
+        @typep my_local_t :: integer
+        @typep my_local_arg_t(a, b) :: {a, b}
+        @type my_type :: my_loc
+        #                      ^
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 4, 26)
+        |> Enum.filter(fn %{type: t} -> t == :type_spec end)
+
+      assert [suggestion1, suggestion2] = list
+      assert %{arity: 0, name: "my_local_t", origin: "MyModule", type: :type_spec, signature: "my_local_t()"} == suggestion2
+      assert %{arity: 2, name: "my_local_arg_t", origin: "MyModule", type: :type_spec, signature: "my_local_arg_t(a, b)"} == suggestion1
+    end
   end
 
   defmodule ElixirSenseExample.SameModule do
