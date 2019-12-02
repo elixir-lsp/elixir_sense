@@ -630,23 +630,7 @@ defmodule ElixirSense.Core.State do
   def default_env(), do: %ElixirSense.Core.State.Env{}
 
   def expand_alias(state, module) do
-    if ElixirSense.Core.Introspection.elixir_module?(module) do
-      current_aliases = current_aliases(state)
-      module_parts = Module.split(module)
-
-      case current_aliases
-           |> Enum.find(fn {alias, _} ->
-             [alis_split] = Module.split(alias)
-             alis_split == hd(module_parts)
-           end) do
-        nil ->
-          module
-
-        {_alias, alias_expanded} ->
-          Module.concat(Module.split(alias_expanded) ++ tl(module_parts))
-      end
-    else
-      module
-    end
+    current_aliases = current_aliases(state)
+    ElixirSense.Core.Introspection.expand_alias(module, current_aliases)
   end
 end

@@ -597,21 +597,66 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def actual_module(module, aliases) do
-    if elixir_module?(module) do
-      module
-      |> Module.split()
-      |> ModuleInfo.expand_alias(aliases)
-    else
-      nil
-    end
+    # TODO check if module exists?
+    expand_alias(module, aliases)
   end
 
-  defp maybe_expand_alias(nil, _aliases), do: nil
+  @doc ~S"""
+  Expand module using aliases list
 
-  defp maybe_expand_alias(mod, aliases) do
-    case Enum.find(aliases, fn {a, _m} -> a == mod end) do
-      nil -> mod
-      {_a, m} -> m
+  ## Examples
+
+      iex> ElixirSense.Core.Introspection.expand_alias(MyList, [])
+      MyList
+      iex> ElixirSense.Core.Introspection.expand_alias(:erlang_module, [])
+      :erlang_module
+      iex> ElixirSense.Core.Introspection.expand_alias(MyList, [{MyList, List}])
+      List
+      iex> ElixirSense.Core.Introspection.expand_alias(MyList.Sub, [{MyList, List}])
+      List.Sub
+      iex> ElixirSense.Core.Introspection.expand_alias(MyList.Sub, [{MyList, List.Some}])
+      List.Some.Sub
+      iex> ElixirSense.Core.Introspection.expand_alias(MyList, [{MyList, :lists}])
+      :lists
+      iex> ElixirSense.Core.Introspection.expand_alias(MyList.Sub, [{MyList, :lists}])
+      :"Elixir.lists.Sub"
+      iex> ElixirSense.Core.Introspection.expand_alias(Elixir, [{MyList, :lists}])
+      Elixir
+      iex> ElixirSense.Core.Introspection.expand_alias(E.String, [{E, Elixir}])
+      String
+      iex> ElixirSense.Core.Introspection.expand_alias(E, [{E, Elixir}])
+      Elixir
+      iex> ElixirSense.Core.Introspection.expand_alias(nil, [])
+      nil
+  """
+  def expand_alias(mod, aliases) do
+    if elixir_module?(mod) do
+      [mod_head | mod_tail] = Module.split(mod)
+      case Enum.find(aliases, fn {alias_mod, _alias_expansion} ->
+        [alias_head] = Module.split(alias_mod)
+        alias_head == mod_head
+      end) do
+        nil ->
+          # alias not found
+          mod
+        {_alias_mod, alias_expansion} ->
+          # Elixir alias expansion rules are strange as they allow submodules to aliased erlang modules
+          # however when they are expanded an elixir module is created, e.g. in
+          # alias :erl, as: E
+          # E.Sub.fun()
+          # results in
+          # :"Elixir.erl.Sub".fun()
+          if mod_tail != [] do
+            # append submodule to expansion
+            Module.concat([alias_expansion | mod_tail])
+          else
+            # alias expands to erlang module
+            alias_expansion
+          end
+      end
+    else
+      # erlang module or `Elixir`
+      mod
     end
   end
 
@@ -621,7 +666,7 @@ defmodule ElixirSense.Core.Introspection do
     with {nil, nil} <- find_kernel_function(mod_fun),
          {nil, nil} <-
            find_metadata_function(
-             {maybe_expand_alias(mod, aliases), fun},
+             {expand_alias(mod, aliases), fun},
              current_module,
              imports,
              mods_funs,
@@ -706,8 +751,30 @@ defmodule ElixirSense.Core.Introspection do
     {nil, nil}
   end
 
-  def elixir_module?(module) when is_atom(module) do
-    module == Module.concat(Elixir, module)
+  @doc ~S"""
+  Tests if term is an elixir module
+
+  ## Examples
+
+      iex> ElixirSense.Core.Introspection.elixir_module?(List)
+      true
+      iex> ElixirSense.Core.Introspection.elixir_module?(List.Submodule)
+      true
+      iex> ElixirSense.Core.Introspection.elixir_module?(:lists)
+      false
+      iex> ElixirSense.Core.Introspection.elixir_module?(:"NotAModule")
+      false
+      iex> ElixirSense.Core.Introspection.elixir_module?(:"Elixir.SomeModule")
+      true
+      iex> ElixirSense.Core.Introspection.elixir_module?(:"Elixir.someModule")
+      true
+      iex> ElixirSense.Core.Introspection.elixir_module?(Elixir.SomeModule)
+      true
+      iex> ElixirSense.Core.Introspection.elixir_module?(Elixir)
+      false
+  """
+  def elixir_module?(term) when is_atom(term) do
+    term == Module.concat(Elixir, term)
   end
 
   def elixir_module?(_) do

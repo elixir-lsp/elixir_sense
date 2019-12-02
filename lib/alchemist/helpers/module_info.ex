@@ -17,24 +17,6 @@ defmodule Alchemist.Helpers.ModuleInfo do
     do_docs?(docs, function)
   end
 
-  def expand_alias([name | rest] = list, aliases) do
-    module = Module.concat(Elixir, name)
-
-    aliases
-    |> Enum.find_value(list, fn {alias, mod} ->
-      if alias === module do
-        case Atom.to_string(mod) do
-          "Elixir." <> mod ->
-            Module.concat([mod | rest])
-
-          _ ->
-            mod
-        end
-      end
-    end)
-    |> normalize_module
-  end
-
   def get_functions(module, hint) do
     hint = to_string(hint)
     {module, _} = Code.eval_string(module)
@@ -134,11 +116,4 @@ defmodule Alchemist.Helpers.ModuleInfo do
     :ets.match(:ac_tab, {{:loaded, :"$1"}, :_})
   end
 
-  defp normalize_module(mod) do
-    if is_list(mod) do
-      Module.concat(mod)
-    else
-      mod
-    end
-  end
 end
