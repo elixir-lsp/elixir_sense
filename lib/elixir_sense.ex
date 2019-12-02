@@ -53,7 +53,7 @@ defmodule ElixirSense do
     } = Metadata.get_env(metadata, line)
 
     {actual_subject, docs} =
-      Docs.all(subject, imports, aliases, module, scope, metadata.mods_funs)
+      Docs.all(subject, imports, aliases, module, scope, metadata.mods_funs, metadata.types)
 
     %{subject: subject, actual_subject: actual_subject, docs: docs}
   end
@@ -98,7 +98,8 @@ defmodule ElixirSense do
       vars,
       buffer_file_metadata.mods_funs_to_positions,
       buffer_file_metadata.mods_funs,
-      calls
+      calls,
+      buffer_file_metadata.types
     )
   end
 
@@ -188,6 +189,7 @@ defmodule ElixirSense do
       protocol,
       buffer_file_metadata.mods_funs,
       structs,
+      buffer_file_metadata.types,
       text_before
     )
   end
@@ -398,7 +400,8 @@ defmodule ElixirSense do
           module,
           scope,
           vars,
-          buffer_file_metadata.mods_funs
+          buffer_file_metadata.mods_funs,
+          buffer_file_metadata.types
         )
 
       _ ->

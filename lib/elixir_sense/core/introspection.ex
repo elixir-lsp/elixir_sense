@@ -615,16 +615,17 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  def actual_mod_fun({nil, nil}, _, _, _, _), do: {nil, nil}
+  def actual_mod_fun({nil, nil}, _, _, _, _, _), do: {nil, nil}
 
-  def actual_mod_fun(mod_fun = {mod, fun}, imports, aliases, current_module, mods_funs) do
+  def actual_mod_fun(mod_fun = {mod, fun}, imports, aliases, current_module, mods_funs, metadata_types) do
     with {nil, nil} <- find_kernel_function(mod_fun),
          {nil, nil} <-
            find_metadata_function(
              {maybe_expand_alias(mod, aliases), fun},
              current_module,
              imports,
-             mods_funs
+             mods_funs,
+             metadata_types
            ),
          {nil, nil} <- find_builtin_type(mod_fun) do
       mod_fun
@@ -633,23 +634,24 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  defp has_type?(mod, type) do
+  defp has_type?(mod, type, metadata_types) do
+    Map.has_key?(metadata_types, {mod, type, nil}) or
     ElixirSense.Core.Normalized.Typespec.get_types(mod)
     |> Enum.any?(fn {_kind, {name, _def, _args}} -> name == type end)
   end
 
-  defp find_metadata_function({nil, fun}, current_module, imports, mods_funs) do
+  defp find_metadata_function({nil, fun}, current_module, imports, mods_funs, metadata_types) do
     mods = [current_module | imports]
 
     case Enum.find(mods, fn mod ->
-           find_metadata_function({mod, fun}, current_module, imports, mods_funs) != {nil, nil}
+           find_metadata_function({mod, fun}, current_module, imports, mods_funs, metadata_types) != {nil, nil}
          end) do
       nil -> {nil, nil}
       mod -> {mod, fun}
     end
   end
 
-  defp find_metadata_function({mod, nil}, _current_module, _imports, mods_funs) do
+  defp find_metadata_function({mod, nil}, _current_module, _imports, mods_funs, _metadata_types) do
     if Map.has_key?(mods_funs, mod) or match?({:module, _}, Code.ensure_loaded(mod)) do
       {mod, nil}
     else
@@ -657,7 +659,7 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  defp find_metadata_function({mod, fun}, _current_module, _imports, mods_funs) do
+  defp find_metadata_function({mod, fun}, _current_module, _imports, mods_funs, metadata_types) do
     # TODO types from metadata
     found_in_metadata =
       case mods_funs[mod] do
@@ -668,7 +670,7 @@ defmodule ElixirSense.Core.Introspection do
           Enum.any?(funs, fn {{f, _a}, _} -> f == fun end)
       end
 
-    if found_in_metadata or ModuleInfo.has_function?(mod, fun) or has_type?(mod, fun) do
+    if found_in_metadata or ModuleInfo.has_function?(mod, fun) or has_type?(mod, fun, metadata_types) do
       {mod, fun}
     else
       {nil, nil}

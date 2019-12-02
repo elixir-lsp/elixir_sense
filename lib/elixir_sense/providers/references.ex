@@ -25,11 +25,11 @@ defmodule ElixirSense.Providers.References do
           range: range
         }
 
-  def find(nil, _, _, _, _, _) do
+  def find(nil, _, _, _, _, _, _) do
     []
   end
 
-  def find(subject, arity, imports, aliases, module, scope, vars, modules_funs) do
+  def find(subject, arity, imports, aliases, module, scope, vars, modules_funs, metadata_types) do
     var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
 
     case var_info do
@@ -40,7 +40,7 @@ defmodule ElixirSense.Providers.References do
       _ ->
         subject
         |> Source.split_module_and_func(module, aliases)
-        |> Introspection.actual_mod_fun(imports, aliases, module, modules_funs)
+        |> Introspection.actual_mod_fun(imports, aliases, module, modules_funs, metadata_types)
         |> xref_at_cursor(arity, module, scope)
         |> Enum.map(&build_location/1)
         |> Enum.sort_by(fn %{uri: a, range: %{start: %{line: b, column: c}}} -> {a, b, c} end)
@@ -138,7 +138,8 @@ defmodule ElixirSense.Providers.References do
                 imports,
                 aliases,
                 module,
-                metadata.mods_funs
+                metadata.mods_funs,
+                metadata.types
               ),
             found_mod_fun == {mod, func},
             arity == call.arity do
@@ -150,11 +151,11 @@ defmodule ElixirSense.Providers.References do
     end
   end
 
-  defp find_actual_mod_fun(code, line, col, imports, aliases, module, mods_funs) do
+  defp find_actual_mod_fun(code, line, col, imports, aliases, module, mods_funs, metadata_types) do
     code
     |> Source.subject(line, col)
     |> Source.split_module_and_func(module, aliases)
-    |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs)
+    |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs, metadata_types)
   end
 
   defp caller_filter([module, func, arity]), do: &match?(%{callee: {^module, ^func, ^arity}}, &1)

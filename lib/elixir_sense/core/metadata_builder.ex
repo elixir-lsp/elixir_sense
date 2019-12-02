@@ -281,13 +281,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre(
-         {:@, [line: line, column: column] = meta_attr,
-          [{kind, _, [{:"::", meta, params = [{name, _, type_args}, _type_def]}]}]} = ast,
+         {:@, [line: line, column: column] = _meta_attr,
+          [{kind, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]}]}]} = ast,
          state
        )
        when kind in [:type, :typep, :opaque] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
-    new_ast = {:@, meta_attr, [{:"::", add_no_call(meta), params}]}
     pre_type(ast, state, %{line: line, col: column}, name, List.wrap(type_args), kind)
   end
 

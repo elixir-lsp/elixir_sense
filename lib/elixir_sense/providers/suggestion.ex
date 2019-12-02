@@ -121,6 +121,7 @@ defmodule ElixirSense.Providers.Suggestion do
           any,
           %{},
           %{},
+          %{},
           String.t()
         ) :: [suggestion]
   def find(
@@ -135,9 +136,10 @@ defmodule ElixirSense.Providers.Suggestion do
         protocol,
         mods_and_funs,
         structs,
+        metadata_types,
         text_before
       ) do
-    case find_struct_fields(hint, text_before, imports, aliases, module, structs, mods_and_funs) do
+    case find_struct_fields(hint, text_before, imports, aliases, module, structs, mods_and_funs, metadata_types) do
       {[], _} ->
         find_all_except_struct_fields(
           hint,
@@ -150,6 +152,7 @@ defmodule ElixirSense.Providers.Suggestion do
           module,
           protocol,
           mods_and_funs,
+          metadata_types,
           text_before
         )
 
@@ -185,6 +188,7 @@ defmodule ElixirSense.Providers.Suggestion do
           module,
           any,
           %{},
+          %{},
           String.t()
         ) :: [suggestion]
   defp find_all_except_struct_fields(
@@ -198,6 +202,7 @@ defmodule ElixirSense.Providers.Suggestion do
          module,
          protocol,
          mods_and_funs,
+         metadata_types,
          text_before
        ) do
     vars = Enum.map(vars, fn v -> v.name end)
@@ -216,7 +221,7 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Kernel.++(find_attributes(attributes, hint))
     |> Kernel.++(find_vars(vars, hint))
     |> Kernel.++(mods_and_funcs)
-    |> Kernel.++(find_param_options(text_before, hint, imports, aliases, module, mods_and_funs))
+    |> Kernel.++(find_param_options(text_before, hint, imports, aliases, module, mods_and_funs, metadata_types))
     |> Kernel.++(find_typespecs(hint, aliases, module, scope))
     |> Enum.uniq()
   end
@@ -245,7 +250,7 @@ defmodule ElixirSense.Providers.Suggestion do
   defp expand_current_module(:__MODULE__, current_module), do: current_module
   defp expand_current_module(module, _current_module), do: module
 
-  defp find_struct_fields(hint, text_before, imports, aliases, module, structs, mods_funs) do
+  defp find_struct_fields(hint, text_before, imports, aliases, module, structs, mods_funs, metadata_types) do
     with {mod, fields_so_far} <- Source.which_struct(text_before),
          {actual_mod, _} <-
            Introspection.actual_mod_fun(
@@ -253,7 +258,8 @@ defmodule ElixirSense.Providers.Suggestion do
              imports,
              aliases,
              module,
-             mods_funs
+             mods_funs,
+             metadata_types
            ),
          true <- Introspection.module_is_struct?(actual_mod) or Map.has_key?(structs, actual_mod) do
       fields =
@@ -428,13 +434,13 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.sort()
   end
 
-  @spec find_param_options(String.t(), String.t(), [module], [{module, module}], module, map) :: [
+  @spec find_param_options(String.t(), String.t(), [module], [{module, module}], module, map, map) :: [
           param_option
         ]
-  defp find_param_options(prefix, hint, imports, aliases, module, mods_funs) do
+  defp find_param_options(prefix, hint, imports, aliases, module, mods_funs, metadata_types) do
     case Source.which_func(prefix, module) do
       %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} ->
-        {mod, fun} = Introspection.actual_mod_fun({mod, fun}, imports, aliases, module, mods_funs)
+        {mod, fun} = Introspection.actual_mod_fun({mod, fun}, imports, aliases, module, mods_funs, metadata_types)
 
         TypeInfo.extract_param_options(mod, fun, npar)
         |> options_to_suggestions(mod)
