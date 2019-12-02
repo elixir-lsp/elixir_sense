@@ -528,8 +528,8 @@ defmodule ElixirSense.Providers.Suggestion do
           arity: length(type_info.args),
           signature: "#{type_info.name}(#{args})",
           origin: origin,
-          # doc: type_info.doc,
-          # spec: type_info.spec
+          doc: "",
+          spec: ""
         }
       _ ->
         %{
