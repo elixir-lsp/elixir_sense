@@ -69,9 +69,18 @@ defmodule ElixirSense.Providers.Definition do
         %Location{found: false}
 
       {mod, fun} ->
-        case mods_funs_to_positions[{mod, fun, nil}] do
+        case mods_funs_to_positions[{mod, fun, nil}] || metadata_types[{mod, fun, nil}] do
           nil ->
             {mod, fun} |> find_source(current_module)
+
+          %ElixirSense.Core.State.TypeInfo{position: %{col: col, line: line}} ->
+            %Location{
+              found: true,
+              file: nil,
+              type: :typespec,
+              line: line,
+              column: col
+            }
 
           %{positions: positions} ->
             # for simplicity take first position here

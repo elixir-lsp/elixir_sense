@@ -531,6 +531,38 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert %{found: false} = ElixirSense.definition(buffer, 2, 23)
   end
 
+  test "find local metadata type definition" do
+    buffer = """
+    defmodule MyModule do
+      @typep my_t :: integer
+
+      @type remote_list_t :: [my_t]
+      #                         ^
+    end
+    """
+
+    %{found: true, type: :typespec, file: nil, line: 2, column: 3} =
+      ElixirSense.definition(buffer, 4, 29)
+  end
+
+  test "find remote metadata type definition" do
+    buffer = """
+    defmodule MyModule.Other do
+      @type my_t :: integer
+    end
+
+    defmodule MyModule do
+      alias MyModule.Other
+
+      @type remote_list_t :: [Other.my_t]
+      #                               ^
+    end
+    """
+
+    %{found: true, type: :typespec, file: nil, line: 2, column: 3} =
+      ElixirSense.definition(buffer, 8, 35)
+  end
+
   defp read_line(file, {line, column}) do
     file
     |> File.read!()
