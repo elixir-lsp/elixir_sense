@@ -494,19 +494,20 @@ defmodule ElixirSense.Providers.Suggestion do
     local_module ++ builtin_modules
   end
 
-  defp find_typespecs_for_mod_and_hint({mod, hint}, aliases, _module, metadata_types) do
+  defp find_typespecs_for_mod_and_hint({mod, hint}, aliases, module, metadata_types) do
     actual_mod = Introspection.actual_module(mod, aliases)
 
     TypeInfo.find_all(actual_mod, &String.starts_with?("#{&1.name}", hint))
-    |> Kernel.++(find_metadata_types(actual_mod, hint, metadata_types))
+    |> Kernel.++(find_metadata_types(actual_mod, hint, metadata_types, module == mod))
     |> Enum.map(&type_info_to_suggestion(&1, actual_mod))
     |> Enum.uniq_by(& {&1.name, &1.arity})
   end
 
-  defp find_metadata_types(actual_mod, hint, metadata_types) do
+  defp find_metadata_types(actual_mod, hint, metadata_types, include_private) do
     for {{mod, type, _}, type_info} <- metadata_types,
       mod == actual_mod,
       type |> Atom.to_string |> String.starts_with?(hint),
+      include_private or type_info.kind != :typep,
       do: type_info
   end
 
