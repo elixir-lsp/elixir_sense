@@ -1685,8 +1685,26 @@ defmodule ElixirSense.SuggestionsTest do
         |> Enum.filter(fn %{type: t} -> t == :type_spec end)
 
       assert [suggestion1, suggestion2] = list
-      assert %{arity: 0, name: "my_local_t", origin: "MyModule", type: :type_spec, signature: "my_local_t()"} == suggestion2
-      assert %{arity: 2, name: "my_local_arg_t", origin: "MyModule", type: :type_spec, signature: "my_local_arg_t(a, b)"} == suggestion1
+
+      assert %{
+               arity: 0,
+               name: "my_local_t",
+               origin: "MyModule",
+               type: :type_spec,
+               signature: "my_local_t()",
+               doc: "",
+               spec: ""
+             } == suggestion2
+
+      assert %{
+               arity: 2,
+               name: "my_local_arg_t",
+               origin: "MyModule",
+               type: :type_spec,
+               signature: "my_local_arg_t(a, b)",
+               doc: "",
+               spec: ""
+             } == suggestion1
     end
 
     test "remote public and opaque types from metadata" do
@@ -1709,8 +1727,26 @@ defmodule ElixirSense.SuggestionsTest do
         |> Enum.filter(fn %{type: t} -> t == :type_spec end)
 
       assert [suggestion1, suggestion2] = list
-      assert %{arity: 2, name: "my_local_pub_t", origin: "SomeModule", type: :type_spec, signature: "my_local_pub_t(a, b)"} == suggestion2
-      assert %{arity: 0, name: "my_local_op_t", origin: "SomeModule", type: :type_spec, signature: "my_local_op_t()"} == suggestion1
+
+      assert %{
+               arity: 2,
+               name: "my_local_pub_t",
+               origin: "SomeModule",
+               type: :type_spec,
+               signature: "my_local_pub_t(a, b)",
+               doc: "",
+               spec: ""
+             } == suggestion2
+
+      assert %{
+               arity: 0,
+               name: "my_local_op_t",
+               origin: "SomeModule",
+               type: :type_spec,
+               signature: "my_local_op_t()",
+               doc: "",
+               spec: ""
+             } == suggestion1
     end
   end
 

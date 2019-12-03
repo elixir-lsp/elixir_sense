@@ -27,7 +27,17 @@ defmodule ElixirSense.Providers.Definition do
   """
   @spec find(String.t(), [module], [{module, module}], module, [%VarInfo{}], map, map, map, map) ::
           %Location{}
-  def find(subject, imports, aliases, module, vars, mods_funs_to_positions, mods_funs, calls, metadata_types) do
+  def find(
+        subject,
+        imports,
+        aliases,
+        module,
+        vars,
+        mods_funs_to_positions,
+        mods_funs,
+        calls,
+        metadata_types
+      ) do
     var_info =
       unless subject_is_call?(subject, calls) do
         vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
@@ -40,7 +50,14 @@ defmodule ElixirSense.Providers.Definition do
       _ ->
         subject
         |> Source.split_module_and_func(module, aliases)
-        |> find_function_or_module(mods_funs_to_positions, mods_funs, module, imports, aliases, metadata_types)
+        |> find_function_or_module(
+          mods_funs_to_positions,
+          mods_funs,
+          module,
+          imports,
+          aliases,
+          metadata_types
+        )
     end
   end
 
@@ -64,7 +81,13 @@ defmodule ElixirSense.Providers.Definition do
          metadata_types
        ) do
     case {module, function}
-         |> Introspection.actual_mod_fun(imports, aliases, current_module, mods_funs, metadata_types) do
+         |> Introspection.actual_mod_fun(
+           imports,
+           aliases,
+           current_module,
+           mods_funs,
+           metadata_types
+         ) do
       {nil, nil} ->
         %Location{found: false}
 

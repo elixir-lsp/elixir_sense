@@ -115,5 +115,4 @@ defmodule Alchemist.Helpers.ModuleInfo do
     # for performance.
     :ets.match(:ac_tab, {{:loaded, :"$1"}, :_})
   end
-
 end

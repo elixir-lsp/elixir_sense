@@ -60,7 +60,21 @@ defmodule ElixirSense.Providers.SuggestionTest do
   end
 
   test "return completion candidates for 'Str'" do
-    assert Suggestion.find("Str", [], [], SomeModule, [], [], [], SomeModule, nil, %{}, %{}, %{}, "") ==
+    assert Suggestion.find(
+             "Str",
+             [],
+             [],
+             SomeModule,
+             [],
+             [],
+             [],
+             SomeModule,
+             nil,
+             %{},
+             %{},
+             %{},
+             ""
+           ) ==
              [
                %{type: :hint, value: "Str"},
                %{
@@ -193,7 +207,21 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
   test "local calls should not return built-in functions" do
     list =
-      Suggestion.find("mo", [MyModule], [], SomeModule, [], [], [], SomeModule, nil, %{}, %{}, %{}, "")
+      Suggestion.find(
+        "mo",
+        [MyModule],
+        [],
+        SomeModule,
+        [],
+        [],
+        [],
+        SomeModule,
+        nil,
+        %{},
+        %{},
+        %{},
+        ""
+      )
       |> Enum.filter(fn item -> item.type in [:hint, :function, :function] end)
 
     assert list == [%{type: :hint, value: "mo"}]
@@ -201,7 +229,21 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
   test "empty hint should not return built-in functions" do
     suggestions_names =
-      Suggestion.find("", [MyModule], [], SomeModule, [], [], [], SomeModule, nil, %{}, %{}, %{}, "")
+      Suggestion.find(
+        "",
+        [MyModule],
+        [],
+        SomeModule,
+        [],
+        [],
+        [],
+        SomeModule,
+        nil,
+        %{},
+        %{},
+        %{},
+        ""
+      )
       |> Enum.filter(&Map.has_key?(&1, :name))
       |> Enum.map(& &1.name)
 
