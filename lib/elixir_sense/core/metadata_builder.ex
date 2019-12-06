@@ -170,6 +170,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
+  defp pre_type(ast, state, %{line: line, col: col}, type_name, type_args, kind) do
+    state
+    |> add_current_env_to_line(line)
+    |> add_type(type_name, type_args, kind, %{line: line, col: col})
+    |> result(ast)
+  end
+
   defp post_string_literal(ast, state, line, str) do
     str
     |> String.split(["\n", "\r\n"])
@@ -271,6 +278,16 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre({:@, [line: line, column: _column], [{:behaviour, _, [erlang_module]}]} = ast, state) do
     pre_behaviour(ast, state, line, erlang_module)
+  end
+
+  defp pre(
+         {:@, [line: line, column: column] = _meta_attr,
+          [{kind, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]}]}]} = ast,
+         state
+       )
+       when kind in [:type, :typep, :opaque] and is_atom(name) and
+              (is_nil(type_args) or is_list(type_args)) do
+    pre_type(ast, state, %{line: line, col: column}, name, List.wrap(type_args), kind)
   end
 
   defp pre({:@, [line: line, column: _column] = meta_attr, [{name, meta, params}]}, state) do

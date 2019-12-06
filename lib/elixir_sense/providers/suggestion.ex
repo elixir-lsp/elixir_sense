@@ -121,6 +121,7 @@ defmodule ElixirSense.Providers.Suggestion do
           any,
           %{},
           %{},
+          %{},
           String.t()
         ) :: [suggestion]
   def find(
@@ -135,9 +136,19 @@ defmodule ElixirSense.Providers.Suggestion do
         protocol,
         mods_and_funs,
         structs,
+        metadata_types,
         text_before
       ) do
-    case find_struct_fields(hint, text_before, imports, aliases, module, structs, mods_and_funs) do
+    case find_struct_fields(
+           hint,
+           text_before,
+           imports,
+           aliases,
+           module,
+           structs,
+           mods_and_funs,
+           metadata_types
+         ) do
       {[], _} ->
         find_all_except_struct_fields(
           hint,
@@ -150,6 +161,7 @@ defmodule ElixirSense.Providers.Suggestion do
           module,
           protocol,
           mods_and_funs,
+          metadata_types,
           text_before
         )
 
@@ -185,6 +197,7 @@ defmodule ElixirSense.Providers.Suggestion do
           module,
           any,
           %{},
+          %{},
           String.t()
         ) :: [suggestion]
   defp find_all_except_struct_fields(
@@ -198,6 +211,7 @@ defmodule ElixirSense.Providers.Suggestion do
          module,
          protocol,
          mods_and_funs,
+         metadata_types,
          text_before
        ) do
     vars = Enum.map(vars, fn v -> v.name end)
@@ -216,8 +230,18 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Kernel.++(find_attributes(attributes, hint))
     |> Kernel.++(find_vars(vars, hint))
     |> Kernel.++(mods_and_funcs)
-    |> Kernel.++(find_param_options(text_before, hint, imports, aliases, module, mods_and_funs))
-    |> Kernel.++(find_typespecs(hint, aliases, module, scope))
+    |> Kernel.++(
+      find_param_options(
+        text_before,
+        hint,
+        imports,
+        aliases,
+        module,
+        mods_and_funs,
+        metadata_types
+      )
+    )
+    |> Kernel.++(find_typespecs(hint, aliases, module, scope, metadata_types))
     |> Enum.uniq()
   end
 
@@ -245,7 +269,16 @@ defmodule ElixirSense.Providers.Suggestion do
   defp expand_current_module(:__MODULE__, current_module), do: current_module
   defp expand_current_module(module, _current_module), do: module
 
-  defp find_struct_fields(hint, text_before, imports, aliases, module, structs, mods_funs) do
+  defp find_struct_fields(
+         hint,
+         text_before,
+         imports,
+         aliases,
+         module,
+         structs,
+         mods_funs,
+         metadata_types
+       ) do
     with {mod, fields_so_far} <- Source.which_struct(text_before),
          {actual_mod, _} <-
            Introspection.actual_mod_fun(
@@ -253,7 +286,8 @@ defmodule ElixirSense.Providers.Suggestion do
              imports,
              aliases,
              module,
-             mods_funs
+             mods_funs,
+             metadata_types
            ),
          true <- Introspection.module_is_struct?(actual_mod) or Map.has_key?(structs, actual_mod) do
       fields =
@@ -428,13 +462,22 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.sort()
   end
 
-  @spec find_param_options(String.t(), String.t(), [module], [{module, module}], module, map) :: [
-          param_option
-        ]
-  defp find_param_options(prefix, hint, imports, aliases, module, mods_funs) do
+  @spec find_param_options(String.t(), String.t(), [module], [{module, module}], module, map, map) ::
+          [
+            param_option
+          ]
+  defp find_param_options(prefix, hint, imports, aliases, module, mods_funs, metadata_types) do
     case Source.which_func(prefix, module) do
       %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} ->
-        {mod, fun} = Introspection.actual_mod_fun({mod, fun}, imports, aliases, module, mods_funs)
+        {mod, fun} =
+          Introspection.actual_mod_fun(
+            {mod, fun},
+            imports,
+            aliases,
+            module,
+            mods_funs,
+            metadata_types
+          )
 
         TypeInfo.extract_param_options(mod, fun, npar)
         |> options_to_suggestions(mod)
@@ -464,22 +507,24 @@ defmodule ElixirSense.Providers.Suggestion do
   end
 
   # We don't list typespecs when inside a function
-  defp find_typespecs(_hint, _aliases, _module, {_m, _f}) do
+  defp find_typespecs(_hint, _aliases, _module, {_m, _f}, _) do
     []
   end
 
-  defp find_typespecs(hint, aliases, module, _scope) do
+  defp find_typespecs(hint, aliases, module, _scope, metadata_types) do
     hint
     |> Source.split_module_and_hint(module, aliases)
-    |> find_typespecs_for_mod_and_hint(aliases, module)
+    |> find_typespecs_for_mod_and_hint(aliases, module, metadata_types)
   end
 
-  defp find_typespecs_for_mod_and_hint({_, nil}, _aliases, _module) do
+  defp find_typespecs_for_mod_and_hint({_, nil}, _aliases, _module, _metadata_types) do
     []
   end
 
-  defp find_typespecs_for_mod_and_hint({nil, hint}, aliases, module) when not is_nil(module) do
-    local_module = find_typespecs_for_mod_and_hint({module, hint}, aliases, module)
+  defp find_typespecs_for_mod_and_hint({nil, hint}, aliases, module, metadata_types)
+       when not is_nil(module) do
+    local_module =
+      find_typespecs_for_mod_and_hint({module, hint}, aliases, module, metadata_types)
 
     builtin_modules =
       TypeInfo.find_all_builtin(&String.starts_with?("#{&1.name}", hint))
@@ -488,12 +533,21 @@ defmodule ElixirSense.Providers.Suggestion do
     local_module ++ builtin_modules
   end
 
-  defp find_typespecs_for_mod_and_hint({mod, hint}, aliases, _module) do
+  defp find_typespecs_for_mod_and_hint({mod, hint}, aliases, module, metadata_types) do
     actual_mod = Introspection.actual_module(mod, aliases)
 
-    actual_mod
-    |> TypeInfo.find_all(&String.starts_with?("#{&1.name}", hint))
+    TypeInfo.find_all(actual_mod, &String.starts_with?("#{&1.name}", hint))
+    |> Kernel.++(find_metadata_types(actual_mod, hint, metadata_types, module == mod))
     |> Enum.map(&type_info_to_suggestion(&1, actual_mod))
+    |> Enum.uniq_by(&{&1.name, &1.arity})
+  end
+
+  defp find_metadata_types(actual_mod, hint, metadata_types, include_private) do
+    for {{mod, type, _}, type_info} <- metadata_types,
+        mod == actual_mod,
+        type |> Atom.to_string() |> String.starts_with?(hint),
+        include_private or type_info.kind != :typep,
+        do: type_info
   end
 
   defp type_info_to_suggestion(type_info, module) do
@@ -504,14 +558,30 @@ defmodule ElixirSense.Providers.Suggestion do
         ""
       end
 
-    %{
-      type: :type_spec,
-      name: type_info.name,
-      arity: type_info.arity,
-      signature: type_info.signature,
-      origin: origin,
-      doc: type_info.doc,
-      spec: type_info.spec
-    }
+    case type_info do
+      %ElixirSense.Core.State.TypeInfo{} ->
+        args = Enum.map_join(type_info.args, ", ", &Atom.to_string/1)
+
+        %{
+          type: :type_spec,
+          name: type_info.name |> Atom.to_string(),
+          arity: length(type_info.args),
+          signature: "#{type_info.name}(#{args})",
+          origin: origin,
+          doc: "",
+          spec: ""
+        }
+
+      _ ->
+        %{
+          type: :type_spec,
+          name: type_info.name,
+          arity: type_info.arity,
+          signature: type_info.signature,
+          origin: origin,
+          doc: type_info.doc,
+          spec: type_info.spec
+        }
+    end
   end
 end

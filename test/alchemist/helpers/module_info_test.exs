@@ -21,14 +21,6 @@ defmodule Alchemist.Helpers.ModuleTest do
     assert ModuleInfo.docs?(nil, :dance) == false
   end
 
-  test "expand_alias return expanded module alias" do
-    aliases = [{MyList, List}, {MyGenServer, :gen_server}]
-
-    assert ModuleInfo.expand_alias([MyList], aliases) == List
-    assert ModuleInfo.expand_alias([MyGenServer], aliases) == :gen_server
-    assert ModuleInfo.expand_alias([MyList], aliases) == List
-  end
-
   test "has_function? return true" do
     assert ModuleInfo.has_function?(List, :flatten) == true
     assert ModuleInfo.has_function?(List, :to_string) == true

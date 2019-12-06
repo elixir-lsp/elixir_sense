@@ -14,7 +14,7 @@ defmodule ElixirSense.Providers.Definition do
   defmodule Location do
     @type t :: %Location{
             found: boolean,
-            type: :module | :function | :variable,
+            type: :module | :function | :variable | :typespec,
             file: String.t() | nil,
             line: pos_integer | nil,
             column: pos_integer | nil
@@ -25,9 +25,19 @@ defmodule ElixirSense.Providers.Definition do
   @doc """
   Finds out where a module, function, macro or variable was defined.
   """
-  @spec find(String.t(), [module], [{module, module}], module, [%VarInfo{}], map, map, map) ::
+  @spec find(String.t(), [module], [{module, module}], module, [%VarInfo{}], map, map, map, map) ::
           %Location{}
-  def find(subject, imports, aliases, module, vars, mods_funs_to_positions, mods_funs, calls) do
+  def find(
+        subject,
+        imports,
+        aliases,
+        module,
+        vars,
+        mods_funs_to_positions,
+        mods_funs,
+        calls,
+        metadata_types
+      ) do
     var_info =
       unless subject_is_call?(subject, calls) do
         vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
@@ -40,7 +50,14 @@ defmodule ElixirSense.Providers.Definition do
       _ ->
         subject
         |> Source.split_module_and_func(module, aliases)
-        |> find_function_or_module(mods_funs_to_positions, mods_funs, module, imports, aliases)
+        |> find_function_or_module(
+          mods_funs_to_positions,
+          mods_funs,
+          module,
+          imports,
+          aliases,
+          metadata_types
+        )
     end
   end
 
@@ -60,17 +77,33 @@ defmodule ElixirSense.Providers.Definition do
          mods_funs,
          current_module,
          imports,
-         aliases
+         aliases,
+         metadata_types
        ) do
     case {module, function}
-         |> Introspection.actual_mod_fun(imports, aliases, current_module, mods_funs) do
+         |> Introspection.actual_mod_fun(
+           imports,
+           aliases,
+           current_module,
+           mods_funs,
+           metadata_types
+         ) do
       {nil, nil} ->
         %Location{found: false}
 
       {mod, fun} ->
-        case mods_funs_to_positions[{mod, fun, nil}] do
+        case mods_funs_to_positions[{mod, fun, nil}] || metadata_types[{mod, fun, nil}] do
           nil ->
             {mod, fun} |> find_source(current_module)
+
+          %ElixirSense.Core.State.TypeInfo{position: %{col: col, line: line}} ->
+            %Location{
+              found: true,
+              file: nil,
+              type: :typespec,
+              line: line,
+              column: col
+            }
 
           %{positions: positions} ->
             # for simplicity take first position here
