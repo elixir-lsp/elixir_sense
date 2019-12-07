@@ -587,10 +587,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
       case fields do
         [fields] when is_list(fields) ->
           if Enum.all?(fields, fn
-            field when is_atom(field) -> true
-            {field, _} when is_atom(field) -> true
-            _ -> false
-          end) do
+               field when is_atom(field) -> true
+               {field, _} when is_atom(field) -> true
+               _ -> false
+             end) do
             fields
             |> Enum.map(fn
               field when is_atom(field) -> {field, nil}
@@ -599,7 +599,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
           else
             []
           end
-        _ -> []
+
+        _ ->
+          []
       end
 
     state =
@@ -858,7 +860,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
     end
   end
 
-  defp split_module_expression(_state, {:__aliases__, _, mods}), do: {:ok, mods}
+  defp split_module_expression(state, {:__aliases__, _, mods}) do
+    {:ok,
+     case mods do
+       [{:__MODULE__, _, nil} | rest] -> [state |> get_current_module | rest]
+       other -> other
+     end}
+  end
+
   defp split_module_expression(_state, mod) when is_atom(mod), do: {:ok, [mod]}
 
   defp split_module_expression(state, {:__MODULE__, _, nil}),

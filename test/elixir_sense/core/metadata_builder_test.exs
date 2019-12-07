@@ -705,12 +705,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       defmodule MyModule do
         alias __MODULE__.{User, Email}
+        alias __MODULE__.Sub.{A, B.C}
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 3) == [{User, MyModule.User}, {Email, MyModule.Email}]
+    assert get_line_aliases(state, 4) == [
+             {User, MyModule.User},
+             {Email, MyModule.Email},
+             {A, MyModule.Sub.A},
+             {C, MyModule.Sub.B.C}
+           ]
   end
 
   test "aliases with __MODULE__" do
