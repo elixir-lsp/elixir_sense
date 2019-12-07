@@ -13,6 +13,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   @scope_keywords [:for, :try, :fn]
   @block_keywords [:do, :else, :rescue, :catch, :after]
   @defs [:def, :defp, :defmacro, :defmacrop, :defdelegate, :defguard, :defguardp]
+  @protocol_types [{:t, [], :type}]
 
   defguard is_call(call, params)
            when is_atom(call) and is_list(params) and
@@ -27,19 +28,26 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
   end
 
-  defp pre_module(ast, state, position, module) do
+  defp pre_module(ast, state, position = {line, column}, module, types \\ []) do
     module = normalize_module(module)
 
-    state
-    |> maybe_add_protocol_implementation(module)
-    |> new_namespace(module)
-    |> add_current_module_to_index(position)
-    |> new_attributes_scope
-    |> new_behaviours_scope
-    |> new_alias_scope
-    |> new_import_scope
-    |> new_require_scope
-    |> new_vars_scope
+    state =
+      state
+      |> maybe_add_protocol_implementation(module)
+      |> new_namespace(module)
+      |> add_current_module_to_index(position)
+      |> new_attributes_scope
+      |> new_behaviours_scope
+      |> new_alias_scope
+      |> new_import_scope
+      |> new_require_scope
+      |> new_vars_scope
+
+    types
+    |> Enum.reduce(state, fn {type_name, type_args, kind}, acc ->
+      acc
+      |> add_type(type_name, type_args, kind, %{line: line, col: column})
+    end)
     |> result(ast)
   end
 
@@ -201,12 +209,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
          {:defprotocol, _, [{:__aliases__, [line: line, column: column], module}, _]} = ast,
          state
        ) do
-    pre_module(ast, state, {line, column}, module)
+    # protocol defines a type `{:type, {:t, {:type, 1, :term, []}, []}}`
+    pre_module(ast, state, {line, column}, module, @protocol_types)
   end
 
   defp pre({:defprotocol, [line: line, column: column], [module, _]} = ast, state)
        when is_atom(module) do
-    pre_module(ast, state, {line, column}, module)
+    # protocol defines a type `{:type, {:t, {:type, 1, :term, []}, []}}`
+    pre_module(ast, state, {line, column}, module, @protocol_types)
   end
 
   defp pre(

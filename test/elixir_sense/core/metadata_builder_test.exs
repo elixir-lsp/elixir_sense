@@ -2594,6 +2594,31 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            }
   end
 
+  test "protocol exports type t" do
+    state =
+      """
+      defprotocol Proto do
+        def reverse(term)
+      end
+      """
+      |> string_to_state
+
+    assert state.types == %{
+             {Proto, :t, nil} => %ElixirSense.Core.State.TypeInfo{
+               args: [],
+               kind: :type,
+               name: :t,
+               position: %{col: 13, line: 1}
+             },
+             {Proto, :t, 0} => %ElixirSense.Core.State.TypeInfo{
+               args: [],
+               kind: :type,
+               name: :t,
+               position: %{col: 13, line: 1}
+             }
+           }
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true)
