@@ -21,7 +21,7 @@ defmodule ElixirSense.Providers.References do
         }
 
   @type reference_info :: %{
-          uri: String.t(),
+          uri: String.t() | nil,
           range: range
         }
 
