@@ -289,6 +289,59 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_behaviour(ast, state, line, erlang_module)
   end
 
+  # protocol derive
+  defp pre(
+         {:@, [line: _line, column: _column] = position, [{:derive, _, [derived_protos]}]} = ast,
+         state
+       ) do
+    current_module_variants = state |> get_current_module_variants
+
+    List.wrap(derived_protos)
+    |> Enum.map(fn
+      {proto, _opts} -> proto
+      proto -> proto
+    end)
+    |> Enum.reduce(state, fn proto, acc ->
+      case split_module_expression(state, proto) do
+        {:ok, proto_module} ->
+          # protocol implementation module for Any
+          mod_any = Module.concat(proto_module ++ [Any])
+
+          current_module_variants
+          |> Enum.reduce(acc, fn variant, acc_1 ->
+            # protocol implementation module built by @derive
+            mod = Module.concat(proto_module ++ [variant])
+
+            case acc_1.mods_funs[mod_any] do
+              nil ->
+                # implemantation for: Any not detected (is in other file etc.)
+                acc_1
+                |> add_module_to_index(mod, position)
+
+              any_mods_funs ->
+                # copy implemantation for: Any
+                copied_mods_funs_to_positions =
+                  for {{module, fun, arity}, val} <- acc_1.mods_funs_to_positions,
+                      module == mod_any,
+                      into: %{},
+                      do: {{mod, fun, arity}, val}
+
+                %{
+                  acc_1
+                  | mods_funs: acc_1.mods_funs |> Map.put(mod, any_mods_funs),
+                    mods_funs_to_positions:
+                      acc_1.mods_funs_to_positions |> Map.merge(copied_mods_funs_to_positions)
+                }
+            end
+          end)
+
+        :error ->
+          acc
+      end
+    end)
+    |> result(ast)
+  end
+
   defp pre(
          {:@, [line: line, column: column] = _meta_attr,
           [{kind, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]}]}]} = ast,
@@ -876,7 +929,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp split_module_expression(_, _), do: :error
 
   defp concat_module_expression(state, module_parts) do
-    # TODO use aliases here?
     Source.concat_module_parts(module_parts, state |> get_current_module, [])
   end
 

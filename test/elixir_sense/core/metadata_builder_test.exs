@@ -1542,6 +1542,93 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_protocol(state, 9) == {Proto, [MyStruct]}
   end
 
+  test "protocol implementation by deriving" do
+    state =
+      """
+      defprotocol Proto do
+        def reverse(term)
+      end
+
+      defimpl Proto, for: Any do
+        def reverse(term), do: term
+      end
+
+      defmodule MyStruct do
+        @derive Proto
+        defstruct [:field]
+        IO.puts ""
+      end
+      IO.puts ""
+
+      defmodule MyOtherStruct do
+        @derive [{Proto, opt: 1}, Enumerable]
+        defstruct [:field]
+      end
+      """
+      |> string_to_state
+
+    assert %{
+             {Enumerable.MyOtherStruct, nil, nil} => %{
+               params: [nil],
+               positions: [[line: 17, column: 3]]
+             },
+             {MyOtherStruct, nil, nil} => %{params: [nil], positions: [{16, 11}]},
+             {MyStruct, nil, nil} => %{params: [nil], positions: [{9, 11}]},
+             {Proto, nil, nil} => %{params: [nil], positions: [{1, 13}]},
+             {Proto, :reverse, 1} => %{
+               params: [[{:term, [line: 2, column: 15], nil}]],
+               positions: [{2, 7}]
+             },
+             {Proto, :reverse, nil} => %{
+               params: [[{:term, [line: 2, column: 15], nil}]],
+               positions: [{2, 7}]
+             },
+             {Proto.Any, nil, nil} => %{params: [nil], positions: [{5, 9}]},
+             {Proto.Any, :reverse, 1} => %{
+               params: [[{:term, [line: 6, column: 15], nil}]],
+               positions: [{6, 7}]
+             },
+             {Proto.Any, :reverse, nil} => %{
+               params: [[{:term, [line: 6, column: 15], nil}]],
+               positions: [{6, 7}]
+             },
+             {Proto.MyOtherStruct, nil, nil} => %{params: [nil], positions: [{5, 9}]},
+             {Proto.MyOtherStruct, :reverse, 1} => %{
+               params: [[{:term, [line: 6, column: 15], nil}]],
+               positions: [{6, 7}]
+             },
+             {Proto.MyOtherStruct, :reverse, nil} => %{
+               params: [[{:term, [line: 6, column: 15], nil}]],
+               positions: [{6, 7}]
+             },
+             {Proto.MyStruct, nil, nil} => %{params: [nil], positions: [{5, 9}]},
+             {Proto.MyStruct, :reverse, 1} => %{
+               params: [[{:term, [line: 6, column: 15], nil}]],
+               positions: [{6, 7}]
+             },
+             {Proto.MyStruct, :reverse, nil} => %{
+               params: [[{:term, [line: 6, column: 15], nil}]],
+               positions: [{6, 7}]
+             }
+           } == state.mods_funs_to_positions
+
+    assert %{
+             Enumerable.MyOtherStruct => %{},
+             MyOtherStruct => %{},
+             MyStruct => %{},
+             Proto => %{{:reverse, 1} => %ElixirSense.Core.State.ModFunInfo{type: :def}},
+             Proto.Any => %{
+               {:reverse, 1} => %ElixirSense.Core.State.ModFunInfo{type: :def}
+             },
+             Proto.MyOtherStruct => %{
+               {:reverse, 1} => %ElixirSense.Core.State.ModFunInfo{type: :def}
+             },
+             Proto.MyStruct => %{
+               {:reverse, 1} => %ElixirSense.Core.State.ModFunInfo{type: :def}
+             }
+           } == state.mods_funs
+  end
+
   test "registers positions" do
     state =
       """
