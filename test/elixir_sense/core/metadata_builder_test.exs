@@ -1515,6 +1515,27 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_protocol(state, 7) == {Nice.Proto, [String]}
   end
 
+  test "protocol implementation for structs does not require for" do
+    state =
+      """
+      defprotocol Proto do
+        def reverse(term)
+      end
+
+      defmodule MyStruct do
+        defstruct [:field]
+
+        defimpl Proto do
+          def reverse(term), do: String.reverse(term)
+        end
+      end
+      """
+      |> string_to_state
+
+    assert get_line_module(state, 9) == Proto.MyStruct
+    assert get_line_protocol(state, 9) == {Proto, [MyStruct]}
+  end
+
   test "registers positions" do
     state =
       """

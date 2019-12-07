@@ -210,20 +210,19 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre(
-         {:defimpl, _,
-          [{:__aliases__, [line: line, column: column], protocol}, [for: for_expression], _]} =
+         {:defimpl, _, [{:__aliases__, [line: line, column: column], protocol}, impl_args | _]} =
            ast,
          state
        ) do
-    pre_protocol_implementation(ast, state, {line, column}, protocol, for_expression)
+    pre_protocol_implementation(ast, state, {line, column}, protocol, impl_args)
   end
 
   defp pre(
-         {:defimpl, [line: line, column: column], [protocol, [for: for_expression], _]} = ast,
+         {:defimpl, [line: line, column: column], [protocol, impl_args | _]} = ast,
          state
        )
        when is_atom(protocol) do
-    pre_protocol_implementation(ast, state, {line, column}, protocol, for_expression)
+    pre_protocol_implementation(ast, state, {line, column}, protocol, impl_args)
   end
 
   defp pre({def_name, meta, [{:when, _, [head | _]}, body]}, state) when def_name in @defs do
@@ -793,7 +792,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     post_module(ast, state, {protocol, implementations})
   end
 
-  defp get_implementations_from_for_expression(state, for_expression) do
+  defp get_implementations_from_for_expression(state, for: for_expression) do
     for_expression
     |> List.wrap()
     |> Enum.map(fn
@@ -802,6 +801,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
       {:__MODULE__, _, nil} -> state |> get_current_module
       _ -> nil
     end)
+  end
+
+  defp get_implementations_from_for_expression(state, _other) do
+    [state |> get_current_module]
   end
 
   defp alias_tuple(module, alias_module) when is_atom(alias_module) do
