@@ -2107,12 +2107,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     state =
       """
       defmodule MyStruct do
-        defstruct [a_field: nil]
+        defstruct [:some_field, a_field: 1]
       end
       """
       |> string_to_state
 
-    assert state.structs == %{MyStruct => {:defstruct, [a_field: nil]}}
+    assert state.structs == %{MyStruct => {:defstruct, [some_field: nil, a_field: 1]}}
   end
 
   test "find struct fields from expression" do

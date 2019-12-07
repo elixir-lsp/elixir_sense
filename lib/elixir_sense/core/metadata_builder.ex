@@ -585,7 +585,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp pre({type, _, fields} = ast, state) when type in [:defstruct, :defexception] do
     fields =
       case fields do
-        [fields] -> if Keyword.keyword?(fields), do: fields, else: []
+        [fields] when is_list(fields) ->
+          if Enum.all?(fields, fn
+            field when is_atom(field) -> true
+            {field, _} when is_atom(field) -> true
+            _ -> false
+          end) do
+            fields
+            |> Enum.map(fn
+              field when is_atom(field) -> {field, nil}
+              {field, value} when is_atom(field) -> {field, value}
+            end)
+          else
+            []
+          end
         _ -> []
       end
 
