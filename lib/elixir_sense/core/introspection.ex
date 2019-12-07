@@ -69,14 +69,28 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_signatures(mod, fun, code_docs \\ nil) do
-    docs = code_docs || NormalizedCode.get_docs(mod, :docs) || []
+    case code_docs || NormalizedCode.get_docs(mod, :docs) do
+      docs when is_list(docs) ->
+        for {{f, arity}, _, _, args, text} <- docs, f == fun do
+          fun_args = Enum.map(args, &format_doc_arg(&1))
+          fun_str = Atom.to_string(fun)
+          doc = extract_summary_from_docs(text)
+          spec = get_spec_as_string(mod, fun, arity)
+          %{name: fun_str, params: fun_args, documentation: doc, spec: spec}
+        end
 
-    for {{f, arity}, _, _, args, text} <- docs, f == fun do
-      fun_args = Enum.map(args, &format_doc_arg(&1))
-      fun_str = Atom.to_string(fun)
-      doc = extract_summary_from_docs(text)
-      spec = get_spec_as_string(mod, fun, arity)
-      %{name: fun_str, params: fun_args, documentation: doc, spec: spec}
+      nil ->
+        for {_kind, {{_name, _arity}, [params | _]}} = spec <-
+              TypeInfo.get_function_specs(mod, fun) do
+          params = TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
+
+          %{
+            name: Atom.to_string(fun),
+            params: params,
+            documentation: "No documentation available",
+            spec: spec |> spec_to_string
+          }
+        end
     end
   end
 
@@ -589,11 +603,10 @@ defmodule ElixirSense.Core.Introspection do
 
   def spec_to_string({kind, {{name, _arity}, specs}}) do
     specs
-    |> Enum.map(fn spec ->
+    |> Enum.map_join("\n", fn spec ->
       binary = Macro.to_string(Typespec.spec_to_quoted(name, spec))
       "@#{kind} #{binary}" |> String.replace("()", "")
     end)
-    |> Enum.join("\n")
   end
 
   def actual_module(module, aliases) do

@@ -5,6 +5,35 @@ defmodule ElixirSense.SignatureTest do
   doctest Signature
 
   describe "signature" do
+    test "find signatures from erlang module" do
+      code = """
+      defmodule MyModule do
+        :lists.flatten(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 24) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   name: "flatten",
+                   params: ["DeepList", "Tail"],
+                   documentation: "No documentation available",
+                   spec:
+                     "@spec flatten(deepList, tail) :: list when deepList: [term | deepList], tail: [term], list: [term]"
+                 },
+                 %{
+                   name: "flatten",
+                   params: ["DeepList"],
+                   documentation: "No documentation available",
+                   spec:
+                     "@spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]"
+                 }
+               ]
+             }
+    end
+
     test "find signatures from aliased modules" do
       code = """
       defmodule MyModule do

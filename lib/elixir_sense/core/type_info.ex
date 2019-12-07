@@ -485,4 +485,18 @@ defmodule ElixirSense.Core.TypeInfo do
     |> String.split("#{kind} ")
     |> (&match?([_, _ | _], &1)).()
   end
+
+  def extract_params({:type, _, :fun, [{:type, _, :product, params_types}, _]}) do
+    params_types
+    |> Enum.map(&extract_params_from_args_spec/1)
+  end
+
+  def extract_params({:type, _, :bounded_fun, [type, _constraints]}) do
+    {:type, _, :fun, [{:type, _, :product, params}, _]} = type
+
+    params
+    |> Enum.map(&extract_params_from_args_spec/1)
+  end
+
+  defp extract_params_from_args_spec({:var, _, param}), do: param
 end
