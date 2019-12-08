@@ -8,16 +8,36 @@ defmodule ElixirSense.Core.TypeInfo do
   @param_option_spec_line_length 35
 
   def find_all(module, filter \\ & &1) do
-    for(
-      {{name, arity}, _, _, doc} <- NormalizedCode.get_docs(module, :type_docs) || [],
-      typedef = get_type_spec(module, name, arity),
-      type_ast = ElixirSense.Core.TypeAst.from_typedef(typedef),
-      spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
-      signature = ElixirSense.Core.TypeAst.extract_signature(type_ast),
-      info = %{name: name, arity: arity, doc: doc, spec: spec, signature: signature},
-      filter.(info)
-    ) do
-      info
+    case NormalizedCode.get_docs(module, :type_docs) do
+      docs when is_list(docs) ->
+        for(
+          {{name, arity}, _, _, doc} <- docs,
+          typedef = get_type_spec(module, name, arity),
+          type_ast = ElixirSense.Core.TypeAst.from_typedef(typedef),
+          spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
+          signature = ElixirSense.Core.TypeAst.extract_signature(type_ast),
+          info = %{name: name, arity: arity, doc: doc, spec: spec, signature: signature},
+          filter.(info)
+        ) do
+          info
+        end
+
+      nil ->
+        for {kind, {name, _type, args}} = typedef <- Typespec.get_types(module),
+            kind in [:type, :opaque],
+            spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
+            type_ast = ElixirSense.Core.TypeAst.from_typedef(typedef),
+            signature = ElixirSense.Core.TypeAst.extract_signature(type_ast),
+            info = %{
+              name: name,
+              arity: length(args),
+              doc: "No documentation available",
+              spec: spec,
+              signature: signature
+            },
+            filter.(info) do
+          info
+        end
     end
   end
 

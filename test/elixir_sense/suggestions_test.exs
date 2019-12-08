@@ -1670,6 +1670,35 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.origin == ""
     end
 
+    test "erlang types" do
+      buffer = "@type my_type :: :erlang.tim"
+
+      suggestions = suggestions_by_type(:type_spec, buffer)
+
+      assert [
+               %{
+                 arity: 0,
+                 doc: "No documentation available",
+                 name: :timestamp,
+                 origin: ":erlang",
+                 signature: "timestamp()",
+                 spec:
+                   "@type timestamp() ::\n  {megaSecs ::\n     non_neg_integer(),\n   secs :: non_neg_integer(),\n   microSecs ::\n     non_neg_integer()}",
+                 type: :type_spec
+               },
+               %{
+                 arity: 0,
+                 doc: "No documentation available",
+                 name: :time_unit,
+                 origin: ":erlang",
+                 signature: "time_unit()",
+                 spec:
+                   "@type time_unit() ::\n  pos_integer()\n  | :second\n  | :millisecond\n  | :microsecond\n  | :nanosecond\n  | :native\n  | :perf_counter\n  | deprecated_time_unit()",
+                 type: :type_spec
+               }
+             ] == suggestions
+    end
+
     test "local types from metadata" do
       buffer = """
       defmodule MyModule do
