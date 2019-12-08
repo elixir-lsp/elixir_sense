@@ -100,7 +100,7 @@ defmodule ElixirSense.Core.Metadata do
     docs = NormalizedCode.get_docs(module, :docs)
 
     for {{func, _arity}, line, _kind, _, _} <- docs, func == function do
-      {line, 0}
+      {line, 1}
     end
     |> Enum.at(0)
   end
