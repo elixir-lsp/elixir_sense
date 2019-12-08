@@ -116,6 +116,22 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "function_arity_one"
   end
 
+  test "find function definition macro generated" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.MacroGenerated, as: Local
+      Local.my_fun()
+      #        ^
+    end
+    """
+
+    %{found: true, type: :function, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 3, 12)
+
+    assert file =~ "elixir_sense/test/support/macro_generated.ex"
+    assert read_line(file, {line, column}) =~ "ElixirSenseExample.Macros.go"
+  end
+
   test "find definition of delegated functions" do
     buffer = """
     defmodule MyModule do
@@ -489,7 +505,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       ElixirSense.definition(buffer, 2, 31)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
-    assert read_line(file, {line, column}) =~ ~r/^remote_t ::/
+    assert read_line(file, {line, column}) =~ ~r/^@type remote_t/
   end
 
   test "find remote type definition" do
@@ -505,7 +521,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       ElixirSense.definition(buffer, 3, 13)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
-    assert read_line(file, {line, column}) =~ ~r/^remote_t ::/
+    assert read_line(file, {line, column}) =~ ~r/^@type remote_t/
   end
 
   test "find type definition without @typedoc" do
@@ -521,7 +537,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       ElixirSense.definition(buffer, 3, 13)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
-    assert read_line(file, {line, column}) =~ ~r/^remote_option_t ::/
+    assert read_line(file, {line, column}) =~ ~r/@type remote_option_t ::/
   end
 
   test "find opaque type definition" do
@@ -537,7 +553,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       ElixirSense.definition(buffer, 3, 12)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
-    assert read_line(file, {line, column}) =~ ~r/^opaque_t ::/
+    assert read_line(file, {line, column}) =~ ~r/@opaque opaque_t/
   end
 
   test "find erlang type definition" do
