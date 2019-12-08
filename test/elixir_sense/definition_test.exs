@@ -239,7 +239,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %Location{found: true, line: 1, column: 1, type: :module, file: file} = ElixirSense.definition(buffer, 2, 5)
+    assert %Location{found: true, line: 1, column: 1, type: :module, file: file} =
+             ElixirSense.definition(buffer, 2, 5)
+
     assert file =~ "/src/erlang.erl"
   end
 
@@ -536,6 +538,36 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
     assert read_line(file, {line, column}) =~ ~r/^opaque_t ::/
+  end
+
+  test "find erlang type definition" do
+    buffer = """
+    defmodule MyModule do
+      :ets.tab
+      #     ^
+    end
+    """
+
+    %{found: true, type: :typespec, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 2, 9)
+
+    assert file =~ "/src/ets.erl"
+    assert read_line(file, {line, column}) =~ "-type tab()"
+  end
+
+  test "find erlang type definition from preloaded module" do
+    buffer = """
+    defmodule MyModule do
+      :erlang.time_unit
+      #        ^
+    end
+    """
+
+    %{found: true, type: :typespec, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 2, 12)
+
+    assert file =~ "/src/erlang.erl"
+    assert read_line(file, {line, column}) =~ "-type time_unit()"
   end
 
   test "builtin types cannot now be found" do
