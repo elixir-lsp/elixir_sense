@@ -556,6 +556,22 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ ~r/@opaque opaque_t/
   end
 
+  test "find type definition macro generated" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.MacroGenerated, as: Local
+      Local.my_type
+      #        ^
+    end
+    """
+
+    %{found: true, type: :typespec, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 3, 12)
+
+    assert file =~ "elixir_sense/test/support/macro_generated.ex"
+    assert read_line(file, {line, column}) =~ "ElixirSenseExample.Macros.go"
+  end
+
   test "find erlang type definition" do
     buffer = """
     defmodule MyModule do

@@ -218,10 +218,8 @@ defmodule ElixirSense.Providers.Definition do
       if String.ends_with?(file, ".erl") do
         find_type_position_in_erl_file(file, name)
       else
-        # file_metadata = Parser.parse_file(file, false, false, nil)
-        # Metadata.get_function_position(file_metadata, mod, fun)
-        # TODO
-        Introspection.get_type_position(mod, name, file)
+        file_metadata = Parser.parse_file(file, false, false, nil)
+        Metadata.get_type_position(file_metadata, mod, name, file)
       end
 
     case position do

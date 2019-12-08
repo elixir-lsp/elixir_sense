@@ -6,6 +6,7 @@ defmodule ElixirSense.Core.Metadata do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
+  alias alias ElixirSense.Core.TypeInfo
 
   defstruct source: nil,
             mods_funs_to_positions: %{},
@@ -43,6 +44,16 @@ defmodule ElixirSense.Core.Metadata do
     case Map.get(metadata.mods_funs_to_positions, {module, function, nil}) do
       nil -> get_function_position_using_docs(module, function)
       %{positions: positions} -> List.last(positions)
+    end
+  end
+
+  def get_type_position(%__MODULE__{} = metadata, module, type, file) do
+    case Map.get(metadata.types, {module, type, nil}) do
+      nil ->
+        TypeInfo.get_type_position_using_docs(module, type, file)
+
+      %ElixirSense.Core.State.TypeInfo{position: %{col: col, line: line}} ->
+        {line, col}
     end
   end
 
