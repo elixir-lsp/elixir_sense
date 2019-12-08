@@ -150,14 +150,15 @@ defmodule ElixirSense.Providers.Definition do
       if file && File.exists?(file) do
         file
       else
-        erl_file =
-          module
-          |> :code.which()
-          |> to_string
-          |> String.replace(Regex.recompile!(~r/(.+)\/ebin\/([^\s]+)\.beam$/), "\\1/src/\\2.erl")
-
-        if File.exists?(erl_file) do
+        with {_module, _binary, beam_filename} <- :code.get_object_code(module),
+        erl_file = beam_filename
+        |> to_string
+        |> String.replace(Regex.recompile!(~r/(.+)\/ebin\/([^\s]+)\.beam$/), "\\1/src/\\2.erl"),
+        true <- File.exists?(erl_file)
+        do
           erl_file
+        else
+          _ -> nil
         end
       end
 

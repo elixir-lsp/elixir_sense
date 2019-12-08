@@ -181,6 +181,23 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "duplicate(N, X)"
   end
 
+  test "find definition of remote erlang functions from preloaded module" do
+    buffer = """
+    defmodule MyModule do
+      def dup(x) do
+        :erlang.start_timer(2, x, 4)
+        #         ^
+      end
+    end
+    """
+
+    %{found: true, type: :function, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 3, 15)
+
+    assert file =~ "/src/erlang.erl"
+    assert read_line(file, {line, column}) =~ "start_timer(_Time, _Dest, _Msg)"
+  end
+
   test "non existing modules" do
     buffer = """
     defmodule MyModule do
@@ -222,7 +239,8 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert ElixirSense.definition(buffer, 2, 5) == %Location{found: false}
+    assert %Location{found: true, line: 1, column: 1, type: :module, file: file} = ElixirSense.definition(buffer, 2, 5)
+    assert file =~ "/src/erlang.erl"
   end
 
   test "cannot find built-in functions" do
