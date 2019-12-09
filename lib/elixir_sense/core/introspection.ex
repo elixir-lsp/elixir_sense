@@ -238,13 +238,6 @@ defmodule ElixirSense.Core.Introspection do
     |> Enum.at(0)
   end
 
-  def get_type_position(mod, type_name, file) do
-    # TODO: extend the metadata builder to hold type definitions
-    # so we can find private types and types from modules that
-    # can't be compiled. If it can't find, fallback to this one.
-    TypeInfo.get_type_position_using_docs(mod, type_name, file)
-  end
-
   defp format_type({kind, type}) do
     ast = Typespec.type_to_quoted(type)
     "@#{kind} #{format_spec_ast(ast)}"

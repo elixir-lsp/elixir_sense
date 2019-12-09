@@ -116,6 +116,22 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "function_arity_one"
   end
 
+  test "find function definition macro generated" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.MacroGenerated, as: Local
+      Local.my_fun()
+      #        ^
+    end
+    """
+
+    %{found: true, type: :function, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 3, 12)
+
+    assert file =~ "elixir_sense/test/support/macro_generated.ex"
+    assert read_line(file, {line, column}) =~ "ElixirSenseExample.Macros.go"
+  end
+
   test "find definition of delegated functions" do
     buffer = """
     defmodule MyModule do
@@ -181,6 +197,23 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "duplicate(N, X)"
   end
 
+  test "find definition of remote erlang functions from preloaded module" do
+    buffer = """
+    defmodule MyModule do
+      def dup(x) do
+        :erlang.start_timer(2, x, 4)
+        #         ^
+      end
+    end
+    """
+
+    %{found: true, type: :function, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 3, 15)
+
+    assert file =~ "/src/erlang.erl"
+    assert read_line(file, {line, column}) =~ "start_timer(_Time, _Dest, _Msg)"
+  end
+
   test "non existing modules" do
     buffer = """
     defmodule MyModule do
@@ -222,7 +255,10 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert ElixirSense.definition(buffer, 2, 5) == %Location{found: false}
+    assert %Location{found: true, line: 1, column: 1, type: :module, file: file} =
+             ElixirSense.definition(buffer, 2, 5)
+
+    assert file =~ "/src/erlang.erl"
   end
 
   test "cannot find built-in functions" do
@@ -469,7 +505,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       ElixirSense.definition(buffer, 2, 31)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
-    assert read_line(file, {line, column}) =~ ~r/^remote_t ::/
+    assert read_line(file, {line, column}) =~ ~r/^@type remote_t/
   end
 
   test "find remote type definition" do
@@ -485,7 +521,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       ElixirSense.definition(buffer, 3, 13)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
-    assert read_line(file, {line, column}) =~ ~r/^remote_t ::/
+    assert read_line(file, {line, column}) =~ ~r/^@type remote_t/
   end
 
   test "find type definition without @typedoc" do
@@ -501,7 +537,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
       ElixirSense.definition(buffer, 3, 13)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
-    assert read_line(file, {line, column}) =~ ~r/^remote_option_t ::/
+    assert read_line(file, {line, column}) =~ ~r/@type remote_option_t ::/
   end
 
   test "find opaque type definition" do
@@ -517,7 +553,53 @@ defmodule ElixirSense.Providers.DefinitionTest do
       ElixirSense.definition(buffer, 3, 12)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
-    assert read_line(file, {line, column}) =~ ~r/^opaque_t ::/
+    assert read_line(file, {line, column}) =~ ~r/@opaque opaque_t/
+  end
+
+  test "find type definition macro generated" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.MacroGenerated, as: Local
+      Local.my_type
+      #        ^
+    end
+    """
+
+    %{found: true, type: :typespec, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 3, 12)
+
+    assert file =~ "elixir_sense/test/support/macro_generated.ex"
+    assert read_line(file, {line, column}) =~ "ElixirSenseExample.Macros.go"
+  end
+
+  test "find erlang type definition" do
+    buffer = """
+    defmodule MyModule do
+      :ets.tab
+      #     ^
+    end
+    """
+
+    %{found: true, type: :typespec, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 2, 9)
+
+    assert file =~ "/src/ets.erl"
+    assert read_line(file, {line, column}) =~ "-type tab()"
+  end
+
+  test "find erlang type definition from preloaded module" do
+    buffer = """
+    defmodule MyModule do
+      :erlang.time_unit
+      #        ^
+    end
+    """
+
+    %{found: true, type: :typespec, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 2, 12)
+
+    assert file =~ "/src/erlang.erl"
+    assert read_line(file, {line, column}) =~ "-type time_unit()"
   end
 
   test "builtin types cannot now be found" do

@@ -86,16 +86,19 @@ defmodule ElixirSense.Core.TypeInfo do
         {kind, _} = get_type_spec(module, type_name)
         kind_str = "@#{kind}"
 
-        {str, index} =
-          File.read!(file)
-          |> Source.text_after(doc_line, 1)
-          |> String.split("\n")
-          |> Enum.with_index()
-          |> Enum.find(fn {str, _} -> starts_with_type_def?(str, kind_str) end)
+        case File.read!(file)
+             |> Source.text_after(doc_line, 1)
+             |> String.split("\n")
+             |> Enum.with_index()
+             |> Enum.find(fn {str, _} -> starts_with_type_def?(str, kind_str) end) do
+          {str, index} ->
+            kind_col = String.split(str, kind_str) |> Enum.at(0) |> String.length()
+            col = kind_col + String.length(kind_str) + 2
+            {doc_line + index, col}
 
-        kind_col = String.split(str, kind_str) |> Enum.at(0) |> String.length()
-        col = kind_col + String.length(kind_str) + 2
-        {doc_line + index, col}
+          nil ->
+            {doc_line, 1}
+        end
 
       _ ->
         nil

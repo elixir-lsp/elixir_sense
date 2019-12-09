@@ -150,14 +150,18 @@ defmodule ElixirSense.Providers.Definition do
       if file && File.exists?(file) do
         file
       else
-        erl_file =
-          module
-          |> :code.which()
-          |> to_string
-          |> String.replace(Regex.recompile!(~r/(.+)\/ebin\/([^\s]+)\.beam$/), "\\1/src/\\2.erl")
-
-        if File.exists?(erl_file) do
+        with {_module, _binary, beam_filename} <- :code.get_object_code(module),
+             erl_file =
+               beam_filename
+               |> to_string
+               |> String.replace(
+                 Regex.recompile!(~r/(.+)\/ebin\/([^\s]+)\.beam$/),
+                 "\\1/src/\\2.erl"
+               ),
+             true <- File.exists?(erl_file) do
           erl_file
+        else
+          _ -> nil
         end
       end
 
@@ -184,24 +188,41 @@ defmodule ElixirSense.Providers.Definition do
   defp fun_to_type(nil), do: :module
   defp fun_to_type(_), do: :function
 
-  defp find_fun_position_in_erl_file(file, fun) do
-    fun_name = Atom.to_string(fun)
+  defp find_fun_position_in_erl_file(_file, nil), do: {1, 1}
 
+  defp find_fun_position_in_erl_file(file, name) do
+    find_line_by_regex(file, Regex.recompile!(~r/^#{name}\b/))
+  end
+
+  defp find_type_position_in_erl_file(file, name) do
+    find_line_by_regex(file, Regex.recompile!(~r/^-(typep?|opaque)\s#{name}\b/))
+  end
+
+  defp find_line_by_regex(file, regex) do
     index =
       file
       |> File.read!()
       |> String.split(["\n", "\r\n"])
-      |> Enum.find_index(&String.match?(&1, Regex.recompile!(~r/^#{fun_name}\b/)))
+      |> Enum.find_index(&String.match?(&1, regex))
 
-    {(index || 0) + 1, 1}
+    case index do
+      nil -> nil
+      i -> {i + 1, 1}
+    end
   end
 
-  defp find_type_position({_, file}, _fun) when file in ["non_existing", nil, ""] do
-    %Location{found: false}
-  end
+  defp find_type_position(_, nil), do: nil
 
   defp find_type_position({mod, file}, name) do
-    case Introspection.get_type_position(mod, name, file) do
+    position =
+      if String.ends_with?(file, ".erl") do
+        find_type_position_in_erl_file(file, name)
+      else
+        file_metadata = Parser.parse_file(file, false, false, nil)
+        Metadata.get_type_position(file_metadata, mod, name, file)
+      end
+
+    case position do
       {line, column} ->
         %Location{found: true, type: :typespec, file: file, line: line, column: column}
 
