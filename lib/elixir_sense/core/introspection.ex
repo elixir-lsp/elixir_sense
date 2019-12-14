@@ -711,7 +711,11 @@ defmodule ElixirSense.Core.Introspection do
          metadata_types,
          include_typespecs
        ) do
-    mods = [{current_module, :current_module} | imports]
+    mods =
+      case current_module do
+        nil -> imports
+        _ -> [{current_module, :current_module} | imports]
+      end
 
     case Enum.find(mods, fn
            {mod, :current_module} ->

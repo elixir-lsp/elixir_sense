@@ -171,4 +171,8 @@ defmodule ElixirSense.Core.IntrospectionTest do
              }
            ]
   end
+
+  test "actual_mod_fun when nil current module" do
+    assert {nil, :some_fun} = actual_mod_fun({nil, :some_fun}, [], [], nil, %{}, %{})
+  end
 end
