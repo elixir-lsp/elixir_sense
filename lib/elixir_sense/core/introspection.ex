@@ -91,6 +91,7 @@ defmodule ElixirSense.Core.Introspection do
             spec: spec |> spec_to_string
           }
         end
+        |> Enum.sort_by(& length(&1.params))
     end
   end
 

@@ -17,18 +17,18 @@ defmodule ElixirSense.SignatureTest do
                pipe_before: false,
                signatures: [
                  %{
-                   name: "flatten",
-                   params: ["DeepList", "Tail"],
                    documentation: "No documentation available",
-                   spec:
-                     "@spec flatten(deepList, tail) :: list when deepList: [term | deepList], tail: [term], list: [term]"
-                 },
-                 %{
                    name: "flatten",
                    params: ["DeepList"],
-                   documentation: "No documentation available",
                    spec:
                      "@spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]"
+                 },
+                 %{
+                   documentation: "No documentation available",
+                   name: "flatten",
+                   params: ["DeepList", "Tail"],
+                   spec:
+                     "@spec flatten(deepList, tail) :: list when deepList: [term | deepList], tail: [term], list: [term]"
                  }
                ]
              }
