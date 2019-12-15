@@ -12,7 +12,7 @@ defmodule ElixirSense.Providers.Signature do
   @type signature_info :: %{active_param: pos_integer, signatures: [signature]} | :none
 
   @doc """
-  Returns the signature info from the function defined in the prefix, if any.
+  Returns the signature info from the function or type defined in the prefix, if any.
   """
   @spec find(String.t(), [module], [{module, module}], module, map) :: signature_info
   def find(prefix, imports, aliases, module, metadata) do
@@ -37,6 +37,10 @@ defmodule ElixirSense.Providers.Signature do
   end
 
   defp find_signatures({mod, fun}, metadata) do
+    find_function_signatures({mod, fun}, metadata) ++ find_type_signatures({mod, fun}, metadata)
+  end
+
+  defp find_function_signatures({mod, fun}, metadata) do
     docs = NormalizedCode.get_docs(mod, :docs)
 
     signatures =
@@ -46,5 +50,17 @@ defmodule ElixirSense.Providers.Signature do
       end
 
     signatures |> Enum.uniq_by(fn sig -> sig.params end)
+  end
+
+  defp find_type_signatures({mod, fun}, metadata) do
+    docs = NormalizedCode.get_docs(mod, :type_docs)
+
+    signature =
+      case Metadata.get_type_signature(metadata, mod, fun, docs) do
+        nil -> ElixirSense.Core.TypeInfo.get_signatures(mod, fun, docs)
+        signature -> signature
+      end
+
+    List.wrap(signature)
   end
 end
