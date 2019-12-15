@@ -6,7 +6,7 @@ defmodule ElixirSense.Core.Metadata do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
-  alias alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Core.TypeInfo
 
   defstruct source: nil,
             mods_funs_to_positions: %{},
