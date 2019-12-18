@@ -4,7 +4,123 @@ defmodule ElixirSense.SignatureTest do
 
   doctest Signature
 
-  describe "signature" do
+  describe "type signature" do
+    test "find signatures from local type" do
+      code = """
+      defmodule MyModule do
+        @typep my(a, b) :: {a, b}
+        @type a :: my(a,
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 19) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   name: "my",
+                   params: ["a", "b"],
+                   documentation: "",
+                   spec: ""
+                 }
+               ]
+             }
+    end
+
+    test "find signatures from local remote type" do
+      code = """
+      defmodule ElixirSenseExample.ModuleWithTypespecs.Remote do
+        @type remote_t(a, b) :: {a, b}
+        @type a :: remote_t(
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 23) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   name: "remote_t",
+                   params: ["a", "b"],
+                   documentation: "Remote type with params",
+                   spec: "@type remote_t(a, b) :: {a, b}"
+                 }
+               ]
+             }
+    end
+
+    test "find type signatures" do
+      code = """
+      defmodule MyModule do
+        @type a :: ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t(
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 69) == %{
+               pipe_before: false,
+               active_param: 0,
+               signatures: [
+                 %{
+                   documentation: "Remote type",
+                   name: "remote_t",
+                   params: [],
+                   spec: "@type remote_t :: atom"
+                 },
+                 %{
+                   documentation: "Remote type with params",
+                   name: "remote_t",
+                   params: ["a", "b"],
+                   spec: "@type remote_t(a, b) :: {a, b}"
+                 }
+               ]
+             }
+    end
+
+    test "find type signatures from erlang module" do
+      code = """
+      defmodule MyModule do
+        @type a :: :erlang.time_unit(
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 32) == %{
+               pipe_before: false,
+               active_param: 0,
+               signatures: [
+                 %{
+                   documentation: "No documentation available",
+                   name: "time_unit",
+                   params: [],
+                   spec:
+                     "@type time_unit :: pos_integer | :second | :millisecond | :microsecond | :nanosecond | :native | :perf_counter | deprecated_time_unit"
+                 }
+               ]
+             }
+    end
+
+    test "find type signatures from builtin type" do
+      code = """
+      defmodule MyModule do
+        @type a :: number(
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 21) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   params: [],
+                   documentation: "An integer or a float",
+                   name: "number",
+                   spec: "@type number :: integer | float"
+                 }
+               ]
+             }
+    end
+  end
+
+  describe "function signature" do
     test "find signatures from erlang module" do
       code = """
       defmodule MyModule do
@@ -17,18 +133,18 @@ defmodule ElixirSense.SignatureTest do
                pipe_before: false,
                signatures: [
                  %{
-                   name: "flatten",
-                   params: ["DeepList", "Tail"],
                    documentation: "No documentation available",
-                   spec:
-                     "@spec flatten(deepList, tail) :: list when deepList: [term | deepList], tail: [term], list: [term]"
-                 },
-                 %{
                    name: "flatten",
                    params: ["DeepList"],
-                   documentation: "No documentation available",
                    spec:
                      "@spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]"
+                 },
+                 %{
+                   documentation: "No documentation available",
+                   name: "flatten",
+                   params: ["DeepList", "Tail"],
+                   spec:
+                     "@spec flatten(deepList, tail) :: list when deepList: [term | deepList], tail: [term], list: [term]"
                  }
                ]
              }

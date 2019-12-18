@@ -3,6 +3,8 @@ defmodule ElixirSense.Core.TypeInfo do
   alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
+  alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.TypeAst
 
   @doc_spec_line_length 75
   @param_option_spec_line_length 35
@@ -13,9 +15,9 @@ defmodule ElixirSense.Core.TypeInfo do
         for(
           {{name, arity}, _, _, doc} <- docs,
           typedef = get_type_spec(module, name, arity),
-          type_ast = ElixirSense.Core.TypeAst.from_typedef(typedef),
+          type_ast = TypeAst.from_typedef(typedef),
           spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
-          signature = ElixirSense.Core.TypeAst.extract_signature(type_ast),
+          signature = TypeAst.extract_signature(type_ast),
           info = %{name: name, arity: arity, doc: doc, spec: spec, signature: signature},
           filter.(info)
         ) do
@@ -26,8 +28,8 @@ defmodule ElixirSense.Core.TypeInfo do
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(module),
             kind in [:type, :opaque],
             spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
-            type_ast = ElixirSense.Core.TypeAst.from_typedef(typedef),
-            signature = ElixirSense.Core.TypeAst.extract_signature(type_ast),
+            type_ast = TypeAst.from_typedef(typedef),
+            signature = TypeAst.extract_signature(type_ast),
             info = %{
               name: name,
               arity: length(args),
@@ -38,6 +40,53 @@ defmodule ElixirSense.Core.TypeInfo do
             filter.(info) do
           info
         end
+    end
+  end
+
+  def get_signatures(mod, type, code_docs \\ nil)
+
+  def get_signatures(mod, type, code_docs) when not is_nil(mod) do
+    case code_docs || NormalizedCode.get_docs(mod, :type_docs) do
+      docs when is_list(docs) ->
+        for {{t, arity}, _, _, text} <- docs, t == type do
+          {_kind, {_name, _def, args}} = get_type_spec(mod, type, arity)
+          type_args = Enum.map(args, &(&1 |> elem(2) |> Atom.to_string()))
+          type_str = Atom.to_string(type)
+          doc = Introspection.extract_summary_from_docs(text)
+          spec = get_type_spec_as_string(mod, type, arity)
+          %{name: type_str, params: type_args, documentation: doc, spec: spec}
+        end
+
+      nil ->
+        for {kind, {name, _type, args}} = typedef <- Typespec.get_types(mod),
+            name == type,
+            kind in [:type, :opaque] do
+          type_args = Enum.map(args, &(&1 |> elem(2) |> Atom.to_string()))
+
+          %{
+            name: Atom.to_string(name),
+            params: type_args,
+            documentation: "No documentation available",
+            spec: type_spec_to_string(typedef)
+          }
+        end
+    end
+  end
+
+  def get_signatures(nil, type, _code_docs) do
+    for ti <- BuiltinTypes.get_builtin_type_info(type) do
+      %{
+        name: Atom.to_string(type),
+        params: ti.params |> Enum.map(&Atom.to_string/1),
+        documentation: ti.doc,
+        spec:
+          "@type " <>
+            case ti do
+              %{spec: ast} -> spec_ast_to_string(ast)
+              %{signature: signature} -> signature
+              nil -> "#{type}"
+            end
+      }
     end
   end
 
@@ -53,7 +102,7 @@ defmodule ElixirSense.Core.TypeInfo do
       type_ast <- [value[:spec]],
       spec <- [format_type_spec_ast(type_ast, :type, line_length: @param_option_spec_line_length)],
       signature <- [
-        value[:signature] || ElixirSense.Core.TypeAst.extract_signature(type_ast) || "#{key}()"
+        value[:signature] || TypeAst.extract_signature(type_ast) || "#{key}()"
       ],
       {name, arity} = extract_name_and_arity.(key),
       doc = value[:doc] || "",
@@ -112,6 +161,16 @@ defmodule ElixirSense.Core.TypeInfo do
 
   def spec_ast_to_string(ast) do
     ast |> Macro.to_string() |> String.replace("()", "")
+  end
+
+  def type_spec_to_string({kind, type}) do
+    binary = Typespec.type_to_quoted(type) |> Macro.to_string()
+    "@#{kind} #{binary}" |> String.replace("()", "")
+  end
+
+  def get_type_spec_as_string(module, type, arity) do
+    get_type_spec(module, type, arity)
+    |> type_spec_to_string
   end
 
   def format_type_spec(spec) do

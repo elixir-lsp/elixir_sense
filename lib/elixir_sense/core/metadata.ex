@@ -6,7 +6,7 @@ defmodule ElixirSense.Core.Metadata do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
-  alias alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Core.TypeInfo
 
   defstruct source: nil,
             mods_funs_to_positions: %{},
@@ -64,6 +64,13 @@ defmodule ElixirSense.Core.Metadata do
     end
   end
 
+  def get_type_info(%__MODULE__{} = metadata, module, type) do
+    case Map.get(metadata.types, {module, type, nil}) do
+      nil -> %{lines: [], params: []}
+      info -> info
+    end
+  end
+
   def get_function_params(%__MODULE__{} = metadata, module, function) do
     params =
       metadata
@@ -105,6 +112,33 @@ defmodule ElixirSense.Core.Metadata do
         spec: spec
       }
     end)
+  end
+
+  def get_type_signature(%__MODULE__{} = metadata, module, type, code_docs \\ nil) do
+    docs = code_docs || NormalizedCode.get_docs(module, :type_docs) || []
+
+    case Map.get(metadata.types, {module, type, nil}) do
+      nil ->
+        nil
+
+      %{args: args} ->
+        arity = length(args)
+
+        {doc, spec} =
+          Enum.find_value(docs, {"", ""}, fn {{t, a}, _, _, text} ->
+            t == type &&
+              a == arity &&
+              {Introspection.extract_summary_from_docs(text),
+               TypeInfo.get_type_spec_as_string(module, type, arity)}
+          end)
+
+        %{
+          name: Atom.to_string(type),
+          params: args |> Enum.map(&Atom.to_string/1),
+          documentation: doc,
+          spec: spec
+        }
+    end
   end
 
   defp get_function_position_using_docs(module, function) do
