@@ -16,6 +16,7 @@ defmodule ElixirSense.Core.State do
   @type mods_funs_t :: %{optional(module) => %{optional({atom, nil | non_neg_integer}) => ElixirSense.Core.State.ModFunInfo.t}}
   @type types_t :: %{optional({module, atom, nil | non_neg_integer}) => ElixirSense.Core.State.TypeInfo.t}
   @type vars_info_per_scope_id_t :: %{optional(scope_id_t) => %{optional(atom) => ElixirSense.Core.State.VarInfo.t}}
+  @type structs_t :: %{optional(module) => ElixirSense.Core.State.StructInfo.t}
 
   @type t :: %ElixirSense.Core.State{
     namespace: [[atom]],
@@ -37,7 +38,7 @@ defmodule ElixirSense.Core.State do
     mods_funs: mods_funs_t,
     lines_to_env: lines_to_env_t,
     calls: calls_t,
-    structs: %{optional(module) => ElixirSense.Core.State.StructInfo.t},
+    structs: structs_t,
     types: types_t
   }
 
@@ -80,8 +81,7 @@ defmodule ElixirSense.Core.State do
       attributes: list(atom),
       behaviours: list(module),
       scope: nil | ElixirSense.Core.State.scope,
-      scope_id: nil | ElixirSense.Core.State.scope_id_t,
-      structs: %{optional(module) => ElixirSense.Core.State.StructInfo.t}
+      scope_id: nil | ElixirSense.Core.State.scope_id_t
     }
     defstruct imports: [],
               requires: [],
@@ -96,8 +96,7 @@ defmodule ElixirSense.Core.State do
               attributes: [],
               behaviours: [],
               scope: nil,
-              scope_id: nil,
-              structs: %{}
+              scope_id: nil
   end
 
   defmodule VarInfo do
@@ -224,8 +223,7 @@ defmodule ElixirSense.Core.State do
           [] -> nil
           [head | _] -> head
         end,
-      protocol_variants: current_scope_protocols,
-      structs: state.structs
+      protocol_variants: current_scope_protocols
     }
   end
 

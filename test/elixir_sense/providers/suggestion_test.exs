@@ -26,6 +26,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
         @env,
         %{},
         %{},
+        %{},
         ""
       )
 
@@ -66,6 +67,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert Suggestion.find(
              "Str",
              @env,
+             %{},
              %{},
              %{},
              ""
@@ -120,6 +122,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                @env,
                %{},
                %{},
+               %{},
                ""
              )
   end
@@ -151,6 +154,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                %{@env | aliases: [{MyList, List}]},
                %{},
                %{},
+               %{},
                ""
              )
   end
@@ -159,6 +163,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert Suggestion.find(
              "say",
              %{@env | imports: [MyModule]},
+             %{},
              %{},
              %{},
              ""
@@ -183,6 +188,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
         @env,
         %{},
         %{},
+        %{},
         ""
       )
       |> Enum.filter(fn item -> item.type in [:hint, :function, :function] end)
@@ -195,6 +201,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
       Suggestion.find(
         "",
         @env,
+        %{},
         %{},
         %{},
         ""
@@ -216,6 +223,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                @env_func,
                %{},
                %{},
+               %{},
                ""
              )
   end
@@ -225,6 +233,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              Suggestion.find(
                "f = &Enum.al",
                @env_func,
+               %{},
                %{},
                %{},
                ""
@@ -238,6 +247,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                @env_func,
                %{},
                %{},
+               %{},
                ""
              )
   end
@@ -249,6 +259,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                @env_func,
                %{},
                %{},
+               %{},
                ""
              )
   end
@@ -258,6 +269,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              Suggestion.find(
                "my_f",
                @env_func,
+               %{},
                %{
                  SomeModule => %{
                    {:my_func, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defp}
@@ -271,6 +283,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              Suggestion.find(
                "So",
                @env_func,
+               %{},
                %{
                  SomeModule => %{}
                },
@@ -286,7 +299,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
            ] =
              Suggestion.find(
                "str_",
-               %{@env_func | structs: %{SomeModule => %StructInfo{type: :defstruct, fields: [str_field: 1]}}},
+               @env_func,
+               %{SomeModule => %StructInfo{type: :defstruct, fields: [str_field: 1]}},
                %{
                  SomeModule => %{}
                },

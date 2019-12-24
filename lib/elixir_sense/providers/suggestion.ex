@@ -113,8 +113,9 @@ defmodule ElixirSense.Providers.Suggestion do
   @spec find(
           String.t(),
           State.Env.t,
-          %{},
-          %{},
+          State.structs_t,
+          State.mods_funs_t,
+          State.types_t,
           String.t()
         ) :: [suggestion]
   def find(
@@ -127,9 +128,9 @@ defmodule ElixirSense.Providers.Suggestion do
         attributes: attributes,
         behaviours: behaviours,
         scope: scope,
-        protocol: protocol,
-        structs: structs
+        protocol: protocol
         },
+        structs,
         mods_and_funs,
         metadata_types,
         text_before

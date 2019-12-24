@@ -158,6 +158,7 @@ defmodule ElixirSense do
     Suggestion.find(
       hint,
       env,
+      buffer_file_metadata.structs,
       buffer_file_metadata.mods_funs,
       buffer_file_metadata.types,
       text_before

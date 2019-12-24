@@ -16,6 +16,7 @@ defmodule ElixirSense.Core.Metadata do
     vars_info_per_scope_id: State.vars_info_per_scope_id_t,
     mods_funs: State.mods_funs_t,
     types: State.types_t,
+    structs: State.structs_t,
     error: nil | term
   }
 
@@ -26,6 +27,7 @@ defmodule ElixirSense.Core.Metadata do
             vars_info_per_scope_id: %{},
             mods_funs: %{},
             types: %{},
+            structs: %{},
             error: nil
 
   @spec get_env(__MODULE__.t, pos_integer) :: State.Env.t
