@@ -23,6 +23,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   Traverses the AST building/retrieving the environment information.
   It returns a `ElixirSense.Core.State` struct containing the information.
   """
+  @spec build(Macro.t()) :: State.t
   def build(ast) do
     {_ast, state} = Macro.traverse(ast, %State{}, &pre/2, &post/2)
     state

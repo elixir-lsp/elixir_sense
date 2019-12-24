@@ -1,6 +1,7 @@
 defmodule ElixirSense.Providers.SuggestionTest do
   use ExUnit.Case, async: true
   alias ElixirSense.Providers.Suggestion
+  alias ElixirSense.Core.State.StructInfo
 
   doctest Suggestion
 
@@ -390,7 +391,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                %{
                  SomeModule => %{}
                },
-               %{SomeModule => {:defstruct, [str_field: 1]}},
+               %{SomeModule => %StructInfo{type: :defstruct, fields: [str_field: 1]}},
                %{},
                "%SomeModule{st"
              )

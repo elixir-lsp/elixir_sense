@@ -5,7 +5,8 @@ defmodule ElixirSense.Providers.Suggestion do
 
   alias Alchemist.Helpers.Complete
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Core.TypeInfo,
+  alias ElixirSense.Core.State.{StructInfo}
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
 
@@ -297,7 +298,8 @@ defmodule ElixirSense.Providers.Suggestion do
           |> Map.from_struct()
           |> Map.keys()
         else
-          structs[actual_mod] |> elem(1) |> Enum.map(&(&1 |> elem(0)))
+          %StructInfo{fields: fields} = structs[actual_mod]
+          Enum.map(fields, &(&1 |> elem(0)))
         end
 
       result =

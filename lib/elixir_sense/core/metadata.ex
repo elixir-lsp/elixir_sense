@@ -8,7 +8,18 @@ defmodule ElixirSense.Core.Metadata do
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.TypeInfo
 
-  defstruct source: nil,
+  @type t :: %ElixirSense.Core.Metadata{
+    source: String.t,
+    mods_funs_to_positions: State.mods_funs_to_positions_t,
+    lines_to_env: State.lines_to_env_t,
+    calls: State.calls_t,
+    vars_info_per_scope_id: State.vars_info_per_scope_id_t,
+    mods_funs: State.mods_funs_t,
+    types: State.types_t,
+    error: nil | term
+  }
+
+  defstruct source: "",
             mods_funs_to_positions: %{},
             lines_to_env: %{},
             calls: %{},
