@@ -2,6 +2,23 @@ defmodule ElixirSense.DocsTest do
   use ExUnit.Case, async: true
 
   describe "docs" do
+    test "when no docs do not return Built-in type" do
+      buffer = """
+      hkjnjknjk
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 1, 2)
+
+      assert subject == "hkjnjknjk"
+      assert actual_subject == "hkjnjknjk"
+
+      assert docs == "No documentation available"
+    end
+
     test "retrieve documentation" do
       buffer = """
       defmodule MyModule do
