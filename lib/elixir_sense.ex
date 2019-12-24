@@ -42,14 +42,19 @@ defmodule ElixirSense do
           docs: Introspection.docs()
         }
   def docs(code, line, column) do
-    subject = Source.subject(code, line, column)
-    metadata = Parser.parse_string(code, true, true, line)
+    case Source.subject(code, line, column) do
+      nil ->
+        %{subject: "", actual_subject: "", docs: %{docs: "No documentation available", types: ""}}
 
-    env = Metadata.get_env(metadata, line)
+      subject ->
+        metadata = Parser.parse_string(code, true, true, line)
 
-    {actual_subject, docs} = Docs.all(subject, env, metadata.mods_funs, metadata.types)
+        env = Metadata.get_env(metadata, line)
 
-    %{subject: subject, actual_subject: actual_subject, docs: docs}
+        {actual_subject, docs} = Docs.all(subject, env, metadata.mods_funs, metadata.types)
+
+        %{subject: subject, actual_subject: actual_subject, docs: docs}
+    end
   end
 
   @doc ~S"""
@@ -69,24 +74,29 @@ defmodule ElixirSense do
   """
   @spec definition(String.t(), pos_integer, pos_integer) :: Definition.Location.t()
   def definition(code, line, column) do
-    subject = Source.subject(code, line, column)
-    buffer_file_metadata = Parser.parse_string(code, true, true, line)
+    case Source.subject(code, line, column) do
+      nil ->
+        %Definition.Location{found: false}
 
-    env = Metadata.get_env(buffer_file_metadata, line)
+      subject ->
+        buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-    calls =
-      buffer_file_metadata.calls[line]
-      |> List.wrap()
-      |> Enum.filter(&(&1.col <= column))
+        env = Metadata.get_env(buffer_file_metadata, line)
 
-    Definition.find(
-      subject,
-      env,
-      buffer_file_metadata.mods_funs_to_positions,
-      buffer_file_metadata.mods_funs,
-      calls,
-      buffer_file_metadata.types
-    )
+        calls =
+          buffer_file_metadata.calls[line]
+          |> List.wrap()
+          |> Enum.filter(&(&1.col <= column))
+
+        Definition.find(
+          subject,
+          env,
+          buffer_file_metadata.mods_funs_to_positions,
+          buffer_file_metadata.mods_funs,
+          calls,
+          buffer_file_metadata.types
+        )
+    end
   end
 
   @doc ~S"""

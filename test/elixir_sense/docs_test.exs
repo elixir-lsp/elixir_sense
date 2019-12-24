@@ -19,6 +19,19 @@ defmodule ElixirSense.DocsTest do
       assert docs == "No documentation available"
     end
 
+    test "when empty buffer" do
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs("", 1, 1)
+
+      assert subject == ""
+      assert actual_subject == ""
+
+      assert docs == "No documentation available"
+    end
+
     test "retrieve documentation" do
       buffer = """
       defmodule MyModule do

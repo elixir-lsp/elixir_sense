@@ -5,6 +5,10 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
   doctest Definition
 
+  test "dont crash on empty buffer" do
+    assert %{found: false} = ElixirSense.definition("", 1, 1)
+  end
+
   test "find definition of aliased modules in `use`" do
     buffer = """
     defmodule MyModule do
