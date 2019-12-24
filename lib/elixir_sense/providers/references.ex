@@ -25,11 +25,9 @@ defmodule ElixirSense.Providers.References do
           range: range
         }
 
-  def find(nil, _, _, _, _, _, _) do
-    []
-  end
-
-  def find(subject, arity, imports, aliases, module, scope, vars, modules_funs, metadata_types) do
+  # TODO improve spec
+  @spec find(String.t, non_neg_integer, State.Env.t, any, any, any) :: [References.reference_info()]
+  def find(subject, arity, %State.Env{imports: imports, aliases: aliases, module: module, scope: scope}, vars, modules_funs, metadata_types) do
     var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
 
     case var_info do

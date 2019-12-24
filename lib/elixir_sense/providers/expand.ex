@@ -4,6 +4,7 @@ defmodule ElixirSense.Providers.Expand do
   """
 
   alias ElixirSense.Core.Ast
+  alias ElixirSense.Core.State
 
   @type expanded_code_map :: %{
           expand_once: String.t(),
@@ -16,8 +17,8 @@ defmodule ElixirSense.Providers.Expand do
   Returns a map containing the results of all different code expansion methods
   available (expand_once, expand, expand_partial and expand_all).
   """
-  @spec expand_full(String.t(), [module], [module], module) :: expanded_code_map
-  def expand_full(code, requires, imports, module) do
+  @spec expand_full(String.t(), State.Env.t) :: expanded_code_map
+  def expand_full(code, %State.Env{requires: requires, imports: imports, module: module}) do
     env =
       __ENV__
       |> Ast.add_requires_to_env(requires)

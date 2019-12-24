@@ -6,6 +6,7 @@ defmodule ElixirSense.Providers.Signature do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
+  alias ElixirSense.Core.State
   alias ElixirSense.Core.Metadata
 
   @type signature :: %{name: String.t(), params: [String.t()]}
@@ -14,8 +15,8 @@ defmodule ElixirSense.Providers.Signature do
   @doc """
   Returns the signature info from the function or type defined in the prefix, if any.
   """
-  @spec find(String.t(), [module], [{module, module}], module, map) :: signature_info
-  def find(prefix, imports, aliases, module, metadata) do
+  @spec find(String.t(), State.Env.t, map) :: signature_info
+  def find(prefix, %State.Env{imports: imports, aliases: aliases, module: module}, metadata) do
     case Source.which_func(prefix, module) do
       %{candidate: {mod, fun}, npar: npar, pipe_before: pipe_before} ->
         {mod, fun} =

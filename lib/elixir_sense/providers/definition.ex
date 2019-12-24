@@ -8,6 +8,7 @@ defmodule ElixirSense.Providers.Definition do
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Source
+  alias ElixirSense.Core.State
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State.VarInfo
 
@@ -25,14 +26,13 @@ defmodule ElixirSense.Providers.Definition do
   @doc """
   Finds out where a module, function, macro or variable was defined.
   """
-  @spec find(String.t(), [module], [{module, module}], module, [%VarInfo{}], map, map, map, map) ::
-          %Location{}
+  @spec find(String.t(), State.Env.t, map, map, map, map) :: %Location{}
   def find(
-        subject,
-        imports,
-        aliases,
-        module,
-        vars,
+        subject, %State.Env{
+        imports: imports,
+        aliases: aliases,
+        module: module,
+        vars: vars},
         mods_funs_to_positions,
         mods_funs,
         calls,

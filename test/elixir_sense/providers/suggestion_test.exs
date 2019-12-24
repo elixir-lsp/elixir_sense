@@ -9,19 +9,21 @@ defmodule ElixirSense.Providers.SuggestionTest do
     def say_hi, do: true
   end
 
+  @env %ElixirSense.Core.State.Env{
+    module: SomeModule,
+    scope: SomeModule
+  }
+
+  @env_func %ElixirSense.Core.State.Env{
+    module: SomeModule,
+    scope: {:func, 0}
+  }
+
   test "find definition of built-in functions" do
     result =
       Suggestion.find(
         "ElixirSenseExample.EmptyModule.",
-        [],
-        [],
-        SomeModule,
-        [],
-        [],
-        [],
-        SomeModule,
-        nil,
-        %{},
+        @env,
         %{},
         %{},
         ""
@@ -63,15 +65,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
   test "return completion candidates for 'Str'" do
     assert Suggestion.find(
              "Str",
-             [],
-             [],
-             SomeModule,
-             [],
-             [],
-             [],
-             SomeModule,
-             nil,
-             %{},
+             @env,
              %{},
              %{},
              ""
@@ -123,15 +117,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
            ] =
              Suggestion.find(
                "List.del",
-               [],
-               [],
-               SomeModule,
-               [],
-               [],
-               [],
-               SomeModule,
-               nil,
-               %{},
+               @env,
                %{},
                %{},
                ""
@@ -162,15 +148,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
            ] =
              Suggestion.find(
                "MyList.del",
-               [],
-               [{MyList, List}],
-               SomeModule,
-               [],
-               [],
-               [],
-               SomeModule,
-               nil,
-               %{},
+               %{@env | aliases: [{MyList, List}]},
                %{},
                %{},
                ""
@@ -180,15 +158,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
   test "return completion candidates for functions from import" do
     assert Suggestion.find(
              "say",
-             [MyModule],
-             [],
-             SomeModule,
-             [],
-             [],
-             [],
-             SomeModule,
-             nil,
-             %{},
+             %{@env | imports: [MyModule]},
              %{},
              %{},
              ""
@@ -210,15 +180,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     list =
       Suggestion.find(
         "mo",
-        [MyModule],
-        [],
-        SomeModule,
-        [],
-        [],
-        [],
-        SomeModule,
-        nil,
-        %{},
+        @env,
         %{},
         %{},
         ""
@@ -232,15 +194,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     suggestions_names =
       Suggestion.find(
         "",
-        [MyModule],
-        [],
-        SomeModule,
-        [],
-        [],
-        [],
-        SomeModule,
-        nil,
-        %{},
+        @env,
         %{},
         %{},
         ""
@@ -259,15 +213,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert [%{type: :hint, value: "%ElixirSense.Providers.SuggestionTest.MyStruct"} | _] =
              Suggestion.find(
                "%ElixirSense.Providers.SuggestionTest.MyStr",
-               [MyModule],
-               [],
-               SomeModule,
-               [],
-               [],
-               [],
-               {:func, 0},
-               nil,
-               %{},
+               @env_func,
                %{},
                %{},
                ""
@@ -278,15 +224,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert [%{type: :hint, value: "f = &Enum.all?"} | _] =
              Suggestion.find(
                "f = &Enum.al",
-               [MyModule],
-               [],
-               SomeModule,
-               [],
-               [],
-               [],
-               {:func, 0},
-               nil,
-               %{},
+               @env_func,
                %{},
                %{},
                ""
@@ -297,15 +235,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert [%{type: :hint, value: "Enum:"}] =
              Suggestion.find(
                "Enum:",
-               [MyModule],
-               [],
-               SomeModule,
-               [],
-               [],
-               [],
-               {:func, 0},
-               nil,
-               %{},
+               @env_func,
                %{},
                %{},
                ""
@@ -316,15 +246,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert [%{type: :hint, value: "x.Foo.get_by"}] =
              Suggestion.find(
                "x.Foo.get_by",
-               [MyModule],
-               [],
-               SomeModule,
-               [],
-               [],
-               [],
-               {:func, 0},
-               nil,
-               %{},
+               @env_func,
                %{},
                %{},
                ""
@@ -335,20 +257,12 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert [%{type: :hint, value: "my_func"} | _] =
              Suggestion.find(
                "my_f",
-               [MyModule],
-               [],
-               SomeModule,
-               [],
-               [],
-               [],
-               {:func, 0},
-               nil,
+               @env_func,
                %{
                  SomeModule => %{
                    {:my_func, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defp}
                  }
                },
-               %{},
                %{},
                ""
              )
@@ -356,18 +270,10 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert [%{type: :hint, value: "SomeModule"} | _] =
              Suggestion.find(
                "So",
-               [MyModule],
-               [],
-               SomeModule,
-               [],
-               [],
-               [],
-               {:func, 0},
-               nil,
+               @env_func,
                %{
                  SomeModule => %{}
                },
-               %{},
                %{},
                ""
              )
@@ -380,18 +286,10 @@ defmodule ElixirSense.Providers.SuggestionTest do
            ] =
              Suggestion.find(
                "str_",
-               [MyModule],
-               [],
-               SomeModule,
-               [],
-               [],
-               [],
-               {:func, 0},
-               nil,
+               %{@env_func | structs: %{SomeModule => %StructInfo{type: :defstruct, fields: [str_field: 1]}}},
                %{
                  SomeModule => %{}
                },
-               %{SomeModule => %StructInfo{type: :defstruct, fields: [str_field: 1]}},
                %{},
                "%SomeModule{st"
              )

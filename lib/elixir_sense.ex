@@ -45,15 +45,10 @@ defmodule ElixirSense do
     subject = Source.subject(code, line, column)
     metadata = Parser.parse_string(code, true, true, line)
 
-    %State.Env{
-      imports: imports,
-      aliases: aliases,
-      module: module,
-      scope: scope
-    } = Metadata.get_env(metadata, line)
+    env = Metadata.get_env(metadata, line)
 
     {actual_subject, docs} =
-      Docs.all(subject, imports, aliases, module, scope, metadata.mods_funs, metadata.types)
+      Docs.all(subject, env, metadata.mods_funs, metadata.types)
 
     %{subject: subject, actual_subject: actual_subject, docs: docs}
   end
@@ -78,12 +73,7 @@ defmodule ElixirSense do
     subject = Source.subject(code, line, column)
     buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-    %State.Env{
-      imports: imports,
-      aliases: aliases,
-      module: module,
-      vars: vars
-    } = Metadata.get_env(buffer_file_metadata, line)
+    env = Metadata.get_env(buffer_file_metadata, line)
 
     calls =
       buffer_file_metadata.calls[line]
@@ -92,10 +82,7 @@ defmodule ElixirSense do
 
     Definition.find(
       subject,
-      imports,
-      aliases,
-      module,
-      vars,
+      env,
       buffer_file_metadata.mods_funs_to_positions,
       buffer_file_metadata.mods_funs,
       calls,
@@ -166,30 +153,12 @@ defmodule ElixirSense do
     buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
     text_before = Source.text_before(buffer, line, column)
 
-    %State.Env{
-      imports: imports,
-      aliases: aliases,
-      vars: vars,
-      attributes: attributes,
-      behaviours: behaviours,
-      module: module,
-      scope: scope,
-      protocol: protocol,
-      structs: structs
-    } = Metadata.get_env(buffer_file_metadata, line)
+    env = Metadata.get_env(buffer_file_metadata, line)
 
     Suggestion.find(
       hint,
-      imports,
-      aliases,
-      module,
-      vars,
-      attributes,
-      behaviours,
-      scope,
-      protocol,
+      env,
       buffer_file_metadata.mods_funs,
-      structs,
       buffer_file_metadata.types,
       text_before
     )
@@ -226,13 +195,9 @@ defmodule ElixirSense do
     prefix = Source.text_before(code, line, column)
     buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-    %State.Env{
-      imports: imports,
-      aliases: aliases,
-      module: module
-    } = Metadata.get_env(buffer_file_metadata, line)
+    env = Metadata.get_env(buffer_file_metadata, line)
 
-    Signature.find(prefix, imports, aliases, module, buffer_file_metadata)
+    Signature.find(prefix, env, buffer_file_metadata)
   end
 
   @doc """
@@ -313,13 +278,9 @@ defmodule ElixirSense do
   def expand_full(buffer, code, line) do
     buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
 
-    %State.Env{
-      requires: requires,
-      imports: imports,
-      module: module
-    } = Metadata.get_env(buffer_file_metadata, line)
+    env = Metadata.get_env(buffer_file_metadata, line)
 
-    Expand.expand_full(code, requires, imports, module)
+    Expand.expand_full(code, env)
   end
 
   @doc """
@@ -382,11 +343,7 @@ defmodule ElixirSense do
       {subject, {line, col}} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-        %State.Env{
-          imports: imports,
-          aliases: aliases,
-          module: module,
-          scope: scope,
+        env = %State.Env{
           scope_id: scope_id
         } = Metadata.get_env(buffer_file_metadata, line)
 
@@ -396,10 +353,7 @@ defmodule ElixirSense do
         References.find(
           subject,
           arity,
-          imports,
-          aliases,
-          module,
-          scope,
+          env,
           vars,
           buffer_file_metadata.mods_funs,
           buffer_file_metadata.types

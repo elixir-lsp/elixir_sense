@@ -112,31 +112,25 @@ defmodule ElixirSense.Providers.Suggestion do
   """
   @spec find(
           String.t(),
-          [module],
-          [{module, module}],
-          module,
-          [String.t()],
-          [String.t()],
-          [module],
-          State.scope(),
-          any,
-          %{},
+          State.Env.t,
           %{},
           %{},
           String.t()
         ) :: [suggestion]
   def find(
         hint,
-        imports,
-        aliases,
-        module,
-        vars,
-        attributes,
-        behaviours,
-        scope,
-        protocol,
+        %State.Env{
+        imports: imports,
+        aliases: aliases,
+        module: module,
+        vars: vars,
+        attributes: attributes,
+        behaviours: behaviours,
+        scope: scope,
+        protocol: protocol,
+        structs: structs
+        },
         mods_and_funs,
-        structs,
         metadata_types,
         text_before
       ) do
