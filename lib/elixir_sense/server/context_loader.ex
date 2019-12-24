@@ -32,9 +32,9 @@ defmodule ElixirSense.Server.ContextLoader do
 
     {new_paths, new_apps} =
       if reload do
-        purge_modules(loaded)
-        purge_paths(paths)
-        purge_apps(apps)
+        _ = purge_modules(loaded)
+        _ = purge_paths(paths)
+        _ = purge_apps(apps)
         {load_paths(env, cwd), load_apps(env, cwd)}
       else
         {paths, apps}
@@ -69,7 +69,7 @@ defmodule ElixirSense.Server.ContextLoader do
 
   defp load_paths(env, cwd) do
     for path <- Path.wildcard(Path.join(cwd, "_build/#{env}/lib/*/ebin")) do
-      Code.prepend_path(path)
+      true = Code.prepend_path(path)
       path
     end
   end
@@ -77,23 +77,26 @@ defmodule ElixirSense.Server.ContextLoader do
   defp load_apps(env, cwd) do
     for path <- Path.wildcard(Path.join(cwd, "_build/#{env}/lib/*/ebin/*.app")) do
       app = path |> Path.basename() |> Path.rootname() |> String.to_atom()
-      Application.load(app)
+      case Application.load(app) do
+        :ok -> :ok
+        {:error, {:already_loaded, _}} -> :ok
+      end
       app
     end
   end
 
   defp purge_modules(loaded) do
     for m <- all_loaded() -- loaded do
-      :code.delete(m)
-      :code.purge(m)
+      true = :code.delete(m)
+      true = :code.purge(m)
     end
   end
 
   defp purge_paths(paths) do
-    for p <- paths, do: Code.delete_path(p)
+    for p <- paths, do: true = Code.delete_path(p)
   end
 
   defp purge_apps(apps) do
-    for a <- apps, do: Application.unload(a)
+    for a <- apps, do: :ok = Application.unload(a)
   end
 end

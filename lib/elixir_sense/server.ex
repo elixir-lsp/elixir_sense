@@ -16,7 +16,10 @@ defmodule ElixirSense.Server do
     )
 
     IO.puts(:stderr, "Working directory is \"#{Path.expand(".")}\"")
-    TCPServer.start(socket_type: socket_type, port: port, env: env)
+    case TCPServer.start(socket_type: socket_type, port: port, env: env) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+    end
     loop()
   end
 
