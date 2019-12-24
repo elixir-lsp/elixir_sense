@@ -17,7 +17,7 @@ defmodule ElixirSense.Providers.Expand do
   Returns a map containing the results of all different code expansion methods
   available (expand_once, expand, expand_partial and expand_all).
   """
-  @spec expand_full(String.t(), State.Env.t) :: expanded_code_map
+  @spec expand_full(String.t(), State.Env.t()) :: expanded_code_map
   def expand_full(code, %State.Env{requires: requires, imports: imports, module: module}) do
     env =
       __ENV__

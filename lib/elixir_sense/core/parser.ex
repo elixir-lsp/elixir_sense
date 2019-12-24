@@ -7,7 +7,7 @@ defmodule ElixirSense.Core.Parser do
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.State
 
-  @spec parse_file(String.t, boolean, boolean, pos_integer | nil) :: Metadata.t
+  @spec parse_file(String.t(), boolean, boolean, pos_integer | nil) :: Metadata.t()
   def parse_file(file, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
     case File.read(file) do
       {:ok, source} ->
@@ -23,7 +23,7 @@ defmodule ElixirSense.Core.Parser do
     end
   end
 
-  @spec parse_string(String.t, boolean, boolean, pos_integer | nil) :: Metadata.t
+  @spec parse_string(String.t(), boolean, boolean, pos_integer | nil) :: Metadata.t()
   def parse_string(source, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
     case string_to_ast(source, if(try_to_fix_parse_error, do: 6, else: 0), cursor_line_number) do
       {:ok, ast, modified_source} ->

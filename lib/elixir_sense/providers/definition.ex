@@ -26,13 +26,17 @@ defmodule ElixirSense.Providers.Definition do
   @doc """
   Finds out where a module, function, macro or variable was defined.
   """
-  @spec find(String.t(), State.Env.t, State.mods_funs_to_positions_t, State.mods_funs_t, list(State.CallInfo.t), State.types_t) :: %Location{}
+  @spec find(
+          String.t(),
+          State.Env.t(),
+          State.mods_funs_to_positions_t(),
+          State.mods_funs_t(),
+          list(State.CallInfo.t()),
+          State.types_t()
+        ) :: %Location{}
   def find(
-        subject, %State.Env{
-        imports: imports,
-        aliases: aliases,
-        module: module,
-        vars: vars},
+        subject,
+        %State.Env{imports: imports, aliases: aliases, module: module, vars: vars},
         mods_funs_to_positions,
         mods_funs,
         calls,

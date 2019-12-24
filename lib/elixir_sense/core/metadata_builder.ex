@@ -16,14 +16,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
   @protocol_types [{:t, [], :type}]
 
   defguardp is_call(call, params)
-           when is_atom(call) and is_list(params) and
-                  call not in [:., :__aliases__, :"::", :{}, :|>]
+            when is_atom(call) and is_list(params) and
+                   call not in [:., :__aliases__, :"::", :{}, :|>]
 
   @doc """
   Traverses the AST building/retrieving the environment information.
   It returns a `ElixirSense.Core.State` struct containing the information.
   """
-  @spec build(Macro.t()) :: State.t
+  @spec build(Macro.t()) :: State.t()
   def build(ast) do
     {_ast, state} = Macro.traverse(ast, %State{}, &pre/2, &post/2)
     state

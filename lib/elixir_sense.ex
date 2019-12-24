@@ -47,8 +47,7 @@ defmodule ElixirSense do
 
     env = Metadata.get_env(metadata, line)
 
-    {actual_subject, docs} =
-      Docs.all(subject, env, metadata.mods_funs, metadata.types)
+    {actual_subject, docs} = Docs.all(subject, env, metadata.mods_funs, metadata.types)
 
     %{subject: subject, actual_subject: actual_subject, docs: docs}
   end
@@ -102,7 +101,7 @@ defmodule ElixirSense do
       ["Version.InvalidVersionError", "Version.Parser", "Version.Requirement", "WithClauseError"]
 
   """
-  @spec all_modules() :: list(String.t)
+  @spec all_modules() :: list(String.t())
   def all_modules do
     Introspection.all_modules()
     |> Enum.map(&Atom.to_string(&1))
@@ -344,9 +343,10 @@ defmodule ElixirSense do
       {subject, {line, col}} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-        env = %State.Env{
-          scope_id: scope_id
-        } = Metadata.get_env(buffer_file_metadata, line)
+        env =
+          %State.Env{
+            scope_id: scope_id
+          } = Metadata.get_env(buffer_file_metadata, line)
 
         vars = buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values()
         arity = Metadata.get_call_arity(buffer_file_metadata, line, col)

@@ -8,7 +8,8 @@ defmodule ElixirSense.Core.Source do
   @empty_graphemes [" ", "\n", "\r\n"]
   @stop_graphemes ~w/{ } ( ) [ ] < > + - * & ^ , ; ~ % = \\ \/ $ ! ?`#/ ++ @empty_graphemes
 
-  @spec split_module_and_hint(String.t, module | nil, [{module, module}]) :: {nil | module, String.t}
+  @spec split_module_and_hint(String.t(), module | nil, [{module, module}]) ::
+          {nil | module, String.t()}
   def split_module_and_hint(hint, current_module \\ nil, aliases \\ []) do
     if String.ends_with?(hint, ".") do
       {mod, _} =
@@ -67,11 +68,13 @@ defmodule ElixirSense.Core.Source do
       {nil, nil}
 
   """
-  @spec split_module_and_func(String.t) :: {module | nil, atom | nil}
-  @spec split_module_and_func(String.t, module | nil) :: {module | nil, atom | nil}
-  @spec split_module_and_func(String.t, module | nil, [{module, module}]) :: {module | nil, atom | nil}
+  @spec split_module_and_func(String.t()) :: {module | nil, atom | nil}
+  @spec split_module_and_func(String.t(), module | nil) :: {module | nil, atom | nil}
+  @spec split_module_and_func(String.t(), module | nil, [{module, module}]) ::
+          {module | nil, atom | nil}
   def split_module_and_func(call, current_module \\ nil, aliases \\ [])
   def split_module_and_func("", _current_module, _aliases), do: {nil, nil}
+
   def split_module_and_func(call, current_module, aliases) do
     case Code.string_to_quoted(call) do
       {:error, _} ->
@@ -85,7 +88,7 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  @spec prefix(String.t, pos_integer, pos_integer) :: String.t
+  @spec prefix(String.t(), pos_integer, pos_integer) :: String.t()
   def prefix(code, line, col) do
     line = code |> String.split("\n") |> Enum.at(line - 1, "")
 
@@ -105,21 +108,21 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  @spec text_before(String.t, pos_integer, pos_integer) :: String.t
+  @spec text_before(String.t(), pos_integer, pos_integer) :: String.t()
   def text_before(code, line, col) do
     pos = find_position(code, line, col, {0, 1, 1})
     {text, _rest} = String.split_at(code, pos)
     text
   end
 
-  @spec text_after(String.t, pos_integer, pos_integer) :: String.t
+  @spec text_after(String.t(), pos_integer, pos_integer) :: String.t()
   def text_after(code, line, col) do
     pos = find_position(code, line, col, {0, 1, 1})
     {_, rest} = String.split_at(code, pos)
     rest
   end
 
-  @spec subject(String.t, pos_integer, pos_integer) :: nil | String.t
+  @spec subject(String.t(), pos_integer, pos_integer) :: nil | String.t()
   def subject(code, line, col) do
     acc = %{line: line, col: col, pos_found: false, candidate: [], pos: nil}
 
@@ -132,7 +135,8 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  @spec subject_with_position(String.t, pos_integer, pos_integer) :: nil | {String.t, {pos_integer, pos_integer}}
+  @spec subject_with_position(String.t(), pos_integer, pos_integer) ::
+          nil | {String.t(), {pos_integer, pos_integer}}
   def subject_with_position(code, line, col) do
     acc = %{line: line, col: col, pos_found: false, candidate: [], pos: nil}
 
@@ -155,7 +159,7 @@ defmodule ElixirSense.Core.Source do
   end
 
   # TODO does it work as expected? non_neg_integer
-  @spec find_next_word(String.t) :: nil | {String.t, non_neg_integer, non_neg_integer}
+  @spec find_next_word(String.t()) :: nil | {String.t(), non_neg_integer, non_neg_integer}
   def find_next_word(code) do
     walk_text(code, nil, fn
       grapheme, rest, _, _, _ when grapheme in @empty_graphemes ->
@@ -166,7 +170,7 @@ defmodule ElixirSense.Core.Source do
     end)
   end
 
-  @spec which_struct(String.t) :: nil | {module, [atom]}
+  @spec which_struct(String.t()) :: nil | {module, [atom]}
   def which_struct(text_before) do
     code = text_before |> String.reverse()
 
@@ -183,7 +187,7 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  @spec get_v12_module_prefix(String.t) :: nil | module | :__MODULE__
+  @spec get_v12_module_prefix(String.t()) :: nil | module | :__MODULE__
   def get_v12_module_prefix(text_before) do
     with %{"module" => module_str} <-
            Regex.named_captures(
@@ -350,12 +354,13 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  @spec which_func(String.t, nil | module) :: %{
-    candidate: :none | {nil | module, atom},
-    npar: non_neg_integer,
-    pipe_before: boolean,
-    pos: nil | {{non_neg_integer, non_neg_integer}, {non_neg_integer, nil | non_neg_integer}}
-  }
+  @spec which_func(String.t(), nil | module) :: %{
+          candidate: :none | {nil | module, atom},
+          npar: non_neg_integer,
+          pipe_before: boolean,
+          pos:
+            nil | {{non_neg_integer, non_neg_integer}, {non_neg_integer, nil | non_neg_integer}}
+        }
   def which_func(prefix, current_module \\ nil) do
     tokens = Tokenizer.tokenize(prefix)
 

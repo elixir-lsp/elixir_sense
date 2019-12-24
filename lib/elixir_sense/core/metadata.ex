@@ -9,16 +9,16 @@ defmodule ElixirSense.Core.Metadata do
   alias ElixirSense.Core.TypeInfo
 
   @type t :: %ElixirSense.Core.Metadata{
-    source: String.t,
-    mods_funs_to_positions: State.mods_funs_to_positions_t,
-    lines_to_env: State.lines_to_env_t,
-    calls: State.calls_t,
-    vars_info_per_scope_id: State.vars_info_per_scope_id_t,
-    mods_funs: State.mods_funs_t,
-    types: State.types_t,
-    structs: State.structs_t,
-    error: nil | term
-  }
+          source: String.t(),
+          mods_funs_to_positions: State.mods_funs_to_positions_t(),
+          lines_to_env: State.lines_to_env_t(),
+          calls: State.calls_t(),
+          vars_info_per_scope_id: State.vars_info_per_scope_id_t(),
+          mods_funs: State.mods_funs_t(),
+          types: State.types_t(),
+          structs: State.structs_t(),
+          error: nil | term
+        }
 
   defstruct source: "",
             mods_funs_to_positions: %{},
@@ -30,7 +30,7 @@ defmodule ElixirSense.Core.Metadata do
             structs: %{},
             error: nil
 
-  @spec get_env(__MODULE__.t, pos_integer) :: State.Env.t
+  @spec get_env(__MODULE__.t(), pos_integer) :: State.Env.t()
   def get_env(%__MODULE__{} = metadata, line) do
     case Map.get(metadata.lines_to_env, line) do
       nil -> State.default_env()

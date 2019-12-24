@@ -77,10 +77,12 @@ defmodule ElixirSense.Server.ContextLoader do
   defp load_apps(env, cwd) do
     for path <- Path.wildcard(Path.join(cwd, "_build/#{env}/lib/*/ebin/*.app")) do
       app = path |> Path.basename() |> Path.rootname() |> String.to_atom()
+
       case Application.load(app) do
         :ok -> :ok
         {:error, {:already_loaded, _}} -> :ok
       end
+
       app
     end
   end

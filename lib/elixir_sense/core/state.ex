@@ -10,37 +10,48 @@ defmodule ElixirSense.Core.State do
   @type scope_id_t :: non_neg_integer
   @type position_t :: {pos_integer, pos_integer}
 
-  @type mods_funs_to_positions_t :: %{optional({module, atom, nil | non_neg_integer}) => ElixirSense.Core.State.PositionInfo.t}
-  @type lines_to_env_t :: %{optional(pos_integer) => ElixirSense.Core.State.Env.t}
-  @type calls_t :: %{optional(pos_integer) => list(ElixirSense.Core.State.CallInfo.t)}
-  @type mods_funs_t :: %{optional(module) => %{optional({atom, nil | non_neg_integer}) => ElixirSense.Core.State.ModFunInfo.t}}
-  @type types_t :: %{optional({module, atom, nil | non_neg_integer}) => ElixirSense.Core.State.TypeInfo.t}
-  @type vars_info_per_scope_id_t :: %{optional(scope_id_t) => %{optional(atom) => ElixirSense.Core.State.VarInfo.t}}
-  @type structs_t :: %{optional(module) => ElixirSense.Core.State.StructInfo.t}
+  @type mods_funs_to_positions_t :: %{
+          optional({module, atom, nil | non_neg_integer}) =>
+            ElixirSense.Core.State.PositionInfo.t()
+        }
+  @type lines_to_env_t :: %{optional(pos_integer) => ElixirSense.Core.State.Env.t()}
+  @type calls_t :: %{optional(pos_integer) => list(ElixirSense.Core.State.CallInfo.t())}
+  @type mods_funs_t :: %{
+          optional(module) => %{
+            optional({atom, nil | non_neg_integer}) => ElixirSense.Core.State.ModFunInfo.t()
+          }
+        }
+  @type types_t :: %{
+          optional({module, atom, nil | non_neg_integer}) => ElixirSense.Core.State.TypeInfo.t()
+        }
+  @type vars_info_per_scope_id_t :: %{
+          optional(scope_id_t) => %{optional(atom) => ElixirSense.Core.State.VarInfo.t()}
+        }
+  @type structs_t :: %{optional(module) => ElixirSense.Core.State.StructInfo.t()}
 
   @type t :: %ElixirSense.Core.State{
-    namespace: [[atom]],
-    scopes: [[scope]],
-    imports: list(list(module)),
-    requires: list(list(module)),
-    aliases: list(list(alias_t)),
-    attributes: list(list(atom)),
-    protocols: list(list(ElixirSense.Core.State.Env.protocol_t)),
-    scope_attributes: list(list(atom)),
-    behaviours: list(list(module)),
-    scope_behaviours: list(list(module)),
-    vars: list(list(ElixirSense.Core.State.VarInfo.t)),
-    scope_vars: list(list(ElixirSense.Core.State.VarInfo.t)),
-    scope_id_count: non_neg_integer,
-    scope_ids: list(scope_id_t),
-    vars_info_per_scope_id: vars_info_per_scope_id_t,
-    mods_funs_to_positions: mods_funs_to_positions_t,
-    mods_funs: mods_funs_t,
-    lines_to_env: lines_to_env_t,
-    calls: calls_t,
-    structs: structs_t,
-    types: types_t
-  }
+          namespace: [[atom]],
+          scopes: [[scope]],
+          imports: list(list(module)),
+          requires: list(list(module)),
+          aliases: list(list(alias_t)),
+          attributes: list(list(atom)),
+          protocols: list(list(ElixirSense.Core.State.Env.protocol_t())),
+          scope_attributes: list(list(atom)),
+          behaviours: list(list(module)),
+          scope_behaviours: list(list(module)),
+          vars: list(list(ElixirSense.Core.State.VarInfo.t())),
+          scope_vars: list(list(ElixirSense.Core.State.VarInfo.t())),
+          scope_id_count: non_neg_integer,
+          scope_ids: list(scope_id_t),
+          vars_info_per_scope_id: vars_info_per_scope_id_t,
+          mods_funs_to_positions: mods_funs_to_positions_t,
+          mods_funs: mods_funs_t,
+          lines_to_env: lines_to_env_t,
+          calls: calls_t,
+          structs: structs_t,
+          types: types_t
+        }
 
   defstruct namespace: [[:"Elixir"]],
             scopes: [[:"Elixir"]],
@@ -70,19 +81,19 @@ defmodule ElixirSense.Core.State do
     """
     @type protocol_t :: {module, nonempty_list(module)}
     @type t :: %Env{
-      imports: list(module),
-      requires: list(module),
-      aliases: list(ElixirSense.Core.State.alias_t),
-      module: nil | module,
-      module_variants: list(module),
-      protocol: nil | protocol_t,
-      protocol_variants: list(protocol_t),
-      vars: list(ElixirSense.Core.State.VarInfo.t),
-      attributes: list(atom),
-      behaviours: list(module),
-      scope: nil | ElixirSense.Core.State.scope,
-      scope_id: nil | ElixirSense.Core.State.scope_id_t
-    }
+            imports: list(module),
+            requires: list(module),
+            aliases: list(ElixirSense.Core.State.alias_t()),
+            module: nil | module,
+            module_variants: list(module),
+            protocol: nil | protocol_t,
+            protocol_variants: list(protocol_t),
+            vars: list(ElixirSense.Core.State.VarInfo.t()),
+            attributes: list(atom),
+            behaviours: list(module),
+            scope: nil | ElixirSense.Core.State.scope(),
+            scope_id: nil | ElixirSense.Core.State.scope_id_t()
+          }
     defstruct imports: [],
               requires: [],
               aliases: [],
@@ -104,11 +115,11 @@ defmodule ElixirSense.Core.State do
     Variable info
     """
     @type t :: %VarInfo{
-      name: atom,
-      positions: list(ElixirSense.Core.State.position_t),
-      scope_id: nil | ElixirSense.Core.State.scope_id_t,
-      is_definition: boolean
-    }
+            name: atom,
+            positions: list(ElixirSense.Core.State.position_t()),
+            scope_id: nil | ElixirSense.Core.State.scope_id_t(),
+            is_definition: boolean
+          }
     defstruct name: nil, positions: [], scope_id: nil, is_definition: false
   end
 
@@ -117,12 +128,12 @@ defmodule ElixirSense.Core.State do
     Type definition info
     """
     @type t :: %TypeInfo{
-      name: atom,
-      args: list(atom),
-      kind: :type | :typep | :opaque,
-      # TODO refactor to ElixirSense.Core.State.position_t
-      position: %{line: pos_integer, col: pos_integer}
-    }
+            name: atom,
+            args: list(atom),
+            kind: :type | :typep | :opaque,
+            # TODO refactor to ElixirSense.Core.State.position_t
+            position: %{line: pos_integer, col: pos_integer}
+          }
     defstruct name: nil, args: [], kind: :type, position: %{line: 1, col: 1}
   end
 
@@ -132,9 +143,9 @@ defmodule ElixirSense.Core.State do
     """
 
     @type t :: %ModFunInfo{
-      # TODO defmodule defprotocol defimpl?
-      type: :def | :defp | :defmacro | :defmacrop | :defdelegate | :defguard | :defguardp
-    }
+            # TODO defmodule defprotocol defimpl?
+            type: :def | :defp | :defmacro | :defmacrop | :defdelegate | :defguard | :defguardp
+          }
     defstruct type: :def
   end
 
@@ -144,9 +155,9 @@ defmodule ElixirSense.Core.State do
     """
     @type field_t :: {atom, any}
     @type t :: %StructInfo{
-      type: :defstruct | :defexception,
-      fields: list(field_t)
-    }
+            type: :defstruct | :defexception,
+            fields: list(field_t)
+          }
     defstruct type: :defstruct, fields: []
   end
 
@@ -155,20 +166,18 @@ defmodule ElixirSense.Core.State do
     Function call info
     """
     @type t :: %CallInfo{
-      arity: non_neg_integer,
-      # TODO refactor to ElixirSense.Core.State.position_t
-      col: pos_integer,
-      line: pos_integer,
-      func: atom,
-      mod: module
-    }
-    defstruct [
-      arity: 0,
-      col: 1,
-      line: 1,
-      func: nil,
-      mod: Elixir
-    ]
+            arity: non_neg_integer,
+            # TODO refactor to ElixirSense.Core.State.position_t
+            col: pos_integer,
+            line: pos_integer,
+            func: atom,
+            mod: module
+          }
+    defstruct arity: 0,
+              col: 1,
+              line: 1,
+              func: nil,
+              mod: Elixir
   end
 
   defmodule PositionInfo do
@@ -177,14 +186,12 @@ defmodule ElixirSense.Core.State do
     """
 
     @type t :: %PositionInfo{
-      params: list(list(term)),
-      positions: list(ElixirSense.Core.State.position_t)
-    }
+            params: list(list(term)),
+            positions: list(ElixirSense.Core.State.position_t())
+          }
 
-    defstruct [
-      params: [],
-      positions: []
-    ]
+    defstruct params: [],
+              positions: []
   end
 
   alias ElixirSense.Core.Introspection

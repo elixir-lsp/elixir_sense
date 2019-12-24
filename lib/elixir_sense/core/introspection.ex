@@ -133,16 +133,18 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_type_docs_md(nil, fun, _scope) do
-    result = for info <- ElixirSense.Core.BuiltinTypes.get_builtin_type_info(fun) do
-      spec =
-        case info do
-          %{signature: sig} -> sig
-          %{spec: spec_ast} -> TypeInfo.format_type_spec_ast(spec_ast, :type)
-          _ -> "#{fun}()"
-        end
+    result =
+      for info <- ElixirSense.Core.BuiltinTypes.get_builtin_type_info(fun) do
+        spec =
+          case info do
+            %{signature: sig} -> sig
+            %{spec: spec_ast} -> TypeInfo.format_type_spec_ast(spec_ast, :type)
+            _ -> "#{fun}()"
+          end
 
-      format_type_doc_md(info[:doc], spec)
-    end
+        format_type_doc_md(info[:doc], spec)
+      end
+
     case result do
       [] -> []
       list -> list ++ ["_* Built-in type_"]

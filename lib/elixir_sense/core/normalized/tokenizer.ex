@@ -18,7 +18,6 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
 
       Version.match?(elixir_version, ">= 1.6.0") ->
         do_tokenize_1_6(prefix_charlist)
-
     end
   end
 
@@ -41,5 +40,4 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
         sofar
     end
   end
-
 end

@@ -2205,7 +2205,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert state.structs == %{MyStruct => %StructInfo{type: :defstruct, fields: [some_field: nil, a_field: 1]}}
+    assert state.structs == %{
+             MyStruct => %StructInfo{type: :defstruct, fields: [some_field: nil, a_field: 1]}
+           }
   end
 
   test "find struct fields from expression" do
@@ -2233,7 +2235,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert state.structs == %{MyError => %StructInfo{type: :defexception, fields: [my_field: nil]}}
+    assert state.structs == %{
+             MyError => %StructInfo{type: :defexception, fields: [my_field: nil]}
+           }
+
     # defexception adds Exception behaviour
     assert get_line_behaviours(state, 4) == [Exception]
   end
@@ -2397,7 +2402,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert state.calls == %{3 => [%CallInfo{arity: 1, col: 26, func: :func, line: 3, mod: NyModule}]}
+    assert state.calls == %{
+             3 => [%CallInfo{arity: 1, col: 26, func: :func, line: 3, mod: NyModule}]
+           }
   end
 
   test "registers calls pipe operator no parens" do
@@ -2453,7 +2460,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert state.calls == %{3 => [%CallInfo{arity: 2, col: 23, func: :func, line: 3, mod: :my_mod}]}
+    assert state.calls == %{
+             3 => [%CallInfo{arity: 2, col: 23, func: :func, line: 3, mod: :my_mod}]
+           }
   end
 
   test "registers calls pipe operator atom module" do
@@ -2603,7 +2612,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert state.calls == %{3 => [%CallInfo{arity: 1, col: 15, func: :func, line: 3, mod: :erl_mod}]}
+    assert state.calls == %{
+             3 => [%CallInfo{arity: 1, col: 15, func: :func, line: 3, mod: :erl_mod}]
+           }
   end
 
   test "registers calls capture operator external atom module" do

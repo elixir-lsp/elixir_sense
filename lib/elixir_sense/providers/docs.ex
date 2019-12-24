@@ -6,9 +6,14 @@ defmodule ElixirSense.Providers.Docs do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Source
 
-  @spec all(String.t(), State.Env.t, State.mods_funs_t, State.types_t) ::
+  @spec all(String.t(), State.Env.t(), State.mods_funs_t(), State.types_t()) ::
           {actual_mod_fun :: String.t(), docs :: Introspection.docs()}
-  def all(subject, %State.Env{imports: imports, aliases: aliases, module: module, scope: scope}, mods_funs, metadata_types) do
+  def all(
+        subject,
+        %State.Env{imports: imports, aliases: aliases, module: module, scope: scope},
+        mods_funs,
+        metadata_types
+      ) do
     mod_fun =
       subject
       |> Source.split_module_and_func(module, aliases)

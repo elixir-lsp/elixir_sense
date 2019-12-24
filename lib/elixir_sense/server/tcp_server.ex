@@ -79,9 +79,10 @@ defmodule ElixirSense.Server.TCPServer do
         IO.puts(:stderr, "Client socket is closed")
 
       {:ok, data} ->
-        :ok = data
-        |> process_request(auth_token)
-        |> send_response(socket)
+        :ok =
+          data
+          |> process_request(auth_token)
+          |> send_response(socket)
 
         connection_handler(socket, auth_token)
     end

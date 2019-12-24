@@ -25,8 +25,22 @@ defmodule ElixirSense.Providers.References do
           range: range
         }
 
-  @spec find(String.t, non_neg_integer, State.Env.t, [atom], State.mods_funs_t, State.types_t) :: [ElixirSense.Providers.References.reference_info()]
-  def find(subject, arity, %State.Env{imports: imports, aliases: aliases, module: module, scope: scope}, vars, modules_funs, metadata_types) do
+  @spec find(
+          String.t(),
+          non_neg_integer,
+          State.Env.t(),
+          [atom],
+          State.mods_funs_t(),
+          State.types_t()
+        ) :: [ElixirSense.Providers.References.reference_info()]
+  def find(
+        subject,
+        arity,
+        %State.Env{imports: imports, aliases: aliases, module: module, scope: scope},
+        vars,
+        modules_funs,
+        metadata_types
+      ) do
     var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
 
     case var_info do

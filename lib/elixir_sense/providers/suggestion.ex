@@ -5,8 +5,10 @@ defmodule ElixirSense.Providers.Suggestion do
 
   alias Alchemist.Helpers.Complete
   alias ElixirSense.Core.Introspection
+
   alias ElixirSense.Core.TypeInfo,
-  alias ElixirSense.Core.State.{StructInfo}
+        alias(ElixirSense.Core.State.{StructInfo})
+
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
 
@@ -112,23 +114,23 @@ defmodule ElixirSense.Providers.Suggestion do
   """
   @spec find(
           String.t(),
-          State.Env.t,
-          State.structs_t,
-          State.mods_funs_t,
-          State.types_t,
+          State.Env.t(),
+          State.structs_t(),
+          State.mods_funs_t(),
+          State.types_t(),
           String.t()
         ) :: [suggestion]
   def find(
         hint,
         %State.Env{
-        imports: imports,
-        aliases: aliases,
-        module: module,
-        vars: vars,
-        attributes: attributes,
-        behaviours: behaviours,
-        scope: scope,
-        protocol: protocol
+          imports: imports,
+          aliases: aliases,
+          module: module,
+          vars: vars,
+          attributes: attributes,
+          behaviours: behaviours,
+          scope: scope,
+          protocol: protocol
         },
         structs,
         mods_and_funs,

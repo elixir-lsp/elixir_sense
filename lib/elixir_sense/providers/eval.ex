@@ -11,7 +11,7 @@ defmodule ElixirSense.Providers.Eval do
   @doc """
   Converts a string to its quoted form.
   """
-  @spec quote(String.t) :: String.t
+  @spec quote(String.t()) :: String.t()
   def quote(code) do
     code
     |> Code.string_to_quoted()
