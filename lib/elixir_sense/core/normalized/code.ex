@@ -19,7 +19,6 @@ defmodule ElixirSense.Core.Normalized.Code do
 
               case {moduledoc_line, moduledoc_en} do
                 {_, nil} -> nil
-                {nil, _} -> nil
                 _ -> {moduledoc_line, moduledoc_en}
               end
 
