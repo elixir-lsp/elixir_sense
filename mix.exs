@@ -13,13 +13,7 @@ defmodule ElixirSense.Mixfile do
       test_coverage: [tool: ExCoveralls],
       preferred_cli_env: [coveralls: :test, "coveralls.detail": :test, "coveralls.html": :test],
       dialyzer: [
-        flags: [
-          "-Wunmatched_returns",
-          "-Werror_handling",
-          "-Wrace_conditions",
-          "-Wunderspecs",
-          "-Wno_match"
-        ]
+        flags: [:unmatched_returns, :error_handling, :race_conditions, :underspecs, :no_match]
       ],
       deps: deps(),
       docs: docs(),
