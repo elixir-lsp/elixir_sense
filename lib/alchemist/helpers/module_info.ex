@@ -47,6 +47,7 @@ defmodule Alchemist.Helpers.ModuleInfo do
     all_functions(list, hint)
   end
 
+  defp get_module_funs(Elixir), do: []
   defp get_module_funs(module) do
     case Code.ensure_loaded(module) do
       {:module, _} ->
