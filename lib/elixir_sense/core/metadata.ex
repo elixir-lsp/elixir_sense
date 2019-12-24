@@ -28,6 +28,7 @@ defmodule ElixirSense.Core.Metadata do
             types: %{},
             error: nil
 
+  @spec get_env(__MODULE__.t, pos_integer) :: State.Env.t
   def get_env(%__MODULE__{} = metadata, line) do
     case Map.get(metadata.lines_to_env, line) do
       nil -> State.default_env()
