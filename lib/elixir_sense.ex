@@ -180,7 +180,7 @@ defmodule ElixirSense do
 
     Suggestion.find(
       hint,
-      [module | imports],
+      imports,
       aliases,
       module,
       vars,
