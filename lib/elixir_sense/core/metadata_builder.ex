@@ -15,7 +15,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   @defs [:def, :defp, :defmacro, :defmacrop, :defdelegate, :defguard, :defguardp]
   @protocol_types [{:t, [], :type}]
 
-  defguard is_call(call, params)
+  defguardp is_call(call, params)
            when is_atom(call) and is_list(params) and
                   call not in [:., :__aliases__, :"::", :{}, :|>]
 
