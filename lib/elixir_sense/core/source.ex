@@ -62,9 +62,16 @@ defmodule ElixirSense.Core.Source do
       {MyMod, nil}
       iex> ElixirSense.Core.Source.split_module_and_func("MyAlias", CurrentMod, [{MyAlias, My.Mod}])
       {My.Mod, nil}
+      iex> ElixirSense.Core.Source.split_module_and_func("", CurrentMod)
+      {nil, nil}
 
   """
-  def split_module_and_func(call, current_module \\ nil, aliases \\ []) do
+  @spec split_module_and_func(String.t) :: {module | nil, atom | nil}
+  @spec split_module_and_func(String.t, module | nil) :: {module | nil, atom | nil}
+  @spec split_module_and_func(String.t, module | nil, [{module, module}]) :: {module | nil, atom | nil}
+  def split_module_and_func(call, current_module \\ nil, aliases \\ [])
+  def split_module_and_func("", _current_module, _aliases), do: {nil, nil}
+  def split_module_and_func(call, current_module, aliases) do
     case Code.string_to_quoted(call) do
       {:error, _} ->
         {nil, nil}
