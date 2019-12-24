@@ -19,8 +19,6 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
       Version.match?(elixir_version, ">= 1.6.0") ->
         do_tokenize_1_6(prefix_charlist)
 
-      Version.match?(elixir_version, ">= 1.5.0") ->
-        do_tokenize_1_5(prefix_charlist)
     end
   end
 
@@ -44,13 +42,4 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
     end
   end
 
-  defp do_tokenize_1_5(prefix_charlist) do
-    case :elixir_tokenizer.tokenize(prefix_charlist, 1, []) do
-      {:ok, _, _, tokens} ->
-        Enum.reverse(tokens)
-
-      {:error, {_line, _error_prefix, _token}, _rest, sofar} ->
-        sofar
-    end
-  end
 end
