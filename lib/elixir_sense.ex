@@ -115,6 +115,7 @@ defmodule ElixirSense do
       ["Version.InvalidVersionError", "Version.Parser", "Version.Requirement", "WithClauseError"]
 
   """
+  @spec all_modules() :: list(String.t)
   def all_modules do
     Introspection.all_modules()
     |> Enum.map(&Atom.to_string(&1))
