@@ -158,7 +158,22 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  # TODO does it work as expected? non_neg_integer
+  @doc ~S"""
+  Finds next word offset
+
+  ## Examples
+
+      iex> ElixirSense.Core.Source.find_next_word("my_funcs sds")
+      {"y_funcs sds", 0, 0}
+      iex> ElixirSense.Core.Source.find_next_word(" my_funcs sds")
+      {"y_funcs sds", 0, 1}
+      iex> ElixirSense.Core.Source.find_next_word("\nmy_funcs sds")
+      {"y_funcs sds", 1, 0}
+      iex> ElixirSense.Core.Source.find_next_word("")
+      nil
+      iex> ElixirSense.Core.Source.find_next_word(" ")
+      nil
+  """
   @spec find_next_word(String.t()) :: nil | {String.t(), non_neg_integer, non_neg_integer}
   def find_next_word(code) do
     walk_text(code, nil, fn
