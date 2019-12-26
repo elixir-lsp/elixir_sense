@@ -28,6 +28,7 @@ defmodule ElixirSense.Core.State do
           optional(scope_id_t) => %{optional(atom) => ElixirSense.Core.State.VarInfo.t()}
         }
   @type structs_t :: %{optional(module) => ElixirSense.Core.State.StructInfo.t()}
+  @type protocol_t :: {module, nonempty_list(module)}
 
   @type t :: %ElixirSense.Core.State{
           namespace: [[atom]],
@@ -36,7 +37,7 @@ defmodule ElixirSense.Core.State do
           requires: list(list(module)),
           aliases: list(list(alias_t)),
           attributes: list(list(atom)),
-          protocols: list(list(ElixirSense.Core.State.Env.protocol_t())),
+          protocols: list(list(protocol_t())),
           scope_attributes: list(list(atom)),
           behaviours: list(list(module)),
           scope_behaviours: list(list(module)),
@@ -79,15 +80,15 @@ defmodule ElixirSense.Core.State do
     @moduledoc """
     Line environment
     """
-    @type protocol_t :: {module, nonempty_list(module)}
+
     @type t :: %Env{
             imports: list(module),
             requires: list(module),
             aliases: list(ElixirSense.Core.State.alias_t()),
             module: nil | module,
             module_variants: list(module),
-            protocol: nil | protocol_t,
-            protocol_variants: list(protocol_t),
+            protocol: nil | ElixirSense.Core.State.protocol_t(),
+            protocol_variants: list(ElixirSense.Core.State.protocol_t()),
             vars: list(ElixirSense.Core.State.VarInfo.t()),
             attributes: list(atom),
             behaviours: list(module),

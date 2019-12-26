@@ -122,16 +122,7 @@ defmodule ElixirSense.Providers.Suggestion do
         ) :: [suggestion]
   def find(
         hint,
-        %State.Env{
-          imports: imports,
-          aliases: aliases,
-          module: module,
-          vars: vars,
-          attributes: attributes,
-          behaviours: behaviours,
-          scope: scope,
-          protocol: protocol
-        },
+        %State.Env{} = env,
         structs,
         mods_and_funs,
         metadata_types,
@@ -140,9 +131,7 @@ defmodule ElixirSense.Providers.Suggestion do
     case find_struct_fields(
            hint,
            text_before,
-           imports,
-           aliases,
-           module,
+           env,
            structs,
            mods_and_funs,
            metadata_types
@@ -150,14 +139,7 @@ defmodule ElixirSense.Providers.Suggestion do
       {[], _} ->
         find_all_except_struct_fields(
           hint,
-          imports,
-          aliases,
-          vars,
-          attributes,
-          behaviours,
-          scope,
-          module,
-          protocol,
+          env,
           mods_and_funs,
           metadata_types,
           text_before
@@ -171,11 +153,7 @@ defmodule ElixirSense.Providers.Suggestion do
         [_hint | rest] =
           find_mods_funs_vars_attributes(
             hint,
-            imports,
-            aliases,
-            vars,
-            attributes,
-            module,
+            env,
             mods_and_funs,
             text_before
           )
@@ -186,28 +164,23 @@ defmodule ElixirSense.Providers.Suggestion do
 
   @spec find_all_except_struct_fields(
           String.t(),
-          [module],
-          [{module, module}],
-          [String.t()],
-          [String.t()],
-          [module],
-          State.scope(),
-          module,
-          any,
-          %{},
-          %{},
+          State.Env.t(),
+          State.mods_funs_t(),
+          State.types_t(),
           String.t()
         ) :: [suggestion]
   defp find_all_except_struct_fields(
          hint,
-         imports,
-         aliases,
-         vars,
-         attributes,
-         behaviours,
-         scope,
-         module,
-         protocol,
+         %State.Env{
+           imports: imports,
+           aliases: aliases,
+           vars: vars,
+           attributes: attributes,
+           behaviours: behaviours,
+           scope: scope,
+           module: module,
+           protocol: protocol
+         },
          mods_and_funs,
          metadata_types,
          text_before
@@ -243,13 +216,21 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.uniq()
   end
 
+  @spec find_mods_funs_vars_attributes(
+          String.t(),
+          State.Env.t(),
+          State.mods_funs_t(),
+          String.t()
+        ) :: [suggestion]
   defp find_mods_funs_vars_attributes(
          hint,
-         imports,
-         aliases,
-         vars,
-         attributes,
-         module,
+         %State.Env{
+           imports: imports,
+           aliases: aliases,
+           vars: vars,
+           attributes: attributes,
+           module: module
+         },
          mods_and_funs,
          text_before
        ) do
@@ -267,12 +248,22 @@ defmodule ElixirSense.Providers.Suggestion do
   defp expand_current_module(:__MODULE__, current_module), do: current_module
   defp expand_current_module(module, _current_module), do: module
 
+  @spec find_struct_fields(
+          String.t(),
+          String.t(),
+          State.Env.t(),
+          State.structs_t(),
+          State.mods_funs_t(),
+          State.types_t()
+        ) :: {[suggestion], nil | :maybe_struct_update}
   defp find_struct_fields(
          hint,
          text_before,
-         imports,
-         aliases,
-         module,
+         %State.Env{
+           imports: imports,
+           aliases: aliases,
+           module: module
+         },
          structs,
          mods_funs,
          metadata_types
@@ -317,7 +308,14 @@ defmodule ElixirSense.Providers.Suggestion do
     end
   end
 
-  @spec find_hint_mods_funcs(String.t(), [module], [{module, module}], module, %{}, String.t()) ::
+  @spec find_hint_mods_funcs(
+          String.t(),
+          [module],
+          [{module, module}],
+          module,
+          State.mods_funs_t(),
+          String.t()
+        ) ::
           %{
             hint: hint,
             suggestions: [mod | func]
@@ -442,6 +440,7 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.sort()
   end
 
+  @spec find_protocol_functions(nil | State.protocol_t(), String.t()) :: [protocol_function]
   defp find_protocol_functions(nil, _hint), do: []
 
   defp find_protocol_functions({protocol, _implementations}, hint) do
@@ -461,7 +460,15 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.sort()
   end
 
-  @spec find_param_options(String.t(), String.t(), [module], [{module, module}], module, map, map) ::
+  @spec find_param_options(
+          String.t(),
+          String.t(),
+          [module],
+          [{module, module}],
+          module,
+          State.mods_funs_t(),
+          State.types_t()
+        ) ::
           [
             param_option
           ]
@@ -504,6 +511,11 @@ defmodule ElixirSense.Providers.Suggestion do
         }
     end)
   end
+
+  @spec find_typespecs(String.t(), [{module, module}], module, State.scope(), State.types_t()) ::
+          [
+            type_spec
+          ]
 
   # We don't list typespecs when inside a function
   defp find_typespecs(_hint, _aliases, _module, {_m, _f}, _) do
