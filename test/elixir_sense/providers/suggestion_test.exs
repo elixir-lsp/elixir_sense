@@ -271,9 +271,9 @@ defmodule ElixirSense.Providers.SuggestionTest do
                @env_func,
                %{},
                %{
-                 SomeModule => %{
-                   {:my_func, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defp}
-                 }
+                 {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule},
+                 {SomeModule, :my_func, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defp},
+                 {SomeModule, :my_func, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defp}
                },
                %{},
                ""
@@ -285,7 +285,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                @env_func,
                %{},
                %{
-                 SomeModule => %{}
+                 {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
                },
                %{},
                ""

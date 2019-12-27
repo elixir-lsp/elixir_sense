@@ -25,7 +25,7 @@ defmodule ElixirSense.Providers.Signature do
             imports,
             aliases,
             module,
-            metadata.mods_funs,
+            metadata.mods_funs_to_positions,
             metadata.types
           )
 

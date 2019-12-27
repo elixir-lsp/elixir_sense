@@ -675,6 +675,14 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
+  @spec actual_mod_fun(
+          {nil | module, nil | atom},
+          [module],
+          [{module, module}],
+          nil | module,
+          ElixirSense.Core.State.mods_funs_to_positions_t(),
+          ElixirSense.Core.State.types_t()
+        ) :: {nil | module, nil | atom}
   def actual_mod_fun({nil, nil}, _, _, _, _, _), do: {nil, nil}
 
   def actual_mod_fun(
@@ -760,7 +768,7 @@ defmodule ElixirSense.Core.Introspection do
          _metadata_types,
          _include_typespecs
        ) do
-    if Map.has_key?(mods_funs, mod) or match?({:module, _}, Code.ensure_loaded(mod)) do
+    if Map.has_key?(mods_funs, {mod, nil, nil}) or match?({:module, _}, Code.ensure_loaded(mod)) do
       {mod, nil}
     else
       {nil, nil}
@@ -776,12 +784,12 @@ defmodule ElixirSense.Core.Introspection do
          include_typespecs
        ) do
     found_in_metadata =
-      case mods_funs[mod] do
+      case mods_funs[{mod, nil, nil}] do
         nil ->
           false
 
-        funs ->
-          Enum.any?(funs, fn {{f, _a}, _} -> f == fun end)
+        _funs ->
+          Enum.any?(mods_funs, fn {{m, f, _a}, _} -> m == mod and f == fun end)
       end
 
     if found_in_metadata or ModuleInfo.has_function?(mod, fun) or

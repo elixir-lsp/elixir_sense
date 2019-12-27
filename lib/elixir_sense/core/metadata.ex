@@ -14,7 +14,6 @@ defmodule ElixirSense.Core.Metadata do
           lines_to_env: State.lines_to_env_t(),
           calls: State.calls_t(),
           vars_info_per_scope_id: State.vars_info_per_scope_id_t(),
-          mods_funs: State.mods_funs_t(),
           types: State.types_t(),
           structs: State.structs_t(),
           error: nil | term
@@ -25,7 +24,6 @@ defmodule ElixirSense.Core.Metadata do
             lines_to_env: %{},
             calls: %{},
             vars_info_per_scope_id: %{},
-            mods_funs: %{},
             types: %{},
             structs: %{},
             error: nil

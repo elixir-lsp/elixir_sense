@@ -88,7 +88,6 @@ defmodule ElixirSense.Core.Parser do
   defp create_metadata(source, {:ok, acc}) do
     %Metadata{
       source: source,
-      mods_funs: acc.mods_funs,
       types: acc.types,
       structs: acc.structs,
       mods_funs_to_positions: acc.mods_funs_to_positions,

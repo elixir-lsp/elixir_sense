@@ -6,7 +6,7 @@ defmodule ElixirSense.Providers.Docs do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Source
 
-  @spec all(String.t(), State.Env.t(), State.mods_funs_t(), State.types_t()) ::
+  @spec all(String.t(), State.Env.t(), State.mods_funs_to_positions_t(), State.types_t()) ::
           {actual_mod_fun :: String.t(), docs :: Introspection.docs()}
   def all(
         subject,

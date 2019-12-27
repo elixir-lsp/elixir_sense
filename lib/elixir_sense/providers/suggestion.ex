@@ -116,7 +116,7 @@ defmodule ElixirSense.Providers.Suggestion do
           String.t(),
           State.Env.t(),
           State.structs_t(),
-          State.mods_funs_t(),
+          State.mods_funs_to_positions_t(),
           State.types_t(),
           String.t()
         ) :: [suggestion]
@@ -165,7 +165,7 @@ defmodule ElixirSense.Providers.Suggestion do
   @spec find_all_except_struct_fields(
           String.t(),
           State.Env.t(),
-          State.mods_funs_t(),
+          State.mods_funs_to_positions_t(),
           State.types_t(),
           String.t()
         ) :: [suggestion]
@@ -219,7 +219,7 @@ defmodule ElixirSense.Providers.Suggestion do
   @spec find_mods_funs_vars_attributes(
           String.t(),
           State.Env.t(),
-          State.mods_funs_t(),
+          State.mods_funs_to_positions_t(),
           String.t()
         ) :: [suggestion]
   defp find_mods_funs_vars_attributes(
@@ -253,7 +253,7 @@ defmodule ElixirSense.Providers.Suggestion do
           String.t(),
           State.Env.t(),
           State.structs_t(),
-          State.mods_funs_t(),
+          State.mods_funs_to_positions_t(),
           State.types_t()
         ) :: {[suggestion], nil | :maybe_struct_update}
   defp find_struct_fields(
@@ -313,7 +313,7 @@ defmodule ElixirSense.Providers.Suggestion do
           [module],
           [{module, module}],
           module,
-          State.mods_funs_t(),
+          State.mods_funs_to_positions_t(),
           String.t()
         ) ::
           %{
@@ -466,7 +466,7 @@ defmodule ElixirSense.Providers.Suggestion do
           [module],
           [{module, module}],
           module,
-          State.mods_funs_t(),
+          State.mods_funs_to_positions_t(),
           State.types_t()
         ) ::
           [

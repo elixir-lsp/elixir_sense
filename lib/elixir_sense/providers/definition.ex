@@ -30,7 +30,6 @@ defmodule ElixirSense.Providers.Definition do
           String.t(),
           State.Env.t(),
           State.mods_funs_to_positions_t(),
-          State.mods_funs_t(),
           list(State.CallInfo.t()),
           State.types_t()
         ) :: %Location{}
@@ -38,7 +37,6 @@ defmodule ElixirSense.Providers.Definition do
         subject,
         %State.Env{imports: imports, aliases: aliases, module: module, vars: vars},
         mods_funs_to_positions,
-        mods_funs,
         calls,
         metadata_types
       ) do
@@ -56,7 +54,6 @@ defmodule ElixirSense.Providers.Definition do
         |> Source.split_module_and_func(module, aliases)
         |> find_function_or_module(
           mods_funs_to_positions,
-          mods_funs,
           module,
           imports,
           aliases,
@@ -78,7 +75,6 @@ defmodule ElixirSense.Providers.Definition do
   defp find_function_or_module(
          {module, function},
          mods_funs_to_positions,
-         mods_funs,
          current_module,
          imports,
          aliases,
@@ -89,7 +85,7 @@ defmodule ElixirSense.Providers.Definition do
            imports,
            aliases,
            current_module,
-           mods_funs,
+           mods_funs_to_positions,
            metadata_types
          ) do
       {nil, nil} ->

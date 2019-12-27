@@ -2,6 +2,7 @@ defmodule Alchemist.Helpers.CompleteTest do
   use ExUnit.Case, async: true
 
   alias Alchemist.Helpers.Complete.Env
+  alias ElixirSense.Core.State.ModFunInfo
 
   def expand(expr, env \\ %Env{}) do
     Alchemist.Helpers.Complete.expand(Enum.reverse(expr), env)
@@ -351,18 +352,24 @@ defmodule Alchemist.Helpers.CompleteTest do
     env = %Env{
       scope_module: MyModule,
       mods_and_funs: %{
-        MyModule => %{
-          {:my_fun_priv, 1} => %{type: :defp},
-          {:my_fun_pub, 1} => %{type: :def},
-          {:my_macro_priv, 1} => %{type: :defmacrop},
-          {:my_macro_pub, 1} => %{type: :defmacro},
-          {:my_guard_priv, 1} => %{type: :defguardp},
-          {:my_guard_pub, 1} => %{type: :defguard},
-          {:my_delegated, 1} => %{type: :defdelegate}
-        },
-        OtherModule => %{
-          {:my_fun_pub_other, 1} => %{type: :def}
-        }
+        {MyModule, nil, nil} => %ModFunInfo{type: :defmodule},
+        {MyModule, :my_fun_priv, nil} => %ModFunInfo{type: :defp},
+        {MyModule, :my_fun_priv, 1} => %ModFunInfo{type: :defp},
+        {MyModule, :my_fun_pub, nil} => %ModFunInfo{type: :def},
+        {MyModule, :my_fun_pub, 1} => %ModFunInfo{type: :def},
+        {MyModule, :my_macro_priv, nil} => %ModFunInfo{type: :defmacrop},
+        {MyModule, :my_macro_priv, 1} => %ModFunInfo{type: :defmacrop},
+        {MyModule, :my_macro_pub, nil} => %ModFunInfo{type: :defmacro},
+        {MyModule, :my_macro_pub, 1} => %ModFunInfo{type: :defmacro},
+        {MyModule, :my_guard_priv, nil} => %ModFunInfo{type: :defguardp},
+        {MyModule, :my_guard_priv, 1} => %ModFunInfo{type: :defguardp},
+        {MyModule, :my_guard_pub, nil} => %ModFunInfo{type: :defguard},
+        {MyModule, :my_guard_pub, 1} => %ModFunInfo{type: :defguard},
+        {MyModule, :my_delegated, nil} => %ModFunInfo{type: :defdelegate},
+        {MyModule, :my_delegated, 1} => %ModFunInfo{type: :defdelegate},
+        {OtherModule, nil, nil} => %ModFunInfo{},
+        {OtherModule, :my_fun_pub_other, nil} => %ModFunInfo{type: :def},
+        {OtherModule, :my_fun_pub_other, 1} => %ModFunInfo{type: :def}
       }
     }
 
@@ -409,10 +416,11 @@ defmodule Alchemist.Helpers.CompleteTest do
       scope_module: MyModule,
       imports: [OtherModule],
       mods_and_funs: %{
-        OtherModule => %{
-          {:my_fun_other_pub, 1} => %{type: :def},
-          {:my_fun_other_priv, 1} => %{type: :defp}
-        }
+        {OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
+        {OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
+        {OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{type: :def},
+        {OtherModule, :my_fun_other_priv, nil} => %ModFunInfo{type: :defp},
+        {OtherModule, :my_fun_other_priv, 1} => %ModFunInfo{type: :defp}
       }
     }
 
@@ -426,10 +434,11 @@ defmodule Alchemist.Helpers.CompleteTest do
     env = %Env{
       scope_module: MyModule,
       mods_and_funs: %{
-        Some.OtherModule => %{
-          {:my_fun_other_pub, 1} => %{type: :def},
-          {:my_fun_other_priv, 1} => %{type: :defp}
-        }
+        {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
+        {Some.OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
+        {Some.OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{type: :def},
+        {Some.OtherModule, :my_fun_other_priv, nil} => %ModFunInfo{type: :defp},
+        {Some.OtherModule, :my_fun_other_priv, 1} => %ModFunInfo{type: :defp}
       }
     }
 
@@ -439,15 +448,16 @@ defmodule Alchemist.Helpers.CompleteTest do
             ]} = expand('Some.OtherModule.my_f', env)
   end
 
-  test "complete remote funs froma aliased module" do
+  test "complete remote funs from aliased module" do
     env = %Env{
       scope_module: MyModule,
       aliases: [{S, Some.OtherModule}],
       mods_and_funs: %{
-        Some.OtherModule => %{
-          {:my_fun_other_pub, 1} => %{type: :def},
-          {:my_fun_other_priv, 1} => %{type: :defp}
-        }
+        {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
+        {Some.OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
+        {Some.OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{type: :def},
+        {Some.OtherModule, :my_fun_other_priv, nil} => %ModFunInfo{type: :defp},
+        {Some.OtherModule, :my_fun_other_priv, 1} => %ModFunInfo{type: :defp}
       }
     }
 
@@ -462,7 +472,7 @@ defmodule Alchemist.Helpers.CompleteTest do
       scope_module: MyModule,
       aliases: [{MyAlias, Some.OtherModule.Nested}],
       mods_and_funs: %{
-        Some.OtherModule => %{}
+        {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule}
       }
     }
 
@@ -539,7 +549,7 @@ defmodule Alchemist.Helpers.CompleteTest do
       scope_module: MyModule,
       aliases: [{MyAlias, Some.OtherModule.Nested}],
       mods_and_funs: %{
-        MyModule => %{}
+        {MyModule, nil, nil} => %ModFunInfo{type: :defmodule}
       }
     }
 

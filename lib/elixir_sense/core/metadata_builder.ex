@@ -313,13 +313,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
             # protocol implementation module built by @derive
             mod = Module.concat(proto_module ++ [variant])
 
-            case acc_1.mods_funs[mod_any] do
+            case acc_1.mods_funs_to_positions[{mod_any, nil, nil}] do
               nil ->
                 # implemantation for: Any not detected (is in other file etc.)
                 acc_1
                 |> add_module_to_index(mod, position)
 
-              any_mods_funs ->
+              _any_mods_funs ->
                 # copy implemantation for: Any
                 copied_mods_funs_to_positions =
                   for {{module, fun, arity}, val} <- acc_1.mods_funs_to_positions,
@@ -329,8 +329,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
                 %{
                   acc_1
-                  | mods_funs: acc_1.mods_funs |> Map.put(mod, any_mods_funs),
-                    mods_funs_to_positions:
+                  | mods_funs_to_positions:
                       acc_1.mods_funs_to_positions |> Map.merge(copied_mods_funs_to_positions)
                 }
             end

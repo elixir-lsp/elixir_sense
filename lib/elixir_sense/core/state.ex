@@ -11,16 +11,11 @@ defmodule ElixirSense.Core.State do
   @type position_t :: {pos_integer, pos_integer}
 
   @type mods_funs_to_positions_t :: %{
-          optional({module, atom, nil | non_neg_integer}) =>
-            ElixirSense.Core.State.PositionInfo.t()
+          optional({module, atom, nil | non_neg_integer}) => ElixirSense.Core.State.ModFunInfo.t()
         }
   @type lines_to_env_t :: %{optional(pos_integer) => ElixirSense.Core.State.Env.t()}
   @type calls_t :: %{optional(pos_integer) => list(ElixirSense.Core.State.CallInfo.t())}
-  @type mods_funs_t :: %{
-          optional(module) => %{
-            optional({atom, nil | non_neg_integer}) => ElixirSense.Core.State.ModFunInfo.t()
-          }
-        }
+
   @type types_t :: %{
           optional({module, atom, nil | non_neg_integer}) => ElixirSense.Core.State.TypeInfo.t()
         }
@@ -47,7 +42,6 @@ defmodule ElixirSense.Core.State do
           scope_ids: list(scope_id_t),
           vars_info_per_scope_id: vars_info_per_scope_id_t,
           mods_funs_to_positions: mods_funs_to_positions_t,
-          mods_funs: mods_funs_t,
           lines_to_env: lines_to_env_t,
           calls: calls_t,
           structs: structs_t,
@@ -70,7 +64,6 @@ defmodule ElixirSense.Core.State do
             scope_ids: [0],
             vars_info_per_scope_id: %{},
             mods_funs_to_positions: %{},
-            mods_funs: %{},
             lines_to_env: %{},
             calls: %{},
             structs: %{},
@@ -138,18 +131,6 @@ defmodule ElixirSense.Core.State do
     defstruct name: nil, args: [], kind: :type, position: %{line: 1, col: 1}
   end
 
-  defmodule ModFunInfo do
-    @moduledoc """
-    Module odr function info
-    """
-
-    @type t :: %ModFunInfo{
-            # TODO defmodule defprotocol defimpl?
-            type: :def | :defp | :defmacro | :defmacrop | :defdelegate | :defguard | :defguardp
-          }
-    defstruct type: :def
-  end
-
   defmodule StructInfo do
     @moduledoc """
     Structure definition info
@@ -181,18 +162,29 @@ defmodule ElixirSense.Core.State do
               mod: Elixir
   end
 
-  defmodule PositionInfo do
+  defmodule ModFunInfo do
     @moduledoc """
-    Module or function position info
+    Module or function info
     """
 
-    @type t :: %PositionInfo{
+    @type t :: %ModFunInfo{
             params: list(list(term)),
-            positions: list(ElixirSense.Core.State.position_t())
+            positions: list(ElixirSense.Core.State.position_t()),
+            # TODO defmodule defprotocol defimpl?
+            type:
+              :def
+              | :defp
+              | :defmacro
+              | :defmacrop
+              | :defdelegate
+              | :defguard
+              | :defguardp
+              | :defmodule
           }
 
     defstruct params: [],
-              positions: []
+              positions: [],
+              type: :def
   end
 
   alias ElixirSense.Core.Introspection
@@ -306,7 +298,7 @@ defmodule ElixirSense.Core.State do
     end)
   end
 
-  def add_mod_fun_to_position(%__MODULE__{} = state, {module, fun, arity}, position, params) do
+  def add_mod_fun_to_position(%__MODULE__{} = state, {module, fun, arity}, position, params, type) do
     current_info = Map.get(state.mods_funs_to_positions, {module, fun, arity}, %{})
     current_params = current_info |> Map.get(:params, [])
     current_positions = current_info |> Map.get(:positions, [])
@@ -314,9 +306,10 @@ defmodule ElixirSense.Core.State do
     new_positions = [position | current_positions]
 
     mods_funs_to_positions =
-      Map.put(state.mods_funs_to_positions, {module, fun, arity}, %PositionInfo{
+      Map.put(state.mods_funs_to_positions, {module, fun, arity}, %ModFunInfo{
         positions: new_positions,
-        params: new_params
+        params: new_params,
+        type: type
       })
 
     %__MODULE__{state | mods_funs_to_positions: mods_funs_to_positions}
@@ -481,40 +474,20 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_module_to_index(%__MODULE__{} = state, module, position) do
-    state = %__MODULE__{
-      state
-      | mods_funs:
-          state.mods_funs
-          |> Map.update(module, %{}, & &1)
-    }
-
-    add_mod_fun_to_position(state, {module, nil, nil}, position, nil)
+    # TODO :defprotocol, :defimpl?
+    add_mod_fun_to_position(state, {module, nil, nil}, position, nil, :defmodule)
   end
 
   def add_func_to_index(%__MODULE__{} = state, func, params, position, type) do
     current_module_variants = get_current_module_variants(state)
     arity = length(params)
 
-    mods_funs =
-      current_module_variants
-      |> Enum.reduce(state.mods_funs, fn variant, acc ->
-        acc
-        |> Map.update(
-          variant,
-          %{{func, arity} => %ModFunInfo{type: type}},
-          &(&1 |> Map.put({func, arity}, %ModFunInfo{type: type}))
-        )
-      end)
-
-    state =
-      current_module_variants
-      |> Enum.reduce(state, fn variant, acc ->
-        acc
-        |> add_mod_fun_to_position({variant, func, arity}, position, params)
-        |> add_mod_fun_to_position({variant, func, nil}, position, params)
-      end)
-
-    %__MODULE__{state | mods_funs: mods_funs}
+    current_module_variants
+    |> Enum.reduce(state, fn variant, acc ->
+      acc
+      |> add_mod_fun_to_position({variant, func, arity}, position, params, type)
+      |> add_mod_fun_to_position({variant, func, nil}, position, params, type)
+    end)
   end
 
   def new_alias_scope(%__MODULE__{} = state) do

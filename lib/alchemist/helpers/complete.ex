@@ -31,7 +31,7 @@ defmodule Alchemist.Helpers.Complete do
             aliases: [{module, module}],
             imports: [module],
             scope_module: nil | module,
-            mods_and_funs: ElixirSense.Core.State.mods_funs_t()
+            mods_and_funs: ElixirSense.Core.State.mods_funs_to_positions_t()
           }
     defstruct aliases: [],
               imports: [],
@@ -353,7 +353,7 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp get_modules_from_metadata(env) do
-    for {k, _} <- env.mods_and_funs, do: Atom.to_string(k)
+    for {{k, nil, nil}, _} <- env.mods_and_funs, do: Atom.to_string(k)
   end
 
   defp loaded_applications do
@@ -405,12 +405,14 @@ defmodule Alchemist.Helpers.Complete do
 
   defp get_metadata_module_funs(mod, include_builtin, env) do
     # TODO add builtin functions for protocols, protocol_implementations, structs, behaviours and exceptions
-    case env.mods_and_funs[mod] do
+    case env.mods_and_funs[{mod, nil, nil}] do
       nil ->
         []
 
-      funs ->
-        for {{f, a}, info} <- funs, mod == env.scope_module || is_pub(info.type) do
+      _funs ->
+        for {{^mod, f, a}, info} <- env.mods_and_funs,
+            a != nil,
+            mod == env.scope_module || is_pub(info.type) do
           {f, a, info.type, nil, nil}
         end
         |> Kernel.++(

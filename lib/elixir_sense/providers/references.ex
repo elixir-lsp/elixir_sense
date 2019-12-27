@@ -30,7 +30,7 @@ defmodule ElixirSense.Providers.References do
           non_neg_integer,
           State.Env.t(),
           [atom],
-          State.mods_funs_t(),
+          State.mods_funs_to_positions_t(),
           State.types_t()
         ) :: [ElixirSense.Providers.References.reference_info()]
   def find(
@@ -149,7 +149,7 @@ defmodule ElixirSense.Providers.References do
                 imports,
                 aliases,
                 module,
-                metadata.mods_funs,
+                metadata.mods_funs_to_positions,
                 metadata.types
               ),
             found_mod_fun == {mod, func},
