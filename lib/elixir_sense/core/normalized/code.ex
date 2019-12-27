@@ -2,17 +2,24 @@ defmodule ElixirSense.Core.Normalized.Code do
   @doc """
   Shim to replicate the behavior of `Code.get_docs/2` in Elixir >= 1.7
   """
-  @type category_t :: :moduledoc | :docs | :callback_docs | :type_docs
+  @type doc_t :: nil | false | String.t()
   @type fun_doc_entry_t ::
-          {{atom, non_neg_integer}, pos_integer, :def | :defmacro, term, String.t()}
+          {{atom, non_neg_integer}, pos_integer, :def | :defmacro, term, doc_t}
   @type doc_entry_t ::
-          {{atom, non_neg_integer}, pos_integer, :callback | :macrocallback | :type, String.t()}
-  @type moduledoc_entry_t :: {pos_integer, false | String.t()}
-  @spec get_docs(module, category_t | :all) ::
+          {{atom, non_neg_integer}, pos_integer, :callback | :macrocallback | :type, doc_t}
+  @type moduledoc_entry_t :: {pos_integer, doc_t}
+
+  @spec get_docs(module, :docs) :: nil | [fun_doc_entry_t]
+  @spec get_docs(module, :callback_docs | :type_docs) :: nil | [:doc_entry_t]
+  @spec get_docs(module, :moduledoc) :: nil | moduledoc_entry_t
+  @spec get_docs(module, :all) ::
           nil
-          | [fun_doc_entry_t | doc_entry_t]
-          | moduledoc_entry_t
-          | [nil | [fun_doc_entry_t | doc_entry_t] | moduledoc_entry_t]
+          | %{
+              moduledoc: moduledoc_entry_t,
+              docs: [:doc_entry_t],
+              callback_docs: [:doc_entry_t],
+              type_docs: [:doc_entry_t]
+            }
   def get_docs(module, category) do
     if function_exported?(Code, :fetch_docs, 1) do
       case Code.fetch_docs(module) do
@@ -21,17 +28,9 @@ defmodule ElixirSense.Core.Normalized.Code do
 
           case category do
             :moduledoc ->
-              moduledoc_en =
-                case moduledoc do
-                  %{"en" => moduledoc_en} -> moduledoc_en
-                  false -> false
-                  _ -> nil
-                end
+              moduledoc_en = extract_docs(moduledoc)
 
-              case {moduledoc_line, moduledoc_en} do
-                {_, nil} -> nil
-                _ -> {moduledoc_line, moduledoc_en}
-              end
+              {moduledoc_line, moduledoc_en}
 
             :docs ->
               Enum.filter(
@@ -62,12 +61,7 @@ defmodule ElixirSense.Core.Normalized.Code do
   end
 
   defp to_old_format({{kind, name, arity}, line, signatures, docs, _meta}) do
-    docs_en =
-      case docs do
-        %{"en" => docs_en} -> docs_en
-        :hidden -> false
-        :none -> nil
-      end
+    docs_en = extract_docs(docs)
 
     case kind do
       kind when kind in [:function, :macro] ->
@@ -92,4 +86,8 @@ defmodule ElixirSense.Core.Normalized.Code do
         {{name, arity}, line, kind, docs_en}
     end
   end
+
+  defp extract_docs(%{"en" => docs_en}), do: docs_en
+  defp extract_docs(:hidden), do: false
+  defp extract_docs(:none), do: nil
 end
