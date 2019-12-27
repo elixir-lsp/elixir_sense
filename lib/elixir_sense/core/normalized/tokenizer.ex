@@ -5,6 +5,7 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
   Uses private api :elixir_tokenizer
   """
 
+  @spec tokenize(String.t()) :: [tuple]
   def tokenize(prefix) do
     prefix
     |> String.to_charlist()
