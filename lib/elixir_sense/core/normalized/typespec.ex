@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Normalized.Typespec do
+  @spec beam_specs(module) :: nil | [{:spec, tuple}]
   def beam_specs(module) do
     specs =
       if Code.ensure_loaded?(Code.Typespec) do
@@ -13,6 +14,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
     beam_specs_tag(specs, :spec)
   end
 
+  @spec get_types(module) :: [tuple]
   def get_types(module) when is_atom(module) do
     if Code.ensure_loaded?(Code.Typespec) do
       case Code.Typespec.fetch_types(module) do
@@ -27,6 +29,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
     end
   end
 
+  @spec get_callbacks(module) :: [tuple]
   def get_callbacks(mod) do
     if Code.ensure_loaded?(Code.Typespec) do
       case Code.Typespec.fetch_callbacks(mod) do
@@ -38,6 +41,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
     end
   end
 
+  @spec type_to_quoted(tuple) :: Macro.t()
   def type_to_quoted(type) do
     if Code.ensure_loaded?(Code.Typespec) do
       Code.Typespec.type_to_quoted(type)
@@ -46,6 +50,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
     end
   end
 
+  @spec spec_to_quoted(atom, tuple) :: {atom, keyword, [Macro.t()]}
   def spec_to_quoted(name, spec) do
     if Code.ensure_loaded?(Code.Typespec) do
       Code.Typespec.spec_to_quoted(name, spec)

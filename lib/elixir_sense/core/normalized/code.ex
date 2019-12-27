@@ -2,6 +2,17 @@ defmodule ElixirSense.Core.Normalized.Code do
   @doc """
   Shim to replicate the behavior of `Code.get_docs/2` in Elixir >= 1.7
   """
+  @type category_t :: :moduledoc | :docs | :callback_docs | :type_docs
+  @type fun_doc_entry_t ::
+          {{atom, non_neg_integer}, pos_integer, :def | :defmacro, term, String.t()}
+  @type doc_entry_t ::
+          {{atom, non_neg_integer}, pos_integer, :callback | :macrocallback | :type, String.t()}
+  @type moduledoc_entry_t :: {pos_integer, false | String.t()}
+  @spec get_docs(module, category_t | :all) ::
+          nil
+          | [fun_doc_entry_t | doc_entry_t]
+          | moduledoc_entry_t
+          | [nil | [fun_doc_entry_t | doc_entry_t] | moduledoc_entry_t]
   def get_docs(module, category) do
     if function_exported?(Code, :fetch_docs, 1) do
       case Code.fetch_docs(module) do
