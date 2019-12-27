@@ -27,6 +27,12 @@ defmodule Alchemist.Helpers.Complete do
   # (original Elixir 1.1) and later GenServer
 
   defmodule Env do
+    @type t :: %Alchemist.Helpers.Complete.Env{
+            aliases: [{module, module}],
+            imports: [module],
+            scope_module: nil | module,
+            mods_and_funs: ElixirSense.Core.State.mods_funs_t()
+          }
     defstruct aliases: [],
               imports: [],
               scope_module: nil,
