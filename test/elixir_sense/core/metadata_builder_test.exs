@@ -3,7 +3,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.State
-  alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo}
+  alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, PositionInfo}
 
   @tag requires_source: true
   test "build metadata from kernel.ex" do
@@ -1568,45 +1568,45 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert %{
-             {Enumerable.MyOtherStruct, nil, nil} => %{
+             {Enumerable.MyOtherStruct, nil, nil} => %PositionInfo{
                params: [nil],
                positions: [[line: 17, column: 3]]
              },
-             {MyOtherStruct, nil, nil} => %{params: [nil], positions: [{16, 11}]},
-             {MyStruct, nil, nil} => %{params: [nil], positions: [{9, 11}]},
-             {Proto, nil, nil} => %{params: [nil], positions: [{1, 13}]},
-             {Proto, :reverse, 1} => %{
+             {MyOtherStruct, nil, nil} => %PositionInfo{params: [nil], positions: [{16, 11}]},
+             {MyStruct, nil, nil} => %PositionInfo{params: [nil], positions: [{9, 11}]},
+             {Proto, nil, nil} => %PositionInfo{params: [nil], positions: [{1, 13}]},
+             {Proto, :reverse, 1} => %PositionInfo{
                params: [[{:term, [line: 2, column: 15], nil}]],
                positions: [{2, 7}]
              },
-             {Proto, :reverse, nil} => %{
+             {Proto, :reverse, nil} => %PositionInfo{
                params: [[{:term, [line: 2, column: 15], nil}]],
                positions: [{2, 7}]
              },
-             {Proto.Any, nil, nil} => %{params: [nil], positions: [{5, 9}]},
-             {Proto.Any, :reverse, 1} => %{
+             {Proto.Any, nil, nil} => %PositionInfo{params: [nil], positions: [{5, 9}]},
+             {Proto.Any, :reverse, 1} => %PositionInfo{
                params: [[{:term, [line: 6, column: 15], nil}]],
                positions: [{6, 7}]
              },
-             {Proto.Any, :reverse, nil} => %{
+             {Proto.Any, :reverse, nil} => %PositionInfo{
                params: [[{:term, [line: 6, column: 15], nil}]],
                positions: [{6, 7}]
              },
-             {Proto.MyOtherStruct, nil, nil} => %{params: [nil], positions: [{5, 9}]},
-             {Proto.MyOtherStruct, :reverse, 1} => %{
+             {Proto.MyOtherStruct, nil, nil} => %PositionInfo{params: [nil], positions: [{5, 9}]},
+             {Proto.MyOtherStruct, :reverse, 1} => %PositionInfo{
                params: [[{:term, [line: 6, column: 15], nil}]],
                positions: [{6, 7}]
              },
-             {Proto.MyOtherStruct, :reverse, nil} => %{
+             {Proto.MyOtherStruct, :reverse, nil} => %PositionInfo{
                params: [[{:term, [line: 6, column: 15], nil}]],
                positions: [{6, 7}]
              },
-             {Proto.MyStruct, nil, nil} => %{params: [nil], positions: [{5, 9}]},
-             {Proto.MyStruct, :reverse, 1} => %{
+             {Proto.MyStruct, nil, nil} => %PositionInfo{params: [nil], positions: [{5, 9}]},
+             {Proto.MyStruct, :reverse, 1} => %PositionInfo{
                params: [[{:term, [line: 6, column: 15], nil}]],
                positions: [{6, 7}]
              },
-             {Proto.MyStruct, :reverse, nil} => %{
+             {Proto.MyStruct, :reverse, nil} => %PositionInfo{
                params: [[{:term, [line: 6, column: 15], nil}]],
                positions: [{6, 7}]
              }
@@ -1671,66 +1671,66 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert %{
-             {OuterModule, nil, nil} => %{params: [nil], positions: [{2, 11}]},
-             {OuterModule.InnerModule, :func, 0} => %{
+             {OuterModule, nil, nil} => %PositionInfo{params: [nil], positions: [{2, 11}]},
+             {OuterModule.InnerModule, :func, 0} => %PositionInfo{
                params: [[]],
                positions: [{5, 9}]
              },
-             {OuterModule.InnerModule, :func, nil} => %{
+             {OuterModule.InnerModule, :func, nil} => %PositionInfo{
                params: [[]],
                positions: [{5, 9}]
              },
-             {OuterModule.InnerModule, nil, nil} => %{
+             {OuterModule.InnerModule, nil, nil} => %PositionInfo{
                params: [nil],
                positions: [{4, 13}]
              },
-             {Impls, nil, nil} => %{params: [nil], positions: [{28, 11}]},
-             {Reversible, :reverse, 1} => %{
+             {Impls, nil, nil} => %PositionInfo{params: [nil], positions: [{28, 11}]},
+             {Reversible, :reverse, 1} => %PositionInfo{
                params: [[{:term, [line: 19, column: 15], nil}]],
                positions: [{19, 7}]
              },
-             {Reversible, :reverse, nil} => %{
+             {Reversible, :reverse, nil} => %PositionInfo{
                params: [[{:term, [line: 19, column: 15], nil}]],
                positions: [{19, 7}]
              },
-             {Reversible, nil, nil} => %{params: [nil], positions: [{18, 13}]},
-             {Reversible.Map, nil, nil} => %{
+             {Reversible, nil, nil} => %PositionInfo{params: [nil], positions: [{18, 13}]},
+             {Reversible.Map, nil, nil} => %PositionInfo{
                params: [nil],
                positions: [{31, 11}]
              },
-             {Reversible.Map, :reverse, 1} => %{
+             {Reversible.Map, :reverse, 1} => %PositionInfo{
                params: [[{:term, [line: 32, column: 17], nil}]],
                positions: [{32, 9}]
              },
-             {Reversible.Map, :reverse, nil} => %{
+             {Reversible.Map, :reverse, nil} => %PositionInfo{
                params: [[{:term, [line: 32, column: 17], nil}]],
                positions: [{32, 9}]
              },
-             {Reversible.My.List, nil, nil} => %{
+             {Reversible.My.List, nil, nil} => %PositionInfo{
                params: [nil],
                positions: [{31, 11}]
              },
-             {Reversible.My.List, :reverse, 1} => %{
+             {Reversible.My.List, :reverse, 1} => %PositionInfo{
                params: [[{:term, [line: 32, column: 17], nil}]],
                positions: [{32, 9}]
              },
-             {Reversible.My.List, :reverse, nil} => %{
+             {Reversible.My.List, :reverse, nil} => %PositionInfo{
                params: [[{:term, [line: 32, column: 17], nil}]],
                positions: [{32, 9}]
              },
-             {Reversible.String, nil, nil} => %{
+             {Reversible.String, nil, nil} => %PositionInfo{
                params: [nil],
                positions: [{23, 9}]
              },
-             {Reversible.String, :reverse, 1} => %{
+             {Reversible.String, :reverse, 1} => %PositionInfo{
                params: [[{:term, [line: 24, column: 15], nil}]],
                positions: [{24, 7}]
              },
-             {Reversible.String, :reverse, nil} => %{
+             {Reversible.String, :reverse, nil} => %PositionInfo{
                params: [[{:term, [line: 24, column: 15], nil}]],
                positions: [{24, 7}]
              },
-             {Some.Nested, nil, nil} => %{params: [nil], positions: [{14, 11}]}
+             {Some.Nested, nil, nil} => %PositionInfo{params: [nil], positions: [{14, 11}]}
            } == state.mods_funs_to_positions
   end
 

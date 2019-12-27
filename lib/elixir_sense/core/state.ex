@@ -314,7 +314,7 @@ defmodule ElixirSense.Core.State do
     new_positions = [position | current_positions]
 
     mods_funs_to_positions =
-      Map.put(state.mods_funs_to_positions, {module, fun, arity}, %{
+      Map.put(state.mods_funs_to_positions, {module, fun, arity}, %PositionInfo{
         positions: new_positions,
         params: new_params
       })

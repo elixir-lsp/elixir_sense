@@ -15,5 +15,5 @@ defmodule ElixirSenseExample.ModuleWithTypes do
   defmacrop some_macro_priv(), do: :abc
 
   @spec some_macro(integer) :: Macro.t()
-  defmacro some_macro(a), do: some_macro_priv()
+  defmacro some_macro(_a), do: some_macro_priv()
 end
