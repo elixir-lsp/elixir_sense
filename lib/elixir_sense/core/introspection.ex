@@ -769,7 +769,7 @@ defmodule ElixirSense.Core.Introspection do
 
   defp find_metadata_function(
          {mod, fun},
-         _current_module,
+         current_module,
          _imports,
          mods_funs,
          metadata_types,
@@ -781,7 +781,9 @@ defmodule ElixirSense.Core.Introspection do
           false
 
         _funs ->
-          Enum.any?(mods_funs, fn {{m, f, _a}, _} -> m == mod and f == fun end)
+          Enum.any?(mods_funs, fn {{m, f, _a}, info} ->
+            m == mod and f == fun and (mod == current_module or is_pub(info.type))
+          end)
       end
 
     if found_in_metadata or ModuleInfo.has_function?(mod, fun) or
