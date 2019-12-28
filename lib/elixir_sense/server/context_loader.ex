@@ -89,8 +89,11 @@ defmodule ElixirSense.Server.ContextLoader do
 
   defp purge_modules(loaded) do
     for m <- all_loaded() -- loaded do
+      # if :code.purge is not called here sometimes an error
+      # [error] Module 'SomeModule' must be purged before deleting
+      _ = :code.purge(m)
       true = :code.delete(m)
-      true = :code.purge(m)
+      _ = :code.purge(m)
     end
   end
 

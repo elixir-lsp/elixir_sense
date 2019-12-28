@@ -144,6 +144,39 @@ defmodule ElixirSense.ServerTest do
     assert send_request(socket, request) |> Enum.at(0) == %{type: :hint, value: "List."}
   end
 
+  test "all_modules request", %{socket: socket, auth_token: auth_token} do
+    request = %{
+      "request_id" => 1,
+      "auth_token" => auth_token,
+      "request" => "all_modules",
+      "payload" => %{}
+    }
+
+    assert send_request(socket, request) |> Enum.at(0) == ":application"
+  end
+
+  test "version request", %{socket: socket, auth_token: auth_token} do
+    request = %{
+      "request_id" => 1,
+      "auth_token" => auth_token,
+      "request" => "version",
+      "payload" => %{}
+    }
+
+    assert %{elixir: _, otp: _} = send_request(socket, request)
+  end
+
+  test "unknown request", %{socket: socket, auth_token: auth_token} do
+    request = %{
+      "request_id" => 1,
+      "auth_token" => auth_token,
+      "request" => "unknown",
+      "payload" => %{}
+    }
+
+    assert send_request(socket, request) == :ok
+  end
+
   test "set_context request", %{socket: socket, auth_token: auth_token} do
     {_, _, _, env, cwd, _} = ContextLoader.get_state()
 
