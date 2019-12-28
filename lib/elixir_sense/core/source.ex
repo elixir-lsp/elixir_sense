@@ -126,6 +126,14 @@ defmodule ElixirSense.Core.Source do
   def subject(code, line, col) do
     acc = %{line: line, col: col, pos_found: false, candidate: [], pos: nil}
 
+    code =
+      code
+      |> String.split(["\n", "\r\n"])
+      |> Enum.map_join("\n", fn line ->
+        # this is a naive comment strip - it will not honour # in strings, chars etc
+        Regex.replace(~r/\#.*$/, line, "")
+      end)
+
     case walk_text(code, acc, &find_subject/5) do
       %{candidate: []} ->
         nil

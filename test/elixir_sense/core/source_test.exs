@@ -485,6 +485,23 @@ defmodule ElixirSense.Core.SourceTest do
 
       assert subject(code, 2, 17) == "MyMod"
     end
+
+    test "function call after comment ending in ." do
+      code = """
+      defmodule MyMod do
+        defp loaded_applications do
+          # for performance.
+          :ets.match(:ac_tab, {{:loaded, :"$1"}, :_})
+
+          :ets. # for performance.
+            match(:ac_tab, {{:loaded, :"$1"}, :_})
+        end
+      end
+      """
+
+      assert subject(code, 4, 10) == ":ets.match"
+      assert subject(code, 7, 7) == ":ets.match"
+    end
   end
 
   describe "which_struct" do
