@@ -15,9 +15,8 @@ defmodule ElixirSense.Providers.Eval do
   def quote(code) do
     code
     |> Code.string_to_quoted()
-    |> Tuple.to_list()
-    |> List.last()
-    |> inspect
+    |> elem(1)
+    |> inspect(limit: :infinity, printable_limit: :infinity)
   end
 
   @doc """
@@ -32,8 +31,7 @@ defmodule ElixirSense.Providers.Eval do
       bindings =
         code
         |> Code.eval_string()
-        |> Tuple.to_list()
-        |> List.last()
+        |> elem(1)
 
       Enum.map(vars, fn var ->
         {var, Keyword.get(bindings, var)}
@@ -78,7 +76,7 @@ defmodule ElixirSense.Providers.Eval do
 
     body =
       Enum.map_join(bindings, "\n\n", fn {var, val} ->
-        "#{var} = #{inspect(val)}"
+        "#{var} = #{inspect(val, limit: :infinity, printable_limit: :infinity)}"
       end)
 
     header <> "\n\n" <> body
