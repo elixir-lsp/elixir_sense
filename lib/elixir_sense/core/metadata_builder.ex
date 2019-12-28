@@ -575,13 +575,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result({:<-, meta, [:_, rhs]})
   end
 
-  # Kernel: defmacro use(module, opts \\ [])
-  defp pre({:use, [line: _, column: _], [{param, _, nil} | _]} = ast, state)
-       when is_atom(param) do
-    state
-    |> result(ast)
-  end
-
   defp pre({:use, [line: line, column: column], _} = ast, state) do
     # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
     current_module = get_current_module(state)
