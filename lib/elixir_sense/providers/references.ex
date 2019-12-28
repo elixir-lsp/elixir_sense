@@ -49,9 +49,12 @@ defmodule ElixirSense.Providers.References do
         |> Enum.map(fn pos -> build_var_location(subject, pos) end)
 
       _ ->
-        subject
-        |> Source.split_module_and_func(module, aliases)
-        |> Introspection.actual_mod_fun(imports, aliases, module, modules_funs, metadata_types)
+        {mod, fun, _found} =
+          subject
+          |> Source.split_module_and_func(module, aliases)
+          |> Introspection.actual_mod_fun(imports, aliases, module, modules_funs, metadata_types)
+
+        {mod, fun}
         |> xref_at_cursor(arity, module, scope)
         |> Enum.map(&build_location/1)
         |> Enum.sort_by(fn %{uri: a, range: %{start: %{line: b, column: c}}} -> {a, b, c} end)
@@ -198,10 +201,13 @@ defmodule ElixirSense.Providers.References do
   end
 
   defp find_actual_mod_fun(code, line, col, imports, aliases, module, mods_funs, metadata_types) do
-    code
-    |> Source.subject(line, col)
-    |> Source.split_module_and_func(module, aliases)
-    |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs, metadata_types)
+    {mod, fun, _found} =
+      code
+      |> Source.subject(line, col)
+      |> Source.split_module_and_func(module, aliases)
+      |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs, metadata_types)
+
+    {mod, fun}
   end
 
   defp caller_filter([module, func, _arity]), do: &match?(%{callee: {^module, ^func, _}}, &1)

@@ -370,6 +370,26 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
+  test "find definition of local functions with default args" do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(a \\\\ 0, b \\\\ nil), do: :ok
+
+      def a do
+        my_fun()
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 5, 6) == %Location{
+             found: true,
+             type: :function,
+             file: nil,
+             line: 2,
+             column: 7
+           }
+  end
+
   test "find definition of local functions with __MODULE__" do
     buffer = """
     defmodule MyModule do

@@ -14,13 +14,15 @@ defmodule ElixirSense.Providers.Docs do
         mods_funs,
         metadata_types
       ) do
-    mod_fun =
+    {mod, fun, _found} =
       subject
       |> Source.split_module_and_func(module, aliases)
       |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs, metadata_types)
 
-    {mod_fun_to_string(mod_fun), Introspection.get_all_docs(mod_fun, scope)}
+    {mod_fun_to_string({mod, fun}), Introspection.get_all_docs({mod, fun}, scope)}
   end
+
+  defp mod_fun_to_string({nil, nil}), do: ""
 
   defp mod_fun_to_string({nil, fun}) do
     Atom.to_string(fun)

@@ -269,7 +269,7 @@ defmodule ElixirSense.Providers.Suggestion do
          metadata_types
        ) do
     with {mod, fields_so_far} <- Source.which_struct(text_before),
-         {actual_mod, _} <-
+         {actual_mod, _, true} <-
            Introspection.actual_mod_fun(
              {expand_current_module(mod, module), nil},
              imports,
@@ -473,22 +473,21 @@ defmodule ElixirSense.Providers.Suggestion do
             param_option
           ]
   defp find_param_options(prefix, hint, imports, aliases, module, mods_funs, metadata_types) do
-    case Source.which_func(prefix, module) do
-      %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} ->
-        {mod, fun} =
-          Introspection.actual_mod_fun(
-            {mod, fun},
-            imports,
-            aliases,
-            module,
-            mods_funs,
-            metadata_types
-          )
-
-        TypeInfo.extract_param_options(mod, fun, npar)
-        |> options_to_suggestions(mod)
-        |> Enum.filter(&String.starts_with?("#{&1.name}", hint))
-
+    with %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} <-
+           Source.which_func(prefix, module),
+         {mod, fun, true} <-
+           Introspection.actual_mod_fun(
+             {mod, fun},
+             imports,
+             aliases,
+             module,
+             mods_funs,
+             metadata_types
+           ) do
+      TypeInfo.extract_param_options(mod, fun, npar)
+      |> options_to_suggestions(mod)
+      |> Enum.filter(&String.starts_with?("#{&1.name}", hint))
+    else
       _ ->
         []
     end

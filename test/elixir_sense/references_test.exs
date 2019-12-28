@@ -542,7 +542,8 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 7)
+    references =
+      ElixirSense.references(buffer, 3, 7) |> Enum.filter(&(&1.uri =~ "modules_with_references"))
 
     assert references == [
              %{

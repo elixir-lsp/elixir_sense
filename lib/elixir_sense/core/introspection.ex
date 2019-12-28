@@ -674,8 +674,8 @@ defmodule ElixirSense.Core.Introspection do
           nil | module,
           ElixirSense.Core.State.mods_funs_to_positions_t(),
           ElixirSense.Core.State.types_t()
-        ) :: {nil | module, nil | atom}
-  def actual_mod_fun({nil, nil}, _, _, _, _, _), do: {nil, nil}
+        ) :: {nil | module, nil | atom, boolean}
+  def actual_mod_fun({nil, nil}, _, _, _, _, _), do: {nil, nil, false}
 
   def actual_mod_fun(
         mod_fun = {mod, fun},
@@ -685,10 +685,12 @@ defmodule ElixirSense.Core.Introspection do
         mods_funs,
         metadata_types
       ) do
+    expanded_mod = expand_alias(mod, aliases)
+
     with {nil, nil} <- find_kernel_function(mod_fun),
          {nil, nil} <-
            find_metadata_function(
-             {expand_alias(mod, aliases), fun},
+             {expanded_mod, fun},
              current_module,
              imports,
              mods_funs,
@@ -696,9 +698,9 @@ defmodule ElixirSense.Core.Introspection do
              true
            ),
          {nil, nil} <- find_builtin_type(mod_fun) do
-      mod_fun
+      {expanded_mod, fun, false}
     else
-      new_mod_fun -> new_mod_fun
+      {m, f} -> {m, f, true}
     end
   end
 

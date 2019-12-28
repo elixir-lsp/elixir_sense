@@ -88,10 +88,10 @@ defmodule ElixirSense.Providers.Definition do
            mods_funs_to_positions,
            metadata_types
          ) do
-      {nil, nil} ->
+      {_, _, false} ->
         %Location{found: false}
 
-      {mod, fun} ->
+      {mod, fun, true} ->
         case mods_funs_to_positions[{mod, fun, nil}] || metadata_types[{mod, fun, nil}] do
           nil ->
             {mod, fun} |> find_source(current_module)

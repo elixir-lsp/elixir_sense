@@ -302,7 +302,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                @env_func,
                %{SomeModule => %StructInfo{type: :defstruct, fields: [str_field: 1]}},
                %{
-                 SomeModule => %{}
+                 {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
                },
                %{},
                "%SomeModule{st"

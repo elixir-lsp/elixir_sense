@@ -210,6 +210,51 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    test "find signatures when function with default args" do
+      code = """
+      defmodule MyModule do
+        List.pop_at(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 21) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation:
+                     "Returns and removes the value at the specified `index` in the `list`.",
+                   name: "pop_at",
+                   params: ["list", "index", "default \\\\ nil"],
+                   spec: "@spec pop_at(list, integer, any) :: {any, list}"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures when function with many clausess" do
+      code = """
+      defmodule MyModule do
+        List.starts_with?(
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 21) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation:
+                     "Returns `true` if `list` starts with the given `prefix` list; otherwise returns `false`.",
+                   name: "starts_with?",
+                   params: ["list", "prefix"],
+                   spec:
+                     "@spec starts_with?([...], [...]) :: boolean\n@spec starts_with?(list, []) :: true\n@spec starts_with?([], [...]) :: false"
+                 }
+               ]
+             }
+    end
+
     test "find signatures from atom modules" do
       code = """
       defmodule MyModule do
@@ -328,9 +373,63 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    test "finds signatures from module with many function clauses" do
+      code = """
+      defmodule Other do
+        alias ElixirSenseExample.ModuleWithManyClauses, as: MyModule
+        def run do
+          MyModule.sum(a,
+        end
+      end
+      """
+
+      assert ElixirSense.signature(code, 4, 21) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{documentation: "", name: "sum", spec: "", params: ["s \\\\ nil", "f"]},
+                 %{documentation: "", name: "sum", spec: "", params: ["arg", "x", "y"]}
+               ]
+             }
+    end
+
     test "finds signatures from metadata module functions" do
       code = """
       defmodule MyModule do
+        def sum(s \\\\ nil, f)
+        def sum(a, nil), do: nil
+        def sum(a, b) do
+          a + b
+        end
+
+        def sum({a, b}, x, y) do
+          a + b + x + y
+        end
+      end
+
+      defmodule Other do
+        def run do
+          MyModule.sum(a,
+        end
+      end
+      """
+
+      assert ElixirSense.signature(code, 15, 21) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{documentation: "", name: "sum", params: ["s \\\\ nil", "f"], spec: ""},
+                 %{documentation: "", name: "sum", spec: "", params: ["a", "atom"]},
+                 %{documentation: "", name: "sum", params: ["a", "b"], spec: ""},
+                 %{documentation: "", name: "sum", params: ["tuple", "x", "y"], spec: ""}
+               ]
+             }
+    end
+
+    test "does not finds signatures from metadata module private functions" do
+      code = """
+      defmodule MyModule do
+        defp sum(a, nil), do: nil
         defp sum(a, b) do
           a + b
         end
@@ -347,19 +446,29 @@ defmodule ElixirSense.SignatureTest do
       end
       """
 
-      assert ElixirSense.signature(code, 13, 21) == %{
+      assert ElixirSense.signature(code, 14, 21) == :none
+    end
+
+    test "finds signatures from metadata module functions with default param" do
+      code = """
+      defmodule MyModule do
+        defp sum(a, b \\\\ 0) do
+          a + b
+        end
+
+        def run do
+          sum(a,
+        end
+      end
+      """
+
+      assert ElixirSense.signature(code, 7, 11) == %{
                active_param: 1,
                pipe_before: false,
                signatures: [
                  %{
                    name: "sum",
-                   params: ["a", "b"],
-                   documentation: "",
-                   spec: ""
-                 },
-                 %{
-                   name: "sum",
-                   params: ["tuple"],
+                   params: ["a", "b \\\\ 0"],
                    documentation: "",
                    spec: ""
                  }
@@ -377,18 +486,14 @@ defmodule ElixirSense.SignatureTest do
       assert ElixirSense.signature(code, 2, 8) == :none
     end
 
-    test "return empty signature list when no signature is found" do
+    test "return :none when no signature is found" do
       code = """
       defmodule MyModule do
         a_func(
       end
       """
 
-      assert ElixirSense.signature(code, 2, 10) == %{
-               active_param: 0,
-               signatures: [],
-               pipe_before: false
-             }
+      assert ElixirSense.signature(code, 2, 10) == :none
     end
 
     test "after |>" do
