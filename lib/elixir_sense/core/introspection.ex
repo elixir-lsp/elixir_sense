@@ -855,4 +855,6 @@ defmodule ElixirSense.Core.Introspection do
     formatted_spec = "```\n#{spec}\n```"
     "#{doc}\n\n#{formatted_spec}#{footer}"
   end
+
+  def is_pub(type), do: type in [:def, :defmacro, :defdelegate, :defguard]
 end

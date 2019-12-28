@@ -401,7 +401,7 @@ defmodule Alchemist.Helpers.Complete do
       _funs ->
         for {{^mod, f, a}, info} <- env.mods_and_funs,
             a != nil,
-            mod == env.scope_module || is_pub(info.type) do
+            mod == env.scope_module || Introspection.is_pub(info.type) do
           {f, a, info.type, nil, nil}
         end
         |> Kernel.++(
@@ -409,8 +409,6 @@ defmodule Alchemist.Helpers.Complete do
         )
     end
   end
-
-  def is_pub(type), do: type in [:def, :defmacro, :defdelegate, :defguard]
 
   defp get_module_funs(mod, include_builtin) do
     cond do
