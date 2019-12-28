@@ -26,7 +26,7 @@ defmodule ElixirSense.Providers.ReferencesTest.Modules do
       IO.puts("")
     end
 
-    def func_arg(arg) do
+    def func_arg(arg \\ "") do
       IO.puts("" <> arg)
     end
   end
@@ -72,6 +72,23 @@ defmodule ElixirSense.Providers.ReferencesTest.Modules do
 
     def call_erlang() do
       :ets.new(:a, [])
+    end
+  end
+
+  defmodule Callee5 do
+    def func_arg(arg \\ "") do
+      IO.puts("" <> arg)
+    end
+
+    def func_arg1(arg \\ "") do
+      IO.puts("" <> arg)
+    end
+  end
+
+  defmodule Caller5 do
+    def func() do
+      ElixirSense.Providers.ReferencesTest.Modules.Callee5.func_arg()
+      ElixirSense.Providers.ReferencesTest.Modules.Callee5.func_arg1("a")
     end
   end
 end

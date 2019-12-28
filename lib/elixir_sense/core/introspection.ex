@@ -149,6 +149,7 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_type_docs_md(mod, fun, _scope) do
     docs = TypeInfo.get_type_docs(mod, fun)
+
     for {{f, arity}, _, _, text} <- docs, f == fun do
       spec =
         mod

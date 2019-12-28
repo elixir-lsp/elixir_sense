@@ -204,6 +204,90 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
+  test "find references with cursor over a function with deault argument when caller uses default arguments" do
+    buffer = """
+    defmodule Caller do
+      def func() do
+        ElixirSense.Providers.ReferencesTest.Modules.Callee5.func_arg()
+        ElixirSense.Providers.ReferencesTest.Modules.Callee5.func_arg("test")
+        #                                                     ^
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 3, 59)
+
+    assert references == [
+             %{
+               uri: "test/support/modules_with_references.ex",
+               range: %{start: %{line: 90, column: 60}, end: %{line: 90, column: 68}}
+             }
+           ]
+
+    references = ElixirSense.references(buffer, 4, 59)
+
+    assert references == [
+             %{
+               uri: "test/support/modules_with_references.ex",
+               range: %{start: %{line: 90, column: 60}, end: %{line: 90, column: 68}}
+             }
+           ]
+  end
+
+  test "find references with cursor over a function with deault argument when caller does not uses default arguments" do
+    buffer = """
+    defmodule Caller do
+      def func() do
+        ElixirSense.Providers.ReferencesTest.Modules.Callee5.func_arg1("test")
+        ElixirSense.Providers.ReferencesTest.Modules.Callee5.func_arg1()
+        #                                                     ^
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 3, 59)
+
+    assert references == [
+             %{
+               uri: "test/support/modules_with_references.ex",
+               range: %{start: %{line: 91, column: 60}, end: %{line: 91, column: 69}}
+             }
+           ]
+
+    references = ElixirSense.references(buffer, 4, 59)
+
+    assert references == [
+             %{
+               uri: "test/support/modules_with_references.ex",
+               range: %{start: %{line: 91, column: 60}, end: %{line: 91, column: 69}}
+             }
+           ]
+  end
+
+  test "find references with cursor over a module with funs with deault argument" do
+    buffer = """
+    defmodule Caller do
+      def func() do
+        ElixirSense.Providers.ReferencesTest.Modules.Callee5.func_arg1("test")
+        #                                                 ^
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 3, 55)
+
+    assert references == [
+             %{
+               range: %{end: %{column: 68, line: 90}, start: %{column: 60, line: 90}},
+               uri: "test/support/modules_with_references.ex"
+             },
+             %{
+               range: %{end: %{column: 69, line: 91}, start: %{column: 60, line: 91}},
+               uri: "test/support/modules_with_references.ex"
+             }
+           ]
+  end
+
   test "find references with cursor over a function call from an aliased module" do
     buffer = """
     defmodule Caller do

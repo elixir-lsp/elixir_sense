@@ -185,6 +185,18 @@ defmodule ElixirSense.Core.State do
     defstruct params: [],
               positions: [],
               type: :def
+
+    def get_arities(%ModFunInfo{params: params_variants}) do
+      params_variants
+      |> Enum.map(fn params ->
+        default_args =
+          params
+          |> Enum.count(&match?({:\\, _, _}, &1))
+
+        total = length(params)
+        {total, default_args}
+      end)
+    end
   end
 
   alias ElixirSense.Core.Introspection

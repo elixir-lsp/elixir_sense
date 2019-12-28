@@ -59,8 +59,10 @@ defmodule ElixirSense.Providers.References do
   end
 
   defp xref_at_cursor(actual_mod_fun, arity, module, scope) do
-    mfa = actual_mod_fun
-    |> callee_at_cursor(module, scope, arity)
+    mfa =
+      actual_mod_fun
+      |> callee_at_cursor(module, scope, arity)
+
     callers(mfa)
   end
 
@@ -90,8 +92,14 @@ defmodule ElixirSense.Providers.References do
       |> Enum.filter(caller_filter(mfa))
       |> fix_caller_module()
 
+    arity =
+      case mfa do
+        [_, _, a] -> a
+        _ -> nil
+      end
+
     for call <- calls,
-        new_call <- expand_xref_line_calls(call) do
+        new_call <- expand_xref_line_calls(call, arity) do
       new_call
     end
   end
@@ -119,7 +127,7 @@ defmodule ElixirSense.Providers.References do
     end)
   end
 
-  defp expand_xref_line_calls(xref_call) do
+  defp expand_xref_line_calls(xref_call, buffer_arity) do
     %{callee: {mod, func, arity}, file: file, line: line} = xref_call
 
     case File.read(file) do
@@ -150,13 +158,43 @@ defmodule ElixirSense.Providers.References do
                 metadata.types
               ),
             found_mod_fun == {mod, func},
-            arity == call.arity do
+            arity == call.arity,
+            check_arity(
+              arity,
+              buffer_arity,
+              metadata.mods_funs_to_positions[{mod, func, nil}]
+            ) do
           Map.merge(xref_call, %{column: call.col, line: call.line})
         end
 
       _ ->
         [xref_call]
     end
+  end
+
+  defp check_arity(call_arity, buffer_arity, _info)
+       when is_nil(buffer_arity) or call_arity == buffer_arity do
+    true
+  end
+
+  defp check_arity(call_arity, buffer_arity, %State.ModFunInfo{} = info) do
+    State.ModFunInfo.get_arities(info)
+    |> Enum.any?(fn
+      {arity, default_args}
+      when arity - default_args == call_arity and buffer_arity == arity ->
+        true
+
+      {arity, default_args}
+      when buffer_arity + default_args == call_arity and call_arity == arity ->
+        true
+
+      _ ->
+        false
+    end)
+  end
+
+  defp check_arity(_call_arity, _buffer_arity, _) do
+    false
   end
 
   defp find_actual_mod_fun(code, line, col, imports, aliases, module, mods_funs, metadata_types) do
@@ -166,7 +204,7 @@ defmodule ElixirSense.Providers.References do
     |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs, metadata_types)
   end
 
-  defp caller_filter([module, func, arity]), do: &match?(%{callee: {^module, ^func, ^arity}}, &1)
+  defp caller_filter([module, func, _arity]), do: &match?(%{callee: {^module, ^func, _}}, &1)
   defp caller_filter([module, func]), do: &match?(%{callee: {^module, ^func, _}}, &1)
   defp caller_filter([module]), do: &match?(%{callee: {^module, _, _}}, &1)
 
