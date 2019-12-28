@@ -3,8 +3,6 @@ defmodule Alchemist.Helpers.ModuleInfo do
 
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
-  @builtin_functions [{:__info__, 1}, {:module_info, 0}, {:module_info, 1}]
-
   def moduledoc?(module) do
     case NormalizedCode.get_docs(module, :moduledoc) do
       {_, doc} -> is_binary(doc)
@@ -17,34 +15,8 @@ defmodule Alchemist.Helpers.ModuleInfo do
     do_docs?(docs, function)
   end
 
-  def get_functions(module, hint) do
-    hint = to_string(hint)
-    {module, _} = Code.eval_string(module)
-    functions = get_module_funs(module)
-
-    list =
-      Enum.reduce(functions, [], fn {f, a}, acc ->
-        case :lists.keyfind(f, 1, acc) do
-          {f, aa} -> :lists.keyreplace(f, 1, acc, {f, [a | aa]})
-          false -> [{f, [a]} | acc]
-        end
-      end)
-
-    list
-    |> do_get_functions(hint)
-    |> :lists.sort()
-  end
-
   def has_function?(module, function) do
     List.keymember?(get_module_funs(module), function, 0)
-  end
-
-  defp do_get_functions(list, "") do
-    all_functions(list)
-  end
-
-  defp do_get_functions(list, hint) do
-    all_functions(list, hint)
   end
 
   defp get_module_funs(Elixir), do: []
@@ -68,24 +40,6 @@ defmodule Alchemist.Helpers.ModuleInfo do
       _otherwise ->
         []
     end
-  end
-
-  defp all_functions(list) do
-    for {fun, arities} <- list do
-      for arity <- arities, {fun, arity} not in @builtin_functions do
-        {fun, arity}
-      end
-    end
-    |> List.flatten()
-  end
-
-  defp all_functions(list, hint) do
-    for {fun, arities} <- list, name = Atom.to_string(fun), String.starts_with?(name, hint) do
-      for arity <- arities, {fun, arity} not in @builtin_functions do
-        {fun, arity}
-      end
-    end
-    |> List.flatten()
   end
 
   def all_applications_modules do
