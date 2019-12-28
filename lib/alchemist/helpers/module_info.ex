@@ -3,6 +3,7 @@ defmodule Alchemist.Helpers.ModuleInfo do
 
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
+  @spec moduledoc?(module) :: boolean
   def moduledoc?(module) do
     case NormalizedCode.get_docs(module, :moduledoc) do
       {_, doc} -> is_binary(doc)
@@ -10,11 +11,13 @@ defmodule Alchemist.Helpers.ModuleInfo do
     end
   end
 
+  @spec docs?(module, atom) :: boolean
   def docs?(module, function) do
     docs = NormalizedCode.get_docs(module, :docs)
     do_docs?(docs, function)
   end
 
+  @spec has_function?(module, atom) :: boolean
   def has_function?(module, function) do
     List.keymember?(get_module_funs(module), function, 0)
   end
@@ -42,6 +45,7 @@ defmodule Alchemist.Helpers.ModuleInfo do
     end
   end
 
+  @spec all_applications_modules() :: [module]
   def all_applications_modules do
     for [app] <- loaded_applications(),
         {:ok, modules} = :application.get_key(app, :modules),
