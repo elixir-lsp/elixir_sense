@@ -148,19 +148,14 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_type_docs_md(mod, fun, _scope) do
-    case TypeInfo.get_type_docs(mod, fun) do
-      nil ->
-        []
+    docs = TypeInfo.get_type_docs(mod, fun)
+    for {{f, arity}, _, _, text} <- docs, f == fun do
+      spec =
+        mod
+        |> TypeInfo.get_type_spec(f, arity)
+        |> TypeInfo.format_type_spec()
 
-      docs ->
-        for {{f, arity}, _, _, text} <- docs, f == fun do
-          spec =
-            mod
-            |> TypeInfo.get_type_spec(f, arity)
-            |> TypeInfo.format_type_spec()
-
-          format_type_doc_md(text, spec)
-        end
+      format_type_doc_md(text, spec)
     end
   end
 
@@ -360,7 +355,7 @@ defmodule ElixirSense.Core.Introspection do
       |> Map.get(mod, mod)
       |> NormalizedCode.get_docs(:callback_docs)
 
-    {callbacks || [], docs || []}
+    {callbacks, docs || []}
   end
 
   defp drop_macro_env({name, meta, [{:"::", _, [{:env, _, _}, _ | _]} | args]}),

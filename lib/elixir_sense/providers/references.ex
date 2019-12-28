@@ -59,32 +59,29 @@ defmodule ElixirSense.Providers.References do
   end
 
   defp xref_at_cursor(actual_mod_fun, arity, module, scope) do
-    actual_mod_fun
+    mfa = actual_mod_fun
     |> callee_at_cursor(module, scope, arity)
-    |> case do
-      {:ok, mfa} -> callers(mfa)
-      _ -> []
-    end
+    callers(mfa)
   end
 
   # Cursor over a module
   defp callee_at_cursor({module, nil}, _module, _scope, _arity) do
-    {:ok, [module]}
+    [module]
   end
 
   # Cursor over a function definition
   defp callee_at_cursor({module, func}, module, {func, arity}, _) do
-    {:ok, [module, func, arity]}
+    [module, func, arity]
   end
 
   # Cursor over a function call but we couldn't introspect the arity
   defp callee_at_cursor({module, func}, _module, _scope, nil) do
-    {:ok, [module, func]}
+    [module, func]
   end
 
   # Cursor over a function call
   defp callee_at_cursor({module, func}, _module, _scope, arity) do
-    {:ok, [module, func, arity]}
+    [module, func, arity]
   end
 
   def callers(mfa) do

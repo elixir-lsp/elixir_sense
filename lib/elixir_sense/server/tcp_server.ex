@@ -93,7 +93,7 @@ defmodule ElixirSense.Server.TCPServer do
          {:ok, result} <- dispatch_request(decoded_data, auth_token) do
       :erlang.term_to_binary(result)
     else
-      {:invalid_request, message} ->
+      {atom, message} when atom in [:error, :invalid_request] ->
         IO.puts(:stderr, "Server Error: #{message}")
         :erlang.term_to_binary(%{request_id: nil, payload: nil, error: message})
 

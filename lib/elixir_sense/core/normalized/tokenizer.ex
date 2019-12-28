@@ -17,7 +17,7 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
       Version.match?(elixir_version, ">= 1.7.0") ->
         do_tokenize_1_7(prefix_charlist)
 
-      Version.match?(elixir_version, ">= 1.6.0") ->
+      true ->
         do_tokenize_1_6(prefix_charlist)
     end
   end
@@ -37,7 +37,7 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
       {:ok, tokens} ->
         Enum.reverse(tokens)
 
-      {:error, {_line, _error_prefix, _token}, _rest, sofar} ->
+      {:error, _, _rest, sofar} ->
         sofar
     end
   end

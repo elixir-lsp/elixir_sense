@@ -528,10 +528,6 @@ defmodule ElixirSense.Providers.Suggestion do
     |> find_typespecs_for_mod_and_hint(aliases, module, metadata_types)
   end
 
-  defp find_typespecs_for_mod_and_hint({_, nil}, _aliases, _module, _metadata_types) do
-    []
-  end
-
   defp find_typespecs_for_mod_and_hint({nil, hint}, aliases, module, metadata_types)
        when not is_nil(module) do
     local_module =
