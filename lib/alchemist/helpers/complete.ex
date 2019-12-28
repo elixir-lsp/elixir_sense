@@ -345,24 +345,13 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp get_modules_from_applications do
-    for [app] <- loaded_applications(),
-        {:ok, modules} = :application.get_key(app, :modules),
-        module <- modules do
+    for module <- Introspection.all_modules() do
       Atom.to_string(module)
     end
   end
 
   defp get_modules_from_metadata(env) do
     for {{k, nil, nil}, _} <- env.mods_and_funs, do: Atom.to_string(k)
-  end
-
-  defp loaded_applications do
-    # If we invoke :application.loaded_applications/0,
-    # it can error if we don't call safe_fixtable before.
-    # Since in both cases we are reaching over the
-    # application controller internals, we choose to match
-    # for performance.
-    :ets.match(:ac_tab, {{:loaded, :"$1"}, :_})
   end
 
   defp match_module_funs(mod, hint, include_builtin, env) do
