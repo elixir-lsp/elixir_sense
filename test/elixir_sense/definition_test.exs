@@ -458,6 +458,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     defmodule MyModule do
       alias MyModule, as: M
       def my_fun(), do: :ok
+      def my_fun(a), do: :ok
 
       def a do
         my_fun1 = 1
@@ -466,7 +467,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert ElixirSense.definition(buffer, 7, 7) == %Location{
+    assert ElixirSense.definition(buffer, 8, 7) == %Location{
              found: true,
              type: :function,
              file: nil,
@@ -655,6 +656,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     buffer = """
     defmodule MyModule.Other do
       @type my_t :: integer
+      @type my_t(a) :: {a, integer}
     end
 
     defmodule MyModule do
@@ -666,7 +668,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     %{found: true, type: :typespec, file: nil, line: 2, column: 3} =
-      ElixirSense.definition(buffer, 8, 35)
+      ElixirSense.definition(buffer, 9, 35)
   end
 
   defp read_line(file, {line, column}) do

@@ -96,18 +96,20 @@ defmodule ElixirSense.Providers.Definition do
           nil ->
             {mod, fun} |> find_source(current_module)
 
-          %ElixirSense.Core.State.TypeInfo{positions: [{line, col} | _t]} ->
+          %ElixirSense.Core.State.TypeInfo{positions: positions} ->
+            # for simplicity take last position here as positions are reversed
+            {line, column} = positions |> Enum.at(-1)
             %Location{
               found: true,
               file: nil,
               type: :typespec,
               line: line,
-              column: col
+              column: column
             }
 
-          %{positions: positions} ->
-            # for simplicity take first position here
-            [{line, column} | _] = positions
+          %ElixirSense.Core.State.ModFunInfo{positions: positions} ->
+            # for simplicity take last position here as positions are reversed
+            {line, column} = positions |> Enum.at(-1)
 
             %Location{
               found: true,
