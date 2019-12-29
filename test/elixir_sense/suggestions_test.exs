@@ -179,6 +179,66 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
+  test "lists macrocallbacks" do
+    buffer = """
+    defmodule MyServer do
+      @behaviour ElixirSenseExample.BehaviourWithMacrocallback
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 7)
+      |> Enum.filter(fn s -> s.type == :callback end)
+
+    assert [
+             %{
+               args: "term,atom",
+               arity: 1,
+               name: "optional",
+               origin: "ElixirSenseExample.BehaviourWithMacrocallback",
+               spec: "@macrocallback optional(term, atom) :: Macro.t\n",
+               summary: "An optional macrocallback\n",
+               type: :callback
+             },
+             %{
+               args: "term,atom",
+               arity: 1,
+               name: "required",
+               origin: "ElixirSenseExample.BehaviourWithMacrocallback",
+               spec: "@macrocallback required(term, atom) :: Macro.t\n",
+               summary: "A required macrocallback\n",
+               type: :callback
+             }
+           ] == list
+  end
+
+  test "lists erlang callbacks" do
+    buffer = """
+    defmodule MyServer do
+      @behaviour :gen_statem
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 7)
+      |> Enum.filter(fn s -> s.type == :callback && s.name == "code_change" end)
+
+    assert [
+             %{
+               args: "oldVsn,oldState,oldData,extra",
+               arity: 4,
+               name: "code_change",
+               origin: ":gen_statem",
+               spec:
+                 "@callback code_change(oldVsn :: term | {:down, term}, oldState :: state, oldData :: data, extra :: term) ::\n  {:ok, newState :: state, newData :: data} |\n  reason :: term\n",
+               summary: "",
+               type: :callback
+             }
+           ] = list
+  end
+
   test "callback suggestions should not crash with unquote(__MODULE__)" do
     buffer = """
     defmodule Dummy do
