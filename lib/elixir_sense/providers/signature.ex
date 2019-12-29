@@ -55,12 +55,9 @@ defmodule ElixirSense.Providers.Signature do
   defp find_type_signatures({mod, fun}, metadata) do
     docs = NormalizedCode.get_docs(mod, :type_docs)
 
-    signature =
-      case Metadata.get_type_signature(metadata, mod, fun, docs) do
-        nil -> ElixirSense.Core.TypeInfo.get_signatures(mod, fun, docs)
-        signature -> signature
-      end
-
-    List.wrap(signature)
+    case Metadata.get_type_signatures(metadata, mod, fun, docs) do
+      [] -> ElixirSense.Core.TypeInfo.get_signatures(mod, fun, docs)
+      signature -> signature
+    end
   end
 end

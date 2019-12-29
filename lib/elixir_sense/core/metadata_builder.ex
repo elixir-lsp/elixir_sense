@@ -29,7 +29,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
   end
 
-  defp pre_module(ast, state, position = {line, column}, module, types \\ []) do
+  defp pre_module(ast, state, position, module, types \\ []) do
     module = normalize_module(module)
 
     state =
@@ -47,7 +47,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     types
     |> Enum.reduce(state, fn {type_name, type_args, kind}, acc ->
       acc
-      |> add_type(type_name, type_args, kind, %{line: line, col: column})
+      |> add_type(type_name, type_args, kind, position)
     end)
     |> result(ast)
   end
@@ -179,10 +179,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_type(ast, state, %{line: line, col: col}, type_name, type_args, kind) do
+  defp pre_type(ast, state, pos = {line, _column}, type_name, type_args, kind) do
     state
     |> add_current_env_to_line(line)
-    |> add_type(type_name, type_args, kind, %{line: line, col: col})
+    |> add_type(type_name, type_args, kind, pos)
     |> result(ast)
   end
 
@@ -349,7 +349,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when kind in [:type, :typep, :opaque] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
-    pre_type(ast, state, %{line: line, col: column}, name, List.wrap(type_args), kind)
+    pre_type(ast, state, {line, column}, name, List.wrap(type_args), kind)
   end
 
   defp pre({:@, [line: line, column: _column] = meta_attr, [{name, meta, params}]}, state) do

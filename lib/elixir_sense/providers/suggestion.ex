@@ -549,7 +549,7 @@ defmodule ElixirSense.Providers.Suggestion do
   end
 
   defp find_metadata_types(actual_mod, hint, metadata_types, include_private) do
-    for {{mod, type, _}, type_info} <- metadata_types,
+    for {{mod, type, arity}, type_info} when is_integer(arity) <- metadata_types,
         mod == actual_mod,
         type |> Atom.to_string() |> String.starts_with?(hint),
         include_private or type_info.kind != :typep,
@@ -565,14 +565,14 @@ defmodule ElixirSense.Providers.Suggestion do
       end
 
     case type_info do
-      %ElixirSense.Core.State.TypeInfo{} ->
-        args = Enum.map_join(type_info.args, ", ", &Atom.to_string/1)
+      %ElixirSense.Core.State.TypeInfo{args: [args]} ->
+        args_stringified = Enum.map_join(args, ", ", &Atom.to_string/1)
 
         %{
           type: :type_spec,
           name: type_info.name |> Atom.to_string(),
-          arity: length(type_info.args),
-          signature: "#{type_info.name}(#{args})",
+          arity: length(args),
+          signature: "#{type_info.name}(#{args_stringified})",
           origin: origin,
           doc: "",
           spec: ""

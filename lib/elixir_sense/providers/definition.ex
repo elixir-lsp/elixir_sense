@@ -96,7 +96,7 @@ defmodule ElixirSense.Providers.Definition do
           nil ->
             {mod, fun} |> find_source(current_module)
 
-          %ElixirSense.Core.State.TypeInfo{position: %{col: col, line: line}} ->
+          %ElixirSense.Core.State.TypeInfo{positions: [{line, col} | _t]} ->
             %Location{
               found: true,
               file: nil,

@@ -64,8 +64,8 @@ defmodule ElixirSense.Core.Metadata do
       nil ->
         TypeInfo.get_type_position_using_docs(module, type, file)
 
-      %ElixirSense.Core.State.TypeInfo{position: %{col: col, line: line}} ->
-        {line, col}
+      %ElixirSense.Core.State.TypeInfo{positions: [h | _t]} ->
+        h
     end
   end
 
@@ -126,30 +126,32 @@ defmodule ElixirSense.Core.Metadata do
     end)
   end
 
-  def get_type_signature(%__MODULE__{} = metadata, module, type, code_docs \\ nil) do
+  def get_type_signatures(%__MODULE__{} = metadata, module, type, code_docs \\ nil) do
     docs = code_docs || NormalizedCode.get_docs(module, :type_docs) || []
 
     case Map.get(metadata.types, {module, type, nil}) do
       nil ->
-        nil
+        []
 
-      %{args: args} ->
-        arity = length(args)
+      %State.TypeInfo{args: args_variants} ->
+        for args <- args_variants do
+          arity = length(args)
 
-        {doc, spec} =
-          Enum.find_value(docs, {"", ""}, fn {{t, a}, _, _, text} ->
-            t == type &&
-              a == arity &&
-              {Introspection.extract_summary_from_docs(text),
-               TypeInfo.get_type_spec_as_string(module, type, arity)}
-          end)
+          {doc, spec} =
+            Enum.find_value(docs, {"", ""}, fn {{t, a}, _, _, text} ->
+              t == type &&
+                a == arity &&
+                {Introspection.extract_summary_from_docs(text),
+                 TypeInfo.get_type_spec_as_string(module, type, arity)}
+            end)
 
-        %{
-          name: Atom.to_string(type),
-          params: args |> Enum.map(&Atom.to_string/1),
-          documentation: doc,
-          spec: spec
-        }
+          %{
+            name: Atom.to_string(type),
+            params: args |> Enum.map(&Atom.to_string/1),
+            documentation: doc,
+            spec: spec
+          }
+        end
     end
   end
 

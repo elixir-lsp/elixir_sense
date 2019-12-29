@@ -3101,7 +3101,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         @type no_arg_no_parens :: integer
         @typep no_args() :: integer
         @opaque with_args(a, b) :: {a, b}
-        IO.puts("")
+        @type overloaded :: {}
+        @type overloaded(a) :: {a}
       end
       IO.puts("")
       """
@@ -3109,40 +3110,58 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert state.types == %{
              {My, :no_arg_no_parens, 0} => %ElixirSense.Core.State.TypeInfo{
-               args: [],
+               args: [[]],
                kind: :type,
                name: :no_arg_no_parens,
-               position: %{col: 3, line: 2}
+               positions: [{2, 3}]
              },
              {My, :no_arg_no_parens, nil} => %ElixirSense.Core.State.TypeInfo{
-               args: [],
+               args: [[]],
                kind: :type,
                name: :no_arg_no_parens,
-               position: %{col: 3, line: 2}
+               positions: [{2, 3}]
              },
              {My, :no_args, 0} => %ElixirSense.Core.State.TypeInfo{
-               args: [],
+               args: [[]],
                kind: :typep,
                name: :no_args,
-               position: %{col: 3, line: 3}
+               positions: [{3, 3}]
              },
              {My, :no_args, nil} => %ElixirSense.Core.State.TypeInfo{
-               args: [],
+               args: [[]],
                kind: :typep,
                name: :no_args,
-               position: %{col: 3, line: 3}
+               positions: [{3, 3}]
              },
              {My, :with_args, 2} => %ElixirSense.Core.State.TypeInfo{
-               args: [:a, :b],
+               args: [[:a, :b]],
                kind: :opaque,
                name: :with_args,
-               position: %{col: 3, line: 4}
+               positions: [{4, 3}]
              },
              {My, :with_args, nil} => %ElixirSense.Core.State.TypeInfo{
-               args: [:a, :b],
+               args: [[:a, :b]],
                kind: :opaque,
                name: :with_args,
-               position: %{col: 3, line: 4}
+               positions: [{4, 3}]
+             },
+             {My, :overloaded, 0} => %ElixirSense.Core.State.TypeInfo{
+               args: [[]],
+               kind: :type,
+               name: :overloaded,
+               positions: [{5, 3}]
+             },
+             {My, :overloaded, 1} => %ElixirSense.Core.State.TypeInfo{
+               args: [[:a]],
+               kind: :type,
+               name: :overloaded,
+               positions: [{6, 3}]
+             },
+             {My, :overloaded, nil} => %ElixirSense.Core.State.TypeInfo{
+               args: [[:a], []],
+               kind: :type,
+               name: :overloaded,
+               positions: [{6, 3}, {5, 3}]
              }
            }
   end
@@ -3158,16 +3177,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert state.types == %{
              {Proto, :t, nil} => %ElixirSense.Core.State.TypeInfo{
-               args: [],
+               args: [[]],
                kind: :type,
                name: :t,
-               position: %{col: 13, line: 1}
+               positions: [{1, 13}]
              },
              {Proto, :t, 0} => %ElixirSense.Core.State.TypeInfo{
-               args: [],
+               args: [[]],
                kind: :type,
                name: :t,
-               position: %{col: 13, line: 1}
+               positions: [{1, 13}]
              }
            }
   end

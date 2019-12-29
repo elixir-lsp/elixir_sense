@@ -123,12 +123,11 @@ defmodule ElixirSense.Core.State do
     """
     @type t :: %TypeInfo{
             name: atom,
-            args: list(atom),
+            args: list(list(atom)),
             kind: :type | :typep | :opaque,
-            # TODO refactor to ElixirSense.Core.State.position_t
-            position: %{line: pos_integer, col: pos_integer}
+            positions: [ElixirSense.Core.State.position_t()]
           }
-    defstruct name: nil, args: [], kind: :type, position: %{line: 1, col: 1}
+    defstruct name: nil, args: [], kind: :type, positions: []
   end
 
   defmodule StructInfo do
@@ -629,14 +628,14 @@ defmodule ElixirSense.Core.State do
     Enum.reduce(modules, state, fn mod, state -> add_require(state, mod) end)
   end
 
-  def add_type(%__MODULE__{} = state, type_name, type_args, kind, %{line: line, col: col}) do
+  def add_type(%__MODULE__{} = state, type_name, type_args, kind, pos) do
     arg_names = for {arg_name, _, _} <- type_args, do: arg_name
 
     type_info = %TypeInfo{
       name: type_name,
-      args: arg_names,
+      args: [arg_names],
       kind: kind,
-      position: %{line: line, col: col}
+      positions: [pos]
     }
 
     current_module_variants = get_current_module_variants(state)
@@ -644,8 +643,17 @@ defmodule ElixirSense.Core.State do
     types =
       current_module_variants
       |> Enum.reduce(state.types, fn current_module, acc ->
+        info =
+          case acc[{current_module, type_name, nil}] do
+            nil ->
+              type_info
+
+            %TypeInfo{positions: positions, args: args} = ti ->
+              %TypeInfo{ti | positions: [pos | positions], args: [arg_names | args]}
+          end
+
         acc
-        |> Map.put({current_module, type_name, nil}, type_info)
+        |> Map.put({current_module, type_name, nil}, info)
         |> Map.put({current_module, type_name, length(arg_names)}, type_info)
       end)
 

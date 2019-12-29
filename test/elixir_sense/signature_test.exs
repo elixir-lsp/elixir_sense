@@ -8,21 +8,18 @@ defmodule ElixirSense.SignatureTest do
     test "find signatures from local type" do
       code = """
       defmodule MyModule do
+        @typep my(a) :: {a, nil}
         @typep my(a, b) :: {a, b}
-        @type a :: my(a,
+        @type a :: my(
       end
       """
 
-      assert ElixirSense.signature(code, 3, 19) == %{
-               active_param: 1,
+      assert ElixirSense.signature(code, 4, 19) == %{
+               active_param: 0,
                pipe_before: false,
                signatures: [
-                 %{
-                   name: "my",
-                   params: ["a", "b"],
-                   documentation: "",
-                   spec: ""
-                 }
+                 %{documentation: "", name: "my", params: ["a", "b"], spec: ""},
+                 %{documentation: "", name: "my", params: ["a"], spec: ""}
                ]
              }
     end
