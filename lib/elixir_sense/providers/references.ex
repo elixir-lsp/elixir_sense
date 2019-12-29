@@ -148,26 +148,25 @@ defmodule ElixirSense.Providers.References do
           |> Metadata.get_calls(line)
           |> fix_calls_positions(code)
 
-        for call <- calls,
+        for %State.CallInfo{arity: call_arity, position: {line, column} = call_position} <- calls,
+            arity == call_arity,
+            check_arity(
+              arity,
+              buffer_arity,
+              metadata.mods_funs_to_positions[{mod, func, nil}]
+            ),
             found_mod_fun =
               find_actual_mod_fun(
                 code,
-                call.line,
-                call.col,
+                call_position,
                 imports,
                 aliases,
                 module,
                 metadata.mods_funs_to_positions,
                 metadata.types
               ),
-            found_mod_fun == {mod, func},
-            arity == call.arity,
-            check_arity(
-              arity,
-              buffer_arity,
-              metadata.mods_funs_to_positions[{mod, func, nil}]
-            ) do
-          Map.merge(xref_call, %{column: call.col, line: call.line})
+            found_mod_fun == {mod, func} do
+          Map.merge(xref_call, %{column: column, line: line})
         end
 
       _ ->
@@ -200,7 +199,7 @@ defmodule ElixirSense.Providers.References do
     false
   end
 
-  defp find_actual_mod_fun(code, line, col, imports, aliases, module, mods_funs, metadata_types) do
+  defp find_actual_mod_fun(code, {line, col}, imports, aliases, module, mods_funs, metadata_types) do
     {mod, fun, _found} =
       code
       |> Source.subject(line, col)
@@ -247,15 +246,15 @@ defmodule ElixirSense.Providers.References do
   defp fix_calls_positions(calls, code) do
     for call <- calls do
       case call do
-        %{mod: nil} ->
+        %State.CallInfo{mod: nil} ->
           call
 
-        %{line: line, col: col} ->
-          text_after = Source.text_after(code, line, col)
+        %State.CallInfo{position: {line, column}} ->
+          text_after = Source.text_after(code, line, column)
           {_rest, line_offset, col_offset} = Source.find_next_word(text_after)
-          col_offset = if line_offset == 0, do: col, else: col_offset
+          col_offset = if line_offset == 0, do: column, else: col_offset
 
-          %{call | line: line + line_offset, col: col_offset}
+          %State.CallInfo{call | position: {line + line_offset, col_offset}}
       end
     end
   end

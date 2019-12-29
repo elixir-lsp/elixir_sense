@@ -99,6 +99,7 @@ defmodule ElixirSense.Providers.Definition do
           %ElixirSense.Core.State.TypeInfo{positions: positions} ->
             # for simplicity take last position here as positions are reversed
             {line, column} = positions |> Enum.at(-1)
+
             %Location{
               found: true,
               file: nil,

@@ -87,7 +87,9 @@ defmodule ElixirSense do
         calls =
           buffer_file_metadata.calls[line]
           |> List.wrap()
-          |> Enum.filter(&(&1.col <= column))
+          |> Enum.filter(fn %State.CallInfo{position: {_call_line, call_column}} ->
+            call_column <= column
+          end)
 
         Definition.find(
           subject,

@@ -563,7 +563,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       # pre Elixir 1.4 local call syntax
       # TODO remove on Elixir 2.0
       state
-      |> add_call_to_line({nil, var_or_call, 0}, line, column)
+      |> add_call_to_line({nil, var_or_call, 0}, {line, column})
       |> add_current_env_to_line(line)
     end
     |> result(ast)
@@ -697,7 +697,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
        when is_call(call, params) do
     state =
       if !String.starts_with?(to_string(call), "__atom_elixir_marker_") do
-        add_call_to_line(state, {nil, call, length(params)}, line, column)
+        add_call_to_line(state, {nil, call, length(params)}, {line, column})
       else
         state
       end
@@ -716,7 +716,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     case concat_module_expression(state, module_expression) do
       {:ok, module} ->
         state
-        |> add_call_to_line({module, call, length(params)}, line, col + 1)
+        |> add_call_to_line({module, call, length(params)}, {line, col + 1})
         |> add_current_env_to_line(line)
 
       :error ->
@@ -733,7 +733,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     module = get_current_module(state)
 
     state
-    |> add_call_to_line({module, call, length(params)}, line, col + 1)
+    |> add_call_to_line({module, call, length(params)}, {line, col + 1})
     |> add_current_env_to_line(line)
     |> result(ast)
   end
@@ -744,7 +744,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when is_atom(module) and is_call(call, params) do
     state
-    |> add_call_to_line({module, call, length(params)}, line, col + 1)
+    |> add_call_to_line({module, call, length(params)}, {line, col + 1})
     |> add_current_env_to_line(line)
     |> result(ast)
   end

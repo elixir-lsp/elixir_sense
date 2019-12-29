@@ -148,15 +148,12 @@ defmodule ElixirSense.Core.State do
     """
     @type t :: %CallInfo{
             arity: non_neg_integer,
-            # TODO refactor to ElixirSense.Core.State.position_t
-            col: pos_integer,
-            line: pos_integer,
+            position: ElixirSense.Core.State.position_t(),
             func: atom,
             mod: module
           }
     defstruct arity: 0,
-              col: 1,
-              line: 1,
+              position: {1, 1},
               func: nil,
               mod: Elixir
   end
@@ -258,8 +255,8 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
   end
 
-  def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, line, col) do
-    call = %CallInfo{mod: mod, func: func, arity: arity, line: line, col: col}
+  def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, position = {line, _column}) do
+    call = %CallInfo{mod: mod, func: func, arity: arity, position: position}
 
     calls =
       Map.update(state.calls, line, [call], fn line_calls ->

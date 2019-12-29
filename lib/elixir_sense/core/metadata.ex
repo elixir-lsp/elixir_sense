@@ -39,14 +39,14 @@ defmodule ElixirSense.Core.Metadata do
   def get_calls(%__MODULE__{} = metadata, line) do
     case Map.get(metadata.calls, line) do
       nil -> []
-      calls -> Enum.sort_by(calls, fn %{col: col} -> col end)
+      calls -> Enum.sort_by(calls, fn %State.CallInfo{position: {_line, column}} -> column end)
     end
   end
 
   def get_call_arity(%__MODULE__{} = metadata, line, col) do
     calls = get_calls(metadata, line)
 
-    case Enum.find(calls, fn c -> c.col == col end) do
+    case Enum.find(calls, fn %State.CallInfo{position: {_line, column}} -> column == col end) do
       %{arity: arity} -> arity
       _ -> nil
     end
