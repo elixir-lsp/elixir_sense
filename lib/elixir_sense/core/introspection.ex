@@ -359,7 +359,7 @@ defmodule ElixirSense.Core.Introspection do
     {callbacks, docs || []}
   end
 
-  defp drop_macro_env({name, meta, [{:"::", _, [{:env, _, _}, _ | _]} | args]}),
+  defp drop_macro_env({name, meta, [{:"::", _, [_, {{:., _, [Macro.Env, :t]}, _, _}]} | args]}),
     do: {name, meta, args}
 
   defp drop_macro_env(other), do: other
