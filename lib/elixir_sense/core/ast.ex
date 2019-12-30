@@ -82,7 +82,7 @@ defmodule ElixirSense.Core.Ast do
     directive_string =
       modules
       |> Enum.filter(&Code.ensure_compiled?/1)
-      |> Enum.map(&"#{directive} #{Introspection.module_to_string(&1)}")
+      |> Enum.map(&"#{directive} #{inspect(&1)}")
       |> Enum.join("; ")
 
     {new_env, _} = Code.eval_string("#{directive_string}; __ENV__", [], env)

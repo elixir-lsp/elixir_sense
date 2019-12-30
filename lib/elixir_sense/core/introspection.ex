@@ -105,7 +105,7 @@ defmodule ElixirSense.Core.Introspection do
             |> Enum.map_join(", ", &format_doc_arg(&1))
             |> String.replace("\\\\", "\\\\\\\\")
 
-          mod_str = module_to_string(mod)
+          mod_str = inspect(mod)
           fun_str = Atom.to_string(fun)
           "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity)}#{text}"
         end
@@ -113,7 +113,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_docs_md(mod) when is_atom(mod) do
-    mod_str = module_to_string(mod)
+    mod_str = inspect(mod)
 
     case NormalizedCode.get_docs(mod, :moduledoc) do
       {_line, doc} when is_binary(doc) ->
@@ -534,13 +534,6 @@ defmodule ElixirSense.Core.Introspection do
 
       spec ->
         "### Specs\n\n`#{spec}`\n\n"
-    end
-  end
-
-  def module_to_string(module) do
-    case module |> Atom.to_string() do
-      "Elixir." <> name -> name
-      name -> ":#{name}"
     end
   end
 

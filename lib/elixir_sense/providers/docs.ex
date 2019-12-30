@@ -29,10 +29,10 @@ defmodule ElixirSense.Providers.Docs do
   end
 
   defp mod_fun_to_string({mod, nil}) do
-    Introspection.module_to_string(mod)
+    inspect(mod)
   end
 
   defp mod_fun_to_string({mod, fun}) do
-    Introspection.module_to_string(mod) <> "." <> Atom.to_string(fun)
+    inspect(mod) <> "." <> Atom.to_string(fun)
   end
 end

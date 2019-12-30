@@ -298,7 +298,7 @@ defmodule ElixirSense.Providers.Suggestion do
           %{
             type: :field,
             name: Atom.to_string(field),
-            origin: Introspection.module_to_string(actual_mod)
+            origin: inspect(actual_mod)
           }
         end)
 
@@ -414,7 +414,7 @@ defmodule ElixirSense.Providers.Suggestion do
     behaviours
     |> Enum.flat_map(fn
       mod when is_atom(mod) ->
-        mod_name = mod |> Introspection.module_to_string()
+        mod_name = inspect(mod)
 
         for %{name: name, arity: arity, callback: spec, signature: signature, doc: doc} <-
               Introspection.get_callbacks_with_docs(mod),
@@ -452,7 +452,7 @@ defmodule ElixirSense.Providers.Suggestion do
         name: Atom.to_string(name),
         arity: arity,
         args: args,
-        origin: Introspection.module_to_string(protocol),
+        origin: inspect(protocol),
         summary: docs,
         spec: spec
       }
@@ -557,12 +557,7 @@ defmodule ElixirSense.Providers.Suggestion do
   end
 
   defp type_info_to_suggestion(type_info, module) do
-    origin =
-      if module do
-        Introspection.module_to_string(module)
-      else
-        ""
-      end
+    origin = if module, do: inspect(module), else: ""
 
     case type_info do
       %ElixirSense.Core.State.TypeInfo{args: [args]} ->

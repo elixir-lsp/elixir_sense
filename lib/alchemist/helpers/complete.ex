@@ -553,9 +553,7 @@ defmodule Alchemist.Helpers.Complete do
           _ -> :function
         end
 
-      mod_name =
-        mod
-        |> Introspection.module_to_string()
+      mod_name = inspect(mod)
 
       unless {name |> String.to_atom(), a} in @builtin_functions do
         %{

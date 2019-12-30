@@ -44,7 +44,7 @@ defmodule ElixirSense.Providers.Eval do
         %{__struct__: type, description: description, line: line} = e
 
         {:error,
-         "# #{Introspection.module_to_string(type)} on line #{line}:\n#  ↳ #{description}"}
+         "# #{inspect(type)} on line #{line}:\n#  ↳ #{description}"}
     end
   end
 
