@@ -1,6 +1,6 @@
 defmodule ElixirSenseExample.ModuleWithManyClauses do
   def sum(s \\ nil, f)
-  def sum(a, nil), do: nil
+  def sum(a, nil), do: a
 
   def sum(a, b) do
     a + b
