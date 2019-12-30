@@ -1385,13 +1385,13 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.expanded_spec == spec
     end
 
-    test "opaque type" do
+    test "opaque type internal structure is not revealed" do
       buffer = "Local.func_with_options("
       suggestion = suggestion_by_name(:opaque_o, buffer)
 
       assert suggestion.type_spec == "opaque_t()"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
-      assert suggestion.expanded_spec == "@opaque opaque_t() :: atom()"
+      assert suggestion.expanded_spec == "@opaque opaque_t()"
       assert suggestion.doc == "Local opaque type"
     end
 

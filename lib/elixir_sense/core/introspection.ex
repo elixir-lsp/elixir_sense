@@ -237,6 +237,11 @@ defmodule ElixirSense.Core.Introspection do
     |> Enum.at(0)
   end
 
+  defp format_type({:opaque, type}) do
+    {:"::", _, [ast, _]} = Typespec.type_to_quoted(type)
+    "@opaque #{format_spec_ast(ast)}"
+  end
+
   defp format_type({kind, type}) do
     ast = Typespec.type_to_quoted(type)
     "@#{kind} #{format_spec_ast(ast)}"
@@ -267,16 +272,21 @@ defmodule ElixirSense.Core.Introspection do
           |> String.replace_prefix(":fake_lhs", "")
       end
 
-    returns_str =
-      parts.returns
-      |> Enum.map(&Macro.to_string(&1))
-      |> Enum.join(" |\n  ")
+    returns_str = if parts.returns != nil do
+        returns_str =
+        parts.returns
+        |> Enum.map(&Macro.to_string(&1))
+        |> Enum.join(" |\n  ")
 
-    formated_spec =
-      case length(parts.returns) do
-        1 -> "#{name_str} :: #{returns_str}#{when_str}\n"
-        _ -> "#{name_str} ::\n  #{returns_str}#{when_str}\n"
-      end
+        case length(parts.returns) do
+          1 -> " :: #{returns_str}#{when_str}"
+          _ -> " ::\n  #{returns_str}#{when_str}"
+        end
+      else
+        ""
+    end
+
+    formated_spec = name_str <> returns_str <> "\n"
 
     formated_spec |> String.replace("()", "")
   end
@@ -317,6 +327,10 @@ defmodule ElixirSense.Core.Introspection do
 
   defp extract_spec_ast_parts({:"::", _, [name_part, return_part]}) do
     %{name: name_part, returns: extract_return_part(return_part, [])}
+  end
+
+  defp extract_spec_ast_parts({name, meta, args} = name_part) do
+    %{name: name_part, returns: nil}
   end
 
   defp extract_return_part({:|, _, [lhs, rhs]}, returns) do

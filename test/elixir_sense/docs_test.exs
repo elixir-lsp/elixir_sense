@@ -247,6 +247,23 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    test "does not reveal opaque types" do
+      buffer = """
+      defmodule MyModule do
+        @behaviour ElixirSenseExample.CallbackOpaque
+      end
+      """
+
+      %{subject: subject, docs: %{types: docs}} = ElixirSense.docs(buffer, 2, 40)
+
+      assert subject == "ElixirSenseExample.CallbackOpaque"
+
+      assert docs =~ """
+             `@opaque t(x)
+             `
+             """
+    end
+
     test "retrieve callback information from modules" do
       buffer = """
       defmodule MyModule do
@@ -314,6 +331,34 @@ defmodule ElixirSense.DocsTest do
 
              ```
              @type remote_t(a, b) :: {a, b}
+             ```\
+             """
+    end
+
+    test "does not reveal opaque type details" do
+      buffer = """
+      defmodule MyModule do
+        alias ElixirSenseExample.CallbackOpaque
+        @type my_list :: CallbackOpaque.t(integer)
+        #                               ^
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 35)
+
+      assert subject == "CallbackOpaque.t"
+      assert actual_subject == "ElixirSenseExample.CallbackOpaque.t"
+
+      assert docs == """
+             Opaque type
+
+
+             ```
+             @opaque t(x)
              ```\
              """
     end

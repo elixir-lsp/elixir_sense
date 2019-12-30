@@ -177,6 +177,11 @@ defmodule ElixirSense.Core.TypeInfo do
     format_type_spec(spec, [])
   end
 
+  def format_type_spec({:opaque, type}, opts) do
+    {:"::", _, [ast, _]} = Typespec.type_to_quoted(type)
+    ast
+    |> format_type_spec_ast(:opaque, opts)
+  end
   def format_type_spec({kind, type_spec}, opts) do
     type_spec
     |> Typespec.type_to_quoted()

@@ -23,6 +23,14 @@ defmodule ElixirSense.Core.IntrospectionTest do
            """
   end
 
+  test "format_spec_ast for callback with opaque" do
+    ast = get_callback_ast(ElixirSenseExample.CallbackOpaque, :do_stuff, 2)
+
+    assert format_spec_ast(ast) == """
+           do_stuff(t(a), term) :: t(a) when a: any
+           """
+  end
+
   test "format_spec_ast for callback" do
     ast = get_callback_ast(GenServer, :code_change, 3)
 
@@ -31,6 +39,20 @@ defmodule ElixirSense.Core.IntrospectionTest do
              {:ok, new_state :: term} |
              {:error, reason :: term} when old_vsn: term | {:down, term}
            """
+  end
+
+  test "get_callbacks_with_docs for with opaque" do
+    assert get_callbacks_with_docs(ElixirSenseExample.CallbackOpaque) == [
+             %{
+               name: :do_stuff,
+               arity: 2,
+               callback: """
+               @callback do_stuff(t(a), term) :: t(a) when a: any
+               """,
+               signature: "do_stuff(t, term)",
+               doc: "Does stuff to opaque arg\n"
+             }
+           ]
   end
 
   test "get_callbacks_with_docs for erlang behaviours" do
