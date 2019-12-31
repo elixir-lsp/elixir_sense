@@ -1863,21 +1863,11 @@ defmodule ElixirSense.SuggestionsTest do
     end
   end
 
-  defmodule ElixirSenseExample.SameModule do
-    def test_fun(), do: :ok
-
-    defmacro some_test_macro() do
-      quote do
-        @attr "val"
-      end
-    end
-  end
-
   test "suggestion understands alias shadowing" do
     # ordinary alias
     buffer = """
     defmodule ElixirSenseExample.OtherModule do
-      alias ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule
+      alias ElixirSenseExample.SameModule
       def some_fun() do
         SameModule.te
       end
@@ -1886,14 +1876,14 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert [
              %{type: :hint, value: "SameModule.test_fun"},
-             %{origin: "ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule"}
+             %{origin: "ElixirSenseExample.SameModule"}
            ] = ElixirSense.suggestions(buffer, 4, 17)
 
     # alias shadowing scope/inherited aliases
     buffer = """
-    defmodule ElixirSenseExample.SameModule do
+    defmodule ElixirSenseExample.Abc.SameModule do
       alias List, as: SameModule
-      alias ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule
+      alias ElixirSenseExample.SameModule
       def some_fun() do
         SameModule.te
       end
@@ -1902,20 +1892,20 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert [
              %{type: :hint, value: "SameModule.test_fun"},
-             %{origin: "ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule"}
+             %{origin: "ElixirSenseExample.SameModule"}
            ] = ElixirSense.suggestions(buffer, 5, 17)
 
     buffer = """
-    defmodule ElixirSenseExample.SameModule do
+    defmodule ElixirSenseExample.Abc.SameModule do
       require Logger, as: ModuleB
-      require ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule, as: SameModule
+      require ElixirSenseExample.SameModule, as: SameModule
       SameModule.so
     end
     """
 
     assert [
              %{type: :hint, value: "SameModule.some_test_macro"},
-             %{origin: "ElixirSense.SuggestionsTest.ElixirSenseExample.SameModule"}
+             %{origin: "ElixirSenseExample.SameModule"}
            ] = ElixirSense.suggestions(buffer, 4, 15)
   end
 
