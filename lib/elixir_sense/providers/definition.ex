@@ -10,12 +10,12 @@ defmodule ElixirSense.Providers.Definition do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.State.VarInfo
+  alias ElixirSense.Core.State.{VarInfo, ModFunInfo, TypeInfo}
 
   defmodule Location do
     @type t :: %Location{
             found: boolean,
-            type: :module | :function | :variable | :typespec | nil,
+            type: :module | :function | :variable | :typespec | :macro | nil,
             file: String.t() | nil,
             line: pos_integer | nil,
             column: pos_integer | nil
@@ -96,7 +96,7 @@ defmodule ElixirSense.Providers.Definition do
           nil ->
             {mod, fun} |> find_source(current_module)
 
-          %ElixirSense.Core.State.TypeInfo{positions: positions} ->
+          %TypeInfo{positions: positions} ->
             # for simplicity take last position here as positions are reversed
             {line, column} = positions |> Enum.at(-1)
 
@@ -108,14 +108,14 @@ defmodule ElixirSense.Providers.Definition do
               column: column
             }
 
-          %ElixirSense.Core.State.ModFunInfo{positions: positions} ->
+          %ModFunInfo{positions: positions} = mi ->
             # for simplicity take last position here as positions are reversed
             {line, column} = positions |> Enum.at(-1)
 
             %Location{
               found: true,
               file: nil,
-              type: fun_to_type(function),
+              type: ModFunInfo.get_category(mi),
               line: line,
               column: column
             }
@@ -172,18 +172,28 @@ defmodule ElixirSense.Providers.Definition do
   end
 
   defp find_fun_position({mod, file}, fun) do
-    type = fun_to_type(fun)
-
-    position =
+    {position, category} =
       if String.ends_with?(file, ".erl") do
-        find_fun_position_in_erl_file(file, fun)
+        # no macros in erlang modules, assume :function when fun != nil
+        category = fun_to_type(fun)
+        {find_fun_position_in_erl_file(file, fun), category}
       else
-        file_metadata = Parser.parse_file(file, false, false, nil)
-        Metadata.get_function_position(file_metadata, mod, fun)
+        %Metadata{mods_funs_to_positions: mods_funs_to_positions} = file_metadata = Parser.parse_file(file, false, false, nil)
+
+        category = case mods_funs_to_positions[{mod, fun, nil}] do
+          %ModFunInfo{} = mi ->
+            ModFunInfo.get_category(mi)
+          nil ->
+            # not found, fall back to :function when fun != nil
+            # TODO use docs?
+            fun_to_type(fun)
+        end
+
+        {Metadata.get_function_position(file_metadata, mod, fun), category}
       end
 
     case position do
-      {line, column} -> %Location{found: true, type: type, file: file, line: line, column: column}
+      {line, column} -> %Location{found: true, type: category, file: file, line: line, column: column}
       _ -> nil
     end
   end

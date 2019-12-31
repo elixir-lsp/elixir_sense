@@ -88,6 +88,22 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "function_arity_one"
   end
 
+  test "find definition of macros from required modules" do
+    buffer = """
+    defmodule MyModule do
+      require ElixirSenseExample.BehaviourWithMacrocallback.Impl, as: Macros
+        Macros.some(
+      #          ^
+    end
+    """
+
+    %{found: true, type: :macro, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 3, 13)
+
+    assert file =~ "elixir_sense/test/support/behaviour_with_macrocallbacks.ex"
+    assert read_line(file, {line, column}) =~ "some"
+  end
+
   test "find definition of functions piped from aliased modules" do
     buffer = """
     defmodule MyModule do
@@ -450,6 +466,26 @@ defmodule ElixirSense.Providers.DefinitionTest do
              file: nil,
              line: 2,
              column: 7
+           }
+  end
+
+  test "find definition of local macro" do
+    buffer = """
+    defmodule MyModule do
+      defmacrop some(var), do: Macro.expand(var, __CALLER__)
+
+      defmacro other do
+        some(1)
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 5, 6) == %Location{
+             found: true,
+             type: :macro,
+             file: nil,
+             line: 2,
+             column: 13
            }
   end
 
