@@ -8,7 +8,7 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
 
     @typedoc "Remote list type"
     @type remote_list_t :: [remote_t]
-
+    @opaque some_opaque_options_t :: {:atom_opt_1, integer} | {:atom_opt_2, integer}
     @type remote_option_t :: {:remote_option_1, remote_t} | {:remote_option_2, remote_list_t}
   end
 
@@ -78,6 +78,8 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     @type extra_option_1_t :: extra_option_t
 
     @type atom_opt_t :: :atom_opt
+
+    @opaque some_opaque_options_t :: {:atom_opt_1, integer} | {:atom_opt_2, integer}
 
     @spec func_with_options(options_t) :: any
     def func_with_options(options) do
@@ -165,5 +167,11 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     @spec fun_with_multiple_specs_when(nil) :: any
     @spec fun_with_multiple_specs_when([opts]) :: any when opts: tuple_opt_t
     def fun_with_multiple_specs_when(a), do: a
+
+    @spec fun_with_local_opaque([some_opaque_options_t]) :: any
+    def fun_with_local_opaque(a), do: a
+
+    @spec fun_with_remote_opaque([Remote.some_opaque_options_t]) :: any
+    def fun_with_remote_opaque(a), do: a
   end
 end

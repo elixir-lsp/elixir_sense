@@ -360,4 +360,14 @@ defmodule ElixirSense.Core.TypeInfoTest do
     assert [{Local, :opt_name, {:atom, _, :opt_value}}] =
              TypeInfo.extract_param_options(Local, :fun_with_multiple_specs_when, 0)
   end
+
+  test "fun_with_local_opaque" do
+    assert [] =
+             TypeInfo.extract_param_options(Local, :fun_with_local_opaque, 0)
+  end
+
+  test "fun_with_remote_opaque" do
+    assert [] =
+             TypeInfo.extract_param_options(Local, :fun_with_remote_opaque, 0)
+  end
 end

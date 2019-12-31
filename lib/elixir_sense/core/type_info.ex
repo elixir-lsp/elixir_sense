@@ -374,9 +374,17 @@ defmodule ElixirSense.Core.TypeInfo do
     expand_type_spec(type, module)
   end
 
-  defp expand_type_spec({:user_type, _, type_name, type_args}, module) do
-    type = get_type_spec(module, type_name, length(type_args))
-    {module, type}
+  defp expand_type_spec({:user_type, _, type_name, type_args} = type, module) do
+    case get_type_spec(module, type_name, length(type_args)) do
+      nil ->
+        {:not_found, type}
+
+      {:opaque, {name, _type, args}} ->
+        {module, {:opaque, {name, nil, args}}}
+
+      type_found ->
+        {module, type_found}
+    end
   end
 
   defp expand_type_spec({:type, _, :list, [_ | _]} = type, module) do
@@ -394,6 +402,9 @@ defmodule ElixirSense.Core.TypeInfo do
     case get_type_spec(remote_mod, type_name, length(type_args)) do
       nil ->
         {:not_found, type}
+
+      {:opaque, {name, _type, args}} ->
+        {remote_mod, {:opaque, {name, nil, args}}}
 
       type_found ->
         {remote_mod, type_found}
