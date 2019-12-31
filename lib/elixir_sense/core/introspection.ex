@@ -350,6 +350,12 @@ defmodule ElixirSense.Core.Introspection do
       |> Typespec.spec_to_quoted(spec)
       |> Macro.prewalk(&drop_macro_env/1)
 
+    spec_ast = if kind == :macrocallback do
+      spec_ast |> remove_first_macro_arg(name)
+    else
+      spec_ast
+    end
+
     signature = get_typespec_signature(spec_ast, arity)
     definition = format_spec_ast(spec_ast)
 

@@ -314,6 +314,29 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    test "retrieve macrocallback information from modules" do
+      buffer = """
+      defmodule MyModule do
+        @behaviour ElixirSenseExample.BehaviourWithMacrocallback
+      end
+      """
+
+      %{subject: subject, docs: %{callbacks: docs}} = ElixirSense.docs(buffer, 2, 40)
+
+      assert subject == "ElixirSenseExample.BehaviourWithMacrocallback"
+
+      assert docs =~ """
+             > optional(atom)
+
+             ### Specs
+
+             `@macrocallback optional(atom) :: Macro.t
+             `
+
+             An optional macrocallback\
+             """
+    end
+
     test "no docs" do
       buffer = """
       defmodule MyModule do

@@ -217,20 +217,20 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert [
              %{
-               args: "term,atom",
+               args: "atom",
                arity: 1,
                name: "optional",
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
-               spec: "@macrocallback optional(term, atom) :: Macro.t\n",
+               spec: "@macrocallback optional(atom) :: Macro.t\n",
                summary: "An optional macrocallback\n",
                type: :callback
              },
              %{
-               args: "term,atom",
+               args: "atom",
                arity: 1,
                name: "required",
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
-               spec: "@macrocallback required(term, atom) :: Macro.t\n",
+               spec: "@macrocallback required(atom) :: Macro.t\n",
                summary: "A required macrocallback\n",
                type: :callback
              }
