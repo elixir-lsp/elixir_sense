@@ -117,6 +117,23 @@ defmodule ElixirSense.SignatureTest do
     end
   end
 
+  describe "macro signature" do
+    test "find signatures from aliased modules" do
+      code = """
+      defmodule MyModule do
+        require ElixirSenseExample.BehaviourWithMacrocallback.Impl, as: Macros
+        Macros.some(
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 15) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [%{documentation: "some macro\n", name: "some", params: ["var"], spec: "@spec some(integer) :: Macro.t"}]
+             }
+    end
+  end
+
   describe "function signature" do
     test "find signatures from erlang module" do
       code = """

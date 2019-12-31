@@ -15,4 +15,10 @@ defmodule ElixirSenseExample.BehaviourWithMacrocallback.Impl do
   @behaviour ElixirSenseExample.BehaviourWithMacrocallback
   defmacro required(var), do: Macro.expand(var, __CALLER__)
   defmacro optional(var), do: Macro.expand(var, __CALLER__)
+
+  @doc """
+  some macro
+  """
+  @spec some(integer) :: Macro.t()
+  defmacro some(var), do: Macro.expand(var, __CALLER__)
 end

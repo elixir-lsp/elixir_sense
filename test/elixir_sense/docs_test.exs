@@ -82,6 +82,33 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    test "retrieve macro documentation" do
+      buffer = """
+      defmodule MyModule do
+        require ElixirSenseExample.BehaviourWithMacrocallback.Impl, as: Macros
+        Macros.some({})
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 12)
+
+      assert subject == "Macros.some"
+      assert actual_subject == "ElixirSenseExample.BehaviourWithMacrocallback.Impl.some"
+      
+      assert docs =~ """
+             > ElixirSenseExample.BehaviourWithMacrocallback.Impl.some(var)
+
+             ### Specs
+
+             `@spec some(integer) :: Macro.t`
+
+             some macro
+             """
+    end
     test "retrieve function documentation atom module" do
       buffer = """
       defmodule MyModule do

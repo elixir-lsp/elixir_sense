@@ -110,11 +110,11 @@ defmodule ElixirSense.Core.Metadata do
       arity = length(params)
 
       {doc, spec} =
-        Enum.find_value(docs, {"", ""}, fn {{f, a}, _, _, _, text} ->
+        Enum.find_value(docs, {"", ""}, fn {{f, a}, _, kind, _, text} ->
           f == function &&
             a == arity &&
             {Introspection.extract_summary_from_docs(text),
-             Introspection.get_spec_as_string(module, function, arity)}
+             Introspection.get_spec_as_string(module, function, arity, kind)}
         end)
 
       %{

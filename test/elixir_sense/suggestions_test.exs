@@ -121,6 +121,30 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  test "with a require" do
+    buffer = """
+    defmodule MyModule do
+      require ElixirSenseExample.BehaviourWithMacrocallback.Impl, as: Macros
+      Macros.so
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 3, 12)
+
+    assert list == [
+             %{type: :hint, value: "Macros.some"},
+             %{
+               args: "var",
+               arity: 1,
+               name: "some",
+               origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
+               spec: "@spec some(integer) :: Macro.t",
+               summary: "some macro\n",
+               type: :macro
+             }
+           ]
+  end
+
   test "with a module hint" do
     buffer = """
     defmodule MyModule do

@@ -67,11 +67,11 @@ defmodule ElixirSense.Core.Introspection do
   def get_signatures(mod, fun, code_docs \\ nil) do
     case code_docs || NormalizedCode.get_docs(mod, :docs) do
       docs when is_list(docs) ->
-        for {{f, arity}, _, _, args, text} <- docs, f == fun do
+        for {{f, arity}, _, kind, args, text} <- docs, f == fun do
           fun_args = Enum.map(args, &format_doc_arg(&1))
           fun_str = Atom.to_string(fun)
           doc = extract_summary_from_docs(text)
-          spec = get_spec_as_string(mod, fun, arity)
+          spec = get_spec_as_string(mod, fun, arity, kind)
           %{name: fun_str, params: fun_args, documentation: doc, spec: spec}
         end
 
@@ -97,7 +97,7 @@ defmodule ElixirSense.Core.Introspection do
         []
 
       docs ->
-        for {{f, arity}, _, _, args, text} <- docs, f == fun do
+        for {{f, arity}, _, kind, args, text} <- docs, f == fun do
           args = args || []
 
           fun_args_text =
@@ -107,7 +107,7 @@ defmodule ElixirSense.Core.Introspection do
 
           mod_str = inspect(mod)
           fun_str = Atom.to_string(fun)
-          "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity)}#{text}"
+          "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity, kind)}#{text}"
         end
     end
   end
@@ -329,7 +329,7 @@ defmodule ElixirSense.Core.Introspection do
     %{name: name_part, returns: extract_return_part(return_part, [])}
   end
 
-  defp extract_spec_ast_parts({name, meta, args} = name_part) do
+  defp extract_spec_ast_parts({_name, _meta, _args} = name_part) do
     %{name: name_part, returns: nil}
   end
 
@@ -537,12 +537,16 @@ defmodule ElixirSense.Core.Introspection do
     {"", ""}
   end
 
-  def get_spec_as_string(module, function, arity) do
+  def get_spec_as_string(module, function, arity, :defmacro) do
+    TypeInfo.get_spec(module, :"MACRO-#{function}", arity + 1) |> spec_to_string()
+  end
+
+  def get_spec_as_string(module, function, arity, :def) do
     TypeInfo.get_spec(module, function, arity) |> spec_to_string()
   end
 
-  def get_spec_text(mod, fun, arity) do
-    case get_spec_as_string(mod, fun, arity) do
+  def get_spec_text(mod, fun, arity, kind) do
+    case get_spec_as_string(mod, fun, arity, kind) do
       "" ->
         ""
 
@@ -579,14 +583,29 @@ defmodule ElixirSense.Core.Introspection do
     Atom.to_string(var)
   end
 
+  defp remove_first_macro_arg({:"::", info, [{_name, info2, [_term_arg | rest_args]}, return]}, name) do
+    {:"::", info, [{name, info2, rest_args}, return]}
+  end
+
   def spec_to_string(nil) do
     ""
   end
 
   def spec_to_string({kind, {{name, _arity}, specs}}) do
+    {stripped_name, is_macro} = case Atom.to_string(name) do
+      "MACRO-" <> rest -> {String.to_atom(rest), true}
+      _other -> {name, false}
+    end
+
     specs
     |> Enum.map_join("\n", fn spec ->
-      binary = Macro.to_string(Typespec.spec_to_quoted(name, spec))
+      quoted = Typespec.spec_to_quoted(name, spec)
+      quoted = if is_macro do
+        quoted |> remove_first_macro_arg(stripped_name)
+      else
+        quoted
+      end
+      binary = Macro.to_string(quoted)
       "@#{kind} #{binary}" |> String.replace("()", "")
     end)
   end

@@ -433,7 +433,13 @@ defmodule Alchemist.Helpers.Complete do
               end
 
             {func_kind, func_doc} = find_doc({f, new_arity}, docs)
-            spec = Map.get(specs, {f, new_arity})
+
+            spec = case func_kind do
+              :defmacro -> Map.get(specs, {:"MACRO-#{f}", new_arity + 1})
+              :def -> Map.get(specs, {f, new_arity})
+              nil -> nil
+            end
+
             {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
           end
         else
