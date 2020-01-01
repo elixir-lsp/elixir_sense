@@ -240,7 +240,8 @@ defmodule Alchemist.Helpers.Complete do
 
   defp match_erlang_modules(hint, env) do
     for mod <- match_modules(hint, true, env), usable_as_unquoted_module?(mod) do
-      %{kind: :module, name: mod, type: :erlang, desc: ""}
+      subtype = Introspection.get_module_subtype(String.to_atom(mod))
+      %{kind: :module, name: mod, type: :erlang, desc: "", subtype: subtype}
     end
   end
 
@@ -272,7 +273,7 @@ defmodule Alchemist.Helpers.Complete do
     for {alias, _mod} <- env.aliases,
         [name] = Module.split(alias),
         starts_with?(name, hint) do
-      %{kind: :module, type: :alias, name: name, desc: ""}
+      %{kind: :module, type: :alias, name: name, desc: "", subtype: nil}
     end
   end
 
@@ -530,13 +531,8 @@ defmodule Alchemist.Helpers.Complete do
 
   ## Ad-hoc conversions
 
-  defp to_entries(%{kind: :module, name: name, desc: desc, subtype: subtype})
-       when subtype != nil do
+  defp to_entries(%{kind: :module, name: name, desc: desc, subtype: subtype}) do
     [%{type: :module, name: name, subtype: subtype, summary: desc}]
-  end
-
-  defp to_entries(%{kind: :module, name: name, desc: desc}) do
-    [%{type: :module, name: name, subtype: nil, summary: desc}]
   end
 
   defp to_entries(%{

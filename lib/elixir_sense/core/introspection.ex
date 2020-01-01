@@ -54,7 +54,6 @@ defmodule ElixirSense.Core.Introspection do
       with(
         [] <- get_func_docs_md(mod, fun),
         [] <- get_type_docs_md(mod, fun, scope)
-        # TODO callback
       ) do
         "No documentation available"
       else
@@ -504,6 +503,26 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
+  @doc ~S"""
+  Returns module subtype if known
+
+  ## Examples
+
+      iex> ElixirSense.Core.Introspection.get_module_subtype(ArgumentError)
+      :exception
+      iex> ElixirSense.Core.Introspection.get_module_subtype(Enumerable)
+      :protocol
+      iex> ElixirSense.Core.Introspection.get_module_subtype(Enumerable.List)
+      :implementation
+      iex> ElixirSense.Core.Introspection.get_module_subtype(Access)
+      :behaviour
+      iex> ElixirSense.Core.Introspection.get_module_subtype(URI)
+      :struct
+      iex> ElixirSense.Core.Introspection.get_module_subtype(Mix.Tasks.Run)
+      :task
+      iex> ElixirSense.Core.Introspection.get_module_subtype(NotExistingModule)
+      nil
+  """
   def get_module_subtype(module) do
     has_func = fn f, a -> module_has_function(module, f, a) end
 
@@ -521,18 +540,18 @@ defmodule ElixirSense.Core.Introspection do
           :struct
         end
 
-      # TODO
-      # function_exported?(module, :behaviour_info, 1) -> :behaviour
+      has_func.(:behaviour_info, 1) ->
+        :behaviour
 
-      # match?("Elixir.Mix.Tasks." <> _, Atom.to_string(module)) ->
-      #   :task
+      match?("Elixir.Mix.Tasks." <> _, Atom.to_string(module)) ->
+        :task
 
       true ->
         nil
     end
   end
 
-  # TODO does not work for macro
+  # NOTE does not work for macro
   def module_has_function(module, func, arity) do
     Code.ensure_loaded?(module) && Kernel.function_exported?(module, func, arity)
   end

@@ -184,8 +184,6 @@ defmodule ElixirSense.Core.TypeInfo do
     |> format_type_spec_ast(:opaque, opts)
   end
 
-  # TODO similar fun in introspection
-
   def format_type_spec({kind, type_spec}, opts) do
     type_spec
     |> Typespec.type_to_quoted()
