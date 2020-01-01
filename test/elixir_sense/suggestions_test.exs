@@ -363,6 +363,24 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  test "lists macro return values" do
+    buffer = """
+    defmodule MyServer do
+      @behaviour ElixirSenseExample.BehaviourWithMacrocallback
+
+      defmacro required(arg) do
+
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 5, 5)
+      |> Enum.filter(fn s -> s.type == :return end)
+
+    assert list == [%{description: "Macro.t", snippet: "\"${1:Macro.t}$\"", spec: "Macro.t", type: :return}]
+  end
+
   test "lists params and vars" do
     buffer = """
     defmodule MyServer do

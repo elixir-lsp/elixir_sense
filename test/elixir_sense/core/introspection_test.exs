@@ -31,6 +31,15 @@ defmodule ElixirSense.Core.IntrospectionTest do
            """
   end
 
+  test "format_spec_ast for macrocallback" do
+    ast = get_callback_ast(ElixirSenseExample.BehaviourWithMacrocallback, :required, 1)
+    |> remove_first_macro_arg()
+
+    assert format_spec_ast(ast) == """
+           required(atom) :: Macro.t
+           """
+  end
+
   test "format_spec_ast for callback" do
     ast = get_callback_ast(GenServer, :code_change, 3)
 
@@ -125,6 +134,12 @@ defmodule ElixirSense.Core.IntrospectionTest do
              }
              | _
            ] = returns
+  end
+
+  test "get_returns_from_macrocallback" do
+    returns = get_returns_from_callback(ElixirSenseExample.BehaviourWithMacrocallback, :required, 1)
+
+    assert [%{description: "Macro.t", snippet: "\"${1:Macro.t}$\"", spec: "Macro.t"}] = returns
   end
 
   test "get_returns_from_callback (all types in 'when')" do

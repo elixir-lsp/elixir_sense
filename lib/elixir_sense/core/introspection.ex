@@ -209,13 +209,8 @@ defmodule ElixirSense.Core.Introspection do
 
       {callbacks, docs} ->
         Enum.map(docs, fn
-          {{fun, arity}, _, :macrocallback, doc} ->
-            fun
-            |> get_callback_with_doc(:macrocallback, doc, {:"MACRO-#{fun}", arity + 1}, callbacks)
-            |> Map.put(:arity, arity)
-
           {{fun, arity}, _, kind, doc} ->
-            get_callback_with_doc(fun, kind, doc, {fun, arity}, callbacks)
+            get_callback_with_doc(kind, doc, {fun, arity}, callbacks)
         end)
     end
     |> Enum.sort_by(&{&1.name, &1.arity})
@@ -245,12 +240,6 @@ defmodule ElixirSense.Core.Introspection do
   defp format_type({kind, type}) do
     ast = Typespec.type_to_quoted(type)
     "@#{kind} #{format_spec_ast(ast)}"
-  end
-
-  def format_spec_ast_single_line(spec_ast) do
-    spec_ast
-    |> Macro.prewalk(&drop_macro_env/1)
-    |> TypeInfo.spec_ast_to_string()
   end
 
   def format_spec_ast(spec_ast) do
@@ -294,7 +283,7 @@ defmodule ElixirSense.Core.Introspection do
   def define_callback?(mod, fun, arity) do
     mod
     |> Typespec.get_callbacks()
-    |> Enum.any?(fn {{f, a}, _} -> {f, a} == {fun, arity} end)
+    |> Enum.any?(fn {{f, a}, _} -> {f, a} == {fun, arity} or {f, a} == {:"MACRO-#{fun}", arity + 1} end)
   end
 
   def get_returns_from_callback(module, func, arity) do
@@ -341,17 +330,21 @@ defmodule ElixirSense.Core.Introspection do
     [ast | returns]
   end
 
-  defp get_callback_with_doc(name, kind, doc, key, callbacks) do
+  defp get_callback_with_doc(kind, doc, key = {name, arity}, callbacks) do
+    key = {spec_name, _spec_arity} = if kind == :macrocallback do
+      {:"MACRO-#{name}", arity + 1}
+    else
+      key
+    end
+
     {_, [spec | _]} = List.keyfind(callbacks, key, 0)
-    {_f, arity} = key
 
     spec_ast =
-      name
-      |> Typespec.spec_to_quoted(spec)
+      Typespec.spec_to_quoted(spec_name, spec)
       |> Macro.prewalk(&drop_macro_env/1)
 
     spec_ast = if kind == :macrocallback do
-      spec_ast |> remove_first_macro_arg(name)
+      spec_ast |> remove_first_macro_arg()
     else
       spec_ast
     end
@@ -576,7 +569,7 @@ defmodule ElixirSense.Core.Introspection do
     {{name, _}, [spec | _]} =
       module
       |> Typespec.get_callbacks()
-      |> Enum.find(fn {{f, a}, _} -> {f, a} == {callback, arity} end)
+      |> Enum.find(fn {{f, a}, _} -> {f, a} == {callback, arity} or {f, a} == {:"MACRO-#{callback}", arity + 1} end)
 
     Typespec.spec_to_quoted(name, spec)
   end
@@ -589,8 +582,9 @@ defmodule ElixirSense.Core.Introspection do
     Atom.to_string(var)
   end
 
-  defp remove_first_macro_arg({:"::", info, [{_name, info2, [_term_arg | rest_args]}, return]}, name) do
-    {:"::", info, [{name, info2, rest_args}, return]}
+  def remove_first_macro_arg({:"::", info, [{name, info2, [_term_arg | rest_args]}, return]}) do
+    "MACRO-" <> rest = Atom.to_string(name)
+    {:"::", info, [{String.to_atom(rest), info2, rest_args}, return]}
   end
 
   def spec_to_string(nil) do
@@ -598,16 +592,13 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def spec_to_string({kind, {{name, _arity}, specs}}) do
-    {stripped_name, is_macro} = case Atom.to_string(name) do
-      "MACRO-" <> rest -> {String.to_atom(rest), true}
-      _other -> {name, false}
-    end
+    is_macro = Atom.to_string(name) |> String.starts_with?("MACRO-")
 
     specs
     |> Enum.map_join("\n", fn spec ->
       quoted = Typespec.spec_to_quoted(name, spec)
       quoted = if is_macro do
-        quoted |> remove_first_macro_arg(stripped_name)
+        quoted |> remove_first_macro_arg()
       else
         quoted
       end
