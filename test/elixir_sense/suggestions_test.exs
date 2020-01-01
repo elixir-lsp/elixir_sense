@@ -381,6 +381,23 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [%{description: "Macro.t", snippet: "\"${1:Macro.t}$\"", spec: "Macro.t", type: :return}]
   end
 
+  test "lists protocol implementation return values" do
+    buffer = """
+    defimpl Enumerable, for: MyStruct do
+      def count(t) do
+    
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 6)
+      |> Enum.filter(fn s -> s.type == :return end)
+
+    assert [%{description: "{:ok, non_neg_integer}", snippet: "{:ok, non_neg_integer()}", spec: "{:ok, non_neg_integer}", type: :return},
+    %{description: "{:error, module}", snippet: "{:error, module()}", spec: "{:error, module}", type: :return}] == list
+  end
+
   test "lists params and vars" do
     buffer = """
     defmodule MyServer do

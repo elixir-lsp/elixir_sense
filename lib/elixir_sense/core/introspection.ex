@@ -319,7 +319,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp extract_spec_ast_parts({_name, _meta, _args} = name_part) do
-    %{name: name_part, returns: nil}
+    %{name: name_part, returns: []}
   end
 
   defp extract_return_part({:|, _, [lhs, rhs]}, returns) do

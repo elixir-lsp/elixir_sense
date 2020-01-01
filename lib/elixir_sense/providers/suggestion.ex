@@ -192,7 +192,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
     callbacks_or_returns =
       case scope do
-        {_f, _a} -> find_returns(behaviours, hint, scope)
+        {_f, _a} -> find_returns(behaviours, protocol, hint, scope)
         _mod -> find_callbacks(behaviours, hint) ++ find_protocol_functions(protocol, hint)
       end
 
@@ -390,22 +390,40 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.sort()
   end
 
-  @spec find_returns([module], String.t(), State.scope()) :: [return]
-  defp find_returns(behaviours, "", {fun, arity}) do
-    for mod <- behaviours, Introspection.define_callback?(mod, fun, arity) do
-      for return <- Introspection.get_returns_from_callback(mod, fun, arity) do
+  @spec find_returns([module], nil | State.protocol_t(), String.t(), State.scope()) :: [return]
+  defp find_returns(behaviours, protocol, "", {fun, arity}) do
+    callbacks = for mod <- behaviours, Introspection.define_callback?(mod, fun, arity),
+      return <- Introspection.get_returns_from_callback(mod, fun, arity) do
         %{
           type: :return,
           description: return.description,
           spec: return.spec,
           snippet: return.snippet
         }
-      end
     end
-    |> List.flatten()
+
+    protocol_functions = case protocol do
+      {proto, _implementations} ->
+        if Introspection.define_callback?(proto, fun, arity) do
+          for return <- Introspection.get_returns_from_callback(proto, fun, arity) do
+              %{
+                type: :return,
+                description: return.description,
+                spec: return.spec,
+                snippet: return.snippet
+              }
+          end
+        else
+          []
+        end
+      nil ->
+        []
+    end
+
+    callbacks ++ protocol_functions
   end
 
-  defp find_returns(_behaviours, _hint, _module) do
+  defp find_returns(_behaviours, _protocol, _hint, _module) do
     []
   end
 
