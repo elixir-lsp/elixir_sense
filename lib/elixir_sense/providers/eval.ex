@@ -3,8 +3,6 @@ defmodule ElixirSense.Providers.Eval do
   Provider responsible for evaluating Elixr expressions.
   """
 
-  alias ElixirSense.Core.Introspection
-
   @type binding :: {name :: String.t(), value :: String.t()}
   @type bindings :: [binding] | :no_match | {:error, message :: String.t()}
 
@@ -43,8 +41,7 @@ defmodule ElixirSense.Providers.Eval do
       e ->
         %{__struct__: type, description: description, line: line} = e
 
-        {:error,
-         "# #{inspect(type)} on line #{line}:\n#  ↳ #{description}"}
+        {:error, "# #{inspect(type)} on line #{line}:\n#  ↳ #{description}"}
     end
   end
 

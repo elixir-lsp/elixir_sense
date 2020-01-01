@@ -98,7 +98,7 @@ defmodule ElixirSense.DocsTest do
 
       assert subject == "Macros.some"
       assert actual_subject == "ElixirSenseExample.BehaviourWithMacrocallback.Impl.some"
-      
+
       assert docs =~ """
              > ElixirSenseExample.BehaviourWithMacrocallback.Impl.some(var)
 

@@ -129,7 +129,14 @@ defmodule ElixirSense.SignatureTest do
       assert ElixirSense.signature(code, 3, 15) == %{
                active_param: 0,
                pipe_before: false,
-               signatures: [%{documentation: "some macro\n", name: "some", params: ["var"], spec: "@spec some(integer) :: Macro.t"}]
+               signatures: [
+                 %{
+                   documentation: "some macro\n",
+                   name: "some",
+                   params: ["var"],
+                   spec: "@spec some(integer) :: Macro.t"
+                 }
+               ]
              }
     end
   end

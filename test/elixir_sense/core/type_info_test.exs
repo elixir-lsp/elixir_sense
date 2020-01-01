@@ -362,12 +362,10 @@ defmodule ElixirSense.Core.TypeInfoTest do
   end
 
   test "fun_with_local_opaque" do
-    assert [] =
-             TypeInfo.extract_param_options(Local, :fun_with_local_opaque, 0)
+    assert [] = TypeInfo.extract_param_options(Local, :fun_with_local_opaque, 0)
   end
 
   test "fun_with_remote_opaque" do
-    assert [] =
-             TypeInfo.extract_param_options(Local, :fun_with_remote_opaque, 0)
+    assert [] = TypeInfo.extract_param_options(Local, :fun_with_remote_opaque, 0)
   end
 end

@@ -392,33 +392,37 @@ defmodule ElixirSense.Providers.Suggestion do
 
   @spec find_returns([module], nil | State.protocol_t(), String.t(), State.scope()) :: [return]
   defp find_returns(behaviours, protocol, "", {fun, arity}) do
-    callbacks = for mod <- behaviours, Introspection.define_callback?(mod, fun, arity),
-      return <- Introspection.get_returns_from_callback(mod, fun, arity) do
+    callbacks =
+      for mod <- behaviours,
+          Introspection.define_callback?(mod, fun, arity),
+          return <- Introspection.get_returns_from_callback(mod, fun, arity) do
         %{
           type: :return,
           description: return.description,
           spec: return.spec,
           snippet: return.snippet
         }
-    end
+      end
 
-    protocol_functions = case protocol do
-      {proto, _implementations} ->
-        if Introspection.define_callback?(proto, fun, arity) do
-          for return <- Introspection.get_returns_from_callback(proto, fun, arity) do
+    protocol_functions =
+      case protocol do
+        {proto, _implementations} ->
+          if Introspection.define_callback?(proto, fun, arity) do
+            for return <- Introspection.get_returns_from_callback(proto, fun, arity) do
               %{
                 type: :return,
                 description: return.description,
                 spec: return.spec,
                 snippet: return.snippet
               }
+            end
+          else
+            []
           end
-        else
+
+        nil ->
           []
-        end
-      nil ->
-        []
-    end
+      end
 
     callbacks ++ protocol_functions
   end

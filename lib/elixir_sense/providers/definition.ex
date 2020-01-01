@@ -178,23 +178,29 @@ defmodule ElixirSense.Providers.Definition do
         category = fun_to_type(fun)
         {find_fun_position_in_erl_file(file, fun), category}
       else
-        %Metadata{mods_funs_to_positions: mods_funs_to_positions} = file_metadata = Parser.parse_file(file, false, false, nil)
+        %Metadata{mods_funs_to_positions: mods_funs_to_positions} =
+          file_metadata = Parser.parse_file(file, false, false, nil)
 
-        category = case mods_funs_to_positions[{mod, fun, nil}] do
-          %ModFunInfo{} = mi ->
-            ModFunInfo.get_category(mi)
-          nil ->
-            # not found, fall back to :function when fun != nil
-            # TODO use docs?
-            fun_to_type(fun)
-        end
+        category =
+          case mods_funs_to_positions[{mod, fun, nil}] do
+            %ModFunInfo{} = mi ->
+              ModFunInfo.get_category(mi)
+
+            nil ->
+              # not found, fall back to :function when fun != nil
+              # TODO use docs?
+              fun_to_type(fun)
+          end
 
         {Metadata.get_function_position(file_metadata, mod, fun), category}
       end
 
     case position do
-      {line, column} -> %Location{found: true, type: category, file: file, line: line, column: column}
-      _ -> nil
+      {line, column} ->
+        %Location{found: true, type: category, file: file, line: line, column: column}
+
+      _ ->
+        nil
     end
   end
 

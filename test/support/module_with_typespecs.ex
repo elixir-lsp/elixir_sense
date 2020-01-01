@@ -171,7 +171,7 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     @spec fun_with_local_opaque([some_opaque_options_t]) :: any
     def fun_with_local_opaque(a), do: a
 
-    @spec fun_with_remote_opaque([Remote.some_opaque_options_t]) :: any
+    @spec fun_with_remote_opaque([Remote.some_opaque_options_t()]) :: any
     def fun_with_remote_opaque(a), do: a
   end
 end

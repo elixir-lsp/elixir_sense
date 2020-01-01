@@ -54,6 +54,7 @@ defmodule ElixirSense.Core.Introspection do
       with(
         [] <- get_func_docs_md(mod, fun),
         [] <- get_type_docs_md(mod, fun, scope)
+        # TODO callback
       ) do
         "No documentation available"
       else
@@ -71,11 +72,13 @@ defmodule ElixirSense.Core.Introspection do
           fun_args = Enum.map(args, &format_doc_arg(&1))
           fun_str = Atom.to_string(fun)
           doc = extract_summary_from_docs(text)
+          # TODO other arities for default arg functions
           spec = get_spec_as_string(mod, fun, arity, kind)
           %{name: fun_str, params: fun_args, documentation: doc, spec: spec}
         end
 
       nil ->
+        # We are not expecting macros here
         for {_kind, {{_name, _arity}, [params | _]}} = spec <-
               TypeInfo.get_function_specs(mod, fun) do
           params = TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
@@ -107,7 +110,10 @@ defmodule ElixirSense.Core.Introspection do
 
           mod_str = inspect(mod)
           fun_str = Atom.to_string(fun)
-          "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity, kind)}#{text}"
+          # TODO other arities for default arg functions
+          "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity, kind)}#{
+            text
+          }"
         end
     end
   end
@@ -261,11 +267,12 @@ defmodule ElixirSense.Core.Introspection do
           |> String.replace_prefix(":fake_lhs", "")
       end
 
-    returns_str = if parts.returns != nil do
+    returns_str =
+      if parts.returns != [] do
         returns_str =
-        parts.returns
-        |> Enum.map(&Macro.to_string(&1))
-        |> Enum.join(" |\n  ")
+          parts.returns
+          |> Enum.map(&Macro.to_string(&1))
+          |> Enum.join(" |\n  ")
 
         case length(parts.returns) do
           1 -> " :: #{returns_str}#{when_str}"
@@ -273,7 +280,7 @@ defmodule ElixirSense.Core.Introspection do
         end
       else
         ""
-    end
+      end
 
     formated_spec = name_str <> returns_str <> "\n"
 
@@ -283,7 +290,9 @@ defmodule ElixirSense.Core.Introspection do
   def define_callback?(mod, fun, arity) do
     mod
     |> Typespec.get_callbacks()
-    |> Enum.any?(fn {{f, a}, _} -> {f, a} == {fun, arity} or {f, a} == {:"MACRO-#{fun}", arity + 1} end)
+    |> Enum.any?(fn {{f, a}, _} ->
+      {f, a} == {fun, arity} or {f, a} == {:"MACRO-#{fun}", arity + 1}
+    end)
   end
 
   def get_returns_from_callback(module, func, arity) do
@@ -331,11 +340,13 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp get_callback_with_doc(kind, doc, key = {name, arity}, callbacks) do
-    key = {spec_name, _spec_arity} = if kind == :macrocallback do
-      {:"MACRO-#{name}", arity + 1}
-    else
-      key
-    end
+    key =
+      {spec_name, _spec_arity} =
+      if kind == :macrocallback do
+        {:"MACRO-#{name}", arity + 1}
+      else
+        key
+      end
 
     {_, [spec | _]} = List.keyfind(callbacks, key, 0)
 
@@ -343,11 +354,12 @@ defmodule ElixirSense.Core.Introspection do
       Typespec.spec_to_quoted(spec_name, spec)
       |> Macro.prewalk(&drop_macro_env/1)
 
-    spec_ast = if kind == :macrocallback do
-      spec_ast |> remove_first_macro_arg()
-    else
-      spec_ast
-    end
+    spec_ast =
+      if kind == :macrocallback do
+        spec_ast |> remove_first_macro_arg()
+      else
+        spec_ast
+      end
 
     signature = get_typespec_signature(spec_ast, arity)
     definition = format_spec_ast(spec_ast)
@@ -509,11 +521,18 @@ defmodule ElixirSense.Core.Introspection do
           :struct
         end
 
+      # TODO
+      # function_exported?(module, :behaviour_info, 1) -> :behaviour
+
+      # match?("Elixir.Mix.Tasks." <> _, Atom.to_string(module)) ->
+      #   :task
+
       true ->
         nil
     end
   end
 
+  # TODO does not work for macro
   def module_has_function(module, func, arity) do
     Code.ensure_loaded?(module) && Kernel.function_exported?(module, func, arity)
   end
@@ -554,6 +573,8 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
+  # This function is used only for protocols so no macros
+  # and we dont expect docs to be nil
   def module_functions_info(module) do
     docs = NormalizedCode.get_docs(module, :docs) || []
     specs = TypeInfo.get_module_specs(module)
@@ -561,6 +582,7 @@ defmodule ElixirSense.Core.Introspection do
     for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false, into: %{} do
       spec = Map.get(specs, {f, a})
       {fun_args, desc} = extract_fun_args_and_desc(func_doc)
+      # TODO other arities for default arg functions
       {{f, a}, {func_kind, fun_args, desc, spec_to_string(spec)}}
     end
   end
@@ -569,7 +591,9 @@ defmodule ElixirSense.Core.Introspection do
     {{name, _}, [spec | _]} =
       module
       |> Typespec.get_callbacks()
-      |> Enum.find(fn {{f, a}, _} -> {f, a} == {callback, arity} or {f, a} == {:"MACRO-#{callback}", arity + 1} end)
+      |> Enum.find(fn {{f, a}, _} ->
+        {f, a} == {callback, arity} or {f, a} == {:"MACRO-#{callback}", arity + 1}
+      end)
 
     Typespec.spec_to_quoted(name, spec)
   end
@@ -597,11 +621,14 @@ defmodule ElixirSense.Core.Introspection do
     specs
     |> Enum.map_join("\n", fn spec ->
       quoted = Typespec.spec_to_quoted(name, spec)
-      quoted = if is_macro do
-        quoted |> remove_first_macro_arg()
-      else
-        quoted
-      end
+
+      quoted =
+        if is_macro do
+          quoted |> remove_first_macro_arg()
+        else
+          quoted
+        end
+
       binary = Macro.to_string(quoted)
       "@#{kind} #{binary}" |> String.replace("()", "")
     end)

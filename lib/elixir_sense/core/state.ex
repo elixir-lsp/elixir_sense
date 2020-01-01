@@ -194,8 +194,13 @@ defmodule ElixirSense.Core.State do
       end)
     end
 
-    def get_category(%ModFunInfo{type: type}) when type in [:defmacro, :defmacrop, :defguard, :defguardp], do: :macro
-    def get_category(%ModFunInfo{type: type}) when type in [:def, :defp, :defdelegate], do: :function
+    def get_category(%ModFunInfo{type: type})
+        when type in [:defmacro, :defmacrop, :defguard, :defguardp],
+        do: :macro
+
+    def get_category(%ModFunInfo{type: type}) when type in [:def, :defp, :defdelegate],
+      do: :function
+
     def get_category(%ModFunInfo{}), do: :module
   end
 

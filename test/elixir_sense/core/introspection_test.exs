@@ -32,8 +32,9 @@ defmodule ElixirSense.Core.IntrospectionTest do
   end
 
   test "format_spec_ast for macrocallback" do
-    ast = get_callback_ast(ElixirSenseExample.BehaviourWithMacrocallback, :required, 1)
-    |> remove_first_macro_arg()
+    ast =
+      get_callback_ast(ElixirSenseExample.BehaviourWithMacrocallback, :required, 1)
+      |> remove_first_macro_arg()
 
     assert format_spec_ast(ast) == """
            required(atom) :: Macro.t
@@ -137,7 +138,8 @@ defmodule ElixirSense.Core.IntrospectionTest do
   end
 
   test "get_returns_from_macrocallback" do
-    returns = get_returns_from_callback(ElixirSenseExample.BehaviourWithMacrocallback, :required, 1)
+    returns =
+      get_returns_from_callback(ElixirSenseExample.BehaviourWithMacrocallback, :required, 1)
 
     assert [%{description: "Macro.t", snippet: "\"${1:Macro.t}$\"", spec: "Macro.t"}] = returns
   end
