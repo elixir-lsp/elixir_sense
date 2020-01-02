@@ -64,6 +64,10 @@ defmodule ElixirSense.Core.Introspection do
     %{docs: docs, types: get_types_md(mod)}
   end
 
+  def count_defaults(args) do
+    Enum.count(args, &match?({:\\, _, _}, &1))
+  end
+
   def get_signatures(mod, fun, code_docs \\ nil) do
     case code_docs || NormalizedCode.get_docs(mod, :docs) do
       docs when is_list(docs) ->
@@ -71,7 +75,7 @@ defmodule ElixirSense.Core.Introspection do
           fun_args = Enum.map(args, &format_doc_arg(&1))
           fun_str = Atom.to_string(fun)
           doc = extract_summary_from_docs(text)
-          # TODO other arities for default arg functions
+
           spec = get_spec_as_string(mod, fun, arity, kind)
           %{name: fun_str, params: fun_args, documentation: doc, spec: spec}
         end
@@ -109,7 +113,7 @@ defmodule ElixirSense.Core.Introspection do
 
           mod_str = inspect(mod)
           fun_str = Atom.to_string(fun)
-          # TODO other arities for default arg functions
+
           "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity, kind)}#{
             text
           }"
@@ -601,7 +605,7 @@ defmodule ElixirSense.Core.Introspection do
     for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false, into: %{} do
       spec = Map.get(specs, {f, a})
       {fun_args, desc} = extract_fun_args_and_desc(func_doc)
-      # TODO other arities for default arg functions
+
       {{f, a}, {func_kind, fun_args, desc, spec_to_string(spec)}}
     end
   end

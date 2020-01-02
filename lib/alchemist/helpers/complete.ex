@@ -485,7 +485,7 @@ defmodule Alchemist.Helpers.Complete do
 
   defp default_arg_functions(docs) do
     for {{fun_name, arity}, _, :def, args, x} when x != false <- docs,
-        count = count_defaults(args),
+        count = Introspection.count_defaults(args),
         count > 0,
         new_arity <- (arity - count)..(arity - 1),
         into: %{},
@@ -494,14 +494,10 @@ defmodule Alchemist.Helpers.Complete do
 
   defp default_arg_functions_with_doc_false(docs) do
     for {{fun_name, arity}, _, _, args, false} <- docs,
-        count = count_defaults(args),
+        count = Introspection.count_defaults(args),
         count > 0,
         new_arity <- (arity - count)..arity,
         do: {fun_name, new_arity}
-  end
-
-  defp count_defaults(args) do
-    Enum.count(args, &match?({:\\, _, _}, &1))
   end
 
   defp hidden_fun?(fun, docs) do
