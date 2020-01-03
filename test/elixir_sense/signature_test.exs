@@ -134,7 +134,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "some macro\n",
                    name: "some",
                    params: ["var"],
-                   spec: "@spec some(integer) :: Macro.t"
+                   spec: "@spec some(integer) :: Macro.t\n@spec some(b) :: Macro.t when b: float"
                  }
                ]
              }

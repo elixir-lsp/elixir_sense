@@ -629,6 +629,21 @@ defmodule ElixirSense.Core.Introspection do
     Atom.to_string(var)
   end
 
+  def remove_first_macro_arg({:when, info3, [{:"::", info, [{name, info2, rest_args}, ret]}, var_params]}) do
+    "MACRO-" <> rest = Atom.to_string(name)
+
+    # Prior to 1.10 elixir generated invalid specs for macros and macrocallbacks with `when`
+    # https://github.com/elixir-lang/elixir/issues/9687
+    sub = if Version.match?(System.version(), ">= 1.10.0") do
+      [{String.to_atom(rest), info2, rest_args |> tl}, ret]
+    else
+      # specs is missing first argument of type term so nothing to drop here
+      [{String.to_atom(rest), info2, rest_args}, ret]
+    end
+
+    {:when, info3, [{:"::", info, sub}, var_params]}
+  end
+
   def remove_first_macro_arg({:"::", info, [{name, info2, [_term_arg | rest_args]}, return]}) do
     "MACRO-" <> rest = Atom.to_string(name)
     {:"::", info, [{String.to_atom(rest), info2, rest_args}, return]}

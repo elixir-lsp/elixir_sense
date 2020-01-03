@@ -138,7 +138,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 1,
                name: "some",
                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
-               spec: "@spec some(integer) :: Macro.t",
+               spec: "@spec some(integer) :: Macro.t\n@spec some(b) :: Macro.t when b: float",
                summary: "some macro\n",
                type: :macro
              }
@@ -217,11 +217,11 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert [
              %{
-               args: "atom",
+               args: "a",
                arity: 1,
                name: "optional",
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
-               spec: "@macrocallback optional(atom) :: Macro.t\n",
+               spec: "@macrocallback optional(a) :: Macro.t when a: atom\n",
                summary: "An optional macrocallback\n",
                type: :callback
              },

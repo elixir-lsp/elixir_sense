@@ -104,7 +104,8 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             `@spec some(integer) :: Macro.t`
+             `@spec some(integer) :: Macro.t
+             @spec some(b) :: Macro.t when b: float`
 
              some macro
              """
@@ -327,11 +328,11 @@ defmodule ElixirSense.DocsTest do
       assert subject == "ElixirSenseExample.BehaviourWithMacrocallback"
 
       assert docs =~ """
-             > optional(atom)
+             > optional(a)
 
              ### Specs
 
-             `@macrocallback optional(atom) :: Macro.t
+             `@macrocallback optional(a) :: Macro.t when a: atom
              `
 
              An optional macrocallback\
