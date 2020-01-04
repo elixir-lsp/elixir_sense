@@ -12,10 +12,8 @@ defmodule ElixirSense.Mixfile do
       start_permanent: Mix.env() == :prod,
       test_coverage: [tool: ExCoveralls],
       preferred_cli_env: [coveralls: :test, "coveralls.detail": :test, "coveralls.html": :test],
-      dialyzer: [
-        flags: [:unmatched_returns, :error_handling, :race_conditions, :unknown, :underspecs]
-      ],
       deps: deps(),
+      dialyzer: dialyzer(),
       docs: docs(),
       description: description(),
       package: package()
@@ -35,6 +33,20 @@ defmodule ElixirSense.Mixfile do
       {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false},
       {:credo, "~> 1.0", only: [:dev]},
       {:ex_doc, "~> 0.14", only: [:dev]}
+    ]
+  end
+
+  defp dialyzer do
+    [
+      plt_add_deps: :apps_direct,
+      plt_add_apps: [:mix],
+      flags: ~w(
+        error_handling
+        race_conditions
+        underspecs
+        unknown
+        unmatched_returns
+      )a
     ]
   end
 
