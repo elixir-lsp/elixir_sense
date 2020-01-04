@@ -4,13 +4,12 @@ defmodule ElixirSense.Providers.Suggestion do
   """
 
   alias Alchemist.Helpers.Complete
+
   alias ElixirSense.Core.Introspection
-
-  alias ElixirSense.Core.TypeInfo,
-        alias(ElixirSense.Core.State.{StructInfo})
-
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
+  alias ElixirSense.Core.State.StructInfo
+  alias ElixirSense.Core.TypeInfo
 
   @type attribute :: %{
           type: :attribute,
