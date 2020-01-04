@@ -109,6 +109,7 @@ defmodule ElixirSense.DocsTest do
              some macro
              """
     end
+
     test "retrieve function documentation atom module" do
       buffer = """
       defmodule MyModule do
