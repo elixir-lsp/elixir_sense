@@ -22,4 +22,10 @@ defmodule ElixirSenseExample.BehaviourWithMacrocallback.Impl do
   @spec some(integer) :: Macro.t()
   @spec some(b) :: Macro.t() when b: float
   defmacro some(var), do: Macro.expand(var, __CALLER__)
+
+  @doc """
+  some macro with default arg
+  """
+  @spec with_default(atom, list, integer) :: Macro.t()
+  defmacro with_default(a \\ :asdf, b, var \\ 0), do: Macro.expand({a, b, var}, __CALLER__)
 end

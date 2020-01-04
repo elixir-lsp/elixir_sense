@@ -64,6 +64,8 @@ defmodule ElixirSense.Core.Introspection do
     %{docs: docs, types: get_types_md(mod)}
   end
 
+  def count_defaults(nil), do: 0
+
   def count_defaults(args) do
     Enum.count(args, &match?({:\\, _, _}, &1))
   end

@@ -484,7 +484,7 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp default_arg_functions(docs) do
-    for {{fun_name, arity}, _, :def, args, x} when x != false <- docs,
+    for {{fun_name, arity}, _, _kind, args, x} when x != false <- docs,
         count = Introspection.count_defaults(args),
         count > 0,
         new_arity <- (arity - count)..(arity - 1),

@@ -46,6 +46,39 @@ defmodule Alchemist.Helpers.CompleteTest do
     assert {:yes, '.', [%{name: "Enumerable", subtype: :protocol}]} = expand('Enumerable')
   end
 
+  test "elixir completion macro with default args" do
+    assert {:yes, 'h_default',
+            [
+              %{
+                args: "a \\\\ :asdf,b,var \\\\ 0",
+                arity: 1,
+                name: "with_default",
+                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
+                spec: "@spec with_default(atom, list, integer) :: Macro.t",
+                summary: "some macro with default arg\n",
+                type: :macro
+              },
+              %{
+                args: "a \\\\ :asdf,b,var \\\\ 0",
+                arity: 2,
+                name: "with_default",
+                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
+                spec: "@spec with_default(atom, list, integer) :: Macro.t",
+                summary: "some macro with default arg\n",
+                type: :macro
+              },
+              %{
+                args: "a \\\\ :asdf,b,var \\\\ 0",
+                arity: 3,
+                name: "with_default",
+                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
+                spec: "@spec with_default(atom, list, integer) :: Macro.t",
+                summary: "some macro with default arg\n",
+                type: :macro
+              }
+            ]} = expand('ElixirSenseExample.BehaviourWithMacrocallback.Impl.wit')
+  end
+
   test "elixir completion on modules from load path" do
     assert {:yes, [],
             [
