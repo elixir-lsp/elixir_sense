@@ -57,7 +57,7 @@ defmodule ElixirSense.Mixfile do
     [
       maintainers: ["Marlus Saraiva (@msaraiva)"],
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/msaraiva/elixir_sense"}
+      links: %{"GitHub" => "https://github.com/elixir-lsp/elixir_sense"}
     ]
   end
 end
