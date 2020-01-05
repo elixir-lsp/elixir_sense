@@ -44,7 +44,7 @@ defmodule ElixirSense.Core.Introspection do
     ModuleInfo.all_applications_modules()
   end
 
-  @spec get_all_docs(mod_fun, scope :: any) :: docs
+  @spec get_all_docs(mod_fun, scope :: ElixirSense.Core.State.scope) :: docs
   def get_all_docs({mod, nil}, _) do
     %{docs: get_docs_md(mod), types: get_types_md(mod), callbacks: get_callbacks_md(mod)}
   end
