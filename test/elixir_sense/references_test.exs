@@ -3,7 +3,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
 
   # doctest References
 
-  test "finds reference tu local function shadowing builtin type" do
+  test "finds reference to local function shadowing builtin type" do
     buffer = """
     defmodule B.Callee do
       def fun() do
