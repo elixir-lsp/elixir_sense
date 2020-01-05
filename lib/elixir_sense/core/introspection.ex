@@ -74,7 +74,7 @@ defmodule ElixirSense.Core.Introspection do
     case code_docs || NormalizedCode.get_docs(mod, :docs) do
       docs when is_list(docs) ->
         for {{f, arity}, _, kind, args, text} <- docs, f == fun do
-          fun_args = Enum.map(args, &format_doc_arg(&1))
+          fun_args = Enum.map(args || [], &format_doc_arg(&1))
           fun_str = Atom.to_string(fun)
           doc = extract_summary_from_docs(text)
 
@@ -837,7 +837,9 @@ defmodule ElixirSense.Core.Introspection do
          _mods_funs,
          _metadata_types,
          _include_typespecs
-       ), do: {nil, nil}
+       ),
+       do: {nil, nil}
+
   defp find_metadata_function(
          {mod, nil},
          _current_module,

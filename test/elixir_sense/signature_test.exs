@@ -80,7 +80,24 @@ defmodule ElixirSense.SignatureTest do
       end
       """
 
-      assert ElixirSense.signature(code, 2, 29) == %{active_param: 0, pipe_before: false, signatures: [%{params: [], documentation: "No documentation available", name: "keyword", spec: "@type keyword :: [{atom, any}]"}, %{documentation: "No documentation available", name: "keyword", params: ["T"], spec: "@type keyword(t) :: [{atom, t}]"}]}
+      assert ElixirSense.signature(code, 2, 29) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   params: [],
+                   documentation: "No documentation available",
+                   name: "keyword",
+                   spec: "@type keyword :: [{atom, any}]"
+                 },
+                 %{
+                   documentation: "No documentation available",
+                   name: "keyword",
+                   params: ["T"],
+                   spec: "@type keyword(t) :: [{atom, t}]"
+                 }
+               ]
+             }
     end
 
     test "find type signatures from erlang module" do
@@ -145,6 +162,28 @@ defmodule ElixirSense.SignatureTest do
                    name: "some",
                    params: ["var"],
                    spec: "@spec some(integer) :: Macro.t\n@spec some(b) :: Macro.t when b: float"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures special forms" do
+      code = """
+      defmodule MyModule do
+        __MODULE__(
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 14) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation:
+                     "Returns the current module name as an atom or `nil` otherwise.",
+                   name: "__MODULE__",
+                   params: [],
+                   spec: ""
                  }
                ]
              }
