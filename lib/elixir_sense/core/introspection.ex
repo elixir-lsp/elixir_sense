@@ -206,6 +206,7 @@ defmodule ElixirSense.Core.Introspection do
       {callbacks, []} ->
         Enum.map(callbacks, fn {{name, arity}, [spec | _]} ->
           spec_ast = Typespec.spec_to_quoted(name, spec)
+          |> Macro.prewalk(&drop_macro_env/1)
           signature = get_typespec_signature(spec_ast, arity)
           definition = format_spec_ast(spec_ast)
 
@@ -621,6 +622,7 @@ defmodule ElixirSense.Core.Introspection do
       end)
 
     Typespec.spec_to_quoted(name, spec)
+    |> Macro.prewalk(&drop_macro_env/1)
   end
 
   defp format_doc_arg({:\\, _, [left, right]}) do
@@ -664,6 +666,7 @@ defmodule ElixirSense.Core.Introspection do
     specs
     |> Enum.map_join("\n", fn spec ->
       quoted = Typespec.spec_to_quoted(name, spec)
+      |> Macro.prewalk(&drop_macro_env/1)
 
       quoted =
         if is_macro do
