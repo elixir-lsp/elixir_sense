@@ -214,4 +214,15 @@ defmodule ElixirSense.Core.IntrospectionTest do
   test "actual_mod_fun when nil current module" do
     assert {nil, :some_fun, false} = actual_mod_fun({nil, :some_fun}, [], [], nil, %{}, %{})
   end
+
+  test "actual_mod_fun Elixir module" do
+    # Elixir is not a module
+    assert {Elixir, nil, false} = actual_mod_fun({Elixir, nil}, [], [], nil, %{}, %{})
+    # But defines some types
+    assert {Elixir, :keyword, true} = actual_mod_fun({Elixir, :keyword}, [], [], nil, %{}, %{})
+    # not erlang types
+    assert {Elixir, :string, false} = actual_mod_fun({Elixir, :string}, [], [], nil, %{}, %{})
+    # not found
+    assert {Elixir, :asdf, false} = actual_mod_fun({Elixir, :asdf}, [], [], nil, %{}, %{})
+  end
 end

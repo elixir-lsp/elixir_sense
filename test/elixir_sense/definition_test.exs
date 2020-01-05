@@ -9,6 +9,10 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert %{found: false} = ElixirSense.definition("", 1, 1)
   end
 
+  test "dont error on __MODULE__ when no module" do
+    assert %{found: false} = ElixirSense.definition("__MODULE__", 1, 1)
+  end
+
   test "find definition of aliased modules in `use`" do
     buffer = """
     defmodule MyModule do
