@@ -76,7 +76,9 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             `@spec flatten(deep_list) :: list when deep_list: [any | deep_list]`
+             ```
+             @spec flatten(deep_list) :: list when deep_list: [any | deep_list]
+             ```
 
              Flattens the given `list` of nested lists.
              """
@@ -104,8 +106,10 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             `@spec some(integer) :: Macro.t
-             @spec some(b) :: Macro.t when b: float`
+             ```
+             @spec some(integer) :: Macro.t
+             @spec some(b) :: Macro.t when b: float
+             ```
 
              some macro
              """
@@ -134,7 +138,9 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             `@spec flatten(deep_list) :: list when deep_list: [any | deep_list]`
+             ```
+             @spec flatten(deep_list) :: list when deep_list: [any | deep_list]
+             ```
 
              Flattens the given `list` of nested lists.
              """
@@ -185,7 +191,9 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             `@spec flatten(deep_list) :: list when deep_list: [any | deep_list]`
+             ```
+             @spec flatten(deep_list) :: list when deep_list: [any | deep_list]
+             ```
 
              Flattens the given `list` of nested lists.
              """
@@ -269,7 +277,9 @@ defmodule ElixirSense.DocsTest do
       assert subject == "GenServer"
 
       assert docs =~ """
-             `@type from :: {pid, tag :: term}`
+             ```
+             @type from :: {pid, tag :: term}
+             ```
 
              Tuple describing the client of a call request.
              """
@@ -287,7 +297,9 @@ defmodule ElixirSense.DocsTest do
       assert subject == "ElixirSenseExample.CallbackOpaque"
 
       assert docs =~ """
-             `@opaque t(x)`
+             ```
+             @opaque t(x)
+             ```
              """
     end
 
@@ -307,7 +319,9 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             `@callback config_change(changed, new, removed) :: :ok when changed: keyword, new: keyword, removed: [atom]`
+             ```
+             @callback config_change(changed, new, removed) :: :ok when changed: keyword, new: keyword, removed: [atom]
+             ```
 
              Callback invoked after code upgrade\
              """
@@ -329,7 +343,9 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             `@macrocallback optional(a) :: Macro.t when a: atom`
+             ```
+             @macrocallback optional(a) :: Macro.t when a: atom
+             ```
 
              An optional macrocallback\
              """

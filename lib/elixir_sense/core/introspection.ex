@@ -44,7 +44,7 @@ defmodule ElixirSense.Core.Introspection do
     ModuleInfo.all_applications_modules()
   end
 
-  @spec get_all_docs(mod_fun, scope :: ElixirSense.Core.State.scope) :: docs
+  @spec get_all_docs(mod_fun, scope :: ElixirSense.Core.State.scope()) :: docs
   def get_all_docs({mod, nil}, _) do
     %{docs: get_docs_md(mod), types: get_types_md(mod), callbacks: get_callbacks_md(mod)}
   end
@@ -174,7 +174,9 @@ defmodule ElixirSense.Core.Introspection do
   def get_types_md(mod) when is_atom(mod) do
     for %{type: type, doc: doc} <- get_types_with_docs(mod) do
       """
-      `#{type}`
+      ```
+      #{type}
+      ```
 
       #{doc}
       """
@@ -189,7 +191,9 @@ defmodule ElixirSense.Core.Introspection do
 
       ### Specs
 
-      `#{callback}`
+      ```
+      #{callback}
+      ```
 
       #{doc}
       """
@@ -205,8 +209,10 @@ defmodule ElixirSense.Core.Introspection do
     case get_callbacks_and_docs(mod) do
       {callbacks, []} ->
         Enum.map(callbacks, fn {{name, arity}, [spec | _]} ->
-          spec_ast = Typespec.spec_to_quoted(name, spec)
-          |> Macro.prewalk(&drop_macro_env/1)
+          spec_ast =
+            Typespec.spec_to_quoted(name, spec)
+            |> Macro.prewalk(&drop_macro_env/1)
+
           signature = get_typespec_signature(spec_ast, arity)
           definition = format_spec_ast(spec_ast)
 
@@ -595,7 +601,7 @@ defmodule ElixirSense.Core.Introspection do
         ""
 
       spec ->
-        "### Specs\n\n`#{spec}`\n\n"
+        "### Specs\n\n```\n#{spec}\n```\n\n"
     end
   end
 
@@ -665,8 +671,9 @@ defmodule ElixirSense.Core.Introspection do
 
     specs
     |> Enum.map_join("\n", fn spec ->
-      quoted = Typespec.spec_to_quoted(name, spec)
-      |> Macro.prewalk(&drop_macro_env/1)
+      quoted =
+        Typespec.spec_to_quoted(name, spec)
+        |> Macro.prewalk(&drop_macro_env/1)
 
       quoted =
         if is_macro do
