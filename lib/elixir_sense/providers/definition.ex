@@ -140,6 +140,7 @@ defmodule ElixirSense.Providers.Definition do
     end
   end
 
+  defp find_mod_file(Elixir), do: nil
   defp find_mod_file(module) do
     file =
       if Code.ensure_loaded?(module) do

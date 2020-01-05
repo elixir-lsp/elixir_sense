@@ -73,6 +73,16 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    test "find builtin type signatures with Elixir prefix" do
+      code = """
+      defmodule MyModule do
+        @type a :: Elixir.keyword(
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 29) == %{active_param: 0, pipe_before: false, signatures: [%{params: [], documentation: "No documentation available", name: "keyword", spec: "@type keyword :: [{atom, any}]"}, %{documentation: "No documentation available", name: "keyword", params: ["T"], spec: "@type keyword(t) :: [{atom, t}]"}]}
+    end
+
     test "find type signatures from erlang module" do
       code = """
       defmodule MyModule do

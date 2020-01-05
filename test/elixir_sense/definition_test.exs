@@ -678,6 +678,17 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert %{found: false} = ElixirSense.definition(buffer, 2, 23)
   end
 
+  test "builtin elixir types cannot now be found" do
+    buffer = """
+    defmodule MyModule do
+      @type my_type :: Elixir.keyword
+      #                         ^
+    end
+    """
+
+    assert %{found: false} = ElixirSense.definition(buffer, 2, 29)
+  end
+
   test "find local metadata type definition" do
     buffer = """
     defmodule MyModule do
