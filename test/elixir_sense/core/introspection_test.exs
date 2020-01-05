@@ -8,7 +8,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
     type_ast = TypeInfo.get_type_ast(GenServer, :debug)
 
     assert format_spec_ast(type_ast) == """
-           debug :: [:trace | :log | :statistics | {:log_to_file, Path.t}]
+           debug :: [:trace | :log | :statistics | {:log_to_file, Path.t}]\
            """
   end
 
@@ -19,7 +19,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
            on_start ::
              {:ok, pid} |
              :ignore |
-             {:error, {:already_started, pid} | term}
+             {:error, {:already_started, pid} | term}\
            """
   end
 
@@ -27,7 +27,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
     ast = get_callback_ast(ElixirSenseExample.CallbackOpaque, :do_stuff, 2)
 
     assert format_spec_ast(ast) == """
-           do_stuff(t(a), term) :: t(a) when a: any
+           do_stuff(t(a), term) :: t(a) when a: any\
            """
   end
 
@@ -37,7 +37,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
       |> remove_first_macro_arg()
 
     assert format_spec_ast(ast) == """
-           required(atom) :: Macro.t
+           required(atom) :: Macro.t\
            """
   end
 
@@ -47,7 +47,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
     assert format_spec_ast(ast) == """
            code_change(old_vsn, state :: term, extra :: term) ::
              {:ok, new_state :: term} |
-             {:error, reason :: term} when old_vsn: term | {:down, term}
+             {:error, reason :: term} when old_vsn: term | {:down, term}\
            """
   end
 
@@ -57,7 +57,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
                name: :do_stuff,
                arity: 2,
                callback: """
-               @callback do_stuff(t(a), term) :: t(a) when a: any
+               @callback do_stuff(t(a), term) :: t(a) when a: any\
                """,
                signature: "do_stuff(t, term)",
                doc: "Does stuff to opaque arg\n"
@@ -73,7 +73,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
                callback: """
                @callback init(args :: term) ::
                  {:ok, {supFlags :: sup_flags, [childSpec :: child_spec]}} |
-                 :ignore
+                 :ignore\
                """,
                signature: "init(args)",
                doc: nil
@@ -86,7 +86,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
              %{
                arity: 2,
                name: :blame,
-               callback: "@callback blame(t, stacktrace) :: {t, stacktrace}\n",
+               callback: "@callback blame(t, stacktrace) :: {t, stacktrace}",
                doc:
                  "Called from `Exception.blame/3` to augment the exception struct.\n\nCan be used to collect additional information about the exception\nor do some additional expensive computation.\n",
                signature: "blame(t, stacktrace)"
@@ -95,13 +95,13 @@ defmodule ElixirSense.Core.IntrospectionTest do
                arity: 1,
                name: :exception,
                doc: nil,
-               callback: "@callback exception(term) :: t\n",
+               callback: "@callback exception(term) :: t",
                signature: "exception(term)"
              },
              %{
                arity: 1,
                name: :message,
-               callback: "@callback message(t) :: String.t\n",
+               callback: "@callback message(t) :: String.t",
                doc: nil,
                signature: "message(t)"
              }

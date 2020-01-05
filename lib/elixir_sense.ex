@@ -34,7 +34,7 @@ defmodule ElixirSense do
       iex> docs |> String.split("\n") |> Enum.at(6)
       "Converts `enumerable` to a list."
       iex> types |> String.split("\n") |> Enum.at(0)
-      "`@type default :: any"
+      "`@type default :: any`"
   """
   @spec docs(String.t(), pos_integer, pos_integer) :: %{
           subject: String.t(),

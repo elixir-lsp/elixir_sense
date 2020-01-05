@@ -221,7 +221,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 1,
                name: "optional",
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
-               spec: "@macrocallback optional(a) :: Macro.t when a: atom\n",
+               spec: "@macrocallback optional(a) :: Macro.t when a: atom",
                summary: "An optional macrocallback\n",
                type: :callback
              },
@@ -230,7 +230,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 1,
                name: "required",
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
-               spec: "@macrocallback required(atom) :: Macro.t\n",
+               spec: "@macrocallback required(atom) :: Macro.t",
                summary: "A required macrocallback\n",
                type: :callback
              }
@@ -256,7 +256,7 @@ defmodule ElixirSense.SuggestionsTest do
                name: "code_change",
                origin: ":gen_statem",
                spec:
-                 "@callback code_change(oldVsn :: term | {:down, term}, oldState :: state, oldData :: data, extra :: term) ::\n  {:ok, newState :: state, newData :: data} |\n  reason :: term\n",
+                 "@callback code_change(oldVsn :: term | {:down, term}, oldState :: state, oldData :: data, extra :: term) ::\n  {:ok, newState :: state, newData :: data} |\n  reason :: term",
                summary: "",
                type: :callback
              }

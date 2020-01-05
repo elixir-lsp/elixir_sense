@@ -288,7 +288,7 @@ defmodule ElixirSense.Core.Introspection do
         ""
       end
 
-    formated_spec = name_str <> returns_str <> "\n"
+    formated_spec = name_str <> returns_str
 
     formated_spec |> String.replace("()", "")
   end
