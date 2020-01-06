@@ -1191,14 +1191,16 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{type: :hint, value: ""},
              %{name: "field_1", origin: "MyServer", type: :field},
-             %{name: "field_2", origin: "MyServer", type: :field}
+             %{name: "field_2", origin: "MyServer", type: :field},
+             %{name: "__struct__", origin: "MyServer", type: :field}
            ]
 
     list = ElixirSense.suggestions(buffer, 9, 28)
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "field_1", origin: "MyServer", type: :field}
+             %{name: "field_1", origin: "MyServer", type: :field},
+             %{name: "__struct__", origin: "MyServer", type: :field}
            ]
   end
 
@@ -1224,14 +1226,16 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{type: :hint, value: ""},
              %{name: "field_1", origin: ":my_server", type: :field},
-             %{name: "field_2", origin: ":my_server", type: :field}
+             %{name: "field_2", origin: ":my_server", type: :field},
+             %{name: "__struct__", origin: ":my_server", type: :field}
            ]
 
     list = ElixirSense.suggestions(buffer, 9, 30)
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "field_1", origin: ":my_server", type: :field}
+             %{name: "field_1", origin: ":my_server", type: :field},
+             %{name: "__struct__", origin: ":my_server", type: :field}
            ]
   end
 
@@ -1256,7 +1260,8 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "field_1", origin: "MyServer", type: :field}
+             %{name: "field_1", origin: "MyServer", type: :field},
+             %{name: "__struct__", origin: "MyServer", type: :field}
            ]
   end
 
@@ -1278,7 +1283,8 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "field_1", origin: "MyServer", type: :field}
+             %{name: "field_1", origin: "MyServer", type: :field},
+             %{name: "__struct__", origin: "MyServer", type: :field}
            ]
   end
 

@@ -2655,7 +2655,34 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert state.structs == %{
-             MyStruct => %StructInfo{type: :defstruct, fields: [some_field: nil, a_field: 1]}
+             MyStruct => %StructInfo{
+               type: :defstruct,
+               fields: [some_field: nil, a_field: 1, __struct__: MyStruct]
+             }
+           }
+
+    # defstruct adds struct/0 and struct/1 functions
+    assert state.mods_funs_to_positions == %{
+             {MyStruct, :__struct__, 0} => %ModFunInfo{
+               params: [[]],
+               positions: [{2, 3}],
+               type: :def
+             },
+             {MyStruct, :__struct__, 1} => %ModFunInfo{
+               params: [[{:kv, [line: 2, column: 3], nil}]],
+               positions: [{2, 3}],
+               type: :def
+             },
+             {MyStruct, :__struct__, nil} => %ModFunInfo{
+               params: [[{:kv, [line: 2, column: 3], nil}], []],
+               positions: [{2, 3}, {2, 3}],
+               type: :def
+             },
+             {MyStruct, nil, nil} => %ModFunInfo{
+               params: [nil],
+               positions: [{1, 11}],
+               type: :defmodule
+             }
            }
   end
 
@@ -2670,14 +2697,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     # TODO expression is not supported
-    assert state.structs == %{MyStruct => %StructInfo{type: :defstruct, fields: []}}
+    assert state.structs == %{
+             MyStruct => %StructInfo{type: :defstruct, fields: [__struct__: MyStruct]}
+           }
   end
 
   test "find exception" do
     state =
       """
       defmodule MyError do
-        defexception [my_field: nil]
+        defexception [message: nil]
 
         IO.puts("")
       end
@@ -2685,7 +2714,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert state.structs == %{
-             MyError => %StructInfo{type: :defexception, fields: [my_field: nil]}
+             MyError => %StructInfo{
+               type: :defexception,
+               fields: [message: nil, __exception__: true, __struct__: MyError]
+             }
            }
 
     # defexception adds Exception behaviour

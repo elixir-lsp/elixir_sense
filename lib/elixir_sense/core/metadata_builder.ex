@@ -628,35 +628,67 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre({type, _, fields} = ast, state) when type in [:defstruct, :defexception] do
+  defp pre({type, [line: line, column: column], fields} = ast, state)
+       when type in [:defstruct, :defexception] do
     fields =
       case fields do
         [fields] when is_list(fields) ->
-          if Enum.all?(fields, fn
-               field when is_atom(field) -> true
-               {field, _} when is_atom(field) -> true
-               _ -> false
-             end) do
-            fields
-            |> Enum.map(fn
-              field when is_atom(field) -> {field, nil}
-              {field, value} when is_atom(field) -> {field, value}
-            end)
-          else
-            []
-          end
+          fields
+          |> Enum.filter(fn
+            field when is_atom(field) -> true
+            {field, _} when is_atom(field) -> true
+            _ -> false
+          end)
+          |> Enum.map(fn
+            field when is_atom(field) -> {field, nil}
+            {field, value} when is_atom(field) -> {field, value}
+          end)
 
         _ ->
           []
       end
 
+    fields =
+      fields ++
+        if type == :defexception do
+          [__exception__: true]
+        else
+          []
+        end
+
     state =
       if type == :defexception do
-        state
-        |> add_behaviour(Exception)
+        state =
+          state
+          |> add_behaviour(Exception)
+
+        if Keyword.has_key?(fields, :message) do
+          state
+          |> add_func_to_index(
+            :exception,
+            [{:exception, [line: line, column: column], nil}],
+            {line, column},
+            :def
+          )
+          |> add_func_to_index(
+            :message,
+            [{:msg, [line: line, column: column], nil}],
+            {line, column},
+            :def
+          )
+        else
+          state
+        end
       else
         state
       end
+      |> add_func_to_index(:__struct__, [], {line, column}, :def)
+      |> add_func_to_index(
+        :__struct__,
+        [{:kv, [line: line, column: column], nil}],
+        {line, column},
+        :def
+      )
 
     state
     |> add_struct(type, fields)

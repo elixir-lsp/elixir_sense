@@ -279,7 +279,7 @@ defmodule ElixirSense.Core.State do
     structs =
       get_current_module_variants(state)
       |> Enum.reduce(state.structs, fn variant, acc ->
-        acc |> Map.put(variant, %StructInfo{type: type, fields: fields})
+        acc |> Map.put(variant, %StructInfo{type: type, fields: fields ++ [__struct__: variant]})
       end)
 
     %__MODULE__{state | structs: structs}
