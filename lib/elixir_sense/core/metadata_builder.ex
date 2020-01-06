@@ -14,6 +14,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
   @block_keywords [:do, :else, :rescue, :catch, :after]
   @defs [:def, :defp, :defmacro, :defmacrop, :defdelegate, :defguard, :defguardp]
   @protocol_types [{:t, [], :type}]
+  @protocol_functions [
+    {:__protocol__, [:atom], :def},
+    {:impl_for, [:data], :def},
+    {:impl_for!, [:data], :def}
+  ]
 
   defguardp is_call(call, params)
             when is_atom(call) and is_list(params) and
@@ -29,7 +34,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
   end
 
-  defp pre_module(ast, state, position, module, types \\ []) do
+  defp pre_module(ast, state, position = {line, column}, module, types \\ [], functions \\ []) do
     module = normalize_module(module)
 
     state =
@@ -44,11 +49,28 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> new_require_scope
       |> new_vars_scope
 
-    types
-    |> Enum.reduce(state, fn {type_name, type_args, kind}, acc ->
-      acc
-      |> add_type(type_name, type_args, kind, position)
-    end)
+    state =
+      types
+      |> Enum.reduce(state, fn {type_name, type_args, kind}, acc ->
+        acc
+        |> add_type(type_name, type_args, kind, position)
+      end)
+
+    state =
+      functions
+      |> Enum.reduce(state, fn {name, args, kind}, acc ->
+        mapped_args = for arg <- args, do: {arg, [line: line, column: column], nil}
+
+        acc
+        |> add_func_to_index(
+          name,
+          mapped_args,
+          position,
+          kind
+        )
+      end)
+
+    state
     |> result(ast)
   end
 
@@ -65,6 +87,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> remove_module_from_namespace(module)
     |> remove_protocol_implementation
     |> result(ast)
+  end
+
+  def pre_protocol(ast, state, position, module) do
+    # protocol defines a type `@type t :: term`
+    # and functions __protocol__/1, impl_for/1, impl_for!/1
+
+    pre_module(ast, state, position, module, @protocol_types, @protocol_functions)
   end
 
   defp pre_func(ast = {type, _, _}, state, %{line: line, col: col}, name, params) do
@@ -210,14 +239,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
          {:defprotocol, _, [{:__aliases__, [line: line, column: column], module}, _]} = ast,
          state
        ) do
-    # protocol defines a type `{:type, {:t, {:type, 1, :term, []}, []}}`
-    pre_module(ast, state, {line, column}, module, @protocol_types)
+    pre_protocol(ast, state, {line, column}, module)
   end
 
   defp pre({:defprotocol, [line: line, column: column], [module, _]} = ast, state)
        when is_atom(module) do
-    # protocol defines a type `{:type, {:t, {:type, 1, :term, []}, []}}`
-    pre_module(ast, state, {line, column}, module, @protocol_types)
+    pre_protocol(ast, state, {line, column}, module)
   end
 
   defp pre(
@@ -886,7 +913,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
        ) do
     implementations = get_implementations_from_for_expression(state, for_expression)
 
-    pre_module(ast, state, position, {protocol, implementations})
+    pre_module(ast, state, position, {protocol, implementations}, [], [{:__impl__, [:atom], :def}])
   end
 
   defp post_protocol_implementation(ast, state, protocol, for_expression) do
