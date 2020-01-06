@@ -147,7 +147,7 @@ defmodule ElixirSense.Core.Metadata do
 
           %{
             name: Atom.to_string(type),
-            params: args |> Enum.map(&Atom.to_string/1),
+            params: args,
             documentation: doc,
             spec: spec
           }

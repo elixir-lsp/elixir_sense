@@ -19,6 +19,9 @@ defmodule ElixirSense.Core.State do
   @type types_t :: %{
           optional({module, atom, nil | non_neg_integer}) => ElixirSense.Core.State.TypeInfo.t()
         }
+  @type specs_t :: %{
+          optional({module, atom, nil | non_neg_integer}) => ElixirSense.Core.State.SpecInfo.t()
+        }
   @type vars_info_per_scope_id_t :: %{
           optional(scope_id_t) => %{optional(atom) => ElixirSense.Core.State.VarInfo.t()}
         }
@@ -35,6 +38,7 @@ defmodule ElixirSense.Core.State do
           protocols: list(list(protocol_t())),
           scope_attributes: list(list(atom)),
           behaviours: list(list(module)),
+          specs: specs_t,
           scope_behaviours: list(list(module)),
           vars: list(list(ElixirSense.Core.State.VarInfo.t())),
           scope_vars: list(list(ElixirSense.Core.State.VarInfo.t())),
@@ -58,6 +62,7 @@ defmodule ElixirSense.Core.State do
             scope_attributes: [[]],
             behaviours: [[]],
             scope_behaviours: [[]],
+            specs: %{},
             vars: [[]],
             scope_vars: [[]],
             scope_id_count: 0,
@@ -123,11 +128,26 @@ defmodule ElixirSense.Core.State do
     """
     @type t :: %TypeInfo{
             name: atom,
-            args: list(list(atom)),
+            args: list(list(String.t())),
+            specs: [String.t()],
             kind: :type | :typep | :opaque,
             positions: [ElixirSense.Core.State.position_t()]
           }
-    defstruct name: nil, args: [], kind: :type, positions: []
+    defstruct name: nil, args: [], specs: [], kind: :type, positions: []
+  end
+
+  defmodule SpecInfo do
+    @moduledoc """
+    Type definition info
+    """
+    @type t :: %SpecInfo{
+            name: atom,
+            args: list(list(String.t())),
+            specs: [String.t()],
+            kind: :spec | :callback | :macrocallback,
+            positions: [ElixirSense.Core.State.position_t()]
+          }
+    defstruct name: nil, args: [], specs: [], kind: :spec, positions: []
   end
 
   defmodule StructInfo do
@@ -634,13 +654,16 @@ defmodule ElixirSense.Core.State do
     Enum.reduce(modules, state, fn mod, state -> add_require(state, mod) end)
   end
 
-  def add_type(%__MODULE__{} = state, type_name, type_args, kind, pos) do
-    arg_names = for {arg_name, _, _} <- type_args, do: arg_name
+  def add_type(%__MODULE__{} = state, type_name, type_args, spec, kind, pos) do
+    arg_names =
+      type_args
+      |> Enum.map(&Macro.to_string/1)
 
     type_info = %TypeInfo{
       name: type_name,
       args: [arg_names],
       kind: kind,
+      specs: [spec],
       positions: [pos]
     }
 
@@ -654,8 +677,13 @@ defmodule ElixirSense.Core.State do
             nil ->
               type_info
 
-            %TypeInfo{positions: positions, args: args} = ti ->
-              %TypeInfo{ti | positions: [pos | positions], args: [arg_names | args]}
+            %TypeInfo{positions: positions, args: args, specs: specs} = ti ->
+              %TypeInfo{
+                ti
+                | positions: [pos | positions],
+                  args: [arg_names | args],
+                  specs: [spec | specs]
+              }
           end
 
         acc
@@ -664,6 +692,46 @@ defmodule ElixirSense.Core.State do
       end)
 
     %__MODULE__{state | types: types}
+  end
+
+  def add_spec(%__MODULE__{} = state, type_name, type_args, spec, kind, pos) do
+    arg_names =
+      type_args
+      |> Enum.map(&Macro.to_string/1)
+
+    type_info = %SpecInfo{
+      name: type_name,
+      args: [arg_names],
+      specs: [spec],
+      kind: kind,
+      positions: [pos]
+    }
+
+    current_module_variants = get_current_module_variants(state)
+
+    specs =
+      current_module_variants
+      |> Enum.reduce(state.specs, fn current_module, acc ->
+        info =
+          case acc[{current_module, type_name, nil}] do
+            nil ->
+              type_info
+
+            %SpecInfo{positions: positions, args: args, specs: specs} = ti ->
+              %SpecInfo{
+                ti
+                | positions: [pos | positions],
+                  args: [arg_names | args],
+                  specs: [spec | specs]
+              }
+          end
+
+        acc
+        |> Map.put({current_module, type_name, nil}, info)
+        |> Map.put({current_module, type_name, length(arg_names)}, type_info)
+      end)
+
+    %__MODULE__{state | specs: specs}
   end
 
   def add_var(%__MODULE__{} = state, %{name: var_name} = var_info, is_definition) do

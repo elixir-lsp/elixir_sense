@@ -3419,55 +3419,64 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                args: [[]],
                kind: :type,
                name: :no_arg_no_parens,
-               positions: [{2, 3}]
+               positions: [{2, 3}],
+               specs: ["@type no_arg_no_parens :: integer"]
              },
              {My, :no_arg_no_parens, nil} => %ElixirSense.Core.State.TypeInfo{
                args: [[]],
                kind: :type,
                name: :no_arg_no_parens,
-               positions: [{2, 3}]
+               positions: [{2, 3}],
+               specs: ["@type no_arg_no_parens :: integer"]
              },
              {My, :no_args, 0} => %ElixirSense.Core.State.TypeInfo{
                args: [[]],
                kind: :typep,
                name: :no_args,
-               positions: [{3, 3}]
+               positions: [{3, 3}],
+               specs: ["@typep no_args :: integer"]
              },
              {My, :no_args, nil} => %ElixirSense.Core.State.TypeInfo{
                args: [[]],
                kind: :typep,
                name: :no_args,
-               positions: [{3, 3}]
-             },
-             {My, :with_args, 2} => %ElixirSense.Core.State.TypeInfo{
-               args: [[:a, :b]],
-               kind: :opaque,
-               name: :with_args,
-               positions: [{4, 3}]
-             },
-             {My, :with_args, nil} => %ElixirSense.Core.State.TypeInfo{
-               args: [[:a, :b]],
-               kind: :opaque,
-               name: :with_args,
-               positions: [{4, 3}]
+               positions: [{3, 3}],
+               specs: ["@typep no_args :: integer"]
              },
              {My, :overloaded, 0} => %ElixirSense.Core.State.TypeInfo{
                args: [[]],
                kind: :type,
                name: :overloaded,
-               positions: [{5, 3}]
+               positions: [{5, 3}],
+               specs: ["@type overloaded :: {}"]
              },
              {My, :overloaded, 1} => %ElixirSense.Core.State.TypeInfo{
-               args: [[:a]],
                kind: :type,
                name: :overloaded,
-               positions: [{6, 3}]
+               positions: [{6, 3}],
+               args: [["a"]],
+               specs: ["@type overloaded(a) :: {a}"]
              },
              {My, :overloaded, nil} => %ElixirSense.Core.State.TypeInfo{
-               args: [[:a], []],
                kind: :type,
                name: :overloaded,
-               positions: [{6, 3}, {5, 3}]
+               positions: [{6, 3}, {5, 3}],
+               args: [["a"], []],
+               specs: ["@type overloaded(a) :: {a}", "@type overloaded :: {}"]
+             },
+             {My, :with_args, 2} => %ElixirSense.Core.State.TypeInfo{
+               kind: :opaque,
+               name: :with_args,
+               positions: [{4, 3}],
+               args: [["a", "b"]],
+               specs: ["@opaque with_args(a, b) :: {a, b}"]
+             },
+             {My, :with_args, nil} => %ElixirSense.Core.State.TypeInfo{
+               kind: :opaque,
+               name: :with_args,
+               positions: [{4, 3}],
+               args: [["a", "b"]],
+               specs: ["@opaque with_args(a, b) :: {a, b}"]
              }
            }
   end
@@ -3486,13 +3495,73 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                args: [[]],
                kind: :type,
                name: :t,
-               positions: [{1, 13}]
+               positions: [{1, 13}],
+               specs: ["@type t :: term"]
              },
              {Proto, :t, 0} => %ElixirSense.Core.State.TypeInfo{
                args: [[]],
                kind: :type,
                name: :t,
-               positions: [{1, 13}]
+               positions: [{1, 13}],
+               specs: ["@type t :: term"]
+             }
+           }
+  end
+
+  test "attributes" do
+    state =
+      """
+      defmodule Proto do
+        @spec abc :: atom | integer
+        @spec abc :: reference
+        @callback my(a :: integer) :: atom
+        @macrocallback other(x) :: Macro.t when x: integer
+      end
+      """
+      |> string_to_state
+
+    assert state.specs == %{
+             {Proto, :abc, 0} => %ElixirSense.Core.State.SpecInfo{
+               args: [[]],
+               kind: :spec,
+               name: :abc,
+               positions: [{3, 3}],
+               specs: ["@spec abc :: reference"]
+             },
+             {Proto, :abc, nil} => %ElixirSense.Core.State.SpecInfo{
+               kind: :spec,
+               name: :abc,
+               args: [[], []],
+               positions: [{3, 3}, {2, 3}],
+               specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
+             },
+             {Proto, :my, 1} => %ElixirSense.Core.State.SpecInfo{
+               kind: :callback,
+               name: :my,
+               args: [["a :: integer"]],
+               positions: [{4, 3}],
+               specs: ["@callback my(a :: integer) :: atom"]
+             },
+             {Proto, :my, nil} => %ElixirSense.Core.State.SpecInfo{
+               kind: :callback,
+               name: :my,
+               args: [["a :: integer"]],
+               positions: [{4, 3}],
+               specs: ["@callback my(a :: integer) :: atom"]
+             },
+             {Proto, :other, 1} => %ElixirSense.Core.State.SpecInfo{
+               kind: :macrocallback,
+               name: :other,
+               args: [["x"]],
+               positions: [{5, 3}],
+               specs: ["@macrocallback other(x) :: Macro.t when x: integer"]
+             },
+             {Proto, :other, nil} => %ElixirSense.Core.State.SpecInfo{
+               kind: :macrocallback,
+               name: :other,
+               args: [["x"]],
+               positions: [{5, 3}],
+               specs: ["@macrocallback other(x) :: Macro.t when x: integer"]
              }
            }
   end

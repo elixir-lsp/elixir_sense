@@ -586,7 +586,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
     case type_info do
       %ElixirSense.Core.State.TypeInfo{args: [args]} ->
-        args_stringified = Enum.map_join(args, ", ", &Atom.to_string/1)
+        args_stringified = Enum.join(args, ", ")
 
         %{
           type: :type_spec,

@@ -13,7 +13,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   @scope_keywords [:for, :try, :fn]
   @block_keywords [:do, :else, :rescue, :catch, :after]
   @defs [:def, :defp, :defmacro, :defmacrop, :defdelegate, :defguard, :defguardp]
-  @protocol_types [{:t, [], :type}]
+  @protocol_types [{:t, [], :type, "@type t :: term"}]
   @protocol_functions [
     {:__protocol__, [:atom], :def},
     {:impl_for, [:data], :def},
@@ -52,9 +52,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state =
       types
-      |> Enum.reduce(state, fn {type_name, type_args, kind}, acc ->
+      |> Enum.reduce(state, fn {type_name, type_args, spec, kind}, acc ->
         acc
-        |> add_type(type_name, type_args, kind, position)
+        |> add_type(type_name, type_args, kind, spec, position)
       end)
 
     state =
@@ -209,10 +209,21 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_type(ast, state, pos = {line, _column}, type_name, type_args, kind) do
+  defp pre_type(ast, state, pos = {line, _column}, type_name, type_args, spec, kind) do
+    spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
+
     state
     |> add_current_env_to_line(line)
-    |> add_type(type_name, type_args, kind, pos)
+    |> add_type(type_name, type_args, spec, kind, pos)
+    |> result(ast)
+  end
+
+  defp pre_spec(ast, state, pos = {line, _column}, type_name, type_args, spec, kind) do
+    spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
+
+    state
+    |> add_current_env_to_line(line)
+    |> add_spec(type_name, type_args, spec, kind, pos)
     |> result(ast)
   end
 
@@ -372,12 +383,37 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre(
          {:@, [line: line, column: column] = _meta_attr,
-          [{kind, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]}]}]} = ast,
+          [{kind, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]} = spec]}]} =
+           ast,
          state
        )
        when kind in [:type, :typep, :opaque] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
-    pre_type(ast, state, {line, column}, name, List.wrap(type_args), kind)
+    pre_type(ast, state, {line, column}, name, List.wrap(type_args), spec, kind)
+  end
+
+  defp pre(
+         {:@, [line: line, column: column] = _meta_attr,
+          [
+            {kind, _,
+             [{:when, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]}, _]} = spec]}
+          ]} = ast,
+         state
+       )
+       when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
+              (is_nil(type_args) or is_list(type_args)) do
+    pre_spec(ast, state, {line, column}, name, List.wrap(type_args), spec, kind)
+  end
+
+  defp pre(
+         {:@, [line: line, column: column] = _meta_attr,
+          [{kind, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]} = spec]}]} =
+           ast,
+         state
+       )
+       when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
+              (is_nil(type_args) or is_list(type_args)) do
+    pre_spec(ast, state, {line, column}, name, List.wrap(type_args), spec, kind)
   end
 
   defp pre({:@, [line: line, column: _column] = meta_attr, [{name, meta, params}]}, state) do
