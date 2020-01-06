@@ -285,7 +285,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert file =~ "/src/erlang.erl"
   end
 
-  test "cannot find built-in functions" do
+  test "find built-in functions" do
     # module_info is defined by default for every elixir and erlang module:
     # https://stackoverflow.com/a/33373107/175830
     buffer = """
@@ -295,7 +295,11 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %{found: false} = ElixirSense.definition(buffer, 2, 42)
+    assert %{column: column, file: file, found: true, line: line, type: :function} =
+             ElixirSense.definition(buffer, 2, 42)
+
+    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
+    assert read_line(file, {line, column}) =~ "ElixirSenseExample.ModuleWithFunctions do"
   end
 
   test "find definition of variables" do

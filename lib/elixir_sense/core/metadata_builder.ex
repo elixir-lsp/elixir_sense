@@ -20,6 +20,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {:impl_for!, [:data], :def},
     {:behaviour_info, [:atom], :def}
   ]
+  @module_functions [
+    {:__info__, [:atom], :def},
+    {:module_info, [], :def},
+    {:module_info, [:atom], :def}
+  ]
 
   defguardp is_call(call, params)
             when is_atom(call) and is_list(params) and
@@ -59,7 +64,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end)
 
     state =
-      functions
+      (functions ++ @module_functions)
       |> Enum.reduce(state, fn {name, args, kind}, acc ->
         mapped_args = for arg <- args, do: {arg, [line: line, column: column], nil}
 
@@ -219,7 +224,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_spec(ast, state, pos = {line, _column}, type_name, type_args, spec, kind) do
+  defp pre_spec(ast, state, pos = {line, column}, type_name, type_args, spec, kind) do
     spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
 
     state =
@@ -227,7 +232,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         state
         |> add_func_to_index(
           :behaviour_info,
-          [:atom],
+          [{:atom, [line: line, column: column], nil}],
           pos,
           :def
         )

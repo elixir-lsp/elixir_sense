@@ -1746,7 +1746,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{1, 13}],
                type: :def
              }
-           } == state.mods_funs_to_positions
+           } = state.mods_funs_to_positions
   end
 
   test "registers positions" do
@@ -1951,7 +1951,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{18, 13}],
                type: :def
              }
-           } == state.mods_funs_to_positions
+           } = state.mods_funs_to_positions
   end
 
   test "behaviours" do
@@ -2268,6 +2268,81 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [nil],
                positions: [{1, 11}],
                type: :defmodule
+             },
+             {MyModuleWithFuns, :__info__, 1} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 3, column: 11], nil}]],
+               positions: [{3, 11}],
+               type: :def
+             },
+             {MyModuleWithFuns, :__info__, nil} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 3, column: 11], nil}]],
+               positions: [{3, 11}],
+               type: :def
+             },
+             {MyModuleWithFuns, :module_info, 0} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[]],
+               positions: [{3, 11}],
+               type: :def
+             },
+             {MyModuleWithFuns, :module_info, 1} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 3, column: 11], nil}]],
+               positions: [{3, 11}],
+               type: :def
+             },
+             {MyModuleWithFuns, :module_info, nil} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 3, column: 11], nil}], []],
+               positions: [{3, 11}, {3, 11}],
+               type: :def
+             },
+             {MyModuleWithFuns.Nested, :__info__, 1} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 19, column: 13], nil}]],
+               positions: [{19, 13}],
+               type: :def
+             },
+             {MyModuleWithFuns.Nested, :__info__, nil} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 19, column: 13], nil}]],
+               positions: [{19, 13}],
+               type: :def
+             },
+             {MyModuleWithFuns.Nested, :module_info, 0} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[]],
+               positions: [{19, 13}],
+               type: :def
+             },
+             {MyModuleWithFuns.Nested, :module_info, 1} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 19, column: 13], nil}]],
+               positions: [{19, 13}],
+               type: :def
+             },
+             {MyModuleWithFuns.Nested, :module_info, nil} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 19, column: 13], nil}], []],
+               positions: [{19, 13}, {19, 13}],
+               type: :def
+             },
+             {MyModuleWithoutFuns, :__info__, 1} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 1, column: 11], nil}]],
+               positions: [{1, 11}],
+               type: :def
+             },
+             {MyModuleWithoutFuns, :__info__, nil} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 1, column: 11], nil}]],
+               positions: [{1, 11}],
+               type: :def
+             },
+             {MyModuleWithoutFuns, :module_info, 0} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[]],
+               positions: [{1, 11}],
+               type: :def
+             },
+             {MyModuleWithoutFuns, :module_info, 1} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 1, column: 11], nil}]],
+               positions: [{1, 11}],
+               type: :def
+             },
+             {MyModuleWithoutFuns, :module_info, nil} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 1, column: 11], nil}], []],
+               positions: [{1, 11}, {1, 11}],
+               type: :def
              }
            } == state.mods_funs_to_positions
   end
@@ -2539,7 +2614,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{23, 13}],
                type: :def
              }
-           } == state.mods_funs_to_positions
+           } = state.mods_funs_to_positions
   end
 
   test "use" do
@@ -2905,7 +2980,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            }
 
     # defstruct adds struct/0 and struct/1 functions
-    assert state.mods_funs_to_positions == %{
+    assert %{
              {MyStruct, :__struct__, 0} => %ModFunInfo{
                params: [[]],
                positions: [{2, 3}],
@@ -2926,7 +3001,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{1, 11}],
                type: :defmodule
              }
-           }
+           } = state.mods_funs_to_positions
   end
 
   test "find struct fields from expression" do
@@ -2966,7 +3041,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     # defexception adds Exception behaviour
     assert get_line_behaviours(state, 4) == [Exception]
     # and message/1 and exception/1 callbacks
-    assert state.mods_funs_to_positions == %{
+    assert %{
              {MyError, :__struct__, 0} => %ModFunInfo{
                params: [[]],
                positions: [{2, 3}],
@@ -3007,7 +3082,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{1, 11}],
                type: :defmodule
              }
-           }
+           } = state.mods_funs_to_positions
   end
 
   test "registers calls with __MODULE__" do
