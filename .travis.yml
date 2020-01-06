@@ -1,7 +1,7 @@
 language: erlang
 
 otp_release:
-  - '22.0'
+  - '22.2.1'
 
 env:
   EX_HOME: ${TRAVIS_BUILD_DIR}/elixir
