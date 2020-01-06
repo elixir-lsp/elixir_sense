@@ -418,7 +418,7 @@ defmodule Alchemist.Helpers.Complete do
 
         if docs != nil do
           exports =
-            (mod.__info__(:macros) ++ mod.__info__(:functions))
+            (mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_buildins(mod))
             |> Kernel.--(default_arg_functions_with_doc_false(docs))
             |> Enum.reject(&hidden_fun?(&1, docs))
 
@@ -468,6 +468,13 @@ defmodule Alchemist.Helpers.Complete do
           end
         end
     end
+  end
+
+  defp special_buildins(mod) do
+    mod.module_info(:exports)
+    |> Enum.filter(fn {f, a} ->
+      {f, a} in [{:behaviour_info, 1}]
+    end)
   end
 
   def find_doc(fun, _docs) when fun in @builtin_functions, do: {:def, nil}

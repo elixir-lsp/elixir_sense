@@ -597,4 +597,18 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'fo__', [%{name: "__info__", type: :function}]} = expand('MyModule.__in', env)
   end
+
+  test "complete build in behaviour functions" do
+    assert {:no, _, _} = expand('Elixir.beh')
+
+    assert {:yes, 'aviour_info',
+            [
+              %{name: "behaviour_info", type: :function, arity: 1}
+            ]} = expand(':gen_server.beh')
+
+    assert {:yes, 'aviour_info',
+            [
+              %{name: "behaviour_info", type: :function, arity: 1}
+            ]} = expand('GenServer.beh')
+  end
 end
