@@ -507,6 +507,13 @@ defmodule Alchemist.Helpers.Complete do
         do: {fun_name, new_arity}
   end
 
+  # protocol
+  defp hidden_fun?({:__protocol__, 1}, _docs), do: false
+  defp hidden_fun?({:impl_for, 1}, _docs), do: false
+  defp hidden_fun?({:impl_for!, 1}, _docs), do: false
+  # protocol impl
+  defp hidden_fun?({:__impl__, 1}, _docs), do: false
+
   defp hidden_fun?(fun, docs) do
     case List.keyfind(docs, fun, 0) do
       nil ->

@@ -611,4 +611,27 @@ defmodule Alchemist.Helpers.CompleteTest do
               %{name: "behaviour_info", type: :function, arity: 1}
             ]} = expand('GenServer.beh')
   end
+
+  test "complete build in protocol functions" do
+    assert {:no, _, _} = expand('Elixir.__pr')
+
+    assert {:yes, 'tocol__',
+            [
+              %{name: "__protocol__", type: :function, arity: 1}
+            ]} = expand('Enumerable.__pro')
+
+    assert {:yes, 'l_for', []} = expand('Enumerable.imp')
+
+    assert {:yes, [], [%{name: "impl_for!", type: :function, arity: 1}]} =
+             expand('Enumerable.impl_for!')
+  end
+
+  test "complete build in protocol implementation functions" do
+    assert {:no, _, _} = expand('Elixir.__im')
+
+    assert {:yes, 'pl__',
+            [
+              %{name: "__impl__", type: :function, arity: 1}
+            ]} = expand('Enumerable.List.__im')
+  end
 end
