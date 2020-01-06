@@ -634,4 +634,37 @@ defmodule Alchemist.Helpers.CompleteTest do
               %{name: "__impl__", type: :function, arity: 1}
             ]} = expand('Enumerable.List.__im')
   end
+
+  test "complete build in struct functions" do
+    assert {:no, _, _} = expand('Elixir.__str')
+
+    assert {:yes, 'uct__',
+            [
+              %{name: "__struct__", type: :function, arity: 0},
+              %{name: "__struct__", type: :function, arity: 1}
+            ]} = expand('ElixirSenseExample.ModuleWithStruct.__str')
+  end
+
+  test "complete build in exception functions" do
+    assert {:no, _, _} = expand('Elixir.mes')
+
+    assert {:yes, 'sage',
+            [
+              %{name: "message", type: :function, arity: 1}
+            ]} = expand('ArgumentError.mes')
+
+    assert {:no, _, _} = expand('Elixir.exce')
+
+    assert {:yes, 'ption',
+            [
+              %{name: "exception", type: :function, arity: 1}
+            ]} = expand('ArgumentError.exce')
+
+    assert {:no, _, _} = expand('Elixir.bla')
+
+    assert {:yes, 'me',
+            [
+              %{name: "blame", type: :function, arity: 2}
+            ]} = expand('ArgumentError.bla')
+  end
 end

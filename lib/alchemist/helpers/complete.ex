@@ -507,6 +507,13 @@ defmodule Alchemist.Helpers.Complete do
         do: {fun_name, new_arity}
   end
 
+  # struct
+  defp hidden_fun?({:__struct__, 0}, _docs), do: false
+  defp hidden_fun?({:__struct__, 1}, _docs), do: false
+  # exception
+  defp hidden_fun?({:message, 1}, _docs), do: false
+  defp hidden_fun?({:exception, 1}, _docs), do: false
+  defp hidden_fun?({:blame, 2}, _docs), do: false
   # protocol
   defp hidden_fun?({:__protocol__, 1}, _docs), do: false
   defp hidden_fun?({:impl_for, 1}, _docs), do: false
