@@ -3520,6 +3520,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
+    # if there are callbacks behaviour_info/1 is defined
+    assert state.mods_funs_to_positions[{Proto, :behaviour_info, 1}] != nil
+
     assert state.specs == %{
              {Proto, :abc, 0} => %ElixirSense.Core.State.SpecInfo{
                args: [[]],

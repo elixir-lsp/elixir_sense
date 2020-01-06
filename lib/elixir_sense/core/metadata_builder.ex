@@ -221,6 +221,18 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp pre_spec(ast, state, pos = {line, _column}, type_name, type_args, spec, kind) do
     spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
 
+    state = if kind in [:callback, :macrocallback] do
+      state
+      |> add_func_to_index(
+          :behaviour_info,
+          [:atom],
+          pos,
+          :def
+        )
+    else
+      state
+    end
+
     state
     |> add_current_env_to_line(line)
     |> add_spec(type_name, type_args, spec, kind, pos)
