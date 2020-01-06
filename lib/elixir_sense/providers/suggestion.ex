@@ -191,8 +191,11 @@ defmodule ElixirSense.Providers.Suggestion do
 
     callbacks_or_returns =
       case scope do
-        {_f, _a} -> find_returns(behaviours, protocol, hint, scope)
-        _mod -> find_callbacks(behaviours, hint) ++ find_protocol_functions(protocol, hint)
+        {_f, _a} ->
+          find_returns(behaviours, protocol, hint, scope)
+
+        _mod ->
+          find_callbacks(behaviours, protocol, hint) ++ find_protocol_functions(protocol, hint)
       end
 
     [hint_suggestion]
@@ -393,6 +396,7 @@ defmodule ElixirSense.Providers.Suggestion do
   defp find_returns(behaviours, protocol, "", {fun, arity}) do
     callbacks =
       for mod <- behaviours,
+          protocol == nil or mod != elem(protocol, 0),
           Introspection.define_callback?(mod, fun, arity),
           return <- Introspection.get_returns_from_callback(mod, fun, arity) do
         %{
@@ -430,11 +434,11 @@ defmodule ElixirSense.Providers.Suggestion do
     []
   end
 
-  @spec find_callbacks([module], String.t()) :: [callback]
-  defp find_callbacks(behaviours, hint) do
+  @spec find_callbacks([module], nil | State.protocol_t(), String.t()) :: [callback]
+  defp find_callbacks(behaviours, protocol, hint) do
     behaviours
     |> Enum.flat_map(fn
-      mod when is_atom(mod) ->
+      mod when is_atom(mod) and (protocol == nil or mod != elem(protocol, 0)) ->
         mod_name = inspect(mod)
 
         for %{name: name, arity: arity, callback: spec, signature: signature, doc: doc} <-

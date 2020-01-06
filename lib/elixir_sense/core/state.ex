@@ -722,12 +722,14 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | attributes: attributes, scope_attributes: scope_attributes}
   end
 
-  def add_behaviour(%__MODULE__{} = state, module) do
+  def add_behaviour(%__MODULE__{} = state, module) when is_atom(module) do
     module = expand_alias(state, module)
     [behaviours_from_scope | other_behaviours] = state.behaviours
     behaviours_from_scope = behaviours_from_scope -- [module]
     %__MODULE__{state | behaviours: [[module | behaviours_from_scope] | other_behaviours]}
   end
+
+  def add_behaviour(%__MODULE__{} = state, _module), do: state
 
   def add_behaviours(%__MODULE__{} = state, modules) do
     Enum.reduce(modules, state, fn mod, state -> add_behaviour(state, mod) end)

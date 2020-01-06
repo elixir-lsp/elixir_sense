@@ -48,6 +48,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> new_import_scope
       |> new_require_scope
       |> new_vars_scope
+      |> maybe_add_protocol_behaviour(module)
 
     state =
       types
@@ -990,4 +991,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     do: {rest, implementations}
 
   defp normalize_module(other), do: other
+
+  defp maybe_add_protocol_behaviour(state, {_protocol, _}) do
+    protocol = state.protocols |> hd |> hd |> elem(0)
+
+    state
+    |> add_behaviour(protocol)
+  end
+
+  defp maybe_add_protocol_behaviour(state, _), do: state
 end

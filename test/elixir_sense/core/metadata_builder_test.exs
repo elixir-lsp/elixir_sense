@@ -1361,6 +1361,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_module(state, 13) == [My.Reversible.Map, My.Reversible.My.List]
     assert get_line_protocol(state, 13) == {My.Reversible, [Map, My.List]}
 
+    # implementation has behaviour
+    assert get_line_behaviours(state, 8) == [My.Reversible]
+
     # multiple implementations create multiple modules
     assert get_line_module(state, 16) == [
              My.Reversible.Map.OuterModule,
