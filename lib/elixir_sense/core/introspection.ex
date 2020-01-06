@@ -841,7 +841,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp find_metadata_function(
-         {Elixir, nil},
+         {Elixir, _},
          _current_module,
          _imports,
          _mods_funs,

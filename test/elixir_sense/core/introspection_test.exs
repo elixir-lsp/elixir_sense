@@ -216,12 +216,12 @@ defmodule ElixirSense.Core.IntrospectionTest do
   end
 
   test "actual_mod_fun Elixir module" do
-    # Elixir is not a module
+    # Elixir is not a valid module
     assert {Elixir, nil, false} = actual_mod_fun({Elixir, nil}, [], [], nil, %{}, %{})
-    # But defines some types
-    assert {Elixir, :keyword, true} = actual_mod_fun({Elixir, :keyword}, [], [], nil, %{}, %{})
-    # not erlang types
-    assert {Elixir, :string, false} = actual_mod_fun({Elixir, :string}, [], [], nil, %{}, %{})
+
+    # But defines some types: Code.Typespec.fetch_types(Elixir) returns keyword, as_boolean and other elixir builtins
+    # we do not support that as such types compile fine but are marked as unknown by dialyzer
+    assert {Elixir, :keyword, false} = actual_mod_fun({Elixir, :keyword}, [], [], nil, %{}, %{})
     # not found
     assert {Elixir, :asdf, false} = actual_mod_fun({Elixir, :asdf}, [], [], nil, %{}, %{})
   end
