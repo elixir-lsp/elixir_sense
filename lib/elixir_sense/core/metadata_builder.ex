@@ -17,7 +17,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   @protocol_functions [
     {:__protocol__, [:atom], :def},
     {:impl_for, [:data], :def},
-    {:impl_for!, [:data], :def}
+    {:impl_for!, [:data], :def},
+    {:behaviour_info, [:atom], :def}
   ]
 
   defguardp is_call(call, params)
@@ -221,17 +222,18 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp pre_spec(ast, state, pos = {line, _column}, type_name, type_args, spec, kind) do
     spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
 
-    state = if kind in [:callback, :macrocallback] do
-      state
-      |> add_func_to_index(
+    state =
+      if kind in [:callback, :macrocallback] do
+        state
+        |> add_func_to_index(
           :behaviour_info,
           [:atom],
           pos,
           :def
         )
-    else
-      state
-    end
+      else
+        state
+      end
 
     state
     |> add_current_env_to_line(line)

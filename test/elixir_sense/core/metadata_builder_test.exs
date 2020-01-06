@@ -1735,6 +1735,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:atom, [line: 5, column: 9], nil}]],
                positions: [{5, 9}],
                type: :def
+             },
+             {Proto, :behaviour_info, 1} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 1, column: 13], nil}]],
+               positions: [{1, 13}],
+               type: :def
+             },
+             {Proto, :behaviour_info, nil} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 1, column: 13], nil}]],
+               positions: [{1, 13}],
+               type: :def
              }
            } == state.mods_funs_to_positions
   end
@@ -1929,6 +1939,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {Reversible.String, :__impl__, nil} => %ElixirSense.Core.State.ModFunInfo{
                params: [[{:atom, [line: 23, column: 9], nil}]],
                positions: [{23, 9}],
+               type: :def
+             },
+             {Reversible, :behaviour_info, 1} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 18, column: 13], nil}]],
+               positions: [{18, 13}],
+               type: :def
+             },
+             {Reversible, :behaviour_info, nil} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 18, column: 13], nil}]],
+               positions: [{18, 13}],
                type: :def
              }
            } == state.mods_funs_to_positions
@@ -2507,6 +2527,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {Reversible.My.List, :__impl__, nil} => %ElixirSense.Core.State.ModFunInfo{
                params: [[{:atom, [line: 36, column: 11], nil}]],
                positions: [{36, 11}],
+               type: :def
+             },
+             {Reversible, :behaviour_info, 1} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 23, column: 13], nil}]],
+               positions: [{23, 13}],
+               type: :def
+             },
+             {Reversible, :behaviour_info, nil} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 23, column: 13], nil}]],
+               positions: [{23, 13}],
                type: :def
              }
            } == state.mods_funs_to_positions
