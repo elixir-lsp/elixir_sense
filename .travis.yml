@@ -6,7 +6,7 @@ otp_release:
 env:
   EX_HOME: ${TRAVIS_BUILD_DIR}/elixir
   EX_BIN: ${TRAVIS_BUILD_DIR}/elixir/bin
-  EX_VSN: 1.9.1
+  EX_VSN: 1.9.4
 
 before_script:
   - git clone https://github.com/elixir-lang/elixir.git ${EX_HOME}
