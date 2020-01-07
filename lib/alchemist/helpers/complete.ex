@@ -360,12 +360,15 @@ defmodule Alchemist.Helpers.Complete do
 
   defp match_module_funs(mod, hint, include_builtin, env) do
     falist =
-      case ensure_loaded(mod) do
-        {:module, _} ->
+      cond do
+        env.mods_and_funs |> Map.has_key?({mod, nil, nil}) ->
+          get_metadata_module_funs(mod, include_builtin, env)
+
+        match?({:module, _}, ensure_loaded(mod)) ->
           get_module_funs(mod, include_builtin)
 
-        _otherwise ->
-          get_metadata_module_funs(mod, include_builtin, env)
+        true ->
+          []
       end
       |> Enum.sort_by(fn {f, a, _, _, _, _} -> {f, -a} end)
 
