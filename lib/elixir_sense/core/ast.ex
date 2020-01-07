@@ -81,7 +81,7 @@ defmodule ElixirSense.Core.Ast do
   defp add_directive_modules_to_env(env, directive, modules) do
     directive_string =
       modules
-      |> Enum.filter(&Code.ensure_compiled?/1)
+      |> Enum.filter(&match?({:module, _}, Code.ensure_compiled(&1)))
       |> Enum.map(&"#{directive} #{inspect(&1)}")
       |> Enum.join("; ")
 
