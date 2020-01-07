@@ -563,17 +563,48 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'dule_info',
             [
-              %{name: "module_info", type: :function, arity: 0},
-              %{name: "module_info", type: :function, arity: 1}
+              %{
+                name: "module_info",
+                type: :function,
+                arity: 0,
+                spec:
+                  "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
+              },
+              %{
+                name: "module_info",
+                type: :function,
+                arity: 1,
+                spec:
+                  "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
+              }
             ]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.mo')
 
-    assert {:yes, 'fo__', [%{name: "__info__", type: :function}]} =
-             expand('Alchemist.Helpers.CompleteTest.MyMacro.__in')
+    assert {:yes, 'fo__',
+            [
+              %{
+                name: "__info__",
+                type: :function,
+                spec:
+                  "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()"
+              }
+            ]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.__in')
 
     assert {:yes, 'dule_info',
             [
-              %{name: "module_info", type: :function, arity: 0},
-              %{name: "module_info", type: :function, arity: 1}
+              %{
+                name: "module_info",
+                type: :function,
+                arity: 0,
+                spec:
+                  "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
+              },
+              %{
+                name: "module_info",
+                type: :function,
+                arity: 1,
+                spec:
+                  "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
+              }
             ]} = expand(':ets.mo')
 
     assert {:no, _, _} = expand(':ets.__in')
@@ -591,11 +622,31 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'dule_info',
             [
-              %{name: "module_info", type: :function, arity: 0},
-              %{name: "module_info", type: :function, arity: 1}
+              %{
+                name: "module_info",
+                type: :function,
+                arity: 0,
+                spec:
+                  "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
+              },
+              %{
+                name: "module_info",
+                type: :function,
+                arity: 1,
+                spec:
+                  "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
+              }
             ]} = expand('MyModule.mo', env)
 
-    assert {:yes, 'fo__', [%{name: "__info__", type: :function}]} = expand('MyModule.__in', env)
+    assert {:yes, 'fo__',
+            [
+              %{
+                name: "__info__",
+                type: :function,
+                spec:
+                  "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()"
+              }
+            ]} = expand('MyModule.__in', env)
   end
 
   test "complete build in behaviour functions" do
@@ -603,12 +654,24 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'aviour_info',
             [
-              %{name: "behaviour_info", type: :function, arity: 1}
+              %{
+                name: "behaviour_info",
+                type: :function,
+                arity: 1,
+                spec:
+                  "@spec behaviour_info(:callbacks | :optional_callbacks) :: [{atom, non_neg_integer}]"
+              }
             ]} = expand(':gen_server.beh')
 
     assert {:yes, 'aviour_info',
             [
-              %{name: "behaviour_info", type: :function, arity: 1}
+              %{
+                name: "behaviour_info",
+                type: :function,
+                arity: 1,
+                spec:
+                  "@spec behaviour_info(:callbacks | :optional_callbacks) :: [{atom, non_neg_integer}]"
+              }
             ]} = expand('GenServer.beh')
   end
 
@@ -617,13 +680,26 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'tocol__',
             [
-              %{name: "__protocol__", type: :function, arity: 1}
+              %{
+                name: "__protocol__",
+                type: :function,
+                arity: 1,
+                spec:
+                  "@spec __protocol__(:module) :: module\n@spec __protocol__(:functions) :: [{atom, non_neg_integer}]\n@spec __protocol__(:consolidated?) :: boolean\n@spec __protocol__(:impls) :: :not_consolidated | {:consolidated, [module]}"
+              }
             ]} = expand('Enumerable.__pro')
 
     assert {:yes, 'l_for', []} = expand('Enumerable.imp')
 
-    assert {:yes, [], [%{name: "impl_for!", type: :function, arity: 1}]} =
-             expand('Enumerable.impl_for!')
+    assert {:yes, [],
+            [
+              %{
+                name: "impl_for!",
+                type: :function,
+                arity: 1,
+                spec: "@spec impl_for!(term) :: atom"
+              }
+            ]} = expand('Enumerable.impl_for!')
   end
 
   test "complete build in protocol implementation functions" do
@@ -631,7 +707,12 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'pl__',
             [
-              %{name: "__impl__", type: :function, arity: 1}
+              %{
+                name: "__impl__",
+                type: :function,
+                arity: 1,
+                spec: "@spec __impl__(:for | :target | :protocol) :: module"
+              }
             ]} = expand('Enumerable.List.__im')
   end
 
@@ -640,8 +721,20 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'uct__',
             [
-              %{name: "__struct__", type: :function, arity: 0},
-              %{name: "__struct__", type: :function, arity: 1}
+              %{
+                name: "__struct__",
+                type: :function,
+                arity: 0,
+                spec:
+                  "@spec __struct__() :: %{required(:__struct__) => module, optional(any) => any}"
+              },
+              %{
+                name: "__struct__",
+                type: :function,
+                arity: 1,
+                spec:
+                  "@spec __struct__(keyword) :: %{required(:__struct__) => module, optional(any) => any}"
+              }
             ]} = expand('ElixirSenseExample.ModuleWithStruct.__str')
   end
 
@@ -650,14 +743,24 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'sage',
             [
-              %{name: "message", type: :function, arity: 1}
+              %{
+                name: "message",
+                type: :function,
+                arity: 1,
+                spec: "@spec message(Exception.t()) :: String.t()"
+              }
             ]} = expand('ArgumentError.mes')
 
     assert {:no, _, _} = expand('Elixir.exce')
 
     assert {:yes, 'ption',
             [
-              %{name: "exception", type: :function, arity: 1}
+              %{
+                name: "exception",
+                type: :function,
+                arity: 1,
+                spec: "@spec exception(term) :: Exception.t()"
+              }
             ]} = expand('ArgumentError.exce')
 
     assert {:no, _, _} = expand('Elixir.bla')

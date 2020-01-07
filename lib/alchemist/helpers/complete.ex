@@ -3,6 +3,7 @@ defmodule Alchemist.Helpers.Complete do
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
+  alias ElixirSense.Core.BuiltinFunctions
 
   @erlang_module_builtin_functions [{:module_info, 0}, {:module_info, 1}]
   @elixir_module_builtin_functions [{:__info__, 1}]
@@ -575,7 +576,9 @@ defmodule Alchemist.Helpers.Complete do
 
       mod_name = inspect(mod)
 
-      unless {name |> String.to_atom(), a} in @builtin_functions do
+      fa = {name_atom = name |> String.to_atom(), a}
+
+      unless fa in BuiltinFunctions.all() do
         %{
           type: kind,
           name: name,
@@ -590,10 +593,10 @@ defmodule Alchemist.Helpers.Complete do
           type: kind,
           name: name,
           arity: a,
-          args: "",
+          args: BuiltinFunctions.get_args(fa) |> Enum.join(","),
           origin: mod_name,
           summary: "Built-in function",
-          spec: spec
+          spec: BuiltinFunctions.get_specs(fa) |> Enum.join("\n")
         }
       end
     end

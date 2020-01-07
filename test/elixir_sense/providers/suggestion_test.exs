@@ -37,27 +37,30 @@ defmodule ElixirSense.Providers.SuggestionTest do
              arity: 0,
              name: "module_info",
              origin: "ElixirSenseExample.EmptyModule",
-             spec: nil,
+             spec:
+               "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]",
              summary: "Built-in function",
              type: :function
            }
 
     assert result |> Enum.at(2) == %{
-             args: "",
+             args: "key",
              arity: 1,
              name: "module_info",
              origin: "ElixirSenseExample.EmptyModule",
-             spec: nil,
+             spec:
+               "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean",
              summary: "Built-in function",
              type: :function
            }
 
     assert result |> Enum.at(3) == %{
-             args: "",
+             args: "atom",
              arity: 1,
              name: "__info__",
              origin: "ElixirSenseExample.EmptyModule",
-             spec: nil,
+             spec:
+               "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()",
              summary: "Built-in function",
              type: :function
            }
