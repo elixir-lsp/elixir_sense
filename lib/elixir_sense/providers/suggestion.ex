@@ -214,7 +214,7 @@ defmodule ElixirSense.Providers.Suggestion do
         metadata_types
       )
     )
-    |> Kernel.++(find_typespecs(hint, aliases, module, scope, metadata_types))
+    |> Kernel.++(find_typespecs(hint, aliases, module, scope, mods_and_funs, metadata_types))
     |> Enum.uniq()
   end
 
@@ -536,26 +536,45 @@ defmodule ElixirSense.Providers.Suggestion do
     end)
   end
 
-  @spec find_typespecs(String.t(), [{module, module}], module, State.scope(), State.types_t()) ::
+  @spec find_typespecs(
+          String.t(),
+          [{module, module}],
+          module,
+          State.scope(),
+          State.mods_funs_to_positions_t(),
+          State.types_t()
+        ) ::
           [
             type_spec
           ]
 
   # We don't list typespecs when inside a function
-  defp find_typespecs(_hint, _aliases, _module, {_m, _f}, _) do
+  defp find_typespecs(_hint, _aliases, _module, {_m, _f}, _, _) do
     []
   end
 
-  defp find_typespecs(hint, aliases, module, _scope, metadata_types) do
+  defp find_typespecs(hint, aliases, module, _scope, mods_and_funs, metadata_types) do
     hint
     |> Source.split_module_and_hint(module, aliases)
-    |> find_typespecs_for_mod_and_hint(aliases, module, metadata_types)
+    |> find_typespecs_for_mod_and_hint(aliases, module, mods_and_funs, metadata_types)
   end
 
-  defp find_typespecs_for_mod_and_hint({nil, hint}, aliases, module, metadata_types)
+  defp find_typespecs_for_mod_and_hint(
+         {nil, hint},
+         aliases,
+         module,
+         mods_and_funs,
+         metadata_types
+       )
        when not is_nil(module) do
     local_module =
-      find_typespecs_for_mod_and_hint({module, hint}, aliases, module, metadata_types)
+      find_typespecs_for_mod_and_hint(
+        {module, hint},
+        aliases,
+        module,
+        mods_and_funs,
+        metadata_types
+      )
 
     builtin_modules =
       TypeInfo.find_all_builtin(&String.starts_with?("#{&1.name}", hint))
@@ -564,13 +583,23 @@ defmodule ElixirSense.Providers.Suggestion do
     local_module ++ builtin_modules
   end
 
-  defp find_typespecs_for_mod_and_hint({mod, hint}, aliases, module, metadata_types) do
-    actual_mod = Introspection.actual_module(mod, aliases)
+  defp find_typespecs_for_mod_and_hint(
+         {mod, hint},
+         aliases,
+         module,
+         mods_and_funs,
+         metadata_types
+       ) do
+    case Introspection.actual_module(mod, aliases, module, mods_and_funs) do
+      {actual_mod, true} ->
+        TypeInfo.find_all(actual_mod, &String.starts_with?("#{&1.name}", hint))
+        |> Kernel.++(find_metadata_types(actual_mod, hint, metadata_types, module == actual_mod))
+        |> Enum.map(&type_info_to_suggestion(&1, actual_mod))
+        |> Enum.uniq_by(&{&1.name, &1.arity})
 
-    TypeInfo.find_all(actual_mod, &String.starts_with?("#{&1.name}", hint))
-    |> Kernel.++(find_metadata_types(actual_mod, hint, metadata_types, module == mod))
-    |> Enum.map(&type_info_to_suggestion(&1, actual_mod))
-    |> Enum.uniq_by(&{&1.name, &1.arity})
+      {_, false} ->
+        []
+    end
   end
 
   defp find_metadata_types(actual_mod, hint, metadata_types, include_private) do

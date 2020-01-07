@@ -687,9 +687,24 @@ defmodule ElixirSense.Core.Introspection do
     end)
   end
 
-  def actual_module(module, aliases) do
-    # TODO check if module exists?
-    expand_alias(module, aliases)
+  @spec actual_module(
+          nil | module,
+          [{module, module}],
+          nil | module,
+          ElixirSense.Core.State.mods_funs_to_positions_t()
+        ) :: {nil | module, boolean}
+  def actual_module(module, aliases, current_module, mods_funs) do
+    {m, nil, res} =
+      actual_mod_fun(
+        {module, nil},
+        [],
+        aliases,
+        current_module,
+        mods_funs,
+        %{}
+      )
+
+    {m, res}
   end
 
   @doc ~S"""
