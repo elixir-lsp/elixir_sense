@@ -6,7 +6,33 @@ defmodule ElixirSense.Core.Source do
   alias ElixirSense.Core.Normalized.Tokenizer
 
   @empty_graphemes [" ", "\n", "\r\n"]
-  @stop_graphemes ~w/{ } ( ) [ ] < > + - * & ^ , ; ~ % = \\ \/ $ ! ?`#/ ++ @empty_graphemes
+  @stop_graphemes [
+                    "{",
+                    "}",
+                    "(",
+                    ")",
+                    "[",
+                    "]",
+                    "<",
+                    ">",
+                    "+",
+                    "-",
+                    "*",
+                    "&",
+                    "^",
+                    ",",
+                    ";",
+                    "~",
+                    "%",
+                    "=",
+                    "\\",
+                    "\/",
+                    "$",
+                    "!",
+                    "?",
+                    "`",
+                    "#"
+                  ] ++ @empty_graphemes
 
   @spec split_module_and_hint(String.t(), module | nil, [{module, module}]) ::
           {nil | module, String.t()}
