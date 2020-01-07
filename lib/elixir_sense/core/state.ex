@@ -817,15 +817,18 @@ defmodule ElixirSense.Core.State do
   end
 
   def get_closest_previous_env(%__MODULE__{} = metadata, line) do
-    metadata.lines_to_env
-    |> Enum.max_by(
-      fn
+    # Elixir 1.10 introduces a breaking change in Enum.max_by
+    try do
+      metadata.lines_to_env
+      |> Enum.max_by(fn
         {env_line, _} when env_line < line -> env_line
         _ -> 0
-      end,
-      fn -> {0, default_env()} end
-    )
-    |> elem(1)
+      end)
+      |> elem(1)
+    rescue
+      Enum.EmptyError ->
+        default_env()
+    end
   end
 
   def default_env(), do: %ElixirSense.Core.State.Env{}
