@@ -89,6 +89,7 @@ defmodule ElixirSense.Core.Parser do
     %Metadata{
       source: source,
       types: acc.types,
+      specs: acc.specs,
       structs: acc.structs,
       mods_funs_to_positions: acc.mods_funs_to_positions,
       lines_to_env: acc.lines_to_env,

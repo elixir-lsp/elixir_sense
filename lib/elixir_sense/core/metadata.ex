@@ -15,6 +15,7 @@ defmodule ElixirSense.Core.Metadata do
           calls: State.calls_t(),
           vars_info_per_scope_id: State.vars_info_per_scope_id_t(),
           types: State.types_t(),
+          specs: State.specs_t(),
           structs: State.structs_t(),
           error: nil | term
         }
@@ -25,6 +26,7 @@ defmodule ElixirSense.Core.Metadata do
             calls: %{},
             vars_info_per_scope_id: %{},
             types: %{},
+            specs: %{},
             structs: %{},
             error: nil
 

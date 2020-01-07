@@ -948,15 +948,21 @@ defmodule ElixirSense.SuggestionsTest do
     assert [
              %{type: :hint, value: "my_guard_p"},
              %{
-               arity: 1,
-               name: "my_guard_pub",
-               origin: "ElixirSenseExample.ModuleA",
-               type: :macro
-             },
-             %{
+               args: "value",
                arity: 1,
                name: "my_guard_priv",
                origin: "ElixirSenseExample.ModuleA",
+               spec: "",
+               summary: "",
+               type: :macro
+             },
+             %{
+               args: "value",
+               arity: 1,
+               name: "my_guard_pub",
+               origin: "ElixirSenseExample.ModuleA",
+               spec: "",
+               summary: "",
                type: :macro
              }
            ] = ElixirSense.suggestions(buffer, 9, 8)
@@ -1016,6 +1022,7 @@ defmodule ElixirSense.SuggestionsTest do
   test "functions defined in other module imported" do
     buffer = """
     defmodule ElixirSenseExample.ModuleO do
+      @spec test_fun_pub(integer) :: atom
       def test_fun_pub(a), do: :ok
       defp test_fun_priv(), do: :ok
     end
@@ -1034,9 +1041,12 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 1,
                name: "test_fun_pub",
                origin: "ElixirSenseExample.ModuleO",
-               type: :function
+               type: :function,
+               args: "a",
+               spec: "@spec test_fun_pub(integer) :: atom",
+               summary: ""
              }
-           ] = ElixirSense.suggestions(buffer, 9, 7)
+           ] == ElixirSense.suggestions(buffer, 10, 7)
   end
 
   test "functions and module suggestions with __MODULE__" do
@@ -1052,6 +1062,7 @@ defmodule ElixirSense.SuggestionsTest do
         __MODULE__.Sm
         __MODULE__.SmodO.te
         __MODULE__.te
+        __MODULE__.__in
       end
     end
     """
@@ -1083,6 +1094,16 @@ defmodule ElixirSense.SuggestionsTest do
                type: :function
              }
            ] = ElixirSense.suggestions(buffer, 11, 18)
+
+    assert [
+             %{type: :hint, value: "__MODULE__.__info__"},
+             %{
+               arity: 1,
+               name: "__info__",
+               origin: "ElixirSenseExample",
+               type: :function
+             }
+           ] = ElixirSense.suggestions(buffer, 12, 20)
   end
 
   test "Elixir module" do
@@ -1339,7 +1360,7 @@ defmodule ElixirSense.SuggestionsTest do
                args: "",
                arity: 0,
                origin: "MyServer",
-               spec: nil,
+               spec: "",
                summary: ""
              }
            ]

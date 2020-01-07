@@ -32,12 +32,14 @@ defmodule Alchemist.Helpers.Complete do
             aliases: [{module, module}],
             imports: [module],
             scope_module: nil | module,
-            mods_and_funs: ElixirSense.Core.State.mods_funs_to_positions_t()
+            mods_and_funs: ElixirSense.Core.State.mods_funs_to_positions_t(),
+            specs: ElixirSense.Core.State.specs_t()
           }
     defstruct aliases: [],
               imports: [],
               scope_module: nil,
-              mods_and_funs: %{}
+              mods_and_funs: %{},
+              specs: %{}
   end
 
   def run(exp, env = %Alchemist.Helpers.Complete.Env{}) do
@@ -365,20 +367,25 @@ defmodule Alchemist.Helpers.Complete do
         _otherwise ->
           get_metadata_module_funs(mod, include_builtin, env)
       end
-      |> Enum.sort_by(fn {f, a, _, _, _} -> {f, -a} end)
+      |> Enum.sort_by(fn {f, a, _, _, _, _} -> {f, -a} end)
 
     list =
-      Enum.reduce(falist, [], fn {f, a, func_kind, doc, spec}, acc ->
+      Enum.reduce(falist, [], fn {f, a, func_kind, doc, spec, arg}, acc ->
         case :lists.keyfind(f, 1, acc) do
-          {f, aa, func_kind, docs, specs} ->
-            :lists.keyreplace(f, 1, acc, {f, [a | aa], func_kind, [doc | docs], [spec | specs]})
+          {f, aa, func_kind, docs, specs, args} ->
+            :lists.keyreplace(
+              f,
+              1,
+              acc,
+              {f, [a | aa], func_kind, [doc | docs], [spec | specs], [arg | args]}
+            )
 
           false ->
-            [{f, [a], func_kind, [doc], [spec]} | acc]
+            [{f, [a], func_kind, [doc], [spec], [arg]} | acc]
         end
       end)
 
-    for {fun, arities, func_kind, docs, specs} <- list,
+    for {fun, arities, func_kind, docs, specs, args} <- list,
         name = Atom.to_string(fun),
         starts_with?(name, hint) do
       %{
@@ -388,14 +395,14 @@ defmodule Alchemist.Helpers.Complete do
         module: mod,
         func_kind: func_kind,
         docs: docs,
-        specs: specs
+        specs: specs,
+        args: args
       }
     end
-    |> :lists.sort()
+    |> Enum.sort_by(& &1.name)
   end
 
   defp get_metadata_module_funs(mod, include_builtin, env) do
-    # TODO add builtin functions for protocols, protocol_implementations, structs, behaviours and exceptions
     case env.mods_and_funs[{mod, nil, nil}] do
       nil ->
         []
@@ -403,12 +410,17 @@ defmodule Alchemist.Helpers.Complete do
       _funs ->
         for {{^mod, f, a}, info} <- env.mods_and_funs,
             a != nil,
-            mod == env.scope_module || Introspection.is_pub(info.type) do
-          {f, a, info.type, nil, nil}
+            mod == env.scope_module || Introspection.is_pub(info.type),
+            include_builtin || not ({f, a} in @builtin_functions) do
+          specs =
+            case env.specs[{mod, f, a}] do
+              nil -> nil
+              %ElixirSense.Core.State.SpecInfo{specs: specs} -> specs |> Enum.join("\n")
+            end
+
+          {f, a, info.type, nil, specs,
+           info.params |> hd |> Enum.map_join(",", &Macro.to_string/1)}
         end
-        |> Kernel.++(
-          for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :def, nil, nil}
-        )
     end
   end
 
@@ -443,15 +455,15 @@ defmodule Alchemist.Helpers.Complete do
                 nil -> nil
               end
 
-            {f, a, func_kind, func_doc, Introspection.spec_to_string(spec)}
+            {f, a, func_kind, func_doc, Introspection.spec_to_string(spec), nil}
           end
         else
-          macros = for {f, a} <- mod.__info__(:macros), do: {f, a, :defmacro, nil, nil}
-          functions = for {f, a} <- mod.__info__(:functions), do: {f, a, :def, nil, nil}
+          macros = for {f, a} <- mod.__info__(:macros), do: {f, a, :defmacro, nil, nil, nil}
+          functions = for {f, a} <- mod.__info__(:functions), do: {f, a, :def, nil, nil, nil}
           macros ++ functions
         end
         |> Kernel.++(
-          for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :def, nil, nil}
+          for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :def, nil, nil, nil}
         )
 
       true ->
@@ -462,10 +474,10 @@ defmodule Alchemist.Helpers.Complete do
         for {f, a} <- funs do
           case f |> Atom.to_string() do
             "MACRO-" <> name ->
-              {String.to_atom(name), a, :defmacro, nil, nil}
+              {String.to_atom(name), a, :defmacro, nil, nil, nil}
 
             _name ->
-              {f, a, :def, nil, nil}
+              {f, a, :def, nil, nil, nil}
           end
         end
     end
@@ -560,12 +572,14 @@ defmodule Alchemist.Helpers.Complete do
          module: mod,
          func_kind: func_kind,
          docs: docs,
-         specs: specs
+         specs: specs,
+         args: args
        }) do
     docs_specs = docs |> Enum.zip(specs)
     arities_docs_specs = arities |> Enum.zip(docs_specs)
+    arities_docs_specs_args = arities_docs_specs |> Enum.zip(args)
 
-    for {a, {doc, spec}} <- arities_docs_specs do
+    for {{a, {doc, spec}}, args} <- arities_docs_specs_args do
       {fun_args, desc} = Introspection.extract_fun_args_and_desc(doc)
 
       kind =
@@ -576,17 +590,17 @@ defmodule Alchemist.Helpers.Complete do
 
       mod_name = inspect(mod)
 
-      fa = {name_atom = name |> String.to_atom(), a}
+      fa = {name |> String.to_atom(), a}
 
       unless fa in BuiltinFunctions.all() do
         %{
           type: kind,
           name: name,
           arity: a,
-          args: fun_args,
+          args: args || fun_args,
           origin: mod_name,
           summary: desc,
-          spec: spec
+          spec: spec || ""
         }
       else
         %{

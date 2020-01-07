@@ -172,6 +172,7 @@ defmodule ElixirSense do
       buffer_file_metadata.structs,
       buffer_file_metadata.mods_funs_to_positions,
       buffer_file_metadata.types,
+      buffer_file_metadata.specs,
       text_before
     )
   end

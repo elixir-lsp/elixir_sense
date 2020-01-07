@@ -27,12 +27,24 @@ defmodule ElixirSense.Providers.SuggestionTest do
         %{},
         %{},
         %{},
+        %{},
         ""
       )
 
     assert result |> Enum.at(0) == %{type: :hint, value: "ElixirSenseExample.EmptyModule."}
 
     assert result |> Enum.at(1) == %{
+             args: "atom",
+             arity: 1,
+             name: "__info__",
+             origin: "ElixirSenseExample.EmptyModule",
+             spec:
+               "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()",
+             summary: "Built-in function",
+             type: :function
+           }
+
+    assert result |> Enum.at(2) == %{
              args: "",
              arity: 0,
              name: "module_info",
@@ -43,7 +55,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              type: :function
            }
 
-    assert result |> Enum.at(2) == %{
+    assert result |> Enum.at(3) == %{
              args: "key",
              arity: 1,
              name: "module_info",
@@ -53,23 +65,13 @@ defmodule ElixirSense.Providers.SuggestionTest do
              summary: "Built-in function",
              type: :function
            }
-
-    assert result |> Enum.at(3) == %{
-             args: "atom",
-             arity: 1,
-             name: "__info__",
-             origin: "ElixirSenseExample.EmptyModule",
-             spec:
-               "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()",
-             summary: "Built-in function",
-             type: :function
-           }
   end
 
   test "return completion candidates for 'Str'" do
     assert Suggestion.find(
              "Str",
              @env,
+             %{},
              %{},
              %{},
              %{},
@@ -126,6 +128,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                %{},
                %{},
                %{},
+               %{},
                ""
              )
   end
@@ -158,6 +161,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                %{},
                %{},
                %{},
+               %{},
                ""
              )
   end
@@ -169,6 +173,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              %{},
              %{},
              %{},
+             %{},
              ""
            ) == [
              %{type: :hint, value: "say_hi"},
@@ -177,7 +182,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                arity: 0,
                name: "say_hi",
                origin: "ElixirSense.Providers.SuggestionTest.MyModule",
-               spec: nil,
+               spec: "",
                summary: "",
                type: :function
              }
@@ -189,6 +194,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
       Suggestion.find(
         "mo",
         @env,
+        %{},
         %{},
         %{},
         %{},
@@ -204,6 +210,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
       Suggestion.find(
         "",
         @env,
+        %{},
         %{},
         %{},
         %{},
@@ -227,6 +234,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                %{},
                %{},
                %{},
+               %{},
                ""
              )
   end
@@ -236,6 +244,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              Suggestion.find(
                "f = &Enum.al",
                @env_func,
+               %{},
                %{},
                %{},
                %{},
@@ -251,6 +260,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                %{},
                %{},
                %{},
+               %{},
                ""
              )
   end
@@ -260,6 +270,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              Suggestion.find(
                "x.Foo.get_by",
                @env_func,
+               %{},
                %{},
                %{},
                %{},
@@ -276,8 +287,12 @@ defmodule ElixirSense.Providers.SuggestionTest do
                %{
                  {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule},
                  {SomeModule, :my_func, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defp},
-                 {SomeModule, :my_func, 1} => %ElixirSense.Core.State.ModFunInfo{type: :defp}
+                 {SomeModule, :my_func, 1} => %ElixirSense.Core.State.ModFunInfo{
+                   type: :defp,
+                   params: [[[:a, [], nil]]]
+                 }
                },
+               %{},
                %{},
                ""
              )
@@ -290,6 +305,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                %{
                  {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
                },
+               %{},
                %{},
                ""
              )
@@ -307,6 +323,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                %{
                  {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
                },
+               %{},
                %{},
                "%SomeModule{st"
              )

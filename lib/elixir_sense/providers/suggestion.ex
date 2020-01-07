@@ -117,6 +117,7 @@ defmodule ElixirSense.Providers.Suggestion do
           State.structs_t(),
           State.mods_funs_to_positions_t(),
           State.types_t(),
+          State.specs_t(),
           String.t()
         ) :: [suggestion]
   def find(
@@ -125,6 +126,7 @@ defmodule ElixirSense.Providers.Suggestion do
         structs,
         mods_and_funs,
         metadata_types,
+        metadata_specs,
         text_before
       ) do
     case find_struct_fields(
@@ -141,6 +143,7 @@ defmodule ElixirSense.Providers.Suggestion do
           env,
           mods_and_funs,
           metadata_types,
+          metadata_specs,
           text_before
         )
 
@@ -154,6 +157,7 @@ defmodule ElixirSense.Providers.Suggestion do
             hint,
             env,
             mods_and_funs,
+            metadata_specs,
             text_before
           )
 
@@ -166,6 +170,7 @@ defmodule ElixirSense.Providers.Suggestion do
           State.Env.t(),
           State.mods_funs_to_positions_t(),
           State.types_t(),
+          State.specs_t(),
           String.t()
         ) :: [suggestion]
   defp find_all_except_struct_fields(
@@ -182,12 +187,21 @@ defmodule ElixirSense.Providers.Suggestion do
          },
          mods_and_funs,
          metadata_types,
+         metadata_specs,
          text_before
        ) do
     vars = Enum.map(vars, fn v -> v.name end)
 
     %{hint: hint_suggestion, suggestions: mods_and_funcs} =
-      find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs, text_before)
+      find_hint_mods_funcs(
+        hint,
+        imports,
+        aliases,
+        module,
+        mods_and_funs,
+        metadata_specs,
+        text_before
+      )
 
     callbacks_or_returns =
       case scope do
@@ -222,6 +236,7 @@ defmodule ElixirSense.Providers.Suggestion do
           String.t(),
           State.Env.t(),
           State.mods_funs_to_positions_t(),
+          State.specs_t(),
           String.t()
         ) :: [suggestion]
   defp find_mods_funs_vars_attributes(
@@ -234,12 +249,21 @@ defmodule ElixirSense.Providers.Suggestion do
            module: module
          },
          mods_and_funs,
+         metadata_specs,
          text_before
        ) do
     vars = Enum.map(vars, fn v -> v.name end)
 
     %{hint: hint_suggestion, suggestions: mods_and_funcs} =
-      find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs, text_before)
+      find_hint_mods_funcs(
+        hint,
+        imports,
+        aliases,
+        module,
+        mods_and_funs,
+        metadata_specs,
+        text_before
+      )
 
     [hint_suggestion]
     |> Kernel.++(find_attributes(attributes, hint))
@@ -316,18 +340,28 @@ defmodule ElixirSense.Providers.Suggestion do
           [{module, module}],
           module,
           State.mods_funs_to_positions_t(),
+          State.specs_t(),
           String.t()
         ) ::
           %{
             hint: hint,
             suggestions: [mod | func]
           }
-  defp find_hint_mods_funcs(hint, imports, aliases, module, mods_and_funs, text_before) do
+  defp find_hint_mods_funcs(
+         hint,
+         imports,
+         aliases,
+         module,
+         mods_and_funs,
+         metadata_specs,
+         text_before
+       ) do
     env = %Complete.Env{
       aliases: aliases,
       scope_module: module,
       imports: imports,
-      mods_and_funs: mods_and_funs
+      mods_and_funs: mods_and_funs,
+      specs: metadata_specs
     }
 
     {hint, prefix} =
