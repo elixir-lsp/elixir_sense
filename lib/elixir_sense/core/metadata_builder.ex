@@ -821,10 +821,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
     column = Keyword.fetch!(meta, :column)
 
     state =
-      if !String.starts_with?(to_string(call), "__atom_elixir_marker_") do
-        add_call_to_line(state, {nil, call, length(params)}, {line, column})
-      else
+      if String.starts_with?(to_string(call), "__atom_elixir_marker_") do
         state
+      else
+        add_call_to_line(state, {nil, call, length(params)}, {line, column})
       end
 
     state
