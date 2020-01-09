@@ -10,7 +10,9 @@ defmodule ElixirSense.Providers.Definition do
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
-  alias ElixirSense.Core.State.{ModFunInfo, TypeInfo, VarInfo}
+  alias ElixirSense.Core.State.ModFunInfo
+  alias ElixirSense.Core.State.TypeInfo
+  alias ElixirSense.Core.State.VarInfo
 
   defmodule Location do
     @moduledoc false
