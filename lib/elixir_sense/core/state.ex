@@ -266,7 +266,7 @@ defmodule ElixirSense.Core.State do
     get_current_module_variants(state) |> hd
   end
 
-  def get_current_module_variants(state = %__MODULE__{protocols: [[] | _]}) do
+  def get_current_module_variants(%__MODULE__{protocols: [[] | _]} = state) do
     state.namespace |> hd |> unescape_protocol_impementations
   end
 
@@ -282,7 +282,7 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
   end
 
-  def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, position = {line, _column}) do
+  def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, {line, _column} = position) do
     call = %CallInfo{mod: mod, func: func, arity: arity, position: position}
 
     calls =

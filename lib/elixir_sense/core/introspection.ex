@@ -355,7 +355,7 @@ defmodule ElixirSense.Core.Introspection do
     [ast | returns]
   end
 
-  defp get_callback_with_doc(kind, doc, key = {name, arity}, callbacks) do
+  defp get_callback_with_doc(kind, doc, {name, arity} = key, callbacks) do
     key =
       {spec_name, _spec_arity} =
       if kind == :macrocallback do
@@ -783,7 +783,7 @@ defmodule ElixirSense.Core.Introspection do
   def actual_mod_fun({nil, nil}, _, _, _, _, _), do: {nil, nil, false}
 
   def actual_mod_fun(
-        mod_fun = {mod, fun},
+        {mod, fun} = mod_fun,
         imports,
         aliases,
         current_module,

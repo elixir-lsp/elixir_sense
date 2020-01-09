@@ -44,7 +44,7 @@ defmodule Alchemist.Helpers.Complete do
               specs: %{}
   end
 
-  def run(exp, env = %Alchemist.Helpers.Complete.Env{}) do
+  def run(exp, %Alchemist.Helpers.Complete.Env{} = env) do
     code =
       case is_bitstring(exp) do
         true -> exp |> String.to_charlist()
