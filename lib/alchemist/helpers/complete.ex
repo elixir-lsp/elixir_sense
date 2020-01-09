@@ -597,17 +597,7 @@ defmodule Alchemist.Helpers.Complete do
 
       fa = {name |> String.to_atom(), a}
 
-      unless fa in BuiltinFunctions.all() do
-        %{
-          type: kind,
-          name: name,
-          arity: a,
-          args: args || fun_args,
-          origin: mod_name,
-          summary: desc,
-          spec: spec || ""
-        }
-      else
+      if fa in BuiltinFunctions.all() do
         %{
           type: kind,
           name: name,
@@ -616,6 +606,16 @@ defmodule Alchemist.Helpers.Complete do
           origin: mod_name,
           summary: "Built-in function",
           spec: BuiltinFunctions.get_specs(fa) |> Enum.join("\n")
+        }
+      else
+        %{
+          type: kind,
+          name: name,
+          arity: a,
+          args: args || fun_args,
+          origin: mod_name,
+          summary: desc,
+          spec: spec || ""
         }
       end
     end
