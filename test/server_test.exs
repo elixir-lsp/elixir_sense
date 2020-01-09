@@ -152,7 +152,7 @@ defmodule ElixirSense.ServerTest do
       "payload" => %{}
     }
 
-    assert send_request(socket, request) |> Enum.at(0) == ":application"
+    assert send_request(socket, request) |> Enum.any?(& &1 == ":application")
   end
 
   test "version request", %{socket: socket, auth_token: auth_token} do
