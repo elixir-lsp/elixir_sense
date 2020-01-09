@@ -3,6 +3,8 @@ defmodule ElixirSense.Core.State do
   Core State
   """
 
+  alias ElixirSense.Core.Introspection
+
   @type fun_arity :: {atom, non_neg_integer}
   @type scope :: atom | fun_arity
 
@@ -221,8 +223,6 @@ defmodule ElixirSense.Core.State do
 
     def get_category(%ModFunInfo{}), do: :module
   end
-
-  alias ElixirSense.Core.Introspection
 
   def current_aliases(%__MODULE__{} = state) do
     state.aliases |> List.flatten() |> Enum.uniq_by(&elem(&1, 0)) |> Enum.reverse()
@@ -833,6 +833,6 @@ defmodule ElixirSense.Core.State do
 
   def expand_alias(%__MODULE__{} = state, module) do
     current_aliases = current_aliases(state)
-    introspection.expand_alias(module, current_aliases)
+    Introspection.expand_alias(module, current_aliases)
   end
 end
