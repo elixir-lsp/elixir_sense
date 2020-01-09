@@ -13,6 +13,8 @@ defmodule ElixirSense.Providers.Definition do
   alias ElixirSense.Core.State.{VarInfo, ModFunInfo, TypeInfo}
 
   defmodule Location do
+    @moduledoc false
+
     @type t :: %Location{
             found: boolean,
             type: :module | :function | :variable | :typespec | :macro | nil,

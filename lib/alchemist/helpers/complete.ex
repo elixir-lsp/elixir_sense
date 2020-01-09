@@ -28,6 +28,8 @@ defmodule Alchemist.Helpers.Complete do
   # (original Elixir 1.1) and later GenServer
 
   defmodule Env do
+    @moduledoc false
+
     @type t :: %Alchemist.Helpers.Complete.Env{
             aliases: [{module, module}],
             imports: [module],

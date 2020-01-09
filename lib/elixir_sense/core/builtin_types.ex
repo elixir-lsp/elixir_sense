@@ -1,4 +1,6 @@
 defmodule ElixirSense.Core.BuiltinTypes do
+  @moduledoc false
+
   @basic_types %{
     "any" => %{
       params: [],

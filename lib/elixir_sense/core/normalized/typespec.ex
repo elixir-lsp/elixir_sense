@@ -1,4 +1,6 @@
 defmodule ElixirSense.Core.Normalized.Typespec do
+  @moduledoc false
+
   @spec beam_specs(module) :: nil | [{:spec, tuple}]
   def beam_specs(module) do
     specs =

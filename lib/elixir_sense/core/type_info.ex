@@ -1,4 +1,6 @@
 defmodule ElixirSense.Core.TypeInfo do
+  @moduledoc false
+
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode

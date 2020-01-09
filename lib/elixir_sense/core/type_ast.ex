@@ -1,4 +1,6 @@
 defmodule ElixirSense.Core.TypeAst do
+  @moduledoc false
+
   alias ElixirSense.Core.Normalized.Typespec
 
   def from_typedef({_kind, type}) do
