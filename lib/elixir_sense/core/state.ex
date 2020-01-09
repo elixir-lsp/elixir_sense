@@ -39,7 +39,6 @@ defmodule ElixirSense.Core.State do
           scope_attributes: list(list(atom)),
           behaviours: list(list(module)),
           specs: specs_t,
-          scope_behaviours: list(list(module)),
           vars: list(list(ElixirSense.Core.State.VarInfo.t())),
           scope_vars: list(list(ElixirSense.Core.State.VarInfo.t())),
           scope_id_count: non_neg_integer,
@@ -61,7 +60,6 @@ defmodule ElixirSense.Core.State do
             protocols: [[]],
             scope_attributes: [[]],
             behaviours: [[]],
-            scope_behaviours: [[]],
             specs: %{},
             vars: [[]],
             scope_vars: [[]],
@@ -556,7 +554,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def new_behaviours_scope(%__MODULE__{} = state) do
-    %__MODULE__{state | behaviours: [[] | state.behaviours], scope_behaviours: [[]]}
+    %__MODULE__{state | behaviours: [[] | state.behaviours]}
   end
 
   def remove_vars_scope(%__MODULE__{} = state) do
@@ -587,7 +585,7 @@ defmodule ElixirSense.Core.State do
 
   def remove_behaviours_scope(%__MODULE__{} = state) do
     behaviours = tl(state.behaviours)
-    %__MODULE__{state | behaviours: behaviours, scope_behaviours: behaviours}
+    %__MODULE__{state | behaviours: behaviours}
   end
 
   def add_alias(%__MODULE__{} = state, {alias, module}) when alias == module, do: state
