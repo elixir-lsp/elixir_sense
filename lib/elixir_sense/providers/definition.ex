@@ -5,12 +5,12 @@ defmodule ElixirSense.Providers.Definition do
   Currently finds definition of modules, functions and macros.
   """
 
+  alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
-  alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.State.{VarInfo, ModFunInfo, TypeInfo}
+  alias ElixirSense.Core.State.{ModFunInfo, TypeInfo, VarInfo}
 
   defmodule Location do
     @moduledoc false

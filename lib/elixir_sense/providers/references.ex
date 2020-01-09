@@ -6,11 +6,11 @@ defmodule ElixirSense.Providers.References do
   """
 
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.State.VarInfo
-  alias ElixirSense.Core.Source
-  alias ElixirSense.Core.State
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
+  alias ElixirSense.Core.Source
+  alias ElixirSense.Core.State
+  alias ElixirSense.Core.State.VarInfo
   alias Mix.Tasks.Xref
 
   @type position :: %{line: pos_integer, column: pos_integer}

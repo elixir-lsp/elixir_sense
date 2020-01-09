@@ -5,10 +5,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   import ElixirSense.Core.State
   alias ElixirSense.Core.Ast
-  alias ElixirSense.Core.State
-  alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Source
+  alias ElixirSense.Core.State
+  alias ElixirSense.Core.State.VarInfo
 
   @scope_keywords [:for, :try, :fn]
   @block_keywords [:do, :else, :rescue, :catch, :after]

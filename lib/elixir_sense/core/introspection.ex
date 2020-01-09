@@ -26,9 +26,9 @@ defmodule ElixirSense.Core.Introspection do
 
   alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.BuiltinTypes
-  alias ElixirSense.Core.TypeInfo
-  alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
+  alias ElixirSense.Core.Normalized.Typespec
+  alias ElixirSense.Core.TypeInfo
 
   @type mod_fun :: {mod :: module | nil, fun :: atom | nil}
   @type markdown :: String.t()

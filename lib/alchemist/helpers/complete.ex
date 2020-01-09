@@ -1,9 +1,9 @@
 defmodule Alchemist.Helpers.Complete do
+  alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
-  alias ElixirSense.Core.BuiltinFunctions
+  alias ElixirSense.Core.TypeInfo
 
   @erlang_module_builtin_functions [{:module_info, 0}, {:module_info, 1}]
   @elixir_module_builtin_functions [{:__info__, 1}]

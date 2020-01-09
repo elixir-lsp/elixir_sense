@@ -1,11 +1,11 @@
 defmodule ElixirSense.Core.TypeInfo do
   @moduledoc false
 
-  alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.BuiltinTypes
-  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
-  alias ElixirSense.Core.Source
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
+  alias ElixirSense.Core.Normalized.Typespec
+  alias ElixirSense.Core.Source
   alias ElixirSense.Core.TypeAst
 
   @doc_spec_line_length 75

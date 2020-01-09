@@ -3,9 +3,9 @@ defmodule ElixirSense.Core.Metadata do
   Core Metadata
   """
 
-  alias ElixirSense.Core.State
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
+  alias ElixirSense.Core.State
   alias ElixirSense.Core.TypeInfo
 
   @type t :: %ElixirSense.Core.Metadata{
