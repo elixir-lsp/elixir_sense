@@ -25,6 +25,7 @@ defmodule ElixirSense.Core.Introspection do
   """
 
   alias Alchemist.Helpers.ModuleInfo
+  alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
@@ -144,7 +145,7 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_type_docs_md(nil, fun, _scope) do
     result =
-      for info <- ElixirSense.Core.BuiltinTypes.get_builtin_type_info(fun) do
+      for info <- BuiltinTypes.get_builtin_type_info(fun) do
         spec =
           case info do
             %{signature: sig} -> sig
@@ -812,7 +813,7 @@ defmodule ElixirSense.Core.Introspection do
 
   defp has_type?(mod, type, metadata_types, true) do
     Map.has_key?(metadata_types, {mod, type, nil}) or
-      ElixirSense.Core.Normalized.Typespec.get_types(mod)
+      Typespec.get_types(mod)
       |> Enum.any?(fn {_kind, {name, _def, _args}} -> name == type end)
   end
 
@@ -911,7 +912,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp find_builtin_type({nil, fun}) do
-    if ElixirSense.Core.BuiltinTypes.builtin_type?(fun) do
+    if BuiltinTypes.builtin_type?(fun) do
       {nil, fun}
     else
       {nil, nil}

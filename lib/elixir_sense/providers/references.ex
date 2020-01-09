@@ -8,10 +8,10 @@ defmodule ElixirSense.Providers.References do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.Source
-  alias Mix.Tasks.Xref
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
+  alias Mix.Tasks.Xref
 
   @type position :: %{line: pos_integer, column: pos_integer}
 
@@ -122,7 +122,7 @@ defmodule ElixirSense.Providers.References do
     app_paths
     |> Enum.flat_map(fn {app, path} ->
       Mix.Project.in_project(app, path, [build_path: build_dir], fn _ ->
-        Mix.Tasks.Xref.calls()
+        Xref.calls()
         |> Enum.map(fn call ->
           Map.update!(call, :file, fn file -> Path.expand(file) end)
         end)

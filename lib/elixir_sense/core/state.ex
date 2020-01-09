@@ -833,6 +833,6 @@ defmodule ElixirSense.Core.State do
 
   def expand_alias(%__MODULE__{} = state, module) do
     current_aliases = current_aliases(state)
-    ElixirSense.Core.Introspection.expand_alias(module, current_aliases)
+    Introspection.expand_alias(module, current_aliases)
   end
 end
