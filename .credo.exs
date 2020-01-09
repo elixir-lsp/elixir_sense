@@ -104,7 +104,7 @@
         ## Refactoring Opportunities
         #
         {Credo.Check.Refactor.CondStatements, []},
-        {Credo.Check.Refactor.CyclomaticComplexity, max_complexity: 14},
+        {Credo.Check.Refactor.CyclomaticComplexity, max_complexity: 17},
         {Credo.Check.Refactor.FunctionArity, max_axity: 7},
         {Credo.Check.Refactor.LongQuoteBlocks, []},
         {Credo.Check.Refactor.MapInto, false},
@@ -143,7 +143,7 @@
         {Credo.Check.Readability.MultiAlias, []},
         {Credo.Check.Readability.SinglePipe, false},
         {Credo.Check.Refactor.PipeChainStart, false},
-        {Credo.Check.Refactor.ABCSize, max_size: 50},
+        {Credo.Check.Refactor.ABCSize, max_size: 113},
         {Credo.Check.Consistency.UnusedVariableNames, false},
         {Credo.Check.Readability.AliasAs, false},
         {Credo.Check.Readability.Specs, false},
