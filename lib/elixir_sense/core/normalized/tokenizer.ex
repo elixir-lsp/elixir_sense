@@ -13,12 +13,10 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
   end
 
   defp do_tokenize(prefix_charlist, elixir_version) do
-    cond do
-      Version.match?(elixir_version, ">= 1.7.0") ->
-        do_tokenize_1_7(prefix_charlist)
-
-      true ->
-        do_tokenize_1_6(prefix_charlist)
+    if Version.match?(elixir_version, ">= 1.7.0") do
+      do_tokenize_1_7(prefix_charlist)
+    else
+      do_tokenize_1_6(prefix_charlist)
     end
   end
 

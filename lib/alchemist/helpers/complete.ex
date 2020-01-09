@@ -430,61 +430,59 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp get_module_funs(mod, include_builtin) do
-    cond do
-      function_exported?(mod, :__info__, 1) ->
-        docs = NormalizedCode.get_docs(mod, :docs)
+    if function_exported?(mod, :__info__, 1) do
+      docs = NormalizedCode.get_docs(mod, :docs)
 
-        if docs != nil do
-          exports =
-            (mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_buildins(mod))
-            |> Kernel.--(default_arg_functions_with_doc_false(docs))
-            |> Enum.reject(&hidden_fun?(&1, docs))
+      if docs != nil do
+        exports =
+          (mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_buildins(mod))
+          |> Kernel.--(default_arg_functions_with_doc_false(docs))
+          |> Enum.reject(&hidden_fun?(&1, docs))
 
-          default_arg_functions = default_arg_functions(docs)
+        default_arg_functions = default_arg_functions(docs)
 
-          specs = TypeInfo.get_module_specs(mod)
+        specs = TypeInfo.get_module_specs(mod)
 
-          for {f, a} <- exports do
-            {f, new_arity} =
-              case default_arg_functions[{f, a}] do
-                nil -> {f, a}
-                new_arity -> {f, new_arity}
-              end
+        for {f, a} <- exports do
+          {f, new_arity} =
+            case default_arg_functions[{f, a}] do
+              nil -> {f, a}
+              new_arity -> {f, new_arity}
+            end
 
-            {func_kind, func_doc} = find_doc({f, new_arity}, docs)
+          {func_kind, func_doc} = find_doc({f, new_arity}, docs)
 
-            spec =
-              case func_kind do
-                :defmacro -> Map.get(specs, {:"MACRO-#{f}", new_arity + 1})
-                :def -> Map.get(specs, {f, new_arity})
-                nil -> nil
-              end
+          spec =
+            case func_kind do
+              :defmacro -> Map.get(specs, {:"MACRO-#{f}", new_arity + 1})
+              :def -> Map.get(specs, {f, new_arity})
+              nil -> nil
+            end
 
-            {f, a, func_kind, func_doc, Introspection.spec_to_string(spec), nil}
-          end
-        else
-          macros = for {f, a} <- mod.__info__(:macros), do: {f, a, :defmacro, nil, nil, nil}
-          functions = for {f, a} <- mod.__info__(:functions), do: {f, a, :def, nil, nil, nil}
-          macros ++ functions
+          {f, a, func_kind, func_doc, Introspection.spec_to_string(spec), nil}
         end
-        |> Kernel.++(
-          for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :def, nil, nil, nil}
-        )
+      else
+        macros = for {f, a} <- mod.__info__(:macros), do: {f, a, :defmacro, nil, nil, nil}
+        functions = for {f, a} <- mod.__info__(:functions), do: {f, a, :def, nil, nil, nil}
+        macros ++ functions
+      end
+      |> Kernel.++(
+        for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :def, nil, nil, nil}
+      )
+    else
+      funs =
+        mod.module_info(:exports)
+        |> Kernel.--(if include_builtin, do: [], else: @builtin_functions)
 
-      true ->
-        funs =
-          mod.module_info(:exports)
-          |> Kernel.--(if include_builtin, do: [], else: @builtin_functions)
+      for {f, a} <- funs do
+        case f |> Atom.to_string() do
+          "MACRO-" <> name ->
+            {String.to_atom(name), a, :defmacro, nil, nil, nil}
 
-        for {f, a} <- funs do
-          case f |> Atom.to_string() do
-            "MACRO-" <> name ->
-              {String.to_atom(name), a, :defmacro, nil, nil, nil}
-
-            _name ->
-              {f, a, :def, nil, nil, nil}
-          end
+          _name ->
+            {f, a, :def, nil, nil, nil}
         end
+      end
     end
   end
 
