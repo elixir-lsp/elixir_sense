@@ -43,9 +43,12 @@ defmodule ElixirSense.Core.TypeInfo do
     end
   end
 
+  @spec get_signatures(module | nil, atom, nil | [NormalizedCode.doc_entry_t()]) :: [
+          ElixirSense.Core.Metadata.signature_t()
+        ]
   def get_signatures(mod, type, code_docs \\ nil)
 
-  def get_signatures(mod, type, code_docs) when not is_nil(mod) do
+  def get_signatures(mod, type, code_docs) when not is_nil(mod) and not is_nil(type) do
     case code_docs || NormalizedCode.get_docs(mod, :type_docs) do
       docs when is_list(docs) ->
         for {{t, arity}, _, _, text} <- docs, t == type do
@@ -73,7 +76,7 @@ defmodule ElixirSense.Core.TypeInfo do
     end
   end
 
-  def get_signatures(nil, type, _code_docs) do
+  def get_signatures(nil, type, _code_docs) when not is_nil(type) do
     for ti <- BuiltinTypes.get_builtin_type_info(type) do
       %{
         name: Atom.to_string(type),

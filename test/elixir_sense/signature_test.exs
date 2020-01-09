@@ -18,30 +18,13 @@ defmodule ElixirSense.SignatureTest do
                active_param: 0,
                pipe_before: false,
                signatures: [
-                 %{documentation: "", name: "my", params: ["a", "b"], spec: ""},
-                 %{documentation: "", name: "my", params: ["a"], spec: ""}
-               ]
-             }
-    end
-
-    test "find signatures from local remote type" do
-      code = """
-      defmodule ElixirSenseExample.ModuleWithTypespecs.Remote do
-        @type remote_t(a, b) :: {a, b}
-        @type a :: remote_t(
-      end
-      """
-
-      assert ElixirSense.signature(code, 3, 23) == %{
-               active_param: 0,
-               pipe_before: false,
-               signatures: [
                  %{
-                   name: "remote_t",
+                   documentation: "",
+                   name: "my",
                    params: ["a", "b"],
-                   documentation: "Remote type with params",
-                   spec: "@type remote_t(a, b) :: {a, b}"
-                 }
+                   spec: "@typep my(a, b) :: {a, b}"
+                 },
+                 %{documentation: "", name: "my", params: ["a"], spec: "@typep my(a) :: {a, nil}"}
                ]
              }
     end
@@ -505,6 +488,7 @@ defmodule ElixirSense.SignatureTest do
     test "finds signatures from metadata module functions with default param" do
       code = """
       defmodule MyModule do
+        @spec sum(integer, integer) :: integer
         defp sum(a, b \\\\ 0) do
           a + b
         end
@@ -515,7 +499,7 @@ defmodule ElixirSense.SignatureTest do
       end
       """
 
-      assert ElixirSense.signature(code, 7, 11) == %{
+      assert ElixirSense.signature(code, 8, 11) == %{
                active_param: 1,
                pipe_before: false,
                signatures: [
@@ -523,7 +507,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "sum",
                    params: ["a", "b \\\\ 0"],
                    documentation: "",
-                   spec: ""
+                   spec: "@spec sum(integer, integer) :: integer"
                  }
                ]
              }

@@ -30,6 +30,13 @@ defmodule ElixirSense.Core.Metadata do
             structs: %{},
             error: nil
 
+  @type signature_t :: %{
+          name: String.t(),
+          params: [String.t()],
+          spec: String.t(),
+          documentation: String.t()
+        }
+
   @spec get_env(__MODULE__.t(), pos_integer) :: State.Env.t()
   def get_env(%__MODULE__{} = metadata, line) do
     case Map.get(metadata.lines_to_env, line) do
@@ -99,9 +106,9 @@ defmodule ElixirSense.Core.Metadata do
     end)
   end
 
-  def get_function_signatures(%__MODULE__{} = metadata, module, function, code_docs \\ nil) do
-    docs = code_docs || NormalizedCode.get_docs(module, :docs) || []
-
+  @spec get_function_signatures(__MODULE__.t(), module, atom) :: [signature_t]
+  def get_function_signatures(%__MODULE__{} = metadata, module, function)
+      when not is_nil(module) and not is_nil(function) do
     params_list =
       metadata
       |> get_function_info(module, function)
@@ -111,26 +118,27 @@ defmodule ElixirSense.Core.Metadata do
     Enum.map(params_list, fn params ->
       arity = length(params)
 
-      {doc, spec} =
-        Enum.find_value(docs, {"", ""}, fn {{f, a}, _, kind, _, text} ->
-          f == function &&
-            a == arity &&
-            {Introspection.extract_summary_from_docs(text),
-             Introspection.get_spec_as_string(module, function, arity, kind)}
-        end)
+      spec =
+        case metadata.specs[{module, function, arity}] do
+          nil ->
+            ""
+
+          %State.SpecInfo{specs: specs} ->
+            Enum.join(specs, "\n")
+        end
 
       %{
         name: Atom.to_string(function),
         params: params |> Enum.with_index() |> Enum.map(&Introspection.param_to_var/1),
-        documentation: doc,
+        documentation: "",
         spec: spec
       }
     end)
   end
 
-  def get_type_signatures(%__MODULE__{} = metadata, module, type, code_docs \\ nil) do
-    docs = code_docs || NormalizedCode.get_docs(module, :type_docs) || []
-
+  @spec get_type_signatures(__MODULE__.t(), module, atom) :: [signature_t]
+  def get_type_signatures(%__MODULE__{} = metadata, module, type)
+      when not is_nil(module) and not is_nil(type) do
     case Map.get(metadata.types, {module, type, nil}) do
       nil ->
         []
@@ -139,18 +147,12 @@ defmodule ElixirSense.Core.Metadata do
         for args <- args_variants do
           arity = length(args)
 
-          {doc, spec} =
-            Enum.find_value(docs, {"", ""}, fn {{t, a}, _, _, text} ->
-              t == type &&
-                a == arity &&
-                {Introspection.extract_summary_from_docs(text),
-                 TypeInfo.get_type_spec_as_string(module, type, arity)}
-            end)
+          spec = metadata.types[{module, type, arity}].specs |> Enum.join("\n")
 
           %{
             name: Atom.to_string(type),
             params: args,
-            documentation: doc,
+            documentation: "",
             spec: spec
           }
         end

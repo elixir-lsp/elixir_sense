@@ -66,22 +66,22 @@ defmodule ElixirSense.Core.Ast do
     end
   end
 
-  @spec set_module_for_env(Macro.Env.t, nil | module) :: Macro.Env.t
+  @spec set_module_for_env(Macro.Env.t(), nil | module) :: Macro.Env.t()
   def set_module_for_env(env, module) do
     Map.put(env, :module, module)
   end
 
-  @spec add_requires_to_env(Macro.Env.t, [module]) :: Macro.Env.t
+  @spec add_requires_to_env(Macro.Env.t(), [module]) :: Macro.Env.t()
   def add_requires_to_env(env, modules) do
     add_directive_modules_to_env(env, :require, modules)
   end
 
-  @spec add_imports_to_env(Macro.Env.t, [module]) :: Macro.Env.t
+  @spec add_imports_to_env(Macro.Env.t(), [module]) :: Macro.Env.t()
   def add_imports_to_env(env, modules) do
     add_directive_modules_to_env(env, :import, modules)
   end
 
-  @spec add_directive_modules_to_env(Macro.Env.t, atom, [module]) :: Macro.Env.t
+  @spec add_directive_modules_to_env(Macro.Env.t(), atom, [module]) :: Macro.Env.t()
   defp add_directive_modules_to_env(env, directive, modules) do
     directive_string =
       modules

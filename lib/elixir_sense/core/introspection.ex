@@ -70,7 +70,10 @@ defmodule ElixirSense.Core.Introspection do
     Enum.count(args, &match?({:\\, _, _}, &1))
   end
 
-  def get_signatures(mod, fun, code_docs \\ nil) do
+  @spec get_signatures(module, atom, nil | [NormalizedCode.fun_doc_entry_t()]) :: [
+          ElixirSense.Core.Metadata.signature_t()
+        ]
+  def get_signatures(mod, fun, code_docs \\ nil) when not is_nil(mod) and not is_nil(fun) do
     case code_docs || NormalizedCode.get_docs(mod, :docs) do
       docs when is_list(docs) ->
         for {{f, arity}, _, kind, args, text} <- docs, f == fun do
