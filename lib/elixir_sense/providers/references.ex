@@ -115,7 +115,7 @@ defmodule ElixirSense.Providers.References do
     end
   end
 
-  def umbrella_calls() do
+  def umbrella_calls do
     build_dir = Path.expand(Mix.Project.config()[:build_path])
     app_paths = Mix.Project.apps_paths()
 

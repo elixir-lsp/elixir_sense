@@ -829,10 +829,10 @@ defmodule ElixirSense.Core.State do
     end
   end
 
-  def default_env(), do: %ElixirSense.Core.State.Env{}
+  def default_env, do: %ElixirSense.Core.State.Env{}
 
   def expand_alias(%__MODULE__{} = state, module) do
     current_aliases = current_aliases(state)
-    Introspection.expand_alias(module, current_aliases)
+    introspection.expand_alias(module, current_aliases)
   end
 end

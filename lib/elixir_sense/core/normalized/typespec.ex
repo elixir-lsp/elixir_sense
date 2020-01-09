@@ -61,7 +61,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
     end
   end
 
-  defp old_typespec() do
+  defp old_typespec do
     Kernel.Typespec
   end
 
