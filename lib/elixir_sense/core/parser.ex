@@ -65,6 +65,7 @@ defmodule ElixirSense.Core.Parser do
            |> fix_line_not_found(cursor_line_number)
            |> string_to_ast(0, cursor_line_number) do
       acc = MetadataBuilder.build(ast)
+
       # a line has been inserted, insert a fake lines_to_env
       fixed_lines_to_env =
         for {line, env} <- acc.lines_to_env,
@@ -77,7 +78,12 @@ defmodule ElixirSense.Core.Parser do
                end)
 
       acc = %State{acc | lines_to_env: fixed_lines_to_env}
-      {:ok, acc}
+
+      if Map.has_key?(acc.lines_to_env, cursor_line_number) do
+        {:ok, acc}
+      else
+        :not_found
+      end
     end
   end
 
