@@ -572,6 +572,7 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   defmodule MyMacro do
+    @compile {:no_warn_undefined, OtherModule}
     defmacro test(do: expr) do
       expr
     end
