@@ -20,7 +20,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
 
     assert references == [
              %{
-               range: %{start: %{column: 14, line: 3}, end: %{column: 17, line: 3}},
+               range: %{start: %{column: 14, line: 4}, end: %{column: 17, line: 4}},
                uri: "test/support/module_with_builtin_type_shadowing.ex"
              }
            ]
