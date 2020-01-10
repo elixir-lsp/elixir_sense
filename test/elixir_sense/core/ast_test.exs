@@ -5,7 +5,7 @@ defmodule ElixirSense.Core.AstTest do
   defmodule ExpandRecursive do
     defmacro my_macro do
       quote do
-        my_macro = "Hi"
+        abc = my_macro()
       end
     end
   end
