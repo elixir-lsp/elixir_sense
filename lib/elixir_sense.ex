@@ -6,18 +6,18 @@ defmodule ElixirSense do
   This module provides the basic functionality for context-aware code completion, docs, signature info and more.
   """
 
-  alias ElixirSense.Core.State
+  alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
-  alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Source
-  alias ElixirSense.Providers.Docs
+  alias ElixirSense.Core.State
   alias ElixirSense.Providers.Definition
-  alias ElixirSense.Providers.Suggestion
-  alias ElixirSense.Providers.Signature
-  alias ElixirSense.Providers.Expand
+  alias ElixirSense.Providers.Docs
   alias ElixirSense.Providers.Eval
+  alias ElixirSense.Providers.Expand
   alias ElixirSense.Providers.References
+  alias ElixirSense.Providers.Signature
+  alias ElixirSense.Providers.Suggestion
 
   @doc ~S"""
   Returns all documentation related a module or function, including types and callback information.

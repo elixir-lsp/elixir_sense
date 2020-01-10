@@ -1,4 +1,6 @@
 defmodule ElixirSense.Core.BuiltinTypes do
+  @moduledoc false
+
   @basic_types %{
     "any" => %{
       params: [],
@@ -103,12 +105,12 @@ defmodule ElixirSense.Core.BuiltinTypes do
     },
     "binary" => %{
       params: [],
-      spec: quote(do: binary() :: <<_::_*8>>),
+      spec: quote(do: binary() :: <<_::size(8)>>),
       doc: "A blob of binary data"
     },
     "bitstring" => %{
       params: [],
-      spec: quote(do: bitstring() :: <<_::_*1>>),
+      spec: quote(do: bitstring() :: <<_::size(1)>>),
       doc: "A bunch of bits"
     },
     "boolean" => %{

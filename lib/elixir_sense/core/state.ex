@@ -3,6 +3,8 @@ defmodule ElixirSense.Core.State do
   Core State
   """
 
+  alias ElixirSense.Core.Introspection
+
   @type fun_arity :: {atom, non_neg_integer}
   @type scope :: atom | fun_arity
 
@@ -222,8 +224,6 @@ defmodule ElixirSense.Core.State do
     def get_category(%ModFunInfo{}), do: :module
   end
 
-  alias ElixirSense.Core.Introspection
-
   def current_aliases(%__MODULE__{} = state) do
     state.aliases |> List.flatten() |> Enum.uniq_by(&elem(&1, 0)) |> Enum.reverse()
   end
@@ -266,7 +266,7 @@ defmodule ElixirSense.Core.State do
     get_current_module_variants(state) |> hd
   end
 
-  def get_current_module_variants(state = %__MODULE__{protocols: [[] | _]}) do
+  def get_current_module_variants(%__MODULE__{protocols: [[] | _]} = state) do
     state.namespace |> hd |> unescape_protocol_impementations
   end
 
@@ -282,7 +282,7 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
   end
 
-  def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, position = {line, _column}) do
+  def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, {line, _column} = position) do
     call = %CallInfo{mod: mod, func: func, arity: arity, position: position}
 
     calls =
@@ -829,10 +829,10 @@ defmodule ElixirSense.Core.State do
     end
   end
 
-  def default_env(), do: %ElixirSense.Core.State.Env{}
+  def default_env, do: %ElixirSense.Core.State.Env{}
 
   def expand_alias(%__MODULE__{} = state, module) do
     current_aliases = current_aliases(state)
-    ElixirSense.Core.Introspection.expand_alias(module, current_aliases)
+    Introspection.expand_alias(module, current_aliases)
   end
 end

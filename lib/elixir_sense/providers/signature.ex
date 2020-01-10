@@ -4,9 +4,9 @@ defmodule ElixirSense.Providers.Signature do
   """
 
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
-  alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.TypeInfo
 
   @type signature_info :: %{

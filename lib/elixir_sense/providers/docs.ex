@@ -3,8 +3,8 @@ defmodule ElixirSense.Providers.Docs do
   Doc Provider
   """
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.State
   alias ElixirSense.Core.Source
+  alias ElixirSense.Core.State
 
   @spec all(String.t(), State.Env.t(), State.mods_funs_to_positions_t(), State.types_t()) ::
           {actual_mod_fun :: String.t(), docs :: Introspection.docs()}

@@ -269,11 +269,13 @@ defmodule ElixirSense.Core.Source do
   end
 
   defp do_extract_struct_module(module, fields) do
-    with {:ok, extracted_module} <- extract_module(module) do
-      fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
-      {extracted_module, fields_names}
-    else
-      _ -> nil
+    case extract_module(module) do
+      {:ok, extracted_module} ->
+        fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
+        {extracted_module, fields_names}
+
+      _ ->
+        nil
     end
   end
 

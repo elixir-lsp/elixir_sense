@@ -1,24 +1,10 @@
-language: erlang
-
+language: elixir
+elixir:
+  - 1.9.4
 otp_release:
-  - '22.2.1'
-
-env:
-  EX_HOME: ${TRAVIS_BUILD_DIR}/elixir
-  EX_BIN: ${TRAVIS_BUILD_DIR}/elixir/bin
-  EX_VSN: 1.9.4
-
-before_script:
-  - git clone https://github.com/elixir-lang/elixir.git ${EX_HOME}
-  - pushd ${EX_HOME}
-  - git checkout v${EX_VSN}
-  - make
-  - popd
-  - ${EX_BIN}/elixir ${EX_BIN}/mix local.hex --force
-  - ${EX_BIN}/elixir ${EX_BIN}/mix local.rebar --force
-
+  - 22.2.1
 script:
-  - ${EX_BIN}/elixir ${EX_BIN}/mix deps.get
-  - MIX_ENV=test ${EX_BIN}/elixir ${EX_BIN}/mix deps.compile
-  - ${EX_BIN}/elixir ${EX_BIN}/mix format --check-formatted
-  - ${EX_BIN}/elixir ${EX_BIN}/mix test
+  - mix format --check-formatted
+  - mix test
+  - mix compile --warnings-as-errors
+  - mix credo --all --strict

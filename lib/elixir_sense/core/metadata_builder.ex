@@ -5,10 +5,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   import ElixirSense.Core.State
   alias ElixirSense.Core.Ast
-  alias ElixirSense.Core.State
-  alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Source
+  alias ElixirSense.Core.State
+  alias ElixirSense.Core.State.VarInfo
 
   @scope_keywords [:for, :try, :fn]
   @block_keywords [:do, :else, :rescue, :catch, :after]
@@ -47,7 +47,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
   end
 
-  defp pre_module(ast, state, position = {line, column}, module, types \\ [], functions \\ []) do
+  defp pre_module(ast, state, {line, column} = position, module, types \\ [], functions \\ []) do
     module = normalize_module(module)
 
     state =
@@ -110,7 +110,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_module(ast, state, position, module, @protocol_types, @protocol_functions)
   end
 
-  defp pre_func(ast = {type, _, _}, state, %{line: line, col: col}, name, params) do
+  defp pre_func({type, _, _} = ast, state, %{line: line, col: col}, name, params) do
     state
     |> new_named_func(name, length(params || []))
     |> add_func_to_index(name, params || [], {line, col}, type)
@@ -164,7 +164,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_clause(ast = {_, [line: line, column: _column], _}, state, lhs) do
+  defp pre_clause({_, [line: line, column: _column], _} = ast, state, lhs) do
     state
     |> new_alias_scope
     |> new_import_scope
@@ -222,7 +222,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_type(ast, state, pos = {line, _column}, type_name, type_args, spec, kind) do
+  defp pre_type(ast, state, {line, _column} = pos, type_name, type_args, spec, kind) do
     spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
 
     state
@@ -231,7 +231,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_spec(ast, state, pos = {line, column}, type_name, type_args, spec, kind) do
+  defp pre_spec(ast, state, {line, column} = pos, type_name, type_args, spec, kind) do
     spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
 
     state =
@@ -821,10 +821,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
     column = Keyword.fetch!(meta, :column)
 
     state =
-      if !String.starts_with?(to_string(call), "__atom_elixir_marker_") do
-        add_call_to_line(state, {nil, call, length(params)}, {line, column})
-      else
+      if String.starts_with?(to_string(call), "__atom_elixir_marker_") do
         state
+      else
+        add_call_to_line(state, {nil, call, length(params)}, {line, column})
       end
 
     state

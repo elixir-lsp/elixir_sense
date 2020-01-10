@@ -1,4 +1,6 @@
 defmodule ElixirSense.Core.BuiltinFunctions do
+  @moduledoc false
+
   @functions %{
     {:exception, 1} => %{specs: [quote(do: exception(term) :: Exception.t())], args: ["msg"]},
     {:message, 1} => %{

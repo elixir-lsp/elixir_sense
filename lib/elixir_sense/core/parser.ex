@@ -3,8 +3,8 @@ defmodule ElixirSense.Core.Parser do
   Core Parser
   """
 
-  alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.State
 
   @spec parse_file(String.t(), boolean, boolean, pos_integer | nil) :: Metadata.t()

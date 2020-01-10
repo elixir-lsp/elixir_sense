@@ -1,7 +1,8 @@
 defmodule ElixirSense.Core.Normalized.Code do
-  @doc """
+  @moduledoc """
   Shim to replicate the behavior of `Code.get_docs/2` in Elixir >= 1.7
   """
+
   @type doc_t :: nil | false | String.t()
   @type fun_doc_entry_t ::
           {{atom, non_neg_integer}, pos_integer, :def | :defmacro, term, doc_t}

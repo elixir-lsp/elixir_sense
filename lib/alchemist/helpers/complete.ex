@@ -1,9 +1,9 @@
 defmodule Alchemist.Helpers.Complete do
+  alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
-  alias ElixirSense.Core.BuiltinFunctions
+  alias ElixirSense.Core.TypeInfo
 
   @erlang_module_builtin_functions [{:module_info, 0}, {:module_info, 1}]
   @elixir_module_builtin_functions [{:__info__, 1}]
@@ -28,6 +28,8 @@ defmodule Alchemist.Helpers.Complete do
   # (original Elixir 1.1) and later GenServer
 
   defmodule Env do
+    @moduledoc false
+
     @type t :: %Alchemist.Helpers.Complete.Env{
             aliases: [{module, module}],
             imports: [module],
@@ -42,7 +44,7 @@ defmodule Alchemist.Helpers.Complete do
               specs: %{}
   end
 
-  def run(exp, env = %Alchemist.Helpers.Complete.Env{}) do
+  def run(exp, %Alchemist.Helpers.Complete.Env{} = env) do
     code =
       case is_bitstring(exp) do
         true -> exp |> String.to_charlist()
@@ -428,61 +430,59 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp get_module_funs(mod, include_builtin) do
-    cond do
-      function_exported?(mod, :__info__, 1) ->
-        docs = NormalizedCode.get_docs(mod, :docs)
+    if function_exported?(mod, :__info__, 1) do
+      docs = NormalizedCode.get_docs(mod, :docs)
 
-        if docs != nil do
-          exports =
-            (mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_buildins(mod))
-            |> Kernel.--(default_arg_functions_with_doc_false(docs))
-            |> Enum.reject(&hidden_fun?(&1, docs))
+      if docs != nil do
+        exports =
+          (mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_buildins(mod))
+          |> Kernel.--(default_arg_functions_with_doc_false(docs))
+          |> Enum.reject(&hidden_fun?(&1, docs))
 
-          default_arg_functions = default_arg_functions(docs)
+        default_arg_functions = default_arg_functions(docs)
 
-          specs = TypeInfo.get_module_specs(mod)
+        specs = TypeInfo.get_module_specs(mod)
 
-          for {f, a} <- exports do
-            {f, new_arity} =
-              case default_arg_functions[{f, a}] do
-                nil -> {f, a}
-                new_arity -> {f, new_arity}
-              end
+        for {f, a} <- exports do
+          {f, new_arity} =
+            case default_arg_functions[{f, a}] do
+              nil -> {f, a}
+              new_arity -> {f, new_arity}
+            end
 
-            {func_kind, func_doc} = find_doc({f, new_arity}, docs)
+          {func_kind, func_doc} = find_doc({f, new_arity}, docs)
 
-            spec =
-              case func_kind do
-                :defmacro -> Map.get(specs, {:"MACRO-#{f}", new_arity + 1})
-                :def -> Map.get(specs, {f, new_arity})
-                nil -> nil
-              end
+          spec =
+            case func_kind do
+              :defmacro -> Map.get(specs, {:"MACRO-#{f}", new_arity + 1})
+              :def -> Map.get(specs, {f, new_arity})
+              nil -> nil
+            end
 
-            {f, a, func_kind, func_doc, Introspection.spec_to_string(spec), nil}
-          end
-        else
-          macros = for {f, a} <- mod.__info__(:macros), do: {f, a, :defmacro, nil, nil, nil}
-          functions = for {f, a} <- mod.__info__(:functions), do: {f, a, :def, nil, nil, nil}
-          macros ++ functions
+          {f, a, func_kind, func_doc, Introspection.spec_to_string(spec), nil}
         end
-        |> Kernel.++(
-          for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :def, nil, nil, nil}
-        )
+      else
+        macros = for {f, a} <- mod.__info__(:macros), do: {f, a, :defmacro, nil, nil, nil}
+        functions = for {f, a} <- mod.__info__(:functions), do: {f, a, :def, nil, nil, nil}
+        macros ++ functions
+      end
+      |> Kernel.++(
+        for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :def, nil, nil, nil}
+      )
+    else
+      funs =
+        mod.module_info(:exports)
+        |> Kernel.--(if include_builtin, do: [], else: @builtin_functions)
 
-      true ->
-        funs =
-          mod.module_info(:exports)
-          |> Kernel.--(if include_builtin, do: [], else: @builtin_functions)
+      for {f, a} <- funs do
+        case f |> Atom.to_string() do
+          "MACRO-" <> name ->
+            {String.to_atom(name), a, :defmacro, nil, nil, nil}
 
-        for {f, a} <- funs do
-          case f |> Atom.to_string() do
-            "MACRO-" <> name ->
-              {String.to_atom(name), a, :defmacro, nil, nil, nil}
-
-            _name ->
-              {f, a, :def, nil, nil, nil}
-          end
+          _name ->
+            {f, a, :def, nil, nil, nil}
         end
+      end
     end
   end
 
@@ -595,17 +595,7 @@ defmodule Alchemist.Helpers.Complete do
 
       fa = {name |> String.to_atom(), a}
 
-      unless fa in BuiltinFunctions.all() do
-        %{
-          type: kind,
-          name: name,
-          arity: a,
-          args: args || fun_args,
-          origin: mod_name,
-          summary: desc,
-          spec: spec || ""
-        }
-      else
+      if fa in BuiltinFunctions.all() do
         %{
           type: kind,
           name: name,
@@ -614,6 +604,16 @@ defmodule Alchemist.Helpers.Complete do
           origin: mod_name,
           summary: "Built-in function",
           spec: BuiltinFunctions.get_specs(fa) |> Enum.join("\n")
+        }
+      else
+        %{
+          type: kind,
+          name: name,
+          arity: a,
+          args: args || fun_args,
+          origin: mod_name,
+          summary: desc,
+          spec: spec || ""
         }
       end
     end

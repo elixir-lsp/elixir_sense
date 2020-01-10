@@ -4,7 +4,8 @@ defmodule ElixirSense.Server.TCPServer do
   """
   use Bitwise
 
-  alias ElixirSense.Server.{RequestHandler, ContextLoader}
+  alias ElixirSense.Server.ContextLoader
+  alias ElixirSense.Server.RequestHandler
 
   @connection_handler_supervisor ElixirSense.Server.TCPServer.ConnectionHandlerSupervisor
   @default_listen_options [:binary, active: false, reuseaddr: true, packet: 4]
