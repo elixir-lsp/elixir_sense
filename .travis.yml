@@ -8,3 +8,7 @@ script:
   - mix test
   - mix compile --warnings-as-errors
   - mix credo --all --strict
+  - mix dialyzer
+cache:
+  directories:
+  - _build/dev
