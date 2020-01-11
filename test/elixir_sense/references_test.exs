@@ -1,9 +1,21 @@
 defmodule ElixirSense.Providers.ReferencesTest do
   use ExUnit.Case, async: true
+  alias ElixirSense.Core.References.Tracer
 
-  # doctest References
+  setup_all do
+    {:ok, _} = Tracer.start_link()
 
-  test "finds reference to local function shadowing builtin type" do
+    Code.compiler_options(tracers: [Tracer], ignore_module_conflict: true)
+
+    Code.compile_file("./test/support/modules_with_references.ex")
+    Code.compile_file("./test/support/module_with_builtin_type_shadowing.ex")
+
+    trace = Tracer.get()
+
+    %{trace: trace}
+  end
+
+  test "finds reference to local function shadowing builtin type", %{trace: trace} do
     buffer = """
     defmodule B.Callee do
       def fun() do
@@ -16,7 +28,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 2, 8)
+    references = ElixirSense.references(buffer, 2, 8, trace)
 
     assert references == [
              %{
@@ -26,7 +38,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function call" do
+  test "find references with cursor over a function call", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -36,7 +48,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
     assert references == [
              %{
@@ -54,7 +66,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function definition" do
+  test "find references with cursor over a function definition", %{trace: trace} do
     buffer = """
     defmodule ElixirSense.Providers.ReferencesTest.Modules.Callee1 do
       def func() do
@@ -68,7 +80,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 2, 10)
+    references = ElixirSense.references(buffer, 2, 10, trace)
 
     assert references == [
              %{
@@ -85,7 +97,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
              }
            ]
 
-    references = ElixirSense.references(buffer, 6, 10)
+    references = ElixirSense.references(buffer, 6, 10, trace)
 
     assert references == [
              %{
@@ -99,7 +111,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function definition with default arg" do
+  test "find references with cursor over a function definition with default arg", %{trace: trace} do
     buffer = """
     defmodule ElixirSenseExample.Subscription do
       def check(resource, models, user, opts \\\\ []) do
@@ -108,7 +120,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 2, 10)
+    references = ElixirSense.references(buffer, 2, 10, trace)
 
     assert references == [
              %{
@@ -122,7 +134,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function with arity 1" do
+  test "find references with cursor over a function with arity 1", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -132,7 +144,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
     assert references == [
              %{
@@ -146,7 +158,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function called via @attr.call" do
+  test "find references with cursor over a function called via @attr.call", %{trace: trace} do
     buffer = """
     defmodule Caller do
       @attr ElixirSense.Providers.ReferencesTest.Modules.Callee1
@@ -157,7 +169,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 12)
+    references = ElixirSense.references(buffer, 4, 12, trace)
 
     assert references == [
              %{
@@ -171,7 +183,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references to function called via @attr.call" do
+  test "find references to function called via @attr.call", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -181,7 +193,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
     assert references == [
              %{
@@ -191,7 +203,9 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function with arity 1 called via pipe operator" do
+  test "find references with cursor over a function with arity 1 called via pipe operator", %{
+    trace: trace
+  } do
     buffer = """
     defmodule Caller do
       def func() do
@@ -202,7 +216,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 62)
+    references = ElixirSense.references(buffer, 4, 62, trace)
 
     assert references == [
              %{
@@ -212,7 +226,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function with arity 1 captured" do
+  test "find references with cursor over a function with arity 1 captured", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -222,7 +236,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 72)
+    references = ElixirSense.references(buffer, 3, 72, trace)
 
     assert references == [
              %{
@@ -232,7 +246,9 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function when caller uses pipe operator" do
+  test "find references with cursor over a function when caller uses pipe operator", %{
+    trace: trace
+  } do
     buffer = """
     defmodule Caller do
       def func() do
@@ -242,7 +258,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
     assert references == [
              %{
@@ -252,7 +268,9 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function when caller uses capture operator" do
+  test "find references with cursor over a function when caller uses capture operator", %{
+    trace: trace
+  } do
     buffer = """
     defmodule Caller do
       def func() do
@@ -262,7 +280,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
     assert references == [
              %{
@@ -272,7 +290,8 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function with deault argument when caller uses default arguments" do
+  test "find references with cursor over a function with deault argument when caller uses default arguments",
+       %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -283,7 +302,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
     assert references == [
              %{
@@ -292,7 +311,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
              }
            ]
 
-    references = ElixirSense.references(buffer, 4, 59)
+    references = ElixirSense.references(buffer, 4, 59, trace)
 
     assert references == [
              %{
@@ -302,7 +321,8 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function with deault argument when caller does not uses default arguments" do
+  test "find references with cursor over a function with deault argument when caller does not uses default arguments",
+       %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -313,7 +333,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
     assert references == [
              %{
@@ -322,7 +342,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
              }
            ]
 
-    references = ElixirSense.references(buffer, 4, 59)
+    references = ElixirSense.references(buffer, 4, 59, trace)
 
     assert references == [
              %{
@@ -332,7 +352,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a module with funs with deault argument" do
+  test "find references with cursor over a module with funs with deault argument", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -342,7 +362,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 55)
+    references = ElixirSense.references(buffer, 3, 55, trace)
 
     assert references == [
              %{
@@ -356,7 +376,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a module with 1.2 alias syntax" do
+  test "find references with cursor over a module with 1.2 alias syntax", %{trace: trace} do
     buffer = """
     defmodule Caller do
       alias ElixirSense.Providers.ReferencesTest.Modules.Callee5
@@ -364,14 +384,14 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references_1 = ElixirSense.references(buffer, 2, 57)
-    references_2 = ElixirSense.references(buffer, 3, 58)
+    references_1 = ElixirSense.references(buffer, 2, 57, trace)
+    references_2 = ElixirSense.references(buffer, 3, 58, trace)
 
     assert references_1 == references_2
     assert [_, _] = references_1
   end
 
-  test "find references with cursor over a function call from an aliased module" do
+  test "find references with cursor over a function call from an aliased module", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def my() do
@@ -382,7 +402,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 8)
+    references = ElixirSense.references(buffer, 4, 8, trace)
 
     assert references == [
              %{
@@ -400,7 +420,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function call from an imported module" do
+  test "find references with cursor over a function call from an imported module", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def my() do
@@ -411,7 +431,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 6)
+    references = ElixirSense.references(buffer, 4, 6, trace)
 
     assert references == [
              %{
@@ -429,7 +449,9 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function call pipe from an imported module" do
+  test "find references with cursor over a function call pipe from an imported module", %{
+    trace: trace
+  } do
     buffer = """
     defmodule Caller do
       def my() do
@@ -440,7 +462,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 12)
+    references = ElixirSense.references(buffer, 4, 12, trace)
 
     assert references == [
              %{
@@ -454,7 +476,9 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a function capture from an imported module" do
+  test "find references with cursor over a function capture from an imported module", %{
+    trace: trace
+  } do
     buffer = """
     defmodule Caller do
       def my() do
@@ -465,7 +489,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 7)
+    references = ElixirSense.references(buffer, 4, 7, trace)
 
     assert references == [
              %{
@@ -483,7 +507,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find imported references" do
+  test "find imported references", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -493,7 +517,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    reference = ElixirSense.references(buffer, 3, 59) |> Enum.at(0)
+    reference = ElixirSense.references(buffer, 3, 59, trace) |> Enum.at(0)
 
     assert reference == %{
              uri: "test/support/modules_with_references.ex",
@@ -501,7 +525,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            }
   end
 
-  test "find references from remote calls with the function in the next line" do
+  test "find references from remote calls with the function in the next line", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -511,7 +535,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    reference = ElixirSense.references(buffer, 3, 59) |> Enum.at(1)
+    reference = ElixirSense.references(buffer, 3, 59, trace) |> Enum.at(1)
 
     assert reference == %{
              uri: "test/support/modules_with_references.ex",
@@ -519,7 +543,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            }
   end
 
-  test "find references when module with __MODULE__ special form" do
+  test "find references when module with __MODULE__ special form", %{trace: trace} do
     buffer = """
     defmodule ElixirSense.Providers.ReferencesTest.Modules do
       def func() do
@@ -529,7 +553,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    reference = ElixirSense.references(buffer, 3, 25) |> Enum.at(0)
+    reference = ElixirSense.references(buffer, 3, 25, trace) |> Enum.at(0)
 
     assert reference == %{
              uri: "test/support/modules_with_references.ex",
@@ -537,7 +561,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            }
   end
 
-  test "find references with atom module" do
+  test "find references with atom module", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -547,7 +571,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    reference = ElixirSense.references(buffer, 3, 69) |> Enum.at(0)
+    reference = ElixirSense.references(buffer, 3, 69, trace) |> Enum.at(0)
 
     assert reference == %{
              uri: "test/support/modules_with_references.ex",
@@ -555,7 +579,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            }
   end
 
-  test "find references of variables" do
+  test "find references of variables", %{trace: trace} do
     buffer = """
     defmodule MyModule do
       def func do
@@ -570,7 +594,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 6, 13)
+    references = ElixirSense.references(buffer, 6, 13, trace)
 
     assert references == [
              %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 9}}},
@@ -587,7 +611,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references of attributes" do
+  test "find references of attributes", %{trace: trace} do
     buffer = """
     defmodule MyModule do
       @attr "abc"
@@ -597,7 +621,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 7)
+    references = ElixirSense.references(buffer, 4, 7, trace)
 
     assert references == [
              %{range: %{end: %{column: 8, line: 2}, start: %{column: 3, line: 2}}, uri: nil},
@@ -612,7 +636,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references of private functions from definition" do
+  test "find references of private functions from definition", %{trace: trace} do
     buffer = """
     defmodule MyModule do
       def calls_private do
@@ -630,7 +654,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 10, 15)
+    references = ElixirSense.references(buffer, 10, 15, trace)
 
     assert references == [
              %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 16}}},
@@ -664,7 +688,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a module" do
+  test "find references with cursor over a module", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -674,7 +698,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 53)
+    references = ElixirSense.references(buffer, 3, 53, trace)
 
     assert references == [
              %{
@@ -700,7 +724,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over an erlang module" do
+  test "find references with cursor over an erlang module", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -711,7 +735,8 @@ defmodule ElixirSense.Providers.ReferencesTest do
     """
 
     references =
-      ElixirSense.references(buffer, 3, 7) |> Enum.filter(&(&1.uri =~ "modules_with_references"))
+      ElixirSense.references(buffer, 3, 7, trace)
+      |> Enum.filter(&(&1.uri =~ "modules_with_references"))
 
     assert references == [
              %{
@@ -721,7 +746,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over an erlang function call" do
+  test "find references with cursor over an erlang function call", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -731,7 +756,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 11)
+    references = ElixirSense.references(buffer, 3, 11, trace)
 
     assert references == [
              %{
@@ -741,7 +766,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over builtin function call" do
+  test "find references with cursor over builtin function call", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -751,7 +776,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 60)
+    references = ElixirSense.references(buffer, 3, 60, trace)
 
     assert references == [
              %{

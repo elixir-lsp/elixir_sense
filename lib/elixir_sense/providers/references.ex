@@ -33,7 +33,8 @@ defmodule ElixirSense.Providers.References do
           State.Env.t(),
           [VarInfo.t()],
           [AttributeInfo.t()],
-          Metadata.t()
+          Metadata.t(),
+          ElixirSense.Core.References.Tracer.call_trace_t() | nil
         ) :: [ElixirSense.Providers.References.reference_info()]
   def find(
         subject,
@@ -50,7 +51,8 @@ defmodule ElixirSense.Providers.References do
           mods_funs_to_positions: modules_funs,
           calls: calls,
           types: metadata_types
-        }
+        },
+        trace
       ) do
     var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
 
@@ -103,18 +105,18 @@ defmodule ElixirSense.Providers.References do
           |> Introspection.actual_mod_fun(imports, aliases, module, modules_funs, metadata_types)
 
         {mod, fun}
-        |> xref_at_cursor(arity, module, scope, modules_funs)
+        |> xref_at_cursor(arity, module, scope, modules_funs, trace)
         |> Enum.map(&build_location/1)
         |> Enum.sort_by(fn %{uri: a, range: %{start: %{line: b, column: c}}} -> {a, b, c} end)
     end
   end
 
-  defp xref_at_cursor(actual_mod_fun, arity, module, scope, modules_funs) do
+  defp xref_at_cursor(actual_mod_fun, arity, module, scope, modules_funs, trace) do
     mfa =
       actual_mod_fun
       |> callee_at_cursor(module, scope, arity, modules_funs)
 
-    callers(mfa)
+    callers(mfa, trace)
   end
 
   # Cursor over a module
@@ -145,11 +147,8 @@ defmodule ElixirSense.Providers.References do
     [module, func, arity]
   end
 
-  def callers(mfa) do
-    calls =
-      calls()
-      |> Enum.filter(caller_filter(mfa))
-      |> Enum.uniq()
+  def callers(mfa, trace) do
+    calls = filtered_calls(mfa, trace)
 
     arity =
       case mfa do
@@ -161,6 +160,14 @@ defmodule ElixirSense.Providers.References do
         new_call <- expand_xref_line_calls(call, arity) do
       new_call
     end
+  end
+
+  defp filtered_calls(mfa, trace) do
+    trace
+    |> Map.values()
+    |> List.flatten()
+    |> Enum.filter(caller_filter(mfa))
+    |> Enum.uniq()
   end
 
   defp calls do
