@@ -288,6 +288,21 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
+  test "find references with cursor over a module with 1.2 alias syntax" do
+    buffer = """
+    defmodule Caller do
+      alias ElixirSense.Providers.ReferencesTest.Modules.Callee5
+      alias ElixirSense.Providers.ReferencesTest.Modules.{Callee5}
+    end
+    """
+
+    references_1 = ElixirSense.references(buffer, 2, 57)
+    references_2 = ElixirSense.references(buffer, 3, 58)
+
+    assert references_1 == references_2
+    assert [_, _] = references_1
+  end
+
   test "find references with cursor over a function call from an aliased module" do
     buffer = """
     defmodule Caller do
