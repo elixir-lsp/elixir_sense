@@ -285,6 +285,28 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    test "retrieve documentation from modules in 1.2 alias syntax" do
+      buffer = """
+      defmodule MyModule do
+        alias ElixirSenseExample.ModuleWithDocs
+        alias ElixirSenseExample.{Some, ModuleWithDocs}
+      end
+      """
+
+      %{
+        actual_subject: actual_subject_1,
+        docs: %{docs: docs_1}
+      } = ElixirSense.docs(buffer, 2, 30)
+
+      %{
+        actual_subject: actual_subject_2,
+        docs: %{docs: docs_2}
+      } = ElixirSense.docs(buffer, 2, 38)
+
+      assert actual_subject_1 == actual_subject_2
+      assert docs_1 == docs_2
+    end
+
     test "does not reveal opaque types" do
       buffer = """
       defmodule MyModule do

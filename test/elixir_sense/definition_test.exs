@@ -188,6 +188,24 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "ElixirSenseExample.ModuleWithFunctions do"
   end
 
+  test "find definition of modules in 1.2 alias syntax" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.ModuleWithDocs
+      alias ElixirSenseExample.{Some, ModuleWithDocs}
+    end
+    """
+
+    %{found: true, type: :module, file: file_1, line: line_1} =
+      ElixirSense.definition(buffer, 2, 30)
+
+    %{found: true, type: :module, file: file_2, line: line_2} =
+      ElixirSense.definition(buffer, 3, 38)
+
+    assert file_1 == file_2
+    assert line_1 == line_2
+  end
+
   test "find definition of erlang modules" do
     buffer = """
     defmodule MyModule do
