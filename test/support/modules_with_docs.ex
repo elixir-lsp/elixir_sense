@@ -43,10 +43,10 @@ defmodule ElixirSenseExample.ModuleWithDocs do
   An example callback
   """
   @doc since: "1.1.0"
-  @macrocallback some_callback(integer) :: atom
+  @macrocallback some_macrocallback(integer) :: atom
   @doc false
-  @macrocallback some_callback_doc_false(integer) :: atom
-  @macrocallback some_callback_no_doc(integer) :: atom
+  @macrocallback some_macrocallback_doc_false(integer) :: atom
+  @macrocallback some_macrocallback_no_doc(integer) :: atom
 end
 
 defmodule ElixirSenseExample.ModuleWithDocFalse do

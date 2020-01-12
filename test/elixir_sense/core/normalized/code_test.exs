@@ -34,9 +34,9 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
              {{:some_callback, 1}, 33, :callback, "An example callback\n"},
              {{:some_callback_doc_false, 1}, 38, :callback, false},
              {{:some_callback_no_doc, 1}, 40, :callback, nil},
-             {{:some_callback, 1}, 42, :macrocallback, "An example callback\n"},
-             {{:some_callback_doc_false, 1}, 47, :macrocallback, false},
-             {{:some_callback_no_doc, 1}, 49, :macrocallback, nil}
+             {{:some_macrocallback, 1}, 42, :macrocallback, "An example callback\n"},
+             {{:some_macrocallback_doc_false, 1}, 47, :macrocallback, false},
+             {{:some_macrocallback_no_doc, 1}, 49, :macrocallback, nil}
            ] == Code.get_docs(ElixirSenseExample.ModuleWithDocs, :callback_docs)
   end
 
@@ -74,9 +74,9 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
                {{:some_callback, 1}, 33, :callback, "An example callback\n"},
                {{:some_callback_doc_false, 1}, 38, :callback, false},
                {{:some_callback_no_doc, 1}, 40, :callback, nil},
-               {{:some_callback, 1}, 42, :macrocallback, "An example callback\n"},
-               {{:some_callback_doc_false, 1}, 47, :macrocallback, false},
-               {{:some_callback_no_doc, 1}, 49, :macrocallback, nil}
+               {{:some_macrocallback, 1}, 42, :macrocallback, "An example callback\n"},
+               {{:some_macrocallback_doc_false, 1}, 47, :macrocallback, false},
+               {{:some_macrocallback_no_doc, 1}, 49, :macrocallback, nil}
              ],
              type_docs: [
                {{:some_type, 0}, 6, :type, "An example type\n"},
