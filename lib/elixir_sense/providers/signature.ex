@@ -10,7 +10,7 @@ defmodule ElixirSense.Providers.Signature do
   alias ElixirSense.Core.TypeInfo
 
   @type signature_info :: %{
-          active_param: pos_integer,
+          active_param: non_neg_integer,
           pipe_before: boolean,
           signatures: [Metadata.signature_t()]
         }

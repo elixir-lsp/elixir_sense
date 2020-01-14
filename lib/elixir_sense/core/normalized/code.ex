@@ -5,10 +5,10 @@ defmodule ElixirSense.Core.Normalized.Code do
 
   @type doc_t :: nil | false | String.t()
   @type fun_doc_entry_t ::
-          {{atom, non_neg_integer}, pos_integer, :def | :defmacro, term, doc_t}
+          {{atom, non_neg_integer}, :erl_anno.anno(), :def | :defmacro, term, doc_t}
   @type doc_entry_t ::
-          {{atom, non_neg_integer}, pos_integer, :callback | :macrocallback | :type, doc_t}
-  @type moduledoc_entry_t :: {pos_integer, doc_t}
+          {{atom, non_neg_integer}, :erl_anno.anno(), :callback | :macrocallback | :type, doc_t}
+  @type moduledoc_entry_t :: {:erl_anno.anno(), doc_t}
 
   @spec get_docs(module, :docs) :: nil | [fun_doc_entry_t]
   @spec get_docs(module, :callback_docs | :type_docs) :: nil | [:doc_entry_t]
@@ -88,6 +88,8 @@ defmodule ElixirSense.Core.Normalized.Code do
     end
   end
 
+  @spec extract_docs(%{required(String.t()) => String.t()} | :hidden | :none) ::
+          String.t() | false | nil
   defp extract_docs(%{"en" => docs_en}), do: docs_en
   defp extract_docs(:hidden), do: false
   defp extract_docs(:none), do: nil

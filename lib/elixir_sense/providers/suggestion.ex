@@ -417,7 +417,7 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.sort()
   end
 
-  @spec find_attributes([String.t()], String.t()) :: [attribute]
+  @spec find_attributes([atom], String.t()) :: [attribute]
   defp find_attributes(attributes, hint) do
     for attribute <- attributes,
         hint in ["", "@"] or String.starts_with?("@#{attribute}", hint) do

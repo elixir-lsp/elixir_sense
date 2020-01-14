@@ -200,13 +200,18 @@ defmodule ElixirSense.Providers.References do
   end
 
   defp find_actual_mod_fun(code, {line, col}, imports, aliases, module, mods_funs, metadata_types) do
-    {mod, fun, _found} =
-      code
-      |> Source.subject(line, col)
-      |> Source.split_module_and_func(module, aliases)
-      |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs, metadata_types)
+    case Source.subject(code, line, col) do
+      nil ->
+        {nil, nil}
 
-    {mod, fun}
+      subject ->
+        {mod, fun, _found} =
+          subject
+          |> Source.split_module_and_func(module, aliases)
+          |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs, metadata_types)
+
+        {mod, fun}
+    end
   end
 
   defp caller_filter([module, func, _arity]), do: &match?(%{callee: {^module, ^func, _}}, &1)

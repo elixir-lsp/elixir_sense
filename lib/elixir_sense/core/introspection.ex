@@ -30,7 +30,7 @@ defmodule ElixirSense.Core.Introspection do
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.TypeInfo
 
-  @type mod_fun :: {mod :: module | nil, fun :: atom | nil}
+  @type mod_fun :: {module | nil, atom | nil}
   @type markdown :: String.t()
   @type mod_docs :: %{docs: markdown, types: markdown, callbacks: markdown}
   @type fun_docs :: %{docs: markdown, types: markdown}
@@ -45,7 +45,7 @@ defmodule ElixirSense.Core.Introspection do
     ModuleInfo.all_applications_modules()
   end
 
-  @spec get_all_docs(mod_fun, scope :: ElixirSense.Core.State.scope()) :: docs
+  @spec get_all_docs(mod_fun, ElixirSense.Core.State.scope()) :: docs
   def get_all_docs({mod, nil}, _) do
     %{docs: get_docs_md(mod), types: get_types_md(mod), callbacks: get_callbacks_md(mod)}
   end
