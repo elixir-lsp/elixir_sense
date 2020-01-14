@@ -256,7 +256,7 @@ defmodule ElixirSense.Providers.References do
 
         %State.CallInfo{position: {line, column}} ->
           text_after = Source.text_after(code, line, column)
-          {_rest, line_offset, col_offset} = Source.find_next_word(text_after)
+          {_rest, line_offset, col_offset} = Source.find_next_word(text_after) || {"", 0, 0}
           col_offset = if line_offset == 0, do: column, else: col_offset
 
           %State.CallInfo{call | position: {line + line_offset, col_offset}}
