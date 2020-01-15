@@ -817,4 +817,50 @@ defmodule Alchemist.Helpers.CompleteTest do
               %{name: "blame", type: :function, arity: 2}
             ]} = expand('ArgumentError.bla')
   end
+
+  test "complete build in :erlang functions" do
+    assert {:yes, '',
+            [
+              %{
+                arity: 2,
+                name: "or",
+                spec: "",
+                type: :function,
+                args: "",
+                origin: ":erlang",
+                summary: ""
+              },
+              %{
+                args: "",
+                arity: 2,
+                name: "orelse",
+                origin: ":erlang",
+                spec: "",
+                summary: "",
+                type: :function
+              }
+            ]} = expand(':erlang.or')
+
+    assert {:yes, '',
+            [
+              %{
+                arity: 2,
+                name: "and",
+                spec: "",
+                type: :function,
+                args: "",
+                origin: ":erlang",
+                summary: ""
+              },
+              %{
+                args: "",
+                arity: 2,
+                name: "andalso",
+                origin: ":erlang",
+                spec: "",
+                summary: "",
+                type: :function
+              }
+            ]} = expand(':erlang.and')
+  end
 end

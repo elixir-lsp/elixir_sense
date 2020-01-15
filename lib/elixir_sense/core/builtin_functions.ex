@@ -83,4 +83,7 @@ defmodule ElixirSense.Core.BuiltinFunctions do
   end
 
   def all, do: @all
+
+  def erlang_builtin_functions(:erlang), do: [{:andalso, 2}, {:orelse, 2}]
+  def erlang_builtin_functions(_), do: []
 end

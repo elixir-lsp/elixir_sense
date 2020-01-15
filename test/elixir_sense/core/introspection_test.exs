@@ -225,4 +225,9 @@ defmodule ElixirSense.Core.IntrospectionTest do
     # not found
     assert {Elixir, :asdf, false} = actual_mod_fun({Elixir, :asdf}, [], [], nil, %{}, %{})
   end
+
+  test "actual_mod_fun :erlang builtings" do
+    assert {:erlang, :andalso, true} = actual_mod_fun({:erlang, :andalso}, [], [], nil, %{}, %{})
+    assert {:erlang, :orelse, true} = actual_mod_fun({:erlang, :orelse}, [], [], nil, %{}, %{})
+  end
 end

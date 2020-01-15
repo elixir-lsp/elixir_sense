@@ -1,6 +1,7 @@
 defmodule Alchemist.Helpers.ModuleInfo do
   @moduledoc false
 
+  alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
   @spec moduledoc?(module) :: boolean
@@ -39,6 +40,7 @@ defmodule Alchemist.Helpers.ModuleInfo do
               [fun | acc]
           end
         end)
+        |> Kernel.++(BuiltinFunctions.erlang_builtin_functions(module))
 
       _otherwise ->
         []

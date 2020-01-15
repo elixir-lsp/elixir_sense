@@ -26,6 +26,11 @@ defmodule Alchemist.Helpers.ModuleTest do
     assert ModuleInfo.has_function?(List, :to_string) == true
   end
 
+  test "has_function? :erlang builtins" do
+    assert ModuleInfo.has_function?(:erlang, :andalso) == true
+    assert ModuleInfo.has_function?(:erlang, :orelse) == true
+  end
+
   test "has_function? return false" do
     assert ModuleInfo.has_function?(List, :split) == false
     assert ModuleInfo.has_function?(List, :map) == false

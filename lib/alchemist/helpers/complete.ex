@@ -473,6 +473,7 @@ defmodule Alchemist.Helpers.Complete do
       funs =
         mod.module_info(:exports)
         |> Kernel.--(if include_builtin, do: [], else: @builtin_functions)
+        |> Kernel.++(BuiltinFunctions.erlang_builtin_functions(mod))
 
       for {f, a} <- funs do
         case f |> Atom.to_string() do
