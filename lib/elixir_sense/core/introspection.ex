@@ -539,6 +539,8 @@ defmodule ElixirSense.Core.Introspection do
       :task
       iex> ElixirSense.Core.Introspection.get_module_subtype(NotExistingModule)
       nil
+      iex> ElixirSense.Core.Introspection.get_module_subtype(Elixir)
+      nil
   """
   def get_module_subtype(module) do
     has_func = fn f, a -> module_has_function(module, f, a) end
@@ -569,8 +571,10 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   # NOTE does not work for macro
+  def module_has_function(Elixir, _func, _arity), do: false
+
   def module_has_function(module, func, arity) do
-    Code.ensure_loaded?(module) && Kernel.function_exported?(module, func, arity)
+    Code.ensure_loaded?(module) and Kernel.function_exported?(module, func, arity)
   end
 
   def module_is_struct?(module) do
