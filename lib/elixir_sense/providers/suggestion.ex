@@ -588,33 +588,12 @@ defmodule ElixirSense.Providers.Suggestion do
   end
 
   defp find_typespecs(hint, aliases, module, _scope, mods_and_funs, metadata_types) do
-    hint
-    |> Source.split_module_and_hint(module, aliases)
-    |> find_typespecs_for_mod_and_hint(aliases, module, mods_and_funs, metadata_types)
-  end
+    {mod, hint} =
+      hint
+      |> Source.split_module_and_hint(module, aliases)
 
-  defp find_typespecs_for_mod_and_hint(
-         {nil, hint},
-         aliases,
-         module,
-         mods_and_funs,
-         metadata_types
-       )
-       when not is_nil(module) do
-    local_module =
-      find_typespecs_for_mod_and_hint(
-        {module, hint},
-        aliases,
-        module,
-        mods_and_funs,
-        metadata_types
-      )
-
-    builtin_modules =
-      TypeInfo.find_all_builtin(&String.starts_with?("#{&1.name}", hint))
-      |> Enum.map(&type_info_to_suggestion(&1, nil))
-
-    local_module ++ builtin_modules
+    find_typespecs_for_mod_and_hint({mod, hint}, aliases, module, mods_and_funs, metadata_types)
+    |> Kernel.++(find_builtin_types({mod, hint}))
   end
 
   defp find_typespecs_for_mod_and_hint(
@@ -626,17 +605,32 @@ defmodule ElixirSense.Providers.Suggestion do
        ) do
     case Introspection.actual_module(mod, aliases, module, mods_and_funs) do
       {actual_mod, true} ->
-        TypeInfo.find_all(actual_mod, &String.starts_with?("#{&1.name}", hint))
-        |> Kernel.++(find_metadata_types(actual_mod, hint, metadata_types, module == actual_mod))
-        |> Enum.map(&type_info_to_suggestion(&1, actual_mod))
-        |> Enum.uniq_by(&{&1.name, &1.arity})
+        find_module_types(actual_mod, {mod, hint}, metadata_types, module)
+
+      {nil, false} ->
+        find_module_types(module, {mod, hint}, metadata_types, module)
 
       {_, false} ->
         []
     end
   end
 
-  defp find_metadata_types(actual_mod, hint, metadata_types, include_private) do
+  defp find_builtin_types({nil, hint}) do
+    TypeInfo.find_all_builtin(&String.starts_with?("#{&1.name}", hint))
+    |> Enum.map(&type_info_to_suggestion(&1, nil))
+  end
+
+  defp find_builtin_types({_mod, _hint}), do: []
+
+  defp find_module_types(actual_mod, {mod, hint}, metadata_types, module) do
+    find_metadata_types(actual_mod, {mod, hint}, metadata_types, module)
+    |> Kernel.++(TypeInfo.find_all(actual_mod, &String.starts_with?("#{&1.name}", hint)))
+    |> Enum.map(&type_info_to_suggestion(&1, actual_mod))
+  end
+
+  defp find_metadata_types(actual_mod, {mod, hint}, metadata_types, module) do
+    include_private = mod == nil and actual_mod == module
+
     for {{mod, type, arity}, type_info} when is_integer(arity) <- metadata_types,
         mod == actual_mod,
         type |> Atom.to_string() |> String.starts_with?(hint),

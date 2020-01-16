@@ -1901,6 +1901,33 @@ defmodule ElixirSense.SuggestionsTest do
              } == suggestion1
     end
 
+    test "local types from metadata external call - private types are not suggested" do
+      buffer = """
+      defmodule MyModule do
+        @type my_local_t :: integer
+        @typep my_local_arg_t(a, b) :: {a, b}
+        @type my_type :: MyModule.my_loc
+        #                               ^
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 4, 35)
+        |> Enum.filter(fn %{type: t} -> t == :type_spec end)
+
+      assert [suggestion1] = list
+
+      assert %{
+               arity: 0,
+               name: "my_local_t",
+               origin: "MyModule",
+               type: :type_spec,
+               signature: "my_local_t()",
+               doc: "",
+               spec: ""
+             } == suggestion1
+    end
+
     test "remote public and opaque types from metadata" do
       buffer = """
       defmodule SomeModule do
