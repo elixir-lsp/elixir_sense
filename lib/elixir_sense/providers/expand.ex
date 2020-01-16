@@ -21,9 +21,9 @@ defmodule ElixirSense.Providers.Expand do
   def expand_full(code, %State.Env{requires: requires, imports: imports, module: module}) do
     env =
       __ENV__
+      |> Ast.set_module_for_env(module)
       |> Ast.add_requires_to_env(requires)
       |> Ast.add_imports_to_env(imports)
-      |> Ast.set_module_for_env(module)
 
     try do
       {_, expr} = code |> Code.string_to_quoted()
