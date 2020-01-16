@@ -1057,7 +1057,7 @@ defmodule ElixirSense.SuggestionsTest do
     end
 
     defmodule ElixirSenseExample do
-      def test_fun_priv1(a), do: :ok
+      defp test_fun_priv1(a), do: :ok
       def some_fun() do
         __MODULE__.Sm
         __MODULE__.SmodO.te
@@ -1085,15 +1085,7 @@ defmodule ElixirSense.SuggestionsTest do
              }
            ] = ElixirSense.suggestions(buffer, 10, 24)
 
-    assert [
-             %{type: :hint, value: "__MODULE__.test_fun_priv1"},
-             %{
-               arity: 1,
-               name: "test_fun_priv1",
-               origin: "ElixirSenseExample",
-               type: :function
-             }
-           ] = ElixirSense.suggestions(buffer, 11, 18)
+    assert [%{type: :hint, value: "__MODULE__.te"}] = ElixirSense.suggestions(buffer, 11, 18)
 
     assert [
              %{type: :hint, value: "__MODULE__.__info__"},
