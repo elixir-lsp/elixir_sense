@@ -1085,6 +1085,7 @@ defmodule ElixirSense.SuggestionsTest do
              }
            ] = ElixirSense.suggestions(buffer, 10, 24)
 
+    # no private on external call
     assert [%{type: :hint, value: "__MODULE__.te"}] = ElixirSense.suggestions(buffer, 11, 18)
 
     assert [
