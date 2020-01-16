@@ -21,10 +21,90 @@ defmodule ElixirSense.SignatureTest do
                  %{
                    documentation: "",
                    name: "my",
+                   params: ["a"],
+                   spec: "@typep my(a) :: {a, nil}"
+                 },
+                 %{
+                   documentation: "",
+                   name: "my",
                    params: ["a", "b"],
                    spec: "@typep my(a, b) :: {a, b}"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures from local type, filter by arity" do
+      code = """
+      defmodule MyModule do
+        @typep my(a) :: {a, nil}
+        @typep my(a, b) :: {a, b}
+        @type a :: my(atom,
+      end
+      """
+
+      assert ElixirSense.signature(code, 4, 25) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "",
+                   name: "my",
+                   params: ["a", "b"],
+                   spec: "@typep my(a, b) :: {a, b}"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures from local type, filter by arity unfinished param" do
+      code = """
+      defmodule MyModule do
+        @typep my(a) :: {a, nil}
+        @typep my(a, b) :: {a, b}
+        @type a :: my(atom
+      end
+      """
+
+      assert ElixirSense.signature(code, 4, 24) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "",
+                   name: "my",
+                   params: ["a"],
+                   spec: "@typep my(a) :: {a, nil}"
                  },
-                 %{documentation: "", name: "my", params: ["a"], spec: "@typep my(a) :: {a, nil}"}
+                 %{
+                   documentation: "",
+                   name: "my",
+                   params: ["a", "b"],
+                   spec: "@typep my(a, b) :: {a, b}"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures from local type, filter by arity unfinished params" do
+      code = """
+      defmodule MyModule do
+        @typep my(a) :: {a, nil}
+        @typep my(a, b) :: {a, b}
+        @type a :: my(atom, atom
+      end
+      """
+
+      assert ElixirSense.signature(code, 4, 30) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "",
+                   name: "my",
+                   params: ["a", "b"],
+                   spec: "@typep my(a, b) :: {a, b}"
+                 }
                ]
              }
     end
@@ -160,12 +240,12 @@ defmodule ElixirSense.SignatureTest do
     test "find signatures from erlang module" do
       code = """
       defmodule MyModule do
-        :lists.flatten(par1,
+        :lists.flatten(
       end
       """
 
       assert ElixirSense.signature(code, 2, 24) == %{
-               active_param: 1,
+               active_param: 0,
                pipe_before: false,
                signatures: [
                  %{
@@ -190,12 +270,12 @@ defmodule ElixirSense.SignatureTest do
       code = """
       defmodule MyModule do
         alias List, as: MyList
-        MyList.flatten(par1,
+        MyList.flatten(
       end
       """
 
       assert ElixirSense.signature(code, 3, 23) == %{
-               active_param: 1,
+               active_param: 0,
                pipe_before: false,
                signatures: [
                  %{
@@ -220,12 +300,12 @@ defmodule ElixirSense.SignatureTest do
       code = """
       defmodule MyModule do
         import List
-        flatten(par1,
+        flatten(
       end
       """
 
       assert ElixirSense.signature(code, 3, 16) == %{
-               active_param: 1,
+               active_param: 0,
                pipe_before: false,
                signatures: [
                  %{
@@ -294,12 +374,12 @@ defmodule ElixirSense.SignatureTest do
     test "find signatures from atom modules" do
       code = """
       defmodule MyModule do
-        :"Elixir.List".flatten(par1,
+        :"Elixir.List".flatten(
       end
       """
 
       assert ElixirSense.signature(code, 2, 31) == %{
-               active_param: 1,
+               active_param: 0,
                pipe_before: false,
                signatures: [
                  %{
@@ -376,6 +456,44 @@ defmodule ElixirSense.SignatureTest do
       defmodule MyModule do
 
         def run do
+          sum(
+        end
+
+        defp sum(a, b) do
+          a + b
+        end
+
+        defp sum({a, b}) do
+          a + b
+        end
+      end
+      """
+
+      assert ElixirSense.signature(code, 4, 9) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   name: "sum",
+                   params: ["tuple"],
+                   documentation: "",
+                   spec: ""
+                 },
+                 %{
+                   name: "sum",
+                   params: ["a", "b"],
+                   documentation: "",
+                   spec: ""
+                 }
+               ]
+             }
+    end
+
+    test "finds signatures from local functions, filter by arity" do
+      code = """
+      defmodule MyModule do
+
+        def run do
           sum(a,
         end
 
@@ -396,12 +514,6 @@ defmodule ElixirSense.SignatureTest do
                  %{
                    name: "sum",
                    params: ["a", "b"],
-                   documentation: "",
-                   spec: ""
-                 },
-                 %{
-                   name: "sum",
-                   params: ["tuple"],
                    documentation: "",
                    spec: ""
                  }
