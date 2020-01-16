@@ -185,11 +185,11 @@ defmodule ElixirSense do
       iex> code = ~S'''
       ...> defmodule MyModule do
       ...>   alias List, as: MyList
-      ...>   MyList.flatten(par0,
+      ...>   MyList.flatten(par0
       ...> end
       ...> '''
-      iex> ElixirSense.signature(code, 3, 23)
-      %{active_param: 1,
+      iex> ElixirSense.signature(code, 3, 22)
+      %{active_param: 0,
         pipe_before: false,
         signatures: [
           %{name: "flatten",
