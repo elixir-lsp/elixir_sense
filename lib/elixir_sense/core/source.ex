@@ -409,19 +409,36 @@ defmodule ElixirSense.Core.Source do
           candidate: :none | {nil | module, atom},
           npar: non_neg_integer,
           pipe_before: boolean,
+          unfinished_parm: boolean,
           pos:
             nil | {{non_neg_integer, non_neg_integer}, {non_neg_integer, nil | non_neg_integer}}
         }
   def which_func(prefix, current_module \\ nil) do
     tokens = Tokenizer.tokenize(prefix)
 
-    pattern = %{npar: 0, count: 0, count2: 0, candidate: [], pos: nil, pipe_before: false}
+    pattern = %{npar: [], count: 0, count2: 0, candidate: [], pos: nil, pipe_before: false}
     result = scan(tokens, pattern)
     %{candidate: candidate, npar: npar, pipe_before: pipe_before, pos: pos} = result
 
+    normalized_candidate = normalize_candidate(candidate, current_module)
+
+    unfinished_parm =
+      case npar |> Enum.at(-1) do
+        nil ->
+          case {tokens, normalized_candidate} do
+            {_, :none} -> false
+            {[{:"(", _}, {:paren_identifier, _, _} | _], _} -> false
+            _ -> true
+          end
+
+        token ->
+          Enum.find_index(tokens, fn t -> t == token end) != 0
+      end
+
     %{
-      candidate: normalize_candidate(candidate, current_module),
-      npar: normalize_npar(npar, pipe_before),
+      candidate: normalized_candidate,
+      npar: normalize_npar(length(npar), pipe_before),
+      unfinished_parm: unfinished_parm,
       pipe_before: pipe_before,
       pos: pos
     }
@@ -460,17 +477,18 @@ defmodule ElixirSense.Core.Source do
   defp normalize_npar(npar, true), do: npar + 1
   defp normalize_npar(npar, _pipe_before), do: npar
 
-  defp scan([{:kw_identifier, _, _} | tokens], %{npar: 1} = state) do
-    scan(tokens, %{state | npar: 0})
+  defp scan([{:kw_identifier, _, _} | tokens], %{npar: [_]} = state) do
+    scan(tokens, %{state | npar: []})
   end
 
   defp scan([{:",", _} | _], %{count: 1} = state), do: state
 
-  defp scan([{:",", _} | tokens], %{count: 0, count2: 0} = state) do
-    scan(tokens, %{state | npar: state.npar + 1, candidate: []})
+  defp scan([{:",", _pos} = t | tokens], %{count: 0, count2: 0} = state) do
+    scan(tokens, %{state | npar: [t | state.npar], candidate: []})
   end
 
-  defp scan([{:"(", _} | _], %{count: 1} = state), do: state
+  defp scan([{:"(", _} | tokens], %{count: 1, candidate: []} = state), do: scan(tokens, state)
+  defp scan([{:"(", _} | _tokens], %{count: 1} = state), do: state
 
   defp scan([{:"(", _} | tokens], state) do
     scan(tokens, %{state | count: state.count + 1, candidate: []})
@@ -481,7 +499,7 @@ defmodule ElixirSense.Core.Source do
   end
 
   defp scan([{token, _} | tokens], %{count2: 0} = state) when token in [:"[", :"{"] do
-    scan(tokens, %{state | npar: 0, count2: 0})
+    scan(tokens, %{state | npar: [], count2: 0})
   end
 
   defp scan([{token, _} | tokens], state) when token in [:"[", :"{"] do
@@ -531,7 +549,7 @@ defmodule ElixirSense.Core.Source do
   end
 
   defp scan([{:fn, _} | tokens], %{count: 1} = state) do
-    scan(tokens, %{state | npar: 0, count: 0})
+    scan(tokens, %{state | npar: [], count: 0})
   end
 
   defp scan([{:., _} | tokens], state), do: scan(tokens, state)

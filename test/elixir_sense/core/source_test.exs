@@ -7,13 +7,14 @@ defmodule ElixirSense.Core.SourceTest do
   describe "which_func/1" do
     test "at the beginning of a defmodule" do
       assert which_func("defmo") ==
-               %{candidate: :none, npar: 0, pipe_before: false, pos: nil}
+               %{candidate: :none, npar: 0, pipe_before: false, unfinished_parm: false, pos: nil}
     end
 
     test "functions without namespace" do
       assert which_func("var = func(") == %{
                candidate: {nil, :func},
                npar: 0,
+               unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -21,6 +22,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = func(param1, ") == %{
                candidate: {nil, :func},
                npar: 1,
+               unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -30,6 +32,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Mod.func(param1, par") == %{
                candidate: {Mod, :func},
                npar: 1,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -37,6 +40,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Mod.SubMod.func(param1, param2, par") == %{
                candidate: {Mod.SubMod, :func},
                npar: 2,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -46,6 +50,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = :\"Elixir.Mod\".func(param1, par") == %{
                candidate: {Mod, :func},
                npar: 1,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -55,6 +60,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = __MODULE__.func(param1, par", Mod) == %{
                candidate: {Mod, :func},
                npar: 1,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -62,6 +68,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = __MODULE__.Sub.func(param1, par", Mod) == %{
                candidate: {Mod.Sub, :func},
                npar: 1,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -71,6 +78,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = outer_func(Mod.SubMod.func(param1,") == %{
                candidate: {Mod.SubMod, :func},
                npar: 1,
+               unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 18}, {1, nil}}
              }
@@ -78,6 +86,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = outer_func(Mod.SubMod.func(param1, [inner_func(") == %{
                candidate: {nil, :inner_func},
                npar: 0,
+               unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 43}, {1, nil}}
              }
@@ -85,6 +94,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = outer_func(func(param1, inner_func, ") == %{
                candidate: {nil, :func},
                npar: 2,
+               unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 18}, {1, nil}}
              }
@@ -92,6 +102,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = outer_func(func(param1, inner_func(), ") == %{
                candidate: {nil, :func},
                npar: 2,
+               unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 18}, {1, nil}}
              }
@@ -99,6 +110,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = func(param1, func2(fun(p3), 4, 5), func3(p1, p2), ") == %{
                candidate: {nil, :func},
                npar: 3,
+               unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -112,6 +124,7 @@ defmodule ElixirSense.Core.SourceTest do
              """) == %{
                candidate: {Mod, :func},
                npar: 2,
+               unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -121,6 +134,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = func(param1, \"not_a_func(, ") == %{
                candidate: {nil, :func},
                npar: 1,
+               unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -128,6 +142,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = func(\"a_string_(param1\", ") == %{
                candidate: {nil, :func},
                npar: 1,
+               unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -137,8 +152,37 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Mod.func1(param) + func2(param1, ") == %{
                candidate: {nil, :func2},
                npar: 1,
+               unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 26}, {1, nil}}
+             }
+    end
+
+    test "unfinished param" do
+      assert which_func("func2(param1") == %{
+               candidate: {nil, :func2},
+               npar: 0,
+               unfinished_parm: true,
+               pipe_before: false,
+               pos: {{1, 1}, {1, nil}}
+             }
+    end
+
+    test "no param" do
+      assert which_func("func2(") == %{
+               candidate: {nil, :func2},
+               npar: 0,
+               unfinished_parm: false,
+               pipe_before: false,
+               pos: {{1, 1}, {1, nil}}
+             }
+
+      assert which_func("func2(a + b,") == %{
+               candidate: {nil, :func2},
+               npar: 1,
+               unfinished_parm: false,
+               pipe_before: false,
+               pos: {{1, 1}, {1, nil}}
              }
     end
 
@@ -146,19 +190,69 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = :global.whereis_name( ") == %{
                candidate: {:global, :whereis_name},
                npar: 0,
+               unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
     end
 
+    test "call on variable" do
+      assert which_func("var = my_var.( ") == %{
+               candidate: :none,
+               npar: 0,
+               unfinished_parm: false,
+               pipe_before: false,
+               pos: nil
+             }
+    end
+
+    test "call on result of other call" do
+      assert which_func("var = my_fun().( ") == %{
+               candidate: :none,
+               npar: 0,
+               unfinished_parm: false,
+               pipe_before: false,
+               pos: nil
+             }
+    end
+
+    # FIXME should return {nil, :some} or :none
+    test "call on dynamic module from function" do
+      assert which_func("var = my_fun().some( ") == %{
+               candidate: {nil, :my_fun},
+               npar: 0,
+               unfinished_parm: false,
+               pipe_before: false,
+               pos: {{1, 7}, {1, nil}}
+             }
+    end
+
+    # FIXME handle attribute or return :none
+    test "call on dynamic module from attribute" do
+      assert which_func("var = @my_attr.some( ") == %{
+               candidate: {nil, :some},
+               npar: 0,
+               unfinished_parm: false,
+               pipe_before: false,
+               pos: {{1, 16}, {1, nil}}
+             }
+    end
+
     test "with fn" do
-      assert which_func("fn(a, ") == %{candidate: :none, npar: 0, pipe_before: false, pos: nil}
+      assert which_func("fn(a, ") == %{
+               candidate: :none,
+               npar: 0,
+               unfinished_parm: false,
+               pipe_before: false,
+               pos: nil
+             }
     end
 
     test "with another fn before" do
       assert which_func("var = Enum.sort_by(list, fn(i) -> i*i end, fn(a, ") == %{
                candidate: {Enum, :sort_by},
                npar: 2,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -168,6 +262,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Enum.map([1,2], fn(i) -> i*") == %{
                candidate: {Enum, :map},
                npar: 1,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -177,6 +272,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Enum.map([1,2,3") == %{
                candidate: {Enum, :map},
                npar: 0,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -186,6 +282,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Enum.map([1,") == %{
                candidate: {Enum, :map},
                npar: 0,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -195,6 +292,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Enum.map([") == %{
                candidate: {Enum, :map},
                npar: 0,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -204,6 +302,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Enum.map([1,2], [1, ") == %{
                candidate: {Enum, :map},
                npar: 1,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -213,6 +312,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = IO.inspect([1,2], limit: 100, ") == %{
                candidate: {IO, :inspect},
                npar: 1,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -222,6 +322,17 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = IO.inspect([1,2], limit: 100, labe: ") == %{
                candidate: {IO, :inspect},
                npar: 1,
+               unfinished_parm: true,
+               pipe_before: false,
+               pos: {{1, 7}, {1, nil}}
+             }
+    end
+
+    test "inside a keyword list as last arg with last key with value" do
+      assert which_func("var = IO.inspect([1,2], limit: 100, labe: :a") == %{
+               candidate: {IO, :inspect},
+               npar: 1,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -231,6 +342,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = IO.inspect([1,2], limit: 100, label: :a, ") == %{
                candidate: {IO, :inspect},
                npar: 1,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -240,6 +352,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = IO.inspect([1,2], [limit: 1, ") == %{
                candidate: {IO, :inspect},
                npar: 1,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -249,6 +362,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = IO.inspect(%{a: 1, b: ") == %{
                candidate: {IO, :inspect},
                npar: 0,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -258,6 +372,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Enum.map({1,2,3") == %{
                candidate: {Enum, :map},
                npar: 0,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -267,6 +382,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Enum.map({1,2}, {1, ") == %{
                candidate: {Enum, :map},
                npar: 1,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -276,6 +392,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Enum.map({1,2}, [{1, ") == %{
                candidate: {Enum, :map},
                npar: 1,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -285,6 +402,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Enum.map([{1,") == %{
                candidate: {Enum, :map},
                npar: 0,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -294,6 +412,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("var = Enum.map([{1,[a, ") == %{
                candidate: {Enum, :map},
                npar: 0,
+               unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
              }
@@ -303,8 +422,29 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_func("} = Enum.map(list, ") == %{
                candidate: :none,
                npar: 0,
+               unfinished_parm: false,
                pipe_before: false,
                pos: nil
+             }
+    end
+
+    test "inside parens" do
+      assert which_func("var = Enum.map((1 + 2") == %{
+               candidate: {Enum, :map},
+               npar: 0,
+               unfinished_parm: true,
+               pipe_before: false,
+               pos: {{1, 7}, {1, nil}}
+             }
+    end
+
+    test "after parens" do
+      assert which_func("var = Enum.map((1 + 2), ") == %{
+               candidate: {Enum, :map},
+               npar: 1,
+               unfinished_parm: false,
+               pipe_before: false,
+               pos: {{1, 7}, {1, nil}}
              }
     end
   end
