@@ -1749,6 +1749,59 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
+  test "protocol registers callbacks from specs or generate dummy callbacks" do
+    state =
+      """
+      defprotocol Proto do
+        @spec with_spec(t, integer) :: String.t
+        @spec with_spec(t, boolean) :: number
+        def with_spec(t, integer)
+
+        def without_spec(t, integer)
+      end
+      """
+      |> string_to_state
+
+    assert state.specs == %{
+             {Proto, :with_spec, 2} => %ElixirSense.Core.State.SpecInfo{
+               args: [["t", "boolean"]],
+               kind: :callback,
+               name: :with_spec,
+               positions: [{3, 3}],
+               specs: [
+                 "@callback with_spec(t, boolean) :: number",
+                 "@spec with_spec(t, boolean) :: number"
+               ]
+             },
+             {Proto, :with_spec, nil} => %ElixirSense.Core.State.SpecInfo{
+               args: [["t", "boolean"], ["t", "integer"]],
+               kind: :callback,
+               name: :with_spec,
+               positions: [{3, 3}, {2, 3}],
+               specs: [
+                 "@callback with_spec(t, boolean) :: number",
+                 "@callback with_spec(t, integer) :: String.t",
+                 "@spec with_spec(t, boolean) :: number",
+                 "@spec with_spec(t, integer) :: String.t"
+               ]
+             },
+             {Proto, :without_spec, nil} => %ElixirSense.Core.State.SpecInfo{
+               args: [["t", "integer"]],
+               kind: :callback,
+               name: :without_spec,
+               positions: [{6, 7}],
+               specs: ["@callback without_spec(t, integer) :: term"]
+             },
+             {Proto, :without_spec, 2} => %ElixirSense.Core.State.SpecInfo{
+               args: [["t", "integer"]],
+               kind: :callback,
+               name: :without_spec,
+               positions: [{6, 7}],
+               specs: ["@callback without_spec(t, integer) :: term"]
+             }
+           }
+  end
+
   test "registers positions" do
     state =
       """

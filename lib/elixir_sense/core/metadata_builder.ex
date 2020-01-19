@@ -5,6 +5,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   import ElixirSense.Core.State
   alias ElixirSense.Core.Ast
+  alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
@@ -108,6 +109,79 @@ defmodule ElixirSense.Core.MetadataBuilder do
     # and functions __protocol__/1, impl_for/1, impl_for!/1
 
     pre_module(ast, state, position, module, @protocol_types, @protocol_functions)
+  end
+
+  def post_protocol(ast, state, module) do
+    # turn specs into callbacks or create dummy callbacks
+    builtins = BuiltinFunctions.all() |> Keyword.keys()
+
+    specs =
+      get_current_module_variants(state)
+      |> Enum.reduce(state.specs, fn variant, acc ->
+        keys =
+          state.mods_funs_to_positions
+          |> Map.keys()
+          |> Enum.filter(fn
+            {^variant, name, _arity} when not is_nil(name) ->
+              name not in builtins
+
+            _ ->
+              false
+          end)
+
+        new_specs =
+          for key = {_mod, name, _arity} <- keys,
+              into: %{},
+              do:
+                (
+                  new_spec =
+                    case acc[key] do
+                      nil ->
+                        %State.ModFunInfo{positions: positions, params: params} =
+                          state.mods_funs_to_positions[key]
+
+                        args =
+                          for param_variant <- params do
+                            param_variant
+                            |> Enum.map(&Macro.to_string/1)
+                          end
+
+                        specs =
+                          for arg <- args do
+                            joined = Enum.join(arg, ", ")
+                            "@callback #{name}(#{joined}) :: term"
+                          end
+
+                        %State.SpecInfo{
+                          name: name,
+                          args: args,
+                          specs: specs,
+                          kind: :callback,
+                          positions: positions
+                        }
+
+                      spec = %State.SpecInfo{specs: specs} ->
+                        %State.SpecInfo{
+                          spec
+                          | # TODO :spec will get replaced here, refactor into array
+                            kind: :callback,
+                            specs:
+                              specs
+                              |> Enum.map(fn s ->
+                                String.replace_prefix(s, "@spec", "@callback")
+                              end)
+                              |> Kernel.++(specs)
+                        }
+                    end
+
+                  {key, new_spec}
+                )
+
+        Map.merge(acc, new_specs)
+      end)
+
+    state = %{state | specs: specs}
+    post_module(ast, state, module)
   end
 
   defp pre_func({type, _, _} = ast, state, %{line: line, col: col}, name, params) do
@@ -902,11 +976,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp post({:defprotocol, _, [{:__aliases__, _, module}, _]} = ast, state) do
-    post_module(ast, state, module)
+    post_protocol(ast, state, module)
   end
 
   defp post({:defprotocol, _, [module, _]} = ast, state) when is_atom(module) do
-    post_module(ast, state, module)
+    post_protocol(ast, state, module)
   end
 
   defp post({:defimpl, _, [{:__aliases__, _, protocol}, [for: implementations], _]} = ast, state) do
