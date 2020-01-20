@@ -355,6 +355,21 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert %{found: false} = ElixirSense.definition(buffer, 8, 5)
   end
 
+  test "does not find built-in erlang functions" do
+    buffer = """
+    defmodule MyModule do
+      :erlang.orelse()
+      #         ^
+      :erlang.or()
+      #       ^
+    end
+    """
+
+    assert %{found: false} = ElixirSense.definition(buffer, 2, 14)
+
+    assert %{found: false} = ElixirSense.definition(buffer, 4, 12)
+  end
+
   test "find definition of variables" do
     buffer = """
     defmodule MyModule do
