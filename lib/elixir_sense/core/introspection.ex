@@ -115,6 +115,24 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
+  def get_func_docs_md(mod, fun)
+      when mod != nil and fun in [:module_info, :behaviour_info, :__info__] do
+    for {f, a} <- BuiltinFunctions.all(), f == fun do
+      spec = BuiltinFunctions.get_specs({f, a})
+      args = BuiltinFunctions.get_args({f, a})
+      text = "Built-in function"
+
+      fun_args_text = Enum.join(args, ", ")
+
+      mod_str = inspect(mod)
+      fun_str = Atom.to_string(fun)
+
+      spec_text = "### Specs\n\n```\n#{spec |> Enum.join("\n")}\n```\n\n"
+
+      "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{spec_text}#{text}"
+    end
+  end
+
   def get_func_docs_md(mod, fun) do
     case NormalizedCode.get_docs(mod, :docs) do
       nil ->

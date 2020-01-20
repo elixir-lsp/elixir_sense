@@ -565,5 +565,87 @@ defmodule ElixirSense.DocsTest do
 
       %{actual_subject: "Kernel.use"} = ElixirSense.docs(buffer, 1, 2)
     end
+
+    test "find built-in functions" do
+      # module_info is defined by default for every elixir and erlang module
+      # __info__ is defined for every elixir module
+      # behaviour_info is defined for every behaviour and every protocol
+      buffer = """
+      defmodule MyModule do
+        ElixirSenseExample.ModuleWithFunctions.module_info()
+        #                                      ^
+        ElixirSenseExample.ModuleWithFunctions.__info__(:macros)
+        #                                      ^
+        ElixirSenseExample.ExampleBehaviour.behaviour_info(:callbacks)
+        #                                      ^
+      end
+      """
+
+      assert %{
+               actual_subject: "ElixirSenseExample.ModuleWithFunctions.module_info",
+               docs: %{
+                 docs: """
+                 > ElixirSenseExample.ModuleWithFunctions.module_info()
+
+                 ### Specs
+
+                 ```
+                 @spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]
+                 ```
+
+                 Built-in function
+
+                 ---
+
+                 > ElixirSenseExample.ModuleWithFunctions.module_info(key)
+
+                 ### Specs
+
+                 ```
+                 @spec module_info(:module) :: atom
+                 @spec module_info(:attributes | :compile) :: [{atom, term}]
+                 @spec module_info(:md5) :: binary
+                 @spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]
+                 @spec module_info(:native) :: boolean
+                 ```
+
+                 Built-in function\
+                 """
+               }
+             } = ElixirSense.docs(buffer, 2, 42)
+
+      assert %{actual_subject: "ElixirSenseExample.ModuleWithFunctions.__info__"} =
+               ElixirSense.docs(buffer, 4, 42)
+
+      assert %{actual_subject: "ElixirSenseExample.ModuleWithFunctions.behaviour_info"} =
+               ElixirSense.docs(buffer, 6, 42)
+    end
+
+    test "built-in functions cannot be called locally" do
+      # module_info is defined by default for every elixir and erlang module
+      # __info__ is defined for every elixir module
+      # behaviour_info is defined for every behaviour and every protocol
+      buffer = """
+      defmodule MyModule do
+        import GenServer
+        @ callback cb() :: term
+        module_info()
+        #^
+        __info__(:macros)
+        #^
+        behaviour_info(:callbacks)
+        #^
+      end
+      """
+
+      assert %{actual_subject: "module_info", docs: %{docs: "No documentation available"}} =
+               ElixirSense.docs(buffer, 4, 5)
+
+      assert %{actual_subject: "__info__", docs: %{docs: "No documentation available"}} =
+               ElixirSense.docs(buffer, 6, 5)
+
+      assert %{actual_subject: "behaviour_info", docs: %{docs: "No documentation available"}} =
+               ElixirSense.docs(buffer, 8, 5)
+    end
   end
 end
