@@ -304,11 +304,16 @@ defmodule ElixirSense.Providers.DefinitionTest do
   end
 
   test "find built-in functions" do
-    # module_info is defined by default for every elixir and erlang module:
-    # https://stackoverflow.com/a/33373107/175830
+    # module_info is defined by default for every elixir and erlang module
+    # __info__ is defined for every elixir module
+    # behaviour_info is defined for every behaviour and every protocol
     buffer = """
     defmodule MyModule do
       ElixirSenseExample.ModuleWithFunctions.module_info()
+      #                                      ^
+      ElixirSenseExample.ModuleWithFunctions.__info__(:macros)
+      #                                      ^
+      ElixirSenseExample.ExampleBehaviour.behaviour_info(:callbacks)
       #                                      ^
     end
     """
@@ -318,6 +323,36 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
     assert read_line(file, {line, column}) =~ "ElixirSenseExample.ModuleWithFunctions do"
+
+    assert %{column: column, file: file, found: true, line: line, type: :function} =
+             ElixirSense.definition(buffer, 4, 42)
+
+    assert %{column: column, file: file, found: true, line: line, type: :function} =
+             ElixirSense.definition(buffer, 6, 42)
+  end
+
+  test "built-in functions cannot be called locally" do
+    # module_info is defined by default for every elixir and erlang module
+    # __info__ is defined for every elixir module
+    # behaviour_info is defined for every behaviour and every protocol
+    buffer = """
+    defmodule MyModule do
+      import GenServer
+      @ callback cb() :: term
+      module_info()
+      #^
+      __info__(:macros)
+      #^
+      behaviour_info(:callbacks)
+      #^
+    end
+    """
+
+    assert %{found: false} = ElixirSense.definition(buffer, 4, 5)
+
+    assert %{found: false} = ElixirSense.definition(buffer, 6, 5)
+
+    assert %{found: false} = ElixirSense.definition(buffer, 8, 5)
   end
 
   test "find definition of variables" do

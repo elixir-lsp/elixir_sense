@@ -823,6 +823,17 @@ defmodule ElixirSense.Core.Introspection do
 
   defp find_metadata_function(
          {nil, fun},
+         _current_module,
+         _imports,
+         _mods_funs,
+         _metadata_types,
+         _include_typespecs
+       )
+       when fun in [:module_info, :behaviour_info, :__info__],
+       do: {nil, nil}
+
+  defp find_metadata_function(
+         {nil, fun},
          current_module,
          imports,
          mods_funs,
