@@ -799,17 +799,55 @@ defmodule ElixirSense.SignatureTest do
       } = ElixirSense.signature(buffer, 2, 18)
 
       assert %{
-               active_param: 0,
-               pipe_before: false,
-               signatures: [
-                 %{
-                   documentation: "No documentation available",
-                   name: "or",
-                   params: ["term", "term"],
-                   spec: []
-                 }
-               ]
-             } = ElixirSense.signature(buffer, 4, 14)
+        active_param: 0,
+        pipe_before: false,
+        signatures: [
+          %{
+            documentation: "No documentation available",
+            name: "or",
+            params: ["term", "term"],
+            spec: ""
+          }
+        ]
+      } = ElixirSense.signature(buffer, 4, 14)
+    end
+
+    test "find :erlang module functions with different forms of typespecs" do
+      buffer = """
+      defmodule MyModule do
+        :erlang.date()
+        #           ^
+        :erlang.cancel_timer()
+        #                   ^
+      end
+      """
+
+      %{
+        active_param: 0,
+        pipe_before: false,
+        signatures: [
+          %{
+            documentation: "No documentation available",
+            name: "date",
+            params: [],
+            spec: "@spec date :: date when date: :calendar.date"
+          }
+        ]
+      } = ElixirSense.signature(buffer, 2, 16)
+
+      assert %{
+        active_param: 0,
+        pipe_before: false,
+        signatures: [
+          %{
+            documentation: "No documentation available",
+            name: "cancel_timer",
+            params: ["TimerRef"],
+            spec: "@spec cancel_timer(timerRef) :: result when timerRef: reference, time: non_neg_integer, result: time | false"
+          },
+          %{documentation: "No documentation available", name: "cancel_timer", params: ["TimerRef", "Options"], spec: "@spec cancel_timer(timerRef, options) :: result | :ok when timerRef: reference, async: boolean, info: boolean, option: {:async, async} | {:info, info}, options: [option], time: non_neg_integer, result: time | false"}
+        ]
+      } = ElixirSense.signature(buffer, 4, 24)
     end
   end
 end

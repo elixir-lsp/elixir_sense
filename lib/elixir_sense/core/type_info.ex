@@ -283,9 +283,13 @@ defmodule ElixirSense.Core.TypeInfo do
         %{}
 
       specs ->
-        for {_kind, {{f, a}, _spec}} = spec <- specs, into: %{} do
-          {{f, a}, spec}
-        end
+        specs
+        |> Map.new(fn
+          {_kind, {{f, a}, _spec}} = spec -> {{f, a}, spec}
+          {kind, {{^module, f, a}, spec}} ->
+            # spec with module - transform it to moduleless form
+            {{f, a}, {kind, {{f, a}, spec}}}
+        end)
     end
   end
 
