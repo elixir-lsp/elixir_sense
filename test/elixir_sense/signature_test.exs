@@ -672,5 +672,107 @@ defmodule ElixirSense.SignatureTest do
                ]
              }
     end
+
+    test "find built-in functions" do
+      # module_info is defined by default for every elixir and erlang module
+      # __info__ is defined for every elixir module
+      # behaviour_info is defined for every behaviour and every protocol
+      buffer = """
+      defmodule MyModule do
+        ElixirSenseExample.ModuleWithFunctions.module_info()
+        #                                                  ^
+        ElixirSenseExample.ModuleWithFunctions.__info__(:macros)
+        #                                               ^
+        ElixirSenseExample.ExampleBehaviour.behaviour_info(:callbacks)
+        #                                                  ^
+      end
+      """
+
+      assert ElixirSense.signature(buffer, 2, 54) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "Built-in function",
+                   name: "module_info",
+                   params: [],
+                   spec: [
+                     "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
+                   ]
+                 },
+                 %{
+                   documentation: "Built-in function",
+                   name: "module_info",
+                   params: ["key"],
+                   spec: [
+                     "@spec module_info(:module) :: atom",
+                     "@spec module_info(:attributes | :compile) :: [{atom, term}]",
+                     "@spec module_info(:md5) :: binary",
+                     "@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]",
+                     "@spec module_info(:native) :: boolean"
+                   ]
+                 }
+               ]
+             }
+
+      assert ElixirSense.signature(buffer, 4, 51) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "Built-in function",
+                   name: "__info__",
+                   params: ["atom"],
+                   spec: [
+                     "@spec __info__(:attributes) :: keyword()",
+                     "@spec __info__(:compile) :: [term()]",
+                     "@spec __info__(:functions) :: [{atom, non_neg_integer}]",
+                     "@spec __info__(:macros) :: [{atom, non_neg_integer}]",
+                     "@spec __info__(:md5) :: binary()",
+                     "@spec __info__(:module) :: module()"
+                   ]
+                 }
+               ]
+             }
+
+      assert ElixirSense.signature(buffer, 6, 54) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "Built-in function",
+                   name: "behaviour_info",
+                   params: ["key"],
+                   spec: [
+                     "@spec behaviour_info(:callbacks | :optional_callbacks) :: [{atom, non_neg_integer}]"
+                   ]
+                 }
+               ]
+             }
+    end
+
+    test "built-in functions cannot be called locally" do
+      # module_info is defined by default for every elixir and erlang module
+      # __info__ is defined for every elixir module
+      # behaviour_info is defined for every behaviour and every protocol
+      buffer = """
+      defmodule MyModule do
+        import GenServer
+        @ callback cb() :: term
+        module_info()
+        #^
+        __info__(:macros)
+        #^
+        behaviour_info(:callbacks)
+        #^
+      end
+      """
+
+      assert :none = ElixirSense.signature(buffer, 4, 5)
+
+      assert :none = ElixirSense.signature(buffer, 6, 5)
+
+      assert :none = ElixirSense.signature(buffer, 8, 5)
+    end
   end
 end

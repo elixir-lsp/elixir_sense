@@ -25,6 +25,7 @@ defmodule ElixirSense.Core.Introspection do
   """
 
   alias Alchemist.Helpers.ModuleInfo
+  alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Normalized.Typespec
@@ -74,7 +75,18 @@ defmodule ElixirSense.Core.Introspection do
   @spec get_signatures(module, atom, nil | [NormalizedCode.fun_doc_entry_t()]) :: [
           ElixirSense.Core.Metadata.signature_t()
         ]
-  def get_signatures(mod, fun, code_docs \\ nil) when not is_nil(mod) and not is_nil(fun) do
+  def get_signatures(mod, fun, code_docs \\ nil)
+
+  def get_signatures(mod, fun, _code_docs)
+      when not is_nil(mod) and fun in [:module_info, :behaviour_info, :__info__] do
+    for {f, a} <- BuiltinFunctions.all(), f == fun do
+      spec = BuiltinFunctions.get_specs({f, a})
+      params = BuiltinFunctions.get_args({f, a})
+      %{name: Atom.to_string(fun), params: params, documentation: "Built-in function", spec: spec}
+    end
+  end
+
+  def get_signatures(mod, fun, code_docs) when not is_nil(mod) and not is_nil(fun) do
     case code_docs || NormalizedCode.get_docs(mod, :docs) do
       docs when is_list(docs) ->
         for {{f, arity}, _, kind, args, text} <- docs, f == fun do
