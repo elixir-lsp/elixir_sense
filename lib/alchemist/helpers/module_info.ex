@@ -23,9 +23,9 @@ defmodule Alchemist.Helpers.ModuleInfo do
     List.keymember?(get_module_funs(module), function, 0)
   end
 
-  defp get_module_funs(Elixir), do: []
+  def get_module_funs(Elixir), do: []
 
-  defp get_module_funs(module) do
+  def get_module_funs(module) do
     case Code.ensure_loaded(module) do
       {:module, _} ->
         module.module_info(:exports)

@@ -100,19 +100,40 @@ defmodule ElixirSense.Core.Introspection do
 
       nil ->
         # We are not expecting macros here
-        for {_kind, {{_name, _arity}, [params | _]}} = spec <-
-              TypeInfo.get_function_specs(mod, fun) do
-          params = TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
+        results =
+          for {_kind, {{_name, _arity}, [params | _]}} = spec <-
+                TypeInfo.get_function_specs(mod, fun) do
+            params = TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
 
-          %{
-            name: Atom.to_string(fun),
-            params: params,
-            documentation: "No documentation available",
-            spec: spec |> spec_to_string
-          }
+            %{
+              name: Atom.to_string(fun),
+              params: params,
+              documentation: "No documentation available",
+              spec: spec |> spec_to_string
+            }
+          end
+
+        case results do
+          [] ->
+            # no docs and notypespecs
+            # provide dummy spec basing on module_info(:exports)
+            for {f, a} <- ModuleInfo.get_module_funs(mod),
+                f == fun do
+              dummy_params = if a == 0, do: [], else: Enum.map(1..a, fn _ -> "term" end)
+
+              %{
+                name: Atom.to_string(fun),
+                params: dummy_params,
+                documentation: "No documentation available",
+                spec: []
+              }
+            end
+
+          other ->
+            other
         end
-        |> Enum.sort_by(&length(&1.params))
     end
+    |> Enum.sort_by(&length(&1.params))
   end
 
   def get_func_docs_md(mod, fun)

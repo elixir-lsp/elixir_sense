@@ -774,5 +774,42 @@ defmodule ElixirSense.SignatureTest do
 
       assert :none = ElixirSense.signature(buffer, 8, 5)
     end
+
+    test "find built-in erlang functions" do
+      buffer = """
+      defmodule MyModule do
+        :erlang.orelse()
+        #             ^
+        :erlang.or()
+        #         ^
+      end
+      """
+
+      %{
+        active_param: 0,
+        pipe_before: false,
+        signatures: [
+          %{
+            documentation: "No documentation available",
+            name: "orelse",
+            params: ["term", "term"],
+            spec: []
+          }
+        ]
+      } = ElixirSense.signature(buffer, 2, 18)
+
+      assert %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "No documentation available",
+                   name: "or",
+                   params: ["term", "term"],
+                   spec: []
+                 }
+               ]
+             } = ElixirSense.signature(buffer, 4, 14)
+    end
   end
 end
