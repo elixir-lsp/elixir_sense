@@ -91,4 +91,14 @@ defmodule ElixirSense.Providers.ReferencesTest.Modules do
       ElixirSense.Providers.ReferencesTest.Modules.Callee5.func_arg1("a")
     end
   end
+
+  defmodule Callee6 do
+  end
+
+  defmodule Caller6 do
+    def func() do
+      ElixirSense.Providers.ReferencesTest.Modules.Callee6.__info__(:function)
+      ElixirSense.Providers.ReferencesTest.Modules.Callee6.module_info()
+    end
+  end
 end

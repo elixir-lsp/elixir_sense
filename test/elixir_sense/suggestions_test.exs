@@ -1031,6 +1031,7 @@ defmodule ElixirSense.SuggestionsTest do
       import ElixirSenseExample.ModuleO
       def some_fun() do
         te
+        __i
       end
     end
     """
@@ -1047,6 +1048,9 @@ defmodule ElixirSense.SuggestionsTest do
                summary: ""
              }
            ] == ElixirSense.suggestions(buffer, 10, 7)
+
+    # builtin functions not called locally
+    assert [%{type: :hint, value: "__i"}] == ElixirSense.suggestions(buffer, 11, 8)
   end
 
   test "functions and module suggestions with __MODULE__" do

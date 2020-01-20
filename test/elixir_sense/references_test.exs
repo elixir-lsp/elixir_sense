@@ -552,7 +552,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     defmodule Caller do
       def func() do
         :ets.new(:s, [])
-        # ^                                              ^
+        # ^
       end
     end
     """
@@ -573,7 +573,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     defmodule Caller do
       def func() do
         :ets.new(:s, [])
-        #     ^                                            ^
+        #     ^
       end
     end
     """
@@ -583,6 +583,26 @@ defmodule ElixirSense.Providers.ReferencesTest do
     assert references == [
              %{
                range: %{start: %{column: 12, line: 74}, end: %{column: 15, line: 74}},
+               uri: "test/support/modules_with_references.ex"
+             }
+           ]
+  end
+
+  test "find references with cursor over builtin function call" do
+    buffer = """
+    defmodule Caller do
+      def func() do
+        ElixirSense.Providers.ReferencesTest.Modules.Callee6.module_info()
+        #                                                      ^
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 3, 60)
+
+    assert references == [
+             %{
+               range: %{start: %{column: 60, line: 101}, end: %{column: 71, line: 101}},
                uri: "test/support/modules_with_references.ex"
              }
            ]
