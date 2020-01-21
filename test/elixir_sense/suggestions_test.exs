@@ -13,7 +13,7 @@ defmodule ElixirSense.SuggestionsTest do
     list = ElixirSense.suggestions(buffer, 2, 7)
 
     assert Enum.find(list, fn s -> match?(%{name: "import", arity: 2}, s) end) == %{
-             args: "module,opts",
+             args: "module, opts",
              arity: 2,
              name: "import",
              origin: "Kernel.SpecialForms",
@@ -27,7 +27,7 @@ defmodule ElixirSense.SuggestionsTest do
              origin: "Kernel.SpecialForms",
              spec: "",
              type: :macro,
-             args: "opts,block",
+             args: "opts, block",
              name: "quote",
              summary: "Gets the representation of any expression."
            }
@@ -37,7 +37,7 @@ defmodule ElixirSense.SuggestionsTest do
              origin: "Kernel.SpecialForms",
              spec: "",
              type: :macro,
-             args: "module,opts",
+             args: "module, opts",
              name: "require",
              summary: "Requires a module in order to use its macros."
            }
@@ -108,7 +108,7 @@ defmodule ElixirSense.SuggestionsTest do
                type: :function
              },
              %{
-               args: "list,tail",
+               args: "list, tail",
                arity: 2,
                name: "flatten",
                origin: "List",
@@ -291,7 +291,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert [
              %{
-               args: "enumerable,acc,fun",
+               args: "enumerable, acc, fun",
                arity: 3,
                name: "reduce",
                origin: "Enumerable",

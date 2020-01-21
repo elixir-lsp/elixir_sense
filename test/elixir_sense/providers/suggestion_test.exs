@@ -113,7 +113,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                type: :function
              },
              %{
-               args: "list,index",
+               args: "list, index",
                arity: 2,
                name: "delete_at",
                origin: "List",
@@ -146,7 +146,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                type: :function
              },
              %{
-               args: "list,index",
+               args: "list, index",
                arity: 2,
                name: "delete_at",
                origin: "List",

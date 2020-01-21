@@ -50,7 +50,7 @@ defmodule Alchemist.Helpers.CompleteTest do
     assert {:yes, 'h_default',
             [
               %{
-                args: "a \\\\ :asdf,b,var \\\\ 0",
+                args: "a \\\\ :asdf, b, var \\\\ 0",
                 arity: 1,
                 name: "with_default",
                 origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
@@ -59,7 +59,7 @@ defmodule Alchemist.Helpers.CompleteTest do
                 type: :macro
               },
               %{
-                args: "a \\\\ :asdf,b,var \\\\ 0",
+                args: "a \\\\ :asdf, b, var \\\\ 0",
                 arity: 2,
                 name: "with_default",
                 origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
@@ -68,7 +68,7 @@ defmodule Alchemist.Helpers.CompleteTest do
                 type: :macro
               },
               %{
-                args: "a \\\\ :asdf,b,var \\\\ 0",
+                args: "a \\\\ :asdf, b, var \\\\ 0",
                 arity: 3,
                 name: "with_default",
                 origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",

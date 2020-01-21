@@ -601,7 +601,7 @@ defmodule Alchemist.Helpers.Complete do
           type: kind,
           name: name,
           arity: a,
-          args: BuiltinFunctions.get_args(fa) |> Enum.join(","),
+          args: BuiltinFunctions.get_args(fa) |> Enum.join(", "),
           origin: mod_name,
           summary: "Built-in function",
           spec: BuiltinFunctions.get_specs(fa) |> Enum.join("\n")
