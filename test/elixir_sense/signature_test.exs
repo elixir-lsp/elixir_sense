@@ -251,14 +251,14 @@ defmodule ElixirSense.SignatureTest do
                  %{
                    documentation: "No documentation available",
                    name: "flatten",
-                   params: ["DeepList"],
+                   params: ["deepList"],
                    spec:
                      "@spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]"
                  },
                  %{
                    documentation: "No documentation available",
                    name: "flatten",
-                   params: ["DeepList", "Tail"],
+                   params: ["deepList", "tail"],
                    spec:
                      "@spec flatten(deepList, tail) :: list when deepList: [term | deepList], tail: [term], list: [term]"
                  }
@@ -840,14 +840,14 @@ defmodule ElixirSense.SignatureTest do
                  %{
                    documentation: "No documentation available",
                    name: "cancel_timer",
-                   params: ["TimerRef"],
+                   params: ["timerRef"],
                    spec:
                      "@spec cancel_timer(timerRef) :: result when timerRef: reference, time: non_neg_integer, result: time | false"
                  },
                  %{
                    documentation: "No documentation available",
                    name: "cancel_timer",
-                   params: ["TimerRef", "Options"],
+                   params: ["timerRef", "options"],
                    spec:
                      "@spec cancel_timer(timerRef, options) :: result | :ok when timerRef: reference, async: boolean, info: boolean, option: {:async, async} | {:info, info}, options: [option], time: non_neg_integer, result: time | false"
                  }

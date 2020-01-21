@@ -597,17 +597,14 @@ defmodule ElixirSense.Core.TypeInfo do
     |> (&match?([_, _ | _], &1)).()
   end
 
-  def extract_params({:type, _, :fun, [{:type, _, :product, params_types}, _]}) do
-    params_types
-    |> Enum.map(&extract_params_from_args_spec/1)
+  def extract_params(type) do
+    case Typespec.spec_to_quoted(:dummy, type) do
+      {:when, _, [{:"::", _, [{:dummy, _, args}, _res]}, _var_args]} -> args
+      {:"::", _, [{:dummy, _, args}, _res]} -> args
+    end
+    |> Enum.map(fn arg ->
+      Macro.to_string(arg)
+      |> String.to_atom
+    end)
   end
-
-  def extract_params({:type, _, :bounded_fun, [type, _constraints]}) do
-    {:type, _, :fun, [{:type, _, :product, params}, _]} = type
-
-    params
-    |> Enum.map(&extract_params_from_args_spec/1)
-  end
-
-  defp extract_params_from_args_spec({:var, _, param}), do: param
 end
