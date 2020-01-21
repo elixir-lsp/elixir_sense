@@ -617,7 +617,7 @@ defmodule ElixirSense.DocsTest do
       assert %{actual_subject: "ElixirSenseExample.ModuleWithFunctions.__info__"} =
                ElixirSense.docs(buffer, 4, 42)
 
-      assert %{actual_subject: "ElixirSenseExample.ModuleWithFunctions.behaviour_info"} =
+      assert %{actual_subject: "ElixirSenseExample.ExampleBehaviour.behaviour_info"} =
                ElixirSense.docs(buffer, 6, 42)
     end
 
