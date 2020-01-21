@@ -696,21 +696,20 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "Built-in function",
                    name: "module_info",
                    params: [],
-                   spec: [
+                   spec:
                      "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
-                   ]
                  },
                  %{
                    documentation: "Built-in function",
                    name: "module_info",
                    params: ["key"],
-                   spec: [
-                     "@spec module_info(:module) :: atom",
-                     "@spec module_info(:attributes | :compile) :: [{atom, term}]",
-                     "@spec module_info(:md5) :: binary",
-                     "@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]",
-                     "@spec module_info(:native) :: boolean"
-                   ]
+                   spec: """
+                   @spec module_info(:module) :: atom
+                   @spec module_info(:attributes | :compile) :: [{atom, term}]
+                   @spec module_info(:md5) :: binary
+                   @spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]
+                   @spec module_info(:native) :: boolean\
+                   """
                  }
                ]
              }
@@ -723,14 +722,14 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "Built-in function",
                    name: "__info__",
                    params: ["atom"],
-                   spec: [
-                     "@spec __info__(:attributes) :: keyword()",
-                     "@spec __info__(:compile) :: [term()]",
-                     "@spec __info__(:functions) :: [{atom, non_neg_integer}]",
-                     "@spec __info__(:macros) :: [{atom, non_neg_integer}]",
-                     "@spec __info__(:md5) :: binary()",
-                     "@spec __info__(:module) :: module()"
-                   ]
+                   spec: """
+                   @spec __info__(:attributes) :: keyword()
+                   @spec __info__(:compile) :: [term()]
+                   @spec __info__(:functions) :: [{atom, non_neg_integer}]
+                   @spec __info__(:macros) :: [{atom, non_neg_integer}]
+                   @spec __info__(:md5) :: binary()
+                   @spec __info__(:module) :: module()\
+                   """
                  }
                ]
              }
@@ -743,9 +742,8 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "Built-in function",
                    name: "behaviour_info",
                    params: ["key"],
-                   spec: [
+                   spec:
                      "@spec behaviour_info(:callbacks | :optional_callbacks) :: [{atom, non_neg_integer}]"
-                   ]
                  }
                ]
              }
@@ -793,23 +791,23 @@ defmodule ElixirSense.SignatureTest do
             documentation: "No documentation available",
             name: "orelse",
             params: ["term", "term"],
-            spec: []
+            spec: ""
           }
         ]
       } = ElixirSense.signature(buffer, 2, 18)
 
       assert %{
-        active_param: 0,
-        pipe_before: false,
-        signatures: [
-          %{
-            documentation: "No documentation available",
-            name: "or",
-            params: ["term", "term"],
-            spec: ""
-          }
-        ]
-      } = ElixirSense.signature(buffer, 4, 14)
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "No documentation available",
+                   name: "or",
+                   params: ["term", "term"],
+                   spec: ""
+                 }
+               ]
+             } = ElixirSense.signature(buffer, 4, 14)
     end
 
     test "find :erlang module functions with different forms of typespecs" do
@@ -836,18 +834,25 @@ defmodule ElixirSense.SignatureTest do
       } = ElixirSense.signature(buffer, 2, 16)
 
       assert %{
-        active_param: 0,
-        pipe_before: false,
-        signatures: [
-          %{
-            documentation: "No documentation available",
-            name: "cancel_timer",
-            params: ["TimerRef"],
-            spec: "@spec cancel_timer(timerRef) :: result when timerRef: reference, time: non_neg_integer, result: time | false"
-          },
-          %{documentation: "No documentation available", name: "cancel_timer", params: ["TimerRef", "Options"], spec: "@spec cancel_timer(timerRef, options) :: result | :ok when timerRef: reference, async: boolean, info: boolean, option: {:async, async} | {:info, info}, options: [option], time: non_neg_integer, result: time | false"}
-        ]
-      } = ElixirSense.signature(buffer, 4, 24)
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "No documentation available",
+                   name: "cancel_timer",
+                   params: ["TimerRef"],
+                   spec:
+                     "@spec cancel_timer(timerRef) :: result when timerRef: reference, time: non_neg_integer, result: time | false"
+                 },
+                 %{
+                   documentation: "No documentation available",
+                   name: "cancel_timer",
+                   params: ["TimerRef", "Options"],
+                   spec:
+                     "@spec cancel_timer(timerRef, options) :: result | :ok when timerRef: reference, async: boolean, info: boolean, option: {:async, async} | {:info, info}, options: [option], time: non_neg_integer, result: time | false"
+                 }
+               ]
+             } = ElixirSense.signature(buffer, 4, 24)
     end
   end
 end

@@ -80,7 +80,7 @@ defmodule ElixirSense.Core.Introspection do
   def get_signatures(mod, fun, _code_docs)
       when not is_nil(mod) and fun in [:module_info, :behaviour_info, :__info__] do
     for {f, a} <- BuiltinFunctions.all(), f == fun do
-      spec = BuiltinFunctions.get_specs({f, a})
+      spec = BuiltinFunctions.get_specs({f, a}) |> Enum.join("\n")
       params = BuiltinFunctions.get_args({f, a})
       %{name: Atom.to_string(fun), params: params, documentation: "Built-in function", spec: spec}
     end
@@ -125,7 +125,7 @@ defmodule ElixirSense.Core.Introspection do
                 name: Atom.to_string(fun),
                 params: dummy_params,
                 documentation: "No documentation available",
-                spec: []
+                spec: ""
               }
             end
 
