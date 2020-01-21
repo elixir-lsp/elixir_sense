@@ -141,7 +141,7 @@ defmodule ElixirSense.Core.Introspection do
     for {f, a} <- BuiltinFunctions.all(), f == fun do
       spec = BuiltinFunctions.get_specs({f, a})
       args = BuiltinFunctions.get_args({f, a})
-      text = "Built-in function"
+      text = "_* Built-in function_"
 
       fun_args_text = Enum.join(args, ", ")
 

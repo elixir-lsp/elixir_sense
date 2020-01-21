@@ -593,7 +593,7 @@ defmodule ElixirSense.DocsTest do
                  @spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]
                  ```
 
-                 Built-in function
+                 _* Built-in function_
 
                  ---
 
@@ -609,7 +609,7 @@ defmodule ElixirSense.DocsTest do
                  @spec module_info(:native) :: boolean
                  ```
 
-                 Built-in function
+                 _* Built-in function_
                  """
                }
              } = ElixirSense.docs(buffer, 2, 42)
@@ -646,6 +646,23 @@ defmodule ElixirSense.DocsTest do
 
       assert %{actual_subject: "behaviour_info", docs: %{docs: "No documentation available\n"}} =
                ElixirSense.docs(buffer, 8, 5)
+    end
+
+    test "find built-in erlang functions" do
+      buffer = """
+      defmodule MyModule do
+        :erlang.orelse()
+        #         ^
+        :erlang.or()
+        #       ^
+      end
+      """
+
+      assert %{column: column, file: file, found: true, line: line, type: :function} =
+               ElixirSense.docs(buffer, 2, 14)
+
+      assert %{column: column, file: file, found: true, line: line, type: :function} =
+               ElixirSense.docs(buffer, 4, 12)
     end
   end
 end
