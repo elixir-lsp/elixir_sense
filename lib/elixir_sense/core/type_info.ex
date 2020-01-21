@@ -604,7 +604,7 @@ defmodule ElixirSense.Core.TypeInfo do
     end
     |> Enum.map(fn arg ->
       Macro.to_string(arg)
-      |> String.to_atom
+      |> String.to_atom()
     end)
   end
 end

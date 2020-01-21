@@ -430,41 +430,34 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp get_module_funs(mod, include_builtin) do
-    if function_exported?(mod, :__info__, 1) do
-      docs = NormalizedCode.get_docs(mod, :docs)
+    docs = NormalizedCode.get_docs(mod, :docs)
+    specs = TypeInfo.get_module_specs(mod)
 
-      if docs != nil do
-        exports =
-          (mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_buildins(mod))
-          |> Kernel.--(default_arg_functions_with_doc_false(docs))
-          |> Enum.reject(&hidden_fun?(&1, docs))
+    if docs != nil do
+      exports =
+        (mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_buildins(mod))
+        |> Kernel.--(default_arg_functions_with_doc_false(docs))
+        |> Enum.reject(&hidden_fun?(&1, docs))
 
-        default_arg_functions = default_arg_functions(docs)
+      default_arg_functions = default_arg_functions(docs)
 
-        specs = TypeInfo.get_module_specs(mod)
+      for {f, a} <- exports do
+        {f, new_arity} =
+          case default_arg_functions[{f, a}] do
+            nil -> {f, a}
+            new_arity -> {f, new_arity}
+          end
 
-        for {f, a} <- exports do
-          {f, new_arity} =
-            case default_arg_functions[{f, a}] do
-              nil -> {f, a}
-              new_arity -> {f, new_arity}
-            end
+        {func_kind, func_doc} = find_doc({f, new_arity}, docs)
 
-          {func_kind, func_doc} = find_doc({f, new_arity}, docs)
+        spec =
+          case func_kind do
+            :defmacro -> Map.get(specs, {:"MACRO-#{f}", new_arity + 1})
+            :def -> Map.get(specs, {f, new_arity})
+            nil -> nil
+          end
 
-          spec =
-            case func_kind do
-              :defmacro -> Map.get(specs, {:"MACRO-#{f}", new_arity + 1})
-              :def -> Map.get(specs, {f, new_arity})
-              nil -> nil
-            end
-
-          {f, a, func_kind, func_doc, Introspection.spec_to_string(spec), nil}
-        end
-      else
-        macros = for {f, a} <- mod.__info__(:macros), do: {f, a, :defmacro, nil, nil, nil}
-        functions = for {f, a} <- mod.__info__(:functions), do: {f, a, :def, nil, nil, nil}
-        macros ++ functions
+        {f, a, func_kind, func_doc, Introspection.spec_to_string(spec), nil}
       end
       |> Kernel.++(
         for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :def, nil, nil, nil}
@@ -476,12 +469,25 @@ defmodule Alchemist.Helpers.Complete do
         |> Kernel.++(BuiltinFunctions.erlang_builtin_functions(mod))
 
       for {f, a} <- funs do
+        spec = specs[{f, a}]
+        spec_str = Introspection.spec_to_string(spec)
+
+        params =
+          case spec do
+            {_kind, {{_name, _arity}, [params | _]}} ->
+              TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
+
+            nil ->
+              ""
+          end
+
         case f |> Atom.to_string() do
           "MACRO-" <> name ->
-            {String.to_atom(name), a, :defmacro, nil, nil, nil}
+            # TODO test this arity and spec
+            {String.to_atom(name), a - 1, :defmacro, nil, spec_str, params}
 
           _name ->
-            {f, a, :def, nil, nil, nil}
+            {f, a, :def, nil, spec_str, params}
         end
       end
     end
