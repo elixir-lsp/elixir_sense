@@ -16,7 +16,7 @@ defmodule ElixirSense.DocsTest do
       assert subject == "hkjnjknjk"
       assert actual_subject == "hkjnjknjk"
 
-      assert docs == "No documentation available"
+      assert docs == "No documentation available\n"
     end
 
     test "when empty buffer" do
@@ -29,7 +29,7 @@ defmodule ElixirSense.DocsTest do
       assert subject == ""
       assert actual_subject == ""
 
-      assert docs == "No documentation available"
+      assert docs == "No documentation available\n"
     end
 
     test "retrieve documentation" do
@@ -369,7 +369,7 @@ defmodule ElixirSense.DocsTest do
              @macrocallback optional(a) :: Macro.t when a: atom
              ```
 
-             An optional macrocallback\
+             An optional macrocallback
              """
     end
 
@@ -383,7 +383,7 @@ defmodule ElixirSense.DocsTest do
       %{subject: subject, docs: %{docs: docs}} = ElixirSense.docs(buffer, 2, 11)
 
       assert subject == "ArgumentError"
-      assert docs == "No documentation available"
+      assert docs == "No documentation available\n"
     end
 
     test "retrieve type documentation" do
@@ -417,7 +417,7 @@ defmodule ElixirSense.DocsTest do
 
              ```
              @type remote_t(a, b) :: {a, b}
-             ```\
+             ```
              """
     end
 
@@ -445,7 +445,7 @@ defmodule ElixirSense.DocsTest do
 
              ```
              @opaque t(x)
-             ```\
+             ```
              """
     end
 
@@ -483,7 +483,7 @@ defmodule ElixirSense.DocsTest do
 
              ---
 
-             _* Built-in type_\
+             _* Built-in type_
              """
     end
 
@@ -513,7 +513,7 @@ defmodule ElixirSense.DocsTest do
 
              ---
 
-             _* Built-in type_\
+             _* Built-in type_
              """
     end
 
@@ -551,7 +551,7 @@ defmodule ElixirSense.DocsTest do
 
              ---
 
-             _* Built-in type_\
+             _* Built-in type_
              """
     end
 
@@ -609,7 +609,7 @@ defmodule ElixirSense.DocsTest do
                  @spec module_info(:native) :: boolean
                  ```
 
-                 Built-in function\
+                 Built-in function
                  """
                }
              } = ElixirSense.docs(buffer, 2, 42)
@@ -638,13 +638,13 @@ defmodule ElixirSense.DocsTest do
       end
       """
 
-      assert %{actual_subject: "module_info", docs: %{docs: "No documentation available"}} =
+      assert %{actual_subject: "module_info", docs: %{docs: "No documentation available\n"}} =
                ElixirSense.docs(buffer, 4, 5)
 
-      assert %{actual_subject: "__info__", docs: %{docs: "No documentation available"}} =
+      assert %{actual_subject: "__info__", docs: %{docs: "No documentation available\n"}} =
                ElixirSense.docs(buffer, 6, 5)
 
-      assert %{actual_subject: "behaviour_info", docs: %{docs: "No documentation available"}} =
+      assert %{actual_subject: "behaviour_info", docs: %{docs: "No documentation available\n"}} =
                ElixirSense.docs(buffer, 8, 5)
     end
   end

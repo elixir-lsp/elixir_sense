@@ -44,7 +44,11 @@ defmodule ElixirSense do
   def docs(code, line, column) do
     case Source.subject(code, line, column) do
       nil ->
-        %{subject: "", actual_subject: "", docs: %{docs: "No documentation available", types: ""}}
+        %{
+          subject: "",
+          actual_subject: "",
+          docs: %{docs: "No documentation available\n", types: ""}
+        }
 
       subject ->
         metadata = Parser.parse_string(code, true, true, line)

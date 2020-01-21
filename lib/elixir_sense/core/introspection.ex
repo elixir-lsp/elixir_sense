@@ -57,10 +57,10 @@ defmodule ElixirSense.Core.Introspection do
         [] <- get_func_docs_md(mod, fun),
         [] <- get_type_docs_md(mod, fun, scope)
       ) do
-        "No documentation available"
+        "No documentation available\n"
       else
         docs ->
-          Enum.join(docs, "\n\n---\n\n")
+          Enum.join(docs, "\n\n---\n\n") <> "\n"
       end
 
     %{docs: docs, types: get_types_md(mod)}
@@ -186,7 +186,7 @@ defmodule ElixirSense.Core.Introspection do
         "> #{mod_str}\n\n" <> doc
 
       _ ->
-        "No documentation available"
+        "No documentation available\n"
     end
   end
 
