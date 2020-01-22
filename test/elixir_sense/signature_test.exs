@@ -296,6 +296,36 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    test "find signatures from aliased modules aaa" do
+      code = """
+      defmodule MyModule do
+        alias NonExisting, as: List
+        Elixir.List.flatten(
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 28) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   name: "flatten",
+                   params: ["list"],
+                   documentation: "Flattens the given `list` of nested lists.",
+                   spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]"
+                 },
+                 %{
+                   name: "flatten",
+                   params: ["list", "tail"],
+                   documentation:
+                     "Flattens the given `list` of nested lists.\nThe list `tail` will be added at the end of\nthe flattened list.",
+                   spec:
+                     "@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var"
+                 }
+               ]
+             }
+    end
+
     test "find signatures from imported modules" do
       code = """
       defmodule MyModule do

@@ -92,6 +92,8 @@ defmodule ElixirSense.Core.Source do
       {My.Mod, nil}
       iex> ElixirSense.Core.Source.split_module_and_func("", CurrentMod)
       {nil, nil}
+      iex> ElixirSense.Core.Source.split_module_and_func("Elixir.Keyword", CurrentMod, [{Keyword, My.Mod}])
+      {Keyword, nil}
 
   """
   @spec split_module_and_func(String.t()) :: {module | nil, atom | nil}
@@ -407,6 +409,7 @@ defmodule ElixirSense.Core.Source do
 
   @spec which_func(String.t(), nil | module) :: %{
           candidate: :none | {nil | module, atom},
+          elixir_prefix: boolean,
           npar: non_neg_integer,
           pipe_before: boolean,
           unfinished_parm: boolean,
@@ -420,7 +423,7 @@ defmodule ElixirSense.Core.Source do
     result = scan(tokens, pattern)
     %{candidate: candidate, npar: npar, pipe_before: pipe_before, pos: pos} = result
 
-    normalized_candidate = normalize_candidate(candidate, current_module)
+    {normalized_candidate, elixir_prefix} = normalize_candidate(candidate, current_module)
 
     unfinished_parm =
       case npar |> Enum.at(-1) do
@@ -437,6 +440,7 @@ defmodule ElixirSense.Core.Source do
 
     %{
       candidate: normalized_candidate,
+      elixir_prefix: elixir_prefix,
       npar: normalize_npar(length(npar), pipe_before),
       unfinished_parm: unfinished_parm,
       pipe_before: pipe_before,
@@ -447,16 +451,16 @@ defmodule ElixirSense.Core.Source do
   defp normalize_candidate(candidate, current_module) do
     case candidate do
       [] ->
-        :none
+        {:none, false}
 
       [func] ->
-        {nil, func}
+        {{nil, func}, false}
 
       [:__MODULE__, func] ->
-        {current_module, func}
+        {{current_module, func}, false}
 
       [mod, func] ->
-        {mod, func}
+        {{mod, func}, false}
 
       list ->
         [func | mods] = Enum.reverse(list)
@@ -470,7 +474,7 @@ defmodule ElixirSense.Core.Source do
               rest
           end
 
-        {Module.concat(module_parts), func}
+        {{Module.concat(module_parts), func}, hd(module_parts) == Elixir}
     end
   end
 

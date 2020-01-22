@@ -22,6 +22,7 @@ defmodule ElixirSense.Providers.Signature do
   def find(prefix, %State.Env{imports: imports, aliases: aliases, module: module}, metadata) do
     with %{
            candidate: {mod, fun},
+           elixir_prefix: elixir_prefix,
            npar: npar,
            unfinished_parm: unfinished_parm,
            pipe_before: pipe_before
@@ -31,7 +32,7 @@ defmodule ElixirSense.Providers.Signature do
            Introspection.actual_mod_fun(
              {mod, fun},
              imports,
-             aliases,
+             if(elixir_prefix, do: [], else: aliases),
              module,
              metadata.mods_funs_to_positions,
              metadata.types

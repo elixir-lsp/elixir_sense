@@ -532,13 +532,13 @@ defmodule ElixirSense.Providers.Suggestion do
             param_option
           ]
   defp find_param_options(prefix, hint, imports, aliases, module, mods_funs, metadata_types) do
-    with %{candidate: {mod, fun}, npar: npar, pipe_before: _pipe_before} <-
+    with %{candidate: {mod, fun}, elixir_prefix: elixir_prefix, npar: npar, pipe_before: _pipe_before} <-
            Source.which_func(prefix, module),
          {mod, fun, true} <-
            Introspection.actual_mod_fun(
              {mod, fun},
              imports,
-             aliases,
+             if(elixir_prefix, do: [], else: aliases),
              module,
              mods_funs,
              metadata_types
