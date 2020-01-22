@@ -648,21 +648,5 @@ defmodule ElixirSense.DocsTest do
                ElixirSense.docs(buffer, 8, 5)
     end
 
-    test "find built-in erlang functions" do
-      buffer = """
-      defmodule MyModule do
-        :erlang.orelse()
-        #         ^
-        :erlang.or()
-        #       ^
-      end
-      """
-
-      assert %{column: column, file: file, found: true, line: line, type: :function} =
-               ElixirSense.docs(buffer, 2, 14)
-
-      assert %{column: column, file: file, found: true, line: line, type: :function} =
-               ElixirSense.docs(buffer, 4, 12)
-    end
   end
 end

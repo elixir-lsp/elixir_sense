@@ -555,6 +555,21 @@ defmodule Alchemist.Helpers.CompleteTest do
     assert {:yes, 'lias', [%{name: "MyAlias", type: :module}]} = expand('MyA', env)
   end
 
+  test "alias rules" do
+    env = %Env{
+      scope_module: MyModule,
+      aliases: [{Keyword, MyKeyword}],
+      mods_and_funs: %{
+        {MyKeyword, nil, nil} => %ModFunInfo{type: :defmodule},
+        {MyKeyword, :values1, 0} => %ModFunInfo{type: :def, params: [[]]},
+        {MyKeyword, :values1, nil} => %ModFunInfo{type: :def}
+      }
+    }
+
+    assert {:yes, 'es1', [%{name: "values1", type: :function, args: "", arity: 0, origin: "MyKeyword", spec: "", summary: ""}]} = expand('Keyword.valu', env)
+    assert {:yes, 'es', [%{name: "values", type: :function, arity: 1, origin: "Keyword"}]} = expand('Elixir.Keyword.valu', env)
+  end
+
   defmodule MyStruct do
     defstruct [:my_val]
   end
