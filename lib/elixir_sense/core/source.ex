@@ -240,7 +240,7 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  @spec get_v12_module_prefix(String.t(), module | nil) :: nil | module
+  @spec get_v12_module_prefix(String.t(), module | nil) :: nil | String.t()
   def get_v12_module_prefix(text_before, current_module) do
     with %{"module" => module_str} <-
            Regex.named_captures(
@@ -248,9 +248,12 @@ defmodule ElixirSense.Core.Source do
              text_before
            ),
          {:ok, ast} <- Code.string_to_quoted(module_str),
-         # TODO do not ignore Elixir. prefix here
-         {:ok, module, _} <- extract_module(ast, current_module) do
-      module
+         {:ok, module, elixir_prefix} <- extract_module(ast, current_module) do
+      if elixir_prefix and module != Elixir do
+        "Elixir." <> inspect(module)
+      else
+        inspect(module)
+      end
     else
       _ ->
         nil

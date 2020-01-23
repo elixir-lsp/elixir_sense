@@ -369,10 +369,10 @@ defmodule ElixirSense.Providers.Suggestion do
         nil ->
           {hint, ""}
 
-        module ->
+        module_string ->
           # v1.2 alias syntax detected
           # prepend module prefix before running completion
-          prefix = inspect(module) <> "."
+          prefix = module_string <> "."
           {prefix <> hint, prefix}
       end
 

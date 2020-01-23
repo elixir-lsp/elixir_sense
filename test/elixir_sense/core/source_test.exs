@@ -854,7 +854,27 @@ defmodule ElixirSense.Core.SourceTest do
           alias Mod.{
       """
 
-      assert get_v12_module_prefix(code, MyMod) == Mod
+      assert get_v12_module_prefix(code, MyMod) == "Mod"
+    end
+
+    test "Elixir prefix" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          alias Elixir.Mod.{
+      """
+
+      assert get_v12_module_prefix(code, MyMod) == "Elixir.Mod"
+    end
+
+    test "Elixir prefix single level" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          alias Elixir.{
+      """
+
+      assert get_v12_module_prefix(code, MyMod) == "Elixir"
     end
 
     test "single level with submodule" do
@@ -864,7 +884,7 @@ defmodule ElixirSense.Core.SourceTest do
           require Mod.{Su
       """
 
-      assert get_v12_module_prefix(code, MyMod) == Mod
+      assert get_v12_module_prefix(code, MyMod) == "Mod"
     end
 
     test "single level with submodules" do
@@ -874,7 +894,7 @@ defmodule ElixirSense.Core.SourceTest do
           use Mod.{Su.Bmod, Other
       """
 
-      assert get_v12_module_prefix(code, MyMod) == Mod
+      assert get_v12_module_prefix(code, MyMod) == "Mod"
     end
 
     test "multi level with submodules" do
@@ -884,7 +904,7 @@ defmodule ElixirSense.Core.SourceTest do
           import Mod.Sub.{
       """
 
-      assert get_v12_module_prefix(code, MyMod) == Mod.Sub
+      assert get_v12_module_prefix(code, MyMod) == "Mod.Sub"
     end
 
     test "__MODULE__ special form level with submodules" do
@@ -894,7 +914,7 @@ defmodule ElixirSense.Core.SourceTest do
           alias __MODULE__.{
       """
 
-      assert get_v12_module_prefix(code, MyMod) == MyMod
+      assert get_v12_module_prefix(code, MyMod) == "MyMod"
     end
 
     test "__MODULE__.Submodule special form level with submodules" do
@@ -904,7 +924,7 @@ defmodule ElixirSense.Core.SourceTest do
           alias __MODULE__.Submodule.{
       """
 
-      assert get_v12_module_prefix(code, MyMod) == MyMod.Submodule
+      assert get_v12_module_prefix(code, MyMod) == "MyMod.Submodule"
     end
 
     test "atom module special form level with submodules" do
@@ -914,7 +934,7 @@ defmodule ElixirSense.Core.SourceTest do
           alias :"Elixir.Mod".{
       """
 
-      assert get_v12_module_prefix(code, MyMod) == Mod
+      assert get_v12_module_prefix(code, MyMod) == "Mod"
     end
 
     test "nil when closed" do
@@ -946,7 +966,7 @@ defmodule ElixirSense.Core.SourceTest do
             B
       """
 
-      assert get_v12_module_prefix(code, MyMod) == Mod
+      assert get_v12_module_prefix(code, MyMod) == "Mod"
     end
   end
 end
