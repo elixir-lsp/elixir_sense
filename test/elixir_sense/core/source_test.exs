@@ -7,7 +7,14 @@ defmodule ElixirSense.Core.SourceTest do
   describe "which_func/1" do
     test "at the beginning of a defmodule" do
       assert which_func("defmo") ==
-               %{candidate: :none, elixir_prefix: false, npar: 0, pipe_before: false, unfinished_parm: false, pos: nil}
+               %{
+                 candidate: :none,
+                 elixir_prefix: false,
+                 npar: 0,
+                 pipe_before: false,
+                 unfinished_parm: false,
+                 pos: nil
+               }
     end
 
     test "functions without namespace" do
@@ -50,13 +57,13 @@ defmodule ElixirSense.Core.SourceTest do
              }
 
       assert which_func("var = Elixir.SubMod.func(param1, param2, par") == %{
-              candidate: {SubMod, :func},
-              elixir_prefix: true,
-              npar: 2,
-              unfinished_parm: true,
-              pipe_before: false,
-              pos: {{1, 7}, {1, nil}}
-            }
+               candidate: {SubMod, :func},
+               elixir_prefix: true,
+               npar: 2,
+               unfinished_parm: true,
+               pipe_before: false,
+               pos: {{1, 7}, {1, nil}}
+             }
     end
 
     test "functions with namespace atom module" do
@@ -706,7 +713,17 @@ defmodule ElixirSense.Core.SourceTest do
           var = %Mod{
       """
 
-      assert which_struct(code) == {Mod, []}
+      assert which_struct(code, MyMod) == {Mod, [], false}
+    end
+
+    test "modules with Elixir prefix" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %Elixir.Mod{
+      """
+
+      assert which_struct(code, MyMod) == {Mod, [], true}
     end
 
     test "modules with namespace" do
@@ -716,7 +733,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %ModA.ModB{
       """
 
-      assert which_struct(code) == {ModA.ModB, []}
+      assert which_struct(code, MyMod) == {ModA.ModB, [], false}
     end
 
     test "`__MODULE__` special form" do
@@ -726,7 +743,17 @@ defmodule ElixirSense.Core.SourceTest do
           var = %__MODULE__{
       """
 
-      assert which_struct(code) == {:__MODULE__, []}
+      assert which_struct(code, MyMod) == {MyMod, [], false}
+    end
+
+    test "`__MODULE__.Submodule` special form" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %__MODULE__.Submodule{
+      """
+
+      assert which_struct(code, MyMod) == {MyMod.Submodule, [], false}
     end
 
     test "modules atom form" do
@@ -736,7 +763,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %:"Elixir.IO.Stream"{
       """
 
-      assert which_struct(code) == {IO.Stream, []}
+      assert which_struct(code, MyMod) == {IO.Stream, [], false}
     end
 
     test "modules erlang atom" do
@@ -746,7 +773,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %:my_module{
       """
 
-      assert which_struct(code) == {:my_module, []}
+      assert which_struct(code, MyMod) == {:my_module, [], false}
     end
 
     test "nested structs" do
@@ -758,12 +785,12 @@ defmodule ElixirSense.Core.SourceTest do
       end
       """
 
-      assert which_struct(text_before(code, 3, 16)) == {Mod, []}
-      assert which_struct(text_before(code, 3, 23)) == nil
-      assert which_struct(text_before(code, 3, 34)) == {InnerMod, []}
-      assert which_struct(text_before(code, 3, 37)) == {Mod, [:field1]}
-      assert which_struct(text_before(code, 3, 39)) == {Mod, [:field1]}
-      assert which_struct(text_before(code, 3, 50)) == {Mod, [:field1, :field2]}
+      assert which_struct(text_before(code, 3, 16), MyMod) == {Mod, [], false}
+      assert which_struct(text_before(code, 3, 23), MyMod) == nil
+      assert which_struct(text_before(code, 3, 34), MyMod) == {InnerMod, [], false}
+      assert which_struct(text_before(code, 3, 37), MyMod) == {Mod, [:field1], false}
+      assert which_struct(text_before(code, 3, 39), MyMod) == {Mod, [:field1], false}
+      assert which_struct(text_before(code, 3, 50), MyMod) == {Mod, [:field1, :field2], false}
     end
 
     test "nested structs with multiple lines" do
@@ -781,8 +808,10 @@ defmodule ElixirSense.Core.SourceTest do
       end
       """
 
-      assert which_struct(text_before(code, 7, 8)) == nil
-      assert which_struct(text_before(code, 8, 9)) == {Mod, [:field1, :field2, :field3]}
+      assert which_struct(text_before(code, 7, 8), MyMod) == nil
+
+      assert which_struct(text_before(code, 8, 9), MyMod) ==
+               {Mod, [:field1, :field2, :field3], false}
     end
 
     test "nested structs with multiple lines when line shorter than col" do
@@ -797,7 +826,7 @@ defmodule ElixirSense.Core.SourceTest do
       end
       """
 
-      assert which_struct(text_before(code, 5, 7)) == {Mod, [:field1]}
+      assert which_struct(text_before(code, 5, 7), MyMod) == {Mod, [:field1], false}
     end
 
     test "struct update syntax" do
@@ -812,8 +841,8 @@ defmodule ElixirSense.Core.SourceTest do
       end
       """
 
-      assert which_struct(text_before(code, 3, 23)) == {Mod, []}
-      assert which_struct(text_before(code, 5, 7)) == {Mod, [:field1]}
+      assert which_struct(text_before(code, 3, 23), MyMod) == {Mod, [], false}
+      assert which_struct(text_before(code, 5, 7), MyMod) == {Mod, [:field1], false}
     end
   end
 
@@ -825,7 +854,7 @@ defmodule ElixirSense.Core.SourceTest do
           alias Mod.{
       """
 
-      assert get_v12_module_prefix(code) == Mod
+      assert get_v12_module_prefix(code, MyMod) == Mod
     end
 
     test "single level with submodule" do
@@ -835,7 +864,7 @@ defmodule ElixirSense.Core.SourceTest do
           require Mod.{Su
       """
 
-      assert get_v12_module_prefix(code) == Mod
+      assert get_v12_module_prefix(code, MyMod) == Mod
     end
 
     test "single level with submodules" do
@@ -845,7 +874,7 @@ defmodule ElixirSense.Core.SourceTest do
           use Mod.{Su.Bmod, Other
       """
 
-      assert get_v12_module_prefix(code) == Mod
+      assert get_v12_module_prefix(code, MyMod) == Mod
     end
 
     test "multi level with submodules" do
@@ -855,7 +884,7 @@ defmodule ElixirSense.Core.SourceTest do
           import Mod.Sub.{
       """
 
-      assert get_v12_module_prefix(code) == Mod.Sub
+      assert get_v12_module_prefix(code, MyMod) == Mod.Sub
     end
 
     test "__MODULE__ special form level with submodules" do
@@ -865,7 +894,17 @@ defmodule ElixirSense.Core.SourceTest do
           alias __MODULE__.{
       """
 
-      assert get_v12_module_prefix(code) == :__MODULE__
+      assert get_v12_module_prefix(code, MyMod) == MyMod
+    end
+
+    test "__MODULE__.Submodule special form level with submodules" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          alias __MODULE__.Submodule.{
+      """
+
+      assert get_v12_module_prefix(code, MyMod) == MyMod.Submodule
     end
 
     test "atom module special form level with submodules" do
@@ -875,7 +914,7 @@ defmodule ElixirSense.Core.SourceTest do
           alias :"Elixir.Mod".{
       """
 
-      assert get_v12_module_prefix(code) == Mod
+      assert get_v12_module_prefix(code, MyMod) == Mod
     end
 
     test "nil when closed" do
@@ -885,7 +924,7 @@ defmodule ElixirSense.Core.SourceTest do
           alias Mod.{}
       """
 
-      assert get_v12_module_prefix(code) == nil
+      assert get_v12_module_prefix(code, MyMod) == nil
     end
 
     test "nil when not on last line" do
@@ -896,7 +935,7 @@ defmodule ElixirSense.Core.SourceTest do
           alias C
       """
 
-      assert get_v12_module_prefix(code) == nil
+      assert get_v12_module_prefix(code, MyMod) == nil
     end
 
     test "multiline" do
@@ -907,7 +946,7 @@ defmodule ElixirSense.Core.SourceTest do
             B
       """
 
-      assert get_v12_module_prefix(code) == Mod
+      assert get_v12_module_prefix(code, MyMod) == Mod
     end
   end
 end

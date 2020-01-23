@@ -566,8 +566,21 @@ defmodule Alchemist.Helpers.CompleteTest do
       }
     }
 
-    assert {:yes, 'es1', [%{name: "values1", type: :function, args: "", arity: 0, origin: "MyKeyword", spec: "", summary: ""}]} = expand('Keyword.valu', env)
-    assert {:yes, 'es', [%{name: "values", type: :function, arity: 1, origin: "Keyword"}]} = expand('Elixir.Keyword.valu', env)
+    assert {:yes, 'es1',
+            [
+              %{
+                name: "values1",
+                type: :function,
+                args: "",
+                arity: 0,
+                origin: "MyKeyword",
+                spec: "",
+                summary: ""
+              }
+            ]} = expand('Keyword.valu', env)
+
+    assert {:yes, 'es', [%{name: "values", type: :function, arity: 1, origin: "Keyword"}]} =
+             expand('Elixir.Keyword.valu', env)
   end
 
   defmodule MyStruct do

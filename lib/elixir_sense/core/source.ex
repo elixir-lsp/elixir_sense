@@ -92,6 +92,8 @@ defmodule ElixirSense.Core.Source do
       {My.Mod, nil}
       iex> ElixirSense.Core.Source.split_module_and_func("", CurrentMod)
       {nil, nil}
+      iex> ElixirSense.Core.Source.split_module_and_func("Elixir.Keyword.A", CurrentMod, [{Keyword, My.Mod}])
+      {Keyword.A, nil}
       iex> ElixirSense.Core.Source.split_module_and_func("Elixir.Keyword", CurrentMod, [{Keyword, My.Mod}])
       {Keyword, nil}
 
@@ -221,8 +223,8 @@ defmodule ElixirSense.Core.Source do
     end)
   end
 
-  @spec which_struct(String.t()) :: nil | {module, [atom]}
-  def which_struct(text_before) do
+  @spec which_struct(String.t(), nil | module) :: nil | {module, [atom], boolean}
+  def which_struct(text_before, current_module) do
     code = text_before |> String.reverse()
 
     case walk_text(code, %{buffer: [], count_open: 0, result: nil}, &find_struct/5) do
@@ -234,19 +236,20 @@ defmodule ElixirSense.Core.Source do
         |> Enum.join()
         |> Kernel.<>("_: _}")
         |> Code.string_to_quoted()
-        |> extract_struct_module()
+        |> extract_struct_module(current_module)
     end
   end
 
-  @spec get_v12_module_prefix(String.t()) :: nil | module | :__MODULE__
-  def get_v12_module_prefix(text_before) do
+  @spec get_v12_module_prefix(String.t(), module | nil) :: nil | module
+  def get_v12_module_prefix(text_before, current_module) do
     with %{"module" => module_str} <-
            Regex.named_captures(
              ~r/(alias|require|import|use)\s+(?<module>[^\s^\{^\}]+?)\.\{[^\}]*?$/,
              text_before
            ),
          {:ok, ast} <- Code.string_to_quoted(module_str),
-         {:ok, module} <- extract_module(ast) do
+         # TODO do not ignore Elixir. prefix here
+         {:ok, module, _} <- extract_module(ast, current_module) do
       module
     else
       _ ->
@@ -254,42 +257,51 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  defp extract_module({:__aliases__, _, module_list}) do
-    {:ok, Module.concat(module_list)}
+  defp extract_module({:__aliases__, _, module_list}, current_module) do
+    module_list =
+      case module_list do
+        [{:__MODULE__, _, nil} | rest] -> [current_module | rest]
+        otherwise -> otherwise
+      end
+
+    {:ok, Module.concat(module_list), hd(module_list) == Elixir}
   end
 
-  defp extract_module({:__MODULE__, _, nil}) do
-    {:ok, :__MODULE__}
+  defp extract_module({:__MODULE__, _, nil}, current_module) do
+    {:ok, current_module, false}
   end
 
-  defp extract_module(module) when is_atom(module) do
-    {:ok, module}
+  defp extract_module(module, _current_module) when is_atom(module) do
+    {:ok, module, false}
   end
 
-  defp extract_module(_) do
+  defp extract_module(_, _) do
     :error
   end
 
-  defp do_extract_struct_module(module, fields) do
-    case extract_module(module) do
-      {:ok, extracted_module} ->
+  defp do_extract_struct_module(module, fields, current_module) do
+    case extract_module(module, current_module) do
+      {:ok, extracted_module, elixir_prefix} ->
         fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
-        {extracted_module, fields_names}
+        {extracted_module, fields_names, elixir_prefix}
 
       _ ->
         nil
     end
   end
 
-  defp extract_struct_module({:ok, {:%, _, [module, {:%{}, _, [{:|, _, [_expr, fields]}]}]}}) do
-    do_extract_struct_module(module, fields)
+  defp extract_struct_module(
+         {:ok, {:%, _, [module, {:%{}, _, [{:|, _, [_expr, fields]}]}]}},
+         current_module
+       ) do
+    do_extract_struct_module(module, fields, current_module)
   end
 
-  defp extract_struct_module({:ok, {:%, _, [module, {:%{}, _, fields}]}}) do
-    do_extract_struct_module(module, fields)
+  defp extract_struct_module({:ok, {:%, _, [module, {:%{}, _, fields}]}}, current_module) do
+    do_extract_struct_module(module, fields, current_module)
   end
 
-  defp extract_struct_module(_) do
+  defp extract_struct_module(_, _) do
     nil
   end
 

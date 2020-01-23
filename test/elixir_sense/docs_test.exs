@@ -647,6 +647,5 @@ defmodule ElixirSense.DocsTest do
       assert %{actual_subject: "behaviour_info", docs: %{docs: "No documentation available\n"}} =
                ElixirSense.docs(buffer, 8, 5)
     end
-
   end
 end

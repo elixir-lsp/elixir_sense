@@ -294,12 +294,12 @@ defmodule ElixirSense.Providers.Suggestion do
          mods_funs,
          metadata_types
        ) do
-    with {mod, fields_so_far} <- Source.which_struct(text_before),
+    with {mod, fields_so_far, elixir_prefix} <- Source.which_struct(text_before, module),
          {actual_mod, _, true} <-
            Introspection.actual_mod_fun(
              {expand_current_module(mod, module), nil},
              imports,
-             aliases,
+             if(elixir_prefix, do: [], else: aliases),
              module,
              mods_funs,
              metadata_types
@@ -365,15 +365,9 @@ defmodule ElixirSense.Providers.Suggestion do
     }
 
     {hint, prefix} =
-      case Source.get_v12_module_prefix(text_before) do
+      case Source.get_v12_module_prefix(text_before, module) do
         nil ->
           {hint, ""}
-
-        :__MODULE__ ->
-          # v1.2 alias syntax detected with __MODULE__ special form
-          # prepend module prefix before running completion
-          prefix = "__MODULE__."
-          {prefix <> hint, prefix}
 
         module ->
           # v1.2 alias syntax detected
@@ -532,7 +526,12 @@ defmodule ElixirSense.Providers.Suggestion do
             param_option
           ]
   defp find_param_options(prefix, hint, imports, aliases, module, mods_funs, metadata_types) do
-    with %{candidate: {mod, fun}, elixir_prefix: elixir_prefix, npar: npar, pipe_before: _pipe_before} <-
+    with %{
+           candidate: {mod, fun},
+           elixir_prefix: elixir_prefix,
+           npar: npar,
+           pipe_before: _pipe_before
+         } <-
            Source.which_func(prefix, module),
          {mod, fun, true} <-
            Introspection.actual_mod_fun(
