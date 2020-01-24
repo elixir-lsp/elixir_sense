@@ -102,7 +102,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       alias MyModule.{One, Two.Three}
       alias MyModule.{Four}
       alias :lists
-
+      alias Elixir.Three.OutsideOfMyModule
       require MyMacros
       require MyMacros.Nested, as: NestedMacros
       require :ets, as: ErlangMacros
@@ -160,7 +160,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
         def reverse(a), do: :ok
       end
 
-      # defdelegate delegated_func, to: ElixirSenseExample.Delegates
+      defdelegate delegated_func, to: ElixirSenseExample.Delegates
     end
   end
 

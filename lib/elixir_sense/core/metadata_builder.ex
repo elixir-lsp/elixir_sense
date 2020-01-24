@@ -7,7 +7,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   alias ElixirSense.Core.Ast
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.VarInfo
 
@@ -265,8 +264,21 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
+  defp wrap_modules(modules) do
+    case modules do
+      [m | _] when is_atom(m) ->
+        [modules]
+
+      m when is_atom(m) ->
+        [m]
+
+      other ->
+        other
+    end
+  end
+
   defp pre_import(ast, state, line, modules) do
-    modules = List.wrap(modules)
+    modules = wrap_modules(modules)
 
     state
     |> add_current_env_to_line(line)
@@ -276,9 +288,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_require(ast, state, line, modules) do
+    modules = wrap_modules(modules)
+
     state
     |> add_current_env_to_line(line)
-    |> add_requires(List.wrap(modules))
+    |> add_requires(modules)
     |> result(ast)
   end
 
@@ -415,14 +429,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
           [{:behaviour, _, [{:__aliases__, _, module_expression}]}]} = ast,
          state
        ) do
-    case concat_module_expression(state, module_expression) do
-      {:ok, module} ->
-        pre_behaviour(ast, state, line, module)
-
-      :error ->
-        state
-        |> result(ast)
-    end
+    module = concat_module_expression(state, module_expression)
+    pre_behaviour(ast, state, line, module)
   end
 
   defp pre({:@, [line: line, column: _column], [{:behaviour, _, [erlang_module]}]} = ast, state) do
@@ -524,7 +532,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # import with v1.2 notation
   defp pre(
          {:import, [line: line, column: _column],
-          [{{:., _, [prefix_expression, :{}]}, _, imports}]} = ast,
+          [{{:., _, [prefix_expression, :{}]}, _, imports} | _]} = ast,
          state
        ) do
     imports_modules = modules_from_12_syntax(state, imports, prefix_expression)
@@ -539,18 +547,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   # import with options
   defp pre(
-         {:import, [line: line, column: _column], [{_, _, module_expression = [_ | _]}, _opts]} =
-           ast,
+         {:import, [line: line, column: _column],
+          [{:__aliases__, _, module_expression = [_ | _]}, _opts]} = ast,
          state
        ) do
-    case concat_module_expression(state, module_expression) do
-      {:ok, module} ->
-        pre_import(ast, state, line, module)
-
-      :error ->
-        state
-        |> result(ast)
-    end
+    module = concat_module_expression(state, module_expression)
+    pre_import(ast, state, line, module)
   end
 
   # atom module
@@ -562,7 +564,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # require with v1.2 notation
   defp pre(
          {:require, [line: line, column: _column],
-          [{{:., _, [prefix_expression, :{}]}, _, requires}]} = ast,
+          [{{:., _, [prefix_expression, :{}]}, _, requires} | _]} = ast,
          state
        ) do
     requires_modules = modules_from_12_syntax(state, requires, prefix_expression)
@@ -581,17 +583,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
           [{_, _, module_expression = [_ | _]}, [as: alias_expression]]} = ast,
          state
        ) do
-    case concat_module_expression(state, module_expression) do
-      {:ok, module} ->
-        alias_tuple = alias_tuple(module, alias_expression)
+    module = concat_module_expression(state, module_expression)
+    alias_tuple = alias_tuple(module, alias_expression)
 
-        {_, new_state} = pre_alias(ast, state, line, alias_tuple)
-        pre_require(ast, new_state, line, module)
-
-      :error ->
-        state
-        |> result(ast)
-    end
+    {_, new_state} = pre_alias(ast, state, line, alias_tuple)
+    pre_require(ast, new_state, line, module)
   end
 
   # require erlang module with `as` option
@@ -608,14 +604,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
            ast,
          state
        ) do
-    case concat_module_expression(state, module_expression) do
-      {:ok, module} ->
-        pre_require(ast, state, line, module)
-
-      :error ->
-        state
-        |> result(ast)
-    end
+    module = concat_module_expression(state, module_expression)
+    pre_require(ast, state, line, module)
   end
 
   defp pre({:require, [line: line, column: _column], [mod, _opts]} = ast, state)
@@ -626,7 +616,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # alias with v1.2 notation
   defp pre(
          {:alias, [line: line, column: _column],
-          [{{:., _, [prefix_expression, :{}]}, _, aliases}]} = ast,
+          [{{:., _, [prefix_expression, :{}]}, _, aliases} | _]} = ast,
          state
        ) do
     case split_module_expression(state, prefix_expression) do
@@ -634,8 +624,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
         aliases_tuples =
           aliases
           |> Enum.map(fn
-            {:__aliases__, _, mods} -> {Module.concat(mods), Module.concat(prefix_atoms ++ mods)}
-            mod when is_atom(mod) -> {mod, Module.concat(prefix_atoms ++ [mod])}
+            {:__aliases__, _, mods} -> {Module.concat(mods), prefix_atoms ++ mods}
+            mod when is_atom(mod) -> {mod, prefix_atoms ++ [mod]}
           end)
 
         pre_alias(ast, state, line, aliases_tuples)
@@ -652,15 +642,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
            ast,
          state
        ) do
-    case concat_module_expression(state, module_expression) do
-      {:ok, module} ->
-        alias_tuple = {Module.concat([List.last(module_expression)]), module}
-        pre_alias(ast, state, line, alias_tuple)
-
-      :error ->
-        state
-        |> result(ast)
-    end
+    module = concat_module_expression(state, module_expression)
+    alias_tuple = {Module.concat([List.last(module_expression)]), module}
+    pre_alias(ast, state, line, alias_tuple)
   end
 
   # alias with `as` option
@@ -669,15 +653,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
           [{_, _, module_expression = [_ | _]}, [as: alias_expression]]} = ast,
          state
        ) do
-    case concat_module_expression(state, module_expression) do
-      {:ok, module} ->
-        alias_tuple = alias_tuple(module, alias_expression)
-        pre_alias(ast, state, line, alias_tuple)
-
-      :error ->
-        state
-        |> result(ast)
-    end
+    module = concat_module_expression(state, module_expression)
+    alias_tuple = alias_tuple(module, alias_expression)
+    pre_alias(ast, state, line, alias_tuple)
   end
 
   # alias atom module
@@ -914,15 +892,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
 
-    case concat_module_expression(state, module_expression) do
-      {:ok, module} ->
-        state
-        |> add_call_to_line({module, call, length(params)}, {line, column + 1})
-        |> add_current_env_to_line(line)
+    module = concat_module_expression(state, module_expression)
 
-      :error ->
-        state
-    end
+    state
+    |> add_call_to_line({Module.concat(module), call, length(params)}, {line, column + 1})
+    |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -1089,7 +1063,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp alias_tuple(module, {:__aliases__, _, alias_atoms = [al | _]})
-       when is_atom(module) and is_atom(al) do
+       when is_atom(al) do
     {Module.concat(alias_atoms), module}
   end
 
@@ -1099,7 +1073,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         for expression <- expressions do
           case split_module_expression(state, expression) do
             {:ok, suffix_atoms} ->
-              Module.concat(prefix_atoms ++ suffix_atoms)
+              prefix_atoms ++ suffix_atoms
 
             :error ->
               :error
@@ -1127,8 +1101,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp split_module_expression(_, _), do: :error
 
-  defp concat_module_expression(state, module_parts) do
-    Source.concat_module_parts(module_parts, state |> get_current_module, [])
+  defp concat_module_expression(state, [{:__MODULE__, _, nil} | rest]) do
+    current_module = state |> get_current_module
+    [current_module | rest]
+  end
+
+  defp concat_module_expression(_state, module_parts) do
+    module_parts
   end
 
   defp normalize_module([{:__MODULE__, _, nil} | rest]), do: rest

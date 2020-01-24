@@ -691,13 +691,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     state =
       """
       defmodule MyModule do
-        alias Foo.{User, Email}
+        alias Foo.{User, Email, Elixir.Test}
+        alias Elixir.User.{Data.Other, Address}
+        alias Elixir.{String.Stream}
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 3) == [{User, Foo.User}, {Email, Foo.Email}]
+    assert get_line_aliases(state, 5) == [
+             {User, Foo.User},
+             {Email, Foo.Email},
+             {Test, Foo.Elixir.Test},
+             {Other, User.Data.Other},
+             {Address, User.Address},
+             {Stream, String.Stream}
+           ]
   end
 
   test "aliases defined with v1.2 notation __MODULE__" do
@@ -735,17 +744,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   test "aliases of aliases" do
+    ElixirSense.Core.Source.split_module_and_func("Elixir.Keyword", CurrentMod, [
+      {Keyword, My.Mod}
+    ])
+
     state =
       """
       defmodule MyModule do
         alias Foo.Bar, as: Fb
         alias Fb.Sub, as: S
+        alias Elixir.Fb.Oth
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 4) == [{Fb, Foo.Bar}, {S, Foo.Bar.Sub}]
+    assert get_line_aliases(state, 5) == [{Fb, Foo.Bar}, {S, Foo.Bar.Sub}, {Oth, Fb.Oth}]
   end
 
   test "aliases erlang module" do
@@ -759,7 +773,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 4) == [{Ets, :ets}]
+    assert get_line_aliases(state, 4) == [{Ets, :ets}, {:"Elixir.erlang_module", :erlang_module}]
   end
 
   test "aliases atom module" do
@@ -848,11 +862,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         alias Foo
         alias :erlang_module
         IO.puts ""
+        alias Enum, as: Foo
+        alias Elixir.Foo
+        IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 4) == []
+    assert get_line_aliases(state, 4) == [{:"Elixir.erlang_module", :erlang_module}]
+    assert get_line_aliases(state, 7) == [{:"Elixir.erlang_module", :erlang_module}]
   end
 
   test "aliases duplicated" do
@@ -867,6 +885,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_aliases(state, 4) == [{User, Foo.User}]
+  end
+
+  test "import with options" do
+    state =
+      """
+      defmodule MyModule do
+        import Enum, only: []
+        import Elixir.{List}, only: []
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_imports(state, 4) == [List, Enum]
   end
 
   test "imports defined with v1.2 notation" do
@@ -904,7 +936,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         import List
         IO.puts ""
         defmodule InnerModule do
-          import Enum
+          import Enum.List
           IO.puts ""
           def func do
             import String
@@ -929,11 +961,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     # note that `import` causes `require` module's macros available
     assert get_line_requires(state, 3) == [List]
 
-    assert get_line_imports(state, 6) == [List, Enum]
-    assert get_line_imports(state, 9) == [List, Enum, String]
-    assert get_line_imports(state, 12) == [List, Enum, String, Macro]
-    assert get_line_imports(state, 14) == [List, Enum, String]
-    assert get_line_imports(state, 16) == [List, Enum]
+    assert get_line_imports(state, 6) == [List, Enum.List]
+    assert get_line_imports(state, 9) == [List, Enum.List, String]
+    assert get_line_imports(state, 12) == [List, Enum.List, String, Macro]
+    assert get_line_imports(state, 14) == [List, Enum.List, String]
+    assert get_line_imports(state, 16) == [List, Enum.List]
     assert get_line_imports(state, 19) == [Code, List]
     assert get_line_imports(state, 21) == []
   end
@@ -2707,6 +2739,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {One, MyModule.One},
              {Three, MyModule.Two.Three},
              {Four, MyModule.Four},
+             {:"Elixir.lists", :lists},
+             {OutsideOfMyModule, Three.OutsideOfMyModule},
              {NestedMacros, MyMacros.Nested},
              {ErlangMacros, :ets},
              {Nested, InheritMod.Nested},

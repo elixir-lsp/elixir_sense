@@ -447,7 +447,7 @@ defmodule ElixirSense.Core.State do
 
       # take only outermost submodule part as deeply nested submodules do not create aliases
       alias = module |> Enum.take(1) |> Module.concat()
-      expanded = namespace |> Enum.drop(length(module) - 1) |> Enum.reverse() |> Module.concat()
+      expanded = namespace |> Enum.drop(length(module) - 1) |> Enum.reverse()
 
       state
       |> add_alias({alias, expanded})
@@ -465,7 +465,7 @@ defmodule ElixirSense.Core.State do
       implementations
       |> Enum.flat_map(fn
         module when is_list(module) ->
-          expanded = expand_alias(state, Module.concat(module))
+          expanded = expand_alias(state, module)
           unescape_protocol_impementations(expanded)
 
         module when is_atom(module) ->
@@ -474,7 +474,7 @@ defmodule ElixirSense.Core.State do
 
     candidate =
       if is_list(protocol) do
-        expand_alias(state, Module.concat(protocol))
+        expand_alias(state, protocol)
       else
         protocol
       end
@@ -588,23 +588,60 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | behaviours: behaviours}
   end
 
-  def add_alias(%__MODULE__{} = state, {alias, module}) when alias == module, do: state
-  def add_alias(%__MODULE__{} = state, {Elixir, _module}), do: state
-
-  def add_alias(%__MODULE__{} = state, {alias, aliased}) do
+  def add_alias(%__MODULE__{} = state, {alias, aliased}) when is_list(aliased) do
     if Introspection.elixir_module?(alias) do
       alias = Module.split(alias) |> Enum.take(-1) |> Module.concat()
+      [aliases_from_scope | inherited_aliases] = state.aliases
+      aliases_from_scope = aliases_from_scope |> Enum.reject(&match?({^alias, _}, &1))
+
+      expanded = expand_alias(state, aliased)
+
+      aliases_from_scope =
+        if alias != expanded do
+          [{alias, expanded} | aliases_from_scope]
+        else
+          aliases_from_scope
+        end
+
+      %__MODULE__{
+        state
+        | aliases: [
+            aliases_from_scope | inherited_aliases
+          ]
+      }
+    else
+      state
+    end
+  end
+
+  def add_alias(%__MODULE__{} = state, {alias, aliased}) when is_atom(aliased) do
+    if Introspection.elixir_module?(alias) do
+      [aliases_from_scope | inherited_aliases] = state.aliases
+      aliases_from_scope = aliases_from_scope |> Enum.reject(&match?({^alias, _}, &1))
+
+      aliases_from_scope =
+        if alias != aliased do
+          [{alias, aliased} | aliases_from_scope]
+        else
+          aliases_from_scope
+        end
+
+      %__MODULE__{
+        state
+        | aliases: [
+            aliases_from_scope | inherited_aliases
+          ]
+      }
+    else
       [aliases_from_scope | inherited_aliases] = state.aliases
       aliases_from_scope = aliases_from_scope |> Enum.reject(&match?({^alias, _}, &1))
 
       %__MODULE__{
         state
         | aliases: [
-            [{alias, expand_alias(state, aliased)} | aliases_from_scope] | inherited_aliases
+            [{Module.concat([alias]), aliased} | aliases_from_scope] | inherited_aliases
           ]
       }
-    else
-      state
     end
   end
 
@@ -628,7 +665,7 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | requires: tl(state.requires)}
   end
 
-  def add_import(%__MODULE__{} = state, module) do
+  def add_import(%__MODULE__{} = state, module) when is_atom(module) or is_list(module) do
     module = expand_alias(state, module)
     [imports_from_scope | inherited_imports] = state.imports
     imports_from_scope = imports_from_scope -- [module]
@@ -636,17 +673,21 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | imports: [[module | imports_from_scope] | inherited_imports]}
   end
 
+  def add_import(%__MODULE__{} = state, _module), do: state
+
   def add_imports(%__MODULE__{} = state, modules) do
     Enum.reduce(modules, state, fn mod, state -> add_import(state, mod) end)
   end
 
-  def add_require(%__MODULE__{} = state, module) do
+  def add_require(%__MODULE__{} = state, module) when is_atom(module) or is_list(module) do
     module = expand_alias(state, module)
 
     [requires_from_scope | inherited_requires] = state.requires
     requires_from_scope = requires_from_scope -- [module]
     %__MODULE__{state | requires: [[module | requires_from_scope] | inherited_requires]}
   end
+
+  def add_require(%__MODULE__{} = state, _module), do: state
 
   def add_requires(%__MODULE__{} = state, modules) do
     Enum.reduce(modules, state, fn mod, state -> add_require(state, mod) end)
@@ -788,7 +829,7 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | attributes: attributes, scope_attributes: scope_attributes}
   end
 
-  def add_behaviour(%__MODULE__{} = state, module) when is_atom(module) do
+  def add_behaviour(%__MODULE__{} = state, module) when is_atom(module) or is_list(module) do
     module = expand_alias(state, module)
     [behaviours_from_scope | other_behaviours] = state.behaviours
     behaviours_from_scope = behaviours_from_scope -- [module]
@@ -831,8 +872,21 @@ defmodule ElixirSense.Core.State do
 
   def default_env, do: %ElixirSense.Core.State.Env{}
 
-  def expand_alias(%__MODULE__{} = state, module) do
+  def expand_alias(%__MODULE__{} = _state, module) when is_atom(module) do
+    module
+  end
+
+  def expand_alias(%__MODULE__{} = _state, [Elixir | _] = module) do
+    Module.concat(module)
+  end
+
+  def expand_alias(%__MODULE__{} = state, [{:__MODULE__, _, nil} | rest]) do
+    current_module = get_current_module(state)
+    Module.concat([current_module | rest])
+  end
+
+  def expand_alias(%__MODULE__{} = state, module) when is_list(module) do
     current_aliases = current_aliases(state)
-    Introspection.expand_alias(module, current_aliases)
+    Introspection.expand_alias(Module.concat(module), current_aliases)
   end
 end
