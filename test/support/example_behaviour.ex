@@ -107,11 +107,11 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       require MyMacros.Nested, as: NestedMacros
       require :ets, as: ErlangMacros
       require MyMacros.{One, Two.Three}
-
+      import Some.{List}, only: []
       import MyImports
       import MyImports.NestedImports
       import MyImports.{OneImports, Two.ThreeImports}
-      import :lists
+      import :lists, only: []
       @my_attribute "my_attr"
 
       defp private_func, do: :ok

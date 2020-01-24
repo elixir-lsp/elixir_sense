@@ -893,12 +893,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule MyModule do
         import Enum, only: []
         import Elixir.{List}, only: []
+        import :lists, only: []
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_imports(state, 4) == [List, Enum]
+    assert get_line_imports(state, 5) == [:lists, List, Enum]
   end
 
   test "imports defined with v1.2 notation" do
@@ -2730,7 +2731,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              MyImports.Two.ThreeImports,
              MyImports.OneImports,
              MyImports.NestedImports,
-             MyImports
+             MyImports,
+             Some.List
            ]
 
     assert get_line_aliases(state, 4) == [

@@ -118,6 +118,8 @@ defmodule ElixirSense.Core.Ast do
     do_expand(ast, acc)
   end
 
+  # TODO should we add imports here as well? 
+
   defp do_expand({:require, _, _} = ast, {env, count}) do
     # TODO is it ok to loose alias_tuples here?
     {modules, _alias_tuples} = extract_directive_modules(:require, ast)
@@ -249,6 +251,7 @@ defmodule ElixirSense.Core.Ast do
   end
 
   defp extract_directive_modules(directive, ast) do
+    # TODO cleanup whose cases
     case ast do
       # v1.2 notation
       {^directive, _, [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, aliases}]} ->
@@ -259,10 +262,6 @@ defmodule ElixirSense.Core.Ast do
           end)
 
         {list, []}
-
-      # with options
-      {^directive, _, [{_, _, module_atoms = [mod | _]}, _opts]} when is_atom(mod) ->
-        {[module_atoms |> Module.concat()], []}
 
       # with options
       {^directive, _, [module, opts]} when is_atom(module) ->
@@ -292,9 +291,13 @@ defmodule ElixirSense.Core.Ast do
       {^directive, _, [module]} when is_atom(module) ->
         {[module], []}
 
-      {^directive, _, [{{:., _, [prefix, :{}]}, _, suffixes}]} when is_list(suffixes) ->
+      {^directive, _, [{{:., _, [prefix, :{}]}, _, suffixes} | _]} when is_list(suffixes) ->
         list = for suffix <- suffixes, do: Module.concat(prefix, suffix)
         {list, []}
+
+      # with options
+      {^directive, _, [{_, _, module_atoms = [mod | _]}, _opts]} when is_atom(mod) ->
+        {[module_atoms |> Module.concat()], []}
     end
   end
 
