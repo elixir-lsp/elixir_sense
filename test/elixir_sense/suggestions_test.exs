@@ -1903,6 +1903,14 @@ defmodule ElixirSense.SuggestionsTest do
              ] == suggestions
     end
 
+    test "no erlang private types" do
+      buffer = "@type my_type :: :erlang.cpu_topo"
+
+      suggestions = suggestions_by_type(:type_spec, buffer)
+
+      assert [] == suggestions
+    end
+
     test "local types from metadata" do
       buffer = """
       defmodule MyModule do
