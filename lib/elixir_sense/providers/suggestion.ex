@@ -311,6 +311,7 @@ defmodule ElixirSense.Providers.Suggestion do
           |> struct()
           |> Map.from_struct()
           |> Map.keys()
+          |> Kernel.++([:__struct__])
         else
           %StructInfo{fields: fields} = structs[actual_mod]
           Enum.map(fields, &(&1 |> elem(0)))

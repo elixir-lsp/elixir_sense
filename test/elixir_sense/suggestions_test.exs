@@ -1131,7 +1131,8 @@ defmodule ElixirSense.SuggestionsTest do
   test "suggestion for struct fields" do
     buffer = """
     defmodule Mod do
-      %IO.Stream{
+      %IO.Stream{}
+      %ArgumentError{}
     end
     """
 
@@ -1143,7 +1144,19 @@ defmodule ElixirSense.SuggestionsTest do
              %{type: :hint, value: ""},
              %{name: "device", origin: "IO.Stream", type: :field},
              %{name: "line_or_bytes", origin: "IO.Stream", type: :field},
-             %{name: "raw", origin: "IO.Stream", type: :field}
+             %{name: "raw", origin: "IO.Stream", type: :field},
+             %{name: "__struct__", origin: "IO.Stream", type: :field}
+           ]
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 18)
+      |> Enum.filter(&(&1.type in [:field, :hint]))
+
+    assert list == [
+             %{type: :hint, value: ""},
+             %{name: "__exception__", origin: "ArgumentError", type: :field},
+             %{name: "message", origin: "ArgumentError", type: :field},
+             %{name: "__struct__", origin: "ArgumentError", type: :field}
            ]
   end
 
@@ -1163,7 +1176,8 @@ defmodule ElixirSense.SuggestionsTest do
              %{type: :hint, value: ""},
              %{name: "device", origin: "IO.Stream", type: :field},
              %{name: "line_or_bytes", origin: "IO.Stream", type: :field},
-             %{name: "raw", origin: "IO.Stream", type: :field}
+             %{name: "raw", origin: "IO.Stream", type: :field},
+             %{name: "__struct__", origin: "IO.Stream", type: :field}
            ]
   end
 
@@ -1183,7 +1197,8 @@ defmodule ElixirSense.SuggestionsTest do
              %{type: :hint, value: ""},
              %{name: "device", origin: "IO.Stream", type: :field},
              %{name: "line_or_bytes", origin: "IO.Stream", type: :field},
-             %{name: "raw", origin: "IO.Stream", type: :field}
+             %{name: "raw", origin: "IO.Stream", type: :field},
+             %{name: "__struct__", origin: "IO.Stream", type: :field}
            ]
   end
 
