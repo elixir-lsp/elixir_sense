@@ -588,6 +588,24 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
+  test "do not find private function definition" do
+    buffer = """
+    defmodule MyModule do
+      defmodule Submodule do
+        defp my_fun(), do: :ok
+      end
+
+      def a do
+        MyModule.Submodule.my_fun()
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 7, 25) == %Location{
+             found: false
+           }
+  end
+
   test "find definition of local module" do
     buffer = """
     defmodule MyModule do
@@ -739,6 +757,17 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "-type time_unit()"
   end
 
+  test "do not find erlang ptivate type" do
+    buffer = """
+    defmodule MyModule do
+      :erlang.memory_type
+      #        ^
+    end
+    """
+
+    %{found: false} = ElixirSense.definition(buffer, 2, 12)
+  end
+
   test "builtin types cannot now be found" do
     buffer = """
     defmodule MyModule do
@@ -792,6 +821,24 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
     %{found: true, type: :typespec, file: nil, line: 2, column: 3} =
       ElixirSense.definition(buffer, 9, 35)
+  end
+
+  test "do not find remote private type definition" do
+    buffer = """
+    defmodule MyModule.Other do
+      @typep my_t :: integer
+      @typep my_t(a) :: {a, integer}
+    end
+
+    defmodule MyModule do
+      alias MyModule.Other
+
+      @type remote_list_t :: [Other.my_t]
+      #                               ^
+    end
+    """
+
+    %{found: false} = ElixirSense.definition(buffer, 9, 35)
   end
 
   defp read_line(file, {line, column}) do

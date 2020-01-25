@@ -29,6 +29,7 @@ defmodule ElixirSense.Core.Introspection do
   alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Normalized.Typespec
+  alias ElixirSense.Core.State
   alias ElixirSense.Core.TypeInfo
 
   @type mod_fun :: {module | nil, atom | nil}
@@ -864,12 +865,19 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  defp has_type?(_mod, _type, _metadata_types, false), do: false
+  defp has_type?(_mod, _type, _current_module, _metadata_types, false), do: false
 
-  defp has_type?(mod, type, metadata_types, true) do
-    Map.has_key?(metadata_types, {mod, type, nil}) or
-      Typespec.get_types(mod)
-      |> Enum.any?(fn {_kind, {name, _def, _args}} -> name == type end)
+  defp has_type?(mod, type, current_module, metadata_types, true) do
+    case metadata_types[{mod, type, nil}] do
+      nil ->
+        Typespec.get_types(mod)
+        |> Enum.any?(fn {kind, {name, _def, _args}} ->
+          name == type and kind in [:type, :opaque]
+        end)
+
+      %State.TypeInfo{kind: kind} ->
+        mod == current_module or kind in [:type, :opaque]
+    end
   end
 
   defp find_metadata_function(
@@ -970,7 +978,7 @@ defmodule ElixirSense.Core.Introspection do
       end
 
     if found_in_metadata or ModuleInfo.has_function?(mod, fun) or
-         has_type?(mod, fun, metadata_types, include_typespecs) do
+         has_type?(mod, fun, current_module, metadata_types, include_typespecs) do
       {mod, fun}
     else
       {nil, nil}
