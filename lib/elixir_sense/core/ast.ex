@@ -118,7 +118,7 @@ defmodule ElixirSense.Core.Ast do
     do_expand(ast, acc)
   end
 
-  # TODO should we add imports here as well? 
+  # TODO should we add imports here as well?
 
   defp do_expand({:require, _, _} = ast, {env, count}) do
     # TODO is it ok to loose alias_tuples here?
@@ -250,8 +250,9 @@ defmodule ElixirSense.Core.Ast do
     {ast, acc}
   end
 
+  # credo:disable-for-lines:50
   defp extract_directive_modules(directive, ast) do
-    # TODO cleanup whose cases
+    # TODO cleanup those cases
     case ast do
       # v1.2 notation
       {^directive, _, [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, aliases}]} ->
