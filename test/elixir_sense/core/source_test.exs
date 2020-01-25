@@ -706,6 +706,24 @@ defmodule ElixirSense.Core.SourceTest do
   end
 
   describe "which_struct" do
+    test "patern match with _" do
+      code = """
+      defmodule MyMod do
+        def my_func(%_{
+      """
+
+      assert which_struct(code, MyMod) == {:_, [], false}
+    end
+
+    test "patern match with variable name" do
+      code = """
+      defmodule MyMod do
+        def my_func(%my_var{
+      """
+
+      assert which_struct(code, MyMod) == {:_, [], false}
+    end
+
     test "modules without namespace" do
       code = """
       defmodule MyMod do

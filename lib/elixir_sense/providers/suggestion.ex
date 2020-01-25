@@ -294,7 +294,8 @@ defmodule ElixirSense.Providers.Suggestion do
          mods_funs,
          metadata_types
        ) do
-    with {mod, fields_so_far, elixir_prefix} <- Source.which_struct(text_before, module),
+    with {mod, fields_so_far, elixir_prefix} when mod != :_ <-
+           Source.which_struct(text_before, module),
          {actual_mod, _, true} <-
            Introspection.actual_mod_fun(
              {expand_current_module(mod, module), nil},
@@ -331,7 +332,23 @@ defmodule ElixirSense.Providers.Suggestion do
 
       {result, if(fields_so_far == [], do: :maybe_struct_update)}
     else
-      _ -> {[], nil}
+      {:_, fields_so_far, false} ->
+        result =
+          [:__struct__]
+          |> Kernel.--(fields_so_far)
+          |> Enum.filter(fn field -> String.starts_with?("#{field}", hint) end)
+          |> Enum.map(fn field ->
+            %{
+              type: :field,
+              name: Atom.to_string(field),
+              origin: ""
+            }
+          end)
+
+        {result, if(fields_so_far == [], do: :maybe_struct_update)}
+
+      _ ->
+        {[], nil}
     end
   end
 

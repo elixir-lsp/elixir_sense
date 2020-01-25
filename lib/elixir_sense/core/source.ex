@@ -282,6 +282,12 @@ defmodule ElixirSense.Core.Source do
     :error
   end
 
+  defp do_extract_struct_module({var, _, nil}, fields, _current_module)
+       when is_atom(var) and var != :__MODULE__ do
+    fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
+    {:_, fields_names, false}
+  end
+
   defp do_extract_struct_module(module, fields, current_module) do
     case extract_module(module, current_module) do
       {:ok, extracted_module, elixir_prefix} ->

@@ -1181,6 +1181,33 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  test "suggestion for builtin fields in struct pattern match" do
+    buffer = """
+    defmodule Mod do
+      def my(%_{}), do: :ok
+      def my(%var{}), do: var
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 2, 13)
+      |> Enum.filter(&(&1.type in [:field, :hint]))
+
+    assert list == [
+             %{type: :hint, value: ""},
+             %{name: "__struct__", origin: "", type: :field}
+           ]
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 15)
+      |> Enum.filter(&(&1.type in [:field, :hint]))
+
+    assert list == [
+             %{type: :hint, value: ""},
+             %{name: "__struct__", origin: "", type: :field}
+           ]
+  end
+
   test "suggestion for aliased struct fields atom module" do
     buffer = """
     defmodule Mod do
