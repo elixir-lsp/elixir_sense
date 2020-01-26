@@ -530,6 +530,36 @@ defmodule ElixirSense.Core.SourceTest do
   end
 
   describe "subject" do
+    test "attribute" do
+      code = """
+      defmodule MyMod do
+        @some_attr "some value"
+      end
+      """
+
+      assert subject(code, 2, 5) == "@some_attr"
+    end
+
+    test "struct" do
+      code = """
+      defmodule MyMod do
+        %SomeMod{}
+      end
+      """
+
+      assert subject(code, 2, 5) == "SomeMod"
+    end
+
+    test "functions capture" do
+      code = """
+      defmodule MyMod do
+        &SomeMod.some_fun/1
+      end
+      """
+
+      assert subject(code, 2, 13) == "SomeMod.some_fun"
+    end
+
     test "functions without namespace" do
       code = """
       defmodule MyMod do
