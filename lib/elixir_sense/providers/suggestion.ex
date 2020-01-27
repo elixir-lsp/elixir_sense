@@ -332,7 +332,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
       {result, if(fields_so_far == [], do: :maybe_struct_update)}
     else
-      {:_, fields_so_far, false} ->
+      {:_, fields_so_far, false} when is_list(fields_so_far) ->
         result =
           [:__struct__]
           |> Kernel.--(fields_so_far)
