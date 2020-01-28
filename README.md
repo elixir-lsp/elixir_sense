@@ -5,7 +5,7 @@ An API/Server for Elixir projects that provides context-aware information for co
 ## Usage
 
 ```
-git clone https://github.com/msaraiva/elixir_sense.git
+git clone https://github.com/elixir-lsp/elixir_sense.git
 cd elixir_sense
 elixir run.exs socket_type port env
 ```
