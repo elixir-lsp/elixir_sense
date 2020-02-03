@@ -55,7 +55,11 @@ defmodule ElixirSense.Mixfile do
 
   defp package do
     [
-      maintainers: ["Marlus Saraiva (@msaraiva)"],
+      maintainers: [
+        "Marlus Saraiva (@msaraiva)",
+        "Łukasz Samson (@lukaszsamson)",
+        "Jason Axelson (@axelson)"
+      ],
       licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/elixir-lsp/elixir_sense"}
     ]
