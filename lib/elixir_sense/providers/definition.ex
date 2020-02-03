@@ -216,11 +216,21 @@ defmodule ElixirSense.Providers.Definition do
   defp find_fun_position_in_erl_file(_file, nil), do: {1, 1}
 
   defp find_fun_position_in_erl_file(file, name) do
-    find_line_by_regex(file, Regex.recompile!(~r/^#{name}\b/))
+    escaped =
+      name
+      |> Atom.to_string()
+      |> Regex.escape()
+
+    find_line_by_regex(file, Regex.recompile!(~r/^#{escaped}\b/))
   end
 
   defp find_type_position_in_erl_file(file, name) do
-    find_line_by_regex(file, Regex.recompile!(~r/^-(typep?|opaque)\s#{name}\b/))
+    escaped =
+      name
+      |> Atom.to_string()
+      |> Regex.escape()
+
+    find_line_by_regex(file, Regex.recompile!(~r/^-(typep?|opaque)\s#{escaped}\b/))
   end
 
   defp find_line_by_regex(file, regex) do
