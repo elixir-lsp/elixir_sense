@@ -170,11 +170,15 @@ defmodule ElixirSense.Core.Metadata do
   end
 
   defp get_function_position_using_docs(module, function) do
-    docs = NormalizedCode.get_docs(module, :docs)
+    case NormalizedCode.get_docs(module, :docs) do
+      nil ->
+        nil
 
-    for {{func, _arity}, line, _kind, _, _} <- docs, func == function do
-      {line, 1}
+      docs ->
+        Enum.find_value(docs, fn
+          {{^function, _arity}, line, _, _, _} -> {line, 1}
+          _ -> nil
+        end)
     end
-    |> Enum.at(0)
   end
 end
