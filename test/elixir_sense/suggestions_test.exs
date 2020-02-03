@@ -843,6 +843,22 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  test "only list defined params in guard" do
+    buffer = """
+    defmodule MyServer do
+      def new(my_var) when is_integer(my
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 2, 37)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    # TODO hint my_var instead of my
+
+    assert list == [%{name: "my_var", type: :variable}]
+  end
+
   test "lists attributes" do
     buffer = """
     defmodule MyModule do

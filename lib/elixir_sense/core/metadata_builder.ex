@@ -237,7 +237,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_clause({_, [line: line, column: _column], _} = ast, state, lhs) do
+  defp pre_clause({_clause, [line: line, column: _column], _} = ast, state, lhs) do
     state
     |> new_alias_scope
     |> new_import_scope
@@ -408,7 +408,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
           ]},
          state
        )
-       when def_name in [:defguard, :defguardp] do
+       when def_name in @defs do
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, body]}
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
   end
@@ -1015,6 +1015,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
        when is_atom(var) and context in [nil, Elixir] do
     var_info = %VarInfo{name: var, positions: [{line, column}]}
     {ast, [var_info | vars]}
+  end
+
+  # drop right side of guard expression as guards cannot define vars
+  defp match_var({:when, _, [left, _right]}, vars) do
+    match_var(left, vars)
   end
 
   defp match_var(ast, vars) do

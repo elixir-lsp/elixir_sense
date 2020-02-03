@@ -121,7 +121,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       defmodule MyModule do
         var_out1 = 1
-        def func(%{key1: par1, key2: [par2|[par3, _]]}, par4) do
+        def func(%{key1: par1, key2: [par2|[par3, _]]}, par4, _par5) do
           var_in1 = 1
           var_in2 = 1
           IO.puts ""
@@ -148,6 +148,53 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert vars == [
              %VarInfo{name: :arg, positions: [{8, 14}], scope_id: 2}
            ]
+  end
+
+  test "guards do not define vars" do
+    state =
+      """
+      defmodule MyModule do
+        def func1(a) when is_integer(b) do
+          IO.puts("")
+        end
+        def func2(a) when is_integer(b) or is_list(c) do
+          IO.puts("")
+        end
+        def func3(a) when is_integer(b) when is_list(c) do
+          IO.puts("")
+        end
+
+        case x do
+          y when is_integer(z) ->
+            IO.puts("")
+        end
+
+        with x when is_integer(y) <- z do
+          IO.puts("")
+        end
+
+        def func3(a) when is_integer(b)
+      end
+      """
+      |> string_to_state
+
+    vars = state |> get_line_vars(3)
+    assert vars == [%VarInfo{is_definition: false, name: :a, positions: [{2, 13}], scope_id: 2}]
+
+    vars = state |> get_line_vars(6)
+    assert vars == [%VarInfo{is_definition: false, name: :a, positions: [{5, 13}], scope_id: 2}]
+
+    vars = state |> get_line_vars(9)
+    assert vars == [%VarInfo{is_definition: false, name: :a, positions: [{8, 13}], scope_id: 2}]
+
+    vars = state |> get_line_vars(14)
+    assert vars == [%VarInfo{is_definition: false, name: :y, positions: [{13, 5}], scope_id: 7}]
+
+    vars = state |> get_line_vars(18)
+    assert vars == [%VarInfo{is_definition: false, name: :x, positions: [{17, 8}], scope_id: 2}]
+
+    vars = state |> get_line_vars(21)
+    assert vars == [%VarInfo{is_definition: false, name: :a, positions: [{21, 13}], scope_id: 2}]
   end
 
   test "rebinding vars" do
