@@ -114,7 +114,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       import :lists, only: []
       @my_attribute "my_attr"
 
-      defp private_func, do: :ok
+      defp private_func, do: @my_attribute
       def public_func, do: :ok
 
       defp private_func_arg(a), do: :ok

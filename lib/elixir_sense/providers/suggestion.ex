@@ -429,11 +429,11 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.sort()
   end
 
-  @spec find_attributes([atom], String.t()) :: [attribute]
+  @spec find_attributes([State.AttributeInfo.t()], String.t()) :: [attribute]
   defp find_attributes(attributes, hint) do
-    for attribute <- attributes,
-        hint in ["", "@"] or String.starts_with?("@#{attribute}", hint) do
-      %{type: :attribute, name: "@#{attribute}"}
+    for %State.AttributeInfo{name: name} <- attributes,
+        hint in ["", "@"] or String.starts_with?("@#{name}", hint) do
+      %{type: :attribute, name: "@#{name}"}
     end
     |> Enum.sort()
   end

@@ -359,7 +359,7 @@ defmodule ElixirSense.Core.ParserTest do
     assert %ElixirSense.Core.Metadata{
              lines_to_env: %{
                6 => %ElixirSense.Core.State.Env{
-                 attributes: [:doc]
+                 attributes: [%ElixirSense.Core.State.AttributeInfo{name: :doc}]
                }
              }
            } = parse_string(source, true, true, 6)

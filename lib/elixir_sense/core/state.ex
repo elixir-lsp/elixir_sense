@@ -36,7 +36,7 @@ defmodule ElixirSense.Core.State do
           imports: list(list(module)),
           requires: list(list(module)),
           aliases: list(list(alias_t)),
-          attributes: list(list(atom)),
+          attributes: list(list(ElixirSense.Core.State.AttributeInfo.t())),
           protocols: list(list(protocol_t())),
           scope_attributes: list(list(atom)),
           behaviours: list(list(module)),
@@ -88,7 +88,7 @@ defmodule ElixirSense.Core.State do
             protocol: nil | ElixirSense.Core.State.protocol_t(),
             protocol_variants: list(ElixirSense.Core.State.protocol_t()),
             vars: list(ElixirSense.Core.State.VarInfo.t()),
-            attributes: list(atom),
+            attributes: list(ElixirSense.Core.State.AttributeInfo.t()),
             behaviours: list(module),
             scope: nil | ElixirSense.Core.State.scope(),
             scope_id: nil | ElixirSense.Core.State.scope_id_t()
@@ -160,6 +160,17 @@ defmodule ElixirSense.Core.State do
             fields: list(field_t)
           }
     defstruct type: :defstruct, fields: []
+  end
+
+  defmodule AttributeInfo do
+    @moduledoc """
+    Variable info
+    """
+    @type t :: %AttributeInfo{
+            name: atom,
+            positions: list(ElixirSense.Core.State.position_t())
+          }
+    defstruct name: nil, positions: []
   end
 
   defmodule CallInfo do
@@ -810,18 +821,35 @@ defmodule ElixirSense.Core.State do
     }
   end
 
-  def add_attributes(%__MODULE__{} = state, attributes) do
-    Enum.reduce(attributes, state, fn attribute, state -> add_attribute(state, attribute) end)
+  def add_attributes(%__MODULE__{} = state, attributes, position) do
+    Enum.reduce(attributes, state, fn attribute, state ->
+      add_attribute(state, attribute, position)
+    end)
   end
 
-  def add_attribute(%__MODULE__{} = state, attribute) do
+  def add_attribute(%__MODULE__{} = state, attribute, position) do
     [attributes_from_scope | other_attributes] = state.attributes
 
+    existing_attribute_index =
+      attributes_from_scope
+      |> Enum.find_index(&(&1.name == attribute))
+
     attributes_from_scope =
-      if attribute in attributes_from_scope do
-        attributes_from_scope
-      else
-        [attribute | attributes_from_scope]
+      case existing_attribute_index do
+        nil ->
+          [
+            %AttributeInfo{
+              name: attribute,
+              positions: [position]
+            }
+            | attributes_from_scope
+          ]
+
+        index ->
+          attributes_from_scope
+          |> List.update_at(index, fn existing ->
+            %AttributeInfo{existing | positions: existing.positions ++ [position]}
+          end)
       end
 
     attributes = [attributes_from_scope | other_attributes]

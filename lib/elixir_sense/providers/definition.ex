@@ -19,7 +19,7 @@ defmodule ElixirSense.Providers.Definition do
 
     @type t :: %Location{
             found: boolean,
-            type: :module | :function | :variable | :typespec | :macro | nil,
+            type: :module | :function | :variable | :typespec | :macro | :attribute | nil,
             file: String.t() | nil,
             line: pos_integer | nil,
             column: pos_integer | nil
@@ -39,7 +39,13 @@ defmodule ElixirSense.Providers.Definition do
         ) :: %Location{}
   def find(
         subject,
-        %State.Env{imports: imports, aliases: aliases, module: module, vars: vars},
+        %State.Env{
+          imports: imports,
+          aliases: aliases,
+          module: module,
+          vars: vars,
+          attributes: attributes
+        },
         mods_funs_to_positions,
         calls,
         metadata_types
@@ -49,11 +55,18 @@ defmodule ElixirSense.Providers.Definition do
         vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
       end
 
-    case var_info do
-      %VarInfo{positions: [{line, column} | _]} ->
+    attribute_info = find_attribute(subject, attributes)
+
+    cond do
+      var_info != nil ->
+        %VarInfo{positions: [{line, column} | _]} = var_info
         %Location{found: true, type: :variable, file: nil, line: line, column: column}
 
-      _ ->
+      attribute_info != nil ->
+        %State.AttributeInfo{positions: [{line, column} | _]} = attribute_info
+        %Location{found: true, type: :attribute, file: nil, line: line, column: column}
+
+      true ->
         subject
         |> Source.split_module_and_func(module, aliases)
         |> find_function_or_module(
@@ -68,13 +81,25 @@ defmodule ElixirSense.Providers.Definition do
 
   defp subject_is_call?(subject, calls) do
     Enum.find(calls, fn
-      %{mod: nil, func: func} ->
+      %State.CallInfo{func: func} ->
         Atom.to_string(func) == subject
 
       _ ->
         false
     end) != nil
   end
+
+  defp find_attribute("@" <> attribute_name, attributes) do
+    Enum.find(attributes, fn
+      %State.AttributeInfo{name: name} ->
+        Atom.to_string(name) == attribute_name
+
+      _ ->
+        false
+    end)
+  end
+
+  defp find_attribute(_, _attributes), do: nil
 
   defp find_function_or_module(
          {module, function},

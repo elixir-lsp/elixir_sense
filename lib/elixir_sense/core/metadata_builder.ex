@@ -296,10 +296,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_module_attribute(ast, state, line, name) do
+  defp pre_module_attribute(ast, state, {line, _} = position, name) do
     state
     |> add_current_env_to_line(line)
-    |> add_attribute(name)
+    |> add_attribute(name, position)
     |> result(ast)
   end
 
@@ -524,9 +524,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_spec(ast, state, {line, column}, name, List.wrap(type_args), spec, kind)
   end
 
-  defp pre({:@, [line: line, column: _column] = meta_attr, [{name, meta, params}]}, state) do
+  defp pre({:@, [line: line, column: column] = meta_attr, [{name, meta, params}]}, state)
+       when not is_nil(params) do
     new_ast = {:@, meta_attr, [{name, add_no_call(meta), params}]}
-    pre_module_attribute(new_ast, state, line, name)
+    pre_module_attribute(new_ast, state, {line, column}, name)
   end
 
   # import with v1.2 notation
@@ -744,7 +745,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> add_requires(requires)
       |> add_imports(imports)
       |> add_behaviours(behaviours)
-      |> add_attributes(attributes)
+      |> add_attributes(attributes, {line, column})
 
     state =
       Enum.reduce(mods_funs, state, fn

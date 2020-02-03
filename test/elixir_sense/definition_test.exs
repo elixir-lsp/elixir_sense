@@ -462,6 +462,35 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
+  test "find definition of attributes" do
+    buffer = """
+    defmodule MyModule do
+      def func do
+        @var1 1
+        @var2 2
+        @var1 3
+        IO.puts(@var1 + @var2)
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 6, 15) == %Location{
+             found: true,
+             type: :attribute,
+             file: nil,
+             line: 3,
+             column: 5
+           }
+
+    assert ElixirSense.definition(buffer, 6, 24) == %Location{
+             found: true,
+             type: :attribute,
+             file: nil,
+             line: 4,
+             column: 5
+           }
+  end
+
   test "find definition of local functions with default args" do
     buffer = """
     defmodule MyModule do

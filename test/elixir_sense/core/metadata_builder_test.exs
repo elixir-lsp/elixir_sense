@@ -3,7 +3,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.State
-  alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, ModFunInfo}
+  alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, ModFunInfo, AttributeInfo}
 
   @tag requires_source: true
   test "build metadata from kernel.ex" do
@@ -40,9 +40,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_attributes(state, 3) == [:myattribute]
-    assert get_line_attributes(state, 6) == [:inner_attr]
-    assert get_line_attributes(state, 8) == [:myattribute]
+    assert get_line_attributes(state, 3) == [
+             %AttributeInfo{name: :myattribute, positions: [{2, 3}]}
+           ]
+
+    assert get_line_attributes(state, 6) == [
+             %AttributeInfo{name: :inner_attr, positions: [{5, 5}]}
+           ]
+
+    assert get_line_attributes(state, 8) == [
+             %AttributeInfo{name: :myattribute, positions: [{2, 3}]}
+           ]
   end
 
   test "module attributes duplicated" do
@@ -56,7 +64,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_attributes(state, 4) == [:myattribute]
+    assert get_line_attributes(state, 4) == [
+             %AttributeInfo{name: :myattribute, positions: [{2, 3}, {3, 3}]}
+           ]
   end
 
   test "vars defined inside a function without params" do
@@ -2797,7 +2807,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {ProtocolEmbedded, InheritMod.ProtocolEmbedded}
            ]
 
-    assert get_line_attributes(state, 4) == [:before_compile, :doc, :my_attribute]
+    assert get_line_attributes(state, 4) == [
+             %AttributeInfo{name: :before_compile, positions: [{2, 3}]},
+             %AttributeInfo{name: :doc, positions: [{2, 3}]},
+             %AttributeInfo{name: :my_attribute, positions: [{2, 3}]}
+           ]
 
     # FIXME `defdelegate` inside `__using__/1` macro is not supported
     # FIXME only submodules defined at top level are supported in `__using__/1`
