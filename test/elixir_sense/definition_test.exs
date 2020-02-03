@@ -216,7 +216,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %Location{found: true, type: :module, file: file, line: 1, column: 1} =
+    %Location{found: true, type: :module, file: file, line: 20, column: 1} =
       ElixirSense.definition(buffer, 3, 7)
 
     assert file =~ "/src/lists.erl"
@@ -297,7 +297,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %Location{found: true, line: 1, column: 1, type: :module, file: file} =
+    assert %Location{found: true, line: 20, column: 1, type: :module, file: file} =
              ElixirSense.definition(buffer, 2, 5)
 
     assert file =~ "/src/erlang.erl"

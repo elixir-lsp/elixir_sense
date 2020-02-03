@@ -213,7 +213,9 @@ defmodule ElixirSense.Providers.Definition do
   defp fun_to_type(nil), do: :module
   defp fun_to_type(_), do: :function
 
-  defp find_fun_position_in_erl_file(_file, nil), do: {1, 1}
+  defp find_fun_position_in_erl_file(file, nil) do
+    find_line_by_regex(file, Regex.recompile!(~r/^-module/))
+  end
 
   defp find_fun_position_in_erl_file(file, name) do
     escaped =
