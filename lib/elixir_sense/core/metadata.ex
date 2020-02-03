@@ -159,6 +159,16 @@ defmodule ElixirSense.Core.Metadata do
     end
   end
 
+  defp get_function_position_using_docs(module, nil) do
+    case NormalizedCode.get_docs(module, :moduledoc) do
+      nil ->
+        nil
+
+      {line, _} ->
+        {line, 1}
+    end
+  end
+
   defp get_function_position_using_docs(module, function) do
     docs = NormalizedCode.get_docs(module, :docs)
 
