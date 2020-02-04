@@ -17,7 +17,7 @@ defmodule ElixirSense.Providers.Suggestion do
         }
 
   @type variable :: %{
-          type: :var,
+          type: :variable,
           name: String.t()
         }
 
