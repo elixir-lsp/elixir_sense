@@ -417,6 +417,31 @@ defmodule ElixirSense.SuggestionsTest do
            ] == list
   end
 
+  test "lists function with spec return values" do
+    buffer = """
+    defmodule SomeModule do
+      @spec count(atom) :: :ok | {:error, any}
+      def count(t) do
+
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 4, 6)
+      |> Enum.filter(fn s -> s.type == :return end)
+
+    assert [
+             %{description: ":ok", snippet: ":ok", spec: ":ok", type: :return},
+             %{
+               description: "{:error, any}",
+               snippet: "{:error, \"${1:any}$\"}",
+               spec: "{:error, any}",
+               type: :return
+             }
+           ] == list
+  end
+
   test "lists params and vars" do
     buffer = """
     defmodule MyServer do

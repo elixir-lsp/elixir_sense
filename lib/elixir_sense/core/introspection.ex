@@ -364,12 +364,14 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_returns_from_callback(module, func, arity) do
-    parts =
-      @wrapped_behaviours
-      |> Map.get(module, module)
-      |> get_callback_ast(func, arity)
-      |> Macro.prewalk(&drop_macro_env/1)
-      |> extract_spec_ast_parts
+    @wrapped_behaviours
+    |> Map.get(module, module)
+    |> get_callback_ast(func, arity)
+    |> get_returns_from_spec_ast
+  end
+
+  def get_returns_from_spec_ast(ast) do
+    parts = extract_spec_ast_parts(ast)
 
     for return <- parts.returns do
       ast = return |> strip_return_types()

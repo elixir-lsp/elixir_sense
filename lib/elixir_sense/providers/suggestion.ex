@@ -206,7 +206,7 @@ defmodule ElixirSense.Providers.Suggestion do
     callbacks_or_returns =
       case scope do
         {_f, _a} ->
-          find_returns(behaviours, protocol, hint, scope)
+          find_returns(behaviours, protocol, metadata_specs, hint, module, scope)
 
         _mod ->
           find_callbacks(behaviours, protocol, hint) ++ find_protocol_functions(protocol, hint)
@@ -438,19 +438,34 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.sort()
   end
 
-  @spec find_returns([module], nil | State.protocol_t(), String.t(), State.scope()) :: [return]
-  defp find_returns(behaviours, protocol, "", {fun, arity}) do
+  @spec find_returns(
+          [module],
+          nil | State.protocol_t(),
+          State.specs_t(),
+          String.t(),
+          module | nil,
+          State.scope()
+        ) :: [return]
+  defp find_returns(behaviours, protocol, specs, "", current_module, {fun, arity}) do
+    spec_returns =
+      case specs[{current_module, fun, arity}] do
+        nil ->
+          []
+
+        %State.SpecInfo{specs: info_specs} ->
+          for spec <- info_specs,
+              {:ok, {:@, _, [{_, _, [quoted]}]}} = Code.string_to_quoted(spec),
+              return <- Introspection.get_returns_from_spec_ast(quoted) do
+            format_return(return)
+          end
+      end
+
     callbacks =
       for mod <- behaviours,
           protocol == nil or mod != elem(protocol, 0),
           Introspection.define_callback?(mod, fun, arity),
           return <- Introspection.get_returns_from_callback(mod, fun, arity) do
-        %{
-          type: :return,
-          description: return.description,
-          spec: return.spec,
-          snippet: return.snippet
-        }
+        format_return(return)
       end
 
     protocol_functions =
@@ -458,12 +473,7 @@ defmodule ElixirSense.Providers.Suggestion do
         {proto, _implementations} ->
           if Introspection.define_callback?(proto, fun, arity) do
             for return <- Introspection.get_returns_from_callback(proto, fun, arity) do
-              %{
-                type: :return,
-                description: return.description,
-                spec: return.spec,
-                snippet: return.snippet
-              }
+              format_return(return)
             end
           else
             []
@@ -473,11 +483,20 @@ defmodule ElixirSense.Providers.Suggestion do
           []
       end
 
-    callbacks ++ protocol_functions
+    callbacks ++ protocol_functions ++ spec_returns
   end
 
-  defp find_returns(_behaviours, _protocol, _hint, _module) do
+  defp find_returns(_behaviours, _protocol, _specs, _hint, _current_module, _scope) do
     []
+  end
+
+  defp format_return(return) do
+    %{
+      type: :return,
+      description: return.description,
+      spec: return.spec,
+      snippet: return.snippet
+    }
   end
 
   @spec find_callbacks([module], nil | State.protocol_t(), String.t()) :: [callback]
