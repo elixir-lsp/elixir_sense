@@ -156,9 +156,49 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_func_docs_md(mod, fun) do
+    mod_str = inspect(mod)
+    fun_str = Atom.to_string(fun)
+
     case NormalizedCode.get_docs(mod, :docs) do
       nil ->
-        []
+        # no docs, fallback to typespecs
+        results =
+          for {_kind, {{_name, arity}, [params | _]}} <-
+                TypeInfo.get_function_specs(mod, fun) do
+            fun_args_text =
+              TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
+
+            text = "No documentation available"
+
+            "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity, :def)}#{
+              text
+            }"
+          end
+
+        case results do
+          [] ->
+            # no docs and notypespecs
+            # provide dummy docs basing on module_info(:exports)
+            for {f, arity} <- ModuleInfo.get_module_funs(mod),
+                f == fun do
+              fun_args_text =
+                if arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end)
+
+              text =
+                if {f, arity} in BuiltinFunctions.erlang_builtin_functions(mod) do
+                  "_* Built-in function_"
+                else
+                  "No documentation available"
+                end
+
+              "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{
+                get_spec_text(mod, fun, arity, :def)
+              }#{text}"
+            end
+
+          other ->
+            other
+        end
 
       docs ->
         for {{f, arity}, _, kind, args, text} <- docs, f == fun do
@@ -168,9 +208,6 @@ defmodule ElixirSense.Core.Introspection do
             args
             |> Enum.map_join(", ", &format_doc_arg(&1))
             |> String.replace("\\\\", "\\\\\\\\")
-
-          mod_str = inspect(mod)
-          fun_str = Atom.to_string(fun)
 
           "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity, kind)}#{
             text

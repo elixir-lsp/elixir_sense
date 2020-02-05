@@ -84,6 +84,78 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    test "retrieve fallback erlang function documentation" do
+      buffer = """
+      defmodule MyModule do
+        def func(list) do
+          :lists.flatten(list)
+        end
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 12)
+
+      assert subject == ":lists.flatten"
+      assert actual_subject == ":lists.flatten"
+
+      assert docs =~ """
+             > :lists.flatten(deepList)
+
+             ### Specs
+
+             ```
+             @spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]
+             ```
+
+             No documentation available
+             """
+    end
+
+    test "retrieve fallback erlang builtin function documentation" do
+      buffer = """
+      defmodule MyModule do
+        def func(list) do
+          :erlang.or(a, b)
+          :erlang.orelse(a, b)
+        end
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 14)
+
+      assert subject == ":erlang.or"
+      assert actual_subject == ":erlang.or"
+
+      assert docs =~ """
+             > :erlang.or(term, term)
+
+             No documentation available
+             """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 4, 14)
+
+      assert subject == ":erlang.orelse"
+      assert actual_subject == ":erlang.orelse"
+
+      assert docs =~ """
+             > :erlang.orelse(term, term)
+
+             _* Built-in function_
+             """
+    end
+
     test "retrieve macro documentation" do
       buffer = """
       defmodule MyModule do
