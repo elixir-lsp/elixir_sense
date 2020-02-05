@@ -521,6 +521,41 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    test "retrieve fallback erlang type documentation" do
+      buffer = """
+      defmodule MyModule do
+        alias ElixirSenseExample.ModuleWithTypespecs.Remote
+        @type my_list :: :erlang.time_unit
+        #                           ^
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 31)
+
+      assert subject == ":erlang.time_unit"
+      assert actual_subject == ":erlang.time_unit"
+
+      assert docs == """
+             No documentation available
+
+             ```
+             @type time_unit() ::
+               pos_integer()
+               | :second
+               | :millisecond
+               | :microsecond
+               | :nanosecond
+               | :native
+               | :perf_counter
+               | deprecated_time_unit()
+             ```
+             """
+    end
+
     test "retrieve builtin type documentation" do
       buffer = """
       defmodule MyModule do

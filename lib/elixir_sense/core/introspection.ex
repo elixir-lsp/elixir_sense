@@ -252,15 +252,26 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_type_docs_md(mod, fun, _scope) do
-    docs = TypeInfo.get_type_docs(mod, fun)
+    case TypeInfo.get_type_docs(mod, fun) do
+      [] ->
+        for {kind, {name, _type, args}} = typedef <- Typespec.get_types(mod),
+            name == fun,
+            kind in [:type, :opaque] do
+          spec = TypeInfo.format_type_spec(typedef)
+          text = "No documentation available"
 
-    for {{f, arity}, _, _, text} <- docs, f == fun do
-      spec =
-        mod
-        |> TypeInfo.get_type_spec(f, arity)
-        |> TypeInfo.format_type_spec()
+          format_type_doc_md(text, spec)
+        end
 
-      format_type_doc_md(text, spec)
+      docs ->
+        for {{f, arity}, _, _, text} <- docs, f == fun do
+          spec =
+            mod
+            |> TypeInfo.get_type_spec(f, arity)
+            |> TypeInfo.format_type_spec()
+
+          format_type_doc_md(text, spec)
+        end
     end
   end
 
