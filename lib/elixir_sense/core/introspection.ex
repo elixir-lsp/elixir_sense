@@ -224,7 +224,11 @@ defmodule ElixirSense.Core.Introspection do
         "> #{mod_str}\n\n" <> doc
 
       _ ->
-        "No documentation available\n"
+        if Code.ensure_loaded?(mod) do
+          "> #{mod_str}\n\n" <> "No documentation available\n"
+        else
+          "No documentation available\n"
+        end
     end
   end
 
@@ -254,7 +258,7 @@ defmodule ElixirSense.Core.Introspection do
   def get_type_docs_md(mod, fun, _scope) do
     case TypeInfo.get_type_docs(mod, fun) do
       [] ->
-        for {kind, {name, _type, args}} = typedef <- Typespec.get_types(mod),
+        for {kind, {name, _type, _args}} = typedef <- Typespec.get_types(mod),
             name == fun,
             kind in [:type, :opaque] do
           spec = TypeInfo.format_type_spec(typedef)

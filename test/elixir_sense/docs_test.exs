@@ -337,6 +337,29 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    test "retrieve fallback documentation from erlang modules" do
+      buffer = """
+      defmodule MyModule do
+        alias :erlang, as: Erl
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 2, 13)
+
+      assert subject == ":erlang"
+      assert actual_subject == ":erlang"
+
+      assert docs =~ """
+             > :erlang
+
+             No documentation available
+             """
+    end
+
     test "retrieve type information from modules" do
       buffer = """
       defmodule MyModule do
@@ -354,6 +377,23 @@ defmodule ElixirSense.DocsTest do
              ```
 
              Tuple describing the client of a call request.
+             """
+    end
+
+    test "retrieve fallback type information from erlang modules" do
+      buffer = """
+      defmodule MyModule do
+        alias :erlang, as: Erl
+      end
+      """
+
+      %{subject: subject, docs: %{types: docs}} = ElixirSense.docs(buffer, 2, 11)
+
+      assert subject == ":erlang"
+
+      assert docs =~ """
+             ```
+             @type time_unit ::\
              """
     end
 
@@ -421,6 +461,24 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    test "retrieve fallback callback information from erlang modules" do
+      buffer = """
+      defmodule MyModule do
+        use :gen_statem
+      end
+      """
+
+      %{subject: subject, docs: %{callbacks: docs}} = ElixirSense.docs(buffer, 2, 8)
+
+      assert subject == ":gen_statem"
+
+      assert docs =~ """
+             ```
+             @callback state_name(:enter, oldStateName :: state_name, data :: data) :: state_enter_result(:state_name)
+             ```\
+             """
+    end
+
     test "retrieve macrocallback information from modules" do
       buffer = """
       defmodule MyModule do
@@ -445,7 +503,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    test "no docs" do
+    test "existing module with no docs" do
       buffer = """
       defmodule MyModule do
         raise ArgumentError, "Error"
@@ -455,6 +513,19 @@ defmodule ElixirSense.DocsTest do
       %{subject: subject, docs: %{docs: docs}} = ElixirSense.docs(buffer, 2, 11)
 
       assert subject == "ArgumentError"
+      assert docs == "> ArgumentError\n\nNo documentation available\n"
+    end
+
+    test "not existing module docs" do
+      buffer = """
+      defmodule MyModule do
+        raise NotExistingError, "Error"
+      end
+      """
+
+      %{subject: subject, docs: %{docs: docs}} = ElixirSense.docs(buffer, 2, 11)
+
+      assert subject == "NotExistingError"
       assert docs == "No documentation available\n"
     end
 
