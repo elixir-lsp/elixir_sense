@@ -343,10 +343,12 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_types_with_docs(module) when is_atom(module) do
+    docs = NormalizedCode.get_docs(module, :type_docs) || []
+
     module
     |> Typespec.get_types()
-    |> Enum.map(fn {_, {t, _, _args}} = type ->
-      %{type: format_type(type), doc: TypeInfo.get_type_doc_desc(module, t)}
+    |> Enum.map(fn {_, {t, _, args}} = type ->
+      %{type: format_type(type), doc: TypeInfo.get_type_doc_desc(module, t, length(args), docs)}
     end)
   end
 

@@ -239,16 +239,16 @@ defmodule ElixirSense.Core.TypeInfo do
     |> Enum.at(0)
   end
 
-  def get_type_doc(module, type, type_n_args) do
-    docs = NormalizedCode.get_docs(module, :type_docs) || []
+  def get_type_doc(module, type, type_n_args, docs \\ nil) do
+    docs = docs || NormalizedCode.get_docs(module, :type_docs) || []
 
     Enum.find(docs, fn {{name, n_args}, _, _, _} ->
       type == name && type_n_args == n_args
     end)
   end
 
-  def get_type_doc_desc(module, type, type_n_args \\ 0) do
-    case get_type_doc(module, type, type_n_args) do
+  def get_type_doc_desc(module, type, type_n_args, docs \\ nil) do
+    case get_type_doc(module, type, type_n_args, docs) do
       nil -> BuiltinTypes.get_builtin_type_doc(type)
       doc -> get_doc_description(doc)
     end
