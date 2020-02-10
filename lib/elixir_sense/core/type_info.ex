@@ -135,7 +135,7 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   def get_type_position_using_docs(module, type_name, file) do
-    case get_type_doc(module, type_name) do
+    case get_type_doc(module, type_name, :any) do
       {_, doc_line, _, _} ->
         {kind, _} = get_type_spec(module, type_name)
         kind_str = "@#{kind}"
@@ -233,17 +233,11 @@ defmodule ElixirSense.Core.TypeInfo do
     |> Enum.sort_by(fn {{_, n_args}, _, _, _} -> n_args end)
   end
 
-  def get_type_doc(module, type_name) do
-    module
-    |> get_type_docs(type_name)
-    |> Enum.at(0)
-  end
-
   def get_type_doc(module, type, type_n_args, docs \\ nil) do
     docs = docs || NormalizedCode.get_docs(module, :type_docs) || []
 
     Enum.find(docs, fn {{name, n_args}, _, _, _} ->
-      type == name && type_n_args == n_args
+      type == name && (type_n_args == n_args || type_n_args == :any)
     end)
   end
 
