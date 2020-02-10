@@ -248,11 +248,11 @@ defmodule ElixirSense.Core.TypeInfo do
     end
   end
 
-  defp get_doc_description({{_, _}, _, _, desc}) do
+  defp get_doc_description({{_, _}, _, _, desc}) when is_binary(desc) do
     desc
   end
 
-  defp get_doc_description(nil) do
+  defp get_doc_description(_) do
     ""
   end
 
