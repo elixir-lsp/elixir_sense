@@ -85,13 +85,6 @@ defmodule ElixirSense.Core.Metadata do
     end
   end
 
-  def get_type_info(%__MODULE__{} = metadata, module, type) do
-    case Map.get(metadata.types, {module, type, nil}) do
-      nil -> %{lines: [], params: []}
-      info -> info
-    end
-  end
-
   def get_function_params(%__MODULE__{} = metadata, module, function) do
     params =
       metadata
