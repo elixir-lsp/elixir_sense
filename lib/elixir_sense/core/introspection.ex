@@ -1051,12 +1051,12 @@ defmodule ElixirSense.Core.Introspection do
     {nil, nil}
   end
 
-  defp find_kernel_function({nil, fun}) do
+  defp find_kernel_function({nil, fun}) when fun not in [:__info__, :module_info] do
     cond do
-      ModuleInfo.docs?(Kernel, fun) ->
+      ModuleInfo.has_function?(Kernel, fun) ->
         {Kernel, fun}
 
-      ModuleInfo.docs?(Kernel.SpecialForms, fun) ->
+      ModuleInfo.has_function?(Kernel.SpecialForms, fun) ->
         {Kernel.SpecialForms, fun}
 
       true ->

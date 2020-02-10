@@ -2,21 +2,6 @@ defmodule Alchemist.Helpers.ModuleInfo do
   @moduledoc false
 
   alias ElixirSense.Core.BuiltinFunctions
-  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
-
-  @spec moduledoc?(module) :: boolean
-  def moduledoc?(module) do
-    case NormalizedCode.get_docs(module, :moduledoc) do
-      {_, doc} -> is_binary(doc)
-      _ -> false
-    end
-  end
-
-  @spec docs?(module, atom) :: boolean
-  def docs?(module, function) do
-    docs = NormalizedCode.get_docs(module, :docs)
-    do_docs?(docs, function)
-  end
 
   @spec has_function?(module, atom) :: boolean
   def has_function?(module, function) do
@@ -55,19 +40,6 @@ defmodule Alchemist.Helpers.ModuleInfo do
       module
     end
   end
-
-  defp do_docs?([head | tail], function) do
-    {{func, _}, _, _, _, doc} = head
-
-    if func == function and is_binary(doc) do
-      true
-    else
-      do_docs?(tail, function)
-    end
-  end
-
-  defp do_docs?([], _function), do: false
-  defp do_docs?(nil, _function), do: false
 
   defp loaded_applications do
     # If we invoke :application.loaded_applications/0,
