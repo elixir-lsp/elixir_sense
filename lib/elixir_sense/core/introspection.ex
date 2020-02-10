@@ -347,6 +347,7 @@ defmodule ElixirSense.Core.Introspection do
 
     module
     |> Typespec.get_types()
+    |> Enum.filter(fn {kind, {_t, _, _args}} -> kind in [:type, :opaque] end)
     |> Enum.map(fn {_, {t, _, args}} = type ->
       %{type: format_type(type), doc: TypeInfo.get_type_doc_desc(module, t, length(args), docs)}
     end)
