@@ -211,6 +211,8 @@ end
 
 defmodule ElixirSenseExample.ExampleBehaviourWithDocCallback do
   @behaviour ElixirSenseExample.ExampleBehaviourWithDoc
+  @behaviour GenServer
+  @behaviour :gen_statem
 
   def foo(), do: :ok
 

@@ -132,9 +132,8 @@ defmodule ElixirSense.Core.Normalized.Code do
   end
 
   defp callback_documentation(module) do
-    module
-    |> get_docs(:callback_docs)
-    |> Stream.map(fn {name_arity, _line, _, doc} -> {name_arity, doc} end)
+    docs = get_docs(module, :callback_docs) || []
+    Stream.map(docs, fn {name_arity, _line, _, doc} -> {name_arity, doc} end)
   end
 
   defp behaviours(module) do
