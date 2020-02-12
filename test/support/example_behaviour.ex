@@ -205,6 +205,9 @@ defmodule ElixirSenseExample.ExampleBehaviourWithDoc do
   @doc "Docs for foo"
   @callback foo() :: :ok
 
+  @doc "Docs for baz"
+  @callback baz() :: :ok
+
   @doc "Docs for bar"
   @macrocallback bar() :: Macro.t()
 end
@@ -215,6 +218,9 @@ defmodule ElixirSenseExample.ExampleBehaviourWithDocCallback do
   @behaviour :gen_statem
 
   def foo(), do: :ok
+
+  @impl true
+  def baz(), do: :ok
 
   defmacro bar(), do: quote(do: :ok)
 end

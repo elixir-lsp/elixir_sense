@@ -100,16 +100,16 @@ defmodule ElixirSense.Core.Normalized.Code do
 
     non_documented =
       docs_from_module
-      |> Stream.filter(&match?({_name_arity, _line, _, _args, nil}, &1))
-      |> Enum.into(MapSet.new(), fn {name_arity, _line, _, _args, nil} -> name_arity end)
+      |> Stream.filter(fn {_name_arity, _line, _, _args, doc} -> doc in [nil, false] end)
+      |> Enum.into(MapSet.new(), fn {name_arity, _line, _, _args, _doc} -> name_arity end)
 
     docs_from_behaviours = get_docs_from_behaviour(module, non_documented)
 
     Enum.map(
       docs_from_module,
       fn
-        {name_arity, line, type, args, nil} ->
-          {name_arity, line, type, args, Map.get(docs_from_behaviours, name_arity)}
+        {name_arity, line, type, args, doc} ->
+          {name_arity, line, type, args, Map.get(docs_from_behaviours, name_arity, doc)}
 
         other ->
           other
