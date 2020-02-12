@@ -108,8 +108,8 @@ defmodule ElixirSense.Core.Normalized.Code do
     Enum.map(
       docs_from_module,
       fn
-        {name_arity, line, :def, args, nil} ->
-          {name_arity, line, :def, args, Map.get(docs_from_behaviours, name_arity)}
+        {name_arity, line, type, args, nil} ->
+          {name_arity, line, type, args, Map.get(docs_from_behaviours, name_arity)}
 
         other ->
           other

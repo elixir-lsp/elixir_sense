@@ -850,4 +850,28 @@ defmodule ElixirSense.DocsTest do
            Docs for foo
            """
   end
+
+  test "retrieve macro documentation from behaviour if available" do
+    buffer = """
+    defmodule MyModule do
+      import ElixirSenseExample.ExampleBehaviourWithDocCallback
+      bar()
+    end
+    """
+
+    %{
+      subject: subject,
+      actual_subject: actual_subject,
+      docs: %{docs: docs}
+    } = ElixirSense.docs(buffer, 3, 5)
+
+    assert subject == "bar"
+    assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallback.bar"
+
+    assert docs =~ """
+           > ElixirSenseExample.ExampleBehaviourWithDocCallback.bar()
+
+           Docs for bar
+           """
+  end
 end

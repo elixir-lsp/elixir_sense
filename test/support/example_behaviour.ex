@@ -204,10 +204,15 @@ end
 defmodule ElixirSenseExample.ExampleBehaviourWithDoc do
   @doc "Docs for foo"
   @callback foo() :: :ok
+
+  @doc "Docs for bar"
+  @macrocallback bar() :: Macro.t()
 end
 
 defmodule ElixirSenseExample.ExampleBehaviourWithDocCallback do
   @behaviour ElixirSenseExample.ExampleBehaviourWithDoc
 
   def foo(), do: :ok
+
+  defmacro bar(), do: quote(do: :ok)
 end
