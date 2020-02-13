@@ -34,10 +34,7 @@ defmodule ElixirSense.Core.Normalized.Code do
               {moduledoc_line, moduledoc_en}
 
             :docs ->
-              Enum.filter(
-                docs,
-                &match?({_, _, def_type, _, _} when def_type in [:def, :defmacro], &1)
-              )
+              get_fun_docs(module, docs)
 
             :callback_docs ->
               Enum.filter(
@@ -93,4 +90,55 @@ defmodule ElixirSense.Core.Normalized.Code do
   defp extract_docs(%{"en" => docs_en}), do: docs_en
   defp extract_docs(:hidden), do: false
   defp extract_docs(:none), do: nil
+
+  defp get_fun_docs(module, docs) do
+    docs_from_module =
+      Enum.filter(
+        docs,
+        &match?({_, _, def_type, _, _} when def_type in [:def, :defmacro], &1)
+      )
+
+    non_documented =
+      docs_from_module
+      |> Stream.filter(fn {_name_arity, _line, _, _args, doc} -> doc in [nil, false] end)
+      |> Enum.into(MapSet.new(), fn {name_arity, _line, _, _args, _doc} -> name_arity end)
+
+    docs_from_behaviours = get_docs_from_behaviour(module, non_documented)
+
+    Enum.map(
+      docs_from_module,
+      fn
+        {name_arity, line, type, args, doc} ->
+          {name_arity, line, type, args, Map.get(docs_from_behaviours, name_arity, doc)}
+
+        other ->
+          other
+      end
+    )
+  end
+
+  defp get_docs_from_behaviour(module, funs) do
+    if Enum.empty?(funs) do
+      # Small optimization to avoid needless analysis of behaviour modules if the collection of
+      # required functions is empty.
+      %{}
+    else
+      module
+      |> behaviours()
+      |> Stream.flat_map(&callback_documentation/1)
+      |> Stream.filter(fn {name_arity, _doc} -> Enum.member?(funs, name_arity) end)
+      |> Enum.into(%{})
+    end
+  end
+
+  defp callback_documentation(module) do
+    docs = get_docs(module, :callback_docs) || []
+    Stream.map(docs, fn {name_arity, _line, _, doc} -> {name_arity, doc} end)
+  end
+
+  defp behaviours(module) do
+    if function_exported?(module, :module_info, 1),
+      do: module.module_info(:attributes) |> Keyword.get_values(:behaviour) |> Enum.concat(),
+      else: []
+  end
 end

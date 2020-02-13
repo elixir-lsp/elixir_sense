@@ -826,4 +826,76 @@ defmodule ElixirSense.DocsTest do
                ElixirSense.docs(buffer, 8, 5)
     end
   end
+
+  test "retrieve function documentation from behaviour if available" do
+    buffer = """
+    defmodule MyModule do
+      import ElixirSenseExample.ExampleBehaviourWithDocCallback
+      foo()
+    end
+    """
+
+    %{
+      subject: subject,
+      actual_subject: actual_subject,
+      docs: %{docs: docs}
+    } = ElixirSense.docs(buffer, 3, 5)
+
+    assert subject == "foo"
+    assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallback.foo"
+
+    assert docs =~ """
+           > ElixirSenseExample.ExampleBehaviourWithDocCallback.foo()
+
+           Docs for foo
+           """
+  end
+
+  test "retrieve function documentation from behaviour even if @doc is set to false" do
+    buffer = """
+    defmodule MyModule do
+      import ElixirSenseExample.ExampleBehaviourWithDocCallback
+      baz()
+    end
+    """
+
+    %{
+      subject: subject,
+      actual_subject: actual_subject,
+      docs: %{docs: docs}
+    } = ElixirSense.docs(buffer, 3, 5)
+
+    assert subject == "baz"
+    assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallback.baz"
+
+    assert docs =~ """
+           > ElixirSenseExample.ExampleBehaviourWithDocCallback.baz()
+
+           Docs for baz
+           """
+  end
+
+  test "retrieve macro documentation from behaviour if available" do
+    buffer = """
+    defmodule MyModule do
+      import ElixirSenseExample.ExampleBehaviourWithDocCallback
+      bar()
+    end
+    """
+
+    %{
+      subject: subject,
+      actual_subject: actual_subject,
+      docs: %{docs: docs}
+    } = ElixirSense.docs(buffer, 3, 5)
+
+    assert subject == "bar"
+    assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallback.bar"
+
+    assert docs =~ """
+           > ElixirSenseExample.ExampleBehaviourWithDocCallback.bar()
+
+           Docs for bar
+           """
+  end
 end

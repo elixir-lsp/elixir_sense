@@ -200,3 +200,27 @@ defmodule ElixirSenseExample.ExampleBehaviour do
     :ok
   end
 end
+
+defmodule ElixirSenseExample.ExampleBehaviourWithDoc do
+  @doc "Docs for foo"
+  @callback foo() :: :ok
+
+  @doc "Docs for baz"
+  @callback baz() :: :ok
+
+  @doc "Docs for bar"
+  @macrocallback bar() :: Macro.t()
+end
+
+defmodule ElixirSenseExample.ExampleBehaviourWithDocCallback do
+  @behaviour ElixirSenseExample.ExampleBehaviourWithDoc
+  @behaviour GenServer
+  @behaviour :gen_statem
+
+  def foo(), do: :ok
+
+  @impl true
+  def baz(), do: :ok
+
+  defmacro bar(), do: quote(do: :ok)
+end
