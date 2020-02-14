@@ -20,7 +20,13 @@ defmodule ElixirSense.Core.TypeInfo do
           type_ast = TypeAst.from_typedef(typedef),
           spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
           signature = TypeAst.extract_signature(type_ast),
-          info = %{name: name, arity: arity, doc: Introspection.extract_summary_from_docs(doc), spec: spec, signature: signature},
+          info = %{
+            name: name,
+            arity: arity,
+            doc: Introspection.extract_summary_from_docs(doc),
+            spec: spec,
+            signature: signature
+          },
           filter.(info)
         ) do
           info
