@@ -27,6 +27,7 @@ defmodule ElixirSense.Core.Introspection do
   alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.BuiltinTypes
+  alias ElixirSense.Core.EdocReader
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.State
@@ -100,16 +101,22 @@ defmodule ElixirSense.Core.Introspection do
         end
 
       nil ->
+        edoc_results =
+          EdocReader.get_docs(mod, fun)
+          |> Map.new(fn {{:function, ^fun, arity}, _, _, maybe_doc, _} ->
+            {arity, EdocReader.extract_docs(maybe_doc) |> extract_summary_from_docs}
+          end)
+
         # We are not expecting macros here
         results =
-          for {_kind, {{_name, _arity}, [params | _]}} = spec <-
+          for {_kind, {{_name, arity}, [params | _]}} = spec <-
                 TypeInfo.get_function_specs(mod, fun) do
             params = TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
 
             %{
               name: Atom.to_string(fun),
               params: params,
-              documentation: "No documentation available",
+              documentation: edoc_results[arity] || "",
               spec: spec |> spec_to_string
             }
           end
@@ -125,7 +132,7 @@ defmodule ElixirSense.Core.Introspection do
               %{
                 name: Atom.to_string(fun),
                 params: dummy_params,
-                documentation: "No documentation available",
+                documentation: edoc_results[a] || "",
                 spec: ""
               }
             end
@@ -161,6 +168,12 @@ defmodule ElixirSense.Core.Introspection do
 
     case NormalizedCode.get_docs(mod, :docs) do
       nil ->
+        edoc_results =
+          EdocReader.get_docs(mod, fun)
+          |> Map.new(fn {{:function, ^fun, arity}, _, _, maybe_doc, _} ->
+            {arity, EdocReader.extract_docs(maybe_doc)}
+          end)
+
         # no docs, fallback to typespecs
         results =
           for {_kind, {{_name, arity}, [params | _]}} <-
@@ -168,7 +181,7 @@ defmodule ElixirSense.Core.Introspection do
             fun_args_text =
               TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
 
-            text = "No documentation available"
+            text = edoc_results[arity] || "No documentation available"
 
             "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity, :def)}#{
               text
@@ -188,7 +201,7 @@ defmodule ElixirSense.Core.Introspection do
                 if {f, arity} in BuiltinFunctions.erlang_builtin_functions(mod) do
                   "_* Built-in function_"
                 else
-                  "No documentation available"
+                  edoc_results[arity] || "No documentation available"
                 end
 
               "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{
@@ -224,10 +237,16 @@ defmodule ElixirSense.Core.Introspection do
         "> #{mod_str}\n\n" <> doc
 
       _ ->
-        if Code.ensure_loaded?(mod) do
-          "> #{mod_str}\n\n" <> "No documentation available\n"
-        else
-          "No documentation available\n"
+        case EdocReader.get_moduledoc(mod) do
+          [doc] ->
+            "> #{mod_str}\n\n" <> EdocReader.extract_docs(doc)
+
+          _ ->
+            if Code.ensure_loaded?(mod) do
+              "> #{mod_str}\n\n" <> "No documentation available\n"
+            else
+              "No documentation available\n"
+            end
         end
     end
   end
@@ -258,11 +277,18 @@ defmodule ElixirSense.Core.Introspection do
   def get_type_docs_md(mod, fun, _scope) do
     case TypeInfo.get_type_docs(mod, fun) do
       [] ->
-        for {kind, {name, _type, _args}} = typedef <- Typespec.get_types(mod),
+        edoc_results =
+          EdocReader.get_typedocs(mod, fun)
+          |> Map.new(fn {{:type, ^fun, arity}, _, _, maybe_doc, _} ->
+            {arity, EdocReader.extract_docs(maybe_doc)}
+          end)
+
+        for {kind, {name, _type, args}} = typedef <- Typespec.get_types(mod),
             name == fun,
             kind in [:type, :opaque] do
           spec = TypeInfo.format_type_spec(typedef)
-          text = "No documentation available"
+
+          text = edoc_results[length(args)] || "No documentation available"
 
           format_type_doc_md(text, spec)
         end
@@ -343,19 +369,34 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_types_with_docs(module) when is_atom(module) do
-    docs = NormalizedCode.get_docs(module, :type_docs) || []
+    docs = NormalizedCode.get_docs(module, :type_docs)
+
+    edocs =
+      if docs == nil do
+        EdocReader.get_typedocs(module)
+        |> Map.new(fn {{:type, fun, arity}, _, _, maybe_doc, _} ->
+          {{fun, arity}, EdocReader.extract_docs(maybe_doc)}
+        end)
+      end
 
     module
     |> Typespec.get_types()
     |> Enum.filter(fn {kind, {_t, _, _args}} -> kind in [:type, :opaque] end)
     |> Enum.map(fn {_, {t, _, args}} = type ->
-      %{type: format_type(type), doc: TypeInfo.get_type_doc_desc(module, t, length(args), docs)}
+      doc =
+        if edocs != nil do
+          edocs[{t, length(args)}]
+        else
+          TypeInfo.get_type_doc_desc(module, t, length(args), docs)
+        end
+
+      %{type: format_type(type), doc: doc}
     end)
   end
 
   def extract_summary_from_docs(doc) when doc in [nil, "", false], do: ""
 
-  def extract_summary_from_docs(doc) do
+  def extract_summary_from_docs(doc) when is_binary(doc) do
     doc
     |> String.split("\n\n")
     |> Enum.at(0)
@@ -506,6 +547,9 @@ defmodule ElixirSense.Core.Introspection do
       |> Map.get(mod, mod)
       |> NormalizedCode.get_docs(:callback_docs)
 
+    # no fallback here as :docsh does not seem to support callbacks
+    # TODO report isse and link here
+
     {callbacks, docs || []}
   end
 
@@ -624,8 +668,18 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_module_docs_summary(module) do
     case NormalizedCode.get_docs(module, :moduledoc) do
-      {_, doc} -> extract_summary_from_docs(doc)
-      _ -> ""
+      {_, doc} ->
+        extract_summary_from_docs(doc)
+
+      _ ->
+        case EdocReader.get_moduledoc(module) do
+          [doc] ->
+            EdocReader.extract_docs(doc)
+            |> extract_summary_from_docs
+
+          _ ->
+            ""
+        end
     end
   end
 
@@ -690,18 +744,14 @@ defmodule ElixirSense.Core.Introspection do
     module_has_function(module, :__struct__, 0)
   end
 
-  def extract_fun_args_and_desc({{_fun, _}, _line, _kind, args, doc}) do
-    formatted_args =
-      (args || [])
-      |> Enum.map_join(", ", &format_doc_arg(&1))
-      |> String.replace(Regex.recompile!(~r/\s+/), " ")
-
-    desc = extract_summary_from_docs(doc)
-    {formatted_args, desc}
+  def extract_fun_args({{_fun, _}, _line, _kind, args, _doc}) do
+    (args || [])
+    |> Enum.map_join(", ", &format_doc_arg(&1))
+    |> String.replace(Regex.recompile!(~r/\s+/), " ")
   end
 
-  def extract_fun_args_and_desc(nil) do
-    {"", ""}
+  def extract_fun_args(_) do
+    ""
   end
 
   def get_spec_as_string(module, function, arity, :defmacro) do
@@ -728,11 +778,17 @@ defmodule ElixirSense.Core.Introspection do
     docs = NormalizedCode.get_docs(module, :docs) || []
     specs = TypeInfo.get_module_specs(module)
 
-    for {{f, a}, _line, func_kind, _sign, doc} = func_doc <- docs, doc != false, into: %{} do
+    for {{f, a}, _line, func_kind, args, doc} <- docs, doc != false, into: %{} do
       spec = Map.get(specs, {f, a})
-      {fun_args, desc} = extract_fun_args_and_desc(func_doc)
 
-      {{f, a}, {func_kind, fun_args, desc, spec_to_string(spec)}}
+      formatted_args =
+        (args || [])
+        |> Enum.map_join(", ", &format_doc_arg(&1))
+        |> String.replace(Regex.recompile!(~r/\s+/), " ")
+
+      desc = extract_summary_from_docs(doc)
+
+      {{f, a}, {func_kind, formatted_args, desc, spec_to_string(spec)}}
     end
   end
 

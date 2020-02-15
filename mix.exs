@@ -23,7 +23,7 @@ defmodule ElixirSense.Mixfile do
   end
 
   def application do
-    [applications: [:logger, :mix]]
+    [applications: [:logger, :mix, :edoc, :docsh]]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -34,7 +34,8 @@ defmodule ElixirSense.Mixfile do
       {:excoveralls, "~> 0.6", only: :test},
       {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false},
       {:credo, "~> 1.0", only: [:dev]},
-      {:ex_doc, "~> 0.14", only: [:dev]}
+      {:ex_doc, "~> 0.14", only: [:dev]},
+      {:docsh, "~> 0.7.2"}
     ]
   end
 

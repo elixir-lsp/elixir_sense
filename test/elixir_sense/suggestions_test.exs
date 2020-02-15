@@ -1699,6 +1699,21 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.doc == "Remote type with params"
     end
 
+    test "remote erlang type with edoc" do
+      buffer = "Local.func_with_edoc_options("
+      suggestion = suggestion_by_name(:edoc_t, buffer)
+
+      assert suggestion.type_spec ==
+               ":docsh_edoc_xmerl.xml_element_content()"
+
+      assert suggestion.origin == ":docsh_edoc_xmerl"
+
+      assert suggestion.expanded_spec ==
+               "@type xml_element_content() :: [\n  record(:xmlElement)\n  | record(:xmlText)\n  | record(:xmlPI)\n  | record(:xmlComment)\n  | record(:xmlDecl)\n]"
+
+      assert suggestion.doc == "#xmlElement.content as defined by xmerl.hrl.\n\n"
+    end
+
     test "remote aliased type" do
       buffer = "Local.func_with_options("
       suggestion = suggestion_by_name(:remote_aliased_o, buffer)
@@ -1923,7 +1938,7 @@ defmodule ElixirSense.SuggestionsTest do
       assert [
                %{
                  arity: 0,
-                 doc: "No documentation available",
+                 doc: "",
                  name: :timestamp,
                  origin: ":erlang",
                  signature: "timestamp()",
@@ -1933,12 +1948,31 @@ defmodule ElixirSense.SuggestionsTest do
                },
                %{
                  arity: 0,
-                 doc: "No documentation available",
+                 doc: "",
                  name: :time_unit,
                  origin: ":erlang",
                  signature: "time_unit()",
                  spec:
                    "@type time_unit() ::\n  pos_integer()\n  | :second\n  | :millisecond\n  | :microsecond\n  | :nanosecond\n  | :native\n  | :perf_counter\n  | deprecated_time_unit()",
+                 type: :type_spec
+               }
+             ] == suggestions
+    end
+
+    test "erlang types edoc" do
+      buffer = "@type my_type :: :docsh_edoc_xmerl.xml_element_con"
+
+      suggestions = suggestions_by_type(:type_spec, buffer)
+
+      assert [
+               %{
+                 arity: 0,
+                 doc: "#xmlElement.content as defined by xmerl.hrl.",
+                 name: :xml_element_content,
+                 origin: ":docsh_edoc_xmerl",
+                 signature: "xml_element_content()",
+                 spec:
+                   "@type xml_element_content() :: [\n  record(:xmlElement)\n  | record(:xmlText)\n  | record(:xmlPI)\n  | record(:xmlComment)\n  | record(:xmlDecl)\n]",
                  type: :type_spec
                }
              ] == suggestions

@@ -2,6 +2,7 @@ defmodule ElixirSense.Core.TypeInfo do
   @moduledoc false
 
   alias ElixirSense.Core.BuiltinTypes
+  alias ElixirSense.Core.EdocReader
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Normalized.Typespec
@@ -33,6 +34,13 @@ defmodule ElixirSense.Core.TypeInfo do
         end
 
       nil ->
+        edoc_results =
+          EdocReader.get_typedocs(module)
+          |> Map.new(fn {{:type, fun, arity}, _, _, maybe_doc, _} ->
+            {{fun, arity},
+             EdocReader.extract_docs(maybe_doc) |> Introspection.extract_summary_from_docs()}
+          end)
+
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(module),
             kind in [:type, :opaque],
             spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
@@ -41,7 +49,7 @@ defmodule ElixirSense.Core.TypeInfo do
             info = %{
               name: name,
               arity: length(args),
-              doc: "No documentation available",
+              doc: edoc_results[{name, length(args)}] || "",
               spec: spec,
               signature: signature
             },
@@ -69,6 +77,13 @@ defmodule ElixirSense.Core.TypeInfo do
         end
 
       nil ->
+        edoc_results =
+          EdocReader.get_typedocs(mod, type)
+          |> Map.new(fn {{:type, ^type, arity}, _, _, maybe_doc, _} ->
+            {arity,
+             EdocReader.extract_docs(maybe_doc) |> Introspection.extract_summary_from_docs()}
+          end)
+
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(mod),
             name == type,
             kind in [:type, :opaque] do
@@ -77,7 +92,7 @@ defmodule ElixirSense.Core.TypeInfo do
           %{
             name: Atom.to_string(name),
             params: type_args,
-            documentation: "No documentation available",
+            documentation: edoc_results[length(args)] || "",
             spec: type_spec_to_string(typedef)
           }
         end
@@ -340,10 +355,19 @@ defmodule ElixirSense.Core.TypeInfo do
         "#{inspect(mod)}.#{type_str(type)}"
       end
 
+    docs =
+      case EdocReader.get_typedocs(module, name, n_args) do
+        [{_, _, _, maybe_doc, _}] ->
+          EdocReader.extract_docs(maybe_doc)
+
+        _ ->
+          get_type_doc_desc(module, name, n_args)
+      end
+
     %{
       origin: inspect(module),
       type_spec: type_spec,
-      doc: get_type_doc_desc(module, name, n_args),
+      doc: docs,
       expanded_spec:
         expanded_type |> format_type_spec(line_length: @param_option_spec_line_length)
     }

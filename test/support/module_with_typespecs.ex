@@ -173,5 +173,10 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
 
     @spec fun_with_remote_opaque([Remote.some_opaque_options_t()]) :: any
     def fun_with_remote_opaque(a), do: a
+
+    @spec func_with_edoc_options([{:edoc_t, :docsh_edoc_xmerl.xml_element_content()}]) :: any
+    def func_with_edoc_options(options) do
+      options
+    end
   end
 end

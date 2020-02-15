@@ -13,6 +13,20 @@ defmodule Alchemist.Helpers.CompleteTest do
              {:yes, 'ib', [%{name: "zlib", subtype: nil, summary: "", type: :module}]}
   end
 
+  test "erlang module completion edoc" do
+    assert expand(':edoc_wi') ==
+             {:yes, 'ki',
+              [
+                %{
+                  name: "edoc_wiki",
+                  subtype: nil,
+                  summary:
+                    "EDoc wiki expansion, parsing and postprocessing of XML text.\nUses XMerL.",
+                  type: :module
+                }
+              ]}
+  end
+
   test "erlang module no completion" do
     assert expand(':unknown') == {:no, '', []}
     assert expand('Enum:') == {:no, '', []}
@@ -24,6 +38,7 @@ defmodule Alchemist.Helpers.CompleteTest do
     assert list |> Enum.find(&(&1.name == "user_drv"))
   end
 
+  # TODO this is very slow
   test "erlang root completion" do
     {:yes, '', list} = expand(':')
     assert is_list(list)
@@ -854,12 +869,12 @@ defmodule Alchemist.Helpers.CompleteTest do
                 name: "or",
                 spec: "",
                 type: :function,
-                args: "",
+                args: "term, term",
                 origin: ":erlang",
                 summary: ""
               },
               %{
-                args: "",
+                args: "term, term",
                 arity: 2,
                 name: "orelse",
                 origin: ":erlang",
@@ -876,12 +891,12 @@ defmodule Alchemist.Helpers.CompleteTest do
                 name: "and",
                 spec: "",
                 type: :function,
-                args: "",
+                args: "term, term",
                 origin: ":erlang",
                 summary: ""
               },
               %{
-                args: "",
+                args: "term, term",
                 arity: 2,
                 name: "andalso",
                 origin: ":erlang",
@@ -929,5 +944,33 @@ defmodule Alchemist.Helpers.CompleteTest do
                 summary: ""
               }
             ]} = expand(':erlang.cancel_time')
+  end
+
+  test "profide specs for erlang functions edoc" do
+    assert {
+             :yes,
+             '',
+             [
+               %{
+                 args: "term",
+                 arity: 1,
+                 name: "files",
+                 origin: ":edoc",
+                 spec: "",
+                 summary: "",
+                 type: :function
+               },
+               %{
+                 args: "term, term",
+                 arity: 2,
+                 name: "files",
+                 origin: ":edoc",
+                 spec: "",
+                 summary:
+                   "Runs EDoc on a given set of source files. See run/2 for\ndetails, including options.",
+                 type: :function
+               }
+             ]
+           } = expand(':edoc.files')
   end
 end
