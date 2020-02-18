@@ -197,6 +197,7 @@ defmodule ElixirSense.Core.State do
     @type t :: %ModFunInfo{
             params: list(list(term)),
             positions: list(ElixirSense.Core.State.position_t()),
+            target: nil | {module, atom},
             # TODO defmodule defprotocol defimpl?
             type:
               :def
@@ -211,6 +212,7 @@ defmodule ElixirSense.Core.State do
 
     defstruct params: [],
               positions: [],
+              target: nil,
               type: :def
 
     def get_arities(%ModFunInfo{params: params_variants}) do
@@ -344,22 +346,43 @@ defmodule ElixirSense.Core.State do
     end)
   end
 
-  def add_mod_fun_to_position(%__MODULE__{} = state, {module, fun, arity}, position, params, type) do
+  def add_mod_fun_to_position(
+        %__MODULE__{} = state,
+        {module, fun, arity},
+        position,
+        params,
+        type,
+        options \\ []
+      ) do
     current_info = Map.get(state.mods_funs_to_positions, {module, fun, arity}, %{})
     current_params = current_info |> Map.get(:params, [])
     current_positions = current_info |> Map.get(:positions, [])
     new_params = [params | current_params]
     new_positions = [position | current_positions]
 
-    mods_funs_to_positions =
-      Map.put(state.mods_funs_to_positions, {module, fun, arity}, %ModFunInfo{
-        positions: new_positions,
-        params: new_params,
-        type: type
-      })
+    info = %ModFunInfo{
+      positions: new_positions,
+      params: new_params,
+      type: type
+    }
+
+    info = process_options(state, info, type, options)
+
+    mods_funs_to_positions = Map.put(state.mods_funs_to_positions, {module, fun, arity}, info)
 
     %__MODULE__{state | mods_funs_to_positions: mods_funs_to_positions}
   end
+
+  defp process_options(state, info, :defdelegate,
+         target: {target_module_expression, target_function}
+       ) do
+    %ModFunInfo{
+      info
+      | target: {expand_alias(state, target_module_expression), target_function}
+    }
+  end
+
+  defp process_options(_state, info, _type, _options), do: info
 
   @dot_marker "(__dot__)"
   @or_marker "(__or__)"
@@ -524,15 +547,15 @@ defmodule ElixirSense.Core.State do
     add_mod_fun_to_position(state, {module, nil, nil}, position, nil, :defmodule)
   end
 
-  def add_func_to_index(%__MODULE__{} = state, func, params, position, type) do
+  def add_func_to_index(%__MODULE__{} = state, func, params, position, type, options \\ []) do
     current_module_variants = get_current_module_variants(state)
     arity = length(params)
 
     current_module_variants
     |> Enum.reduce(state, fn variant, acc ->
       acc
-      |> add_mod_fun_to_position({variant, func, arity}, position, params, type)
-      |> add_mod_fun_to_position({variant, func, nil}, position, params, type)
+      |> add_mod_fun_to_position({variant, func, arity}, position, params, type, options)
+      |> add_mod_fun_to_position({variant, func, nil}, position, params, type, options)
     end)
   end
 

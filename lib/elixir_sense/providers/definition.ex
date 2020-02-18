@@ -107,7 +107,32 @@ defmodule ElixirSense.Providers.Definition do
          current_module,
          imports,
          aliases,
-         metadata_types
+         metadata_types,
+         visited \\ []
+       ) do
+    if {module, function} in visited do
+      %Location{found: false}
+    else
+      do_find_function_or_module(
+        {module, function},
+        mods_funs_to_positions,
+        current_module,
+        imports,
+        aliases,
+        metadata_types,
+        [{module, function} | visited]
+      )
+    end
+  end
+
+  defp do_find_function_or_module(
+         {module, function},
+         mods_funs_to_positions,
+         current_module,
+         imports,
+         aliases,
+         metadata_types,
+         visited
        ) do
     case {module, function}
          |> Introspection.actual_mod_fun(
@@ -136,6 +161,17 @@ defmodule ElixirSense.Providers.Definition do
               line: line,
               column: column
             }
+
+          %ModFunInfo{type: :defdelegate, target: target} ->
+            find_function_or_module(
+              target,
+              mods_funs_to_positions,
+              current_module,
+              imports,
+              aliases,
+              metadata_types,
+              visited
+            )
 
           %ModFunInfo{positions: positions} = mi ->
             # for simplicity take last position here as positions are reversed

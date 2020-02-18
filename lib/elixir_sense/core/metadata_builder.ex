@@ -183,10 +183,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
     post_module(ast, state, module)
   end
 
-  defp pre_func({type, _, _} = ast, state, %{line: line, col: col}, name, params) do
+  defp pre_func({type, _, _} = ast, state, %{line: line, col: col}, name, params, options \\ [])
+       when is_atom(name) do
     state
     |> new_named_func(name, length(params || []))
-    |> add_func_to_index(name, params || [], {line, col}, type)
+    |> add_func_to_index(name, params || [], {line, col}, type, options)
     |> new_alias_scope
     |> new_import_scope
     |> new_require_scope
@@ -389,11 +390,40 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_protocol_implementation(ast, state, {line, column}, protocol, impl_args)
   end
 
+  defp pre(
+         {:defdelegate, meta, [{name, [line: line, column: column] = meta2, params}, body]},
+         state
+       )
+       when is_atom(name) do
+    ast_without_params = {:defdelegate, meta, [{name, add_no_call(meta2), []}, body]}
+    target_module = body |> Keyword.get(:to)
+
+    target_function =
+      case body |> Keyword.get(:as) do
+        nil -> {:ok, name}
+        {as, _, nil} when is_atom(as) -> {:ok, as}
+        _ -> :error
+      end
+
+    options =
+      with {:ok, mod} <- split_module_expression(state, target_module),
+           {:ok, target_function} <- target_function do
+        [target: {mod, target_function}]
+      else
+        _ -> []
+      end
+
+    pre_func(ast_without_params, state, %{line: line, col: column}, name, params, options)
+  end
+
   defp pre({def_name, meta, [{:when, _, [head | _]}, body]}, state) when def_name in @defs do
     pre({def_name, meta, [head, body]}, state)
   end
 
-  defp pre({def_name, meta, [{name, [line: line, column: column] = meta2, params}, body]}, state)
+  defp pre(
+         {def_name, meta, [{name, [line: line, column: column] = meta2, params}, body]},
+         state
+       )
        when def_name in @defs and is_atom(name) do
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, body]}
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
@@ -413,15 +443,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
   end
 
-  # protocol function
+  # function head
   defp pre({def_name, meta, [{name, [line: line, column: column] = meta2, params}]}, state)
-       when def_name == :def do
+       when def_name in @defs and is_atom(name) do
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, nil]}
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
-  end
-
-  defp pre({def_name, _meta, _} = ast, state) when def_name in @defs do
-    {ast, state}
   end
 
   defp pre(
@@ -625,8 +651,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
         aliases_tuples =
           aliases
           |> Enum.map(fn
-            {:__aliases__, _, mods} -> {Module.concat(mods), prefix_atoms ++ mods}
-            mod when is_atom(mod) -> {mod, prefix_atoms ++ [mod]}
+            {:__aliases__, _, mods} -> {Module.concat(mods), List.wrap(prefix_atoms) ++ mods}
+            mod when is_atom(mod) -> {mod, List.wrap(prefix_atoms) ++ [mod]}
           end)
 
         pre_alias(ast, state, line, aliases_tuples)
@@ -1079,7 +1105,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         for expression <- expressions do
           case split_module_expression(state, expression) do
             {:ok, suffix_atoms} ->
-              prefix_atoms ++ suffix_atoms
+              List.wrap(prefix_atoms) ++ List.wrap(suffix_atoms)
 
             :error ->
               :error
@@ -1100,7 +1126,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
      end}
   end
 
-  defp split_module_expression(_state, mod) when is_atom(mod), do: {:ok, [mod]}
+  defp split_module_expression(_state, mod) when is_atom(mod), do: {:ok, mod}
 
   defp split_module_expression(state, {:__MODULE__, _, nil}),
     do: {:ok, [state |> get_current_module]}

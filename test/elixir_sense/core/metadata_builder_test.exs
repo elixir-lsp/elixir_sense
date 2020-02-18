@@ -2340,7 +2340,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         end
         defguard is_even(value) when is_integer(value) and rem(value, 2) == 0
         defguardp is_evenp(value) when is_integer(value) and rem(value, 2) == 0
-        defdelegate func_delegated(par), to: OtherModule
+
         defmodule Nested do
         end
       end
@@ -2357,16 +2357,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[]],
                positions: [{4, 7}],
                type: :def
-             },
-             {MyModuleWithFuns, :func_delegated, 1} => %ModFunInfo{
-               params: [[{:par, [line: 18, column: 30], nil}]],
-               positions: [{18, 15}],
-               type: :defdelegate
-             },
-             {MyModuleWithFuns, :func_delegated, nil} => %ModFunInfo{
-               params: [[{:par, [line: 18, column: 30], nil}]],
-               positions: [{18, 15}],
-               type: :defdelegate
              },
              {MyModuleWithFuns, :funcp, 0} => %ModFunInfo{
                params: [[]],
@@ -2509,6 +2499,71 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: :def
              }
            } == state.mods_funs_to_positions
+  end
+
+  test "registers delegated func" do
+    state =
+      """
+      defmodule MyModuleWithFuns do
+        alias Enum, as: E
+        defdelegate func_delegated(par), to: OtherModule
+        defdelegate func_delegated_erlang(par), to: :erlang_module
+        defdelegate func_delegated_as(par), to: __MODULE__.Sub, as: my_func
+        defdelegate func_delegated_alias(par), to: E
+      end
+      """
+      |> string_to_state
+
+    assert %{
+             {MyModuleWithFuns, :func_delegated, 1} => %ModFunInfo{
+               params: [[{:par, [line: 3, column: 30], nil}]],
+               positions: [{3, 15}],
+               target: {OtherModule, :func_delegated},
+               type: :defdelegate
+             },
+             {MyModuleWithFuns, :func_delegated, nil} => %ModFunInfo{
+               params: [[{:par, [line: 3, column: 30], nil}]],
+               positions: [{3, 15}],
+               target: {OtherModule, :func_delegated},
+               type: :defdelegate
+             },
+             {MyModuleWithFuns, :func_delegated_alias, 1} => %ModFunInfo{
+               params: [[{:par, [line: 6, column: 36], nil}]],
+               positions: [{6, 15}],
+               target: {Enum, :func_delegated_alias},
+               type: :defdelegate
+             },
+             {MyModuleWithFuns, :func_delegated_alias, nil} => %ModFunInfo{
+               params: [[{:par, [line: 6, column: 36], nil}]],
+               positions: [{6, 15}],
+               target: {Enum, :func_delegated_alias},
+               type: :defdelegate
+             },
+             {MyModuleWithFuns, :func_delegated_as, 1} => %ModFunInfo{
+               params: [[{:par, [line: 5, column: 33], nil}]],
+               positions: [{5, 15}],
+               target: {MyModuleWithFuns.Sub, :my_func},
+               type: :defdelegate
+             },
+             {MyModuleWithFuns, :func_delegated_as, nil} => %ModFunInfo{
+               params: [[{:par, [line: 5, column: 33], nil}]],
+               positions: [{5, 15}],
+               target: {MyModuleWithFuns.Sub, :my_func},
+               type: :defdelegate
+             },
+             {MyModuleWithFuns, :func_delegated_erlang, 1} => %ModFunInfo{
+               params: [[{:par, [line: 4, column: 37], nil}]],
+               positions: [{4, 15}],
+               target: {:erlang_module, :func_delegated_erlang},
+               type: :defdelegate
+             },
+             {MyModuleWithFuns, :func_delegated_erlang, nil} => %ModFunInfo{
+               params: [[{:par, [line: 4, column: 37], nil}]],
+               positions: [{4, 15}],
+               target: {:erlang_module, :func_delegated_erlang},
+               type: :defdelegate
+             }
+           } = state.mods_funs_to_positions
   end
 
   test "registers mods and func for protocols" do
