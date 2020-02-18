@@ -633,6 +633,27 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
   end
 
+  test "vars as a struct type" do
+    state =
+      """
+      defmodule MyModule do
+        def func(%my_var{}, %_my_other{}, %_{}, x) do
+          %abc{} = x
+          IO.puts ""
+        end
+      end
+      """
+      |> string_to_state
+
+    vars = state |> get_line_vars(4)
+
+    assert vars == [
+             %VarInfo{is_definition: false, name: :abc, positions: [{3, 6}], scope_id: 3},
+             %VarInfo{is_definition: false, name: :my_var, positions: [{2, 13}], scope_id: 2},
+             %VarInfo{is_definition: false, name: :x, positions: [{2, 43}, {3, 14}], scope_id: 3}
+           ]
+  end
+
   test "aliases" do
     state =
       """
