@@ -158,11 +158,33 @@ defmodule ElixirSense.SignatureTest do
                active_param: 0,
                signatures: [
                  %{
-                   documentation: "No documentation available",
+                   documentation: "",
                    name: "time_unit",
                    params: [],
                    spec:
                      "@type time_unit :: pos_integer | :second | :millisecond | :microsecond | :nanosecond | :native | :perf_counter | deprecated_time_unit"
+                 }
+               ]
+             }
+    end
+
+    test "find type signatures from erlang module edoc" do
+      code = """
+      defmodule MyModule do
+        @type a :: :docsh_edoc_xmerl.xml_element_content(
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 52) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "#xmlElement.content as defined by xmerl.hrl.",
+                   name: "xml_element_content",
+                   params: '',
+                   spec:
+                     "@type xml_element_content :: [record(:xmlElement) | record(:xmlText) | record(:xmlPI) | record(:xmlComment) | record(:xmlDecl)]"
                  }
                ]
              }
@@ -249,18 +271,41 @@ defmodule ElixirSense.SignatureTest do
                pipe_before: false,
                signatures: [
                  %{
-                   documentation: "No documentation available",
+                   documentation: "",
                    name: "flatten",
                    params: ["deepList"],
                    spec:
                      "@spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]"
                  },
                  %{
-                   documentation: "No documentation available",
+                   documentation: "",
                    name: "flatten",
                    params: ["deepList", "tail"],
                    spec:
                      "@spec flatten(deepList, tail) :: list when deepList: [term | deepList], tail: [term], list: [term]"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures from erlang module edoc" do
+      code = """
+      defmodule MyModule do
+        :edoc.file(
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 14) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{documentation: "", name: "file", params: ["term"], spec: ""},
+                 %{
+                   documentation:
+                     "Reads a source code file and outputs formatted documentation to\na corresponding file.",
+                   name: "file",
+                   params: ["term", "term"],
+                   spec: ""
                  }
                ]
              }
@@ -818,7 +863,7 @@ defmodule ElixirSense.SignatureTest do
         pipe_before: false,
         signatures: [
           %{
-            documentation: "No documentation available",
+            documentation: "",
             name: "orelse",
             params: ["term", "term"],
             spec: ""
@@ -831,7 +876,7 @@ defmodule ElixirSense.SignatureTest do
                pipe_before: false,
                signatures: [
                  %{
-                   documentation: "No documentation available",
+                   documentation: "",
                    name: "or",
                    params: ["term", "term"],
                    spec: ""
@@ -855,7 +900,7 @@ defmodule ElixirSense.SignatureTest do
         pipe_before: false,
         signatures: [
           %{
-            documentation: "No documentation available",
+            documentation: "",
             name: "date",
             params: [],
             spec: "@spec date :: date when date: :calendar.date"
@@ -868,14 +913,14 @@ defmodule ElixirSense.SignatureTest do
                pipe_before: false,
                signatures: [
                  %{
-                   documentation: "No documentation available",
+                   documentation: "",
                    name: "cancel_timer",
                    params: ["timerRef"],
                    spec:
                      "@spec cancel_timer(timerRef) :: result when timerRef: reference, time: non_neg_integer, result: time | false"
                  },
                  %{
-                   documentation: "No documentation available",
+                   documentation: "",
                    name: "cancel_timer",
                    params: ["timerRef", "options"],
                    spec:

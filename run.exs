@@ -1,6 +1,7 @@
 requires = [
   "elixir_sense/core/state.ex",
   "elixir_sense/core/introspection.ex",
+  "elixir_sense/core/edoc_reader.ex",
   "elixir_sense/core/ast.ex",
   "elixir_sense/core/metadata_builder.ex",
   "elixir_sense/core/metadata.ex",

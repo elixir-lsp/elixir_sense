@@ -1,5 +1,6 @@
 defmodule Alchemist.Helpers.Complete do
   alias ElixirSense.Core.BuiltinFunctions
+  alias ElixirSense.Core.EdocReader
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
@@ -83,7 +84,9 @@ defmodule Alchemist.Helpers.Complete do
         expand_dot(reduce(t), env)
 
       h === ?: and t == [] ->
-        expand_erlang_modules(env)
+        # we are expanding all erlang modules
+        # for performance reasons we do not extract edocs
+        expand_erlang_modules(env, false)
 
       identifier?(h) ->
         expand_expr(reduce(expr), env)
@@ -122,7 +125,7 @@ defmodule Alchemist.Helpers.Complete do
   defp expand_expr(expr, env) do
     case Code.string_to_quoted(expr) do
       {:ok, atom} when is_atom(atom) ->
-        expand_erlang_modules(Atom.to_string(atom), env)
+        expand_erlang_modules(Atom.to_string(atom), env, true)
 
       {:ok, {atom, _, nil}} when is_atom(atom) ->
         expand_import(Atom.to_string(atom), env)
@@ -239,14 +242,23 @@ defmodule Alchemist.Helpers.Complete do
 
   ## Erlang modules
 
-  defp expand_erlang_modules(hint \\ "", env) do
-    format_expansion(match_erlang_modules(hint, env), hint)
+  defp expand_erlang_modules(hint \\ "", env, provide_edocs?) do
+    format_expansion(match_erlang_modules(hint, env, provide_edocs?), hint)
   end
 
-  defp match_erlang_modules(hint, env) do
+  defp match_erlang_modules(hint, env, provide_edocs?) do
     for mod <- match_modules(hint, true, env), usable_as_unquoted_module?(mod) do
-      subtype = Introspection.get_module_subtype(String.to_atom(mod))
-      %{kind: :module, name: mod, type: :erlang, desc: "", subtype: subtype}
+      mod_as_atom = String.to_atom(mod)
+      subtype = Introspection.get_module_subtype(mod_as_atom)
+
+      desc =
+        if provide_edocs? do
+          Introspection.get_module_docs_summary(mod_as_atom)
+        else
+          ""
+        end
+
+      %{kind: :module, name: mod, type: :erlang, desc: desc, subtype: subtype}
     end
   end
 
@@ -423,7 +435,7 @@ defmodule Alchemist.Helpers.Complete do
               %ElixirSense.Core.State.SpecInfo{specs: specs} -> specs |> Enum.join("\n")
             end
 
-          {f, a, info.type, nil, specs,
+          {f, a, info.type, "", specs,
            info.params |> hd |> Enum.map_join(",", &Macro.to_string/1)}
         end
     end
@@ -457,7 +469,15 @@ defmodule Alchemist.Helpers.Complete do
             nil -> nil
           end
 
-        {f, a, func_kind, func_doc, Introspection.spec_to_string(spec), nil}
+        doc =
+          case func_doc do
+            nil -> ""
+            {{_fun, _}, _line, _kind, _args, doc} -> Introspection.extract_summary_from_docs(doc)
+          end
+
+        fun_args = Introspection.extract_fun_args(func_doc)
+
+        {f, a, func_kind, doc, Introspection.spec_to_string(spec), fun_args}
       end
       |> Kernel.++(
         for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :def, nil, nil, nil}
@@ -468,29 +488,46 @@ defmodule Alchemist.Helpers.Complete do
         |> Kernel.--(if include_builtin, do: [], else: @builtin_functions)
         |> Kernel.++(BuiltinFunctions.erlang_builtin_functions(mod))
 
+      edoc_results = get_edocs(mod)
+
       for {f, a} <- funs do
         spec = specs[{f, a}]
         spec_str = Introspection.spec_to_string(spec)
 
-        params =
-          case spec do
-            {_kind, {{_name, _arity}, [params | _]}} ->
-              TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
-
-            nil ->
-              ""
-          end
-
         case f |> Atom.to_string() do
           "MACRO-" <> name ->
+            params = format_params(spec, a - 1)
             # TODO test this arity and spec
-            {String.to_atom(name), a - 1, :defmacro, nil, spec_str, params}
+            # TODO is this ranch reachable?
+            {String.to_atom(name), a - 1, :defmacro, "", spec_str, params}
 
           _name ->
-            {f, a, :def, nil, spec_str, params}
+            params = format_params(spec, a)
+            {f, a, :def, edoc_results[{f, a}] || "", spec_str, params}
         end
       end
     end
+  end
+
+  defp format_params({_kind, {{_name, _arity}, [params | _]}}, _arity_1) do
+    TypeInfo.extract_params(params)
+    |> Enum.map_join(", ", &Atom.to_string/1)
+  end
+
+  defp format_params(nil, 0), do: ""
+
+  defp format_params(nil, arity) do
+    1..arity
+    |> Enum.map_join(", ", fn _ -> "term" end)
+  end
+
+  defp get_edocs(mod) do
+    EdocReader.get_docs(mod, :any)
+    |> Map.new(fn {{:function, fun, arity}, _, _, maybe_doc, _} ->
+      {{fun, arity},
+       EdocReader.extract_docs(maybe_doc)
+       |> Introspection.extract_summary_from_docs()}
+    end)
   end
 
   defp special_buildins(mod) do
@@ -590,8 +627,6 @@ defmodule Alchemist.Helpers.Complete do
     arities_docs_specs_args = arities_docs_specs |> Enum.zip(args)
 
     for {{a, {doc, spec}}, args} <- arities_docs_specs_args do
-      {fun_args, desc} = Introspection.extract_fun_args_and_desc(doc)
-
       kind =
         case func_kind do
           k when k in [:defmacro, :defmacrop, :defguard, :defguardp] -> :macro
@@ -617,9 +652,9 @@ defmodule Alchemist.Helpers.Complete do
           type: kind,
           name: name,
           arity: a,
-          args: args || fun_args,
+          args: args,
           origin: mod_name,
-          summary: desc,
+          summary: doc,
           spec: spec || ""
         }
       end

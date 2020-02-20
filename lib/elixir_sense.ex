@@ -113,8 +113,8 @@ defmodule ElixirSense do
       iex> ElixirSense.all_modules() |> Enum.take(4)
       [":application", ":application_controller", ":application_master", ":application_starter"]
 
-      iex> ElixirSense.all_modules() |> Enum.take(-4)
-      ["Version.InvalidVersionError", "Version.Parser", "Version.Requirement", "WithClauseError"]
+      iex> ElixirSense.all_modules() |> Enum.any?(& &1 == "Version.Parser")
+      true
 
   """
   @spec all_modules() :: list(String.t())
