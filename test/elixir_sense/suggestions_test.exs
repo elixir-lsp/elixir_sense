@@ -152,19 +152,17 @@ defmodule ElixirSense.SuggestionsTest do
     end
     """
 
-    list = ElixirSense.suggestions(buffer, 2, 6)
+    list = ElixirSense.suggestions(buffer, 2, 33)
 
     assert list == [
-             %{type: :hint, value: "Elixir"},
-             %{name: "Elixir", subtype: nil, summary: "", type: :module},
+             %{type: :hint, value: "ElixirSenseExample.ModuleWithDoc"},
+             %{name: "ModuleWithDocFalse", subtype: nil, summary: "", type: :module},
              %{
-               name: "ElixirSense",
-               subtype: nil,
-               summary:
-                 "ElxirSense is a Elixir library that implements useful features for any editor/tool that needs\nto introspect context-aware information about Elixir source code.",
+               name: "ModuleWithDocs",
+               subtype: :behaviour,
+               summary: "An example module\n",
                type: :module
-             },
-             %{name: "ElixirSenseExample", subtype: :behaviour, summary: "", type: :module}
+             }
            ]
   end
 
