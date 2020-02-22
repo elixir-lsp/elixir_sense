@@ -69,7 +69,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
   test "return completion candidates for 'Str'" do
     assert Suggestion.find(
-             "Str",
+             "ElixirSenseExample.ModuleWithD",
              @env,
              %{},
              %{},
@@ -78,23 +78,12 @@ defmodule ElixirSense.Providers.SuggestionTest do
              ""
            ) ==
              [
-               %{type: :hint, value: "Str"},
+               %{type: :hint, value: "ElixirSenseExample.ModuleWithDoc"},
+               %{name: "ModuleWithDocFalse", subtype: nil, summary: "", type: :module},
                %{
-                 name: "Stream",
-                 subtype: :struct,
-                 summary: "Functions for creating and composing streams.",
-                 type: :module
-               },
-               %{
-                 name: "String",
-                 subtype: nil,
-                 summary: "A String in Elixir is a UTF-8 encoded binary.",
-                 type: :module
-               },
-               %{
-                 name: "StringIO",
-                 subtype: nil,
-                 summary: "Controls an IO device process that wraps a string.",
+                 name: "ModuleWithDocs",
+                 subtype: :behaviour,
+                 summary: "An example module\n",
                  type: :module
                }
              ]

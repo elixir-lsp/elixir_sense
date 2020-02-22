@@ -148,32 +148,23 @@ defmodule ElixirSense.SuggestionsTest do
   test "with a module hint" do
     buffer = """
     defmodule MyModule do
-      Str
+      ElixirSenseExample.ModuleWithD
     end
     """
 
     list = ElixirSense.suggestions(buffer, 2, 6)
 
     assert list == [
-             %{type: :hint, value: "Str"},
+             %{type: :hint, value: "Elixir"},
+             %{name: "Elixir", subtype: nil, summary: "", type: :module},
              %{
-               name: "Stream",
-               subtype: :struct,
-               summary: "Functions for creating and composing streams.",
+               name: "ElixirSense",
+               subtype: nil,
+               summary:
+                 "ElxirSense is a Elixir library that implements useful features for any editor/tool that needs\nto introspect context-aware information about Elixir source code.",
                type: :module
              },
-             %{
-               name: "String",
-               subtype: nil,
-               summary: "A String in Elixir is a UTF-8 encoded binary.",
-               type: :module
-             },
-             %{
-               name: "StringIO",
-               subtype: nil,
-               summary: "Controls an IO device process that wraps a string.",
-               type: :module
-             }
+             %{name: "ElixirSenseExample", subtype: :behaviour, summary: "", type: :module}
            ]
   end
 

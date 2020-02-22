@@ -353,8 +353,8 @@ defmodule ElixirSense.DocsTest do
       %{subject: subject, docs: %{docs: docs}} = ElixirSense.docs(buffer, 2, 5)
 
       assert subject == "defmacro"
-      assert docs =~ "Kernel.defmacro(call, expr \\\\\\\\ nil)"
-      assert docs =~ "Defines a macro with the given name and body."
+      assert docs =~ "Kernel.defmacro("
+      assert docs =~ "macro with the given name and body."
     end
 
     test "retrieve documentation from modules" do
