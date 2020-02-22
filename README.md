@@ -114,7 +114,7 @@ $ mix deps.get
 $ mix test
 ```
 
-A few of the tests require a source installation of Elixir which you can accomplish with [asdf](https://github.com/asdf-vm/asdf-elixir) (use `ref:v1.7.1`) or [kiex](https://github.com/taylor/kiex)
+A few of the tests require a source installation of Elixir which you can accomplish with [asdf](https://github.com/asdf-vm/asdf-elixir) (use `ref:v1.9.4`) or [kiex](https://github.com/taylor/kiex)
 
 To run the tests that require a source installation of Elixir run:
 ```

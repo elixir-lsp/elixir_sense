@@ -3,10 +3,11 @@ defmodule ElixirSense.Core.Normalized.Typespec do
 
   @spec beam_specs(module) :: nil | [{:spec, tuple}]
   def beam_specs(module) do
-    specs = case Code.Typespec.fetch_specs(module) do
-      {:ok, specs} -> specs
-      _ -> []
-    end
+    specs =
+      case Code.Typespec.fetch_specs(module) do
+        {:ok, specs} -> specs
+        _ -> []
+      end
 
     beam_specs_tag(specs, :spec)
   end

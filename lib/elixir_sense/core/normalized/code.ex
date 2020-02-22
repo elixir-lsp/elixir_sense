@@ -1,6 +1,6 @@
 defmodule ElixirSense.Core.Normalized.Code do
   @moduledoc """
-  Shim to replicate the behavior of `Code.get_docs/2` in Elixir >= 1.7
+  Shim to replicate the behavior of deprecated `Code.get_docs/2`
   """
 
   @type doc_t :: nil | false | String.t()

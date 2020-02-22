@@ -202,7 +202,7 @@ defmodule ElixirSense.Core.Ast do
     {ast, %{acc | attributes: [attribute | acc.attributes]}}
   end
 
-  # Elixir 1.9
+  # Elixir >= 1.9
   defp pre_walk_expanded(
          {{:., _, [Module, :__put_attribute__]}, _, [_module, :behaviour, behaviour | _]} = ast,
          acc
