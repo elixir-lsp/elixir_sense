@@ -22,39 +22,35 @@ defmodule ElixirSense.Core.Normalized.Code do
               type_docs: [:doc_entry_t]
             }
   def get_docs(module, category) do
-    if function_exported?(Code, :fetch_docs, 1) do
-      case Code.fetch_docs(module) do
-        {:docs_v1, moduledoc_line, _beam_language, "text/markdown", moduledoc, _metadata, docs} ->
-          docs = Enum.map(docs, &to_old_format/1)
+    case Code.fetch_docs(module) do
+      {:docs_v1, moduledoc_line, _beam_language, "text/markdown", moduledoc, _metadata, docs} ->
+        docs = Enum.map(docs, &to_old_format/1)
 
-          case category do
-            :moduledoc ->
-              moduledoc_en = extract_docs(moduledoc)
+        case category do
+          :moduledoc ->
+            moduledoc_en = extract_docs(moduledoc)
 
-              {moduledoc_line, moduledoc_en}
+            {moduledoc_line, moduledoc_en}
 
-            :docs ->
-              get_fun_docs(module, docs)
+          :docs ->
+            get_fun_docs(module, docs)
 
-            :callback_docs ->
-              Enum.filter(
-                docs,
-                &match?({_, _, kind, _} when kind in [:callback, :macrocallback], &1)
-              )
+          :callback_docs ->
+            Enum.filter(
+              docs,
+              &match?({_, _, kind, _} when kind in [:callback, :macrocallback], &1)
+            )
 
-            :type_docs ->
-              Enum.filter(docs, &match?({_, _, :type, _}, &1))
+          :type_docs ->
+            Enum.filter(docs, &match?({_, _, :type, _}, &1))
 
-            :all ->
-              [:moduledoc, :docs, :callback_docs, :type_docs]
-              |> Enum.map(&{&1, get_docs(module, &1)})
-          end
+          :all ->
+            [:moduledoc, :docs, :callback_docs, :type_docs]
+            |> Enum.map(&{&1, get_docs(module, &1)})
+        end
 
-        _ ->
-          nil
-      end
-    else
-      Module.concat([Code]).get_docs(module, category)
+      _ ->
+        nil
     end
   end
 
