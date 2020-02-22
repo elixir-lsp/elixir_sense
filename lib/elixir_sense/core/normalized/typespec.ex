@@ -1,7 +1,7 @@
 defmodule ElixirSense.Core.Normalized.Typespec do
   @moduledoc false
 
-  @spec beam_specs(module) :: nil | [{:spec, tuple}]
+  @spec beam_specs(module) :: [{:spec, tuple}]
   def beam_specs(module) do
     specs =
       case Code.Typespec.fetch_specs(module) do
@@ -37,8 +37,6 @@ defmodule ElixirSense.Core.Normalized.Typespec do
   def spec_to_quoted(name, spec) do
     Code.Typespec.spec_to_quoted(name, spec)
   end
-
-  defp beam_specs_tag(nil, _), do: nil
 
   defp beam_specs_tag(specs, tag) do
     Enum.map(specs, &{tag, &1})

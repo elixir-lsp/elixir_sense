@@ -293,21 +293,15 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   def get_module_specs(module) do
-    case Typespec.beam_specs(module) do
-      nil ->
-        %{}
+    Typespec.beam_specs(module)
+    |> Map.new(fn
+      {_kind, {{f, a}, _spec}} = spec ->
+        {{f, a}, spec}
 
-      specs ->
-        specs
-        |> Map.new(fn
-          {_kind, {{f, a}, _spec}} = spec ->
-            {{f, a}, spec}
-
-          {kind, {{^module, f, a}, spec}} ->
-            # spec with module - transform it to moduleless form
-            {{f, a}, {kind, {{f, a}, spec}}}
-        end)
-    end
+      {kind, {{^module, f, a}, spec}} ->
+        # spec with module - transform it to moduleless form
+        {{f, a}, {kind, {{f, a}, spec}}}
+    end)
   end
 
   # Workaround since Code.Typespec.typespec_to_quoted/1 is private

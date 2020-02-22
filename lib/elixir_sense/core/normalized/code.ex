@@ -13,14 +13,6 @@ defmodule ElixirSense.Core.Normalized.Code do
   @spec get_docs(module, :docs) :: nil | [fun_doc_entry_t]
   @spec get_docs(module, :callback_docs | :type_docs) :: nil | [:doc_entry_t]
   @spec get_docs(module, :moduledoc) :: nil | moduledoc_entry_t
-  @spec get_docs(module, :all) ::
-          nil
-          | %{
-              moduledoc: moduledoc_entry_t,
-              docs: [:doc_entry_t],
-              callback_docs: [:doc_entry_t],
-              type_docs: [:doc_entry_t]
-            }
   def get_docs(module, category) do
     case Code.fetch_docs(module) do
       {:docs_v1, moduledoc_line, _beam_language, "text/markdown", moduledoc, _metadata, docs} ->
@@ -43,10 +35,6 @@ defmodule ElixirSense.Core.Normalized.Code do
 
           :type_docs ->
             Enum.filter(docs, &match?({_, _, :type, _}, &1))
-
-          :all ->
-            [:moduledoc, :docs, :callback_docs, :type_docs]
-            |> Enum.map(&{&1, get_docs(module, &1)})
         end
 
       _ ->

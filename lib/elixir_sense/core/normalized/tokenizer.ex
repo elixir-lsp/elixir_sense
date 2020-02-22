@@ -9,11 +9,7 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
   def tokenize(prefix) do
     prefix
     |> String.to_charlist()
-    |> do_tokenize(System.version())
-  end
-
-  defp do_tokenize(prefix_charlist, elixir_version) do
-    do_tokenize_1_7(prefix_charlist)
+    |> do_tokenize_1_7()
   end
 
   defp do_tokenize_1_7(prefix_charlist) do
