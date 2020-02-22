@@ -6,7 +6,7 @@ defmodule ElixirSense.Mixfile do
     [
       app: :elixir_sense,
       version: "1.0.1",
-      elixir: "~> 1.6",
+      elixir: "~> 1.7",
       elixirc_paths: elixirc_paths(Mix.env()),
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
@@ -35,7 +35,7 @@ defmodule ElixirSense.Mixfile do
       {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false},
       {:credo, "~> 1.0", only: [:dev]},
       {:ex_doc, "~> 0.14", only: [:dev]},
-      {:docsh, "~> 0.7.2"}
+      {:docsh, "~> 0.7"}
     ]
   end
 
