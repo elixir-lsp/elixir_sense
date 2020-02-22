@@ -347,7 +347,7 @@ defmodule ElixirSense.Core.ParserTest do
   test "parse_string with literal strings" do
     source = ~S'''
     defmodule MyMod do
-      @doc """
+      @my_attr """
       Some docs.
       """
       def func do
@@ -359,7 +359,7 @@ defmodule ElixirSense.Core.ParserTest do
     assert %ElixirSense.Core.Metadata{
              lines_to_env: %{
                6 => %ElixirSense.Core.State.Env{
-                 attributes: [%ElixirSense.Core.State.AttributeInfo{name: :doc}]
+                 attributes: [%ElixirSense.Core.State.AttributeInfo{name: :my_attr}]
                }
              }
            } = parse_string(source, true, true, 6)

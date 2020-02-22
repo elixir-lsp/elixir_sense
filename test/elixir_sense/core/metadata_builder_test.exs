@@ -2884,8 +2884,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
 
     assert get_line_attributes(state, 4) == [
-             %AttributeInfo{name: :before_compile, positions: [{2, 3}]},
-             %AttributeInfo{name: :doc, positions: [{2, 3}]},
              %AttributeInfo{name: :my_attribute, positions: [{2, 3}]}
            ]
 

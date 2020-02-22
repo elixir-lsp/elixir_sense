@@ -895,11 +895,41 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 4, 4)
-      |> Enum.filter(fn s -> s.type == :attribute end)
+      |> Enum.filter(fn s -> s.type == :attribute and s.name |> String.starts_with?("@my") end)
 
     assert list == [
              %{name: "@my_attribute1", type: :attribute},
              %{name: "@my_attribute2", type: :attribute}
+           ]
+  end
+
+  test "lists module attributes in module scope" do
+    buffer = """
+    defmodule MyModule do
+      @myattr "asd"
+      @moduledoc "asdf"
+      def some do
+        @m
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 2, 5)
+      |> Enum.filter(fn s -> s.type == :attribute end)
+
+    assert list == [
+             %{name: "@macrocallback", type: :attribute},
+             %{name: "@moduledoc", type: :attribute},
+             %{name: "@myattr", type: :attribute}
+           ]
+
+    list =
+      ElixirSense.suggestions(buffer, 4, 7)
+      |> Enum.filter(fn s -> s.type == :attribute end)
+
+    assert list == [
+             %{name: "@myattr", type: :attribute}
            ]
   end
 

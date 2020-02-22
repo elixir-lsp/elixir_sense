@@ -1,4 +1,5 @@
 requires = [
+  "elixir_sense/core/builtin_attributes.ex",
   "elixir_sense/core/state.ex",
   "elixir_sense/core/introspection.ex",
   "elixir_sense/core/edoc_reader.ex",

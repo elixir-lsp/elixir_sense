@@ -4,7 +4,7 @@ defmodule ElixirSense.Providers.Suggestion do
   """
 
   alias Alchemist.Helpers.Complete
-
+  alias ElixirSense.Core.BuiltinAttributes
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
@@ -214,7 +214,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
     [hint_suggestion]
     |> Kernel.++(callbacks_or_returns)
-    |> Kernel.++(find_attributes(attributes, hint))
+    |> Kernel.++(find_attributes(attributes, hint, scope))
     |> Kernel.++(find_vars(vars, hint))
     |> Kernel.++(mods_and_funcs)
     |> Kernel.++(
@@ -246,7 +246,8 @@ defmodule ElixirSense.Providers.Suggestion do
            aliases: aliases,
            vars: vars,
            attributes: attributes,
-           module: module
+           module: module,
+           scope: scope
          },
          mods_and_funs,
          metadata_specs,
@@ -266,7 +267,7 @@ defmodule ElixirSense.Providers.Suggestion do
       )
 
     [hint_suggestion]
-    |> Kernel.++(find_attributes(attributes, hint))
+    |> Kernel.++(find_attributes(attributes, hint, scope))
     |> Kernel.++(find_vars(vars, hint))
     |> Kernel.++(mods_and_funcs)
   end
@@ -429,9 +430,22 @@ defmodule ElixirSense.Providers.Suggestion do
     |> Enum.sort()
   end
 
-  @spec find_attributes([State.AttributeInfo.t()], String.t()) :: [attribute]
-  defp find_attributes(attributes, hint) do
-    for %State.AttributeInfo{name: name} <- attributes,
+  @spec find_attributes([State.AttributeInfo.t()], String.t(), State.scope()) :: [attribute]
+  defp find_attributes(attributes, hint, scope) do
+    attribute_names =
+      attributes
+      |> Enum.map(fn %State.AttributeInfo{name: name} -> name end)
+
+    attribute_names =
+      case scope do
+        {_fun, _arity} ->
+          attribute_names
+
+        module when not is_nil(module) ->
+          attribute_names ++ BuiltinAttributes.all()
+      end
+
+    for name <- attribute_names,
         hint in ["", "@"] or String.starts_with?("@#{name}", hint) do
       %{type: :attribute, name: "@#{name}"}
     end

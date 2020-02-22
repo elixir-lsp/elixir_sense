@@ -844,13 +844,16 @@ defmodule ElixirSense.Core.State do
     }
   end
 
+  @builtin_attributes ElixirSense.Core.BuiltinAttributes.all()
+
   def add_attributes(%__MODULE__{} = state, attributes, position) do
     Enum.reduce(attributes, state, fn attribute, state ->
       add_attribute(state, attribute, position)
     end)
   end
 
-  def add_attribute(%__MODULE__{} = state, attribute, position) do
+  def add_attribute(%__MODULE__{} = state, attribute, position)
+      when attribute not in @builtin_attributes do
     [attributes_from_scope | other_attributes] = state.attributes
 
     existing_attribute_index =
@@ -878,6 +881,10 @@ defmodule ElixirSense.Core.State do
     attributes = [attributes_from_scope | other_attributes]
     scope_attributes = [attributes_from_scope | tl(state.scope_attributes)]
     %__MODULE__{state | attributes: attributes, scope_attributes: scope_attributes}
+  end
+
+  def add_attribute(%__MODULE__{} = state, _attribute, _position) do
+    state
   end
 
   def add_behaviour(%__MODULE__{} = state, module) when is_atom(module) or is_list(module) do
