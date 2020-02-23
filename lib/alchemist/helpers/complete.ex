@@ -446,10 +446,7 @@ defmodule Alchemist.Helpers.Complete do
     specs = TypeInfo.get_module_specs(mod)
 
     if docs != nil do
-      exports =
-        (mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_buildins(mod))
-        |> Kernel.--(default_arg_functions_with_doc_false(docs))
-        |> Enum.reject(&hidden_fun?(&1, docs))
+      exports = mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_buildins(mod)
 
       default_arg_functions = default_arg_functions(docs)
 
@@ -551,54 +548,13 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp default_arg_functions(docs) do
-    for {{fun_name, arity}, _, _kind, args, x} when x != false <- docs,
+    for {{fun_name, arity}, _, _kind, args, _} <- docs,
         count = Introspection.count_defaults(args),
         count > 0,
         new_arity <- (arity - count)..(arity - 1),
         into: %{},
         do: {{fun_name, new_arity}, arity}
   end
-
-  defp default_arg_functions_with_doc_false(docs) do
-    for {{fun_name, arity}, _, _, args, false} <- docs,
-        count = Introspection.count_defaults(args),
-        count > 0,
-        new_arity <- (arity - count)..arity,
-        do: {fun_name, new_arity}
-  end
-
-  # struct
-  defp hidden_fun?({:__struct__, 0}, _docs), do: false
-  defp hidden_fun?({:__struct__, 1}, _docs), do: false
-  # exception
-  defp hidden_fun?({:message, 1}, _docs), do: false
-  defp hidden_fun?({:exception, 1}, _docs), do: false
-  defp hidden_fun?({:blame, 2}, _docs), do: false
-  # protocol
-  defp hidden_fun?({:__protocol__, 1}, _docs), do: false
-  defp hidden_fun?({:impl_for, 1}, _docs), do: false
-  defp hidden_fun?({:impl_for!, 1}, _docs), do: false
-  # protocol impl
-  defp hidden_fun?({:__impl__, 1}, _docs), do: false
-
-  defp hidden_fun?(fun, docs) do
-    case List.keyfind(docs, fun, 0) do
-      nil ->
-        underscored_fun?(fun)
-
-      {_, _, _, _, false} ->
-        true
-
-      {fun, _, _, _, nil} ->
-        underscored_fun?(fun)
-
-      {_, _, _, _, _} ->
-        false
-    end
-  end
-
-  defp underscored_fun?({name, _}),
-    do: hd(Atom.to_charlist(name)) == ?_
 
   defp ensure_loaded(Elixir), do: {:error, :nofile}
   defp ensure_loaded(mod), do: Code.ensure_compiled(mod)

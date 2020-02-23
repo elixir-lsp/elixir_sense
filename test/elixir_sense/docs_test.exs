@@ -32,6 +32,19 @@ defmodule ElixirSense.DocsTest do
       assert docs == "No documentation available\n"
     end
 
+    test "module with @moduledoc false" do
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs("ElixirSenseExample.ModuleWithDocFalse", 1, 22)
+
+      assert subject == "ElixirSenseExample.ModuleWithDocFalse"
+      assert actual_subject == "ElixirSenseExample.ModuleWithDocFalse"
+
+      assert docs == "> ElixirSenseExample.ModuleWithDocFalse\n\nNo documentation available\n"
+    end
+
     test "retrieve documentation" do
       buffer = """
       defmodule MyModule do

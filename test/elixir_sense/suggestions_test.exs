@@ -2005,6 +2005,24 @@ defmodule ElixirSense.SuggestionsTest do
       assert [] == suggestions
     end
 
+    test "type with @typedoc false" do
+      buffer = "@type my_type :: ElixirSenseExample.ModuleWithDocs.some_type_doc_false"
+
+      suggestions = suggestions_by_type(:type_spec, buffer)
+
+      assert [
+               %{
+                 arity: 0,
+                 doc: "",
+                 name: :some_type_doc_false,
+                 origin: "ElixirSenseExample.ModuleWithDocs",
+                 signature: "some_type_doc_false()",
+                 spec: "@type some_type_doc_false() ::\n  integer()",
+                 type: :type_spec
+               }
+             ] == suggestions
+    end
+
     test "local types from metadata" do
       buffer = """
       defmodule MyModule do

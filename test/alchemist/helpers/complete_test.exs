@@ -38,7 +38,6 @@ defmodule Alchemist.Helpers.CompleteTest do
     assert list |> Enum.find(&(&1.name == "user_drv"))
   end
 
-  # TODO this is very slow
   test "erlang root completion" do
     {:yes, '', list} = expand(':')
     assert is_list(list)
@@ -55,6 +54,56 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, 'ble', [%{name: "Enumerable", subtype: :protocol, type: :module}]} =
              expand('Enumera')
+  end
+
+  test "elixir module completion with @moduledoc false" do
+    assert {:yes, 'e', [%{name: "ModuleWithDocFalse", summary: ""}]} =
+             expand('ElixirSenseExample.ModuleWithDocFals')
+  end
+
+  test "elixir function completion with @doc false" do
+    assert {
+             :yes,
+             '',
+             [
+               %{
+                 name: "some_fun_doc_false",
+                 summary: "",
+                 args: "a, b \\\\ nil",
+                 arity: 1,
+                 origin: "ElixirSenseExample.ModuleWithDocs",
+                 spec: "",
+                 type: :function
+               },
+               %{
+                 args: "a, b \\\\ nil",
+                 arity: 2,
+                 name: "some_fun_doc_false",
+                 origin: "ElixirSenseExample.ModuleWithDocs",
+                 spec: "",
+                 summary: "",
+                 type: :function
+               },
+               %{
+                 args: "a, b \\\\ nil",
+                 arity: 1,
+                 name: "some_fun_no_doc",
+                 origin: "ElixirSenseExample.ModuleWithDocs",
+                 spec: "",
+                 summary: "",
+                 type: :function
+               },
+               %{
+                 args: "a, b \\\\ nil",
+                 arity: 2,
+                 name: "some_fun_no_doc",
+                 origin: "ElixirSenseExample.ModuleWithDocs",
+                 spec: "",
+                 summary: "",
+                 type: :function
+               }
+             ]
+           } = expand('ElixirSenseExample.ModuleWithDocs.some_fun_')
   end
 
   test "elixir completion with self" do
@@ -158,76 +207,6 @@ defmodule Alchemist.Helpers.CompleteTest do
     Code.compiler_options(ignore_module_conflict: false)
     :code.purge(Sample)
     :code.delete(Sample)
-  end
-
-  test "Elixir no completion for default argument functions with doc set to false" do
-    {:yes, '', available} = expand('String.')
-    refute Enum.any?(available, &(&1.name == "rjust" and &1.arity == 2))
-    assert Enum.any?(available, &(&1.name == "replace" and &1.arity == 3))
-
-    assert expand('String.r') == {:yes, 'e', []}
-
-    {:module, _, bytecode, _} =
-      defmodule Elixir.DefaultArgumentFunctions do
-        def afoo(a \\ :a, b, c \\ :c),
-          do: {a, b, c}
-
-        def _do_fizz(a \\ :a, b, c \\ :c),
-          do: {a, b, c}
-
-        @doc false
-        def __fizz__(a \\ :a, b, c \\ :c),
-          do: {a, b, c}
-
-        @doc "bar/0 doc"
-        def abar(),
-          do: :bar
-
-        @doc false
-        def abar(a \\ :a, b, c \\ :c, d \\ :d),
-          do: {a, b, c, d}
-
-        @doc false
-        def abar(a, b, c, d, e),
-          do: {a, b, c, d, e}
-
-        @doc false
-        def abaz(a \\ :a),
-          do: {a}
-
-        @doc "biz/3 doc"
-        def abiz(a, b, c \\ :c),
-          do: {a, b, c}
-      end
-
-    File.write!("Elixir.DefaultArgumentFunctions.beam", bytecode)
-
-    assert {:yes, '',
-            [
-              %{name: "abar", arity: 0},
-              %{name: "abiz", arity: 2},
-              %{name: "abiz", arity: 3},
-              %{name: "afoo", arity: 1},
-              %{name: "afoo", arity: 2},
-              %{name: "afoo", arity: 3}
-            ]} = expand('DefaultArgumentFunctions.a')
-
-    assert {:yes, 'z',
-            [
-              %{name: "abiz", arity: 2},
-              %{name: "abiz", arity: 3}
-            ]} = expand('DefaultArgumentFunctions.abi')
-
-    assert {:yes, '',
-            [
-              %{name: "afoo", arity: 1},
-              %{name: "afoo", arity: 2},
-              %{name: "afoo", arity: 3}
-            ]} = expand('DefaultArgumentFunctions.afoo')
-  after
-    File.rm("Elixir.DefaultArgumentFunctions.beam")
-    :code.purge(DefaultArgumentFunctions)
-    :code.delete(DefaultArgumentFunctions)
   end
 
   test "elixir no completion" do

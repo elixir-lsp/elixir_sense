@@ -136,6 +136,27 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    test "find type signatures with @typedoc false" do
+      code = """
+      defmodule MyModule do
+        @type a :: ElixirSenseExample.ModuleWithDocs.some_type_doc_false(
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 68) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "",
+                   name: "some_type_doc_false",
+                   params: '',
+                   spec: "@type some_type_doc_false :: integer"
+                 }
+               ]
+             }
+    end
+
     test "does not find builtin type signatures with Elixir prefix" do
       code = """
       defmodule MyModule do
@@ -441,6 +462,27 @@ defmodule ElixirSense.SignatureTest do
                    params: ["list", "prefix"],
                    spec:
                      "@spec starts_with?([...], [...]) :: boolean\n@spec starts_with?(list, []) :: true\n@spec starts_with?([], [...]) :: false"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures for function with @doc false" do
+      code = """
+      defmodule MyModule do
+        ElixirSenseExample.ModuleWithDocs.some_fun_doc_false(
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 56) == %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "",
+                   name: "some_fun_doc_false",
+                   params: ["a", "b \\\\ nil"],
+                   spec: ""
                  }
                ]
              }
