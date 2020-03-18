@@ -88,12 +88,12 @@ defmodule ElixirSense.Providers.References do
   end
 
   # Cursor over a function call but we couldn't introspect the arity
-  defp callee_at_cursor({module, func}, _module, _scope, nil) do
+  defp callee_at_cursor({module, func}, _module, _scope, nil, _modules_funs) do
     [module, func]
   end
 
   # Cursor over a function call
-  defp callee_at_cursor({module, func}, _module, _scope, arity) do
+  defp callee_at_cursor({module, func}, _module, _scope, arity, _modules_funs) do
     [module, func, arity]
   end
 
