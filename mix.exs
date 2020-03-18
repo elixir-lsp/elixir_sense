@@ -31,10 +31,10 @@ defmodule ElixirSense.Mixfile do
 
   defp deps do
     [
-      {:excoveralls, "~> 0.6", only: :test},
-      {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false},
+      {:excoveralls, "~> 0.10", only: :test},
+      {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:credo, "~> 1.0", only: [:dev]},
-      {:ex_doc, "~> 0.14", only: [:dev]},
+      {:ex_doc, "~> 0.18", only: [:dev]},
       {:docsh, "~> 0.7"}
     ]
   end
