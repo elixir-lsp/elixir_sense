@@ -99,6 +99,29 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
+  test "find references with cursor over a function definition with default arg" do
+    buffer = """
+    defmodule ElixirSenseExample.Subscription do
+      def check(resource, models, user, opts \\\\ []) do
+        IO.inspect({resource, models, user, opts})
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 2, 10)
+
+    assert references == [
+             %{
+               range: %{end: %{column: 42, line: 3}, start: %{column: 37, line: 3}},
+               uri: "test/support/subscriber.ex"
+             },
+             %{
+               range: %{end: %{column: 42, line: 4}, start: %{column: 37, line: 4}},
+               uri: "test/support/subscriber.ex"
+             }
+           ]
+  end
+
   test "find references with cursor over a function with arity 1" do
     buffer = """
     defmodule Caller do

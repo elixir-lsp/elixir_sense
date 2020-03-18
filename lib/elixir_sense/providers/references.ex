@@ -55,28 +55,36 @@ defmodule ElixirSense.Providers.References do
           |> Introspection.actual_mod_fun(imports, aliases, module, modules_funs, metadata_types)
 
         {mod, fun}
-        |> xref_at_cursor(arity, module, scope)
+        |> xref_at_cursor(arity, module, scope, modules_funs)
         |> Enum.map(&build_location/1)
         |> Enum.sort_by(fn %{uri: a, range: %{start: %{line: b, column: c}}} -> {a, b, c} end)
     end
   end
 
-  defp xref_at_cursor(actual_mod_fun, arity, module, scope) do
+  defp xref_at_cursor(actual_mod_fun, arity, module, scope, modules_funs) do
     mfa =
       actual_mod_fun
-      |> callee_at_cursor(module, scope, arity)
+      |> callee_at_cursor(module, scope, arity, modules_funs)
 
     callers(mfa)
   end
 
   # Cursor over a module
-  defp callee_at_cursor({module, nil}, _module, _scope, _arity) do
+  defp callee_at_cursor({module, nil}, _module, _scope, _arity, _modules_funs) do
     [module]
   end
 
   # Cursor over a function definition
-  defp callee_at_cursor({module, func}, module, {func, arity}, _) do
-    [module, func, arity]
+  defp callee_at_cursor({module, func}, module, {func, arity}, nil, modules_funs) do
+    fun_info = modules_funs |> Map.fetch!({module, func, arity})
+
+    if fun_info.params |> hd |> Enum.any?(&match?({:\\, _, _}, &1)) do
+      # function has default params, we cannot use arity to filter
+      # TODO maybe filter by arity range
+      [module, func]
+    else
+      [module, func, arity]
+    end
   end
 
   # Cursor over a function call but we couldn't introspect the arity
