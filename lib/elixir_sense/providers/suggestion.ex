@@ -639,7 +639,10 @@ defmodule ElixirSense.Providers.Suggestion do
     []
   end
 
-  defp find_typespecs(hint, aliases, module, _scope, mods_and_funs, metadata_types) do
+  # We don't list typespecs outside of a module
+  defp find_typespecs(_hint, _aliases, _module, Elixir, _, _) do
+    []
+  end
     {mod, hint} =
       hint
       |> Source.split_module_and_hint(module, aliases)
