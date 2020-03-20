@@ -653,44 +653,43 @@ defmodule ElixirSense.SuggestionsTest do
   end
 
   test "lists vars in unfinished heredoc interpolation" do
-    # The cases below are not supported as elixir parser returns unexpected error
-    # {:error, {5, "unexpected token: ", <<34, 0, 34, 32, 40, 99, 111, 108, 117, 109, 110, 32, 49, 44, 32, 99, 111, 100, 101, 32, 112, 111, 105, 110, 116, 32, 85, 43, 48, 48, 48, 48, 41>>}}
+    # The 2 cases below are only supported on elixir >= 1.10
     # see https://github.com/elixir-lang/elixir/issues/9252
 
-    # buffer = """
-    # defmodule MyServer do
-    #   x = 4
-    #   \"\"\"
-    #   abc\#{
-    #   \"\"\"
+    buffer = """
+    defmodule MyServer do
+      x = 4
+      \"\"\"
+      abc\#{
+      \"\"\"
 
-    # end
-    # """
+    end
+    """
 
-    # list =
-    #   ElixirSense.suggestions(buffer, 4, 8)
-    #   |> Enum.filter(fn s -> s.type == :variable end)
+    list =
+      ElixirSense.suggestions(buffer, 4, 8)
+      |> Enum.filter(fn s -> s.type == :variable end)
 
-    # assert list == [
-    #   %{name: "x, type: :variable},
-    # ]
+    assert list == [
+             %{name: "x", type: :variable}
+           ]
 
-    # buffer = """
-    # defmodule MyServer do
-    #   x = 4
-    #   \"\"\"
-    #   abc\#{
+    buffer = """
+    defmodule MyServer do
+      x = 4
+      \"\"\"
+      abc\#{
 
-    # end
-    # """
+    end
+    """
 
-    # list =
-    #   ElixirSense.suggestions(buffer, 4, 8)
-    #   |> Enum.filter(fn s -> s.type == :variable end)
+    list =
+      ElixirSense.suggestions(buffer, 4, 8)
+      |> Enum.filter(fn s -> s.type == :variable end)
 
-    # assert list == [
-    #   %{name: "x, type: :variable},
-    # ]
+    assert list == [
+             %{name: "x", type: :variable}
+           ]
 
     buffer = """
     defmodule MyServer do
