@@ -431,6 +431,8 @@ defmodule ElixirSense.Providers.Suggestion do
   end
 
   @spec find_attributes([State.AttributeInfo.t()], String.t(), State.scope()) :: [attribute]
+  # do not suggest attributes outside of a module
+  defp find_attributes(_attributes, _hint, Elixir), do: []
   defp find_attributes(attributes, hint, scope) do
     attribute_names =
       attributes
