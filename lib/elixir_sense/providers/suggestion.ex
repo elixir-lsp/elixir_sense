@@ -433,6 +433,7 @@ defmodule ElixirSense.Providers.Suggestion do
   @spec find_attributes([State.AttributeInfo.t()], String.t(), State.scope()) :: [attribute]
   # do not suggest attributes outside of a module
   defp find_attributes(_attributes, _hint, Elixir), do: []
+
   defp find_attributes(attributes, hint, scope) do
     attribute_names =
       attributes
@@ -643,6 +644,13 @@ defmodule ElixirSense.Providers.Suggestion do
   defp find_typespecs(_hint, _aliases, _module, Elixir, _, _) do
     []
   end
+
+  # We don't list typespecs when the hint is most likely an attribute
+  defp find_typespecs("@" <> _, _aliases, _module, _scope, _, _) do
+    []
+  end
+
+  defp find_typespecs(hint, aliases, module, _scope, mods_and_funs, metadata_types) do
     {mod, hint} =
       hint
       |> Source.split_module_and_hint(module, aliases)

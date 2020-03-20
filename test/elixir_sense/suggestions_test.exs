@@ -1839,14 +1839,20 @@ defmodule ElixirSense.SuggestionsTest do
 
   describe "suggestions for typespecs" do
     test "remote types - filter list of typespecs" do
-      buffer = "Remote.remote_t"
+      buffer = """
+      defmodule My do
+        Remote.remote_t\
+      """
 
       list = suggestions_by_type(:type_spec, buffer)
       assert length(list) == 2
     end
 
     test "remote types - retrieve info from typespecs" do
-      buffer = "Remote."
+      buffer = """
+      defmodule My do
+        Remote.\
+      """
 
       suggestion = suggestion_by_name(:remote_list_t, buffer)
 
@@ -1863,7 +1869,10 @@ defmodule ElixirSense.SuggestionsTest do
     end
 
     test "remote types - retrieve info from typespecs with params" do
-      buffer = "Remote."
+      buffer = """
+      defmodule My do
+        Remote.\
+      """
 
       [suggestion_1, suggestion_2] = suggestions_by_name(:remote_t, buffer)
 
@@ -1919,14 +1928,14 @@ defmodule ElixirSense.SuggestionsTest do
     end
 
     test "builtin types - filter list of typespecs" do
-      buffer = "@type my_type :: lis"
+      buffer = "defmodule My, do: @type my_type :: lis"
 
       list = suggestions_by_type(:type_spec, buffer)
       assert length(list) == 2
     end
 
     test "builtin types - retrieve info from typespecs" do
-      buffer = "@type my_type :: lis"
+      buffer = "defmodule My, do: @type my_type :: lis"
 
       [suggestion | _] = suggestions_by_type(:type_spec, buffer)
 
@@ -1938,7 +1947,7 @@ defmodule ElixirSense.SuggestionsTest do
     end
 
     test "builtin types - retrieve info from typespecs with params" do
-      buffer = "@type my_type :: lis"
+      buffer = "defmodule My, do: @type my_type :: lis"
 
       [_, suggestion | _] = suggestions_by_type(:type_spec, buffer)
 
@@ -1950,7 +1959,7 @@ defmodule ElixirSense.SuggestionsTest do
     end
 
     test "erlang types" do
-      buffer = "@type my_type :: :erlang.tim"
+      buffer = "defmodule My, do: @type my_type :: :erlang.tim"
 
       suggestions = suggestions_by_type(:type_spec, buffer)
 
@@ -1979,7 +1988,7 @@ defmodule ElixirSense.SuggestionsTest do
     end
 
     test "erlang types edoc" do
-      buffer = "@type my_type :: :docsh_edoc_xmerl.xml_element_con"
+      buffer = "defmodule My, do: @type my_type :: :docsh_edoc_xmerl.xml_element_con"
 
       suggestions = suggestions_by_type(:type_spec, buffer)
 
@@ -1998,7 +2007,7 @@ defmodule ElixirSense.SuggestionsTest do
     end
 
     test "no erlang private types" do
-      buffer = "@type my_type :: :erlang.cpu_topo"
+      buffer = "defmodule My, do: @type my_type :: :erlang.cpu_topo"
 
       suggestions = suggestions_by_type(:type_spec, buffer)
 
@@ -2006,7 +2015,8 @@ defmodule ElixirSense.SuggestionsTest do
     end
 
     test "type with @typedoc false" do
-      buffer = "@type my_type :: ElixirSenseExample.ModuleWithDocs.some_type_doc_false"
+      buffer =
+        "defmodule My, do: @type my_type :: ElixirSenseExample.ModuleWithDocs.some_type_doc_false"
 
       suggestions = suggestions_by_type(:type_spec, buffer)
 
