@@ -436,7 +436,7 @@ defmodule Alchemist.Helpers.Complete do
             end
 
           {f, a, info.type, "", specs,
-           info.params |> hd |> Enum.map_join(",", &Macro.to_string/1)}
+           info.params |> hd |> Enum.map_join(", ", &Macro.to_string/1)}
         end
     end
   end

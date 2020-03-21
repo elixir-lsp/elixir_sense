@@ -381,7 +381,10 @@ defmodule Alchemist.Helpers.CompleteTest do
       mods_and_funs: %{
         {MyModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {MyModule, :my_fun_priv, nil} => %ModFunInfo{type: :defp},
-        {MyModule, :my_fun_priv, 1} => %ModFunInfo{type: :defp, params: [[{:some, [], nil}]]},
+        {MyModule, :my_fun_priv, 2} => %ModFunInfo{
+          type: :defp,
+          params: [[{:some, [], nil}, {:other, [], nil}]]
+        },
         {MyModule, :my_fun_pub, nil} => %ModFunInfo{type: :def},
         {MyModule, :my_fun_pub, 1} => %ModFunInfo{type: :def, params: [[{:some, [], nil}]]},
         {MyModule, :my_macro_priv, nil} => %ModFunInfo{type: :defmacrop},
@@ -411,9 +414,9 @@ defmodule Alchemist.Helpers.CompleteTest do
         }
       },
       specs: %{
-        {MyModule, :my_fun_priv, 1} => %SpecInfo{
+        {MyModule, :my_fun_priv, 2} => %SpecInfo{
           kind: :spec,
-          specs: ["@spec my_fun_priv(atom) :: boolean"]
+          specs: ["@spec my_fun_priv(atom, integer) :: boolean"]
         }
       }
     }
@@ -425,8 +428,9 @@ defmodule Alchemist.Helpers.CompleteTest do
               %{
                 name: "my_fun_priv",
                 origin: "MyModule",
+                args: "some, other",
                 type: :function,
-                spec: "@spec my_fun_priv(atom) :: boolean"
+                spec: "@spec my_fun_priv(atom, integer) :: boolean"
               }
             ]} = expand('my_fun_pr', env)
 
