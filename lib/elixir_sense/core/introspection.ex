@@ -251,7 +251,13 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
+  # no types inside a function
   def get_type_docs_md(_, _, {_f, _a}) do
+    []
+  end
+
+  # no types outside a module
+  def get_type_docs_md(_, _, scope) when scope in [Elixir, nil] do
     []
   end
 

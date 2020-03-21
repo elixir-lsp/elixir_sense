@@ -432,7 +432,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
   @spec find_attributes([State.AttributeInfo.t()], String.t(), State.scope()) :: [attribute]
   # do not suggest attributes outside of a module
-  defp find_attributes(_attributes, _hint, Elixir), do: []
+  defp find_attributes(_attributes, _hint, scope) when scope in [Elixir, nil], do: []
 
   defp find_attributes(attributes, hint, scope) do
     attribute_names =
@@ -641,7 +641,7 @@ defmodule ElixirSense.Providers.Suggestion do
   end
 
   # We don't list typespecs outside of a module
-  defp find_typespecs(_hint, _aliases, _module, Elixir, _, _) do
+  defp find_typespecs(_hint, _aliases, _module, scope, _, _) when scope in [Elixir, nil] do
     []
   end
 
