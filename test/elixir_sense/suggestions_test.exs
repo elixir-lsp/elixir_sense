@@ -781,6 +781,7 @@ defmodule ElixirSense.SuggestionsTest do
           {:atom1, vara} ->
             :ok
           {:atom2, varb} -> :ok
+          abc when is_atom(a)
         end
 
       end
@@ -806,11 +807,19 @@ defmodule ElixirSense.SuggestionsTest do
            ]
 
     list =
-      ElixirSense.suggestions(buffer, 8, 4)
+      ElixirSense.suggestions(buffer, 9, 4)
       |> Enum.filter(fn s -> s.type == :variable end)
 
     assert list == [
              %{name: "request", type: :variable}
+           ]
+
+    list =
+      ElixirSense.suggestions(buffer, 7, 25)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+             %{name: "abc", type: :variable}
            ]
   end
 

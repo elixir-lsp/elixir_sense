@@ -744,6 +744,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result({:<-, meta, [:_, rhs]})
   end
 
+  defp pre({:when, meta, [lhs, rhs]}, state) do
+    state
+    |> add_vars(find_vars(lhs), true)
+    |> result({:when, meta, [:_, rhs]})
+  end
+
   defp pre({:use, [line: line, column: column], _} = ast, state) do
     # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
     current_module = get_current_module(state)
