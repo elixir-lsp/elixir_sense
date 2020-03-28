@@ -468,8 +468,12 @@ defmodule Alchemist.Helpers.Complete do
 
         doc =
           case func_doc do
-            nil -> ""
-            {{_fun, _}, _line, _kind, _args, doc} -> Introspection.extract_summary_from_docs(doc)
+            nil ->
+              ""
+
+            # TODO use metadata
+            {{_fun, _}, _line, _kind, _args, doc, _metadata} ->
+              Introspection.extract_summary_from_docs(doc)
           end
 
         fun_args = Introspection.extract_fun_args(func_doc)
@@ -495,7 +499,7 @@ defmodule Alchemist.Helpers.Complete do
           "MACRO-" <> name ->
             params = format_params(spec, a - 1)
             # TODO test this arity and spec
-            # TODO is this ranch reachable?
+            # TODO is this branch reachable?
             {String.to_atom(name), a - 1, :defmacro, "", spec_str, params}
 
           _name ->
@@ -520,6 +524,7 @@ defmodule Alchemist.Helpers.Complete do
 
   defp get_edocs(mod) do
     EdocReader.get_docs(mod, :any)
+    # TODO use metadata
     |> Map.new(fn {{:function, fun, arity}, _, _, maybe_doc, _} ->
       {{fun, arity},
        EdocReader.extract_docs(maybe_doc)
@@ -539,16 +544,17 @@ defmodule Alchemist.Helpers.Complete do
   def find_doc(fun, docs) do
     doc =
       docs
-      |> Enum.find(&match?({^fun, _, _, _, _}, &1))
+      |> Enum.find(&match?({^fun, _, _, _, _, _}, &1))
 
     case doc do
       nil -> {nil, nil}
-      {_, _, func_kind, _, _} = d -> {func_kind, d}
+      # TODO use metadata
+      {_, _, func_kind, _, _, _} = d -> {func_kind, d}
     end
   end
 
   defp default_arg_functions(docs) do
-    for {{fun_name, arity}, _, _kind, args, _} <- docs,
+    for {{fun_name, arity}, _, _kind, args, _, _} <- docs,
         count = Introspection.count_defaults(args),
         count > 0,
         new_arity <- (arity - count)..(arity - 1),

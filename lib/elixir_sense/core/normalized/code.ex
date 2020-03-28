@@ -5,24 +5,25 @@ defmodule ElixirSense.Core.Normalized.Code do
 
   @type doc_t :: nil | false | String.t()
   @type fun_doc_entry_t ::
-          {{atom, non_neg_integer}, :erl_anno.anno(), :def | :defmacro, term, doc_t}
+          {{atom, non_neg_integer}, pos_integer, :def | :defmacro, term, doc_t, map}
   @type doc_entry_t ::
-          {{atom, non_neg_integer}, :erl_anno.anno(), :callback | :macrocallback | :type, doc_t}
-  @type moduledoc_entry_t :: {:erl_anno.anno(), doc_t}
+          {{atom, non_neg_integer}, pos_integer, :callback | :macrocallback | :type, doc_t,
+           map}
+  @type moduledoc_entry_t :: {pos_integer, doc_t, map}
 
   @spec get_docs(module, :docs) :: nil | [fun_doc_entry_t]
   @spec get_docs(module, :callback_docs | :type_docs) :: nil | [:doc_entry_t]
   @spec get_docs(module, :moduledoc) :: nil | moduledoc_entry_t
   def get_docs(module, category) do
     case Code.fetch_docs(module) do
-      {:docs_v1, moduledoc_line, _beam_language, "text/markdown", moduledoc, _metadata, docs} ->
-        docs = Enum.map(docs, &to_old_format/1)
+      {:docs_v1, moduledoc_line, _beam_language, "text/markdown", moduledoc, metadata, docs} ->
+        docs = Enum.map(docs, &map_doc_entry/1)
 
         case category do
           :moduledoc ->
             moduledoc_en = extract_docs(moduledoc)
 
-            {moduledoc_line, moduledoc_en}
+            {moduledoc_line, moduledoc_en, metadata}
 
           :docs ->
             get_fun_docs(module, docs)
@@ -30,11 +31,11 @@ defmodule ElixirSense.Core.Normalized.Code do
           :callback_docs ->
             Enum.filter(
               docs,
-              &match?({_, _, kind, _} when kind in [:callback, :macrocallback], &1)
+              &match?({_, _, kind, _, _} when kind in [:callback, :macrocallback], &1)
             )
 
           :type_docs ->
-            Enum.filter(docs, &match?({_, _, :type, _}, &1))
+            Enum.filter(docs, &match?({_, _, :type, _, _}, &1))
         end
 
       _ ->
@@ -42,7 +43,7 @@ defmodule ElixirSense.Core.Normalized.Code do
     end
   end
 
-  defp to_old_format({{kind, name, arity}, line, signatures, docs, _meta}) do
+  defp map_doc_entry({{kind, name, arity}, line, signatures, docs, metadata}) when is_integer(line) do
     docs_en = extract_docs(docs)
 
     case kind do
@@ -62,10 +63,10 @@ defmodule ElixirSense.Core.Normalized.Code do
             :macro -> :defmacro
           end
 
-        {{name, arity}, line, def_type, args_quoted, docs_en}
+        {{name, arity}, line, def_type, args_quoted, docs_en, metadata}
 
       _ ->
-        {{name, arity}, line, kind, docs_en}
+        {{name, arity}, line, kind, docs_en, metadata}
     end
   end
 
@@ -79,21 +80,22 @@ defmodule ElixirSense.Core.Normalized.Code do
     docs_from_module =
       Enum.filter(
         docs,
-        &match?({_, _, def_type, _, _} when def_type in [:def, :defmacro], &1)
+        &match?({_, _, def_type, _, _, _} when def_type in [:def, :defmacro], &1)
       )
 
     non_documented =
       docs_from_module
-      |> Stream.filter(fn {_name_arity, _line, _, _args, doc} -> doc in [nil, false] end)
-      |> Enum.into(MapSet.new(), fn {name_arity, _line, _, _args, _doc} -> name_arity end)
+      |> Stream.filter(fn {_name_arity, _line, _, _args, doc, _} -> doc in [nil, false] end)
+      |> Enum.into(MapSet.new(), fn {name_arity, _line, _, _args, _doc, _} -> name_arity end)
 
     docs_from_behaviours = get_docs_from_behaviour(module, non_documented)
 
     Enum.map(
       docs_from_module,
       fn
-        {name_arity, line, type, args, doc} ->
-          {name_arity, line, type, args, Map.get(docs_from_behaviours, name_arity, doc)}
+        {name_arity, line, type, args, doc, metadata} ->
+          {doc, metadata} = Map.get(docs_from_behaviours, name_arity, {doc, metadata})
+          {name_arity, line, type, args, doc, metadata}
 
         other ->
           other
@@ -110,14 +112,15 @@ defmodule ElixirSense.Core.Normalized.Code do
       module
       |> behaviours()
       |> Stream.flat_map(&callback_documentation/1)
-      |> Stream.filter(fn {name_arity, _doc} -> Enum.member?(funs, name_arity) end)
+      |> Stream.filter(fn {name_arity, {_doc, _metadata}} -> Enum.member?(funs, name_arity) end)
       |> Enum.into(%{})
     end
   end
 
   defp callback_documentation(module) do
     docs = get_docs(module, :callback_docs) || []
-    Stream.map(docs, fn {name_arity, _line, _, doc} -> {name_arity, doc} end)
+
+    Stream.map(docs, fn {name_arity, _line, _, doc, metadata} -> {name_arity, {doc, metadata}} end)
   end
 
   defp behaviours(module) do

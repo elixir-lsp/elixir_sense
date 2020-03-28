@@ -16,7 +16,8 @@ defmodule ElixirSense.Core.TypeInfo do
     case NormalizedCode.get_docs(module, :type_docs) do
       docs when is_list(docs) ->
         for(
-          {{name, arity}, _, _, doc} <- docs,
+          # TODO use metadata
+          {{name, arity}, _, _, doc, _metadata} <- docs,
           typedef = get_type_spec(module, name, arity),
           type_ast = TypeAst.from_typedef(typedef),
           spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
@@ -67,7 +68,8 @@ defmodule ElixirSense.Core.TypeInfo do
   def get_signatures(mod, type, code_docs) when not is_nil(mod) and not is_nil(type) do
     case code_docs || NormalizedCode.get_docs(mod, :type_docs) do
       docs when is_list(docs) ->
-        for {{t, arity}, _, _, text} <- docs, t == type do
+        # TODO use metadata
+        for {{t, arity}, _, _, text, _metadata} <- docs, t == type do
           {_kind, {_name, _def, args}} = get_type_spec(mod, type, arity)
           type_args = Enum.map(args, &(&1 |> elem(2) |> Atom.to_string()))
           type_str = Atom.to_string(type)
@@ -79,6 +81,7 @@ defmodule ElixirSense.Core.TypeInfo do
       nil ->
         edoc_results =
           EdocReader.get_typedocs(mod, type)
+          # TODO use metadata
           |> Map.new(fn {{:type, ^type, arity}, _, _, maybe_doc, _} ->
             {arity,
              EdocReader.extract_docs(maybe_doc) |> Introspection.extract_summary_from_docs()}
@@ -157,7 +160,7 @@ defmodule ElixirSense.Core.TypeInfo do
 
   def get_type_position_using_docs(module, type_name, file) do
     case get_type_doc(module, type_name, :any) do
-      {_, doc_line, _, _} ->
+      {_, doc_line, _, _, _} ->
         {kind, _} = get_type_spec(module, type_name)
         kind_str = "@#{kind}"
 
@@ -246,22 +249,35 @@ defmodule ElixirSense.Core.TypeInfo do
     |> Enum.join("\n")
   end
 
+  @spec get_type_docs(module, atom) :: [ElixirSense.Core.Normalized.Code.doc_entry_t()]
   def get_type_docs(module, type_name) do
     docs = NormalizedCode.get_docs(module, :type_docs) || []
 
     docs
-    |> Enum.filter(fn {{name, _}, _, _, _} -> name == type_name end)
-    |> Enum.sort_by(fn {{_, n_args}, _, _, _} -> n_args end)
+    |> Enum.filter(fn {{name, _}, _, _, _, _} -> name == type_name end)
+    |> Enum.sort_by(fn {{_, n_args}, _, _, _, _} -> n_args end)
   end
 
+  @spec get_type_doc(
+          module,
+          atom,
+          non_neg_integer | :any,
+          [ElixirSense.Core.Normalized.Code.doc_entry_t()] | nil
+        ) :: ElixirSense.Core.Normalized.Code.doc_entry_t() | nil
   def get_type_doc(module, type, type_n_args, docs \\ nil) do
     docs = docs || NormalizedCode.get_docs(module, :type_docs) || []
 
-    Enum.find(docs, fn {{name, n_args}, _, _, _} ->
+    Enum.find(docs, fn {{name, n_args}, _, _, _, _} ->
       type == name && (type_n_args == n_args || type_n_args == :any)
     end)
   end
 
+  @spec get_type_doc_desc(
+          module,
+          atom,
+          non_neg_integer,
+          [ElixirSense.Core.Normalized.Code.doc_entry_t()] | nil
+        ) :: String.t()
   def get_type_doc_desc(module, type, type_n_args, docs \\ nil) do
     case get_type_doc(module, type, type_n_args, docs) do
       nil -> BuiltinTypes.get_builtin_type_doc(type)
@@ -269,7 +285,8 @@ defmodule ElixirSense.Core.TypeInfo do
     end
   end
 
-  defp get_doc_description({{_, _}, _, _, desc}) when is_binary(desc) do
+  defp get_doc_description({{_, _}, _, _, desc, _metadata}) when is_binary(desc) do
+    # TODO use metadata
     desc
   end
 

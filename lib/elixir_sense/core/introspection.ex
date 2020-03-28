@@ -91,7 +91,8 @@ defmodule ElixirSense.Core.Introspection do
   def get_signatures(mod, fun, code_docs) when not is_nil(mod) and not is_nil(fun) do
     case code_docs || NormalizedCode.get_docs(mod, :docs) do
       docs when is_list(docs) ->
-        for {{f, arity}, _, kind, args, text} <- docs, f == fun do
+        # TODO use metadata
+        for {{f, arity}, _, kind, args, text, _metadata} <- docs, f == fun do
           fun_args = Enum.map(args || [], &format_doc_arg(&1))
           fun_str = Atom.to_string(fun)
           doc = extract_summary_from_docs(text)
@@ -103,6 +104,7 @@ defmodule ElixirSense.Core.Introspection do
       nil ->
         edoc_results =
           EdocReader.get_docs(mod, fun)
+          # TODO use metadata
           |> Map.new(fn {{:function, ^fun, arity}, _, _, maybe_doc, _} ->
             {arity, EdocReader.extract_docs(maybe_doc) |> extract_summary_from_docs}
           end)
@@ -170,6 +172,7 @@ defmodule ElixirSense.Core.Introspection do
       nil ->
         edoc_results =
           EdocReader.get_docs(mod, fun)
+          # TODO use metadata
           |> Map.new(fn {{:function, ^fun, arity}, _, _, maybe_doc, _} ->
             {arity, EdocReader.extract_docs(maybe_doc)}
           end)
@@ -214,7 +217,8 @@ defmodule ElixirSense.Core.Introspection do
         end
 
       docs ->
-        for {{f, arity}, _, kind, args, text} <- docs, f == fun do
+        # TODO use metadata
+        for {{f, arity}, _, kind, args, text, _metadata} <- docs, f == fun do
           args = args || []
 
           fun_args_text =
@@ -233,7 +237,8 @@ defmodule ElixirSense.Core.Introspection do
     mod_str = inspect(mod)
 
     case NormalizedCode.get_docs(mod, :moduledoc) do
-      {_line, doc} when is_binary(doc) ->
+      # TODO use metadata
+      {_line, doc, _metadata} when is_binary(doc) ->
         "> #{mod_str}\n\n" <> doc
 
       _ ->
@@ -300,7 +305,8 @@ defmodule ElixirSense.Core.Introspection do
         end
 
       docs ->
-        for {{f, arity}, _, _, text} <- docs, f == fun do
+        # TODO use metadata
+        for {{f, arity}, _, _, text, _metadata} <- docs, f == fun do
           spec =
             mod
             |> TypeInfo.get_type_spec(f, arity)
@@ -367,7 +373,8 @@ defmodule ElixirSense.Core.Introspection do
 
       {callbacks, docs} ->
         Enum.map(docs, fn
-          {{fun, arity}, _, kind, doc} ->
+          {{fun, arity}, _, kind, doc, _metadata} ->
+            # TODO use metadata
             get_callback_with_doc(kind, doc, {fun, arity}, callbacks)
         end)
     end
@@ -380,6 +387,7 @@ defmodule ElixirSense.Core.Introspection do
     edocs =
       if docs == nil do
         EdocReader.get_typedocs(module)
+        # TODO use metadata
         |> Map.new(fn {{:type, fun, arity}, _, _, maybe_doc, _} ->
           {{fun, arity}, EdocReader.extract_docs(maybe_doc)}
         end)
@@ -674,7 +682,8 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_module_docs_summary(module) do
     case NormalizedCode.get_docs(module, :moduledoc) do
-      {_, doc} ->
+      # TODO use metadata
+      {_, doc, _metadata} ->
         extract_summary_from_docs(doc)
 
       _ ->
@@ -750,7 +759,7 @@ defmodule ElixirSense.Core.Introspection do
     module_has_function(module, :__struct__, 0)
   end
 
-  def extract_fun_args({{_fun, _}, _line, _kind, args, _doc}) do
+  def extract_fun_args({{_fun, _}, _line, _kind, args, _doc, _metadata}) do
     (args || [])
     |> Enum.map_join(", ", &format_doc_arg(&1))
     |> String.replace(Regex.recompile!(~r/\s+/), " ")
@@ -784,7 +793,8 @@ defmodule ElixirSense.Core.Introspection do
     docs = NormalizedCode.get_docs(module, :docs) || []
     specs = TypeInfo.get_module_specs(module)
 
-    for {{f, a}, _line, func_kind, args, doc} <- docs, doc != false, into: %{} do
+    # TODO use metadata
+    for {{f, a}, _line, func_kind, args, doc, _metadata} <- docs, doc != false, into: %{} do
       spec = Map.get(specs, {f, a})
 
       formatted_args =

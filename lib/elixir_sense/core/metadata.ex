@@ -157,7 +157,7 @@ defmodule ElixirSense.Core.Metadata do
       nil ->
         nil
 
-      {line, _} ->
+      {line, _, _} ->
         {line, 1}
     end
   end
@@ -169,7 +169,7 @@ defmodule ElixirSense.Core.Metadata do
 
       docs ->
         Enum.find_value(docs, fn
-          {{^function, _arity}, line, _, _, _} -> {line, 1}
+          {{^function, _arity}, line, _, _, _, _} -> {line, 1}
           _ -> nil
         end)
     end
