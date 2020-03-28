@@ -461,8 +461,8 @@ defmodule Alchemist.Helpers.Complete do
 
         spec =
           case func_kind do
-            :defmacro -> Map.get(specs, {:"MACRO-#{f}", new_arity + 1})
-            :def -> Map.get(specs, {f, new_arity})
+            :macro -> Map.get(specs, {:"MACRO-#{f}", new_arity + 1})
+            :function -> Map.get(specs, {f, new_arity})
             nil -> nil
           end
 
@@ -481,7 +481,7 @@ defmodule Alchemist.Helpers.Complete do
         {f, a, func_kind, doc, Introspection.spec_to_string(spec), fun_args}
       end
       |> Kernel.++(
-        for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :def, nil, nil, nil}
+        for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :function, nil, nil, nil}
       )
     else
       funs =
@@ -500,11 +500,11 @@ defmodule Alchemist.Helpers.Complete do
             params = format_params(spec, a - 1)
             # TODO test this arity and spec
             # TODO is this branch reachable?
-            {String.to_atom(name), a - 1, :defmacro, "", spec_str, params}
+            {String.to_atom(name), a - 1, :macro, "", spec_str, params}
 
           _name ->
             params = format_params(spec, a)
-            {f, a, :def, edoc_results[{f, a}] || "", spec_str, params}
+            {f, a, :function, edoc_results[{f, a}] || "", spec_str, params}
         end
       end
     end
@@ -539,7 +539,7 @@ defmodule Alchemist.Helpers.Complete do
     end)
   end
 
-  def find_doc(fun, _docs) when fun in @builtin_functions, do: {:def, nil}
+  def find_doc(fun, _docs) when fun in @builtin_functions, do: {:function, nil}
 
   def find_doc(fun, docs) do
     doc =
@@ -591,7 +591,7 @@ defmodule Alchemist.Helpers.Complete do
     for {{a, {doc, spec}}, args} <- arities_docs_specs_args do
       kind =
         case func_kind do
-          k when k in [:defmacro, :defmacrop, :defguard, :defguardp] -> :macro
+          k when k in [:macro, :defmacro, :defmacrop, :defguard, :defguardp] -> :macro
           _ -> :function
         end
 

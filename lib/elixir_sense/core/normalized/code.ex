@@ -5,10 +5,9 @@ defmodule ElixirSense.Core.Normalized.Code do
 
   @type doc_t :: nil | false | String.t()
   @type fun_doc_entry_t ::
-          {{atom, non_neg_integer}, pos_integer, :def | :defmacro, term, doc_t, map}
+          {{atom, non_neg_integer}, pos_integer, :function | :macro, term, doc_t, map}
   @type doc_entry_t ::
-          {{atom, non_neg_integer}, pos_integer, :callback | :macrocallback | :type, doc_t,
-           map}
+          {{atom, non_neg_integer}, pos_integer, :callback | :macrocallback | :type, doc_t, map}
   @type moduledoc_entry_t :: {pos_integer, doc_t, map}
 
   @spec get_docs(module, :docs) :: nil | [fun_doc_entry_t]
@@ -43,7 +42,8 @@ defmodule ElixirSense.Core.Normalized.Code do
     end
   end
 
-  defp map_doc_entry({{kind, name, arity}, line, signatures, docs, metadata}) when is_integer(line) do
+  defp map_doc_entry({{kind, name, arity}, line, signatures, docs, metadata})
+       when is_integer(line) do
     docs_en = extract_docs(docs)
 
     case kind do
@@ -57,13 +57,7 @@ defmodule ElixirSense.Core.Normalized.Code do
             _ -> []
           end
 
-        def_type =
-          case kind do
-            :function -> :def
-            :macro -> :defmacro
-          end
-
-        {{name, arity}, line, def_type, args_quoted, docs_en, metadata}
+        {{name, arity}, line, kind, args_quoted, docs_en, metadata}
 
       _ ->
         {{name, arity}, line, kind, docs_en, metadata}
@@ -80,7 +74,7 @@ defmodule ElixirSense.Core.Normalized.Code do
     docs_from_module =
       Enum.filter(
         docs,
-        &match?({_, _, def_type, _, _, _} when def_type in [:def, :defmacro], &1)
+        &match?({_, _, def_type, _, _, _} when def_type in [:function, :macro], &1)
       )
 
     non_documented =

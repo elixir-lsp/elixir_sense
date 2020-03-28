@@ -25,10 +25,10 @@ defmodule ElixirSenseExample.ModuleWithDocs do
   An example macro
   """
   @doc since: "1.1.0"
-  def some_macro(a, b \\ nil), do: a + b
+  defmacro some_macro(a, b \\ nil), do: a + b
   @doc false
-  def some_macro_doc_false(a, b \\ nil), do: a + b
-  def some_macro_no_doc(a, b \\ nil), do: a + b
+  defmacro some_macro_doc_false(a, b \\ nil), do: a + b
+  defmacro some_macro_no_doc(a, b \\ nil), do: a + b
 
   @doc """
   An example callback

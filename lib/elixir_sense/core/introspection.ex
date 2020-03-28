@@ -186,9 +186,9 @@ defmodule ElixirSense.Core.Introspection do
 
             text = edoc_results[arity] || "No documentation available"
 
-            "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_spec_text(mod, fun, arity, :def)}#{
-              text
-            }"
+            "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{
+              get_spec_text(mod, fun, arity, :function)
+            }#{text}"
           end
 
         case results do
@@ -208,7 +208,7 @@ defmodule ElixirSense.Core.Introspection do
                 end
 
               "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{
-                get_spec_text(mod, fun, arity, :def)
+                get_spec_text(mod, fun, arity, :function)
               }#{text}"
             end
 
@@ -769,11 +769,11 @@ defmodule ElixirSense.Core.Introspection do
     ""
   end
 
-  def get_spec_as_string(module, function, arity, :defmacro) do
+  def get_spec_as_string(module, function, arity, :macro) do
     TypeInfo.get_spec(module, :"MACRO-#{function}", arity + 1) |> spec_to_string()
   end
 
-  def get_spec_as_string(module, function, arity, :def) do
+  def get_spec_as_string(module, function, arity, :function) do
     TypeInfo.get_spec(module, function, arity) |> spec_to_string()
   end
 

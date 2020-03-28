@@ -4,22 +4,22 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
 
   test "gets function docs" do
     assert [
-             {{:some_fun, 2}, 15, :def,
+             {{:some_fun, 2}, 15, :function,
               [{:a, [line: 1], nil}, {:\\, [line: 1], [{:b, [line: 1], nil}, nil]}],
               "An example fun\n", %{defaults: 1, since: "1.1.0"}},
-             {{:some_fun_doc_false, 2}, 20, :def,
+             {{:some_fun_doc_false, 2}, 20, :function,
               [{:a, [line: 1], nil}, {:\\, [line: 1], [{:b, [line: 1], nil}, nil]}], false,
               %{defaults: 1}},
-             {{:some_fun_no_doc, 2}, 22, :def,
+             {{:some_fun_no_doc, 2}, 22, :function,
               [{:a, [line: 1], nil}, {:\\, [line: 1], [{:b, [line: 1], nil}, nil]}], nil,
               %{defaults: 1}},
-             {{:some_macro, 2}, 24, :def,
+             {{:some_macro, 2}, 24, :macro,
               [{:a, [line: 1], nil}, {:\\, [line: 1], [{:b, [line: 1], nil}, nil]}],
               "An example macro\n", %{defaults: 1, since: "1.1.0"}},
-             {{:some_macro_doc_false, 2}, 29, :def,
+             {{:some_macro_doc_false, 2}, 29, :macro,
               [{:a, [line: 1], nil}, {:\\, [line: 1], [{:b, [line: 1], nil}, nil]}], false,
               %{defaults: 1}},
-             {{:some_macro_no_doc, 2}, 31, :def,
+             {{:some_macro_no_doc, 2}, 31, :macro,
               [{:a, [line: 1], nil}, {:\\, [line: 1], [{:b, [line: 1], nil}, nil]}], nil,
               %{defaults: 1}}
            ] == Code.get_docs(ElixirSenseExample.ModuleWithDocs, :docs)
