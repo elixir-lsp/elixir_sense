@@ -293,14 +293,14 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   def get_module_specs(module) do
-    Typespec.beam_specs(module)
+    Typespec.get_specs(module)
     |> Map.new(fn
-      {_kind, {{f, a}, _spec}} = spec ->
+      {{f, a}, _spec} = spec ->
         {{f, a}, spec}
 
-      {kind, {{^module, f, a}, spec}} ->
+      {{^module, f, a}, spec} ->
         # spec with module - transform it to moduleless form
-        {{f, a}, {kind, {{f, a}, spec}}}
+        {{f, a}, {{f, a}, spec}}
     end)
   end
 
@@ -552,7 +552,7 @@ defmodule ElixirSense.Core.TypeInfo do
     false
   end
 
-  defp extract_params_types_variants({:spec, {_, list}}) do
+  defp extract_params_types_variants({_, list}) do
     list
     |> Enum.map(&extract_params_types/1)
   end

@@ -109,7 +109,7 @@ defmodule ElixirSense.Core.Introspection do
 
         # We are not expecting macros here
         results =
-          for {_kind, {{_name, arity}, [params | _]}} = spec <-
+          for {{_name, arity}, [params | _]} = spec <-
                 TypeInfo.get_function_specs(mod, fun) do
             params = TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
 
@@ -176,7 +176,7 @@ defmodule ElixirSense.Core.Introspection do
 
         # no docs, fallback to typespecs
         results =
-          for {_kind, {{_name, arity}, [params | _]}} <-
+          for {{_name, arity}, [params | _]} <-
                 TypeInfo.get_function_specs(mod, fun) do
             fun_args_text =
               TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
@@ -845,7 +845,7 @@ defmodule ElixirSense.Core.Introspection do
     ""
   end
 
-  def spec_to_string({kind, {{name, _arity}, specs}}) do
+  def spec_to_string({{name, arity}, specs}) when is_atom(name) and is_integer(arity) do
     is_macro = Atom.to_string(name) |> String.starts_with?("MACRO-")
 
     specs
@@ -862,7 +862,7 @@ defmodule ElixirSense.Core.Introspection do
         end
 
       binary = Macro.to_string(quoted)
-      "@#{kind} #{binary}" |> String.replace("()", "")
+      "@spec #{binary}" |> String.replace("()", "")
     end)
   end
 

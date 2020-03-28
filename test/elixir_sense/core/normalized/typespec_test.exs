@@ -2,32 +2,29 @@ defmodule ElixirSense.Core.Normalized.TypespecTest do
   use ExUnit.Case, async: true
   alias ElixirSense.Core.Normalized.Typespec
 
-  test "beam_specs" do
+  test "get_specs" do
     assert [
-             spec:
-               {{:"MACRO-some_macro", 2},
-                [
-                  {:type, 17, :fun,
-                   [
-                     {:type, 17, :product, [{:type, 17, :term, []}, {:type, 17, :integer, []}]},
-                     {:remote_type, 17, [{:atom, 0, Macro}, {:atom, 0, :t}, []]}
-                   ]}
-                ]},
-             spec:
-               {{:some_fun_priv, 1},
-                [
-                  {:type, 8, :fun,
-                   [{:type, 8, :product, [{:type, 8, :integer, []}]}, {:type, 8, :integer, []}]}
-                ]},
-             spec:
-               {{:some_fun, 1},
-                [
-                  {:type, 11, :fun,
-                   [{:type, 11, :product, [{:type, 11, :integer, []}]}, {:type, 11, :integer, []}]}
-                ]}
-           ] == Typespec.beam_specs(ElixirSenseExample.ModuleWithTypes)
+             {{:"MACRO-some_macro", 2},
+              [
+                {:type, 17, :fun,
+                 [
+                   {:type, 17, :product, [{:type, 17, :term, []}, {:type, 17, :integer, []}]},
+                   {:remote_type, 17, [{:atom, 0, Macro}, {:atom, 0, :t}, []]}
+                 ]}
+              ]},
+             {{:some_fun_priv, 1},
+              [
+                {:type, 8, :fun,
+                 [{:type, 8, :product, [{:type, 8, :integer, []}]}, {:type, 8, :integer, []}]}
+              ]},
+             {{:some_fun, 1},
+              [
+                {:type, 11, :fun,
+                 [{:type, 11, :product, [{:type, 11, :integer, []}]}, {:type, 11, :integer, []}]}
+              ]}
+           ] == Typespec.get_specs(ElixirSenseExample.ModuleWithTypes)
 
-    assert [] == Typespec.beam_specs(ElixirSenseExample.NotExistingModule)
+    assert [] == Typespec.get_specs(ElixirSenseExample.NotExistingModule)
   end
 
   test "get_types" do

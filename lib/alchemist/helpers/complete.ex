@@ -506,7 +506,7 @@ defmodule Alchemist.Helpers.Complete do
     end
   end
 
-  defp format_params({_kind, {{_name, _arity}, [params | _]}}, _arity_1) do
+  defp format_params({{_name, _arity}, [params | _]}, _arity_1) do
     TypeInfo.extract_params(params)
     |> Enum.map_join(", ", &Atom.to_string/1)
   end
