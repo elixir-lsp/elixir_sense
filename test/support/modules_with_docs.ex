@@ -2,6 +2,7 @@ defmodule ElixirSenseExample.ModuleWithDocs do
   @moduledoc """
   An example module
   """
+  @moduledoc since: "1.2.3"
 
   @typedoc """
   An example type
@@ -11,6 +12,11 @@ defmodule ElixirSenseExample.ModuleWithDocs do
   @typedoc false
   @type some_type_doc_false :: integer
   @type some_type_no_doc :: integer
+
+  @typedoc """
+  An example opaque type
+  """
+  @opaque opaque_type :: integer
 
   @doc """
   An example fun
@@ -47,6 +53,52 @@ defmodule ElixirSenseExample.ModuleWithDocs do
   @doc false
   @macrocallback some_macrocallback_doc_false(integer) :: atom
   @macrocallback some_macrocallback_no_doc(integer) :: atom
+
+  @doc """
+  An example fun
+  """
+  @doc deprecated: "This function will be removed in a future release"
+  def soft_deprecated_fun(_a), do: :ok
+
+  @doc """
+  An example macro
+  """
+  @doc deprecated: "This macro will be removed in a future release"
+  defmacro soft_deprecated_macro(_a), do: :ok
+
+  # As of elixir 1.10 hard deprecation by @deprecated attribute is only supported for macros and functions
+
+  @doc """
+  An example fun
+  """
+  @deprecated "This function will be removed in a future release"
+  def hard_deprecated_fun(_a), do: :ok
+
+  @doc """
+  An example macro
+  """
+  @deprecated "This macro will be removed in a future release"
+  defmacro hard_deprecated_macro(_a), do: :ok
+
+  @doc """
+  An example callback
+  """
+  @doc deprecated: "This callback will be removed in a future release"
+  @callback soft_deprecated_callback(integer) :: atom
+
+  @doc """
+  An example macrocallback
+  """
+  @doc deprecated: "This callback will be removed in a future release"
+  @macrocallback soft_deprecated_macrocallback(integer) :: atom
+
+  @typedoc """
+  An example type
+  """
+  @typedoc deprecated: "This type will be removed in a future release"
+  @type soft_deprecated_type :: integer
+
+  @optional_callbacks soft_deprecated_callback: 1, soft_deprecated_macrocallback: 1
 end
 
 defmodule ElixirSenseExample.ModuleWithDocFalse do
@@ -54,4 +106,11 @@ defmodule ElixirSenseExample.ModuleWithDocFalse do
 end
 
 defmodule ElixirSenseExample.ModuleWithNoDocs do
+end
+
+defmodule ElixirSenseExample.SoftDeprecatedModule do
+  @moduledoc """
+  An example module
+  """
+  @moduledoc deprecated: "This module will be removed in a future release"
 end
