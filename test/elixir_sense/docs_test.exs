@@ -560,6 +560,8 @@ defmodule ElixirSense.DocsTest do
       assert docs =~ """
              > config_change(changed, new, removed)
 
+             **Optional**
+
              ### Specs
 
              ```
@@ -601,6 +603,8 @@ defmodule ElixirSense.DocsTest do
 
       assert docs =~ """
              > optional(a)
+
+             **Optional**
 
              ### Specs
 
@@ -657,19 +661,27 @@ defmodule ElixirSense.DocsTest do
       assert actual_subject == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t"
 
       assert docs == """
-             Remote type
+             > ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t()
+
+             ### Specs
 
              ```
              @type remote_t() :: atom()
              ```
 
+             Remote type
+
              ---
 
-             Remote type with params
+             > ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t(a, b)
+
+             ### Specs
 
              ```
              @type remote_t(a, b) :: {a, b}
              ```
+
+             Remote type with params
              """
     end
 
@@ -692,12 +704,18 @@ defmodule ElixirSense.DocsTest do
       assert actual_subject == "ElixirSenseExample.CallbackOpaque.t"
 
       assert docs == """
-             Opaque type
+             > ElixirSenseExample.CallbackOpaque.t(x)
 
+             **Opaque**
+
+             ### Specs
 
              ```
              @opaque t(x)
              ```
+
+             Opaque type
+
              """
     end
 
@@ -720,9 +738,9 @@ defmodule ElixirSense.DocsTest do
       assert actual_subject == ":docsh_edoc_xmerl.xml_element_content"
 
       assert docs == """
-             #xmlElement.content as defined by xmerl.hrl.
+             > :docsh_edoc_xmerl.xml_element_content()
 
-
+             ### Specs
 
              ```
              @type xml_element_content() :: [
@@ -733,6 +751,10 @@ defmodule ElixirSense.DocsTest do
                | record(:xmlDecl)
              ]
              ```
+
+             #xmlElement.content as defined by xmerl.hrl.
+
+
              """
     end
 
@@ -755,7 +777,9 @@ defmodule ElixirSense.DocsTest do
       assert actual_subject == ":erlang.time_unit"
 
       assert docs == """
-             No documentation available
+             > :erlang.time_unit()
+
+             ### Specs
 
              ```
              @type time_unit() ::
@@ -768,6 +792,9 @@ defmodule ElixirSense.DocsTest do
                | :perf_counter
                | deprecated_time_unit()
              ```
+
+             No documentation available
+
              """
     end
 
@@ -789,19 +816,27 @@ defmodule ElixirSense.DocsTest do
       assert actual_subject == "keyword"
 
       assert docs == """
-             A keyword list
+             > keyword()
+
+             ### Specs
 
              ```
              @type keyword() :: [{atom(), any()}]
              ```
 
+             A keyword list
+
              ---
 
-             A keyword list with values of type `t`
+             > keyword(t)
+
+             ### Specs
 
              ```
              @type keyword(t) :: [{atom(), t}]
              ```
+
+             A keyword list with values of type `t`
 
              ---
 
@@ -827,11 +862,15 @@ defmodule ElixirSense.DocsTest do
       assert actual_subject == "integer"
 
       assert docs == """
-             An integer number
+             > integer()
+
+             ### Specs
 
              ```
              integer()
              ```
+
+             An integer number
 
              ---
 
@@ -857,19 +896,27 @@ defmodule ElixirSense.DocsTest do
       assert actual_subject == "list"
 
       assert docs == """
-             A list
+             > list()
+
+             ### Specs
 
              ```
              @type list() :: [any()]
              ```
 
+             A list
+
              ---
 
-             Proper list ([]-terminated)
+             > list(t)
+
+             ### Specs
 
              ```
              list(t)
              ```
+
+             Proper list ([]-terminated)
 
              ---
 

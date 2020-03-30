@@ -60,7 +60,8 @@ defmodule ElixirSense.Core.IntrospectionTest do
                @callback do_stuff(t(a), term) :: t(a) when a: any\
                """,
                signature: "do_stuff(t, term)",
-               doc: "Does stuff to opaque arg\n"
+               doc: "Does stuff to opaque arg\n",
+               metadata: %{optional: false}
              }
            ]
   end
@@ -76,7 +77,8 @@ defmodule ElixirSense.Core.IntrospectionTest do
                  :ignore\
                """,
                signature: "init(args)",
-               doc: nil
+               doc: nil,
+               metadata: %{optional: false}
              }
            ]
   end
@@ -89,21 +91,24 @@ defmodule ElixirSense.Core.IntrospectionTest do
                callback: "@callback blame(t, stacktrace) :: {t, stacktrace}",
                doc:
                  "Called from `Exception.blame/3` to augment the exception struct.\n\nCan be used to collect additional information about the exception\nor do some additional expensive computation.\n",
-               signature: "blame(t, stacktrace)"
+               signature: "blame(t, stacktrace)",
+               metadata: %{optional: true}
              },
              %{
                arity: 1,
                name: :exception,
                doc: nil,
                callback: "@callback exception(term) :: t",
-               signature: "exception(term)"
+               signature: "exception(term)",
+               metadata: %{optional: false}
              },
              %{
                arity: 1,
                name: :message,
                callback: "@callback message(t) :: String.t",
                doc: nil,
-               signature: "message(t)"
+               signature: "message(t)",
+               metadata: %{optional: false}
              }
            ]
   end
@@ -229,5 +234,147 @@ defmodule ElixirSense.Core.IntrospectionTest do
   test "actual_mod_fun :erlang builtings" do
     assert {:erlang, :andalso, true} = actual_mod_fun({:erlang, :andalso}, [], [], nil, %{}, %{})
     assert {:erlang, :orelse, true} = actual_mod_fun({:erlang, :orelse}, [], [], nil, %{}, %{})
+  end
+
+  describe "get_all_docs" do
+    test "returns since metadata on functions" do
+      assert %{docs: docs} =
+               get_all_docs({ElixirSenseExample.ModuleWithDocs, :some_fun}, SomeModule)
+
+      assert docs == """
+             > ElixirSenseExample.ModuleWithDocs.some_fun(a, b \\\\\\\\ nil)
+
+             **Since**
+             1.1.0
+
+             An example fun
+
+             """
+    end
+
+    test "returns deprecated metadata on functions" do
+      assert %{docs: docs} =
+               get_all_docs({ElixirSenseExample.ModuleWithDocs, :soft_deprecated_fun}, SomeModule)
+
+      assert docs == """
+             > ElixirSenseExample.ModuleWithDocs.soft_deprecated_fun(a)
+
+             **Deprecated**
+             This function will be removed in a future release
+
+             An example fun
+
+             """
+    end
+
+    test "returns since metadata on types" do
+      assert %{docs: docs} =
+               get_all_docs({ElixirSenseExample.ModuleWithDocs, :some_type}, SomeModule)
+
+      assert docs == """
+             > ElixirSenseExample.ModuleWithDocs.some_type()
+
+             **Since**
+             1.1.0
+
+             ### Specs
+
+             ```
+             @type some_type() :: integer()
+             ```
+
+             An example type
+
+             """
+    end
+
+    test "returns since metadata on modules" do
+      assert %{docs: docs} = get_all_docs({ElixirSenseExample.ModuleWithDocs, nil}, SomeModule)
+
+      assert docs == """
+             > ElixirSenseExample.ModuleWithDocs
+
+             **Since**
+             1.2.3
+
+             An example module
+             """
+    end
+
+    test "returns since metadata on callbacks" do
+      assert %{callbacks: callbacks} =
+               get_all_docs({ElixirSenseExample.ModuleWithDocs, nil}, SomeModule)
+
+      assert callbacks =~ """
+             > some_callback(integer)
+
+             **Since**
+             1.1.0
+
+             ### Specs
+
+             ```
+             @callback some_callback(integer) :: atom
+             ```
+
+             An example callback
+             """
+    end
+
+    test "returns optional metadata on callbacks" do
+      assert %{callbacks: callbacks} =
+               get_all_docs({ElixirSenseExample.ModuleWithDocs, nil}, SomeModule)
+
+      assert callbacks =~ """
+             > soft_deprecated_callback(integer)
+
+             **Deprecated**
+             This callback will be removed in a future release
+             **Optional**
+
+             ### Specs
+
+             ```
+             @callback soft_deprecated_callback(integer) :: atom
+             ```
+
+             An example callback
+
+
+
+             ---
+
+             > soft_deprecated_macrocallback(integer)
+
+             **Deprecated**
+             This callback will be removed in a future release
+             **Optional**
+
+             ### Specs
+
+             ```
+             @macrocallback soft_deprecated_macrocallback(integer) :: atom
+             ```
+
+             An example macrocallback
+             """
+    end
+
+    test "returns since metadata on types (module)" do
+      assert %{types: types} = get_all_docs({ElixirSenseExample.ModuleWithDocs, nil}, SomeModule)
+
+      assert types =~ """
+             > ElixirSenseExample.ModuleWithDocs.opaque_type()
+
+             **Opaque**
+
+             ### Specs
+             ```
+             @opaque opaque_type
+             ```
+
+             An example opaque type
+             """
+    end
   end
 end

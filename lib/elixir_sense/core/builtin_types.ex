@@ -99,7 +99,7 @@ defmodule ElixirSense.Core.BuiltinTypes do
       doc: "The number of arguments that a function takes"
     },
     "as_boolean/1" => %{
-      params: [],
+      params: [:t],
       spec: quote(do: as_boolean(t) :: t),
       doc: "A type `t` whose value will be used as a _truthy_ value"
     },

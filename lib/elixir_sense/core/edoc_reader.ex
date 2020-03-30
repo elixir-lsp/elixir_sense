@@ -40,13 +40,19 @@ defmodule ElixirSense.Core.EdocReader do
           {:error, _reason} ->
             []
 
-          {:ok, docs} ->
-            case :docsh_format.lookup(docs, key, kinds) do
-              {:not_found, _message} ->
-                []
+          {:ok, docs = {:docs_v1, line, :erlang, "text/erlang-edoc", moduledoc, metadata, _docs}} ->
+            case kinds do
+              [:moduledoc] ->
+                [{line, moduledoc, metadata}]
 
-              {:ok, doc_items} ->
-                doc_items
+              _ ->
+                case :docsh_format.lookup(docs, key, kinds) do
+                  {:not_found, _message} ->
+                    []
+
+                  {:ok, doc_items} ->
+                    doc_items
+                end
             end
         end
       rescue

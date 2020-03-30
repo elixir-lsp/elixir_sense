@@ -33,7 +33,7 @@ defmodule ElixirSense do
       iex> %{docs: %{types: types, docs: docs}} = ElixirSense.docs(code, 3, 11)
       iex> docs |> String.split("\n") |> Enum.at(8)
       "Converts `enumerable` to a list."
-      iex> types |> String.split("\n") |> Enum.at(1)
+      iex> types |> String.split("\n") |> Enum.at(4)
       "@type default :: any"
   """
   @spec docs(String.t(), pos_integer, pos_integer) :: %{

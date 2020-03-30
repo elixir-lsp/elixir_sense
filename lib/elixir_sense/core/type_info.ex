@@ -277,21 +277,20 @@ defmodule ElixirSense.Core.TypeInfo do
           atom,
           non_neg_integer,
           [ElixirSense.Core.Normalized.Code.doc_entry_t()] | nil
-        ) :: String.t()
+        ) :: {String.t(), map}
   def get_type_doc_desc(module, type, type_n_args, docs \\ nil) do
     case get_type_doc(module, type, type_n_args, docs) do
-      nil -> BuiltinTypes.get_builtin_type_doc(type)
+      nil -> {BuiltinTypes.get_builtin_type_doc(type), %{}}
       doc -> get_doc_description(doc)
     end
   end
 
-  defp get_doc_description({{_, _}, _, _, desc, _metadata}) when is_binary(desc) do
-    # TODO use metadata
-    desc
+  defp get_doc_description({{_, _}, _, _, desc, metadata}) when is_binary(desc) do
+    {desc, metadata}
   end
 
   defp get_doc_description(_) do
-    ""
+    {nil, %{}}
   end
 
   def get_spec(module, function, arity)
@@ -366,10 +365,11 @@ defmodule ElixirSense.Core.TypeInfo do
         "#{inspect(mod)}.#{type_str(type)}"
       end
 
-    docs =
+    # TODO use metadata
+    {docs, _metadata} =
       case EdocReader.get_typedocs(module, name, n_args) do
-        [{_, _, _, maybe_doc, _}] ->
-          EdocReader.extract_docs(maybe_doc)
+        [{_, _, _, maybe_doc, metadata}] ->
+          {EdocReader.extract_docs(maybe_doc), metadata}
 
         _ ->
           get_type_doc_desc(module, name, n_args)
