@@ -41,7 +41,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
              spec:
                "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()",
              summary: "Built-in function",
-             type: :function
+             type: :function,
+             metadata: %{builtin: true}
            }
 
     assert result |> Enum.at(2) == %{
@@ -52,7 +53,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
              spec:
                "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]",
              summary: "Built-in function",
-             type: :function
+             type: :function,
+             metadata: %{builtin: true}
            }
 
     assert result |> Enum.at(3) == %{
@@ -63,7 +65,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
              spec:
                "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean",
              summary: "Built-in function",
-             type: :function
+             type: :function,
+             metadata: %{builtin: true}
            }
   end
 
@@ -79,12 +82,19 @@ defmodule ElixirSense.Providers.SuggestionTest do
            ) ==
              [
                %{type: :hint, value: "ElixirSenseExample.ModuleWithDoc"},
-               %{name: "ModuleWithDocFalse", subtype: nil, summary: "", type: :module},
+               %{
+                 name: "ModuleWithDocFalse",
+                 subtype: nil,
+                 summary: "",
+                 type: :module,
+                 metadata: %{}
+               },
                %{
                  name: "ModuleWithDocs",
                  subtype: :behaviour,
                  summary: "An example module\n",
-                 type: :module
+                 type: :module,
+                 metadata: %{since: "1.2.3"}
                }
              ]
   end
@@ -173,7 +183,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
                origin: "ElixirSense.Providers.SuggestionTest.MyModule",
                spec: "",
                summary: "",
-               type: :function
+               type: :function,
+               metadata: %{}
              }
            ]
   end

@@ -16,8 +16,7 @@ defmodule ElixirSense.Core.TypeInfo do
     case NormalizedCode.get_docs(module, :type_docs) do
       docs when is_list(docs) ->
         for(
-          # TODO use metadata
-          {{name, arity}, _, _, doc, _metadata} <- docs,
+          {{name, arity}, _, _, doc, metadata} <- docs,
           typedef = get_type_spec(module, name, arity),
           type_ast = TypeAst.from_typedef(typedef),
           spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
@@ -27,7 +26,8 @@ defmodule ElixirSense.Core.TypeInfo do
             arity: arity,
             doc: Introspection.extract_summary_from_docs(doc),
             spec: spec,
-            signature: signature
+            signature: signature,
+            metadata: metadata
           },
           filter.(info)
         ) do
@@ -37,9 +37,9 @@ defmodule ElixirSense.Core.TypeInfo do
       nil ->
         edoc_results =
           EdocReader.get_typedocs(module)
-          |> Map.new(fn {{:type, fun, arity}, _, _, maybe_doc, _} ->
-            {{fun, arity},
-             EdocReader.extract_docs(maybe_doc) |> Introspection.extract_summary_from_docs()}
+          |> Map.new(fn {{:type, fun, arity}, _, _, maybe_doc, metadata} ->
+            doc = EdocReader.extract_docs(maybe_doc) |> Introspection.extract_summary_from_docs()
+            {{fun, arity}, {doc || "", metadata}}
           end)
 
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(module),
@@ -47,10 +47,12 @@ defmodule ElixirSense.Core.TypeInfo do
             spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
             type_ast = TypeAst.from_typedef(typedef),
             signature = TypeAst.extract_signature(type_ast),
+            {doc, metadata} = edoc_results[{name, length(args)}] || {"", %{}},
             info = %{
               name: name,
               arity: length(args),
-              doc: edoc_results[{name, length(args)}] || "",
+              doc: doc,
+              metadata: metadata,
               spec: spec,
               signature: signature
             },
@@ -135,7 +137,14 @@ defmodule ElixirSense.Core.TypeInfo do
       ],
       {name, arity} = extract_name_and_arity.(key),
       doc = value[:doc] || "",
-      info = %{name: name, arity: arity, doc: doc, spec: spec, signature: signature},
+      info = %{
+        name: name,
+        arity: arity,
+        doc: doc,
+        spec: spec,
+        signature: signature,
+        metadata: %{builtin: true}
+      },
       filter.(info)
     ) do
       info

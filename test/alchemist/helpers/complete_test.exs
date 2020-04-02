@@ -10,7 +10,8 @@ defmodule Alchemist.Helpers.CompleteTest do
 
   test "erlang module completion" do
     assert expand(':zl') ==
-             {:yes, 'ib', [%{name: "zlib", subtype: nil, summary: "", type: :module}]}
+             {:yes, 'ib',
+              [%{name: "zlib", subtype: nil, summary: "", type: :module, metadata: %{}}]}
   end
 
   test "erlang module completion edoc" do
@@ -22,7 +23,8 @@ defmodule Alchemist.Helpers.CompleteTest do
                   subtype: nil,
                   summary:
                     "EDoc wiki expansion, parsing and postprocessing of XML text.\nUses XMerL.",
-                  type: :module
+                  type: :module,
+                  metadata: %{}
                 }
               ]}
   end

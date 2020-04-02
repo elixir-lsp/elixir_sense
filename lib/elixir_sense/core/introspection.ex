@@ -277,6 +277,14 @@ defmodule ElixirSense.Core.Introspection do
     "**Since**\n#{text}"
   end
 
+  defp get_metadata_entry_md({:guard, true}) do
+    "**Guard**"
+  end
+
+  defp get_metadata_entry_md({:builtin, true}) do
+    "**Built-in**"
+  end
+
   defp get_metadata_entry_md({:optional, true}) do
     "**Optional**"
   end
@@ -643,7 +651,7 @@ defmodule ElixirSense.Core.Introspection do
       |> NormalizedCode.get_docs(:callback_docs)
 
     # no fallback here as :docsh as ov v0.7.2 does not seem to support callbacks
-    # TODO report isse and link here
+    # TODO report issue and link here
 
     {callbacks, docs || []}
   end
@@ -763,19 +771,20 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_module_docs_summary(module) do
     case NormalizedCode.get_docs(module, :moduledoc) do
-      # TODO use metadata
-      {_, doc, _metadata} ->
-        extract_summary_from_docs(doc)
+      {_, doc, metadata} ->
+        {extract_summary_from_docs(doc), metadata}
 
       _ ->
         case EdocReader.get_moduledoc(module) do
-          # TODO use metadata
-          [{_line, doc, _metadata}] ->
-            EdocReader.extract_docs(doc)
-            |> extract_summary_from_docs
+          [{_line, doc, metadata}] ->
+            doc =
+              EdocReader.extract_docs(doc)
+              |> extract_summary_from_docs
+
+            {doc, metadata}
 
           _ ->
-            ""
+            {"", %{}}
         end
     end
   end
@@ -875,8 +884,7 @@ defmodule ElixirSense.Core.Introspection do
     docs = NormalizedCode.get_docs(module, :docs) || []
     specs = TypeInfo.get_module_specs(module)
 
-    # TODO use metadata
-    for {{f, a}, _line, func_kind, args, doc, _metadata} <- docs, doc != false, into: %{} do
+    for {{f, a}, _line, func_kind, args, doc, metadata} <- docs, doc != false, into: %{} do
       spec = Map.get(specs, {f, a})
 
       formatted_args =
@@ -886,7 +894,7 @@ defmodule ElixirSense.Core.Introspection do
 
       desc = extract_summary_from_docs(doc)
 
-      {{f, a}, {func_kind, formatted_args, desc, spec_to_string(spec)}}
+      {{f, a}, {func_kind, formatted_args, desc, metadata, spec_to_string(spec)}}
     end
   end
 

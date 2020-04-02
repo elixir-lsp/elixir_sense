@@ -19,7 +19,8 @@ defmodule ElixirSense.SuggestionsTest do
              origin: "Kernel.SpecialForms",
              spec: "",
              summary: "Imports functions and macros from other modules.",
-             type: :macro
+             type: :macro,
+             metadata: %{}
            }
 
     assert Enum.find(list, fn s -> match?(%{name: "quote", arity: 2}, s) end) == %{
@@ -29,7 +30,8 @@ defmodule ElixirSense.SuggestionsTest do
              type: :macro,
              args: "opts, block",
              name: "quote",
-             summary: "Gets the representation of any expression."
+             summary: "Gets the representation of any expression.",
+             metadata: %{}
            }
 
     assert Enum.find(list, fn s -> match?(%{name: "require", arity: 2}, s) end) == %{
@@ -39,7 +41,8 @@ defmodule ElixirSense.SuggestionsTest do
              type: :macro,
              args: "module, opts",
              name: "require",
-             summary: "Requires a module in order to use its macros."
+             summary: "Requires a module in order to use its macros.",
+             metadata: %{}
            }
   end
 
@@ -61,7 +64,8 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "Kernel",
                spec: "@spec is_binary(term) :: boolean",
                summary: "Returns `true` if `term` is a binary; otherwise returns `false`.",
-               type: :function
+               type: :function,
+               metadata: %{guard: true}
              },
              %{
                args: "term",
@@ -71,7 +75,8 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "@spec is_bitstring(term) :: boolean",
                summary:
                  "Returns `true` if `term` is a bitstring (including a binary); otherwise returns `false`.",
-               type: :function
+               type: :function,
+               metadata: %{guard: true}
              },
              %{
                args: "term",
@@ -81,7 +86,8 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "@spec is_boolean(term) :: boolean",
                summary:
                  "Returns `true` if `term` is either the atom `true` or the atom `false` (i.e.,\na boolean); otherwise returns `false`.",
-               type: :function
+               type: :function,
+               metadata: %{guard: true}
              }
            ]
   end
@@ -105,7 +111,8 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "List",
                spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]",
                summary: "Flattens the given `list` of nested lists.",
-               type: :function
+               type: :function,
+               metadata: %{}
              },
              %{
                args: "list, tail",
@@ -116,7 +123,8 @@ defmodule ElixirSense.SuggestionsTest do
                  "@spec flatten(deep_list, [elem]) :: [elem] when deep_list: [elem | deep_list], elem: var",
                summary:
                  "Flattens the given `list` of nested lists.\nThe list `tail` will be added at the end of\nthe flattened list.",
-               type: :function
+               type: :function,
+               metadata: %{}
              }
            ]
   end
@@ -140,7 +148,8 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
                spec: "@spec some(integer) :: Macro.t\n@spec some(b) :: Macro.t when b: float",
                summary: "some macro\n",
-               type: :macro
+               type: :macro,
+               metadata: %{}
              }
            ]
   end
@@ -156,12 +165,19 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: "ElixirSenseExample.ModuleWithDoc"},
-             %{name: "ModuleWithDocFalse", subtype: nil, summary: "", type: :module},
+             %{
+               name: "ModuleWithDocFalse",
+               subtype: nil,
+               summary: "",
+               type: :module,
+               metadata: %{}
+             },
              %{
                name: "ModuleWithDocs",
                subtype: :behaviour,
                summary: "An example module\n",
-               type: :module
+               type: :module,
+               metadata: %{since: "1.2.3"}
              }
            ]
   end
@@ -212,7 +228,8 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
                spec: "@macrocallback optional(a) :: Macro.t when a: atom",
                summary: "An optional macrocallback\n",
-               type: :callback
+               type: :callback,
+               metadata: %{optional: true}
              },
              %{
                args: "atom",
@@ -221,7 +238,8 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
                spec: "@macrocallback required(atom) :: Macro.t",
                summary: "A required macrocallback\n",
-               type: :callback
+               type: :callback,
+               metadata: %{optional: false}
              }
            ] == list
   end
@@ -286,7 +304,8 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "Enumerable",
                spec: "@spec reduce(t, acc, reducer) :: result",
                summary: "Reduces the `enumerable` into an element.",
-               type: :protocol_function
+               type: :protocol_function,
+               metadata: %{}
              }
            ] = list
   end
@@ -1113,7 +1132,8 @@ defmodule ElixirSense.SuggestionsTest do
                type: :function,
                args: "a",
                spec: "@spec test_fun_pub(integer) :: atom",
-               summary: ""
+               summary: "",
+               metadata: %{}
              }
            ] == ElixirSense.suggestions(buffer, 10, 7)
 
@@ -1181,7 +1201,14 @@ defmodule ElixirSense.SuggestionsTest do
     list = ElixirSense.suggestions(buffer, 2, 5)
 
     assert Enum.at(list, 0) == %{type: :hint, value: "Elixir"}
-    assert Enum.at(list, 1) == %{type: :module, name: "Elixir", subtype: nil, summary: ""}
+
+    assert Enum.at(list, 1) == %{
+             type: :module,
+             name: "Elixir",
+             subtype: nil,
+             summary: "",
+             metadata: %{}
+           }
   end
 
   test "suggestion for aliases modules defined by require clause" do
@@ -1468,7 +1495,8 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 0,
                origin: "MyServer",
                spec: "",
-               summary: ""
+               summary: "",
+               metadata: %{}
              }
            ]
   end
@@ -1980,7 +2008,8 @@ defmodule ElixirSense.SuggestionsTest do
                  signature: "timestamp()",
                  spec:
                    "@type timestamp() ::\n  {megaSecs ::\n     non_neg_integer(),\n   secs :: non_neg_integer(),\n   microSecs ::\n     non_neg_integer()}",
-                 type: :type_spec
+                 type: :type_spec,
+                 metadata: %{}
                },
                %{
                  arity: 0,
@@ -1990,7 +2019,8 @@ defmodule ElixirSense.SuggestionsTest do
                  signature: "time_unit()",
                  spec:
                    "@type time_unit() ::\n  pos_integer()\n  | :second\n  | :millisecond\n  | :microsecond\n  | :nanosecond\n  | :native\n  | :perf_counter\n  | deprecated_time_unit()",
-                 type: :type_spec
+                 type: :type_spec,
+                 metadata: %{}
                }
              ] == suggestions
     end
@@ -2009,7 +2039,8 @@ defmodule ElixirSense.SuggestionsTest do
                  signature: "xml_element_content()",
                  spec:
                    "@type xml_element_content() :: [\n  record(:xmlElement)\n  | record(:xmlText)\n  | record(:xmlPI)\n  | record(:xmlComment)\n  | record(:xmlDecl)\n]",
-                 type: :type_spec
+                 type: :type_spec,
+                 metadata: %{}
                }
              ] == suggestions
     end
@@ -2036,7 +2067,8 @@ defmodule ElixirSense.SuggestionsTest do
                  origin: "ElixirSenseExample.ModuleWithDocs",
                  signature: "some_type_doc_false()",
                  spec: "@type some_type_doc_false() ::\n  integer()",
-                 type: :type_spec
+                 type: :type_spec,
+                 metadata: %{}
                }
              ] == suggestions
     end
@@ -2064,7 +2096,8 @@ defmodule ElixirSense.SuggestionsTest do
                type: :type_spec,
                signature: "my_local_t()",
                doc: "",
-               spec: ""
+               spec: "",
+               metadata: %{}
              } == suggestion2
 
       assert %{
@@ -2074,7 +2107,8 @@ defmodule ElixirSense.SuggestionsTest do
                type: :type_spec,
                signature: "my_local_arg_t(a, b)",
                doc: "",
-               spec: ""
+               spec: "",
+               metadata: %{}
              } == suggestion1
     end
 
@@ -2101,7 +2135,8 @@ defmodule ElixirSense.SuggestionsTest do
                type: :type_spec,
                signature: "my_local_t()",
                doc: "",
-               spec: ""
+               spec: "",
+               metadata: %{}
              } == suggestion1
     end
 
@@ -2133,7 +2168,8 @@ defmodule ElixirSense.SuggestionsTest do
                type: :type_spec,
                signature: "my_local_pub_t(a, b)",
                doc: "",
-               spec: ""
+               spec: "",
+               metadata: %{}
              } == suggestion2
 
       assert %{
@@ -2143,7 +2179,8 @@ defmodule ElixirSense.SuggestionsTest do
                type: :type_spec,
                signature: "my_local_op_t()",
                doc: "",
-               spec: ""
+               spec: "",
+               metadata: %{}
              } == suggestion1
     end
   end

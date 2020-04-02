@@ -255,7 +255,7 @@ defmodule Alchemist.Helpers.Complete do
         if provide_edocs? do
           Introspection.get_module_docs_summary(mod_as_atom)
         else
-          ""
+          {"", %{}}
         end
 
       %{kind: :module, name: mod, type: :erlang, desc: desc, subtype: subtype}
@@ -290,7 +290,7 @@ defmodule Alchemist.Helpers.Complete do
     for {alias, _mod} <- env.aliases,
         [name] = Module.split(alias),
         starts_with?(name, hint) do
-      %{kind: :module, type: :alias, name: name, desc: "", subtype: nil}
+      %{kind: :module, type: :alias, name: name, desc: {"", %{}}, subtype: nil}
     end
   end
 
@@ -308,6 +308,7 @@ defmodule Alchemist.Helpers.Complete do
       mod_as_atom = mod |> String.to_atom()
       desc = Introspection.get_module_docs_summary(mod_as_atom)
       subtype = Introspection.get_module_subtype(mod_as_atom)
+
       %{kind: :module, type: :elixir, name: name, desc: desc, subtype: subtype}
     end
     |> Enum.uniq_by(fn %{name: name} -> name end)
@@ -435,7 +436,8 @@ defmodule Alchemist.Helpers.Complete do
               %ElixirSense.Core.State.SpecInfo{specs: specs} -> specs |> Enum.join("\n")
             end
 
-          {f, a, info.type, "", specs,
+          # TODO docs and meta
+          {f, a, info.type, {"", %{}}, specs,
            info.params |> hd |> Enum.map_join(", ", &Macro.to_string/1)}
         end
     end
@@ -469,11 +471,10 @@ defmodule Alchemist.Helpers.Complete do
         doc =
           case func_doc do
             nil ->
-              ""
+              {"", %{}}
 
-            # TODO use metadata
-            {{_fun, _}, _line, _kind, _args, doc, _metadata} ->
-              Introspection.extract_summary_from_docs(doc)
+            {{_fun, _}, _line, _kind, _args, doc, metadata} ->
+              {Introspection.extract_summary_from_docs(doc), metadata}
           end
 
         fun_args = Introspection.extract_fun_args(func_doc)
@@ -481,7 +482,9 @@ defmodule Alchemist.Helpers.Complete do
         {f, a, func_kind, doc, Introspection.spec_to_string(spec), fun_args}
       end
       |> Kernel.++(
-        for {f, a} <- @builtin_functions, include_builtin, do: {f, a, :function, nil, nil, nil}
+        for {f, a} <- @builtin_functions,
+            include_builtin,
+            do: {f, a, :function, {nil, %{}}, nil, nil}
       )
     else
       funs =
@@ -500,11 +503,11 @@ defmodule Alchemist.Helpers.Complete do
             params = format_params(spec, a - 1)
             # TODO test this arity and spec
             # TODO is this branch reachable?
-            {String.to_atom(name), a - 1, :macro, "", spec_str, params}
+            {String.to_atom(name), a - 1, :macro, {"", %{}}, spec_str, params}
 
           _name ->
             params = format_params(spec, a)
-            {f, a, :function, edoc_results[{f, a}] || "", spec_str, params}
+            {f, a, :function, edoc_results[{f, a}] || {"", %{}}, spec_str, params}
         end
       end
     end
@@ -524,11 +527,12 @@ defmodule Alchemist.Helpers.Complete do
 
   defp get_edocs(mod) do
     EdocReader.get_docs(mod, :any)
-    # TODO use metadata
-    |> Map.new(fn {{:function, fun, arity}, _, _, maybe_doc, _} ->
-      {{fun, arity},
-       EdocReader.extract_docs(maybe_doc)
-       |> Introspection.extract_summary_from_docs()}
+    |> Map.new(fn {{:function, fun, arity}, _, _, maybe_doc, metadata} ->
+      doc =
+        EdocReader.extract_docs(maybe_doc)
+        |> Introspection.extract_summary_from_docs()
+
+      {{fun, arity}, {doc || "", metadata}}
     end)
   end
 
@@ -548,7 +552,6 @@ defmodule Alchemist.Helpers.Complete do
 
     case doc do
       nil -> {nil, nil}
-      # TODO use metadata
       {_, _, func_kind, _, _, _} = d -> {func_kind, d}
     end
   end
@@ -570,8 +573,8 @@ defmodule Alchemist.Helpers.Complete do
 
   ## Ad-hoc conversions
 
-  defp to_entries(%{kind: :module, name: name, desc: desc, subtype: subtype}) do
-    [%{type: :module, name: name, subtype: subtype, summary: desc}]
+  defp to_entries(%{kind: :module, name: name, desc: {desc, metadata}, subtype: subtype}) do
+    [%{type: :module, name: name, subtype: subtype, summary: desc, metadata: metadata}]
   end
 
   defp to_entries(%{
@@ -588,7 +591,7 @@ defmodule Alchemist.Helpers.Complete do
     arities_docs_specs = arities |> Enum.zip(docs_specs)
     arities_docs_specs_args = arities_docs_specs |> Enum.zip(args)
 
-    for {{a, {doc, spec}}, args} <- arities_docs_specs_args do
+    for e <- arities_docs_specs_args, {{a, {{doc, metadata}, spec}}, args} = e do
       kind =
         case func_kind do
           k when k in [:macro, :defmacro, :defmacrop, :defguard, :defguardp] -> :macro
@@ -607,6 +610,7 @@ defmodule Alchemist.Helpers.Complete do
           args: BuiltinFunctions.get_args(fa) |> Enum.join(", "),
           origin: mod_name,
           summary: "Built-in function",
+          metadata: %{builtin: true},
           spec: BuiltinFunctions.get_specs(fa) |> Enum.join("\n")
         }
       else
@@ -617,6 +621,7 @@ defmodule Alchemist.Helpers.Complete do
           args: args,
           origin: mod_name,
           summary: doc,
+          metadata: metadata,
           spec: spec || ""
         }
       end

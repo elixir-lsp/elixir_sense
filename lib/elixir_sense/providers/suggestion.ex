@@ -41,7 +41,8 @@ defmodule ElixirSense.Providers.Suggestion do
           args: String.t(),
           origin: String.t(),
           summary: String.t(),
-          spec: String.t()
+          spec: String.t(),
+          metadata: map
         }
 
   @type protocol_function :: %{
@@ -51,7 +52,8 @@ defmodule ElixirSense.Providers.Suggestion do
           args: String.t(),
           origin: String.t(),
           summary: String.t(),
-          spec: String.t()
+          spec: String.t(),
+          metadata: map
         }
 
   @type func :: %{
@@ -61,14 +63,16 @@ defmodule ElixirSense.Providers.Suggestion do
           args: String.t(),
           origin: String.t(),
           summary: String.t(),
-          spec: String.t()
+          spec: String.t(),
+          metadata: map
         }
 
   @type mod :: %{
           type: :module,
           name: String.t(),
           subtype: String.t(),
-          summary: String.t()
+          summary: String.t(),
+          metadata: map
         }
 
   @type param_option :: %{
@@ -87,7 +91,8 @@ defmodule ElixirSense.Providers.Suggestion do
           origin: String.t(),
           spec: String.t(),
           doc: String.t(),
-          signature: String.t()
+          signature: String.t(),
+          metadata: map
         }
 
   @type hint :: %{
@@ -523,7 +528,14 @@ defmodule ElixirSense.Providers.Suggestion do
       mod when is_atom(mod) and (protocol == nil or mod != elem(protocol, 0)) ->
         mod_name = inspect(mod)
 
-        for %{name: name, arity: arity, callback: spec, signature: signature, doc: doc} <-
+        for %{
+              name: name,
+              arity: arity,
+              callback: spec,
+              signature: signature,
+              doc: doc,
+              metadata: metadata
+            } <-
               Introspection.get_callbacks_with_docs(mod),
             hint == "" or String.starts_with?("#{name}", hint) do
           desc = Introspection.extract_summary_from_docs(doc)
@@ -537,7 +549,8 @@ defmodule ElixirSense.Providers.Suggestion do
             args: args,
             origin: mod_name,
             summary: desc,
-            spec: spec
+            spec: spec,
+            metadata: metadata
           }
         end
 
@@ -551,7 +564,7 @@ defmodule ElixirSense.Providers.Suggestion do
   defp find_protocol_functions(nil, _hint), do: []
 
   defp find_protocol_functions({protocol, _implementations}, hint) do
-    for {{name, arity}, {_type, args, docs, spec}} <-
+    for {{name, arity}, {_type, args, docs, metadata, spec}} <-
           Introspection.module_functions_info(protocol),
         hint == "" or String.starts_with?("#{name}", hint) do
       %{
@@ -561,6 +574,7 @@ defmodule ElixirSense.Providers.Suggestion do
         args: args,
         origin: inspect(protocol),
         summary: docs,
+        metadata: metadata,
         spec: spec
       }
     end
@@ -715,7 +729,9 @@ defmodule ElixirSense.Providers.Suggestion do
           signature: "#{type_info.name}(#{args_stringified})",
           origin: origin,
           doc: "",
-          spec: ""
+          spec: "",
+          # TODO extract doc and meta
+          metadata: %{}
         }
 
       _ ->
@@ -726,7 +742,8 @@ defmodule ElixirSense.Providers.Suggestion do
           signature: type_info.signature,
           origin: origin,
           doc: type_info.doc,
-          spec: type_info.spec
+          spec: type_info.spec,
+          metadata: type_info.metadata
         }
     end
   end
