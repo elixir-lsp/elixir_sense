@@ -70,7 +70,6 @@ defmodule ElixirSense.Core.TypeInfo do
   def get_signatures(mod, type, code_docs) when not is_nil(mod) and not is_nil(type) do
     case code_docs || NormalizedCode.get_docs(mod, :type_docs) do
       docs when is_list(docs) ->
-        # TODO use metadata
         for {{t, arity}, _, _, text, _metadata} <- docs, t == type do
           {_kind, {_name, _def, args}} = get_type_spec(mod, type, arity)
           type_args = Enum.map(args, &(&1 |> elem(2) |> Atom.to_string()))
@@ -83,7 +82,6 @@ defmodule ElixirSense.Core.TypeInfo do
       nil ->
         edoc_results =
           EdocReader.get_typedocs(mod, type)
-          # TODO use metadata
           |> Map.new(fn {{:type, ^type, arity}, _, _, maybe_doc, _} ->
             {arity,
              EdocReader.extract_docs(maybe_doc) |> Introspection.extract_summary_from_docs()}
@@ -374,7 +372,6 @@ defmodule ElixirSense.Core.TypeInfo do
         "#{inspect(mod)}.#{type_str(type)}"
       end
 
-    # TODO use metadata
     {docs, _metadata} =
       case EdocReader.get_typedocs(module, name, n_args) do
         [{_, _, _, maybe_doc, metadata}] ->

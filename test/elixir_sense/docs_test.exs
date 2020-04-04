@@ -214,7 +214,9 @@ defmodule ElixirSense.DocsTest do
       assert docs =~ """
              > :erlang.orelse(term, term)
 
-             _* Built-in function_
+             **Built-in**
+
+             No documentation available
              """
     end
 
@@ -818,6 +820,8 @@ defmodule ElixirSense.DocsTest do
       assert docs == """
              > keyword()
 
+             **Built-in**
+
              ### Specs
 
              ```
@@ -830,6 +834,8 @@ defmodule ElixirSense.DocsTest do
 
              > keyword(t)
 
+             **Built-in**
+
              ### Specs
 
              ```
@@ -837,10 +843,6 @@ defmodule ElixirSense.DocsTest do
              ```
 
              A keyword list with values of type `t`
-
-             ---
-
-             _* Built-in type_
              """
     end
 
@@ -864,6 +866,8 @@ defmodule ElixirSense.DocsTest do
       assert docs == """
              > integer()
 
+             **Built-in**
+
              ### Specs
 
              ```
@@ -871,10 +875,6 @@ defmodule ElixirSense.DocsTest do
              ```
 
              An integer number
-
-             ---
-
-             _* Built-in type_
              """
     end
 
@@ -898,6 +898,8 @@ defmodule ElixirSense.DocsTest do
       assert docs == """
              > list()
 
+             **Built-in**
+
              ### Specs
 
              ```
@@ -910,6 +912,8 @@ defmodule ElixirSense.DocsTest do
 
              > list(t)
 
+             **Built-in**
+
              ### Specs
 
              ```
@@ -917,10 +921,6 @@ defmodule ElixirSense.DocsTest do
              ```
 
              Proper list ([]-terminated)
-
-             ---
-
-             _* Built-in type_
              """
     end
 
@@ -956,17 +956,22 @@ defmodule ElixirSense.DocsTest do
                  docs: """
                  > ElixirSenseExample.ModuleWithFunctions.module_info()
 
+                 **Built-in**
+
                  ### Specs
 
                  ```
                  @spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]
                  ```
 
-                 _* Built-in function_
+                 No documentation available
+
 
                  ---
 
                  > ElixirSenseExample.ModuleWithFunctions.module_info(key)
+
+                 **Built-in**
 
                  ### Specs
 
@@ -978,7 +983,8 @@ defmodule ElixirSense.DocsTest do
                  @spec module_info(:native) :: boolean
                  ```
 
-                 _* Built-in function_
+                 No documentation available
+
                  """
                }
              } = ElixirSense.docs(buffer, 2, 42)

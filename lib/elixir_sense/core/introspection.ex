@@ -93,7 +93,6 @@ defmodule ElixirSense.Core.Introspection do
   def get_signatures(mod, fun, code_docs) when not is_nil(mod) and not is_nil(fun) do
     case code_docs || NormalizedCode.get_docs(mod, :docs) do
       docs when is_list(docs) ->
-        # TODO use metadata
         for {{f, arity}, _, kind, args, text, _metadata} <- docs, f == fun do
           fun_args = Enum.map(args || [], &format_doc_arg(&1))
           fun_str = Atom.to_string(fun)
@@ -106,7 +105,6 @@ defmodule ElixirSense.Core.Introspection do
       nil ->
         edoc_results =
           EdocReader.get_docs(mod, fun)
-          # TODO use metadata
           |> Map.new(fn {{:function, ^fun, arity}, _, _, maybe_doc, _} ->
             {arity, EdocReader.extract_docs(maybe_doc) |> extract_summary_from_docs}
           end)
@@ -153,7 +151,6 @@ defmodule ElixirSense.Core.Introspection do
     for {f, a} <- BuiltinFunctions.all(), f == fun do
       spec = BuiltinFunctions.get_specs({f, a})
       args = BuiltinFunctions.get_args({f, a})
-      text = "_* Built-in function_"
 
       fun_args_text = Enum.join(args, ", ")
 
@@ -161,8 +158,11 @@ defmodule ElixirSense.Core.Introspection do
       fun_str = Atom.to_string(fun)
 
       spec_text = "### Specs\n\n```\n#{spec |> Enum.join("\n")}\n```\n\n"
+      metadata = %{builtin: true}
 
-      "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{spec_text}#{text}"
+      "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{spec_text}#{
+        @no_documentation
+      }"
     end
   end
 
@@ -203,8 +203,7 @@ defmodule ElixirSense.Core.Introspection do
 
               {text, metadata} =
                 if {f, arity} in BuiltinFunctions.erlang_builtin_functions(mod) do
-                  # TODO move to metadata?
-                  {"_* Built-in function_", %{}}
+                  {nil, %{builtin: true}}
                 else
                   edoc_results[arity] || {nil, %{}}
                 end
@@ -308,28 +307,21 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_type_docs_md(nil, fun, _scope) do
-    result =
-      for info <- BuiltinTypes.get_builtin_type_info(fun) do
-        {spec, args} =
-          case info do
-            %{signature: sig, params: params} ->
-              {sig, Enum.map_join(params, ", ", &(&1 |> Atom.to_string()))}
+    for info <- BuiltinTypes.get_builtin_type_info(fun) do
+      {spec, args} =
+        case info do
+          %{signature: sig, params: params} ->
+            {sig, Enum.map_join(params, ", ", &(&1 |> Atom.to_string()))}
 
-            %{spec: spec_ast, params: params} ->
-              {TypeInfo.format_type_spec_ast(spec_ast, :type),
-               Enum.map_join(params, ", ", &(&1 |> Atom.to_string()))}
+          %{spec: spec_ast, params: params} ->
+            {TypeInfo.format_type_spec_ast(spec_ast, :type),
+             Enum.map_join(params, ", ", &(&1 |> Atom.to_string()))}
 
-            _ ->
-              {"#{fun}()", ""}
-          end
+          _ ->
+            {"#{fun}()", ""}
+        end
 
-        format_type_doc_md({nil, fun}, args, info[:doc], spec, %{})
-      end
-
-    case result do
-      [] -> []
-      # TODO move to metadata
-      list -> list ++ ["_* Built-in type_"]
+      format_type_doc_md({nil, fun}, args, info[:doc], spec, %{builtin: true})
     end
   end
 
