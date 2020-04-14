@@ -177,8 +177,8 @@ defmodule Alchemist.Helpers.Complete do
 
   defp format_expansion([uniq], hint) do
     case to_hint(uniq, hint) do
-      "" -> yes("", to_uniq_entries(uniq))
-      hint -> yes(hint, to_uniq_entries(uniq))
+      "" -> yes("", to_entries(uniq))
+      hint -> yes(hint, to_entries(uniq))
     end
   end
 
@@ -626,14 +626,6 @@ defmodule Alchemist.Helpers.Complete do
         }
       end
     end
-  end
-
-  defp to_uniq_entries(%{kind: :module} = mod) do
-    to_entries(mod)
-  end
-
-  defp to_uniq_entries(%{kind: :function} = fun) do
-    to_entries(fun)
   end
 
   defp to_hint(%{kind: :module, name: name}, hint) when name == hint do
