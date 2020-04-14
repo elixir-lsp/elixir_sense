@@ -11,6 +11,7 @@ defmodule ElixirSense do
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
+  alias ElixirSense.Location
   alias ElixirSense.Providers.Definition
   alias ElixirSense.Providers.Docs
   alias ElixirSense.Providers.Eval
@@ -77,11 +78,11 @@ defmodule ElixirSense do
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
       "module_with_functions.ex:6:7"
   """
-  @spec definition(String.t(), pos_integer, pos_integer) :: Definition.Location.t()
+  @spec definition(String.t(), pos_integer, pos_integer) :: Location.t()
   def definition(code, line, column) do
     case Source.subject(code, line, column) do
       nil ->
-        %Definition.Location{found: false}
+        %Location{found: false}
 
       subject ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)

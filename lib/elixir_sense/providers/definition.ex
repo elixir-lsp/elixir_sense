@@ -2,7 +2,8 @@ defmodule ElixirSense.Providers.Definition do
   @moduledoc """
   Provides a function to find out where symbols are defined.
 
-  Currently finds definition of modules, functions and macros.
+  Currently finds definition of modules, functions and macros,
+  typespecs, variables and attributes.
   """
 
   alias ElixirSense.Core.Introspection
@@ -14,10 +15,12 @@ defmodule ElixirSense.Providers.Definition do
   alias ElixirSense.Core.State.TypeInfo
   alias ElixirSense.Core.State.VarInfo
 
-  defmodule Location do
-    @moduledoc false
+  defmodule Elixir.ElixirSense.Location do
+    @moduledoc """
+    A location in a source file or buffer
+    """
 
-    @type t :: %Location{
+    @type t :: %ElixirSense.Location{
             found: boolean,
             type: :module | :function | :variable | :typespec | :macro | :attribute | nil,
             file: String.t() | nil,
@@ -26,6 +29,8 @@ defmodule ElixirSense.Providers.Definition do
           }
     defstruct [:found, :type, :file, :line, :column]
   end
+
+  alias ElixirSense.Location
 
   @doc """
   Finds out where a module, function, macro or variable was defined.

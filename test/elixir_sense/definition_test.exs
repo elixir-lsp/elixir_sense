@@ -1,7 +1,7 @@
 defmodule ElixirSense.Providers.DefinitionTest do
   use ExUnit.Case, async: true
   alias ElixirSense.Providers.Definition
-  alias ElixirSense.Providers.Definition.Location
+  alias ElixirSense.Location
 
   doctest Definition
 
@@ -694,7 +694,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert ElixirSense.definition(buffer, 4, 21) == %ElixirSense.Providers.Definition.Location{
+    assert ElixirSense.definition(buffer, 4, 21) == %Location{
              found: true,
              type: :variable,
              file: nil,
