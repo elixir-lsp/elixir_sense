@@ -1237,10 +1237,34 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "device", origin: "IO.Stream", type: :field},
-             %{name: "line_or_bytes", origin: "IO.Stream", type: :field},
-             %{name: "raw", origin: "IO.Stream", type: :field},
-             %{name: "__struct__", origin: "IO.Stream", type: :field}
+             %{
+               name: "device",
+               origin: "IO.Stream",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "line_or_bytes",
+               origin: "IO.Stream",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "raw",
+               origin: "IO.Stream",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "__struct__",
+               origin: "IO.Stream",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             }
            ]
 
     list =
@@ -1249,9 +1273,27 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "__exception__", origin: "ArgumentError", type: :field},
-             %{name: "message", origin: "ArgumentError", type: :field},
-             %{name: "__struct__", origin: "ArgumentError", type: :field}
+             %{
+               name: "__exception__",
+               origin: "ArgumentError",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "message",
+               origin: "ArgumentError",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "__struct__",
+               origin: "ArgumentError",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             }
            ]
   end
 
@@ -1269,10 +1311,34 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "device", origin: "IO.Stream", type: :field},
-             %{name: "line_or_bytes", origin: "IO.Stream", type: :field},
-             %{name: "raw", origin: "IO.Stream", type: :field},
-             %{name: "__struct__", origin: "IO.Stream", type: :field}
+             %{
+               name: "device",
+               origin: "IO.Stream",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "line_or_bytes",
+               origin: "IO.Stream",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "raw",
+               origin: "IO.Stream",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "__struct__",
+               origin: "IO.Stream",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             }
            ]
   end
 
@@ -1290,7 +1356,13 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "__struct__", origin: "", type: :field}
+             %{
+               name: "__struct__",
+               origin: nil,
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             }
            ]
 
     list =
@@ -1299,7 +1371,13 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "__struct__", origin: "", type: :field}
+             %{
+               name: "__struct__",
+               origin: nil,
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             }
            ]
   end
 
@@ -1317,10 +1395,34 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "device", origin: "IO.Stream", type: :field},
-             %{name: "line_or_bytes", origin: "IO.Stream", type: :field},
-             %{name: "raw", origin: "IO.Stream", type: :field},
-             %{name: "__struct__", origin: "IO.Stream", type: :field}
+             %{
+               name: "device",
+               origin: "IO.Stream",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "line_or_bytes",
+               origin: "IO.Stream",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "raw",
+               origin: "IO.Stream",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "__struct__",
+               origin: "IO.Stream",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             }
            ]
   end
 
@@ -1345,17 +1447,47 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "field_1", origin: "MyServer", type: :field},
-             %{name: "field_2", origin: "MyServer", type: :field},
-             %{name: "__struct__", origin: "MyServer", type: :field}
+             %{
+               name: "field_1",
+               origin: "MyServer",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "field_2",
+               origin: "MyServer",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "__struct__",
+               origin: "MyServer",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             }
            ]
 
     list = ElixirSense.suggestions(buffer, 9, 28)
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "field_1", origin: "MyServer", type: :field},
-             %{name: "__struct__", origin: "MyServer", type: :field}
+             %{
+               name: "field_1",
+               origin: "MyServer",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "__struct__",
+               origin: "MyServer",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             }
            ]
   end
 
@@ -1380,17 +1512,47 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "field_1", origin: ":my_server", type: :field},
-             %{name: "field_2", origin: ":my_server", type: :field},
-             %{name: "__struct__", origin: ":my_server", type: :field}
+             %{
+               name: "field_1",
+               origin: ":my_server",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "field_2",
+               origin: ":my_server",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "__struct__",
+               origin: ":my_server",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             }
            ]
 
     list = ElixirSense.suggestions(buffer, 9, 30)
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "field_1", origin: ":my_server", type: :field},
-             %{name: "__struct__", origin: ":my_server", type: :field}
+             %{
+               name: "field_1",
+               origin: ":my_server",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "__struct__",
+               origin: ":my_server",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             }
            ]
   end
 
@@ -1415,8 +1577,20 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "field_1", origin: "MyServer", type: :field},
-             %{name: "__struct__", origin: "MyServer", type: :field}
+             %{
+               name: "field_1",
+               origin: "MyServer",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "__struct__",
+               origin: "MyServer",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             }
            ]
   end
 
@@ -1438,9 +1612,100 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: ""},
-             %{name: "field_1", origin: "MyServer", type: :field},
-             %{name: "__struct__", origin: "MyServer", type: :field}
+             %{
+               name: "field_1",
+               origin: "MyServer",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             },
+             %{
+               name: "__struct__",
+               origin: "MyServer",
+               type: :field,
+               call?: false,
+               subtype: :struct_field
+             }
            ]
+  end
+
+  test "suggestion for struct fields in variable.key call syntax" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        field_2: ""
+      ]
+
+      def func do
+        var_1 = %MyServer{}
+        var_1.f
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 9, 12)
+      |> Enum.filter(&(&1.type in [:field, :hint]))
+
+    assert list == [
+             %{type: :hint, value: "var_1.field_"},
+             %{
+               name: "field_1",
+               origin: "MyServer",
+               type: :field,
+               call?: true,
+               subtype: :struct_field
+             },
+             %{
+               name: "field_2",
+               origin: "MyServer",
+               type: :field,
+               call?: true,
+               subtype: :struct_field
+             }
+           ]
+  end
+
+  test "suggestion for map fields in variable.key call syntax" do
+    buffer = """
+    defmodule MyServer do
+      def func do
+        var_1 = %{key_1: 1, key_2: %{abc: 123}}
+        var_1.k
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 4, 12)
+      |> Enum.filter(&(&1.type in [:field, :hint]))
+
+    assert list == [
+             %{type: :hint, value: "var_1.key_"},
+             %{name: "key_1", origin: nil, type: :field, call?: true, subtype: :map_key},
+             %{name: "key_2", origin: nil, type: :field, call?: true, subtype: :map_key}
+           ]
+  end
+
+  test "suggestion for functions in variable.key call syntax" do
+    buffer = """
+    defmodule MyServer do
+      def func do
+        var_1 = Atom
+        var_1.to_s
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 4, 15)
+      |> Enum.filter(&(&1.type in [:function, :hint]))
+
+    assert [
+             %{type: :hint, value: "var_1.to_string"},
+             %{name: "to_string", origin: "Atom", type: :function}
+           ] = list
   end
 
   test "suggestion for vars in struct update" do
@@ -1461,10 +1726,19 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: "so"},
-             %{origin: "MyServer", type: :field, name: "some_field"},
+             %{
+               origin: "MyServer",
+               type: :field,
+               name: "some_field",
+               call?: false,
+               subtype: :struct_field
+             },
              %{name: "some_arg", type: :variable}
            ]
   end
+
+  # TODO map update
+  # TODO map update when var is struct
 
   test "suggestion for funcs and vars in struct" do
     buffer = """

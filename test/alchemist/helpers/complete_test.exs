@@ -2,7 +2,7 @@ defmodule Alchemist.Helpers.CompleteTest do
   use ExUnit.Case, async: true
 
   alias Alchemist.Helpers.Complete.Env
-  alias ElixirSense.Core.State.{ModFunInfo, SpecInfo}
+  alias ElixirSense.Core.State.{ModFunInfo, SpecInfo, VarInfo}
 
   def expand(expr, env \\ %Env{}) do
     Alchemist.Helpers.Complete.expand(Enum.reverse(expr), env)
@@ -259,6 +259,154 @@ defmodule Alchemist.Helpers.CompleteTest do
 
     assert {:yes, '', [%{name: "printable?", arity: 1}, %{name: "printable?", arity: 2}]} =
              expand('String.printable?/')
+  end
+
+  test "function completion using a variable bound to a module" do
+    env = %Env{
+      vars: [
+        %VarInfo{
+          name: :mod,
+          type: {:atom, String}
+        }
+      ]
+    }
+
+    assert {:yes, 'able?', [%{name: "printable?", arity: 1}, %{name: "printable?", arity: 2}]} =
+             expand('mod.print', env)
+  end
+
+  test "map atom key completion is supported" do
+    env = %Env{
+      vars: [
+        %VarInfo{
+          name: :map,
+          type: {:map, [foo: 1, bar_1: 23, bar_2: 14]}
+        }
+      ]
+    }
+
+    assert expand('map.f', env) ==
+             {:yes, 'oo',
+              [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]}
+
+    assert expand('map.b', env) == {:yes, 'ar_', []}
+
+    assert expand('map.bar_', env) ==
+             {:yes, '',
+              [
+                %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
+                %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true}
+              ]}
+
+    assert expand('map.c', env) == {:no, '', []}
+
+    assert expand('map.', env) ==
+             {:yes, '',
+              [
+                %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
+                %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true},
+                %{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}
+              ]}
+
+    assert expand('map.foo', env) == {:no, '', []}
+  end
+
+  test "nested map atom key completion is supported" do
+    env = %Env{
+      vars: [
+        %VarInfo{
+          name: :map,
+          type:
+            {:map,
+             [
+               nested:
+                 {:map,
+                  [
+                    deeply:
+                      {:map,
+                       [
+                         foo: 1,
+                         bar_1: 23,
+                         bar_2: 14,
+                         mod: {:atom, String},
+                         num: 1
+                       ]}
+                  ]}
+             ]}
+        }
+      ]
+    }
+
+    assert expand('map.nested.deeply.f', env) ==
+             {:yes, 'oo',
+              [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]}
+
+    assert expand('map.nested.deeply.b', env) == {:yes, 'ar_', []}
+
+    assert expand('map.nested.deeply.bar_', env) ==
+             {:yes, '',
+              [
+                %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
+                %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true}
+              ]}
+
+    assert expand('map.nested.deeply.', env) ==
+             {:yes, '',
+              [
+                %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
+                %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true},
+                %{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true},
+                %{name: "mod", subtype: :map_key, type: :field, origin: nil, call?: true},
+                %{name: "num", subtype: :map_key, type: :field, origin: nil, call?: true}
+              ]}
+
+    assert {:yes, 'able?', _} = expand('map.nested.deeply.mod.print', env)
+
+    assert expand('map.nested', env) ==
+             {:yes, '.',
+              [%{name: "nested", subtype: :map_key, type: :field, origin: nil, call?: true}]}
+
+    assert expand('map.nested.deeply', env) ==
+             {:yes, '.',
+              [%{name: "deeply", subtype: :map_key, type: :field, origin: nil, call?: true}]}
+
+    assert expand('map.nested.deeply.foo', env) == {:no, '', []}
+
+    assert expand('map.nested.deeply.c', env) == {:no, '', []}
+    assert expand('map.a.b.c.f', env) == {:no, '', []}
+  end
+
+  test "map string key completion is not supported" do
+    env = %Env{
+      vars: [
+        %VarInfo{
+          name: :map,
+          type: {:map, [{"foo", 124}]}
+        }
+      ]
+    }
+
+    assert expand('map.f', env) == {:no, '', []}
+  end
+
+  test "autocompletion off a bound variable only works for modules and maps" do
+    env = %Env{
+      vars: [
+        %VarInfo{
+          name: :map,
+          type: {:map, [nested: {:map, [num: 23]}]}
+        }
+      ]
+    }
+
+    assert expand('num.print', env) == {:no, '', []}
+    assert expand('map.nested.num.f', env) == {:no, '', []}
+    assert expand('map.nested.num.key.f', env) == {:no, '', []}
+  end
+
+  test "autocompletion off of unbound variables is not supported" do
+    assert expand('other_var.f') == {:no, '', []}
+    assert expand('a.b.c.d') == {:no, '', []}
   end
 
   test "macro completion" do
@@ -584,11 +732,129 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   defmodule MyStruct do
-    defstruct [:my_val]
+    defstruct [:my_val, :some_map, :a_mod, :str, :unknown_str]
   end
 
   test "completion for structs" do
     assert {:yes, 'uct', [%{name: "MyStruct"}]} = expand('%Alchemist.Helpers.CompleteTest.MyStr')
+  end
+
+  test "completion for struct keys" do
+    env = %Env{
+      vars: [
+        %VarInfo{
+          name: :struct,
+          type:
+            {:struct,
+             [
+               a_mod: {:atom, String},
+               some_map: {:map, [asdf: 1]},
+               str: {:struct, [], MyStruct},
+               unknown_str: {:struct, [abc: nil], nil}
+             ], MyStruct}
+        }
+      ]
+    }
+
+    assert expand('struct.my', env) ==
+             {:yes, '_val',
+              [
+                %{
+                  name: "my_val",
+                  subtype: :struct_field,
+                  type: :field,
+                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  call?: true
+                }
+              ]}
+
+    assert expand('struct.some_m', env) ==
+             {:yes, 'ap',
+              [
+                %{
+                  name: "some_map",
+                  subtype: :struct_field,
+                  type: :field,
+                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  call?: true
+                }
+              ]}
+
+    assert expand('struct.some_map.', env) ==
+             {:yes, 'asdf',
+              [%{name: "asdf", subtype: :map_key, type: :field, origin: nil, call?: true}]}
+
+    assert expand('struct.str.', env) ==
+             {:yes, '',
+              [
+                %{
+                  name: "__struct__",
+                  subtype: :struct_field,
+                  type: :field,
+                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  call?: true
+                },
+                %{
+                  name: "a_mod",
+                  subtype: :struct_field,
+                  type: :field,
+                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  call?: true
+                },
+                %{
+                  name: "my_val",
+                  subtype: :struct_field,
+                  type: :field,
+                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  call?: true
+                },
+                %{
+                  name: "some_map",
+                  subtype: :struct_field,
+                  type: :field,
+                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  call?: true
+                },
+                %{
+                  name: "str",
+                  subtype: :struct_field,
+                  type: :field,
+                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  call?: true
+                },
+                %{
+                  name: "unknown_str",
+                  subtype: :struct_field,
+                  type: :field,
+                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  call?: true
+                }
+              ]}
+
+    assert expand('struct.str', env) ==
+             {:yes, '.',
+              [
+                %{
+                  name: "str",
+                  subtype: :struct_field,
+                  type: :field,
+                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  call?: true
+                }
+              ]}
+
+    assert expand('struct.unknown_str.', env) ==
+             {:yes, '',
+              [
+                %{
+                  call?: true,
+                  name: "__struct__",
+                  origin: nil,
+                  subtype: :struct_field,
+                  type: :field
+                },
+                %{call?: true, name: "abc", origin: nil, subtype: :struct_field, type: :field}
+              ]}
   end
 
   test "ignore invalid Elixir module literals" do

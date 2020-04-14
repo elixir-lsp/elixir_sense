@@ -23,8 +23,10 @@ defmodule ElixirSense.Providers.Suggestion do
 
   @type field :: %{
           type: :field,
+          subtype: :struct_field | :map_key,
           name: String.t(),
-          origin: String.t()
+          origin: String.t() | nil,
+          call?: boolean
         }
 
   @type return :: %{
@@ -318,7 +320,9 @@ defmodule ElixirSense.Providers.Suggestion do
         |> Enum.map(fn field ->
           %{
             type: :field,
+            subtype: :struct_field,
             name: Atom.to_string(field),
+            call?: false,
             origin: inspect(actual_mod)
           }
         end)
@@ -333,8 +337,10 @@ defmodule ElixirSense.Providers.Suggestion do
           |> Enum.map(fn field ->
             %{
               type: :field,
+              subtype: :struct_field,
               name: Atom.to_string(field),
-              origin: ""
+              origin: nil,
+              call?: false
             }
           end)
 
@@ -355,7 +361,7 @@ defmodule ElixirSense.Providers.Suggestion do
         ) ::
           %{
             hint: hint,
-            suggestions: [mod | func]
+            suggestions: [mod | func | field]
           }
   defp find_hint_mods_funcs(
          hint,

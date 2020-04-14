@@ -216,19 +216,74 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   # variable.fun_or_key
-  defp expand_call({_, _, _} = _ast_node, _hint, _env) do
-    # FIXME not supported
-    no()
-    # case value_from_binding(ast_node, server) do
-    #   {:ok, mod} when is_atom(mod) -> expand_call(mod, hint, server)
-    #   {:ok, map} when is_map(map) -> expand_map_field_access(map, hint)
-    #   _otherwise -> no()
-    # end
+  defp expand_call({_, _, _} = ast_node, hint, %Env{} = env) do
+    case value_from_binding(ast_node, env) do
+      {:ok, mod} when is_atom(mod) -> expand_call(mod, hint, env)
+      {:ok, type, fields} when is_list(fields) -> expand_map_field_access(fields, hint, type)
+      _otherwise -> no()
+    end
   end
 
   defp expand_call(_, _, _) do
     no()
   end
+
+  defp expand_map_field_access(fields, hint, type) do
+    case match_map_fields(fields, hint, type) do
+      [%{kind: :field, name: ^hint, value_is_map: false}] ->
+        no()
+
+      map_fields when is_list(map_fields) ->
+        format_expansion(map_fields, hint)
+    end
+  end
+
+  defp value_from_binding(ast_node, %Env{vars: vars, structs: structs}) do
+    with {var, map_key_path} <- extract_from_ast(ast_node, []) do
+      case Enum.find(vars, fn %VarInfo{name: name} -> name == var end) do
+        %VarInfo{type: type} ->
+          recurse_var(type, map_key_path, structs)
+
+        _otherwise ->
+          :error
+      end
+    end
+  end
+
+  defp recurse_var(nil, _, _), do: :error
+  defp recurse_var({:atom, atom}, _, _) when atom not in [nil, true, false], do: {:ok, atom}
+  defp recurse_var({:map, fields}, [], _), do: {:ok, :map, fields}
+
+  defp recurse_var({:struct, fields, nil}, [], _structs) do
+    {:ok, {:struct, nil}, Keyword.put_new(fields, :__struct__, nil)}
+  end
+
+  defp recurse_var({:struct, fields, module}, [], structs) do
+    fields_values =
+      for field <- Struct.get_fields(module, structs), field != :__struct__ do
+        {field, fields[field]}
+      end
+
+    struct =
+      case fields[:__struct__] do
+        nil -> {:atom, module}
+        other -> other
+      end
+
+    {:ok, {:struct, module}, Keyword.put(fields_values, :__struct__, struct)}
+  end
+
+  defp recurse_var({:struct, fields, _module}, [head | tail], structs) do
+    field = fields[head]
+    recurse_var(field, tail, structs)
+  end
+
+  defp recurse_var({:map, fields}, [head | tail], structs) do
+    field = fields[head]
+    recurse_var(field, tail, structs)
+  end
+
+  defp recurse_var(_, _, _), do: :error
 
   defp expand_require(mod, hint, env) do
     format_expansion(match_module_funs(mod, hint, true, env), hint)
@@ -577,7 +632,32 @@ defmodule Alchemist.Helpers.Complete do
   defp starts_with?(_string, ""), do: true
   defp starts_with?(string, hint), do: String.starts_with?(string, hint)
 
+  defp match_map_fields(fields, hint, type) do
+    for {key, value} when is_atom(key) <- fields,
+        key = Atom.to_string(key),
+        String.starts_with?(key, hint) do
+      value_is_map =
+        case value do
+          {:map, _} -> true
+          {:struct, _, _} -> true
+          _ -> false
+        end
+
+      {subtype, origin} =
+        case type do
+          {:struct, mod} -> {:struct_field, if(mod, do: inspect(mod))}
+          :map -> {:map_key, nil}
+        end
+
+      %{kind: :field, name: key, subtype: subtype, value_is_map: value_is_map, origin: origin}
+    end
+    |> Enum.sort_by(& &1.name)
+  end
+
   ## Ad-hoc conversions
+  defp to_entries(%{kind: :field, subtype: subtype, name: name, origin: origin}) do
+    [%{type: :field, name: name, subtype: subtype, origin: origin, call?: true}]
+  end
 
   defp to_entries(%{kind: :module, name: name, desc: {desc, metadata}, subtype: subtype}) do
     [%{type: :module, name: name, subtype: subtype, summary: desc, metadata: metadata}]
@@ -638,16 +718,32 @@ defmodule Alchemist.Helpers.Complete do
     format_hint(name, name) <> "."
   end
 
-  defp to_hint(%{kind: :module, name: name}, hint) do
-    format_hint(name, hint)
+  defp to_hint(%{kind: :field, name: name, value_is_map: true}, hint) when name == hint do
+    format_hint(name, hint) <> "."
   end
 
-  defp to_hint(%{kind: :function, name: name}, hint) do
+  defp to_hint(%{kind: kind, name: name}, hint) when kind in [:function, :field, :module] do
     format_hint(name, hint)
   end
 
   defp format_hint(name, hint) do
     hint_size = byte_size(hint)
     binary_part(name, hint_size, byte_size(name) - hint_size)
+  end
+
+  defp extract_from_ast(var_name, acc) when is_atom(var_name) do
+    {var_name, acc}
+  end
+
+  defp extract_from_ast({var_name, _, nil}, acc) when is_atom(var_name) do
+    {var_name, acc}
+  end
+
+  defp extract_from_ast({{:., _, [ast_node, fun]}, _, []}, acc) when is_atom(fun) do
+    extract_from_ast(ast_node, [fun | acc])
+  end
+
+  defp extract_from_ast(_ast_node, _acc) do
+    :error
   end
 end
