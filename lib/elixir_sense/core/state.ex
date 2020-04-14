@@ -913,11 +913,20 @@ defmodule ElixirSense.Core.State do
   end
 
   defp reduce_vars(vars) do
-    Enum.reduce(vars, %{}, fn %VarInfo{name: var, positions: positions, scope_id: scope_id},
-                              acc ->
-      var_info = Map.get(acc, var, %VarInfo{name: var, positions: [], scope_id: scope_id})
-      var_info = %VarInfo{var_info | positions: Enum.sort(var_info.positions ++ positions)}
-      Map.put(acc, var, var_info)
+    Enum.reduce(vars, %{}, fn %VarInfo{name: var, positions: positions} = el, acc ->
+      updated =
+        case acc[var] do
+          nil ->
+            el
+
+          var_info = %VarInfo{is_definition: false} ->
+            %VarInfo{el | positions: Enum.sort(var_info.positions ++ positions)}
+
+          var_info = %VarInfo{is_definition: true} ->
+            %VarInfo{var_info | positions: Enum.sort(var_info.positions ++ positions)}
+        end
+
+      Map.put(acc, var, updated)
     end)
   end
 
