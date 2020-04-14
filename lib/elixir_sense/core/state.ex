@@ -113,13 +113,19 @@ defmodule ElixirSense.Core.State do
     @moduledoc """
     Variable info
     """
+    @type var_type :: nil | {:atom, atom} | {:map, keyword} | {:struct, keyword, module}
     @type t :: %VarInfo{
             name: atom,
             positions: list(ElixirSense.Core.State.position_t()),
             scope_id: nil | ElixirSense.Core.State.scope_id_t(),
-            is_definition: boolean
+            is_definition: boolean,
+            type: var_type
           }
-    defstruct name: nil, positions: [], scope_id: nil, is_definition: false
+    defstruct name: nil,
+              positions: [],
+              scope_id: nil,
+              is_definition: false,
+              type: nil
   end
 
   defmodule TypeInfo do
