@@ -807,7 +807,11 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | specs: specs}
   end
 
-  def add_var(%__MODULE__{} = state, %{name: var_name} = var_info, is_definition) do
+  def add_var(
+        %__MODULE__{} = state,
+        %VarInfo{name: var_name} = var_info,
+        is_definition
+      ) do
     scope = get_current_scope_name(state)
     [vars_from_scope | other_vars] = state.vars
     is_var_defined = is_variable_defined(state, var_name)
@@ -821,15 +825,13 @@ defmodule ElixirSense.Core.State do
         {_, _, ^scope} ->
           vars_from_scope
 
-        {true, _, _} ->
+        {is_definition, is_var_defined, _} when is_definition or is_var_defined ->
           [
-            %VarInfo{var_info | scope_id: hd(state.scope_ids), is_definition: is_definition}
-            | vars_from_scope
-          ]
-
-        {false, true, _} ->
-          [
-            %VarInfo{var_info | scope_id: hd(state.scope_ids), is_definition: is_definition}
+            %VarInfo{
+              var_info
+              | scope_id: hd(state.scope_ids),
+                is_definition: is_definition
+            }
             | vars_from_scope
           ]
 
