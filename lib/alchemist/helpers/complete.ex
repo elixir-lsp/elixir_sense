@@ -4,6 +4,8 @@ defmodule Alchemist.Helpers.Complete do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
+  alias ElixirSense.Core.State.VarInfo
+  alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
 
   @erlang_module_builtin_functions [{:module_info, 0}, {:module_info, 1}]
@@ -36,13 +38,17 @@ defmodule Alchemist.Helpers.Complete do
             imports: [module],
             scope_module: nil | module,
             mods_and_funs: ElixirSense.Core.State.mods_funs_to_positions_t(),
-            specs: ElixirSense.Core.State.specs_t()
+            specs: ElixirSense.Core.State.specs_t(),
+            vars: [ElixirSense.Core.State.VarInfo.t()],
+            structs: ElixirSense.Core.State.structs_t()
           }
     defstruct aliases: [],
               imports: [],
               scope_module: nil,
               mods_and_funs: %{},
-              specs: %{}
+              specs: %{},
+              vars: [],
+              structs: %{}
   end
 
   def run(exp, %Alchemist.Helpers.Complete.Env{} = env) do
