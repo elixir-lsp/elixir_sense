@@ -192,7 +192,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> new_import_scope
     |> new_require_scope
     |> new_func_vars_scope
-    |> add_vars(find_vars(params), true)
+    |> add_vars(find_vars(state, params), true)
     |> add_current_env_to_line(line)
     |> result(ast)
   end
@@ -244,7 +244,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> new_import_scope
     |> new_require_scope
     |> new_vars_scope
-    |> add_vars(find_vars(lhs), true)
+    |> add_vars(find_vars(state, lhs), true)
     |> add_current_env_to_line(line)
     |> result(ast)
   end
@@ -718,8 +718,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre({:=, meta, [lhs, rhs]}, state) do
+    match_context = get_binding_type(state, rhs)
+
     state
-    |> add_vars(find_vars(lhs), true)
+    |> add_vars(find_vars(state, lhs, match_context), true)
     |> result({:=, meta, [:_, rhs]})
   end
 
@@ -727,7 +729,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
        when is_atom(var_or_call) and var_or_call != :__MODULE__ and context in [nil, Elixir] do
     if Enum.any?(get_current_vars(state), &(&1.name == var_or_call)) do
       state
-      |> add_vars(find_vars(ast), false)
+      |> add_vars(find_vars(state, ast), false)
     else
       # pre Elixir 1.4 local call syntax
       # TODO remove on Elixir 2.0
@@ -740,13 +742,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre({:<-, meta, [lhs, rhs]}, state) do
     state
-    |> add_vars(find_vars(lhs), true)
+    |> add_vars(find_vars(state, lhs), true)
     |> result({:<-, meta, [:_, rhs]})
   end
 
   defp pre({:when, meta, [lhs, rhs]}, state) do
     state
-    |> add_vars(find_vars(lhs), true)
+    |> add_vars(find_vars(state, lhs), true)
     |> result({:when, meta, [:_, rhs]})
   end
 
@@ -1039,25 +1041,165 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, state}
   end
 
-  defp find_vars(ast) do
-    {_ast, vars} = Macro.prewalk(ast, [], &match_var/2)
+  defp find_vars(state, ast, match_context \\ nil) do
+    {_ast, {vars, _match_context}} =
+      Macro.prewalk(ast, {[], match_context}, &match_var(state, &1, &2))
+
     vars
   end
 
-  defp match_var({var, [line: line, column: column], context} = ast, vars)
+  defp match_var(
+         state,
+         {:=, _meta,
+          [
+            left,
+            right
+          ]},
+         {vars, _match_context}
+       ) do
+    {_ast, {vars, _match_context}} =
+      match_var(state, left, {vars, get_binding_type(state, right)})
+
+    {_ast, {vars, _match_context}} =
+      match_var(state, right, {vars, get_binding_type(state, left)})
+
+    {[], {vars, nil}}
+  end
+
+  defp match_var(
+         _state,
+         {var, [line: line, column: column], context} = ast,
+         {vars, match_context}
+       )
        when is_atom(var) and context in [nil, Elixir] do
-    var_info = %VarInfo{name: var, positions: [{line, column}]}
-    {ast, [var_info | vars]}
+    var_info = %VarInfo{name: var, positions: [{line, column}], type: match_context}
+    {ast, {[var_info | vars], nil}}
   end
 
   # drop right side of guard expression as guards cannot define vars
-  defp match_var({:when, _, [left, _right]}, vars) do
-    match_var(left, vars)
+  defp match_var(state, {:when, _, [left, _right]}, {vars, _match_context}) do
+    match_var(state, left, {vars, nil})
   end
 
-  defp match_var(ast, vars) do
-    {ast, vars}
+  defp match_var(_state, ast, {vars, _match_context}) do
+    {ast, {vars, nil}}
   end
+
+  defp get_binding_type(
+         state,
+         {:%, _meta,
+          [
+            struct_ast,
+            {:%{}, _, _} = ast
+          ]}
+       ) do
+    fields =
+      case get_binding_type(state, ast) do
+        {:map, fields} -> fields
+        {:struct, fields, _} -> fields
+        _ -> :error
+      end
+
+    if is_list(fields) do
+      case struct_ast do
+        atom when is_atom(atom) ->
+          {:struct, fields, atom}
+
+        {:__MODULE__, _, nil} ->
+          {:struct, fields, state |> get_current_module}
+
+        {:__aliases__, _, list} when is_list(list) ->
+          {:struct, fields, expand_alias(state, list)}
+
+        {var, _, context} when is_atom(var) and context in [nil, Elixir] ->
+          {:struct, fields, nil}
+
+        _ ->
+          nil
+          # TODO attribute
+      end
+    end
+  end
+
+  defp get_binding_type(state, {var, _, context})
+       when is_atom(var) and context in [nil, Elixir] do
+    vars = get_current_vars(state)
+
+    case vars |> Enum.find(&(&1.name == var)) do
+      %VarInfo{type: type} -> type
+      nil -> nil
+    end
+  end
+
+  # TODO attribute
+
+  defp get_binding_type(state, {:__MODULE__, _, nil}) do
+    {:atom, state |> get_current_module}
+  end
+
+  defp get_binding_type(state, {:__aliases__, _, list}) when is_list(list) do
+    {:atom, expand_alias(state, list)}
+  end
+
+  defp get_binding_type(_state, atom) when is_atom(atom) do
+    {:atom, atom}
+  end
+
+  defp get_binding_type(
+         state,
+         {:%{}, _meta,
+          [
+            {:|, _meta1,
+             [
+               var,
+               fields
+             ]}
+          ]}
+       )
+       when is_list(fields) do
+    updated_fields =
+      for {field, value} <- fields,
+          is_atom(field) do
+        {field, get_binding_type(state, value)}
+      end
+
+    case var do
+      {var, _, context} when is_atom(var) and context in [nil, Elixir] ->
+        vars = get_current_vars(state)
+
+        case vars |> Enum.find(&(&1.name == var)) do
+          %VarInfo{type: {:map, fields}} ->
+            {:map, fields |> Keyword.merge(updated_fields)}
+
+          %VarInfo{type: {:struct, fields, struct}} ->
+            {:struct, fields |> Keyword.merge(updated_fields), struct}
+
+          _ ->
+            # var not found or unknown type
+            {:map, updated_fields}
+        end
+
+      _ ->
+        {:map, updated_fields}
+        # TODO fields from attribute
+    end
+  end
+
+  defp get_binding_type(state, {:%{}, _meta, fields}) when is_list(fields) do
+    res =
+      for {field, value} <- fields,
+          is_atom(field) do
+        {field, get_binding_type(state, value)}
+      end
+
+    {:map, res}
+  end
+
+  defp get_binding_type(state, {:=, _, [_, ast]}) do
+    get_binding_type(state, ast)
+  end
+
+  defp get_binding_type(_state, _), do: nil
 
   defp add_no_call(meta) do
     [{:no_call, true} | meta]
