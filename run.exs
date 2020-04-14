@@ -15,6 +15,7 @@ requires = [
   "elixir_sense/core/normalized/code.ex",
   "elixir_sense/core/normalized/tokenizer.ex",
   "elixir_sense/core/normalized/typespec.ex",
+  "elixir_sense/core/struct.ex",
   "alchemist/helpers/module_info.ex",
   "alchemist/helpers/complete.ex",
   "elixir_sense/providers/definition.ex",

@@ -8,7 +8,7 @@ defmodule ElixirSense.Providers.Suggestion do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
-  alias ElixirSense.Core.State.StructInfo
+  alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
 
   @type attribute :: %{
@@ -311,18 +311,8 @@ defmodule ElixirSense.Providers.Suggestion do
              mods_funs,
              metadata_types
            ),
-         true <- Introspection.module_is_struct?(actual_mod) or Map.has_key?(structs, actual_mod) do
-      fields =
-        if Introspection.module_is_struct?(actual_mod) do
-          actual_mod
-          |> struct()
-          |> Map.from_struct()
-          |> Map.keys()
-          |> Kernel.++([:__struct__])
-        else
-          %StructInfo{fields: fields} = structs[actual_mod]
-          Enum.map(fields, &(&1 |> elem(0)))
-        end
+         true <- Struct.is_struct(actual_mod, structs) do
+      fields = Struct.get_fields(actual_mod, structs)
 
       result =
         fields
