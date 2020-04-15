@@ -223,20 +223,21 @@ defmodule ElixirSense.Core.Source do
     end)
   end
 
-  @spec which_struct(String.t(), nil | module) :: nil | {module, [atom], boolean}
+  @spec which_struct(String.t(), nil | module) ::
+          nil | {module, [atom], boolean, atom} | {:map, [atom], atom}
   def which_struct(text_before, current_module) do
     code = text_before |> String.reverse()
 
-    case walk_text(code, %{buffer: [], count_open: 0, result: nil}, &find_struct/5) do
-      %{result: nil} ->
-        nil
-
-      %{result: result} ->
-        result
-        |> Enum.join()
-        |> Kernel.<>("_: _}")
-        |> Code.string_to_quoted()
-        |> extract_struct_module(current_module)
+    with %{result: result} when result != nil <-
+           walk_text(code, %{buffer: [], count_open: 0, result: nil}, &find_struct/5),
+         {:ok, ast} <-
+           result
+           |> Enum.join()
+           |> Kernel.<>("_: _}")
+           |> Code.string_to_quoted() do
+      extract_struct_module(ast, current_module)
+    else
+      _ -> nil
     end
   end
 
@@ -282,32 +283,48 @@ defmodule ElixirSense.Core.Source do
     :error
   end
 
-  defp do_extract_struct_module({var, _, nil}, fields, _current_module)
-       when is_atom(var) and var != :__MODULE__ do
-    fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
-    {:_, fields_names, false}
+  defp get_field_names(fields) do
+    Keyword.keys(fields) |> Enum.slice(0..-2)
   end
 
-  defp do_extract_struct_module(module, fields, current_module) do
+  defp get_var({var, _, nil}) when is_atom(var) and var != :__MODULE__ do
+    var
+  end
+
+  defp get_var(_), do: nil
+
+  defp do_extract_struct_module({var, _, nil}, fields, _current_module, updated_var)
+       when is_atom(var) and var != :__MODULE__ do
+    {:_, get_field_names(fields), false, updated_var}
+  end
+
+  defp do_extract_struct_module(module, fields, current_module, updated_var) do
     case extract_module(module, current_module) do
       {:ok, extracted_module, elixir_prefix} ->
-        fields_names = Keyword.keys(fields) |> Enum.slice(0..-2)
-        {extracted_module, fields_names, elixir_prefix}
+        {extracted_module, get_field_names(fields), elixir_prefix, updated_var}
 
       _ ->
         nil
     end
   end
 
-  defp extract_struct_module(
-         {:ok, {:%, _, [module, {:%{}, _, [{:|, _, [_expr, fields]}]}]}},
-         current_module
-       ) do
-    do_extract_struct_module(module, fields, current_module)
+  defp extract_struct_module({:%{}, _, [{:|, _, [expr, fields]}]}, _) do
+    {:map, get_field_names(fields), get_var(expr)}
   end
 
-  defp extract_struct_module({:ok, {:%, _, [module, {:%{}, _, fields}]}}, current_module) do
-    do_extract_struct_module(module, fields, current_module)
+  defp extract_struct_module({:%{}, _, fields}, _) do
+    {:map, get_field_names(fields), nil}
+  end
+
+  defp extract_struct_module(
+         {:%, _, [module, {:%{}, _, [{:|, _, [expr, fields]}]}]},
+         current_module
+       ) do
+    do_extract_struct_module(module, fields, current_module, get_var(expr))
+  end
+
+  defp extract_struct_module({:%, _, [module, {:%{}, _, fields}]}, current_module) do
+    do_extract_struct_module(module, fields, current_module, nil)
   end
 
   defp extract_struct_module(_, _) do

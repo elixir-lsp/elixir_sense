@@ -771,7 +771,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{name: "arg", type: :variable},
-             # TODO my is not defined
+             # FIXME my is not defined, should not be in the list
              %{name: "my", type: :variable}
            ]
   end
@@ -893,11 +893,11 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 2, 37)
-      |> Enum.filter(fn s -> s.type == :variable end)
+      |> Enum.filter(fn s -> s.type in [:variable, :hint] end)
 
-    # TODO hint my_var instead of my
+    # FIXME hint my_var instead of my
 
-    assert list == [%{name: "my_var", type: :variable}]
+    assert list == [%{type: :hint, value: "my"}, %{name: "my_var", type: :variable}]
   end
 
   test "lists attributes" do
@@ -1737,8 +1737,95 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
-  # TODO map update
-  # TODO map update when var is struct
+  test "suggestion for fields in struct update" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        some_field: ""
+      ]
+
+      def func(%MyServer{} = some_arg) do
+        %MyServer{some_arg | fi
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 8, 28)
+
+    assert list == [
+             %{type: :hint, value: "fi"},
+             %{
+               call?: false,
+               name: "field_1",
+               origin: "MyServer",
+               subtype: :struct_field,
+               type: :field
+             }
+           ]
+  end
+
+  test "suggestion for fields in struct update when module not set" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        some_field: ""
+      ]
+
+      def func(%MyServer{} = some_arg) do
+        %{some_arg | fi
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 8, 20)
+
+    assert list == [
+             %{type: :hint, value: "fi"},
+             %{
+               call?: false,
+               name: "field_1",
+               origin: "MyServer",
+               subtype: :struct_field,
+               type: :field
+             }
+           ]
+  end
+
+  test "suggestion for fields in struct update when struct type is var" do
+    buffer = """
+    defmodule MyServer do
+      def func(%var{field_1: "asd"} = some_arg) do
+        %{some_arg | fi
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 3, 20)
+
+    assert list == [
+             %{type: :hint, value: "fi"},
+             %{call?: false, name: "field_1", origin: nil, subtype: :struct_field, type: :field}
+           ]
+  end
+
+  test "suggestion for keys in map update" do
+    buffer = """
+    defmodule MyServer do
+      def func(%{field_1: "asd"} = some_arg) do
+        %{some_arg | fi
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 3, 20)
+
+    assert list == [
+             %{type: :hint, value: "fi"},
+             %{call?: false, name: "field_1", origin: nil, subtype: :map_key, type: :field}
+           ]
+  end
 
   test "suggestion for funcs and vars in struct" do
     buffer = """

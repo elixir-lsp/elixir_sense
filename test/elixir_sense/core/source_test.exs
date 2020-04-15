@@ -736,13 +736,43 @@ defmodule ElixirSense.Core.SourceTest do
   end
 
   describe "which_struct" do
+    test "map" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %{
+      """
+
+      assert which_struct(code, MyMod) == {:map, [], nil}
+    end
+
+    test "map update" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %{asd |
+      """
+
+      assert which_struct(code, MyMod) == {:map, [], :asd}
+    end
+
+    test "map update with fields" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %{asd | qwe: "ds",
+      """
+
+      assert which_struct(code, MyMod) == {:map, [:qwe], :asd}
+    end
+
     test "patern match with _" do
       code = """
       defmodule MyMod do
         def my_func(%_{
       """
 
-      assert which_struct(code, MyMod) == {:_, [], false}
+      assert which_struct(code, MyMod) == {:_, [], false, nil}
     end
 
     test "patern match with variable name" do
@@ -751,7 +781,7 @@ defmodule ElixirSense.Core.SourceTest do
         def my_func(%my_var{
       """
 
-      assert which_struct(code, MyMod) == {:_, [], false}
+      assert which_struct(code, MyMod) == {:_, [], false, nil}
     end
 
     test "modules without namespace" do
@@ -761,7 +791,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %Mod{
       """
 
-      assert which_struct(code, MyMod) == {Mod, [], false}
+      assert which_struct(code, MyMod) == {Mod, [], false, nil}
     end
 
     test "modules with Elixir prefix" do
@@ -771,7 +801,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %Elixir.Mod{
       """
 
-      assert which_struct(code, MyMod) == {Mod, [], true}
+      assert which_struct(code, MyMod) == {Mod, [], true, nil}
     end
 
     test "modules with namespace" do
@@ -781,7 +811,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %ModA.ModB{
       """
 
-      assert which_struct(code, MyMod) == {ModA.ModB, [], false}
+      assert which_struct(code, MyMod) == {ModA.ModB, [], false, nil}
     end
 
     test "`__MODULE__` special form" do
@@ -791,7 +821,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %__MODULE__{
       """
 
-      assert which_struct(code, MyMod) == {MyMod, [], false}
+      assert which_struct(code, MyMod) == {MyMod, [], false, nil}
     end
 
     test "`__MODULE__.Submodule` special form" do
@@ -801,7 +831,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %__MODULE__.Submodule{
       """
 
-      assert which_struct(code, MyMod) == {MyMod.Submodule, [], false}
+      assert which_struct(code, MyMod) == {MyMod.Submodule, [], false, nil}
     end
 
     test "modules atom form" do
@@ -811,7 +841,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %:"Elixir.IO.Stream"{
       """
 
-      assert which_struct(code, MyMod) == {IO.Stream, [], false}
+      assert which_struct(code, MyMod) == {IO.Stream, [], false, nil}
     end
 
     test "modules erlang atom" do
@@ -821,7 +851,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %:my_module{
       """
 
-      assert which_struct(code, MyMod) == {:my_module, [], false}
+      assert which_struct(code, MyMod) == {:my_module, [], false, nil}
     end
 
     test "nested structs" do
@@ -833,12 +863,14 @@ defmodule ElixirSense.Core.SourceTest do
       end
       """
 
-      assert which_struct(text_before(code, 3, 16), MyMod) == {Mod, [], false}
+      assert which_struct(text_before(code, 3, 16), MyMod) == {Mod, [], false, nil}
       assert which_struct(text_before(code, 3, 23), MyMod) == nil
-      assert which_struct(text_before(code, 3, 34), MyMod) == {InnerMod, [], false}
-      assert which_struct(text_before(code, 3, 37), MyMod) == {Mod, [:field1], false}
-      assert which_struct(text_before(code, 3, 39), MyMod) == {Mod, [:field1], false}
-      assert which_struct(text_before(code, 3, 50), MyMod) == {Mod, [:field1, :field2], false}
+      assert which_struct(text_before(code, 3, 34), MyMod) == {InnerMod, [], false, nil}
+      assert which_struct(text_before(code, 3, 37), MyMod) == {Mod, [:field1], false, nil}
+      assert which_struct(text_before(code, 3, 39), MyMod) == {Mod, [:field1], false, nil}
+
+      assert which_struct(text_before(code, 3, 50), MyMod) ==
+               {Mod, [:field1, :field2], false, nil}
     end
 
     test "nested structs with multiple lines" do
@@ -856,10 +888,10 @@ defmodule ElixirSense.Core.SourceTest do
       end
       """
 
-      assert which_struct(text_before(code, 7, 8), MyMod) == nil
+      assert which_struct(text_before(code, 7, 8), MyMod) == {:map, [], nil}
 
       assert which_struct(text_before(code, 8, 9), MyMod) ==
-               {Mod, [:field1, :field2, :field3], false}
+               {Mod, [:field1, :field2, :field3], false, nil}
     end
 
     test "nested structs with multiple lines when line shorter than col" do
@@ -874,7 +906,7 @@ defmodule ElixirSense.Core.SourceTest do
       end
       """
 
-      assert which_struct(text_before(code, 5, 7), MyMod) == {Mod, [:field1], false}
+      assert which_struct(text_before(code, 5, 7), MyMod) == {Mod, [:field1], false, nil}
     end
 
     test "struct update syntax" do
@@ -889,8 +921,8 @@ defmodule ElixirSense.Core.SourceTest do
       end
       """
 
-      assert which_struct(text_before(code, 3, 23), MyMod) == {Mod, [], false}
-      assert which_struct(text_before(code, 5, 7), MyMod) == {Mod, [:field1], false}
+      assert which_struct(text_before(code, 3, 23), MyMod) == {Mod, [], false, :par1}
+      assert which_struct(text_before(code, 5, 7), MyMod) == {Mod, [:field1], false, :par1}
     end
   end
 

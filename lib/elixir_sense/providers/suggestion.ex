@@ -291,45 +291,28 @@ defmodule ElixirSense.Providers.Suggestion do
          hint,
          text_before,
          %State.Env{
-           imports: imports,
-           aliases: aliases,
-           module: module
-         },
+           module: module,
+           vars: vars
+         } = env,
          structs,
          mods_funs,
          metadata_types
        ) do
-    with {mod, fields_so_far, elixir_prefix} when mod != :_ <-
-           Source.which_struct(text_before, module),
-         {actual_mod, _, true} <-
-           Introspection.actual_mod_fun(
-             {expand_current_module(mod, module), nil},
-             imports,
-             if(elixir_prefix, do: [], else: aliases),
-             module,
-             mods_funs,
-             metadata_types
-           ),
-         true <- Struct.is_struct(actual_mod, structs) do
-      fields = Struct.get_fields(actual_mod, structs)
+    case Source.which_struct(text_before, module) do
+      {mod, fields_so_far, _elixir_prefix, _var} = struct when mod != :_ ->
+        result =
+          get_fields(
+            env,
+            mods_funs,
+            metadata_types,
+            structs,
+            hint,
+            struct
+          )
 
-      result =
-        fields
-        |> Kernel.--(fields_so_far)
-        |> Enum.filter(fn field -> String.starts_with?("#{field}", hint) end)
-        |> Enum.map(fn field ->
-          %{
-            type: :field,
-            subtype: :struct_field,
-            name: Atom.to_string(field),
-            call?: false,
-            origin: inspect(actual_mod)
-          }
-        end)
+        {result, if(fields_so_far == [], do: :maybe_struct_update)}
 
-      {result, if(fields_so_far == [], do: :maybe_struct_update)}
-    else
-      {:_, fields_so_far, false} when is_list(fields_so_far) ->
+      {:_, fields_so_far, false, _var} when is_list(fields_so_far) ->
         result =
           [:__struct__]
           |> Kernel.--(fields_so_far)
@@ -346,8 +329,102 @@ defmodule ElixirSense.Providers.Suggestion do
 
         {result, if(fields_so_far == [], do: :maybe_struct_update)}
 
+      {:map, fields_so_far, var} when not is_nil(var) ->
+        result = get_fields_from_var(vars, structs, var, fields_so_far, hint)
+
+        {result, if(fields_so_far == [], do: :maybe_struct_update)}
+
       _ ->
         {[], nil}
+    end
+  end
+
+  defp get_fields(
+         %State.Env{
+           imports: imports,
+           aliases: aliases,
+           module: module,
+           vars: vars
+         },
+         mods_funs,
+         metadata_types,
+         structs,
+         hint,
+         {mod, fields_so_far, elixir_prefix, var}
+       ) do
+    with {actual_mod, _, true} <-
+           Introspection.actual_mod_fun(
+             {expand_current_module(mod, module), nil},
+             imports,
+             if(elixir_prefix, do: [], else: aliases),
+             module,
+             mods_funs,
+             metadata_types
+           ),
+         true <- Struct.is_struct(actual_mod, structs) do
+      fields = Struct.get_fields(actual_mod, structs)
+
+      fields
+      |> Kernel.--(fields_so_far)
+      |> Enum.filter(fn field -> String.starts_with?("#{field}", hint) end)
+      |> Enum.map(fn field ->
+        %{
+          type: :field,
+          subtype: :struct_field,
+          name: Atom.to_string(field),
+          call?: false,
+          origin: inspect(actual_mod)
+        }
+      end)
+    else
+      _ ->
+        get_fields_from_var(vars, structs, var, fields_so_far, hint)
+    end
+  end
+
+  defp get_fields_from_var(vars, structs, var, fields_so_far, hint) do
+    case Enum.find(vars, fn %State.VarInfo{name: name} -> name == var end) do
+      %State.VarInfo{type: {:map, fields}} ->
+        for {field, _} <- fields,
+            field not in fields_so_far,
+            String.starts_with?("#{field}", hint) do
+          %{
+            type: :field,
+            subtype: :map_key,
+            name: Atom.to_string(field),
+            origin: nil,
+            call?: false
+          }
+        end
+
+      %State.VarInfo{type: {:struct, fields, nil}} ->
+        for {field, _} <- fields |> Keyword.put_new(:__struct__, nil),
+            field not in fields_so_far,
+            String.starts_with?("#{field}", hint) do
+          %{
+            type: :field,
+            subtype: :struct_field,
+            name: Atom.to_string(field),
+            origin: nil,
+            call?: false
+          }
+        end
+
+      %State.VarInfo{type: {:struct, _fields, module}} ->
+        for field <- Struct.get_fields(module, structs),
+            field not in fields_so_far,
+            String.starts_with?("#{field}", hint) do
+          %{
+            type: :field,
+            subtype: :struct_field,
+            name: Atom.to_string(field),
+            origin: inspect(module),
+            call?: false
+          }
+        end
+
+      _otherwise ->
+        []
     end
   end
 
