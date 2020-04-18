@@ -411,16 +411,20 @@ defmodule ElixirSense.Providers.Suggestion do
         end
 
       %State.VarInfo{type: {:struct, _fields, module}} ->
-        for field <- Struct.get_fields(module, structs),
-            field not in fields_so_far,
-            String.starts_with?("#{field}", hint) do
-          %{
-            type: :field,
-            subtype: :struct_field,
-            name: Atom.to_string(field),
-            origin: inspect(module),
-            call?: false
-          }
+        if Struct.is_struct(module, structs) do
+          for field <- Struct.get_fields(module, structs),
+              field not in fields_so_far,
+              String.starts_with?("#{field}", hint) do
+            %{
+              type: :field,
+              subtype: :struct_field,
+              name: Atom.to_string(field),
+              origin: inspect(module),
+              call?: false
+            }
+          end
+        else
+          []
         end
 
       _otherwise ->

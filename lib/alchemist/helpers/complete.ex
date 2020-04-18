@@ -259,18 +259,22 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp recurse_var({:struct, fields, module}, [], structs) do
-    fields_values =
-      for field <- Struct.get_fields(module, structs), field != :__struct__ do
-        {field, fields[field]}
-      end
+    if Struct.is_struct(module, structs) do
+      fields_values =
+        for field <- Struct.get_fields(module, structs), field != :__struct__ do
+          {field, fields[field]}
+        end
 
-    struct =
-      case fields[:__struct__] do
-        nil -> {:atom, module}
-        other -> other
-      end
+      struct =
+        case fields[:__struct__] do
+          nil -> {:atom, module}
+          other -> other
+        end
 
-    {:ok, {:struct, module}, Keyword.put(fields_values, :__struct__, struct)}
+      {:ok, {:struct, module}, Keyword.put(fields_values, :__struct__, struct)}
+    else
+      :error
+    end
   end
 
   defp recurse_var({:struct, fields, _module}, [head | tail], structs) do
