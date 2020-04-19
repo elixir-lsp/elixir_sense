@@ -21,6 +21,10 @@ defmodule ElixirSense.Server.RequestHandler do
     ElixirSense.suggestions(buffer, line, column)
   end
 
+  def handle_request("string_to_quoted", %{"buffer" => buffer} = args) do
+    ElixirSense.suggestions(buffer, args["cursor_line"], args["error_threshold"] || 6)
+  end
+
   def handle_request("expand_full", %{
         "buffer" => buffer,
         "selected_code" => selected_code,

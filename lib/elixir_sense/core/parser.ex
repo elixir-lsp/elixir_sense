@@ -107,7 +107,7 @@ defmodule ElixirSense.Core.Parser do
     }
   end
 
-  defp string_to_ast(source, errors_threshold, cursor_line_number, original_error \\ nil) do
+  def string_to_ast(source, errors_threshold, cursor_line_number, original_error \\ nil) do
     case Code.string_to_quoted(source, columns: true) do
       {:ok, ast} ->
         {:ok, ast, source}
