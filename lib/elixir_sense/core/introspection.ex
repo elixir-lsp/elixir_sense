@@ -24,7 +24,6 @@ defmodule ElixirSense.Core.Introspection do
   A collection of functions to introspect/format docs, specs, types and callbacks.
   """
 
-  alias Alchemist.Helpers.ModuleInfo
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.EdocReader
@@ -46,8 +45,51 @@ defmodule ElixirSense.Core.Introspection do
     :gen_event => GenEvent
   }
 
-  def all_modules do
-    ModuleInfo.all_applications_modules()
+  @spec get_exports(module) :: [{atom, non_neg_integer}]
+  def get_exports(Elixir), do: []
+
+  def get_exports(module) do
+    case Code.ensure_loaded(module) do
+      {:module, _} ->
+        for {f, a} <- module.module_info(:exports) do
+          case Atom.to_string(f) do
+            "MACRO-" <> macro_name ->
+              # extract macro name
+              {String.to_atom(macro_name), a - 1}
+
+            _ ->
+              # normal public fun
+              {f, a}
+          end
+        end
+        |> Kernel.++(BuiltinFunctions.erlang_builtin_functions(module))
+
+      _otherwise ->
+        []
+    end
+  end
+
+  @doc ~S"""
+  Checks if function or macro is exported from module
+
+  ## Example
+
+      iex> ElixirSense.Core.Introspection.exported?(Atom, :to_string)
+      true
+
+      iex> ElixirSense.Core.Introspection.exported?(Kernel, :defmodule)
+      true
+
+      iex> ElixirSense.Core.Introspection.exported?(:erlang, :orelse)
+      true
+
+      iex> ElixirSense.Core.Introspection.exported?(:lists, :flatten)
+      true
+
+  """
+  @spec exported?(module, atom) :: boolean
+  def exported?(module, fun) do
+    Keyword.has_key?(get_exports(module), fun)
   end
 
   @spec get_all_docs(mod_fun, ElixirSense.Core.State.scope()) :: docs
@@ -127,7 +169,7 @@ defmodule ElixirSense.Core.Introspection do
           [] ->
             # no docs and notypespecs
             # provide dummy spec basing on module_info(:exports)
-            for {f, a} <- ModuleInfo.get_module_funs(mod),
+            for {f, a} <- get_exports(mod),
                 f == fun do
               dummy_params = if a == 0, do: [], else: Enum.map(1..a, fn _ -> "term" end)
 
@@ -196,7 +238,7 @@ defmodule ElixirSense.Core.Introspection do
           [] ->
             # no docs and no typespecs
             # provide dummy docs basing on module_info(:exports)
-            for {f, arity} <- ModuleInfo.get_module_funs(mod),
+            for {f, arity} <- get_exports(mod),
                 f == fun do
               fun_args_text =
                 if arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end)
@@ -1188,7 +1230,7 @@ defmodule ElixirSense.Core.Introspection do
           end)
       end
 
-    if found_in_metadata or ModuleInfo.has_function?(mod, fun) or
+    if found_in_metadata or exported?(mod, fun) or
          has_type?(mod, fun, current_module, metadata_types, include_typespecs) do
       {mod, fun}
     else
@@ -1210,10 +1252,10 @@ defmodule ElixirSense.Core.Introspection do
 
   defp find_kernel_function({nil, fun}) when fun not in [:__info__, :module_info] do
     cond do
-      ModuleInfo.has_function?(Kernel, fun) ->
+      exported?(Kernel, fun) ->
         {Kernel, fun}
 
-      ModuleInfo.has_function?(Kernel.SpecialForms, fun) ->
+      exported?(Kernel.SpecialForms, fun) ->
         {Kernel.SpecialForms, fun}
 
       true ->

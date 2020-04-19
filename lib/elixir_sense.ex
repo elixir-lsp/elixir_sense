@@ -6,6 +6,7 @@ defmodule ElixirSense do
   This module provides the basic functionality for context-aware code completion, docs, signature info and more.
   """
 
+  alias ElixirSense.Core.Applications
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
@@ -111,25 +112,17 @@ defmodule ElixirSense do
 
   ## Example
 
-      iex> ElixirSense.all_modules() |> Enum.take(4)
-      [":application", ":application_controller", ":application_master", ":application_starter"]
+      iex> ":application" in ElixirSense.all_modules()
+      true
 
-      iex> ElixirSense.all_modules() |> Enum.any?(& &1 == "Version.Parser")
+      iex> "Version.Parser" in ElixirSense.all_modules()
       true
 
   """
   @spec all_modules() :: list(String.t())
   def all_modules do
-    Introspection.all_modules()
-    |> Enum.map(&Atom.to_string(&1))
-    |> Enum.map(fn x ->
-      if String.downcase(x) == x do
-        ":" <> x
-      else
-        x
-      end
-    end)
-    |> Enum.map(&String.replace_prefix(&1, "Elixir.", ""))
+    Applications.get_modules_from_applications()
+    |> Enum.map(&inspect/1)
     |> Enum.sort()
   end
 

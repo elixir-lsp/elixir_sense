@@ -1,5 +1,6 @@
 requires = [
   "elixir_sense/core/builtin_attributes.ex",
+  "elixir_sense/core/applications.ex",
   "elixir_sense/core/state.ex",
   "elixir_sense/core/introspection.ex",
   "elixir_sense/core/edoc_reader.ex",
@@ -16,7 +17,6 @@ requires = [
   "elixir_sense/core/normalized/tokenizer.ex",
   "elixir_sense/core/normalized/typespec.ex",
   "elixir_sense/core/struct.ex",
-  "alchemist/helpers/module_info.ex",
   "alchemist/helpers/complete.ex",
   "elixir_sense/providers/definition.ex",
   "elixir_sense/providers/docs.ex",

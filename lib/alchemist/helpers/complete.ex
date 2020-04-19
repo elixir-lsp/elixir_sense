@@ -1,4 +1,5 @@
 defmodule Alchemist.Helpers.Complete do
+  alias ElixirSense.Core.Applications
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.EdocReader
   alias ElixirSense.Core.Introspection
@@ -429,7 +430,7 @@ defmodule Alchemist.Helpers.Complete do
   end
 
   defp get_modules_from_applications do
-    for module <- Introspection.all_modules() do
+    for module <- Applications.get_modules_from_applications() do
       Atom.to_string(module)
     end
   end
