@@ -1,11 +1,31 @@
-defmodule Alchemist.Helpers.CompleteTest do
+# This file includes modified code extracted from the elixir project. Namely:
+#
+# https://github.com/elixir-lang/elixir/blob/v1.9/lib/iex/test/iex/autocomplete_test.exs
+#
+# The original code is licensed as follows:
+#
+# Copyright 2012 Plataformatec
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   use ExUnit.Case, async: true
 
-  alias Alchemist.Helpers.Complete.Env
+  alias ElixirSense.Providers.Suggestion.Complete.Env
   alias ElixirSense.Core.State.{ModFunInfo, SpecInfo, VarInfo}
 
   def expand(expr, env \\ %Env{}) do
-    Alchemist.Helpers.Complete.expand(Enum.reverse(expr), env)
+    ElixirSense.Providers.Suggestion.Complete.expand(Enum.reverse(expr), env)
   end
 
   test "erlang module completion" do
@@ -52,7 +72,7 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "elixir completion" do
-    assert expand('En') == {:yes, 'um', []}
+    assert {:yes, 'um', [_ | _]} = expand('En')
 
     assert {:yes, 'ble', [%{name: "Enumerable", subtype: :protocol, type: :module}]} =
              expand('Enumera')
@@ -192,8 +212,10 @@ defmodule Alchemist.Helpers.CompleteTest do
         def foo(), do: 0
       end
 
-    File.write!("Alchemist.Helpers.CompleteTest.Sample.beam", bytecode)
-    assert {:yes, '', [%{name: "foo"}]} = expand('Alchemist.Helpers.CompleteTest.Sample.foo')
+    File.write!("ElixirSense.Providers.Suggestion.CompleteTest.Sample.beam", bytecode)
+
+    assert {:yes, '', [%{name: "foo"}]} =
+             expand('ElixirSense.Providers.Suggestion.CompleteTest.Sample.foo')
 
     Code.compiler_options(ignore_module_conflict: true)
 
@@ -203,9 +225,9 @@ defmodule Alchemist.Helpers.CompleteTest do
     end
 
     assert {:yes, '', [%{name: "foo"}, %{name: "foobar"}]} =
-             expand('Alchemist.Helpers.CompleteTest.Sample.foo')
+             expand('ElixirSense.Providers.Suggestion.CompleteTest.Sample.foo')
   after
-    File.rm("Alchemist.Helpers.CompleteTest.Sample.beam")
+    File.rm("ElixirSense.Providers.Suggestion.CompleteTest.Sample.beam")
     Code.compiler_options(ignore_module_conflict: false)
     :code.purge(Sample)
     :code.delete(Sample)
@@ -289,7 +311,7 @@ defmodule Alchemist.Helpers.CompleteTest do
              {:yes, 'oo',
               [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]}
 
-    assert expand('map.b', env) == {:yes, 'ar_', []}
+    assert {:yes, 'ar_', _} = expand('map.b', env)
 
     assert expand('map.bar_', env) ==
              {:yes, '',
@@ -341,7 +363,7 @@ defmodule Alchemist.Helpers.CompleteTest do
              {:yes, 'oo',
               [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]}
 
-    assert expand('map.nested.deeply.b', env) == {:yes, 'ar_', []}
+    assert {:yes, 'ar_', _} = expand('map.nested.deeply.b', env)
 
     assert expand('map.nested.deeply.bar_', env) ==
              {:yes, '',
@@ -452,15 +474,15 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "completion inside expression" do
-    assert expand('1 En') == {:yes, 'um', []}
-    assert expand('Test(En') == {:yes, 'um', []}
+    assert {:yes, 'um', _} = expand('1 En')
+    assert {:yes, 'um', _} = expand('Test(En')
     assert {:yes, 'ib', [_]} = expand('Test :zl')
     assert {:yes, 'ib', [_]} = expand('[:zl')
     assert {:yes, 'ib', [_]} = expand('{:zl')
   end
 
   test "ampersand completion" do
-    assert expand('&Enu') == {:yes, 'm', []}
+    assert {:yes, 'm', [_ | _]} = expand('&Enu')
 
     assert {:yes, [],
             [
@@ -488,7 +510,7 @@ defmodule Alchemist.Helpers.CompleteTest do
 
   test "elixir completion sublevel" do
     assert {:yes, 'LevelA', [%{name: "LevelA"}]} =
-             expand('Alchemist.Helpers.CompleteTest.SublevelTest.')
+             expand('ElixirSense.Providers.Suggestion.CompleteTest.SublevelTest.')
   end
 
   defmodule MyServer do
@@ -571,7 +593,7 @@ defmodule Alchemist.Helpers.CompleteTest do
       }
     }
 
-    assert {:yes, 'un_p', []} = expand('my_f', env)
+    assert {:yes, 'un_p', _} = expand('my_f', env)
 
     assert {:yes, 'iv',
             [
@@ -736,7 +758,8 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "completion for structs" do
-    assert {:yes, 'uct', [%{name: "MyStruct"}]} = expand('%Alchemist.Helpers.CompleteTest.MyStr')
+    assert {:yes, 'uct', [%{name: "MyStruct"}]} =
+             expand('%ElixirSense.Providers.Suggestion.CompleteTest.MyStr')
   end
 
   test "completion for struct keys" do
@@ -763,7 +786,7 @@ defmodule Alchemist.Helpers.CompleteTest do
                   name: "my_val",
                   subtype: :struct_field,
                   type: :field,
-                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
                   call?: true
                 }
               ]}
@@ -775,7 +798,7 @@ defmodule Alchemist.Helpers.CompleteTest do
                   name: "some_map",
                   subtype: :struct_field,
                   type: :field,
-                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
                   call?: true
                 }
               ]}
@@ -791,42 +814,42 @@ defmodule Alchemist.Helpers.CompleteTest do
                   name: "__struct__",
                   subtype: :struct_field,
                   type: :field,
-                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
                   call?: true
                 },
                 %{
                   name: "a_mod",
                   subtype: :struct_field,
                   type: :field,
-                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
                   call?: true
                 },
                 %{
                   name: "my_val",
                   subtype: :struct_field,
                   type: :field,
-                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
                   call?: true
                 },
                 %{
                   name: "some_map",
                   subtype: :struct_field,
                   type: :field,
-                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
                   call?: true
                 },
                 %{
                   name: "str",
                   subtype: :struct_field,
                   type: :field,
-                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
                   call?: true
                 },
                 %{
                   name: "unknown_str",
                   subtype: :struct_field,
                   type: :field,
-                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
                   call?: true
                 }
               ]}
@@ -838,7 +861,7 @@ defmodule Alchemist.Helpers.CompleteTest do
                   name: "str",
                   subtype: :struct_field,
                   type: :field,
-                  origin: "Alchemist.Helpers.CompleteTest.MyStruct",
+                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
                   call?: true
                 }
               ]}
@@ -858,11 +881,11 @@ defmodule Alchemist.Helpers.CompleteTest do
   end
 
   test "ignore invalid Elixir module literals" do
-    defmodule :"Alchemist.Helpers.CompleteTest.Unicodé", do: nil
-    assert expand('Alchemist.Helpers.CompleteTest.Unicod') == {:no, '', []}
+    defmodule :"ElixirSense.Providers.Suggestion.CompleteTest.Unicodé", do: nil
+    assert expand('ElixirSense.Providers.Suggestion.CompleteTest.Unicod') == {:no, '', []}
   after
-    :code.purge(:"Alchemist.Helpers.CompleteTest.Unicodé")
-    :code.delete(:"Alchemist.Helpers.CompleteTest.Unicodé")
+    :code.purge(:"ElixirSense.Providers.Suggestion.CompleteTest.Unicodé")
+    :code.delete(:"ElixirSense.Providers.Suggestion.CompleteTest.Unicodé")
   end
 
   defmodule MyMacro do
@@ -878,16 +901,16 @@ defmodule Alchemist.Helpers.CompleteTest do
 
   test "complete macros and functions from not loaded modules" do
     assert {:yes, 'st', [%{name: "test", type: :macro}]} =
-             expand('Alchemist.Helpers.CompleteTest.MyMacro.te')
+             expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.te')
 
     assert {:yes, 'un', [%{name: "fun", type: :function}]} =
-             expand('Alchemist.Helpers.CompleteTest.MyMacro.f')
+             expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.f')
 
     assert {:yes, 'uard', [%{name: "guard", type: :macro}]} =
-             expand('Alchemist.Helpers.CompleteTest.MyMacro.g')
+             expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.g')
 
     assert {:yes, 'legated', [%{name: "delegated", type: :function}]} =
-             expand('Alchemist.Helpers.CompleteTest.MyMacro.de')
+             expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.de')
   end
 
   test "complete build in functions on non local calls" do
@@ -913,7 +936,7 @@ defmodule Alchemist.Helpers.CompleteTest do
                 spec:
                   "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
               }
-            ]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.mo')
+            ]} = expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.mo')
 
     assert {:yes, 'fo__',
             [
@@ -923,7 +946,7 @@ defmodule Alchemist.Helpers.CompleteTest do
                 spec:
                   "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()"
               }
-            ]} = expand('Alchemist.Helpers.CompleteTest.MyMacro.__in')
+            ]} = expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.__in')
 
     assert {:yes, 'dule_info',
             [
@@ -1030,7 +1053,7 @@ defmodule Alchemist.Helpers.CompleteTest do
               }
             ]} = expand('Enumerable.__pro')
 
-    assert {:yes, 'l_for', []} = expand('Enumerable.imp')
+    assert {:yes, 'l_for', [_, _]} = expand('Enumerable.imp')
 
     assert {:yes, [],
             [

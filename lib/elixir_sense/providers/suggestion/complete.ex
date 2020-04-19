@@ -1,4 +1,39 @@
-defmodule Alchemist.Helpers.Complete do
+# This file includes modified code extracted from the elixir project. Namely:
+#
+# https://github.com/elixir-lang/elixir/blob/v1.1/lib/iex/lib/iex/autocomplete.exs
+#
+# The original code is licensed as follows:
+#
+# Copyright 2012 Plataformatec
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This module is based on IEx.Autocomplete from version ~ 1.1
+# with some changes inspired by Alchemist.Completer (itself based on IEx.Autocomplete).
+# Since then the codebases have diverged as the requirements
+# put on editor and REPL autocomplete are different.
+# However some relevant changes have been merged back
+# from upstream Elixir (1.10).
+# Changes made to the original version include:
+# - different result format with added docs and spec
+# - built in and private funcs are not excluded
+# - does not omit results when returning hint
+# - added expansion basing on metadata besides introspection
+# - uses custom docs extraction function
+# - gets metadata by argument instead of environment variables
+# (original Elixir 1.1) and later GenServer
+
+defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.Applications
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.EdocReader
@@ -15,26 +50,10 @@ defmodule Alchemist.Helpers.Complete do
 
   @moduledoc false
 
-  # This module is based on Alchemist.Completer which in
-  # turn was originally based on Elixir IEx.Autocomplete taken
-  # from version ~ 1.1
-  # Since then the codebases have diverged as the requirements
-  # put on editor and REPL autocomplete are different.
-  # However some relevant changes have been merged back
-  # from upstream Elixir (1.9).
-  # Changes made to the original version include:
-  # - different result format with added docs and spec
-  # - built in funcss are not excluded
-  # - recursive evalutor `run/2` added on top of `expand/2`
-  # - added expansion basing on metadata besides introspection
-  # - uses custom docs extraction function
-  # - gets metadata by argument instead of environment variables
-  # (original Elixir 1.1) and later GenServer
-
   defmodule Env do
     @moduledoc false
 
-    @type t :: %Alchemist.Helpers.Complete.Env{
+    @type t :: %ElixirSense.Providers.Suggestion.Complete.Env{
             aliases: [{module, module}],
             imports: [module],
             scope_module: nil | module,
@@ -52,34 +71,21 @@ defmodule Alchemist.Helpers.Complete do
               structs: %{}
   end
 
-  def run(exp, %Alchemist.Helpers.Complete.Env{} = env) do
-    code =
-      case is_bitstring(exp) do
-        true -> exp |> String.to_charlist()
-        _ -> exp
-      end
+  @spec complete(String.t(), Env.t()) ::
+          {%{type: :hint, value: String.t()},
+           [
+             ElixirSense.Providers.Suggestion.func()
+             | ElixirSense.Providers.Suggestion.mod()
+             | ElixirSense.Providers.Suggestion.field()
+           ]}
+  def complete(hint, %Env{} = env) do
+    {_result, completion_hint, completions} =
+      expand(hint |> String.to_charlist() |> Enum.reverse(), env)
 
-    {status, result, list} = expand(code |> Enum.reverse(), env)
-
-    case {status, result, list} do
-      {:no, _, _} ->
-        {%{type: :hint, value: "#{exp}"}, []}
-
-      {:yes, [], _} ->
-        {%{type: :hint, value: "#{exp}"}, list}
-
-      {:yes, _, []} ->
-        run(code ++ result, env)
-
-      {:yes, _, r} ->
-        case r do
-          [%{subtype: :struct}] -> {%{type: :hint, value: "#{exp}#{result}"}, list}
-          # TODO maybe run recursively in some cases
-          [_] -> {%{type: :hint, value: "#{exp}#{result}"}, list}
-          [_ | _] -> run(code ++ result, env)
-        end
-    end
+    {build_hint(hint, completion_hint), completions}
   end
+
+  defp build_hint(hint, completion_hint), do: %{type: :hint, value: "#{hint}#{completion_hint}"}
 
   def expand('', env) do
     expand_import("", env)
@@ -194,10 +200,12 @@ defmodule Alchemist.Helpers.Complete do
     length = byte_size(hint)
     prefix = :binary.longest_common_prefix(binary)
 
+    mapped = Enum.flat_map(entries, &to_entries/1)
+
     if prefix in [0, length] do
-      yes("", Enum.flat_map(entries, &to_entries/1))
+      yes("", mapped)
     else
-      yes(binary_part(first.name, prefix, length - prefix), [])
+      yes(binary_part(first.name, prefix, length - prefix), mapped)
     end
   end
 

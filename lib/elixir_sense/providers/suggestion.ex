@@ -3,13 +3,13 @@ defmodule ElixirSense.Providers.Suggestion do
   Provider responsible for finding suggestions for auto-completing
   """
 
-  alias Alchemist.Helpers.Complete
   alias ElixirSense.Core.BuiltinAttributes
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Providers.Suggestion.Complete
 
   @type attribute :: %{
           type: :attribute,
@@ -486,7 +486,7 @@ defmodule ElixirSense.Providers.Suggestion do
         {hint, false}
       end
 
-    {%{type: :hint, value: prefixed_value}, suggestions} = Complete.run(hint, env)
+    {%{type: :hint, value: prefixed_value}, suggestions} = Complete.complete(hint, env)
 
     prefixed_value =
       if module_special_form_replaced do
