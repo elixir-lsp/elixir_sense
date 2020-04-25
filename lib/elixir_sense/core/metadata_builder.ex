@@ -1199,6 +1199,27 @@ defmodule ElixirSense.Core.MetadataBuilder do
     get_binding_type(state, ast)
   end
 
+  defp get_binding_type(_state, {:.., _, [_, _]}) do
+    {:struct, [], Range}
+  end
+
+  @builtin_sigils %{
+    sigil_D: Date,
+    sigil_T: Time,
+    sigil_U: DateTime,
+    sigil_N: NaiveDateTime,
+    sigil_R: Regex,
+    sigil_r: Regex
+  }
+
+  defp get_binding_type(_state, {sigil, _, _}) when is_atom(sigil) do
+    # TODO support custom sigils
+    case @builtin_sigils[sigil] do
+      nil -> nil
+      type -> {:struct, [], type}
+    end
+  end
+
   defp get_binding_type(_state, _), do: nil
 
   defp add_no_call(meta) do

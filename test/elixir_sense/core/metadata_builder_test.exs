@@ -215,6 +215,35 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ] = state |> get_line_vars(15) |> Enum.filter(&(&1.name in [:x, :z]))
   end
 
+  test "struct binding understands builtin sigils and ranges" do
+    state =
+      """
+      defmodule MyModule do
+        def some() do
+          var1 = ~D[2000-01-01]
+          var2 = ~T[13:00:07]
+          var3 = ~U[2015-01-13 13:00:07Z]
+          var4 = ~N[2000-01-01 23:00:07]
+          var5 = ~r/foo/iu
+          var6 = ~R(f\#{1,3}o)
+          var7 = 12..34
+          IO.puts ""
+        end
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{name: :var1, type: {:struct, [], Date}},
+             %VarInfo{name: :var2, type: {:struct, [], Time}},
+             %VarInfo{name: :var3, type: {:struct, [], DateTime}},
+             %VarInfo{name: :var4, type: {:struct, [], NaiveDateTime}},
+             %VarInfo{name: :var5, type: {:struct, [], Regex}},
+             %VarInfo{name: :var6, type: {:struct, [], Regex}},
+             %VarInfo{name: :var7, type: {:struct, [], Range}}
+           ] = state |> get_line_vars(10)
+  end
+
   test "vars defined inside a function `after`/`rescue`/`catch`" do
     state =
       """
