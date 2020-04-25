@@ -350,11 +350,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
     assert read_line(file, {line, column}) =~ "ElixirSenseExample.ModuleWithFunctions do"
 
-    assert %{column: column, file: file, found: true, line: line, type: :function} =
-             ElixirSense.definition(buffer, 4, 42)
+    assert %{found: true, type: :function} = ElixirSense.definition(buffer, 4, 42)
 
-    assert %{column: column, file: file, found: true, line: line, type: :function} =
-             ElixirSense.definition(buffer, 6, 42)
+    assert %{found: true, type: :function} = ElixirSense.definition(buffer, 6, 42)
   end
 
   test "built-in functions cannot be called locally" do
