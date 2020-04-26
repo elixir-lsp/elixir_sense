@@ -3330,6 +3330,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       defmodule MyStruct do
         defstruct [:some_field, a_field: 1]
+        IO.puts ""
       end
       """
       |> string_to_state
@@ -3364,6 +3365,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: :defmodule
              }
            } = state.mods_funs_to_positions
+
+    assert get_line_attributes(state, 3) == [
+            %AttributeInfo{name: :struct, positions: [{2, 3}]}
+          ]
   end
 
   test "find struct fields from expression" do
