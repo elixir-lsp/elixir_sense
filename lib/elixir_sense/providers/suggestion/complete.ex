@@ -575,8 +575,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         case f |> Atom.to_string() do
           "MACRO-" <> name ->
             params = format_params(spec, a - 1)
-            # TODO test this arity and spec
-            # TODO is this branch reachable?
             {String.to_atom(name), a - 1, :macro, {"", %{}}, spec_str, params}
 
           _name ->
