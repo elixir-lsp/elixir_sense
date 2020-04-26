@@ -6,6 +6,7 @@ defmodule ElixirSense.Core.BuiltinAttributes do
     impl
     derive
     enforce_keys
+    struct
     compile
     deprecated
     dialyzer
