@@ -116,7 +116,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
 
       defp private_func, do: @my_attribute
       def public_func, do: :ok
-
+      defp private_func_arg(a \\ nil)
       defp private_func_arg(a) when is_integer(a), do: :ok
       def public_func_arg(b, a \\ "def"), do: :ok
 

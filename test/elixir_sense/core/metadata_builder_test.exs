@@ -3041,17 +3041,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{2, 3}],
                type: :def
              },
-             {InheritMod, :handle_call, nil} => %ModFunInfo{
-               params: [
-                 [
-                   {:msg, _, ElixirSenseExample.ExampleBehaviour},
-                   {:_from, _, ElixirSenseExample.ExampleBehaviour},
-                   {:state, _, ElixirSenseExample.ExampleBehaviour}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :def
-             },
+             {InheritMod, :handle_call, nil} => %ModFunInfo{},
              {InheritMod, nil, nil} => %ModFunInfo{
                params: [nil, nil],
                positions: [{2, 3}, {1, 11}],
@@ -3062,35 +3052,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{2, 3}],
                type: :defp
              },
-             {InheritMod, :private_func, nil} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :defp
-             },
              {InheritMod, :private_func_arg, 1} => %ModFunInfo{
-               params: [
-                 [
-                   {:a, _, ElixirSenseExample.ExampleBehaviour}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :defp
-             },
-             {InheritMod, :private_func_arg, nil} => %ModFunInfo{
-               params: [
-                 [
-                   {:a, _, ElixirSenseExample.ExampleBehaviour}
-                 ]
-               ],
-               positions: [{2, 3}],
+               params: [[{:\\, _, [{:a, _, ElixirSenseExample.ExampleBehaviour}, nil]}], [{:a, _, ElixirSenseExample.ExampleBehaviour}]],
+               positions: [{2, 3}, {2, 3}],
                type: :defp
              },
              {InheritMod, :private_guard, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :defguardp
-             },
-             {InheritMod, :private_guard, nil} => %ModFunInfo{
                params: [[]],
                positions: [{2, 3}],
                type: :defguardp
@@ -3104,21 +3071,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{2, 3}],
                type: :defguardp
              },
-             {InheritMod, :private_guard_arg, nil} => %ModFunInfo{
-               params: [
-                 [
-                   {:a, _, ElixirSenseExample.ExampleBehaviour}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :defguardp
-             },
              {InheritMod, :private_macro, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :defmacrop
-             },
-             {InheritMod, :private_macro, nil} => %ModFunInfo{
                params: [[]],
                positions: [{2, 3}],
                type: :defmacrop
@@ -3132,21 +3085,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{2, 3}],
                type: :defmacrop
              },
-             {InheritMod, :private_macro_arg, nil} => %ModFunInfo{
-               params: [
-                 [
-                   {:a, _, ElixirSenseExample.ExampleBehaviour}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :defmacrop
-             },
              {InheritMod, :public_func, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :def
-             },
-             {InheritMod, :public_func, nil} => %ModFunInfo{
                params: [[]],
                positions: [{2, 3}],
                type: :def
@@ -3165,26 +3104,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{2, 3}],
                type: :def
              },
-             {InheritMod, :public_func_arg, nil} => %ModFunInfo{
-               params: [
-                 [
-                   {:b, _, ElixirSenseExample.ExampleBehaviour},
-                   {:\\, [keep: {"test/support/example_behaviour.ex", 121}],
-                    [
-                      {:a, _, ElixirSenseExample.ExampleBehaviour},
-                      "def"
-                    ]}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :def
-             },
              {InheritMod, :public_guard, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :defguard
-             },
-             {InheritMod, :public_guard, nil} => %ModFunInfo{
                params: [[]],
                positions: [{2, 3}],
                type: :defguard
@@ -3198,35 +3118,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{2, 3}],
                type: :defguard
              },
-             {InheritMod, :public_guard_arg, nil} => %ModFunInfo{
-               params: [
-                 [
-                   {:a, _, ElixirSenseExample.ExampleBehaviour}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :defguard
-             },
              {InheritMod, :public_macro, 0} => %ModFunInfo{
                params: [[]],
                positions: [{2, 3}],
                type: :defmacro
              },
-             {InheritMod, :public_macro, nil} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :defmacro
-             },
              {InheritMod, :public_macro_arg, 1} => %ModFunInfo{
-               params: [
-                 [
-                   {:a, _, ElixirSenseExample.ExampleBehaviour}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :defmacro
-             },
-             {InheritMod, :public_macro_arg, nil} => %ModFunInfo{
                params: [
                  [
                    {:a, _, ElixirSenseExample.ExampleBehaviour}

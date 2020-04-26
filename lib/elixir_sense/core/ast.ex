@@ -48,6 +48,8 @@ defmodule ElixirSense.Core.Ast do
     :in
   ]
 
+  @fun_kinds [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp]
+
   @max_expand_count 30_000
 
   def extract_use_info(use_ast, module, state) do
@@ -164,27 +166,27 @@ defmodule ElixirSense.Core.Ast do
 
   defp pre_walk_expanded({:require, _, _} = ast, acc) do
     {modules, alias_tuples} = extract_directive_modules(:require, ast)
-    {ast, %{acc | requires: acc.requires ++ modules, aliases: acc.aliases ++ alias_tuples}}
+    {nil, %{acc | requires: acc.requires ++ modules, aliases: acc.aliases ++ alias_tuples}}
   end
 
   defp pre_walk_expanded({:import, _, _} = ast, acc) do
     {modules, alias_tuples} = extract_directive_modules(:import, ast)
-    {ast, %{acc | imports: acc.imports ++ modules, aliases: acc.aliases ++ alias_tuples}}
+    {nil, %{acc | imports: acc.imports ++ modules, aliases: acc.aliases ++ alias_tuples}}
   end
 
   defp pre_walk_expanded({:alias, _, ast}, acc) do
     alias_tuples = extract_aliases(ast)
-    {ast, %{acc | aliases: acc.aliases ++ alias_tuples}}
+    {nil, %{acc | aliases: acc.aliases ++ alias_tuples}}
   end
 
   defp pre_walk_expanded({:@, _, [{:behaviour, _, [behaviour]}]} = ast, acc) do
     # TODO is it needed? no tests cover reach this branch
-    {ast, %{acc | behaviours: [behaviour | acc.behaviours]}}
+    {nil, %{acc | behaviours: [behaviour | acc.behaviours]}}
   end
 
   defp pre_walk_expanded({:@, _, [{attribute, _, _}]} = ast, acc) do
     # TODO is it needed? no tests cover reach this branch
-    {ast, %{acc | attributes: [attribute | acc.attributes]}}
+    {nil, %{acc | attributes: [attribute | acc.attributes]}}
   end
 
   # Elixir < 1.9
@@ -192,14 +194,14 @@ defmodule ElixirSense.Core.Ast do
          {{:., _, [Module, :put_attribute]}, _, [_module, :behaviour, behaviour | _]} = ast,
          acc
        ) do
-    {ast, %{acc | behaviours: [behaviour | acc.behaviours]}}
+    {nil, %{acc | behaviours: [behaviour | acc.behaviours]}}
   end
 
   defp pre_walk_expanded(
          {{:., _, [Module, :put_attribute]}, _, [_module, attribute | _]} = ast,
          acc
        ) do
-    {ast, %{acc | attributes: [attribute | acc.attributes]}}
+    {nil, %{acc | attributes: [attribute | acc.attributes]}}
   end
 
   # Elixir >= 1.9
@@ -207,44 +209,24 @@ defmodule ElixirSense.Core.Ast do
          {{:., _, [Module, :__put_attribute__]}, _, [_module, :behaviour, behaviour | _]} = ast,
          acc
        ) do
-    {ast, %{acc | behaviours: [behaviour | acc.behaviours]}}
+    {nil, %{acc | behaviours: [behaviour | acc.behaviours]}}
   end
 
   defp pre_walk_expanded(
          {{:., _, [Module, :__put_attribute__]}, _, [_module, attribute | _]} = ast,
          acc
        ) do
-    {ast, %{acc | attributes: [attribute | acc.attributes]}}
+    {nil, %{acc | attributes: [attribute | acc.attributes]}}
   end
 
-  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, args}, _]}, _]} = ast, acc)
-       when type in [:def, :defp, :defmacro, :defmacrop] and is_list(args) do
-    {ast, %{acc | mods_funs: [{name, args, type} | acc.mods_funs]}}
+  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, args}, _]} | _]} = ast, acc)
+       when type in @fun_kinds do
+    {nil, %{acc | mods_funs: [{name, get_args(args), type} | acc.mods_funs]}}
   end
 
-  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, _}, _]}, _]} = ast, acc)
-       when type in [:def, :defp, :defmacro, :defmacrop] do
-    {ast, %{acc | mods_funs: [{name, [], type} | acc.mods_funs]}}
-  end
-
-  defp pre_walk_expanded({type, _, [{name, _, args}, _]} = ast, acc)
-       when type in [:def, :defp, :defmacro, :defmacrop] and is_list(args) do
-    {ast, %{acc | mods_funs: [{name, args, type} | acc.mods_funs]}}
-  end
-
-  defp pre_walk_expanded({type, _, [{name, _, _}, _]} = ast, acc)
-       when type in [:def, :defp, :defmacro, :defmacrop] do
-    {ast, %{acc | mods_funs: [{name, [], type} | acc.mods_funs]}}
-  end
-
-  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, args}, _]}]} = ast, acc)
-       when type in [:defguardp, :defguard] and is_list(args) do
-    {ast, %{acc | mods_funs: [{name, args, type} | acc.mods_funs]}}
-  end
-
-  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, _}, _]}]} = ast, acc)
-       when type in [:defguardp, :defguard] do
-    {ast, %{acc | mods_funs: [{name, [], type} | acc.mods_funs]}}
+  defp pre_walk_expanded({type, _, [{name, _, args} | _]} = ast, acc)
+       when type in @fun_kinds do
+    {nil, %{acc | mods_funs: [{name, get_args(args), type} | acc.mods_funs]}}
   end
 
   defp pre_walk_expanded({{:., _, [:elixir_module, :compile]}, _, [mod | _]} = ast, acc)
