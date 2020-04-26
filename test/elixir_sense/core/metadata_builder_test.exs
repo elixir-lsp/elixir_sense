@@ -3366,6 +3366,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              }
            } = state.mods_funs_to_positions
 
+    # not documented baheviour - defstruct adds @struct attribute
     assert get_line_attributes(state, 3) == [
             %AttributeInfo{name: :struct, positions: [{2, 3}]}
           ]
