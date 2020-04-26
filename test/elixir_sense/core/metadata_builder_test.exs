@@ -3326,36 +3326,56 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{2, 3}],
                type: :def
              },
-             {MyError, :__struct__, nil} => %ModFunInfo{
-               params: [[{:kv, [line: 2, column: 3], nil}], []],
+             {MyError, :exception, 1} => %ModFunInfo{
+               params: [[{:args, [line: 2, column: 3], nil}], [{:msg, [line: 2, column: 3], nil}]],
                positions: [{2, 3}, {2, 3}],
                type: :def
              },
-             {MyError, :exception, 1} => %ModFunInfo{
-               params: [[{:exception, [line: 2, column: 3], nil}]],
-               positions: [{2, 3}],
-               type: :def
-             },
-             {MyError, :exception, nil} => %ModFunInfo{
-               params: [[{:exception, [line: 2, column: 3], nil}]],
-               positions: [{2, 3}],
-               type: :def
-             },
              {MyError, :message, 1} => %ModFunInfo{
-               params: [[{:msg, [line: 2, column: 3], nil}]],
+               params: [[{:exception, [line: 2, column: 3], nil}]],
                positions: [{2, 3}],
                type: :def
              },
-             {MyError, :message, nil} => %ModFunInfo{
-               params: [[{:msg, [line: 2, column: 3], nil}]],
-               positions: [{2, 3}],
-               type: :def
-             },
-             {MyError, nil, nil} => %ModFunInfo{
-               params: [nil],
-               positions: [{1, 11}],
-               type: :defmodule
+           } = state.mods_funs_to_positions
+  end
+
+  test "find exception without message key" do
+    state =
+      """
+      defmodule MyError do
+        defexception []
+
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+
+    assert state.structs == %{
+             MyError => %StructInfo{
+               type: :defexception,
+               fields: [__exception__: true, __struct__: MyError]
              }
+           }
+
+    # defexception adds Exception behaviour
+    assert get_line_behaviours(state, 4) == [Exception]
+    # and message/1 and exception/1 callbacks
+    assert %{
+             {MyError, :__struct__, 0} => %ModFunInfo{
+               params: [[]],
+               positions: [{2, 3}],
+               type: :def
+             },
+             {MyError, :__struct__, 1} => %ModFunInfo{
+               params: [[{:kv, [line: 2, column: 3], nil}]],
+               positions: [{2, 3}],
+               type: :def
+             },
+             {MyError, :exception, 1} => %ModFunInfo{
+               params: [[{:args, [line: 2, column: 3], nil}]],
+               positions: [{2, 3}],
+               type: :def
+             },
            } = state.mods_funs_to_positions
   end
 

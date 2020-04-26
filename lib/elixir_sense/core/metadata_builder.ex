@@ -859,19 +859,25 @@ defmodule ElixirSense.Core.MetadataBuilder do
           state
           |> add_func_to_index(
             :exception,
-            [{:exception, [line: line, column: column], nil}],
+            [{:msg, [line: line, column: column], nil}],
             {line, column},
             :def
           )
           |> add_func_to_index(
             :message,
-            [{:msg, [line: line, column: column], nil}],
+            [{:exception, [line: line, column: column], nil}],
             {line, column},
             :def
           )
         else
           state
         end
+        |> add_func_to_index(
+            :exception,
+            [{:args, [line: line, column: column], nil}],
+            {line, column},
+            :def
+          )
       else
         state
       end
