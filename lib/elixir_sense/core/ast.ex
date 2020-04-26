@@ -286,9 +286,8 @@ defmodule ElixirSense.Core.Ast do
   defp get_args(args) when is_list(args), do: args
   defp get_args(_), do: []
 
-  # credo:disable-for-lines:50
+  # credo:disable-for-lines:40
   defp extract_directive_modules(directive, ast) do
-    # TODO cleanup those cases
     case ast do
       # v1.2 notation
       {^directive, _, [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, aliases}]} ->
@@ -312,18 +311,10 @@ defmodule ElixirSense.Core.Ast do
 
       # with options
       {^directive, _, [{:__aliases__, _, module_parts}, _opts]} ->
-        raise ArgumentError
-        # TODO is it needed? no tests cover reach this branch
         {[module_parts |> Module.concat()], []}
 
       # without options
       {^directive, _, [{:__aliases__, _, module_parts}]} ->
-        {[module_parts |> Module.concat()], []}
-
-      # without options
-      {^directive, _, [{:__aliases__, [alias: false, counter: _], module_parts}]} ->
-        raise ArgumentError
-        # TODO is it needed? no tests cover reach this branch
         {[module_parts |> Module.concat()], []}
 
       # without options
@@ -333,10 +324,6 @@ defmodule ElixirSense.Core.Ast do
       {^directive, _, [{{:., _, [prefix, :{}]}, _, suffixes} | _]} when is_list(suffixes) ->
         list = for suffix <- suffixes, do: Module.concat(prefix, suffix)
         {list, []}
-
-      # with options
-      {^directive, _, [{_, _, module_atoms = [mod | _]}, _opts]} when is_atom(mod) ->
-        {[module_atoms |> Module.concat()], []}
     end
   end
 

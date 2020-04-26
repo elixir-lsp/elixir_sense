@@ -7,7 +7,13 @@ defmodule ElixirSenseExample.BehaviourWithMacrocallback do
   @doc """
   An optional macrocallback
   """
-  @macrocallback optional(a) :: Macro.t() when a: atom
+  if Version.match?(System.version(), ">= 1.8.0") do
+    @macrocallback optional(a) :: Macro.t() when a: atom
+  else
+    # upper version does not compile on 1.7
+    @macrocallback optional(atom) :: Macro.t()
+  end
+
   @optional_callbacks [optional: 1]
 end
 
