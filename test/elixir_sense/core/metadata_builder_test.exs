@@ -3980,7 +3980,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            }
   end
 
-  test "attributes" do
+  test "specs and callbacks" do
     state =
       """
       defmodule Proto do
