@@ -797,8 +797,27 @@ defmodule ElixirSense.Core.MetadataBuilder do
               (Module.split(variant) ++ submodule_parts)
               |> Module.concat()
 
-            acc_1
+              acc_1 = acc_1
             |> add_module_to_index(module, {line, column})
+
+            @module_functions
+            |> Enum.reduce(acc_1, fn {name, args, kind}, acc_2 ->
+              mapped_args = for arg <- args, do: {arg, [line: line, column: column], nil}
+
+              acc_2
+              |> add_mod_fun_to_position(
+                {module, name, length(args)},
+                {line, column},
+                mapped_args,
+                kind
+              )
+              |> add_mod_fun_to_position(
+                {module, name, nil},
+                {line, column},
+                mapped_args,
+                kind
+              )
+            end)
           end)
       end)
 
@@ -1379,4 +1398,5 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
     |> add_struct(type, fields)
   end
+
 end
