@@ -3368,8 +3368,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     # not documented baheviour - defstruct adds @struct attribute
     assert get_line_attributes(state, 3) == [
-            %AttributeInfo{name: :struct, positions: [{2, 3}]}
-          ]
+             %AttributeInfo{name: :struct, positions: [{2, 3}]}
+           ]
   end
 
   test "find struct fields from expression" do

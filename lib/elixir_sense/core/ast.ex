@@ -217,6 +217,16 @@ defmodule ElixirSense.Core.Ast do
     {ast, %{acc | attributes: [attribute | acc.attributes]}}
   end
 
+  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, args}, _]}, _]} = ast, acc)
+       when type in [:def, :defp, :defmacro, :defmacrop] and is_list(args) do
+    {ast, %{acc | mods_funs: [{name, args, type} | acc.mods_funs]}}
+  end
+
+  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, _}, _]}, _]} = ast, acc)
+       when type in [:def, :defp, :defmacro, :defmacrop] do
+    {ast, %{acc | mods_funs: [{name, [], type} | acc.mods_funs]}}
+  end
+
   defp pre_walk_expanded({type, _, [{name, _, args}, _]} = ast, acc)
        when type in [:def, :defp, :defmacro, :defmacrop] and is_list(args) do
     {ast, %{acc | mods_funs: [{name, args, type} | acc.mods_funs]}}
