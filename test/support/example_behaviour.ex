@@ -113,7 +113,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       import MyImports.{OneImports, Two.ThreeImports}
       import :lists, only: []
       @my_attribute "my_attr"
-      @spec private_func() :: String.t
+      @spec private_func() :: String.t()
       defp private_func, do: @my_attribute
       def public_func, do: :ok
       defp private_func_arg(a \\ nil)
@@ -168,7 +168,6 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       @type my_pub_type_arg(a, b) :: {b, a}
 
       @callback some_callback(abc) :: :ok when abc: integer
-
     end
   end
 
@@ -232,7 +231,6 @@ defmodule ElixirSenseExample.ExampleBehaviourWithDocCallback do
 
   defmacro bar(), do: quote(do: :ok)
 end
-
 
 defmodule ElixirSenseExample.ExampleBehaviourWithStruct do
   alias ElixirSenseExample.ExampleBehaviourWithStruct

@@ -183,57 +183,63 @@ defmodule ElixirSense.Core.Ast do
     {nil, %{acc | aliases: acc.aliases ++ alias_tuples}}
   end
 
-  defp pre_walk_expanded({:@, _,
-  [
-    {kind,
-     _,
-     [
-       {:when, _,
-        [
-          {:"::", _,
-           [
-             {name, _,
-              args},
-             _
-           ]},
-          _
-        ]} = spec
-     ]}
-  ]} = ast, acc) when kind in @spec_kinds do
-    spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
-    {nil, %{acc | specs: [{name, get_args(args), spec, kind} | acc.specs]}}
+  defp pre_walk_expanded(
+         {:@, _,
+          [
+            {kind, _,
+             [
+               {:when, _,
+                [
+                  {:"::", _,
+                   [
+                     {name, _, args},
+                     _
+                   ]},
+                  _
+                ]} = spec
+             ]}
+          ]},
+         acc
+       )
+       when kind in @spec_kinds do
+    {nil,
+     %{acc | specs: [{name, get_args(args), typespec_to_string(kind, spec), kind} | acc.specs]}}
   end
 
-  defp pre_walk_expanded({:@, _, [{kind, _meta, [{:"::", _, [{name, _, args}, _]} = spec]}]} = ast, acc) when kind in @spec_kinds do
-    spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
-    {nil, %{acc | specs: [{name, get_args(args), spec, kind} | acc.specs]}}
+  defp pre_walk_expanded({:@, _, [{kind, _meta, [{:"::", _, [{name, _, args}, _]} = spec]}]}, acc)
+       when kind in @spec_kinds do
+    {nil,
+     %{acc | specs: [{name, get_args(args), typespec_to_string(kind, spec), kind} | acc.specs]}}
   end
 
-  defp pre_walk_expanded({:@, _, [{kind, _meta, [{:"::", _, [{name, _, args}, _]} = spec]}]} = ast, acc) when kind in @type_kinds do
-    spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
-    {nil, %{acc | types: [{name, get_args(args), spec, kind} | acc.types]}}
+  defp pre_walk_expanded({:@, _, [{kind, _meta, [{:"::", _, [{name, _, args}, _]} = spec]}]}, acc)
+       when kind in @type_kinds do
+    {nil,
+     %{acc | types: [{name, get_args(args), typespec_to_string(kind, spec), kind} | acc.types]}}
   end
 
-  defp pre_walk_expanded({:@, _, [{:behaviour, _, [behaviour]}]} = ast, acc) do
+  defp pre_walk_expanded({:@, _, [{:behaviour, _, [behaviour]}]}, acc) do
+    raise ArgumentError
     # TODO is it needed? no tests cover reach this branch
     {nil, %{acc | behaviours: [behaviour | acc.behaviours]}}
   end
 
-  defp pre_walk_expanded({:@, _, [{attribute, _, _}]} = ast, acc) do
+  defp pre_walk_expanded({:@, _, [{attribute, _, _}]}, acc) do
+    raise ArgumentError
     # TODO is it needed? no tests cover reach this branch
     {nil, %{acc | attributes: [attribute | acc.attributes]}}
   end
 
   # Elixir < 1.9
   defp pre_walk_expanded(
-         {{:., _, [Module, :put_attribute]}, _, [_module, :behaviour, behaviour | _]} = ast,
+         {{:., _, [Module, :put_attribute]}, _, [_module, :behaviour, behaviour | _]},
          acc
        ) do
     {nil, %{acc | behaviours: [behaviour | acc.behaviours]}}
   end
 
   defp pre_walk_expanded(
-         {{:., _, [Module, :put_attribute]}, _, [_module, attribute | _]} = ast,
+         {{:., _, [Module, :put_attribute]}, _, [_module, attribute | _]},
          acc
        ) do
     {nil, %{acc | attributes: [attribute | acc.attributes]}}
@@ -241,25 +247,25 @@ defmodule ElixirSense.Core.Ast do
 
   # Elixir >= 1.9
   defp pre_walk_expanded(
-         {{:., _, [Module, :__put_attribute__]}, _, [_module, :behaviour, behaviour | _]} = ast,
+         {{:., _, [Module, :__put_attribute__]}, _, [_module, :behaviour, behaviour | _]},
          acc
        ) do
     {nil, %{acc | behaviours: [behaviour | acc.behaviours]}}
   end
 
   defp pre_walk_expanded(
-         {{:., _, [Module, :__put_attribute__]}, _, [_module, attribute | _]} = ast,
+         {{:., _, [Module, :__put_attribute__]}, _, [_module, attribute | _]},
          acc
        ) do
     {nil, %{acc | attributes: [attribute | acc.attributes]}}
   end
 
-  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, args}, _]} | _]} = ast, acc)
+  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, args}, _]} | _]}, acc)
        when type in @fun_kinds do
     {nil, %{acc | mods_funs: [{name, get_args(args), type} | acc.mods_funs]}}
   end
 
-  defp pre_walk_expanded({type, _, [{name, _, args} | _]} = ast, acc)
+  defp pre_walk_expanded({type, _, [{name, _, args} | _]}, acc)
        when type in @fun_kinds do
     {nil, %{acc | mods_funs: [{name, get_args(args), type} | acc.mods_funs]}}
   end
@@ -306,6 +312,7 @@ defmodule ElixirSense.Core.Ast do
 
       # with options
       {^directive, _, [{:__aliases__, _, module_parts}, _opts]} ->
+        raise ArgumentError
         # TODO is it needed? no tests cover reach this branch
         {[module_parts |> Module.concat()], []}
 
@@ -315,6 +322,7 @@ defmodule ElixirSense.Core.Ast do
 
       # without options
       {^directive, _, [{:__aliases__, [alias: false, counter: _], module_parts}]} ->
+        raise ArgumentError
         # TODO is it needed? no tests cover reach this branch
         {[module_parts |> Module.concat()], []}
 
@@ -354,5 +362,9 @@ defmodule ElixirSense.Core.Ast do
       mod = Module.concat(prefix, suffix)
       {alias, mod}
     end
+  end
+
+  def typespec_to_string(kind, spec) do
+    "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
   end
 end

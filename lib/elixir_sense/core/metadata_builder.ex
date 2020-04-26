@@ -312,7 +312,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_type(ast, state, {line, _column} = pos, type_name, type_args, spec, kind) do
-    spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
+    spec = Ast.typespec_to_string(kind, spec)
 
     state
     |> add_current_env_to_line(line)
@@ -321,7 +321,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_spec(ast, state, {line, column} = pos, type_name, type_args, spec, kind) do
-    spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
+    spec = Ast.typespec_to_string(kind, spec)
 
     state =
       if kind in [:callback, :macrocallback] do
@@ -752,6 +752,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result({:when, meta, [:_, rhs]})
   end
 
+  # credo:disable-for-lines:115
   defp pre({:use, [line: line, column: column], _} = ast, state) do
     # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
     current_module = get_current_module(state)
@@ -797,8 +798,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
               (Module.split(variant) ++ submodule_parts)
               |> Module.concat()
 
-              acc_1 = acc_1
-            |> add_module_to_index(module, {line, column})
+            acc_1 =
+              acc_1
+              |> add_module_to_index(module, {line, column})
 
             @module_functions
             |> Enum.reduce(acc_1, fn {name, args, kind}, acc_2 ->
@@ -836,9 +838,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end)
 
     state =
-      if specs |> Enum.any?(fn
-      {type_name, type_args, spec, kind} -> kind in [:callback, :macrocallback]
-      end) do
+      if specs
+         |> Enum.any?(fn
+           {_type_name, _type_args, _spec, kind} -> kind in [:callback, :macrocallback]
+         end) do
         state
         |> add_func_to_index(
           :behaviour_info,
@@ -850,16 +853,19 @@ defmodule ElixirSense.Core.MetadataBuilder do
         state
       end
 
-    state = cond do
-      Exception in behaviours ->
-        # assume that defexception is used but fields are not known
-        add_struct_or_exception(state, :defexception, [], {line, column})
-      :struct in attributes ->
-        # assume that defstruct is used but fields are not known
-        add_struct_or_exception(state, :defstruct, [], {line, column})
-      true ->
-        state
-    end
+    state =
+      cond do
+        Exception in behaviours ->
+          # assume that defexception is used but fields are not known
+          add_struct_or_exception(state, :defexception, [], {line, column})
+
+        :struct in attributes ->
+          # assume that defstruct is used but fields are not known
+          add_struct_or_exception(state, :defstruct, [], {line, column})
+
+        true ->
+          state
+      end
 
     state
     |> add_current_env_to_line(line)
@@ -1379,11 +1385,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
           state
         end
         |> add_func_to_index(
-            :exception,
-            [{:args, [line: line, column: column], nil}],
-            {line, column},
-            :def
-          )
+          :exception,
+          [{:args, [line: line, column: column], nil}],
+          {line, column},
+          :def
+        )
       else
         state
       end
@@ -1398,5 +1404,4 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
     |> add_struct(type, fields)
   end
-
 end

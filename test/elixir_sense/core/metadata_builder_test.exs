@@ -3053,7 +3053,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: :defp
              },
              {InheritMod, :private_func_arg, 1} => %ModFunInfo{
-               params: [[{:\\, _, [{:a, _, ElixirSenseExample.ExampleBehaviour}, nil]}], [{:a, _, ElixirSenseExample.ExampleBehaviour}]],
+               params: [
+                 [{:\\, _, [{:a, _, ElixirSenseExample.ExampleBehaviour}, nil]}],
+                 [{:a, _, ElixirSenseExample.ExampleBehaviour}]
+               ],
                positions: [{2, 3}, {2, 3}],
                type: :defp
              },
@@ -3147,23 +3150,64 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{2, 3}],
                type: :defmodule
              },
-             {InheritMod, :behaviour_info, 1} => %ModFunInfo{params: [[{:atom, [line: 2, column: 3], nil}]], positions: [{2, 3}], target: nil, type: :def},
+             {InheritMod, :behaviour_info, 1} => %ModFunInfo{
+               params: [[{:atom, [line: 2, column: 3], nil}]],
+               positions: [{2, 3}],
+               target: nil,
+               type: :def
+             },
              {InheritMod.ProtocolEmbedded, :module_info, 1} => %ModFunInfo{}
            } = state.mods_funs_to_positions
 
-           assert %{
-             {InheritMod, :my_opaque_type, 0} => %State.TypeInfo{args: [[]], kind: :opaque, name: :my_opaque_type, positions: [{2, 3}], specs: ["@opaque my_opaque_type :: any"]},
+    assert %{
+             {InheritMod, :my_opaque_type, 0} => %State.TypeInfo{
+               args: [[]],
+               kind: :opaque,
+               name: :my_opaque_type,
+               positions: [{2, 3}],
+               specs: ["@opaque my_opaque_type :: any"]
+             },
              {InheritMod, :my_opaque_type, nil} => %State.TypeInfo{},
-             {InheritMod, :my_priv_type, 0} => %State.TypeInfo{args: [[]], kind: :typep, name: :my_priv_type, positions: [{2, 3}], specs: ["@typep my_priv_type :: any"]},
-             {InheritMod, :my_pub_type, 0} => %State.TypeInfo{args: [[]], kind: :type, name: :my_pub_type, positions: [{2, 3}], specs: ["@type my_pub_type :: any"]},
-             {InheritMod, :my_pub_type_arg, 2} => %State.TypeInfo{args: [["a", "b"]], kind: :type, name: :my_pub_type_arg, positions: [{2, 3}], specs: ["@type my_pub_type_arg(a, b) :: {b, a}"]},
-             } = state.types
+             {InheritMod, :my_priv_type, 0} => %State.TypeInfo{
+               args: [[]],
+               kind: :typep,
+               name: :my_priv_type,
+               positions: [{2, 3}],
+               specs: ["@typep my_priv_type :: any"]
+             },
+             {InheritMod, :my_pub_type, 0} => %State.TypeInfo{
+               args: [[]],
+               kind: :type,
+               name: :my_pub_type,
+               positions: [{2, 3}],
+               specs: ["@type my_pub_type :: any"]
+             },
+             {InheritMod, :my_pub_type_arg, 2} => %State.TypeInfo{
+               args: [["a", "b"]],
+               kind: :type,
+               name: :my_pub_type_arg,
+               positions: [{2, 3}],
+               specs: ["@type my_pub_type_arg(a, b) :: {b, a}"]
+             }
+           } = state.types
 
-             assert %{
-              {InheritMod, :private_func, 0} => %State.SpecInfo{args: [[]], kind: :spec, name: :private_func, positions: [{2, 3}], specs: ["@spec private_func :: String.t"]},
-              {InheritMod, :private_func, nil} => %State.SpecInfo{},
-              {InheritMod, :some_callback, 1} => %State.SpecInfo{args: [["abc"]], kind: :callback, name: :some_callback, positions: [{2, 3}], specs: ["@callback some_callback(abc) :: :ok when abc: integer"]},
-              } = state.specs
+    assert %{
+             {InheritMod, :private_func, 0} => %State.SpecInfo{
+               args: [[]],
+               kind: :spec,
+               name: :private_func,
+               positions: [{2, 3}],
+               specs: ["@spec private_func :: String.t"]
+             },
+             {InheritMod, :private_func, nil} => %State.SpecInfo{},
+             {InheritMod, :some_callback, 1} => %State.SpecInfo{
+               args: [["abc"]],
+               kind: :callback,
+               name: :some_callback,
+               positions: [{2, 3}],
+               specs: ["@callback some_callback(abc) :: :ok when abc: integer"]
+             }
+           } = state.specs
   end
 
   test "use defining struct" do
@@ -3177,14 +3221,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-      assert %{
-        InheritMod => %State.StructInfo{fields: [__struct__: InheritMod], type: :defstruct}} = state.structs
+    assert %{
+             InheritMod => %State.StructInfo{fields: [__struct__: InheritMod], type: :defstruct}
+           } = state.structs
 
-      assert %{
-        {InheritMod, :__struct__, 0} => %State.ModFunInfo{},
-        {InheritMod, :__struct__, 1} => %State.ModFunInfo{}, 
-        } = state.mods_funs_to_positions
-
+    assert %{
+             {InheritMod, :__struct__, 0} => %State.ModFunInfo{},
+             {InheritMod, :__struct__, 1} => %State.ModFunInfo{}
+           } = state.mods_funs_to_positions
   end
 
   test "use defining exception" do
@@ -3198,14 +3242,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-      assert %{
-        MyError => %State.StructInfo{fields: [__exception__: true, __struct__: MyError], type: :defexception}} = state.structs
+    assert %{
+             MyError => %State.StructInfo{
+               fields: [__exception__: true, __struct__: MyError],
+               type: :defexception
+             }
+           } = state.structs
 
-      assert %{
-        {MyError, :__struct__, 0} => %State.ModFunInfo{},
-        {MyError, :__struct__, 1} => %State.ModFunInfo{}, 
-        {MyError, :exception, 1} => %State.ModFunInfo{}, 
-        } = state.mods_funs_to_positions
+    assert %{
+             {MyError, :__struct__, 0} => %State.ModFunInfo{},
+             {MyError, :__struct__, 1} => %State.ModFunInfo{},
+             {MyError, :exception, 1} => %State.ModFunInfo{}
+           } = state.mods_funs_to_positions
   end
 
   test "use v1.2 notation" do
@@ -3379,7 +3427,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:exception, [line: 2, column: 3], nil}]],
                positions: [{2, 3}],
                type: :def
-             },
+             }
            } = state.mods_funs_to_positions
   end
 
@@ -3419,7 +3467,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:args, [line: 2, column: 3], nil}]],
                positions: [{2, 3}],
                type: :def
-             },
+             }
            } = state.mods_funs_to_positions
   end
 
