@@ -233,20 +233,14 @@ defmodule ElixirSenseExample.ExampleBehaviourWithDocCallback do
 end
 
 defmodule ElixirSenseExample.ExampleBehaviourWithStruct do
-  alias ElixirSenseExample.ExampleBehaviourWithStruct
-
   defmacro __using__(opts) do
     quote location: :keep, bind_quoted: [opts: opts] do
-      @behaviour ExampleBehaviourWithStruct
-
       defstruct [:a, b: 1]
     end
   end
 end
 
 defmodule ElixirSenseExample.ExampleBehaviourWithException do
-  alias ElixirSenseExample.ExampleBehaviourWithException
-
   defmacro __using__(opts) do
     quote location: :keep, bind_quoted: [opts: opts] do
       defexception [:a, b: 1]
