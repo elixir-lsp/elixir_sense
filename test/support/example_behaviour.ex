@@ -161,6 +161,11 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       end
 
       defdelegate delegated_func, to: ElixirSenseExample.Delegates
+
+      @type my_pub_type :: any
+      @typep my_priv_type :: any
+      @opaque my_opaque_type :: any
+      @type my_pub_type_arg(a, b) :: {b, a}
     end
   end
 

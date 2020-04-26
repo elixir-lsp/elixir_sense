@@ -3148,6 +3148,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: :defmodule
              }
            } = state.mods_funs_to_positions
+
+           assert %{
+             {InheritMod, :my_opaque_type, 0} => %State.TypeInfo{args: [[]], kind: :opaque, name: :my_opaque_type, positions: [{2, 3}], specs: ["@opaque my_opaque_type :: any"]},
+             {InheritMod, :my_opaque_type, nil} => %State.TypeInfo{},
+             {InheritMod, :my_priv_type, 0} => %State.TypeInfo{args: [[]], kind: :typep, name: :my_priv_type, positions: [{2, 3}], specs: ["@typep my_priv_type :: any"]},
+             {InheritMod, :my_pub_type, 0} => %State.TypeInfo{args: [[]], kind: :type, name: :my_pub_type, positions: [{2, 3}], specs: ["@type my_pub_type :: any"]},
+             {InheritMod, :my_pub_type_arg, 2} => %State.TypeInfo{args: [["a", "b"]], kind: :type, name: :my_pub_type_arg, positions: [{2, 3}], specs: ["@type my_pub_type_arg(a, b) :: {b, a}"]},
+             } = state.types
   end
 
   test "use v1.2 notation" do

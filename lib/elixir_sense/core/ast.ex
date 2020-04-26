@@ -12,7 +12,8 @@ defmodule ElixirSense.Core.Ast do
     behaviours: [],
     aliases: [],
     attributes: [],
-    mods_funs: []
+    mods_funs: [],
+    types: []
   }
 
   @partials [
@@ -48,6 +49,7 @@ defmodule ElixirSense.Core.Ast do
     :in
   ]
 
+  @type_kinds [:type, :typep, :opaque]
   @fun_kinds [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp]
 
   @max_expand_count 30_000
@@ -179,6 +181,11 @@ defmodule ElixirSense.Core.Ast do
     {nil, %{acc | aliases: acc.aliases ++ alias_tuples}}
   end
 
+  defp pre_walk_expanded({:@, _, [{kind, _meta, [{:"::", _, [{name, _, args}, _]} = spec]}]} = ast, acc) when kind in @type_kinds do
+    spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
+    {nil, %{acc | types: [{name, get_args(args), spec, kind} | acc.types]}}
+  end
+
   defp pre_walk_expanded({:@, _, [{:behaviour, _, [behaviour]}]} = ast, acc) do
     # TODO is it needed? no tests cover reach this branch
     {nil, %{acc | behaviours: [behaviour | acc.behaviours]}}
@@ -241,6 +248,9 @@ defmodule ElixirSense.Core.Ast do
   defp pre_walk_expanded(ast, acc) do
     {ast, acc}
   end
+
+  defp get_args(args) when is_list(args), do: args
+  defp get_args(_), do: []
 
   # credo:disable-for-lines:50
   defp extract_directive_modules(directive, ast) do
