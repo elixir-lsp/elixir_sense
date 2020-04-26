@@ -816,6 +816,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
           |> add_spec(type_name, type_args, spec, kind, {line, column})
       end)
 
+    state = cond do
+      Exception in behaviours ->
+        # assume that defexception is used but fields are not known
+        add_struct_or_exception(state, :defexception, [], {line, column})
+      :struct in attributes ->
+        # assume that defstruct is used but fields are not known
+        add_struct_or_exception(state, :defstruct, [], {line, column})
+      true ->
+        state
+    end
+
     state
     |> add_current_env_to_line(line)
     |> result(ast)
@@ -841,56 +852,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
           []
       end
 
-    fields =
-      fields ++
-        if type == :defexception do
-          [__exception__: true]
-        else
-          []
-        end
-
-    state =
-      if type == :defexception do
-        state =
-          state
-          |> add_behaviour(Exception)
-
-        if Keyword.has_key?(fields, :message) do
-          state
-          |> add_func_to_index(
-            :exception,
-            [{:msg, [line: line, column: column], nil}],
-            {line, column},
-            :def
-          )
-          |> add_func_to_index(
-            :message,
-            [{:exception, [line: line, column: column], nil}],
-            {line, column},
-            :def
-          )
-        else
-          state
-        end
-        |> add_func_to_index(
-            :exception,
-            [{:args, [line: line, column: column], nil}],
-            {line, column},
-            :def
-          )
-      else
-        state
-      end
-      |> add_func_to_index(:__struct__, [], {line, column}, :def)
-      |> add_func_to_index(
-        :__struct__,
-        [{:kv, [line: line, column: column], nil}],
-        {line, column},
-        :def
-      )
-
     state
-    |> add_struct(type, fields)
+    |> add_struct_or_exception(type, fields, {line, column})
     |> result(ast)
   end
 
@@ -1348,4 +1311,57 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp maybe_add_protocol_behaviour(state, _), do: state
+
+  defp add_struct_or_exception(state, type, fields, {line, column}) do
+    fields =
+      fields ++
+        if type == :defexception do
+          [__exception__: true]
+        else
+          []
+        end
+
+    state =
+      if type == :defexception do
+        state =
+          state
+          |> add_behaviour(Exception)
+
+        if Keyword.has_key?(fields, :message) do
+          state
+          |> add_func_to_index(
+            :exception,
+            [{:msg, [line: line, column: column], nil}],
+            {line, column},
+            :def
+          )
+          |> add_func_to_index(
+            :message,
+            [{:exception, [line: line, column: column], nil}],
+            {line, column},
+            :def
+          )
+        else
+          state
+        end
+        |> add_func_to_index(
+            :exception,
+            [{:args, [line: line, column: column], nil}],
+            {line, column},
+            :def
+          )
+      else
+        state
+      end
+      |> add_func_to_index(:__struct__, [], {line, column}, :def)
+      |> add_func_to_index(
+        :__struct__,
+        [{:kv, [line: line, column: column], nil}],
+        {line, column},
+        :def
+      )
+
+    state
+    |> add_struct(type, fields)
+  end
 end

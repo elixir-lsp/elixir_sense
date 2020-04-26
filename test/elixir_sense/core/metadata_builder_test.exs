@@ -3164,6 +3164,48 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
               } = state.specs
   end
 
+  test "use defining struct" do
+    state =
+      """
+      defmodule InheritMod do
+        use ElixirSenseExample.ExampleBehaviourWithStruct
+
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+
+      assert %{
+        InheritMod => %State.StructInfo{fields: [__struct__: InheritMod], type: :defstruct}} = state.structs
+
+      assert %{
+        {InheritMod, :__struct__, 0} => %State.ModFunInfo{},
+        {InheritMod, :__struct__, 1} => %State.ModFunInfo{}, 
+        } = state.mods_funs_to_positions
+
+  end
+
+  test "use defining exception" do
+    state =
+      """
+      defmodule MyError do
+        use ElixirSenseExample.ExampleBehaviourWithException
+
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+
+      assert %{
+        MyError => %State.StructInfo{fields: [__exception__: true, __struct__: MyError], type: :defexception}} = state.structs
+
+      assert %{
+        {MyError, :__struct__, 0} => %State.ModFunInfo{},
+        {MyError, :__struct__, 1} => %State.ModFunInfo{}, 
+        {MyError, :exception, 1} => %State.ModFunInfo{}, 
+        } = state.mods_funs_to_positions
+  end
+
   test "use v1.2 notation" do
     state =
       """

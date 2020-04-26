@@ -168,6 +168,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       @type my_pub_type_arg(a, b) :: {b, a}
 
       @callback some_callback(abc) :: :ok when abc: integer
+
     end
   end
 
@@ -230,4 +231,27 @@ defmodule ElixirSenseExample.ExampleBehaviourWithDocCallback do
   def baz(), do: :ok
 
   defmacro bar(), do: quote(do: :ok)
+end
+
+
+defmodule ElixirSenseExample.ExampleBehaviourWithStruct do
+  alias ElixirSenseExample.ExampleBehaviourWithStruct
+
+  defmacro __using__(opts) do
+    quote location: :keep, bind_quoted: [opts: opts] do
+      @behaviour ExampleBehaviourWithStruct
+
+      defstruct [:a, b: 1]
+    end
+  end
+end
+
+defmodule ElixirSenseExample.ExampleBehaviourWithException do
+  alias ElixirSenseExample.ExampleBehaviourWithException
+
+  defmacro __using__(opts) do
+    quote location: :keep, bind_quoted: [opts: opts] do
+      defexception [:a, b: 1]
+    end
+  end
 end
