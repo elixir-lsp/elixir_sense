@@ -1,14 +1,52 @@
 language: elixir
-elixir:
-  - 1.10.2
-otp_release:
-  - 22.3
 script:
-  - mix format --check-formatted
-  - mix test
-  - mix compile --warnings-as-errors
-  - mix credo --all --strict
-  - mix dialyzer
+  - |
+    if [[ "$ALLOW_FAILED" -eq 1 ]]
+    then
+      mix test || true
+    else
+      mix test
+    fi
+  - |
+    if [[ "$STRICT" -eq 1 ]]
+    then
+      mix compile --warnings-as-errors
+    else
+      mix compile
+    fi
+  - |
+    if [[ "$STRICT" -eq 1 ]]
+    then
+      mix credo --all --strict
+    else
+      echo "Not running credo"
+    fi
+  - |
+    if [[ "$STRICT" -eq 1 ]]
+    then
+      mix dialyzer
+    else
+      echo "Not running dialyzer"
+    fi
 cache:
   directories:
-  - _build/dev
+  - _build
+  - deps
+  - $HOME/.mix
+env:
+  global:
+    - MIX_HOME=$HOME/.mix
+matrix:
+  include:
+    - otp_release: 19.3
+      elixir: 1.7.4
+      env: ALLOW_FAILED=1
+    - otp_release: 20.3
+      elixir: 1.8.2
+      env: ALLOW_FAILED=1
+    - otp_release: 21.3
+      elixir: 1.9.4
+    - otp_release: 22.3
+      elixir: 1.10.3
+      env:
+        - STRICT=1
