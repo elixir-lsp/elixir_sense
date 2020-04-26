@@ -675,40 +675,42 @@ defmodule ElixirSense.SuggestionsTest do
     # The 2 cases below are only supported on elixir >= 1.10
     # see https://github.com/elixir-lang/elixir/issues/9252
 
-    buffer = """
-    defmodule MyServer do
-      x = 4
-      \"\"\"
-      abc\#{
-      \"\"\"
+    if Version.match?(System.version(), ">= 1.10.0") do
+      buffer = """
+      defmodule MyServer do
+        x = 4
+        \"\"\"
+        abc\#{
+        \"\"\"
 
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 4, 8)
+        |> Enum.filter(fn s -> s.type == :variable end)
+
+      assert list == [
+               %{name: "x", type: :variable}
+             ]
+
+      buffer = """
+      defmodule MyServer do
+        x = 4
+        \"\"\"
+        abc\#{
+
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 4, 8)
+        |> Enum.filter(fn s -> s.type == :variable end)
+
+      assert list == [
+               %{name: "x", type: :variable}
+             ]
     end
-    """
-
-    list =
-      ElixirSense.suggestions(buffer, 4, 8)
-      |> Enum.filter(fn s -> s.type == :variable end)
-
-    assert list == [
-             %{name: "x", type: :variable}
-           ]
-
-    buffer = """
-    defmodule MyServer do
-      x = 4
-      \"\"\"
-      abc\#{
-
-    end
-    """
-
-    list =
-      ElixirSense.suggestions(buffer, 4, 8)
-      |> Enum.filter(fn s -> s.type == :variable end)
-
-    assert list == [
-             %{name: "x", type: :variable}
-           ]
 
     buffer = """
     defmodule MyServer do

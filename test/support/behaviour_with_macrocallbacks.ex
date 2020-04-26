@@ -25,8 +25,15 @@ defmodule ElixirSenseExample.BehaviourWithMacrocallback.Impl do
   @doc """
   some macro
   """
-  @spec some(integer) :: Macro.t()
-  @spec some(b) :: Macro.t() when b: float
+  if Version.match?(System.version(), ">= 1.8.0") do
+    @spec some(integer) :: Macro.t()
+    @spec some(b) :: Macro.t() when b: float
+  else
+    # upper version does not compile on 1.7
+    @spec some(integer) :: Macro.t()
+    @spec some(float) :: Macro.t()
+  end
+
   defmacro some(var), do: Macro.expand(var, __CALLER__)
 
   @doc """
