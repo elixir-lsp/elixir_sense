@@ -816,6 +816,21 @@ defmodule ElixirSense.Core.MetadataBuilder do
           |> add_spec(type_name, type_args, spec, kind, {line, column})
       end)
 
+    state =
+      if specs |> Enum.any?(fn
+      {type_name, type_args, spec, kind} -> kind in [:callback, :macrocallback]
+      end) do
+        state
+        |> add_func_to_index(
+          :behaviour_info,
+          [{:atom, [line: line, column: column], nil}],
+          {line, column},
+          :def
+        )
+      else
+        state
+      end
+
     state = cond do
       Exception in behaviours ->
         # assume that defexception is used but fields are not known

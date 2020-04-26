@@ -3146,7 +3146,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [nil],
                positions: [{2, 3}],
                type: :defmodule
-             }
+             },
+             {InheritMod, :behaviour_info, 1} => %ModFunInfo{params: [[{:atom, [line: 2, column: 3], nil}]], positions: [{2, 3}], target: nil, type: :def}
            } = state.mods_funs_to_positions
 
            assert %{
