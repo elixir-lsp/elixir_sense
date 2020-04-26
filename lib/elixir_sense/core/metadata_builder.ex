@@ -885,8 +885,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state
     |> add_struct(type, fields)
-    # not documented behaviour
-    |> add_attribute(:struct, {line, column})
     |> result(ast)
   end
 
