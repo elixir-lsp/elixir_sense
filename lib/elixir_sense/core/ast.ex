@@ -218,18 +218,6 @@ defmodule ElixirSense.Core.Ast do
      %{acc | types: [{name, get_args(args), typespec_to_string(kind, spec), kind} | acc.types]}}
   end
 
-  defp pre_walk_expanded({:@, _, [{:behaviour, _, [behaviour]}]}, acc) do
-    raise ArgumentError
-    # TODO is it needed? no tests cover reach this branch
-    {nil, %{acc | behaviours: [behaviour | acc.behaviours]}}
-  end
-
-  defp pre_walk_expanded({:@, _, [{attribute, _, _}]}, acc) do
-    raise ArgumentError
-    # TODO is it needed? no tests cover reach this branch
-    {nil, %{acc | attributes: [attribute | acc.attributes]}}
-  end
-
   # Elixir < 1.9
   defp pre_walk_expanded(
          {{:., _, [Module, :put_attribute]}, _, [_module, :behaviour, behaviour | _]},
