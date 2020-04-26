@@ -3156,6 +3156,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {InheritMod, :my_pub_type, 0} => %State.TypeInfo{args: [[]], kind: :type, name: :my_pub_type, positions: [{2, 3}], specs: ["@type my_pub_type :: any"]},
              {InheritMod, :my_pub_type_arg, 2} => %State.TypeInfo{args: [["a", "b"]], kind: :type, name: :my_pub_type_arg, positions: [{2, 3}], specs: ["@type my_pub_type_arg(a, b) :: {b, a}"]},
              } = state.types
+
+             assert %{
+              {InheritMod, :private_func, 0} => %State.SpecInfo{args: [[]], kind: :spec, name: :private_func, positions: [{2, 3}], specs: ["@spec private_func :: String.t"]},
+              {InheritMod, :private_func, nil} => %State.SpecInfo{},
+              {InheritMod, :some_callback, 1} => %State.SpecInfo{args: [["abc"]], kind: :callback, name: :some_callback, positions: [{2, 3}], specs: ["@callback some_callback(abc) :: :ok when abc: integer"]},
+              } = state.specs
   end
 
   test "use v1.2 notation" do

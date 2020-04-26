@@ -771,7 +771,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
       aliases: aliases,
       attributes: attributes,
       mods_funs: mods_funs,
-      types: types
+      types: types,
+      specs: specs
     } = Ast.extract_use_info(ast, current_module, state)
 
     state =
@@ -806,6 +807,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
         {type_name, type_args, spec, kind}, acc ->
           acc
           |> add_type(type_name, type_args, spec, kind, {line, column})
+      end)
+
+    state =
+      Enum.reduce(specs, state, fn
+        {type_name, type_args, spec, kind}, acc ->
+          acc
+          |> add_spec(type_name, type_args, spec, kind, {line, column})
       end)
 
     state

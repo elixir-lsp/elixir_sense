@@ -113,7 +113,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       import MyImports.{OneImports, Two.ThreeImports}
       import :lists, only: []
       @my_attribute "my_attr"
-
+      @spec private_func() :: String.t
       defp private_func, do: @my_attribute
       def public_func, do: :ok
       defp private_func_arg(a \\ nil)
@@ -166,6 +166,8 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       @typep my_priv_type :: any
       @opaque my_opaque_type :: any
       @type my_pub_type_arg(a, b) :: {b, a}
+
+      @callback some_callback(abc) :: :ok when abc: integer
     end
   end
 

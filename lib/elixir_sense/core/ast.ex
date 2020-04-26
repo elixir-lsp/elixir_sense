@@ -13,7 +13,8 @@ defmodule ElixirSense.Core.Ast do
     aliases: [],
     attributes: [],
     mods_funs: [],
-    types: []
+    types: [],
+    specs: []
   }
 
   @partials [
@@ -50,6 +51,7 @@ defmodule ElixirSense.Core.Ast do
   ]
 
   @type_kinds [:type, :typep, :opaque]
+  @spec_kinds [:spec, :callback, :macrocallback]
   @fun_kinds [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp]
 
   @max_expand_count 30_000
@@ -179,6 +181,32 @@ defmodule ElixirSense.Core.Ast do
   defp pre_walk_expanded({:alias, _, ast}, acc) do
     alias_tuples = extract_aliases(ast)
     {nil, %{acc | aliases: acc.aliases ++ alias_tuples}}
+  end
+
+  defp pre_walk_expanded({:@, _,
+  [
+    {kind,
+     _,
+     [
+       {:when, _,
+        [
+          {:"::", _,
+           [
+             {name, _,
+              args},
+             _
+           ]},
+          _
+        ]} = spec
+     ]}
+  ]} = ast, acc) when kind in @spec_kinds do
+    spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
+    {nil, %{acc | specs: [{name, get_args(args), spec, kind} | acc.specs]}}
+  end
+
+  defp pre_walk_expanded({:@, _, [{kind, _meta, [{:"::", _, [{name, _, args}, _]} = spec]}]} = ast, acc) when kind in @spec_kinds do
+    spec = "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
+    {nil, %{acc | specs: [{name, get_args(args), spec, kind} | acc.specs]}}
   end
 
   defp pre_walk_expanded({:@, _, [{kind, _meta, [{:"::", _, [{name, _, args}, _]} = spec]}]} = ast, acc) when kind in @type_kinds do
