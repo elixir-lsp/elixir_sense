@@ -2366,22 +2366,22 @@ defmodule ElixirSense.SuggestionsTest do
                %{
                  arity: 0,
                  doc: "",
-                 name: :timestamp,
+                 name: :time_unit,
                  origin: ":erlang",
-                 signature: "timestamp()",
+                 signature: "time_unit()",
                  spec:
-                   "@type timestamp() ::\n  {megaSecs ::\n     non_neg_integer(),\n   secs :: non_neg_integer(),\n   microSecs ::\n     non_neg_integer()}",
+                   "@type time_unit() ::\n  pos_integer()\n  | :second\n  | :millisecond\n  | :microsecond\n  | :nanosecond\n  | :native\n  | :perf_counter\n  | deprecated_time_unit()",
                  type: :type_spec,
                  metadata: %{}
                },
                %{
                  arity: 0,
                  doc: "",
-                 name: :time_unit,
+                 name: :timestamp,
                  origin: ":erlang",
-                 signature: "time_unit()",
+                 signature: "timestamp()",
                  spec:
-                   "@type time_unit() ::\n  pos_integer()\n  | :second\n  | :millisecond\n  | :microsecond\n  | :nanosecond\n  | :native\n  | :perf_counter\n  | deprecated_time_unit()",
+                   "@type timestamp() ::\n  {megaSecs ::\n     non_neg_integer(),\n   secs :: non_neg_integer(),\n   microSecs ::\n     non_neg_integer()}",
                  type: :type_spec,
                  metadata: %{}
                }
@@ -2604,6 +2604,7 @@ defmodule ElixirSense.SuggestionsTest do
     |> add_aliases("Local, Remote")
     |> ElixirSense.suggestions(line + 1, column)
     |> Enum.filter(fn %{type: t} -> t == type end)
+    |> Enum.sort()
   end
 
   defp suggestions_by_name(name, buffer) do
@@ -2619,6 +2620,7 @@ defmodule ElixirSense.SuggestionsTest do
       %{name: n} -> n == name
       _ -> false
     end)
+    |> Enum.sort()
   end
 
   defp suggestion_by_name(name, buffer) do
