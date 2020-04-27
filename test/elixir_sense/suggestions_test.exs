@@ -902,6 +902,24 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [%{type: :hint, value: "my"}, %{name: "my_var", type: :variable}]
   end
 
+  test "variable shadowing function" do
+    buffer = """
+    defmodule Mod do
+      def my_fun(), do: :ok
+      def some() do
+        my_fun = 1
+        my_f
+      end
+    end
+    """
+
+    assert [
+             %{type: :hint, value: "my_fun"},
+             %{name: "my_fun", type: :variable},
+             %{name: "my_fun", type: :function}
+           ] = ElixirSense.suggestions(buffer, 5, 9) |> IO.inspect()
+  end
+
   test "lists attributes" do
     buffer = """
     defmodule MyModule do

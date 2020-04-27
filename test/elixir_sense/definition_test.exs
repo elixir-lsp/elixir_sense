@@ -444,7 +444,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
-  test "find definition of functions when name same as variable" do
+  test "find definition of functions when name same as variable - parens preferes function" do
     buffer = """
     defmodule MyModule do
       def my_fun(), do: :ok
@@ -462,6 +462,27 @@ defmodule ElixirSense.Providers.DefinitionTest do
              file: nil,
              line: 2,
              column: 7
+           }
+  end
+
+  test "find definition of variables when name same as function - no parens preferes variable" do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(), do: :ok
+
+      def a do
+        my_fun = 1
+        my_fun
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 6, 6) == %Location{
+             found: true,
+             type: :variable,
+             file: nil,
+             line: 5,
+             column: 5
            }
   end
 
