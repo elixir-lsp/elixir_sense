@@ -897,9 +897,7 @@ defmodule ElixirSense.SuggestionsTest do
       ElixirSense.suggestions(buffer, 2, 37)
       |> Enum.filter(fn s -> s.type in [:variable, :hint] end)
 
-    # FIXME hint my_var instead of my
-
-    assert list == [%{type: :hint, value: "my"}, %{name: "my_var", type: :variable}]
+    assert list == [%{type: :hint, value: "my_var"}, %{name: "my_var", type: :variable}]
   end
 
   test "variable shadowing function" do
@@ -917,7 +915,7 @@ defmodule ElixirSense.SuggestionsTest do
              %{type: :hint, value: "my_fun"},
              %{name: "my_fun", type: :variable},
              %{name: "my_fun", type: :function}
-           ] = ElixirSense.suggestions(buffer, 5, 9) |> IO.inspect()
+           ] = ElixirSense.suggestions(buffer, 5, 9)
   end
 
   test "lists attributes" do
@@ -1867,7 +1865,7 @@ defmodule ElixirSense.SuggestionsTest do
     list = ElixirSense.suggestions(buffer, 11, 18)
 
     assert list == [
-             %{type: :hint, value: "other_func"},
+             %{type: :hint, value: "other_"},
              %{name: "other_arg", type: :variable},
              %{
                name: "other_func",

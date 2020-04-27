@@ -188,7 +188,6 @@ defmodule ElixirSense.Providers.Suggestion do
          %State.Env{
            imports: imports,
            aliases: aliases,
-           vars: vars,
            attributes: attributes,
            behaviours: behaviours,
            scope: scope,
@@ -223,7 +222,6 @@ defmodule ElixirSense.Providers.Suggestion do
     [hint_suggestion]
     |> Kernel.++(callbacks_or_returns)
     |> Kernel.++(find_attributes(attributes, hint, scope))
-    |> Kernel.++(find_vars(vars, hint))
     |> Kernel.++(mods_and_funcs)
     |> Kernel.++(
       find_param_options(
@@ -251,7 +249,6 @@ defmodule ElixirSense.Providers.Suggestion do
   defp find_mods_funs_vars_attributes(
          hint,
          %State.Env{
-           vars: vars,
            attributes: attributes,
            scope: scope
          } = env,
@@ -272,7 +269,6 @@ defmodule ElixirSense.Providers.Suggestion do
 
     [hint_suggestion]
     |> Kernel.++(find_attributes(attributes, hint, scope))
-    |> Kernel.++(find_vars(vars, hint))
     |> Kernel.++(mods_and_funcs)
   end
 
@@ -504,14 +500,6 @@ defmodule ElixirSense.Providers.Suggestion do
       end
 
     %{hint: %{type: :hint, value: value}, suggestions: suggestions}
-  end
-
-  @spec find_vars([State.VarInfo.t()], String.t()) :: [variable]
-  defp find_vars(vars, hint) do
-    for %State.VarInfo{name: var} <- vars, hint == "" or String.starts_with?("#{var}", hint) do
-      %{type: :variable, name: Atom.to_string(var)}
-    end
-    |> Enum.sort()
   end
 
   @spec find_attributes([State.AttributeInfo.t()], String.t(), State.scope()) :: [attribute]

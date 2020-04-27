@@ -468,6 +468,29 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
             ]} = expand('put_')
   end
 
+  test "variable name completion" do
+    env = %Env{
+      vars: [
+        %VarInfo{
+          name: :numeral
+        },
+        %VarInfo{
+          name: :number
+        },
+        %VarInfo{
+          name: :nothing
+        }
+      ]
+    }
+
+    assert expand('numb', env) == {:yes, 'er', [%{type: :variable, name: "number"}]}
+
+    assert expand('num', env) ==
+             {:yes, '', [%{type: :variable, name: "number"}, %{type: :variable, name: "numeral"}]}
+
+    assert {:yes, '', [%{type: :variable, name: "nothing"} | _]} = expand('no', env)
+  end
+
   test "kernel special form completion" do
     assert {:yes, 'icing', [%{name: "unquote_splicing", origin: "Kernel.SpecialForms"}]} =
              expand('unquote_spl')

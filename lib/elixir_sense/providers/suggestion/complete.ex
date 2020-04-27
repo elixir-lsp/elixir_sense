@@ -72,11 +72,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   @spec complete(String.t(), Env.t()) ::
-          {%{type: :hint, value: String.t()},
+          {ElixirSense.Providers.Suggestion.hint(),
            [
              ElixirSense.Providers.Suggestion.func()
              | ElixirSense.Providers.Suggestion.mod()
              | ElixirSense.Providers.Suggestion.field()
+             | ElixirSense.Providers.Suggestion.variable()
            ]}
   def complete(hint, %Env{} = env) do
     {_result, completion_hint, completions} =
@@ -88,7 +89,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp build_hint(hint, completion_hint), do: %{type: :hint, value: "#{hint}#{completion_hint}"}
 
   def expand('', env) do
-    expand_import("", env)
+    expand_variable_or_import("", env)
   end
 
   def expand([h | t] = expr, env) do
@@ -141,7 +142,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_erlang_modules(Atom.to_string(atom), env, true)
 
       {:ok, {atom, _, nil}} when is_atom(atom) ->
-        expand_import(Atom.to_string(atom), env)
+        expand_variable_or_import(Atom.to_string(atom), env)
 
       {:ok, {:__aliases__, _, [root]}} ->
         expand_elixir_modules([], Atom.to_string(root), env)
@@ -302,8 +303,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     format_expansion(match_module_funs(mod, hint, true, env), hint)
   end
 
-  defp expand_import(hint, env) do
-    # import calls of buildin functions are not possible
+  defp expand_variable_or_import(hint, env) do
+    variables = expand_variable(hint, env)
+    # import calls of builtin functions are not possible
     funs =
       match_module_funs(Kernel, hint, false, env) ++
         match_module_funs(Kernel.SpecialForms, hint, false, env) ++
@@ -311,7 +313,18 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         (env.imports
          |> Enum.flat_map(fn scope_import -> match_module_funs(scope_import, hint, false, env) end))
 
-    format_expansion(funs, hint)
+    format_expansion(variables ++ funs, hint)
+  end
+
+  defp expand_variable(hint, %Env{vars: vars}) do
+    for(
+      %VarInfo{name: name} when is_atom(name) <- vars,
+      name = Atom.to_string(name),
+      String.starts_with?(name, hint),
+      do: name
+    )
+    |> Enum.sort()
+    |> Enum.map(&%{kind: :variable, name: &1})
   end
 
   ## Erlang modules
@@ -666,12 +679,23 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   ## Ad-hoc conversions
+  @spec to_entries(map) ::
+          [
+            ElixirSense.Providers.Suggestion.mod()
+            | ElixirSense.Providers.Suggestion.func()
+            | ElixirSense.Providers.Suggestion.variable()
+            | ElixirSense.Providers.Suggestion.field()
+          ]
   defp to_entries(%{kind: :field, subtype: subtype, name: name, origin: origin}) do
     [%{type: :field, name: name, subtype: subtype, origin: origin, call?: true}]
   end
 
   defp to_entries(%{kind: :module, name: name, desc: {desc, metadata}, subtype: subtype}) do
     [%{type: :module, name: name, subtype: subtype, summary: desc, metadata: metadata}]
+  end
+
+  defp to_entries(%{kind: :variable, name: name}) do
+    [%{type: :variable, name: name}]
   end
 
   defp to_entries(%{
@@ -733,7 +757,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     format_hint(name, hint) <> "."
   end
 
-  defp to_hint(%{kind: kind, name: name}, hint) when kind in [:function, :field, :module] do
+  defp to_hint(%{kind: kind, name: name}, hint)
+       when kind in [:function, :field, :module, :variable] do
     format_hint(name, hint)
   end
 
