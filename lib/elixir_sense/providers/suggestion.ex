@@ -59,7 +59,7 @@ defmodule ElixirSense.Providers.Suggestion do
         }
 
   @type func :: %{
-          type: :function,
+          type: :function | :macro,
           name: String.t(),
           arity: non_neg_integer,
           args: String.t(),
