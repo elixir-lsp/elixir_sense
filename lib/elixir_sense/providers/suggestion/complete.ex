@@ -226,6 +226,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   # variable.fun_or_key
+  # @attribute.fun_or_key
   defp expand_call({_, _, _} = ast_node, hint, %Env{} = env) do
     case value_from_binding(ast_node, env) do
       {:ok, mod} when is_atom(mod) -> expand_call(mod, hint, env)
@@ -248,10 +249,15 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  defp value_from_binding(ast_node, %Env{vars: vars, structs: structs}) do
-    with {var, map_key_path} <- extract_from_ast(ast_node, []) do
-      case Enum.find(vars, fn %VarInfo{name: name} -> name == var end) do
-        %VarInfo{type: type} ->
+  defp value_from_binding(ast_node, %Env{vars: vars, attributes: attributes, structs: structs}) do
+    with {kind, var, map_key_path} <- extract_from_ast(ast_node, []) do
+      objects = case kind do
+        :variable -> vars
+        :attribute -> attributes
+      end
+      
+      case Enum.find(objects, fn %_{name: name} -> name == var end) do
+        %_{type: type} ->
           recurse_var(type, map_key_path, structs)
 
         _otherwise ->
@@ -768,11 +774,15 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp extract_from_ast(var_name, acc) when is_atom(var_name) do
-    {var_name, acc}
+    {:variable, var_name, acc}
   end
 
   defp extract_from_ast({var_name, _, nil}, acc) when is_atom(var_name) do
-    {var_name, acc}
+    {:variable, var_name, acc}
+  end
+
+  defp extract_from_ast({:@, _, [{attribute_name, _, nil}]}, acc) when is_atom(attribute_name) do
+    {:attribute, attribute_name, acc}
   end
 
   defp extract_from_ast({{:., _, [ast_node, fun]}, _, []}, acc) when is_atom(fun) do

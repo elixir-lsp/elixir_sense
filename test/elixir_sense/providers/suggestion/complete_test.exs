@@ -22,7 +22,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   use ExUnit.Case, async: true
 
   alias ElixirSense.Providers.Suggestion.Complete.Env
-  alias ElixirSense.Core.State.{ModFunInfo, SpecInfo, VarInfo}
+  alias ElixirSense.Core.State.{ModFunInfo, SpecInfo, VarInfo, AttributeInfo}
 
   def expand(expr, env \\ %Env{}) do
     ElixirSense.Providers.Suggestion.Complete.expand(Enum.reverse(expr), env)
@@ -331,6 +331,42 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
               ]}
 
     assert expand('map.foo', env) == {:no, '', []}
+  end
+
+  test "map atom key completion is supported on attributes" do
+    env = %Env{
+      attributes: [
+        %AttributeInfo{
+          name: :map,
+          type: {:map, [foo: 1, bar_1: 23, bar_2: 14]}
+        }
+      ]
+    }
+
+    assert expand('@map.f', env) ==
+             {:yes, 'oo',
+              [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]}
+
+    assert {:yes, 'ar_', _} = expand('@map.b', env)
+
+    assert expand('@map.bar_', env) ==
+             {:yes, '',
+              [
+                %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
+                %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true}
+              ]}
+
+    assert expand('@map.c', env) == {:no, '', []}
+
+    assert expand('@map.', env) ==
+             {:yes, '',
+              [
+                %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
+                %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true},
+                %{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}
+              ]}
+
+    assert expand('@map.foo', env) == {:no, '', []}
   end
 
   test "nested map atom key completion is supported" do

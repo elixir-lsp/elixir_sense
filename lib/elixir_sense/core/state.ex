@@ -29,6 +29,7 @@ defmodule ElixirSense.Core.State do
         }
   @type structs_t :: %{optional(module) => ElixirSense.Core.State.StructInfo.t()}
   @type protocol_t :: {module, nonempty_list(module)}
+  @type var_type :: nil | {:atom, atom} | {:map, keyword} | {:struct, keyword, module}
 
   @type t :: %ElixirSense.Core.State{
           namespace: [[atom]],
@@ -113,13 +114,13 @@ defmodule ElixirSense.Core.State do
     @moduledoc """
     Variable info
     """
-    @type var_type :: nil | {:atom, atom} | {:map, keyword} | {:struct, keyword, module}
+    
     @type t :: %VarInfo{
             name: atom,
             positions: list(ElixirSense.Core.State.position_t()),
             scope_id: nil | ElixirSense.Core.State.scope_id_t(),
             is_definition: boolean,
-            type: var_type
+            type: ElixirSense.Core.State.var_type
           }
     defstruct name: nil,
               positions: [],
@@ -174,9 +175,10 @@ defmodule ElixirSense.Core.State do
     """
     @type t :: %AttributeInfo{
             name: atom,
-            positions: list(ElixirSense.Core.State.position_t())
+            positions: list(ElixirSense.Core.State.position_t()),
+            type: ElixirSense.Core.State.var_type
           }
-    defstruct name: nil, positions: []
+    defstruct name: nil, positions: [], type: nil
   end
 
   defmodule CallInfo do
