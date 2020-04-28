@@ -35,12 +35,13 @@
 
 defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.Applications
+  alias ElixirSense.Core.BuiltinAttributes
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.EdocReader
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
-  alias ElixirSense.Core.State.VarInfo
+  alias ElixirSense.Core.State.{VarInfo, AttributeInfo}
   alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
 
@@ -60,7 +61,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             mods_and_funs: ElixirSense.Core.State.mods_funs_to_positions_t(),
             specs: ElixirSense.Core.State.specs_t(),
             vars: [ElixirSense.Core.State.VarInfo.t()],
-            structs: ElixirSense.Core.State.structs_t()
+            attributes: [ElixirSense.Core.State.AttributeInfo.t()],
+            structs: ElixirSense.Core.State.structs_t(),
+            scope: ElixirSense.Core.State.scope()
           }
     defstruct aliases: [],
               imports: [],
@@ -68,7 +71,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               mods_and_funs: %{},
               specs: %{},
               vars: [],
-              structs: %{}
+              attributes: [],
+              structs: %{},
+              scope: Elixir
   end
 
   @spec complete(String.t(), Env.t()) ::
@@ -89,6 +94,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp build_hint(hint, completion_hint), do: %{type: :hint, value: "#{hint}#{completion_hint}"}
 
   def expand('', env) do
+    # TODO change? add modules attributes
     expand_variable_or_import("", env)
   end
 
@@ -101,6 +107,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         # we are expanding all erlang modules
         # for performance reasons we do not extract edocs
         expand_erlang_modules(env, false)
+
+      h === ?@ and t == [] ->
+        expand_attribute("", env)
 
       identifier?(h) ->
         expand_expr(reduce(expr), env)
@@ -154,6 +163,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
       {:ok, {{:., _, [ast_node, fun]}, _, []}} when is_atom(fun) ->
         expand_call(ast_node, Atom.to_string(fun), env)
+
+      {:ok, {:@, _, [{atom, _, nil}]}} when is_atom(atom) ->
+        expand_attribute(Atom.to_string(atom), env)
 
       _ ->
         no()
@@ -251,11 +263,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   defp value_from_binding(ast_node, %Env{vars: vars, attributes: attributes, structs: structs}) do
     with {kind, var, map_key_path} <- extract_from_ast(ast_node, []) do
-      objects = case kind do
-        :variable -> vars
-        :attribute -> attributes
-      end
-      
+      objects =
+        case kind do
+          :variable -> vars
+          :attribute -> attributes
+        end
+
       case Enum.find(objects, fn %_{name: name} -> name == var end) do
         %_{type: type} ->
           recurse_var(type, map_key_path, structs)
@@ -331,6 +344,35 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     )
     |> Enum.sort()
     |> Enum.map(&%{kind: :variable, name: &1})
+  end
+
+  # do not suggest attributes outside of a module
+  defp expand_attribute(_, %Env{scope: scope}) when scope in [Elixir, nil], do: no()
+
+  defp expand_attribute(hint, %Env{attributes: attributes, scope: scope}) do
+    attribute_names =
+      attributes
+      |> Enum.map(fn %AttributeInfo{name: name} -> name end)
+
+    attribute_names =
+      case scope do
+        {_fun, _arity} ->
+          attribute_names
+
+        module when not is_nil(module) ->
+          # include module attributes in module scope
+          attribute_names ++ BuiltinAttributes.all()
+      end
+
+    for(
+      attribute_name when is_atom(attribute_name) <- attribute_names,
+      name = Atom.to_string(attribute_name),
+      String.starts_with?(name, hint),
+      do: name
+    )
+    |> Enum.sort()
+    |> Enum.map(&%{kind: :attribute, name: &1})
+    |> format_expansion(hint)
   end
 
   ## Erlang modules
@@ -691,6 +733,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             | ElixirSense.Providers.Suggestion.func()
             | ElixirSense.Providers.Suggestion.variable()
             | ElixirSense.Providers.Suggestion.field()
+            | ElixirSense.Providers.Suggestion.attribute()
           ]
   defp to_entries(%{kind: :field, subtype: subtype, name: name, origin: origin}) do
     [%{type: :field, name: name, subtype: subtype, origin: origin, call?: true}]
@@ -702,6 +745,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   defp to_entries(%{kind: :variable, name: name}) do
     [%{type: :variable, name: name}]
+  end
+
+  defp to_entries(%{kind: :attribute, name: name}) do
+    [%{type: :attribute, name: "@" <> name}]
   end
 
   defp to_entries(%{
@@ -764,7 +811,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp to_hint(%{kind: kind, name: name}, hint)
-       when kind in [:function, :field, :module, :variable] do
+       when kind in [:function, :field, :module, :variable, :attribute] do
     format_hint(name, hint)
   end
 

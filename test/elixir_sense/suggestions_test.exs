@@ -959,7 +959,7 @@ defmodule ElixirSense.SuggestionsTest do
            ]
 
     list =
-      ElixirSense.suggestions(buffer, 4, 7)
+      ElixirSense.suggestions(buffer, 5, 7)
       |> Enum.filter(fn s -> s.type == :attribute end)
 
     assert list == [

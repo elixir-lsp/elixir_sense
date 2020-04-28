@@ -3,7 +3,6 @@ defmodule ElixirSense.Providers.Suggestion do
   Provider responsible for finding suggestions for auto-completing
   """
 
-  alias ElixirSense.Core.BuiltinAttributes
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
@@ -188,7 +187,6 @@ defmodule ElixirSense.Providers.Suggestion do
          %State.Env{
            imports: imports,
            aliases: aliases,
-           attributes: attributes,
            behaviours: behaviours,
            scope: scope,
            module: module,
@@ -221,7 +219,6 @@ defmodule ElixirSense.Providers.Suggestion do
 
     [hint_suggestion]
     |> Kernel.++(callbacks_or_returns)
-    |> Kernel.++(find_attributes(attributes, hint, scope))
     |> Kernel.++(mods_and_funcs)
     |> Kernel.++(
       find_param_options(
@@ -248,10 +245,7 @@ defmodule ElixirSense.Providers.Suggestion do
         ) :: [suggestion]
   defp find_mods_funs_vars_attributes(
          hint,
-         %State.Env{
-           attributes: attributes,
-           scope: scope
-         } = env,
+         env,
          mods_and_funs,
          metadata_specs,
          structs,
@@ -268,7 +262,6 @@ defmodule ElixirSense.Providers.Suggestion do
       )
 
     [hint_suggestion]
-    |> Kernel.++(find_attributes(attributes, hint, scope))
     |> Kernel.++(mods_and_funcs)
   end
 
@@ -446,7 +439,9 @@ defmodule ElixirSense.Providers.Suggestion do
            imports: imports,
            aliases: aliases,
            module: module,
-           vars: vars
+           vars: vars,
+           attributes: attributes,
+           scope: scope
          },
          mods_and_funs,
          metadata_specs,
@@ -456,11 +451,13 @@ defmodule ElixirSense.Providers.Suggestion do
     env = %Complete.Env{
       aliases: aliases,
       vars: vars,
+      attributes: attributes,
       scope_module: module,
       imports: imports,
       mods_and_funs: mods_and_funs,
       specs: metadata_specs,
-      structs: structs
+      structs: structs,
+      scope: scope
     }
 
     {hint, prefix} =
@@ -500,31 +497,6 @@ defmodule ElixirSense.Providers.Suggestion do
       end
 
     %{hint: %{type: :hint, value: value}, suggestions: suggestions}
-  end
-
-  @spec find_attributes([State.AttributeInfo.t()], String.t(), State.scope()) :: [attribute]
-  # do not suggest attributes outside of a module
-  defp find_attributes(_attributes, _hint, scope) when scope in [Elixir, nil], do: []
-
-  defp find_attributes(attributes, hint, scope) do
-    attribute_names =
-      attributes
-      |> Enum.map(fn %State.AttributeInfo{name: name} -> name end)
-
-    attribute_names =
-      case scope do
-        {_fun, _arity} ->
-          attribute_names
-
-        module when not is_nil(module) ->
-          attribute_names ++ BuiltinAttributes.all()
-      end
-
-    for name <- attribute_names,
-        hint in ["", "@"] or String.starts_with?("@#{name}", hint) do
-      %{type: :attribute, name: "@#{name}"}
-    end
-    |> Enum.sort()
   end
 
   @spec find_returns(

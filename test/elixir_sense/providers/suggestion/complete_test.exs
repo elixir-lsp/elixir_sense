@@ -527,6 +527,60 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert {:yes, '', [%{type: :variable, name: "nothing"} | _]} = expand('no', env)
   end
 
+  test "attribute name completion" do
+    env = %Env{
+      attributes: [
+        %AttributeInfo{
+          name: :numeral
+        },
+        %AttributeInfo{
+          name: :number
+        },
+        %AttributeInfo{
+          name: :nothing
+        }
+      ],
+      scope: {:some, 0}
+    }
+
+    assert expand('@numb', env) == {:yes, 'er', [%{type: :attribute, name: "@number"}]}
+
+    assert expand('@num', env) ==
+             {:yes, '',
+              [%{type: :attribute, name: "@number"}, %{type: :attribute, name: "@numeral"}]}
+
+    assert expand('@', env) ==
+             {:yes, 'n',
+              [
+                %{name: "@nothing", type: :attribute},
+                %{type: :attribute, name: "@number"},
+                %{type: :attribute, name: "@numeral"}
+              ]}
+  end
+
+  test "builtin attribute name completion" do
+    env_function = %Env{
+      attributes: [],
+      scope: {:some, 0}
+    }
+
+    env_module = %Env{
+      attributes: [],
+      scope: Some.Module
+    }
+
+    env_outside_module = %Env{
+      attributes: [],
+      scope: Elixir
+    }
+
+    assert expand('@befo', env_function) == {:no, [], []}
+    assert expand('@befo', env_outside_module) == {:no, [], []}
+
+    assert expand('@befo', env_module) ==
+             {:yes, 're_compile', [%{type: :attribute, name: "@before_compile"}]}
+  end
+
   test "kernel special form completion" do
     assert {:yes, 'icing', [%{name: "unquote_splicing", origin: "Kernel.SpecialForms"}]} =
              expand('unquote_spl')

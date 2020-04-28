@@ -114,13 +114,13 @@ defmodule ElixirSense.Core.State do
     @moduledoc """
     Variable info
     """
-    
+
     @type t :: %VarInfo{
             name: atom,
             positions: list(ElixirSense.Core.State.position_t()),
             scope_id: nil | ElixirSense.Core.State.scope_id_t(),
             is_definition: boolean,
-            type: ElixirSense.Core.State.var_type
+            type: ElixirSense.Core.State.var_type()
           }
     defstruct name: nil,
               positions: [],
@@ -176,7 +176,7 @@ defmodule ElixirSense.Core.State do
     @type t :: %AttributeInfo{
             name: atom,
             positions: list(ElixirSense.Core.State.position_t()),
-            type: ElixirSense.Core.State.var_type
+            type: ElixirSense.Core.State.var_type()
           }
     defstruct name: nil, positions: [], type: nil
   end
