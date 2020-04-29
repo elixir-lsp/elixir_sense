@@ -136,7 +136,7 @@ defmodule ElixirSense.Core.TypeInfo do
       {name, arity} = extract_name_and_arity.(key),
       doc = value[:doc] || "",
       info = %{
-        name: name,
+        name: String.to_atom(name),
         arity: arity,
         doc: doc,
         spec: spec,

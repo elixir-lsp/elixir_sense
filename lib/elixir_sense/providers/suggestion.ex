@@ -431,7 +431,7 @@ defmodule ElixirSense.Providers.Suggestion do
         ) ::
           %{
             hint: hint,
-            suggestions: [mod | func | field]
+            suggestions: [mod | func | field | variable | attribute]
           }
   defp find_hint_mods_funcs(
          hint,
@@ -651,7 +651,7 @@ defmodule ElixirSense.Providers.Suggestion do
            ) do
       TypeInfo.extract_param_options(mod, fun, npar)
       |> options_to_suggestions(mod)
-      |> Enum.filter(&String.starts_with?("#{&1.name}", hint))
+      |> Enum.filter(&String.starts_with?(&1.name, hint))
     else
       _ ->
         []
@@ -662,13 +662,13 @@ defmodule ElixirSense.Providers.Suggestion do
     Enum.map(options, fn
       {mod, name, type} ->
         TypeInfo.get_type_info(mod, type, original_module)
-        |> Map.merge(%{type: :param_option, name: name})
+        |> Map.merge(%{type: :param_option, name: name |> Atom.to_string()})
 
       {mod, name} ->
         %{
           doc: "",
           expanded_spec: "",
-          name: name,
+          name: name |> Atom.to_string(),
           origin: inspect(mod),
           type: :param_option,
           type_spec: ""
@@ -776,7 +776,7 @@ defmodule ElixirSense.Providers.Suggestion do
       _ ->
         %{
           type: :type_spec,
-          name: type_info.name,
+          name: type_info.name |> Atom.to_string(),
           arity: type_info.arity,
           signature: type_info.signature,
           origin: origin,
