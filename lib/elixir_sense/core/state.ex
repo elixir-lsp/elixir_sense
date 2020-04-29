@@ -255,7 +255,7 @@ defmodule ElixirSense.Core.State do
     current_requires = state.requires |> :lists.reverse() |> List.flatten()
     current_aliases = current_aliases(state)
     current_vars = state |> get_current_vars()
-    current_attributes = state.scope_attributes |> :lists.reverse() |> List.flatten()
+    current_attributes = state |> get_current_attributes()
     current_behaviours = hd(state.behaviours)
     current_scope = hd(hd(state.scopes))
     current_scope_id = hd(state.scope_ids)
@@ -344,6 +344,10 @@ defmodule ElixirSense.Core.State do
 
   def get_current_vars_refs(%__MODULE__{} = state) do
     state.scope_vars |> List.flatten()
+  end
+
+  def get_current_attributes(%__MODULE__{} = state) do
+    state.scope_attributes |> :lists.reverse() |> List.flatten()
   end
 
   def is_variable_defined(%__MODULE__{} = state, var_name) do
@@ -858,11 +862,11 @@ defmodule ElixirSense.Core.State do
 
   def add_attributes(%__MODULE__{} = state, attributes, position) do
     Enum.reduce(attributes, state, fn attribute, state ->
-      add_attribute(state, attribute, position)
+      add_attribute(state, attribute, nil, true, position)
     end)
   end
 
-  def add_attribute(%__MODULE__{} = state, attribute, position)
+  def add_attribute(%__MODULE__{} = state, attribute, type, is_definition, position)
       when attribute not in @builtin_attributes do
     [attributes_from_scope | other_attributes] = state.attributes
 
@@ -876,6 +880,7 @@ defmodule ElixirSense.Core.State do
           [
             %AttributeInfo{
               name: attribute,
+              type: type,
               positions: [position]
             }
             | attributes_from_scope
@@ -884,7 +889,14 @@ defmodule ElixirSense.Core.State do
         index ->
           attributes_from_scope
           |> List.update_at(index, fn existing ->
-            %AttributeInfo{existing | positions: existing.positions ++ [position]}
+            type = if is_definition, do: type, else: existing.type
+
+            %AttributeInfo{
+              existing
+              | # FIXME this is wrong for accumulating attributes
+                type: type,
+                positions: existing.positions ++ [position]
+            }
           end)
       end
 
@@ -893,7 +905,7 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | attributes: attributes, scope_attributes: scope_attributes}
   end
 
-  def add_attribute(%__MODULE__{} = state, _attribute, _position) do
+  def add_attribute(%__MODULE__{} = state, _attribute, _type, _is_definition, _position) do
     state
   end
 

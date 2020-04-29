@@ -8,7 +8,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State
-  alias ElixirSense.Core.State.VarInfo
+  alias ElixirSense.Core.State.{VarInfo, AttributeInfo}
 
   @scope_keywords [:for, :try, :fn]
   @block_keywords [:do, :else, :rescue, :catch, :after]
@@ -297,10 +297,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_module_attribute(ast, state, {line, _} = position, name) do
+  defp pre_module_attribute(ast, state, {line, _} = position, name, type, is_definition) do
     state
     |> add_current_env_to_line(line)
-    |> add_attribute(name, position)
+    |> add_attribute(name, type, is_definition, position)
     |> result(ast)
   end
 
@@ -550,10 +550,18 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_spec(ast, state, {line, column}, name, List.wrap(type_args), spec, kind)
   end
 
-  defp pre({:@, [line: line, column: column] = meta_attr, [{name, meta, params}]}, state)
-       when not is_nil(params) do
+  defp pre({:@, [line: line, column: column] = meta_attr, [{name, meta, params}]}, state) do
+    {type, is_definition} =
+      case List.wrap(params) do
+        [] ->
+          {nil, false}
+
+        [param] ->
+          {get_binding_type(state, param), true}
+      end
+
     new_ast = {:@, meta_attr, [{name, add_no_call(meta), params}]}
-    pre_module_attribute(new_ast, state, {line, column}, name)
+    pre_module_attribute(new_ast, state, {line, column}, name, type, is_definition)
   end
 
   # import with v1.2 notation
@@ -1122,27 +1130,42 @@ defmodule ElixirSense.Core.MetadataBuilder do
       case get_binding_type(state, ast) do
         {:map, fields} -> fields
         {:struct, fields, _} -> fields
-        _ -> :error
+        _ -> []
       end
 
-    if is_list(fields) do
-      case struct_ast do
-        atom when is_atom(atom) ->
-          {:struct, fields, atom}
+    case struct_ast do
+      atom when is_atom(atom) ->
+        # erlang module
+        {:struct, fields, atom}
 
-        {:__MODULE__, _, nil} ->
-          {:struct, fields, state |> get_current_module}
+      {:__MODULE__, _, nil} ->
+        # current module
+        {:struct, fields, state |> get_current_module}
 
-        {:__aliases__, _, list} when is_list(list) ->
-          {:struct, fields, expand_alias(state, list)}
+      {:__aliases__, _, list} when is_list(list) ->
+        # elixir module
+        {:struct, fields, expand_alias(state, list)}
 
-        {var, _, context} when is_atom(var) and context in [nil, Elixir] ->
-          {:struct, fields, nil}
+      {var, _, context} when is_atom(var) and context in [nil, Elixir] ->
+        # variable
+        {:struct, fields, nil}
 
-        _ ->
-          nil
-          # TODO attribute
-      end
+      {:@, _, [{attribute, _, context}]} when is_atom(attribute) and context in [nil, Elixir] ->
+        attributes = get_current_attributes(state)
+
+        type =
+          case attributes |> Enum.find(&(&1.name == attribute)) do
+            # attribute bound to a module
+            %AttributeInfo{type: {:atom, atom}} -> atom
+            # other or not found
+            _ -> nil
+          end
+
+        {:struct, fields, type}
+
+      _ ->
+        # other
+        {:struct, fields, nil}
     end
   end
 
@@ -1156,7 +1179,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
     end
   end
 
-  # TODO attribute
+  defp get_binding_type(state, {:@, _, [{attribute, _, context}]})
+       when is_atom(attribute) and context in [nil, Elixir] do
+    attributes = get_current_attributes(state)
+
+    case attributes |> Enum.find(&(&1.name == attribute)) do
+      %AttributeInfo{type: type} -> type
+      nil -> nil
+    end
+  end
 
   defp get_binding_type(state, {:__MODULE__, _, nil}) do
     {:atom, state |> get_current_module}
@@ -1176,7 +1207,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
           [
             {:|, _meta1,
              [
-               var,
+               var_or_attr,
                fields
              ]}
           ]}
@@ -1188,25 +1219,31 @@ defmodule ElixirSense.Core.MetadataBuilder do
         {field, get_binding_type(state, value)}
       end
 
-    case var do
+    get_type = fn vars, var ->
+      case vars |> Enum.find(&(&1.name == var)) do
+        %_{type: {:map, fields}} ->
+          {:map, fields |> Keyword.merge(updated_fields)}
+
+        %_{type: {:struct, fields, struct}} ->
+          {:struct, fields |> Keyword.merge(updated_fields), struct}
+
+        _ ->
+          # var not found or unknown type
+          {:map, updated_fields}
+      end
+    end
+
+    case var_or_attr do
       {var, _, context} when is_atom(var) and context in [nil, Elixir] ->
-        vars = get_current_vars(state)
+        get_current_vars(state)
+        |> get_type.(var)
 
-        case vars |> Enum.find(&(&1.name == var)) do
-          %VarInfo{type: {:map, fields}} ->
-            {:map, fields |> Keyword.merge(updated_fields)}
-
-          %VarInfo{type: {:struct, fields, struct}} ->
-            {:struct, fields |> Keyword.merge(updated_fields), struct}
-
-          _ ->
-            # var not found or unknown type
-            {:map, updated_fields}
-        end
+      {:@, _, [{attribute, _, context}]} when is_atom(attribute) and context in [nil, Elixir] ->
+        get_current_attributes(state)
+        |> get_type.(attribute)
 
       _ ->
         {:map, updated_fields}
-        # TODO fields from attribute
     end
   end
 

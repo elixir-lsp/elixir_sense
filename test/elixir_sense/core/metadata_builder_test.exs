@@ -29,10 +29,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     state =
       """
       defmodule MyModule do
-        @myattribute 1
+        @myattribute String
         IO.puts @myattribute
         defmodule InnerModule do
-          @inner_attr module_var
+          @inner_attr %{abc: nil}
           IO.puts @inner_attr
         end
         IO.puts ""
@@ -41,32 +41,115 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_attributes(state, 3) == [
-             %AttributeInfo{name: :myattribute, positions: [{2, 3}]}
+             %AttributeInfo{name: :myattribute, positions: [{2, 3}], type: {:atom, String}}
            ]
 
     assert get_line_attributes(state, 6) == [
-             %AttributeInfo{name: :inner_attr, positions: [{5, 5}]}
+             %AttributeInfo{
+               name: :inner_attr,
+               positions: [{5, 5}],
+               type: {:map, [abc: {:atom, nil}]}
+             }
            ]
 
     assert get_line_attributes(state, 8) == [
-             %AttributeInfo{name: :myattribute, positions: [{2, 3}]}
+             %AttributeInfo{
+               name: :myattribute,
+               positions: [{2, 3}, {3, 11}],
+               type: {:atom, String}
+             }
            ]
   end
 
-  test "module attributes duplicated" do
+  test "module attributes rebinding" do
     state =
       """
       defmodule MyModule do
-        @myattribute 1
-        @myattribute 2
-        IO.puts @myattribute
+        @myattribute String
+        @myattribute List
+        @myattribute
+        IO.puts ""
+        def a do
+          @myattribute
+        end
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_attributes(state, 5) == [
+             %AttributeInfo{
+               name: :myattribute,
+               positions: [{2, 3}, {3, 3}, {4, 3}],
+               type: {:atom, List}
+             }
+           ]
+
+    assert get_line_attributes(state, 9) == [
+             %AttributeInfo{
+               name: :myattribute,
+               positions: [{2, 3}, {3, 3}, {4, 3}, {7, 5}],
+               type: {:atom, List}
+             }
+           ]
+  end
+
+  test "module attributes value binding" do
+    state =
+      """
+      defmodule MyModule do
+        @myattribute %{abc: String}
+        @some_attr @myattribute
+        @other_attr @myattribute.abc
+        IO.puts ""
       end
       """
       |> string_to_state
 
     assert get_line_attributes(state, 4) == [
-             %AttributeInfo{name: :myattribute, positions: [{2, 3}, {3, 3}]}
+             %AttributeInfo{
+               name: :myattribute,
+               positions: [{2, 3}, {3, 14}],
+               type: {:map, [abc: {:atom, String}]}
+             },
+             # TODO value from call
+             %AttributeInfo{name: :other_attr, positions: [{4, 3}], type: nil},
+             %AttributeInfo{
+               name: :some_attr,
+               positions: [{3, 3}],
+               type: {:map, [abc: {:atom, String}]}
+             }
            ]
+  end
+
+  test "module attributes value binding to and from variables" do
+    state =
+      """
+      defmodule MyModule do
+        @myattribute %{abc: String}
+        var = @myattribute
+        @other var
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_attributes(state, 5) == [
+             %AttributeInfo{
+               name: :myattribute,
+               positions: [{2, 3}, {3, 9}],
+               type: {:map, [abc: {:atom, String}]}
+             },
+             %AttributeInfo{
+               name: :other,
+               positions: [{4, 3}],
+               type: {:map, [abc: {:atom, String}]}
+             }
+           ]
+
+    assert [
+             %VarInfo{name: :var, type: {:map, [abc: {:atom, String}]}}
+           ] = state |> get_line_vars(5)
   end
 
   test "vars defined inside a function without params" do
