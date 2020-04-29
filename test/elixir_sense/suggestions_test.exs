@@ -1764,7 +1764,7 @@ defmodule ElixirSense.SuggestionsTest do
     list = ElixirSense.suggestions(buffer, 8, 17)
 
     assert list == [
-             %{type: :hint, value: "so"},
+             %{type: :hint, value: "some_"},
              %{
                origin: "MyServer",
                type: :field,

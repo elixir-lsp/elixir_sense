@@ -114,6 +114,19 @@ defmodule ElixirSense.Providers.Suggestion do
           | param_option
           | type_spec
 
+  defp get_hint(list) do
+    names =
+      list
+      |> Enum.map(fn
+        %{name: name} -> name
+        %{value: name} -> name
+      end)
+
+    prefix = :binary.longest_common_prefix(names)
+
+    binary_part(names |> hd, 0, prefix)
+  end
+
   @doc """
   Finds all suggestions for a hint based on context information.
   """
@@ -155,12 +168,11 @@ defmodule ElixirSense.Providers.Suggestion do
         )
 
       {fields, nil} ->
-        [%{type: :hint, value: "#{hint}"} | fields]
+        [%{type: :hint, value: get_hint(fields)} | fields]
 
       {fields, :maybe_struct_update} ->
-        # TODO refactor hint generation
-        [_hint | rest] =
-          find_mods_funs_vars_attributes(
+        %{hint: mods_funcs_hint, suggestions: rest} =
+          find_hint_mods_funcs(
             hint,
             env,
             mods_and_funs,
@@ -169,7 +181,7 @@ defmodule ElixirSense.Providers.Suggestion do
             text_before
           )
 
-        [%{type: :hint, value: "#{hint}"} | fields ++ rest]
+        [%{type: :hint, value: get_hint([mods_funcs_hint | fields])} | fields ++ rest]
     end
   end
 
@@ -198,7 +210,7 @@ defmodule ElixirSense.Providers.Suggestion do
          structs,
          text_before
        ) do
-    %{hint: hint_suggestion, suggestions: mods_and_funcs} =
+    %{hint: mods_funcs_hint, suggestions: mods_and_funcs} =
       find_hint_mods_funcs(
         hint,
         env,
@@ -217,10 +229,7 @@ defmodule ElixirSense.Providers.Suggestion do
           find_callbacks(behaviours, protocol, hint) ++ find_protocol_functions(protocol, hint)
       end
 
-    [hint_suggestion]
-    |> Kernel.++(callbacks_or_returns)
-    |> Kernel.++(mods_and_funcs)
-    |> Kernel.++(
+    param_options =
       find_param_options(
         text_before,
         hint,
@@ -230,39 +239,12 @@ defmodule ElixirSense.Providers.Suggestion do
         mods_and_funs,
         metadata_types
       )
-    )
-    |> Kernel.++(find_typespecs(hint, aliases, module, scope, mods_and_funs, metadata_types))
-    |> Enum.uniq()
-  end
 
-  @spec find_mods_funs_vars_attributes(
-          String.t(),
-          State.Env.t(),
-          State.mods_funs_to_positions_t(),
-          State.specs_t(),
-          State.structs_t(),
-          String.t()
-        ) :: [suggestion]
-  defp find_mods_funs_vars_attributes(
-         hint,
-         env,
-         mods_and_funs,
-         metadata_specs,
-         structs,
-         text_before
-       ) do
-    %{hint: hint_suggestion, suggestions: mods_and_funcs} =
-      find_hint_mods_funcs(
-        hint,
-        env,
-        mods_and_funs,
-        metadata_specs,
-        structs,
-        text_before
-      )
+    typespecs = find_typespecs(hint, aliases, module, scope, mods_and_funs, metadata_types)
 
-    [hint_suggestion]
-    |> Kernel.++(mods_and_funcs)
+    hint = %{type: :hint, value: get_hint([mods_funcs_hint] ++ param_options ++ typespecs)}
+
+    [hint] ++ mods_and_funcs ++ param_options ++ typespecs ++ callbacks_or_returns
   end
 
   defp expand_current_module(:__MODULE__, current_module), do: current_module
@@ -367,6 +349,7 @@ defmodule ElixirSense.Providers.Suggestion do
       end)
     else
       _ ->
+        # TODO attributes
         get_fields_from_var(vars, structs, var, fields_so_far, hint)
     end
   end
