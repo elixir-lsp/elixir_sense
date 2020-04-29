@@ -33,6 +33,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         IO.puts @myattribute
         defmodule InnerModule do
           @inner_attr %{abc: nil}
+          @inner_attr_1 __MODULE__
           IO.puts @inner_attr
         end
         IO.puts ""
@@ -44,15 +45,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              %AttributeInfo{name: :myattribute, positions: [{2, 3}], type: {:atom, String}}
            ]
 
-    assert get_line_attributes(state, 6) == [
+    assert get_line_attributes(state, 7) == [
              %AttributeInfo{
                name: :inner_attr,
                positions: [{5, 5}],
                type: {:map, [abc: {:atom, nil}]}
+             },
+             %AttributeInfo{
+               name: :inner_attr_1,
+               positions: [{6, 5}],
+               type: {:atom, MyModule.InnerModule}
              }
            ]
 
-    assert get_line_attributes(state, 8) == [
+    assert get_line_attributes(state, 9) == [
              %AttributeInfo{
                name: :myattribute,
                positions: [{2, 3}, {3, 11}],

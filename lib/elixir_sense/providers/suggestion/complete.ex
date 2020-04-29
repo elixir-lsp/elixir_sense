@@ -41,7 +41,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
-  alias ElixirSense.Core.State.{VarInfo, AttributeInfo}
+  alias ElixirSense.Core.State.AttributeInfo
+  alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
 

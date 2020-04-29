@@ -8,7 +8,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State
-  alias ElixirSense.Core.State.{VarInfo, AttributeInfo}
+  alias ElixirSense.Core.State.AttributeInfo
+  alias ElixirSense.Core.State.VarInfo
 
   @scope_keywords [:for, :try, :fn]
   @block_keywords [:do, :else, :rescue, :catch, :after]
@@ -1169,6 +1170,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
     end
   end
 
+  defp get_binding_type(state, {:__MODULE__, _, nil}) do
+    {:atom, state |> get_current_module}
+  end
+
+  defp get_binding_type(state, {:__aliases__, _, list}) when is_list(list) do
+    {:atom, expand_alias(state, list)}
+  end
+
   defp get_binding_type(state, {var, _, context})
        when is_atom(var) and context in [nil, Elixir] do
     vars = get_current_vars(state)
@@ -1187,14 +1196,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
       %AttributeInfo{type: type} -> type
       nil -> nil
     end
-  end
-
-  defp get_binding_type(state, {:__MODULE__, _, nil}) do
-    {:atom, state |> get_current_module}
-  end
-
-  defp get_binding_type(state, {:__aliases__, _, list}) when is_list(list) do
-    {:atom, expand_alias(state, list)}
   end
 
   defp get_binding_type(_state, atom) when is_atom(atom) do
