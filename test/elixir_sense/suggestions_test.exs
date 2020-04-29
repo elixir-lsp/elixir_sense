@@ -1706,6 +1706,27 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  test "suggestion for map fields in @attribute.key call syntax" do
+    buffer = """
+    defmodule MyServer do
+      @var_1 %{key_1: 1, key_2: %{abc: 123}}
+      def func do
+        @var_1.k
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 4, 13)
+      |> Enum.filter(&(&1.type in [:field, :hint]))
+
+    assert list == [
+             %{type: :hint, value: "@var_1.key_"},
+             %{name: "key_1", origin: nil, type: :field, call?: true, subtype: :map_key},
+             %{name: "key_2", origin: nil, type: :field, call?: true, subtype: :map_key}
+           ]
+  end
+
   test "suggestion for functions in variable.key call syntax" do
     buffer = """
     defmodule MyServer do
