@@ -9,6 +9,7 @@ defmodule ElixirSense.Providers.Suggestion do
   alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Providers.Suggestion.Complete
+  alias ElixirSense.Providers.Suggestion.Hint
 
   @type attribute :: %{
           type: :attribute,
@@ -114,19 +115,6 @@ defmodule ElixirSense.Providers.Suggestion do
           | param_option
           | type_spec
 
-  defp get_hint(list) do
-    names =
-      list
-      |> Enum.map(fn
-        %{name: name} -> name
-        %{value: name} -> name
-      end)
-
-    prefix = :binary.longest_common_prefix(names)
-
-    binary_part(names |> hd, 0, prefix)
-  end
-
   @doc """
   Finds all suggestions for a hint based on context information.
   """
@@ -168,10 +156,10 @@ defmodule ElixirSense.Providers.Suggestion do
         )
 
       {fields, nil} ->
-        [%{type: :hint, value: get_hint(fields)} | fields]
+        Hint.get(hint, fields)
 
       {fields, :maybe_struct_update} ->
-        %{hint: mods_funcs_hint, suggestions: rest} =
+        mods_funcs_suggestions =
           find_hint_mods_funcs(
             hint,
             env,
@@ -181,7 +169,7 @@ defmodule ElixirSense.Providers.Suggestion do
             text_before
           )
 
-        [%{type: :hint, value: get_hint([mods_funcs_hint | fields])} | fields ++ rest]
+        Hint.combine(mods_funcs_suggestions, fields)
     end
   end
 
@@ -210,7 +198,7 @@ defmodule ElixirSense.Providers.Suggestion do
          structs,
          text_before
        ) do
-    %{hint: mods_funcs_hint, suggestions: mods_and_funcs} =
+    mods_and_funcs =
       find_hint_mods_funcs(
         hint,
         env,
@@ -242,9 +230,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
     typespecs = find_typespecs(hint, aliases, module, scope, mods_and_funs, metadata_types)
 
-    hint = %{type: :hint, value: get_hint([mods_funcs_hint] ++ param_options ++ typespecs)}
-
-    [hint] ++ mods_and_funcs ++ param_options ++ typespecs ++ callbacks_or_returns
+    Hint.combine(mods_and_funcs, param_options ++ typespecs ++ callbacks_or_returns)
   end
 
   defp expand_current_module(:__MODULE__, current_module), do: current_module

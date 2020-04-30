@@ -200,9 +200,9 @@ defmodule ElixirSense.Providers.SuggestionTest do
         %{},
         ""
       )
-      |> Enum.filter(fn item -> item.type in [:hint, :function, :function] end)
+      |> Enum.filter(fn item -> item.type in [:function] end)
 
-    assert list == [%{type: :hint, value: "mo"}]
+    assert list == []
   end
 
   test "empty hint should not return built-in functions" do
@@ -313,7 +313,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
   test "return completion candidates for metadata structs" do
     assert [
-             %{type: :hint, value: "str_"},
+             %{type: :hint, value: "str_field"},
              %{name: "str_field", origin: "SomeModule", type: :field}
            ] =
              Suggestion.find(

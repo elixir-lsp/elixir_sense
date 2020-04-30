@@ -1765,14 +1765,14 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{type: :hint, value: "some_"},
+             %{name: "some_arg", type: :variable},
              %{
                origin: "MyServer",
                type: :field,
                name: "some_field",
                call?: false,
                subtype: :struct_field
-             },
-             %{name: "some_arg", type: :variable}
+             }
            ]
   end
 
@@ -1793,7 +1793,7 @@ defmodule ElixirSense.SuggestionsTest do
     list = ElixirSense.suggestions(buffer, 8, 28)
 
     assert list == [
-             %{type: :hint, value: "fi"},
+             %{type: :hint, value: "field_1"},
              %{
                call?: false,
                name: "field_1",
@@ -1821,7 +1821,7 @@ defmodule ElixirSense.SuggestionsTest do
     list = ElixirSense.suggestions(buffer, 8, 20)
 
     assert list == [
-             %{type: :hint, value: "fi"},
+             %{type: :hint, value: "field_1"},
              %{
                call?: false,
                name: "field_1",
@@ -1844,7 +1844,7 @@ defmodule ElixirSense.SuggestionsTest do
     list = ElixirSense.suggestions(buffer, 3, 20)
 
     assert list == [
-             %{type: :hint, value: "fi"},
+             %{type: :hint, value: "field_1"},
              %{call?: false, name: "field_1", origin: nil, subtype: :struct_field, type: :field}
            ]
   end
@@ -1861,7 +1861,7 @@ defmodule ElixirSense.SuggestionsTest do
     list = ElixirSense.suggestions(buffer, 3, 20)
 
     assert list == [
-             %{type: :hint, value: "fi"},
+             %{type: :hint, value: "field_1"},
              %{call?: false, name: "field_1", origin: nil, subtype: :map_key, type: :field}
            ]
   end
