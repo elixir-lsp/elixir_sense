@@ -1804,7 +1804,7 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
-  test "suggestion for fields in struct update when module not set" do
+  test "suggestion for fields in struct update variable when module not set" do
     buffer = """
     defmodule MyServer do
       defstruct [
@@ -1832,6 +1832,34 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  test "suggestion for fields in struct update attribute when module not set" do
+    buffer = """
+    defmodule MyServer do
+      defstruct [
+        field_1: nil,
+        some_field: ""
+      ]
+
+      @str %MyServer{}
+
+      %{@str | fi
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 9, 14)
+
+    assert list == [
+             %{type: :hint, value: "field_1"},
+             %{
+               call?: false,
+               name: "field_1",
+               origin: "MyServer",
+               subtype: :struct_field,
+               type: :field
+             }
+           ]
+  end
+
   test "suggestion for fields in struct update when struct type is var" do
     buffer = """
     defmodule MyServer do
@@ -1846,6 +1874,22 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{type: :hint, value: "field_1"},
              %{call?: false, name: "field_1", origin: nil, subtype: :struct_field, type: :field}
+           ]
+  end
+
+  test "suggestion for fields in struct when struct type is attribute" do
+    buffer = """
+    defmodule MyServer do
+      @t Time
+      %@t{ho
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 3, 9)
+
+    assert list == [
+             %{type: :hint, value: "hour"},
+             %{call?: false, name: "hour", origin: "Time", subtype: :struct_field, type: :field}
            ]
   end
 

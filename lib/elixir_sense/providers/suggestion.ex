@@ -249,14 +249,34 @@ defmodule ElixirSense.Providers.Suggestion do
          text_before,
          %State.Env{
            module: module,
-           vars: vars
+           vars: vars,
+           attributes: attributes
          } = env,
          structs,
          mods_funs,
          metadata_types
        ) do
     case Source.which_struct(text_before, module) do
-      {mod, fields_so_far, _elixir_prefix, _var} = struct when mod != :_ ->
+      {{:attribute, attr}, fields_so_far, _elixir_prefix, _var} = struct ->
+        mod =
+          case Enum.find(attributes, fn %_{name: name} -> name == attr end) do
+            %_{type: {:atom, mod}} -> mod
+            _ -> nil
+          end
+
+        result =
+          get_fields(
+            env,
+            mods_funs,
+            metadata_types,
+            structs,
+            hint,
+            struct |> put_elem(0, mod)
+          )
+
+        {result, if(fields_so_far == [], do: :maybe_struct_update)}
+
+      {mod, fields_so_far, _elixir_prefix, _var} = struct when is_atom(mod) and mod != :_ ->
         result =
           get_fields(
             env,
@@ -286,8 +306,15 @@ defmodule ElixirSense.Providers.Suggestion do
 
         {result, if(fields_so_far == [], do: :maybe_struct_update)}
 
-      {:map, fields_so_far, var} when not is_nil(var) ->
-        result = get_fields_from_var(vars, structs, var, fields_so_far, hint)
+      {:map, fields_so_far, var_or_attr} when not is_nil(var_or_attr) ->
+        result =
+          case var_or_attr do
+            {:variable, var} ->
+              get_fields_from_var_or_attr(vars, structs, var, fields_so_far, hint)
+
+            {:attribute, attr} ->
+              get_fields_from_var_or_attr(attributes, structs, attr, fields_so_far, hint)
+          end
 
         {result, if(fields_so_far == [], do: :maybe_struct_update)}
 
@@ -301,13 +328,14 @@ defmodule ElixirSense.Providers.Suggestion do
            imports: imports,
            aliases: aliases,
            module: module,
-           vars: vars
+           vars: vars,
+           attributes: attributes
          },
          mods_funs,
          metadata_types,
          structs,
          hint,
-         {mod, fields_so_far, elixir_prefix, var}
+         {mod, fields_so_far, elixir_prefix, var_or_attr}
        ) do
     with {actual_mod, _, true} <-
            Introspection.actual_mod_fun(
@@ -335,14 +363,22 @@ defmodule ElixirSense.Providers.Suggestion do
       end)
     else
       _ ->
-        # TODO attributes
-        get_fields_from_var(vars, structs, var, fields_so_far, hint)
+        case var_or_attr do
+          nil ->
+            []
+
+          {:variable, var} ->
+            get_fields_from_var_or_attr(vars, structs, var, fields_so_far, hint)
+
+          {:attribute, attr} ->
+            get_fields_from_var_or_attr(attributes, structs, attr, fields_so_far, hint)
+        end
     end
   end
 
-  defp get_fields_from_var(vars, structs, var, fields_so_far, hint) do
-    case Enum.find(vars, fn %State.VarInfo{name: name} -> name == var end) do
-      %State.VarInfo{type: {:map, fields}} ->
+  defp get_fields_from_var_or_attr(vars, structs, var, fields_so_far, hint) do
+    case Enum.find(vars, fn %_{name: name} -> name == var end) do
+      %_{type: {:map, fields}} ->
         for {field, _} <- fields,
             field not in fields_so_far,
             String.starts_with?("#{field}", hint) do
@@ -355,7 +391,7 @@ defmodule ElixirSense.Providers.Suggestion do
           }
         end
 
-      %State.VarInfo{type: {:struct, fields, nil}} ->
+      %_{type: {:struct, fields, nil}} ->
         for {field, _} <- fields |> Keyword.put_new(:__struct__, nil),
             field not in fields_so_far,
             String.starts_with?("#{field}", hint) do
@@ -368,7 +404,7 @@ defmodule ElixirSense.Providers.Suggestion do
           }
         end
 
-      %State.VarInfo{type: {:struct, _fields, module}} ->
+      %_{type: {:struct, _fields, module}} ->
         if Struct.is_struct(module, structs) do
           for field <- Struct.get_fields(module, structs),
               field not in fields_so_far,

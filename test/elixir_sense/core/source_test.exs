@@ -746,14 +746,24 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_struct(code, MyMod) == {:map, [], nil}
     end
 
-    test "map update" do
+    test "map update variable" do
       code = """
       defmodule MyMod do
         def my_func(par1) do
           var = %{asd |
       """
 
-      assert which_struct(code, MyMod) == {:map, [], :asd}
+      assert which_struct(code, MyMod) == {:map, [], {:variable, :asd}}
+    end
+
+    test "map update attribute" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %{@asd |
+      """
+
+      assert which_struct(code, MyMod) == {:map, [], {:attribute, :asd}}
     end
 
     test "map update with fields" do
@@ -763,7 +773,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %{asd | qwe: "ds",
       """
 
-      assert which_struct(code, MyMod) == {:map, [:qwe], :asd}
+      assert which_struct(code, MyMod) == {:map, [:qwe], {:variable, :asd}}
     end
 
     test "patern match with _" do
@@ -822,6 +832,16 @@ defmodule ElixirSense.Core.SourceTest do
       """
 
       assert which_struct(code, MyMod) == {MyMod, [], false, nil}
+    end
+
+    test "attribute struct type" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %@attr{
+      """
+
+      assert which_struct(code, MyMod) == {{:attribute, :attr}, [], false, nil}
     end
 
     test "`__MODULE__.Submodule` special form" do
@@ -909,7 +929,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_struct(text_before(code, 5, 7), MyMod) == {Mod, [:field1], false, nil}
     end
 
-    test "struct update syntax" do
+    test "struct update variable syntax" do
       code = """
       defmodule MyMod do
         def my_func(par1) do
@@ -921,8 +941,29 @@ defmodule ElixirSense.Core.SourceTest do
       end
       """
 
-      assert which_struct(text_before(code, 3, 23), MyMod) == {Mod, [], false, :par1}
-      assert which_struct(text_before(code, 5, 7), MyMod) == {Mod, [:field1], false, :par1}
+      assert which_struct(text_before(code, 3, 23), MyMod) == {Mod, [], false, {:variable, :par1}}
+
+      assert which_struct(text_before(code, 5, 7), MyMod) ==
+               {Mod, [:field1], false, {:variable, :par1}}
+    end
+
+    test "struct update attribute syntax" do
+      code = """
+      defmodule MyMod do
+        def my_func(par1) do
+          var = %Mod{@par1 |
+            field1: %InnerMod{},
+
+          }
+        end
+      end
+      """
+
+      assert which_struct(text_before(code, 3, 23), MyMod) ==
+               {Mod, [], false, {:attribute, :par1}}
+
+      assert which_struct(text_before(code, 5, 7), MyMod) ==
+               {Mod, [:field1], false, {:attribute, :par1}}
     end
   end
 

@@ -223,8 +223,12 @@ defmodule ElixirSense.Core.Source do
     end)
   end
 
+  @type var_or_attr_t :: {:variable, atom} | {:attribute, atom} | nil
+
   @spec which_struct(String.t(), nil | module) ::
-          nil | {module, [atom], boolean, atom} | {:map, [atom], atom}
+          nil
+          | {module | {:attribute, atom} | :_, [atom], boolean, var_or_attr_t}
+          | {:map, [atom], var_or_attr_t}
   def which_struct(text_before, current_module) do
     code = text_before |> String.reverse()
 
@@ -287,15 +291,24 @@ defmodule ElixirSense.Core.Source do
     Keyword.keys(fields) |> Enum.slice(0..-2)
   end
 
-  defp get_var({var, _, nil}) when is_atom(var) and var != :__MODULE__ do
-    var
+  defp get_var_or_attr({var, _, nil}) when is_atom(var) and var != :__MODULE__ do
+    {:variable, var}
   end
 
-  defp get_var(_), do: nil
+  defp get_var_or_attr({:@, _, [{attr, _, nil}]}) when is_atom(attr) do
+    {:attribute, attr}
+  end
+
+  defp get_var_or_attr(_), do: nil
 
   defp do_extract_struct_module({var, _, nil}, fields, _current_module, updated_var)
        when is_atom(var) and var != :__MODULE__ do
     {:_, get_field_names(fields), false, updated_var}
+  end
+
+  defp do_extract_struct_module({:@, _, [{attr, _, nil}]}, fields, _current_module, updated_var)
+       when is_atom(attr) do
+    {{:attribute, attr}, get_field_names(fields), false, updated_var}
   end
 
   defp do_extract_struct_module(module, fields, current_module, updated_var) do
@@ -309,7 +322,7 @@ defmodule ElixirSense.Core.Source do
   end
 
   defp extract_struct_module({:%{}, _, [{:|, _, [expr, fields]}]}, _) do
-    {:map, get_field_names(fields), get_var(expr)}
+    {:map, get_field_names(fields), get_var_or_attr(expr)}
   end
 
   defp extract_struct_module({:%{}, _, fields}, _) do
@@ -320,7 +333,7 @@ defmodule ElixirSense.Core.Source do
          {:%, _, [module, {:%{}, _, [{:|, _, [expr, fields]}]}]},
          current_module
        ) do
-    do_extract_struct_module(module, fields, current_module, get_var(expr))
+    do_extract_struct_module(module, fields, current_module, get_var_or_attr(expr))
   end
 
   defp extract_struct_module({:%, _, [module, {:%{}, _, fields}]}, current_module) do
