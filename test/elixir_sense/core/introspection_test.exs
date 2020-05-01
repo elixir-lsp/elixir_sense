@@ -237,6 +237,21 @@ defmodule ElixirSense.Core.IntrospectionTest do
   end
 
   describe "get_all_docs" do
+    test "returns delageted metadata on functions" do
+      assert %{docs: docs} =
+               get_all_docs({ElixirSenseExample.ModuleWithDelegates, :delegated_fun}, SomeModule)
+
+      assert docs == """
+             > ElixirSenseExample.ModuleWithDelegates.delegated_fun(a, b)
+
+             **Delegates to**
+             ElixirSenseExample.ModuleWithDocs.some_fun_no_doc/2
+
+             A delegated function
+
+             """
+    end
+
     test "returns since metadata on functions" do
       assert %{docs: docs} =
                get_all_docs({ElixirSenseExample.ModuleWithDocs, :some_fun}, SomeModule)

@@ -114,3 +114,10 @@ defmodule ElixirSenseExample.SoftDeprecatedModule do
   """
   @moduledoc deprecated: "This module will be removed in a future release"
 end
+
+defmodule ElixirSenseExample.ModuleWithDelegates do
+  @doc """
+  A delegated function
+  """
+  defdelegate delegated_fun(a, b), to: ElixirSenseExample.ModuleWithDocs, as: :some_fun_no_doc
+end

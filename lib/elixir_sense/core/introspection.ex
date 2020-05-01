@@ -338,6 +338,10 @@ defmodule ElixirSense.Core.Introspection do
 
   defp get_metadata_entry_md({:defaults, _}), do: nil
 
+  defp get_metadata_entry_md({:delegate_to, {m, f, a}}) do
+    "**Delegates to**\n#{inspect(m)}.#{f}/#{a}"
+  end
+
   # no types inside a function
   def get_type_docs_md(_, _, {_f, _a}) do
     []
