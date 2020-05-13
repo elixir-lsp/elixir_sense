@@ -72,7 +72,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
   test "return completion candidates for 'Str'" do
     assert Suggestion.find(
-             "ElixirSenseExample.ModuleWithD",
+             "ElixirSenseExample.ModuleWithDo",
              @env,
              %{},
              %{},

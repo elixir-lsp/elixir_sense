@@ -157,11 +157,11 @@ defmodule ElixirSense.SuggestionsTest do
   test "with a module hint" do
     buffer = """
     defmodule MyModule do
-      ElixirSenseExample.ModuleWithD
+      ElixirSenseExample.ModuleWithDo
     end
     """
 
-    list = ElixirSense.suggestions(buffer, 2, 33)
+    list = ElixirSense.suggestions(buffer, 2, 34)
 
     assert list == [
              %{type: :hint, value: "ElixirSenseExample.ModuleWithDoc"},
