@@ -920,8 +920,8 @@ defmodule ElixirSense.SignatureTest do
                  %{
                    documentation: "",
                    name: "or",
-                   params: ["term", "term"],
-                   spec: ""
+                   params: ["boolean()", "boolean()"],
+                   spec: "@spec boolean or boolean :: boolean"
                  }
                ]
              } = ElixirSense.signature(buffer, 4, 14)

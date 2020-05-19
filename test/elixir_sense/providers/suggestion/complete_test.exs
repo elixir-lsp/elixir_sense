@@ -1254,9 +1254,9 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
               %{
                 arity: 2,
                 name: "or",
-                spec: "",
+                spec: "@spec boolean or boolean :: boolean",
                 type: :function,
-                args: "term, term",
+                args: "boolean(), boolean()",
                 origin: ":erlang",
                 summary: ""
               },
@@ -1276,9 +1276,9 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
               %{
                 arity: 2,
                 name: "and",
-                spec: "",
+                spec: "@spec boolean and boolean :: boolean",
                 type: :function,
-                args: "term, term",
+                args: "boolean(), boolean()",
                 origin: ":erlang",
                 summary: ""
               },

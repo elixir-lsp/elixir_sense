@@ -197,9 +197,16 @@ defmodule ElixirSense.DocsTest do
       assert actual_subject == ":erlang.or"
 
       assert docs =~ """
-             > :erlang.or(term, term)
+             > :erlang.or(boolean(), boolean())
+
+             ### Specs
+
+             ```
+             @spec boolean or boolean :: boolean
+             ```
 
              No documentation available
+
              """
 
       %{
