@@ -1721,13 +1721,17 @@ defmodule ElixirSense.SuggestionsTest do
         some_field: ""
       ]
 
+      def some_func() do
+        false
+      end
+
       def func(%MyServer{} = some_arg) do
         %MyServer{so
       end
     end
     """
 
-    list = ElixirSense.suggestions(buffer, 8, 17)
+    list = ElixirSense.suggestions(buffer, 12, 17)
 
     assert list == [
              %{
