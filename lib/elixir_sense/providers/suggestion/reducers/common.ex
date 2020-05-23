@@ -8,33 +8,33 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
   alias ElixirSense.Providers.Suggestion.Reducer
 
   @type attribute :: %{
-    type: :attribute,
-    name: String.t()
-  }
+          type: :attribute,
+          name: String.t()
+        }
 
   @type variable :: %{
-    type: :variable,
-    name: String.t()
-  }
+          type: :variable,
+          name: String.t()
+        }
 
   @type func :: %{
-    type: :function | :macro,
-    name: String.t(),
-    arity: non_neg_integer,
-    args: String.t(),
-    origin: String.t(),
-    summary: String.t(),
-    spec: String.t(),
-    metadata: map
-  }
+          type: :function | :macro,
+          name: String.t(),
+          arity: non_neg_integer,
+          args: String.t(),
+          origin: String.t(),
+          summary: String.t(),
+          spec: String.t(),
+          metadata: map
+        }
 
   @type mod :: %{
-    type: :module,
-    name: String.t(),
-    subtype: String.t(),
-    summary: String.t(),
-    metadata: map
-  }
+          type: :module,
+          name: String.t(),
+          subtype: String.t(),
+          summary: String.t(),
+          metadata: map
+        }
 
   @doc """
   A reducer that populates the context with the suggestions provided by

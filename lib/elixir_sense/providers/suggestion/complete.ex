@@ -78,14 +78,14 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   @type hint :: %{
-    type: :hint,
-    value: String.t()
-  }
+          type: :hint,
+          value: String.t()
+        }
 
   @spec complete(String.t(), Env.t()) ::
           {hint(),
            [
-            ElixirSense.Providers.Suggestion.Reducers.Common.func()
+             ElixirSense.Providers.Suggestion.Reducers.Common.func()
              | ElixirSense.Providers.Suggestion.Reducers.Common.mod()
              | ElixirSense.Providers.Suggestion.Reducers.Common.variable()
              | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
