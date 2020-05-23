@@ -13,8 +13,8 @@ defmodule ElixirSense.Providers.Suggestion do
         String.t(),
         State.Env.t(),
         Metadata.t(),
-        Reducer.acc()
-      ) :: {:cont | :halt, Reducer.acc()}
+        acc()
+      ) :: {:cont | :halt, acc()}
 
   ## Examples
 
@@ -37,7 +37,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
       def my_reducer(hint, prefix, env, buffer_metadata, acc) do
         suggestions = ...
-        {:halt, %{acc | result: suggestions, reducers: [:]}}
+        {:cont, %{acc | result: fields, reducers: [:populate_common, :variables]}}
       end
   """
 
