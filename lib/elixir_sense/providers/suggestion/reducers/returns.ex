@@ -1,7 +1,9 @@
 defmodule ElixirSense.Providers.Suggestion.Reducers.Returns do
   @moduledoc false
 
-  alias ElixirSense.Core.{Introspection, State, Metadata}
+  alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.State
 
   @type return :: %{
           type: :return,
@@ -14,7 +16,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Returns do
   A reducer that adds suggestions of possible return values.
   """
   def add_returns(
-        _hint = "",
+        "" = _hint,
         _text_before,
         %State.Env{scope: {fun, arity}} = env,
         buffer_metadata,

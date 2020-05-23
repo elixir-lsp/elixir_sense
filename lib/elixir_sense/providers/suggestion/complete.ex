@@ -77,13 +77,18 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               scope: Elixir
   end
 
+  @type hint :: %{
+    type: :hint,
+    value: String.t()
+  }
+
   @spec complete(String.t(), Env.t()) ::
-          {ElixirSense.Providers.Suggestion.hint(),
+          {hint(),
            [
-             ElixirSense.Providers.Suggestion.func()
-             | ElixirSense.Providers.Suggestion.mod()
-             | ElixirSense.Providers.Suggestion.field()
-             | ElixirSense.Providers.Suggestion.variable()
+            ElixirSense.Providers.Suggestion.Reducers.Common.func()
+             | ElixirSense.Providers.Suggestion.Reducers.Common.mod()
+             | ElixirSense.Providers.Suggestion.Reducers.Common.variable()
+             | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
            ]}
   def complete(hint, %Env{} = env) do
     {_result, completion_hint, completions} =
@@ -730,11 +735,11 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   ## Ad-hoc conversions
   @spec to_entries(map) ::
           [
-            ElixirSense.Providers.Suggestion.mod()
-            | ElixirSense.Providers.Suggestion.func()
-            | ElixirSense.Providers.Suggestion.variable()
-            | ElixirSense.Providers.Suggestion.field()
-            | ElixirSense.Providers.Suggestion.attribute()
+            ElixirSense.Providers.Suggestion.Reducers.Common.mod()
+            | ElixirSense.Providers.Suggestion.Reducers.Common.func()
+            | ElixirSense.Providers.Suggestion.Reducers.Common.variable()
+            | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
+            | ElixirSense.Providers.Suggestion.Reducers.Common.attribute()
           ]
   defp to_entries(%{kind: :field, subtype: subtype, name: name, origin: origin}) do
     [%{type: :field, name: name, subtype: subtype, origin: origin, call?: true}]

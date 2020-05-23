@@ -1,7 +1,11 @@
 defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
   @moduledoc false
 
-  alias ElixirSense.Core.{Introspection, State, Source, TypeInfo, Metadata}
+  alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.Source
+  alias ElixirSense.Core.State
+  alias ElixirSense.Core.TypeInfo
 
   @type param_option :: %{
           type: :param_option,

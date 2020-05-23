@@ -41,8 +41,23 @@ defmodule ElixirSense.Providers.Suggestion do
       end
   """
 
-  alias ElixirSense.Core.{State, Metadata}
-  alias ElixirSense.Providers.Suggestion.{Reducer, Reducers}
+  alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.State
+  alias ElixirSense.Providers.Suggestion.Reducers
+
+  @type suggestion ::
+          Reducers.Common.attribute()
+          | Reducers.Common.variable()
+          | Reducers.Struct.field()
+          | Reducers.Returns.return()
+          | Reducers.Callbacks.callback()
+          | Reducers.Protocol.protocol_function()
+          | Reducers.Common.func()
+          | Reducers.Common.mod()
+          | Reducers.Params.param_option()
+          | Reducers.TypeSpecs.type_spec()
+
+  @type acc :: %{result: [suggestion], reducers: [atom], context: map}
 
   @reducers [
     structs_fields: &Reducers.Struct.add_fields/5,
@@ -63,7 +78,7 @@ defmodule ElixirSense.Providers.Suggestion do
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t(), State.Env.t(), Metadata.t(), String.t()) :: [Reducer.suggestion()]
+  @spec find(String.t(), String.t(), State.Env.t(), Metadata.t()) :: [suggestion()]
   def find(hint, text_before, env, buffer_metadata) do
     acc = %{result: [], reducers: Keyword.keys(@reducers), context: %{}}
 

@@ -1,7 +1,11 @@
 defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
   @moduledoc false
 
-  alias ElixirSense.Core.{Source, Introspection, State, Struct, Metadata}
+  alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.Source
+  alias ElixirSense.Core.State
+  alias ElixirSense.Core.Struct
 
   @type field :: %{
           type: :field,

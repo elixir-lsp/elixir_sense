@@ -1,7 +1,8 @@
 defmodule ElixirSense.Providers.Suggestion.Reducers.Protocol do
   @moduledoc false
 
-  alias ElixirSense.Core.{Introspection, State}
+  alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.State
 
   @type protocol_function :: %{
           type: :protocol_function,

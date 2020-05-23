@@ -1,7 +1,11 @@
 defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
   @moduledoc false
 
-  alias ElixirSense.Core.{Introspection, State, Metadata, Source, TypeInfo}
+  alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.Source
+  alias ElixirSense.Core.State
+  alias ElixirSense.Core.TypeInfo
 
   @type type_spec :: %{
           type: :type_spec,
