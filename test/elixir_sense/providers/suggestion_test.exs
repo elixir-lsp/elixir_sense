@@ -2,6 +2,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
   use ExUnit.Case, async: true
   alias ElixirSense.Providers.Suggestion
   alias ElixirSense.Core.State.StructInfo
+  alias ElixirSense.Core.Metadata
 
   doctest Suggestion
 
@@ -20,20 +21,9 @@ defmodule ElixirSense.Providers.SuggestionTest do
   }
 
   test "find definition of built-in functions" do
-    result =
-      Suggestion.find(
-        "ElixirSenseExample.EmptyModule.",
-        @env,
-        %{},
-        %{},
-        %{},
-        %{},
-        ""
-      )
+    result = Suggestion.find("ElixirSenseExample.EmptyModule.", "", @env, %Metadata{})
 
-    assert result |> Enum.at(0) == %{type: :hint, value: "ElixirSenseExample.EmptyModule."}
-
-    assert result |> Enum.at(1) == %{
+    assert result |> Enum.at(0) == %{
              args: "atom",
              arity: 1,
              name: "__info__",
@@ -45,7 +35,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              metadata: %{builtin: true}
            }
 
-    assert result |> Enum.at(2) == %{
+    assert result |> Enum.at(1) == %{
              args: "",
              arity: 0,
              name: "module_info",
@@ -57,7 +47,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              metadata: %{builtin: true}
            }
 
-    assert result |> Enum.at(3) == %{
+    assert result |> Enum.at(2) == %{
              args: "key",
              arity: 1,
              name: "module_info",
@@ -71,17 +61,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
   end
 
   test "return completion candidates for 'Str'" do
-    assert Suggestion.find(
-             "ElixirSenseExample.ModuleWithDo",
-             @env,
-             %{},
-             %{},
-             %{},
-             %{},
-             ""
-           ) ==
+    assert Suggestion.find("ElixirSenseExample.ModuleWithDo", "", @env, %Metadata{}) ==
              [
-               %{type: :hint, value: "ElixirSenseExample.ModuleWithDoc"},
                %{
                  name: "ModuleWithDocFalse",
                  subtype: nil,
@@ -101,7 +82,6 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
   test "return completion candidates for 'List.del'" do
     assert [
-             %{type: :hint, value: "List.delete"},
              %{
                args: "list," <> _,
                arity: 2,
@@ -120,21 +100,11 @@ defmodule ElixirSense.Providers.SuggestionTest do
                summary: "Produces a new list by " <> _,
                type: :function
              }
-           ] =
-             Suggestion.find(
-               "List.del",
-               @env,
-               %{},
-               %{},
-               %{},
-               %{},
-               ""
-             )
+           ] = Suggestion.find("List.del", "", @env, %Metadata{})
   end
 
   test "return completion candidates for module with alias" do
     assert [
-             %{type: :hint, value: "MyList.delete"},
              %{
                args: "list," <> _,
                arity: 2,
@@ -154,28 +124,12 @@ defmodule ElixirSense.Providers.SuggestionTest do
                type: :function
              }
            ] =
-             Suggestion.find(
-               "MyList.del",
-               %{@env | aliases: [{MyList, List}]},
-               %{},
-               %{},
-               %{},
-               %{},
-               ""
-             )
+             Suggestion.find("MyList.del", "", %{@env | aliases: [{MyList, List}]}, %Metadata{})
   end
 
   test "return completion candidates for functions from import" do
-    assert Suggestion.find(
-             "say",
-             %{@env | imports: [MyModule]},
-             %{},
-             %{},
-             %{},
-             %{},
-             ""
-           ) == [
-             %{type: :hint, value: "say_hi"},
+    assert Suggestion.find("say", "", %{@env | imports: [MyModule]}, %Metadata{}) ==
+           [
              %{
                args: "",
                arity: 0,
@@ -191,15 +145,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
   test "local calls should not return built-in functions" do
     list =
-      Suggestion.find(
-        "mo",
-        @env,
-        %{},
-        %{},
-        %{},
-        %{},
-        ""
-      )
+      Suggestion.find("mo", "", @env, %Metadata{})
       |> Enum.filter(fn item -> item.type in [:function] end)
 
     assert list == []
@@ -207,15 +153,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
   test "empty hint should not return built-in functions" do
     suggestions_names =
-      Suggestion.find(
-        "",
-        @env,
-        %{},
-        %{},
-        %{},
-        %{},
-        ""
-      )
+      Suggestion.find("", "", @env, %Metadata{})
       |> Enum.filter(&Map.has_key?(&1, :name))
       |> Enum.map(& &1.name)
 
@@ -227,105 +165,90 @@ defmodule ElixirSense.Providers.SuggestionTest do
   end
 
   test "return completion candidates for struct starting with %" do
-    assert [%{type: :hint, value: "%ElixirSense.Providers.SuggestionTest.MyStruct"} | _] =
+    assert [%{type: :module, name: "MyStruct"} | _] =
              Suggestion.find(
                "%ElixirSense.Providers.SuggestionTest.MyStr",
+               "",
                @env_func,
-               %{},
-               %{},
-               %{},
-               %{},
-               ""
+               %Metadata{}
              )
   end
 
   test "return completion candidates for &func" do
-    assert [%{type: :hint, value: "f = &Enum.all?"} | _] =
+    assert [%{type: :function, name: "all?", origin: "Enum"} | _] =
              Suggestion.find(
                "f = &Enum.al",
+               "",
                @env_func,
-               %{},
-               %{},
-               %{},
-               %{},
-               ""
+               %Metadata{}
              )
   end
 
   test "do not return completion candidates for unknown erlang modules" do
-    assert [%{type: :hint, value: "Enum:"}] =
+    assert [] =
              Suggestion.find(
                "Enum:",
+               "",
                @env_func,
-               %{},
-               %{},
-               %{},
-               %{},
-               ""
+               %Metadata{}
              )
   end
 
   test "do not return completion candidates for unknown modules" do
-    assert [%{type: :hint, value: "x.Foo.get_by"}] =
+    assert [] =
              Suggestion.find(
                "x.Foo.get_by",
+               "",
                @env_func,
-               %{},
-               %{},
-               %{},
-               %{},
-               ""
+               %Metadata{}
              )
   end
 
   test "return completion candidates for metadata modules" do
-    assert [%{type: :hint, value: "my_func"} | _] =
+    assert [%{type: :function, name: "my_func"} | _] =
              Suggestion.find(
                "my_f",
+               "",
                @env_func,
-               %{},
-               %{
-                 {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule},
-                 {SomeModule, :my_func, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defp},
-                 {SomeModule, :my_func, 1} => %ElixirSense.Core.State.ModFunInfo{
-                   type: :defp,
-                   params: [[[:a, [], nil]]]
+               %Metadata{
+                 mods_funs_to_positions: %{
+                   {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule},
+                   {SomeModule, :my_func, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defp},
+                   {SomeModule, :my_func, 1} => %ElixirSense.Core.State.ModFunInfo{
+                     type: :defp,
+                     params: [[[:a, [], nil]]]
+                   }
                  }
-               },
-               %{},
-               %{},
-               ""
+               }
              )
 
-    assert [%{type: :hint, value: "SomeModule"} | _] =
+    assert [%{type: :module, name: "SomeModule"} | _] =
              Suggestion.find(
                "So",
+               "",
                @env_func,
-               %{},
-               %{
-                 {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
-               },
-               %{},
-               %{},
-               ""
+               %Metadata{
+                 mods_funs_to_positions: %{
+                  {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
+                 }
+               }
              )
   end
 
   test "return completion candidates for metadata structs" do
     assert [
-             %{type: :hint, value: "str_field"},
              %{name: "str_field", origin: "SomeModule", type: :field}
            ] =
              Suggestion.find(
                "str_",
+               "%SomeModule{st",
                @env_func,
-               %{SomeModule => %StructInfo{type: :defstruct, fields: [str_field: 1]}},
-               %{
-                 {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
-               },
-               %{},
-               %{},
-               "%SomeModule{st"
+               %Metadata{
+                 structs: %{SomeModule => %StructInfo{type: :defstruct, fields: [str_field: 1]}},
+                 mods_funs_to_positions: %{
+                   {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
+                 }
+               }
              )
   end
 end

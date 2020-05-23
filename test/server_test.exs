@@ -141,7 +141,7 @@ defmodule ElixirSense.ServerTest do
       }
     }
 
-    assert send_request(socket, request) |> Enum.at(0) == %{type: :hint, value: "List."}
+    assert %{type: :module, name: "Chars"} = send_request(socket, request) |> Enum.at(0)
   end
 
   test "all_modules request", %{socket: socket, auth_token: auth_token} do
@@ -247,6 +247,6 @@ defmodule ElixirSense.ServerUnixSocketTest do
       }
     }
 
-    assert send_request(socket, request) |> Enum.at(0) == %{type: :hint, value: "List."}
+    assert %{type: :module, name: "Chars"} = send_request(socket, request) |> Enum.at(0)
   end
 end
