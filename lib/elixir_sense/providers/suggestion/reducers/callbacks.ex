@@ -18,10 +18,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
   @doc """
   A reducer that adds suggestions of callbacks.
   """
-  def add_callbacks(_hint, _text_before, %State.Env{scope: {_f, _a}}, _buffer_metadata, acc),
-    do: {:cont, acc}
-
-  def add_callbacks(hint, _text_before, env, _buffer_metadata, acc) do
+  def add_callbacks(hint, text_before, env, _buffer_metadata, acc) do
     %State.Env{protocol: protocol, behaviours: behaviours} = env
 
     list =
@@ -38,7 +35,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
                 metadata: metadata
               } <-
                 Introspection.get_callbacks_with_docs(mod),
-              hint == "" or String.starts_with?("#{name}", hint) do
+              def_prefix?(hint, spec) or String.starts_with?("#{name}", hint) do
             desc = Introspection.extract_summary_from_docs(doc)
             [_, args_str] = Regex.run(Regex.recompile!(~r/.\((.*)\)/), signature)
             args = args_str |> String.replace(Regex.recompile!(~r/\s/), "")
@@ -59,6 +56,20 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
           []
       end)
 
-    {:cont, %{acc | result: acc.result ++ Enum.sort(list)}}
+    list = Enum.sort(list)
+
+    if Regex.match?(~r/\s(def|defmacro)\s+[a-z|_]*$/, text_before) do
+      {:halt, %{acc | result: list}}
+    else
+      {:cont, %{acc | result: acc.result ++ list}}
+    end
+  end
+
+  defp def_prefix?(hint, spec) do
+    if String.starts_with?(spec, "@macrocallback") do
+      String.starts_with?("defmacro", hint)
+    else
+      String.starts_with?("def", hint)
+    end
   end
 end

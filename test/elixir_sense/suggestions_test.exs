@@ -204,6 +204,62 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
+  test "lists callbacks + def macros after de" do
+    buffer = """
+    defmodule MyServer do
+      use GenServer
+
+      de
+      # ^
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 4, 5)
+    assert Enum.any?(list, fn s -> s.type == :callback end)
+    assert Enum.any?(list, fn s -> s.type == :macro end)
+    assert Enum.all?(list, fn s -> s.type in [:callback, :macro] end)
+  end
+
+  test "lists callbacks + def macros after def" do
+    buffer = """
+    defmodule MyServer do
+      use GenServer
+
+      def
+      #  ^
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 4, 6)
+    assert Enum.any?(list, fn s -> s.type == :callback end)
+    assert Enum.any?(list, fn s -> s.type == :macro end)
+    assert Enum.all?(list, fn s -> s.type in [:callback, :macro] end)
+  end
+
+  test "lists only callbacks after def + space" do
+    buffer = """
+    defmodule MyServer do
+      use GenServer
+
+      def t
+      #   ^
+    end
+    """
+
+    assert ElixirSense.suggestions(buffer, 4, 7) |> Enum.all?(fn s -> s.type == :callback end)
+
+    buffer = """
+    defmodule MyServer do
+      use GenServer
+
+      def t
+      #    ^
+    end
+    """
+
+    assert [%{name: "terminate", type: :callback}] = ElixirSense.suggestions(buffer, 4, 8)
+  end
+
   test "lists macrocallbacks" do
     buffer = """
     defmodule MyServer do
@@ -238,6 +294,22 @@ defmodule ElixirSense.SuggestionsTest do
                metadata: %{optional: false}
              }
            ] == list
+  end
+
+  test "lists macrocallbacks + def macros after defma" do
+    buffer = """
+    defmodule MyServer do
+      @behaviour ElixirSenseExample.BehaviourWithMacrocallback
+
+      defma
+      #    ^
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 4, 8)
+    assert Enum.any?(list, fn s -> s.type == :callback end)
+    assert Enum.any?(list, fn s -> s.type == :macro end)
+    assert Enum.all?(list, fn s -> s.type in [:callback, :macro] end)
   end
 
   test "lists erlang callbacks" do
