@@ -4,13 +4,13 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
   alias ElixirSense.Core.{Introspection, State, Source, TypeInfo, Metadata}
 
   @type param_option :: %{
-    type: :param_option,
-    name: String.t(),
-    origin: String.t(),
-    type_spec: String.t(),
-    doc: String.t(),
-    expanded_spec: String.t()
-  }
+          type: :param_option,
+          name: String.t(),
+          origin: String.t(),
+          type_spec: String.t(),
+          doc: String.t(),
+          expanded_spec: String.t()
+        }
 
   @doc """
   A reducer that adds suggestions of keyword list options.
@@ -40,6 +40,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
         |> TypeInfo.extract_param_options(fun, npar)
         |> options_to_suggestions(mod)
         |> Enum.filter(&String.starts_with?(&1.name, hint))
+
       {:cont, %{acc | result: acc.result ++ list}}
     else
       _ ->

@@ -123,24 +123,23 @@ defmodule ElixirSense.Providers.SuggestionTest do
                summary: "Produces a new list " <> _,
                type: :function
              }
-           ] =
-             Suggestion.find("MyList.del", "", %{@env | aliases: [{MyList, List}]}, %Metadata{})
+           ] = Suggestion.find("MyList.del", "", %{@env | aliases: [{MyList, List}]}, %Metadata{})
   end
 
   test "return completion candidates for functions from import" do
     assert Suggestion.find("say", "", %{@env | imports: [MyModule]}, %Metadata{}) ==
-           [
-             %{
-               args: "",
-               arity: 0,
-               name: "say_hi",
-               origin: "ElixirSense.Providers.SuggestionTest.MyModule",
-               spec: "",
-               summary: "",
-               type: :function,
-               metadata: %{}
-             }
-           ]
+             [
+               %{
+                 args: "",
+                 arity: 0,
+                 name: "say_hi",
+                 origin: "ElixirSense.Providers.SuggestionTest.MyModule",
+                 spec: "",
+                 summary: "",
+                 type: :function,
+                 metadata: %{}
+               }
+             ]
   end
 
   test "local calls should not return built-in functions" do
@@ -229,7 +228,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                @env_func,
                %Metadata{
                  mods_funs_to_positions: %{
-                  {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
+                   {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
                  }
                }
              )

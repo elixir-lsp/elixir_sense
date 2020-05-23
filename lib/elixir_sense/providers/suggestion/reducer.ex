@@ -2,16 +2,16 @@ defmodule ElixirSense.Providers.Suggestion.Reducer do
   @moduledoc false
 
   @type suggestion ::
-          Reducers.Common.attribute
-          | Reducers.Common.variable
-          | Reducers.StructFields.field
-          | Reducers.Returns.return
-          | Reducers.Callbacks.callback
-          | Reducers.ProtocolFunctions.protocol_function
-          | Reducers.Common.func
-          | Reducers.Common.mod
-          | Reducers.ParamOptions.param_option
-          | Reducers.TypeSpecs.type_spec
+          Reducers.Common.attribute()
+          | Reducers.Common.variable()
+          | Reducers.StructFields.field()
+          | Reducers.Returns.return()
+          | Reducers.Callbacks.callback()
+          | Reducers.ProtocolFunctions.protocol_function()
+          | Reducers.Common.func()
+          | Reducers.Common.mod()
+          | Reducers.ParamOptions.param_option()
+          | Reducers.TypeSpecs.type_spec()
 
   @type acc :: %{result: [suggestion], reducers: [atom], context: map}
 

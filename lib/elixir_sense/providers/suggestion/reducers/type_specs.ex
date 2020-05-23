@@ -4,15 +4,15 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
   alias ElixirSense.Core.{Introspection, State, Metadata, Source, TypeInfo}
 
   @type type_spec :: %{
-    type: :type_spec,
-    name: String.t(),
-    arity: non_neg_integer,
-    origin: String.t(),
-    spec: String.t(),
-    doc: String.t(),
-    signature: String.t(),
-    metadata: map
-  }
+          type: :type_spec,
+          name: String.t(),
+          arity: non_neg_integer,
+          origin: String.t(),
+          spec: String.t(),
+          doc: String.t(),
+          signature: String.t(),
+          metadata: map
+        }
 
   @doc """
   A reducer that adds suggestions of types.
@@ -24,7 +24,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
 
   # We don't list typespecs outside of a module
   def add_types(_hint, _text_before, %State.Env{scope: scope}, _buffer_metadata, acc)
-    when scope in [Elixir, nil] do
+      when scope in [Elixir, nil] do
     {:cont, acc}
   end
 

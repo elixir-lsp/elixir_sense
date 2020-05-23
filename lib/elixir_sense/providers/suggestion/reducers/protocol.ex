@@ -4,15 +4,15 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Protocol do
   alias ElixirSense.Core.{Introspection, State}
 
   @type protocol_function :: %{
-    type: :protocol_function,
-    name: String.t(),
-    arity: non_neg_integer,
-    args: String.t(),
-    origin: String.t(),
-    summary: String.t(),
-    spec: String.t(),
-    metadata: map
-  }
+          type: :protocol_function,
+          name: String.t(),
+          arity: non_neg_integer,
+          args: String.t(),
+          origin: String.t(),
+          summary: String.t(),
+          spec: String.t(),
+          metadata: map
+        }
 
   @doc """
   A reducer that adds suggestions of protocol functions.
@@ -41,6 +41,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Protocol do
           spec: spec
         }
       end
+
     {:cont, %{acc | result: acc.result ++ Enum.sort(list)}}
   end
 end

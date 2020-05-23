@@ -5,15 +5,15 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
   alias ElixirSense.Core.State
 
   @type callback :: %{
-    type: :callback,
-    name: String.t(),
-    arity: non_neg_integer,
-    args: String.t(),
-    origin: String.t(),
-    summary: String.t(),
-    spec: String.t(),
-    metadata: map
-  }
+          type: :callback,
+          name: String.t(),
+          arity: non_neg_integer,
+          args: String.t(),
+          origin: String.t(),
+          summary: String.t(),
+          spec: String.t(),
+          metadata: map
+        }
 
   @doc """
   A reducer that adds suggestions of callbacks.

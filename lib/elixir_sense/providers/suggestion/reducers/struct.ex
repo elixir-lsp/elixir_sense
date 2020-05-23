@@ -4,12 +4,12 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
   alias ElixirSense.Core.{Source, Introspection, State, Struct, Metadata}
 
   @type field :: %{
-    type: :field,
-    subtype: :struct_field | :map_key,
-    name: String.t(),
-    origin: String.t() | nil,
-    call?: boolean
-  }
+          type: :field,
+          subtype: :struct_field | :map_key,
+          name: String.t(),
+          origin: String.t() | nil,
+          call?: boolean
+        }
 
   @doc """
   A reducer that adds suggestions of struct fields.
@@ -29,6 +29,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
 
   defp find_struct_fields(hint, text_before, env, buffer_metadata) do
     %State.Env{module: module, vars: vars, attributes: attributes} = env
+
     %Metadata{
       structs: structs,
       mods_funs_to_positions: mods_funs,

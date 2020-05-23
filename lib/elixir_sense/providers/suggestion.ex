@@ -63,7 +63,7 @@ defmodule ElixirSense.Providers.Suggestion do
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t(), State.Env.t(), Metadata.t(), String.t()) :: [Reducer.suggestion]
+  @spec find(String.t(), State.Env.t(), Metadata.t(), String.t()) :: [Reducer.suggestion()]
   def find(hint, text_before, env, buffer_metadata) do
     acc = %{result: [], reducers: Keyword.keys(@reducers), context: %{}}
 

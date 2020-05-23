@@ -4,16 +4,22 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Returns do
   alias ElixirSense.Core.{Introspection, State, Metadata}
 
   @type return :: %{
-    type: :return,
-    description: String.t(),
-    spec: String.t(),
-    snippet: String.t()
-  }
+          type: :return,
+          description: String.t(),
+          spec: String.t(),
+          snippet: String.t()
+        }
 
   @doc """
   A reducer that adds suggestions of possible return values.
   """
-  def add_returns(_hint = "", _text_before, %State.Env{scope: {fun, arity}} = env, buffer_metadata, acc) do
+  def add_returns(
+        _hint = "",
+        _text_before,
+        %State.Env{scope: {fun, arity}} = env,
+        buffer_metadata,
+        acc
+      ) do
     %State.Env{module: current_module, behaviours: behaviours, protocol: protocol} = env
     %Metadata{specs: specs} = buffer_metadata
 
