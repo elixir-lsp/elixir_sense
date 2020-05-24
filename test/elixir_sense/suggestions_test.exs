@@ -260,6 +260,23 @@ defmodule ElixirSense.SuggestionsTest do
     assert [%{name: "terminate", type: :callback}] = ElixirSense.suggestions(buffer, 4, 8)
   end
 
+  test "do not list callbacks inside functions" do
+    buffer = """
+    defmodule MyServer do
+      use GenServer
+
+      def init(_) do
+        t
+      #  ^
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 5, 6)
+    assert Enum.any?(list, fn s -> s.type == :function end)
+    refute Enum.any?(list, fn s -> s.type == :callback end)
+  end
+
   test "lists macrocallbacks" do
     buffer = """
     defmodule MyServer do

@@ -19,7 +19,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
   A reducer that adds suggestions of callbacks.
   """
   def add_callbacks(hint, text_before, env, _buffer_metadata, acc) do
-    %State.Env{protocol: protocol, behaviours: behaviours} = env
+    %State.Env{protocol: protocol, behaviours: behaviours, scope: scope} = env
 
     list =
       Enum.flat_map(behaviours, fn
@@ -58,10 +58,15 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
 
     list = Enum.sort(list)
 
-    if Regex.match?(~r/\s(def|defmacro)\s+[a-z|_]*$/, text_before) do
-      {:halt, %{acc | result: list}}
-    else
-      {:cont, %{acc | result: acc.result ++ list}}
+    cond do
+      Regex.match?(~r/\s(def|defmacro)\s+[a-z|_]*$/, text_before) ->
+        {:halt, %{acc | result: list}}
+
+      match?({_f, _a}, scope) ->
+        {:cont, acc}
+
+      true ->
+        {:cont, %{acc | result: acc.result ++ list}}
     end
   end
 
