@@ -27,7 +27,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
         {:halt, %{acc | result: fields}}
 
       {fields, :maybe_struct_update} ->
-        {:cont, %{acc | result: fields, reducers: [:populate_common, :variables]}}
+        reducers = [:populate_common, :modules, :functions, :macros, :variables, :attributes]
+        {:cont, %{acc | result: fields, reducers: reducers}}
     end
   end
 

@@ -1822,7 +1822,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 12, 17)
 
-    assert list == [
+    assert [
              %{
                origin: "MyServer",
                type: :field,
@@ -1830,8 +1830,9 @@ defmodule ElixirSense.SuggestionsTest do
                call?: false,
                subtype: :struct_field
              },
-             %{name: "some_arg", type: :variable}
-           ]
+             %{name: "some_arg", type: :variable},
+             %{name: "some_func", type: :function}
+           ] = list
   end
 
   test "suggestion for fields in struct update" do
