@@ -1090,4 +1090,27 @@ defmodule ElixirSense.Core.SourceTest do
       assert get_v12_module_prefix(code, MyMod) == "Mod"
     end
   end
+
+  describe "walk_text/3" do
+    test "walks through text until a criteria is reached" do
+      text = """
+      a b c
+      d-e-f
+      g.h.i
+      j,k,l
+      """
+
+      {_, line, col} =
+        walk_text(text, nil, fn
+          grapheme, rest, _, _, _ when grapheme != "i" ->
+            {rest, nil}
+
+          _grapheme, rest, line, col, _ ->
+            {"", {rest, line - 1, col - 1}}
+        end)
+
+      assert line == 2
+      assert col == 4
+    end
+  end
 end

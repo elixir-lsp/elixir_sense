@@ -20,7 +20,9 @@ defmodule ElixirSense.SuggestionsTest do
              spec: "",
              summary: "Imports functions and macros from other modules.",
              type: :macro,
-             metadata: %{}
+             metadata: %{},
+             snippet: nil,
+             visibility: :public
            }
 
     assert Enum.find(list, fn s -> match?(%{name: "quote", arity: 2}, s) end) == %{
@@ -31,7 +33,9 @@ defmodule ElixirSense.SuggestionsTest do
              args: "opts, block",
              name: "quote",
              summary: "Gets the representation of any expression.",
-             metadata: %{}
+             metadata: %{},
+             snippet: nil,
+             visibility: :public
            }
 
     assert Enum.find(list, fn s -> match?(%{name: "require", arity: 2}, s) end) == %{
@@ -42,7 +46,9 @@ defmodule ElixirSense.SuggestionsTest do
              args: "module, opts",
              name: "require",
              summary: "Requires a module in order to use its macros.",
-             metadata: %{}
+             metadata: %{},
+             snippet: nil,
+             visibility: :public
            }
   end
 
@@ -64,7 +70,9 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "@spec is_binary(term) :: boolean",
                summary: "Returns `true` if `term` is a binary; otherwise returns `false`.",
                type: :function,
-               metadata: %{guard: true}
+               metadata: %{guard: true},
+               snippet: nil,
+               visibility: :public
              },
              %{
                args: "term",
@@ -75,7 +83,9 @@ defmodule ElixirSense.SuggestionsTest do
                summary:
                  "Returns `true` if `term` is a bitstring (including a binary); otherwise returns `false`.",
                type: :function,
-               metadata: %{guard: true}
+               metadata: %{guard: true},
+               snippet: nil,
+               visibility: :public
              },
              %{
                args: "term",
@@ -86,7 +96,9 @@ defmodule ElixirSense.SuggestionsTest do
                summary:
                  "Returns `true` if `term` is either the atom `true` or the atom `false` (i.e.,\na boolean); otherwise returns `false`.",
                type: :function,
-               metadata: %{guard: true}
+               metadata: %{guard: true},
+               snippet: nil,
+               visibility: :public
              }
            ]
   end
@@ -110,7 +122,9 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]",
                summary: "Flattens the given `list` of nested lists.",
                type: :function,
-               metadata: %{}
+               metadata: %{},
+               visibility: :public,
+               snippet: nil
              },
              %{
                args: "list, tail",
@@ -122,7 +136,9 @@ defmodule ElixirSense.SuggestionsTest do
                summary:
                  "Flattens the given `list` of nested lists.\nThe list `tail` will be added at the end of\nthe flattened list.",
                type: :function,
-               metadata: %{}
+               metadata: %{},
+               visibility: :public,
+               snippet: nil
              }
            ]
   end
@@ -146,7 +162,9 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "@spec some(integer) :: Macro.t\n@spec some(b) :: Macro.t when b: float",
                summary: "some macro\n",
                type: :macro,
-               metadata: %{}
+               metadata: %{},
+               snippet: nil,
+               visibility: :public
              }
            ]
   end
@@ -1062,6 +1080,7 @@ defmodule ElixirSense.SuggestionsTest do
         is_bo
         del
         my_
+        a_m
       end
 
       defp test_fun_priv(), do: :ok
@@ -1070,7 +1089,10 @@ defmodule ElixirSense.SuggestionsTest do
       defdelegate delegate_not_defined, to: Dummy, as: :hello
       defguard my_guard_pub(value) when is_integer(value) and rem(value, 2) == 0
       defguardp my_guard_priv(value) when is_integer(value)
-      defmacro some_macro(a) do
+      defmacro a_macro(a) do
+        quote do: :ok
+      end
+      defmacrop a_macro_priv(a) do
         quote do: :ok
       end
     end
@@ -1081,13 +1103,15 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 0,
                name: "test_fun_priv",
                origin: "ElixirSenseExample.ModuleA",
-               type: :function
+               type: :function,
+               visibility: :private
              },
              %{
                arity: 1,
                name: "test_fun_pub",
                origin: "ElixirSenseExample.ModuleA",
-               type: :function
+               type: :function,
+               visibility: :public
              }
            ] = ElixirSense.suggestions(buffer, 5, 7)
 
@@ -1138,7 +1162,8 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "ElixirSenseExample.ModuleA",
                spec: "",
                summary: "",
-               type: :macro
+               type: :macro,
+               visibility: :private
              },
              %{
                args: "value",
@@ -1150,6 +1175,28 @@ defmodule ElixirSense.SuggestionsTest do
                type: :macro
              }
            ] = ElixirSense.suggestions(buffer, 9, 8)
+
+    assert [
+             %{
+               args: "a",
+               arity: 1,
+               name: "a_macro",
+               origin: "ElixirSenseExample.ModuleA",
+               spec: "",
+               summary: "",
+               type: :macro,
+               visibility: :public
+             },
+             %{
+               args: "a",
+               arity: 1,
+               name: "a_macro_priv",
+               origin: "ElixirSenseExample.ModuleA",
+               spec: "",
+               summary: "",
+               type: :macro
+             }
+           ] = ElixirSense.suggestions(buffer, 10, 8)
   end
 
   test "functions defined in other module fully qualified" do
@@ -1227,7 +1274,9 @@ defmodule ElixirSense.SuggestionsTest do
                args: "a",
                spec: "@spec test_fun_pub(integer) :: atom",
                summary: "",
-               metadata: %{}
+               metadata: %{},
+               snippet: nil,
+               visibility: :public
              }
            ] == ElixirSense.suggestions(buffer, 10, 7)
 
@@ -1992,6 +2041,8 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "MyServer",
                spec: "",
                summary: "",
+               visibility: :public,
+               snippet: nil,
                metadata: %{}
              }
            ]

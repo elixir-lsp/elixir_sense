@@ -32,7 +32,9 @@ defmodule ElixirSense.Providers.SuggestionTest do
                "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()",
              summary: "Built-in function",
              type: :function,
-             metadata: %{builtin: true}
+             metadata: %{builtin: true},
+             snippet: nil,
+             visibility: :public
            }
 
     assert result |> Enum.at(1) == %{
@@ -44,7 +46,9 @@ defmodule ElixirSense.Providers.SuggestionTest do
                "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]",
              summary: "Built-in function",
              type: :function,
-             metadata: %{builtin: true}
+             metadata: %{builtin: true},
+             snippet: nil,
+             visibility: :public
            }
 
     assert result |> Enum.at(2) == %{
@@ -56,7 +60,9 @@ defmodule ElixirSense.Providers.SuggestionTest do
                "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean",
              summary: "Built-in function",
              type: :function,
-             metadata: %{builtin: true}
+             metadata: %{builtin: true},
+             snippet: nil,
+             visibility: :public
            }
   end
 
@@ -137,7 +143,9 @@ defmodule ElixirSense.Providers.SuggestionTest do
                  spec: "",
                  summary: "",
                  type: :function,
-                 metadata: %{}
+                 metadata: %{},
+                 snippet: nil,
+                 visibility: :public
                }
              ]
   end

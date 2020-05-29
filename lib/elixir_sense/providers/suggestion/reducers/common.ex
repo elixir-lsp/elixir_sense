@@ -19,12 +19,14 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
 
   @type func :: %{
           type: :function | :macro,
+          visibility: :public | :private,
           name: String.t(),
           arity: non_neg_integer,
           args: String.t(),
           origin: String.t(),
           summary: String.t(),
           spec: String.t(),
+          snippet: String.t() | nil,
           metadata: map
         }
 
