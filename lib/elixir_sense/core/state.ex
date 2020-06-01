@@ -226,12 +226,7 @@ defmodule ElixirSense.Core.State do
     def get_arities(%ModFunInfo{params: params_variants}) do
       params_variants
       |> Enum.map(fn params ->
-        default_args =
-          params
-          |> Enum.count(&match?({:\\, _, _}, &1))
-
-        total = length(params)
-        {total, default_args}
+        {length(params), Introspection.count_defaults(params)}
       end)
     end
 
