@@ -49,7 +49,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              %AttributeInfo{
                name: :inner_attr,
                positions: [{5, 5}],
-               type: {:map, [abc: {:atom, nil}]}
+               type: {:map, [abc: {:atom, nil}], nil}
              },
              %AttributeInfo{
                name: :inner_attr_1,
@@ -106,7 +106,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule MyModule do
         @myattribute %{abc: String}
         @some_attr @myattribute
-        @other_attr @myattribute.abc
         IO.puts ""
       end
       """
@@ -116,14 +115,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              %AttributeInfo{
                name: :myattribute,
                positions: [{2, 3}, {3, 14}],
-               type: {:map, [abc: {:atom, String}]}
+               type: {:map, [abc: {:atom, String}], nil}
              },
-             # TODO value from call
-             %AttributeInfo{name: :other_attr, positions: [{4, 3}], type: nil},
              %AttributeInfo{
                name: :some_attr,
                positions: [{3, 3}],
-               type: {:map, [abc: {:atom, String}]}
+               type: {:attribute, :myattribute}
              }
            ]
   end
@@ -144,17 +141,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              %AttributeInfo{
                name: :myattribute,
                positions: [{2, 3}, {3, 9}],
-               type: {:map, [abc: {:atom, String}]}
+               type: {:map, [abc: {:atom, String}], nil}
              },
              %AttributeInfo{
                name: :other,
                positions: [{4, 3}],
-               type: {:map, [abc: {:atom, String}]}
+               type: {:variable, :var}
              }
            ]
 
     assert [
-             %VarInfo{name: :var, type: {:map, [abc: {:atom, String}]}}
+             %VarInfo{name: :var, type: {:attribute, :myattribute}}
            ] = state |> get_line_vars(5)
   end
 
@@ -215,9 +212,63 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert [%VarInfo{type: {:atom, Atom}}] = state |> get_line_vars(16)
 
     assert [
-             %VarInfo{name: :other, type: {:atom, Atom}},
+             %VarInfo{name: :other, type: {:variable, :var}},
              %VarInfo{name: :var, type: {:atom, Atom}}
            ] = state |> get_line_vars(18)
+  end
+
+  test "call binding" do
+    state =
+      """
+      defmodule MyModule do
+        def remote_calls do
+          var1 = DateTime.now
+          var2 = :erlang.now()
+          var3 = __MODULE__.now(:abc)
+          var4 = "Etc/UTC" |> DateTime.now
+          IO.puts ""
+        end
+
+        def local_calls do
+          var1 = now
+          var2 = now()
+          var3 = now(:abc)
+          var4 = :abc |> now
+          var5 = :abc |> now(5)
+          IO.puts ""
+        end
+
+        @attr %{qwe: String}
+        def map_field(var1) do
+          var1 = var1.abc
+          var2 = @attr.qwe(0)
+          var3 = abc.cde.efg
+          IO.puts ""
+        end
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{name: :var1, type: {:call, {:atom, DateTime}, :now, 0}},
+             %VarInfo{name: :var2, type: {:call, {:atom, :erlang}, :now, 0}},
+             %VarInfo{name: :var3, type: {:call, {:atom, MyModule}, :now, 1}},
+             %VarInfo{name: :var4, type: {:call, {:atom, DateTime}, :now, 1}}
+           ] = state |> get_line_vars(7)
+
+    assert [
+             %VarInfo{name: :var1, type: {:variable, :now}},
+             %VarInfo{name: :var2, type: {:local_call, :now, 0}},
+             %VarInfo{name: :var3, type: {:local_call, :now, 1}},
+             %VarInfo{name: :var4, type: {:local_call, :now, 1}},
+             %VarInfo{name: :var5, type: {:local_call, :now, 2}}
+           ] = state |> get_line_vars(16)
+
+    assert [
+             %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, 0}},
+             %VarInfo{name: :var2, type: {:call, {:attribute, :attr}, :qwe, 1}},
+             %VarInfo{name: :var3, type: {:call, {:call, {:variable, :abc}, :cde, 0}, :efg, 0}}
+           ] = state |> get_line_vars(24)
   end
 
   test "map binding" do
@@ -243,18 +294,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert [%VarInfo{type: {:map, [asd: nil]}}] = state |> get_line_vars(4)
+    assert [%VarInfo{type: {:map, [asd: nil], nil}}] = state |> get_line_vars(4)
 
-    assert [%VarInfo{type: {:map, [asd: nil, nested: {:map, [wer: nil]}]}}] =
+    assert [%VarInfo{type: {:map, [asd: nil, nested: {:map, [wer: nil], nil}], nil}}] =
              state |> get_line_vars(6)
 
-    assert [%VarInfo{type: {:map, []}}] = state |> get_line_vars(8)
-    assert [%VarInfo{type: {:map, [asd: nil, zxc: {:atom, String}]}}] = state |> get_line_vars(10)
+    assert [%VarInfo{type: {:map, [], nil}}] = state |> get_line_vars(8)
 
-    assert %VarInfo{type: {:map, [asd: nil, zxc: nil]}} =
+    assert [%VarInfo{type: {:map, [asd: nil, zxc: {:atom, String}], nil}}] =
+             state |> get_line_vars(10)
+
+    assert %VarInfo{type: {:map, [asd: nil, zxc: nil], {:variable, :var}}} =
              state |> get_line_vars(12) |> Enum.find(&(&1.name == :qwe))
 
-    assert %VarInfo{type: {:map, [{:zxc, {:atom, String}}, {:asd, nil}]}} =
+    assert %VarInfo{type: {:map, [{:asd, nil}], {:variable, :var}}} =
              state |> get_line_vars(14) |> Enum.find(&(&1.name == :qwe))
   end
 
@@ -282,25 +335,27 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert [
-             %VarInfo{name: :var1, type: {:struct, [], MyStruct}},
-             %VarInfo{name: :var2, type: {:struct, [], :other_struct}},
-             %VarInfo{name: :var3, type: {:struct, [], MyModule}},
-             %VarInfo{name: :var4, type: {:struct, [], MyModule.Sub}},
-             %VarInfo{name: :var7, type: {:struct, [], nil}}
+             %VarInfo{name: :var1, type: {:struct, [], {:atom, MyStruct}, nil}},
+             %VarInfo{name: :var2, type: {:struct, [], {:atom, :other_struct}, nil}},
+             %VarInfo{name: :var3, type: {:struct, [], {:atom, MyModule}, nil}},
+             %VarInfo{name: :var4, type: {:struct, [], {:atom, MyModule.Sub}, nil}},
+             %VarInfo{name: :var7, type: {:struct, [], nil, nil}}
            ] = state |> get_line_vars(4)
 
-    assert %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], Some}} =
+    assert %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}} =
              state |> get_line_vars(9) |> Enum.find(&(&1.name == :asd))
 
-    assert %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], Other}} =
-             state |> get_line_vars(11) |> Enum.find(&(&1.name == :asd))
+    assert %VarInfo{
+             name: :asd,
+             type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
+           } = state |> get_line_vars(11) |> Enum.find(&(&1.name == :asd))
 
-    assert %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}, {:other, nil}], Other}} =
+    assert %VarInfo{name: :asd, type: {:map, [{:other, nil}], {:variable, :asd}}} =
              state |> get_line_vars(13) |> Enum.find(&(&1.name == :asd))
 
     assert [
-             %VarInfo{name: :x, type: {:struct, [{:sub, {:atom, Atom}}, {:other, nil}], Other}},
-             %VarInfo{name: :z, type: {:struct, [{:sub, {:atom, Atom}}, {:other, nil}], Other}}
+             %VarInfo{name: :x, type: {:variable, :asd}},
+             %VarInfo{name: :z, type: {:variable, :asd}}
            ] = state |> get_line_vars(15) |> Enum.filter(&(&1.name in [:x, :z]))
   end
 
@@ -323,13 +378,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert [
-             %VarInfo{name: :var1, type: {:struct, [], Date}},
-             %VarInfo{name: :var2, type: {:struct, [], Time}},
-             %VarInfo{name: :var3, type: {:struct, [], DateTime}},
-             %VarInfo{name: :var4, type: {:struct, [], NaiveDateTime}},
-             %VarInfo{name: :var5, type: {:struct, [], Regex}},
-             %VarInfo{name: :var6, type: {:struct, [], Regex}},
-             %VarInfo{name: :var7, type: {:struct, [], Range}}
+             %VarInfo{name: :var1, type: {:struct, [], {:atom, Date}}},
+             %VarInfo{name: :var2, type: {:struct, [], {:atom, Time}}},
+             %VarInfo{name: :var3, type: {:struct, [], {:atom, DateTime}}},
+             %VarInfo{name: :var4, type: {:struct, [], {:atom, NaiveDateTime}}},
+             %VarInfo{name: :var5, type: {:struct, [], {:atom, Regex}}},
+             %VarInfo{name: :var6, type: {:struct, [], {:atom, Regex}}},
+             %VarInfo{name: :var7, type: {:struct, [], {:atom, Range}}}
            ] = state |> get_line_vars(10)
   end
 
@@ -4147,6 +4202,44 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                specs: ["@macrocallback other(x) :: Macro.t when x: integer"]
              }
            }
+  end
+
+  test "specs and types expand aliases" do
+    state =
+      """
+      defmodule Proto do
+        alias Model.User
+        alias Model.Order
+        alias Model.UserOrder
+        @type local_type() :: User.t
+        @spec abc({%User{}}) :: [%UserOrder{order: Order.t}, local_type()]
+      end
+      """
+      |> string_to_state
+
+    assert %{
+             {Proto, :abc, 1} => %State.SpecInfo{
+               args: [["{%Model.User{}}"]],
+               specs: [
+                 "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t}, local_type]"
+               ]
+             },
+             {Proto, :abc, nil} => %State.SpecInfo{
+               args: [["{%Model.User{}}"]],
+               specs: [
+                 "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t}, local_type]"
+               ]
+             }
+           } = state.specs
+
+    assert %{
+             {Proto, :local_type, 0} => %State.TypeInfo{
+               specs: ["@type local_type :: Model.User.t"]
+             },
+             {Proto, :local_type, nil} => %State.TypeInfo{
+               specs: ["@type local_type :: Model.User.t"]
+             }
+           } = state.types
   end
 
   defp string_to_state(string) do
