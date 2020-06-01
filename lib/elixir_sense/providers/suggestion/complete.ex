@@ -35,15 +35,17 @@
 
 defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.Applications
+  alias ElixirSense.Core.Binding
   alias ElixirSense.Core.BuiltinAttributes
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.EdocReader
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
+  alias ElixirSense.Core.State
   alias ElixirSense.Core.State.AttributeInfo
   alias ElixirSense.Core.State.VarInfo
-  alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
 
   @erlang_module_builtin_functions [{:module_info, 0}, {:module_info, 1}]
@@ -64,6 +66,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             vars: [ElixirSense.Core.State.VarInfo.t()],
             attributes: [ElixirSense.Core.State.AttributeInfo.t()],
             structs: ElixirSense.Core.State.structs_t(),
+            types: ElixirSense.Core.State.types_t(),
             scope: ElixirSense.Core.State.scope()
           }
     defstruct aliases: [],
@@ -74,6 +77,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               vars: [],
               attributes: [],
               structs: %{},
+              types: %{},
               scope: Elixir
   end
 
@@ -240,10 +244,65 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   # variable.fun_or_key
   # @attribute.fun_or_key
-  defp expand_call({_, _, _} = ast_node, hint, %Env{} = env) do
-    case value_from_binding(ast_node, env) do
-      {:ok, mod} when is_atom(mod) -> expand_call(mod, hint, env)
-      {:ok, type, fields} when is_list(fields) -> expand_map_field_access(fields, hint, type)
+  defp expand_call(
+         {_, _, _} = ast_node,
+         hint,
+         %Env{
+           aliases: aliases,
+           vars: vars,
+           attributes: attributes,
+           structs: structs,
+           imports: imports,
+           specs: specs,
+           scope_module: scope_module,
+           types: types,
+           mods_and_funs: mods_and_funs
+         } = env
+       ) do
+    # need to init namespace and aliases here so expansion work as expected
+    namespace =
+      case scope_module do
+        m when m in [nil, Elixir] ->
+          [[Elixir]]
+
+        _ ->
+          split =
+            Module.split(scope_module)
+            |> Enum.reverse()
+            |> Enum.map(&String.to_atom/1)
+            |> Kernel.++([Elixir])
+
+          [split, [Elixir]]
+      end
+
+    binding_type =
+      MetadataBuilder.get_binding_type(
+        %State{
+          namespace: namespace,
+          aliases: [aliases]
+        },
+        ast_node
+      )
+
+    value_from_binding =
+      Binding.expand(
+        %Binding{
+          variables: vars,
+          attributes: attributes,
+          structs: structs,
+          imports: imports,
+          specs: specs,
+          current_module: scope_module,
+          types: types,
+          mods_and_funs: mods_and_funs
+        },
+        binding_type
+      )
+
+    case value_from_binding do
+      {:atom, mod} -> expand_call(mod, hint, env)
+      {:map, fields, _} -> expand_map_field_access(fields, hint, :map)
+      {:struct, fields, type, _} -> expand_map_field_access(fields, hint, {:struct, type})
       _otherwise -> no()
     end
   end
@@ -261,63 +320,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         format_expansion(map_fields, hint)
     end
   end
-
-  defp value_from_binding(ast_node, %Env{vars: vars, attributes: attributes, structs: structs}) do
-    with {kind, var, map_key_path} <- extract_from_ast(ast_node, []) do
-      objects =
-        case kind do
-          :variable -> vars
-          :attribute -> attributes
-        end
-
-      case Enum.find(objects, fn %_{name: name} -> name == var end) do
-        %_{type: type} ->
-          recurse_var(type, map_key_path, structs)
-
-        _otherwise ->
-          :error
-      end
-    end
-  end
-
-  defp recurse_var(nil, _, _), do: :error
-  defp recurse_var({:atom, atom}, _, _) when atom not in [nil, true, false], do: {:ok, atom}
-  defp recurse_var({:map, fields}, [], _), do: {:ok, :map, fields}
-
-  defp recurse_var({:struct, fields, nil}, [], _structs) do
-    {:ok, {:struct, nil}, Keyword.put_new(fields, :__struct__, nil)}
-  end
-
-  defp recurse_var({:struct, fields, module}, [], structs) do
-    if Struct.is_struct(module, structs) do
-      fields_values =
-        for field <- Struct.get_fields(module, structs), field != :__struct__ do
-          {field, fields[field]}
-        end
-
-      struct =
-        case fields[:__struct__] do
-          nil -> {:atom, module}
-          other -> other
-        end
-
-      {:ok, {:struct, module}, Keyword.put(fields_values, :__struct__, struct)}
-    else
-      :error
-    end
-  end
-
-  defp recurse_var({:struct, fields, _module}, [head | tail], structs) do
-    field = fields[head]
-    recurse_var(field, tail, structs)
-  end
-
-  defp recurse_var({:map, fields}, [head | tail], structs) do
-    field = fields[head]
-    recurse_var(field, tail, structs)
-  end
-
-  defp recurse_var(_, _, _), do: :error
 
   defp expand_require(mod, hint, env) do
     format_expansion(match_module_funs(mod, hint, true, env), hint)
@@ -711,8 +713,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         String.starts_with?(key, hint) do
       value_is_map =
         case value do
-          {:map, _} -> true
-          {:struct, _, _} -> true
+          {:map, _, _} -> true
+          {:struct, _, _, _} -> true
           _ -> false
         end
 
@@ -819,25 +821,5 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp format_hint(name, hint) do
     hint_size = byte_size(hint)
     binary_part(name, hint_size, byte_size(name) - hint_size)
-  end
-
-  defp extract_from_ast(var_name, acc) when is_atom(var_name) do
-    {:variable, var_name, acc}
-  end
-
-  defp extract_from_ast({var_name, _, nil}, acc) when is_atom(var_name) do
-    {:variable, var_name, acc}
-  end
-
-  defp extract_from_ast({:@, _, [{attribute_name, _, nil}]}, acc) when is_atom(attribute_name) do
-    {:attribute, attribute_name, acc}
-  end
-
-  defp extract_from_ast({{:., _, [ast_node, fun]}, _, []}, acc) when is_atom(fun) do
-    extract_from_ast(ast_node, [fun | acc])
-  end
-
-  defp extract_from_ast(_ast_node, _acc) do
-    :error
   end
 end
