@@ -152,8 +152,8 @@ defmodule ElixirSense do
       ...> end
       ...> '''
       iex> ElixirSense.suggestions(code, 3, 12)
-      [%{type: :hint, value: "MyList.insert_at"},
-        %{origin: "List", type: :function, args: "list, index, value", arity: 3, name: "insert_at", metadata: %{},
+      [%{origin: "List", type: :function, args: "list, index, value", arity: 3,
+        name: "insert_at", metadata: %{}, snippet: nil, visibility: :public,
         spec: "@spec insert_at(list, integer, any) :: list", summary: "Returns a list with `value` inserted at the specified `index`."}]
   """
   @spec suggestions(String.t(), pos_integer, pos_integer) :: [Suggestion.suggestion()]
@@ -164,15 +164,7 @@ defmodule ElixirSense do
 
     env = Metadata.get_env(buffer_file_metadata, line)
 
-    Suggestion.find(
-      hint,
-      env,
-      buffer_file_metadata.structs,
-      buffer_file_metadata.mods_funs_to_positions,
-      buffer_file_metadata.types,
-      buffer_file_metadata.specs,
-      text_before
-    )
+    Suggestion.find(hint, text_before, env, buffer_file_metadata)
   end
 
   @doc """

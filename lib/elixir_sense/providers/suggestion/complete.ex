@@ -81,13 +81,18 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               scope: Elixir
   end
 
+  @type hint :: %{
+          type: :hint,
+          value: String.t()
+        }
+
   @spec complete(String.t(), Env.t()) ::
-          {ElixirSense.Providers.Suggestion.hint(),
+          {hint(),
            [
-             ElixirSense.Providers.Suggestion.func()
-             | ElixirSense.Providers.Suggestion.mod()
-             | ElixirSense.Providers.Suggestion.field()
-             | ElixirSense.Providers.Suggestion.variable()
+             ElixirSense.Providers.Suggestion.Reducers.Common.func()
+             | ElixirSense.Providers.Suggestion.Reducers.Common.mod()
+             | ElixirSense.Providers.Suggestion.Reducers.Common.variable()
+             | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
            ]}
   def complete(hint, %Env{} = env) do
     {_result, completion_hint, completions} =
@@ -732,11 +737,11 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   ## Ad-hoc conversions
   @spec to_entries(map) ::
           [
-            ElixirSense.Providers.Suggestion.mod()
-            | ElixirSense.Providers.Suggestion.func()
-            | ElixirSense.Providers.Suggestion.variable()
-            | ElixirSense.Providers.Suggestion.field()
-            | ElixirSense.Providers.Suggestion.attribute()
+            ElixirSense.Providers.Suggestion.Reducers.Common.mod()
+            | ElixirSense.Providers.Suggestion.Reducers.Common.func()
+            | ElixirSense.Providers.Suggestion.Reducers.Common.variable()
+            | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
+            | ElixirSense.Providers.Suggestion.Reducers.Common.attribute()
           ]
   defp to_entries(%{kind: :field, subtype: subtype, name: name, origin: origin}) do
     [%{type: :field, name: name, subtype: subtype, origin: origin, call?: true}]
@@ -775,6 +780,13 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           _ -> :function
         end
 
+      visibility =
+        if func_kind in [:defp, :defmacrop, :defguardp] do
+          :private
+        else
+          :public
+        end
+
       mod_name = inspect(mod)
 
       fa = {name |> String.to_atom(), a}
@@ -782,24 +794,28 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       if fa in BuiltinFunctions.all() do
         %{
           type: kind,
+          visibility: visibility,
           name: name,
           arity: a,
           args: BuiltinFunctions.get_args(fa) |> Enum.join(", "),
           origin: mod_name,
           summary: "Built-in function",
           metadata: %{builtin: true},
-          spec: BuiltinFunctions.get_specs(fa) |> Enum.join("\n")
+          spec: BuiltinFunctions.get_specs(fa) |> Enum.join("\n"),
+          snippet: nil
         }
       else
         %{
           type: kind,
+          visibility: visibility,
           name: name,
           arity: a,
           args: args,
           origin: mod_name,
           summary: doc,
           metadata: metadata,
-          spec: spec || ""
+          spec: spec || "",
+          snippet: nil
         }
       end
     end

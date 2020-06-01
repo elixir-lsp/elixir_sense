@@ -161,7 +161,7 @@ defmodule ElixirSense.Core.Source do
       |> String.split(["\n", "\r\n"])
       |> Enum.map_join("\n", fn line ->
         # this is a naive comment strip - it will not honour # in strings, chars etc
-        Regex.replace(~r/\#.*$/, line, "")
+        Regex.replace(~r/[^<]\#.*$/, line, "")
       end)
 
     case walk_text(code, acc, &find_subject/5) do
@@ -263,6 +263,18 @@ defmodule ElixirSense.Core.Source do
       _ ->
         nil
     end
+  end
+
+  @doc """
+  Walks through `text` updating `acc` until a criteria is reached.
+  """
+  @spec walk_text(
+          text :: binary,
+          acc :: any(),
+          (binary, binary, integer, integer, any -> {binary, any})
+        ) :: any
+  def walk_text(text, acc, func) do
+    do_walk_text(text, func, 1, 1, acc)
   end
 
   defp extract_module({:__aliases__, _, module_list}, current_module) do
@@ -407,10 +419,6 @@ defmodule ElixirSense.Core.Source do
 
   defp find_subject(grapheme, rest, _line, _col, acc) do
     {rest, %{acc | candidate: [grapheme | acc.candidate]}}
-  end
-
-  defp walk_text(text, acc, func) do
-    do_walk_text(text, func, 1, 1, acc)
   end
 
   defp do_walk_text(text, func, line, col, acc) do
