@@ -4,7 +4,9 @@ defmodule ElixirSense.Core.Struct do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State
 
-  @spec is_struct(module, State.structs_t()) :: boolean
+  @spec is_struct(module | nil, State.structs_t()) :: boolean
+  def is_struct(nil, _metadata_structs), do: false
+
   def is_struct(module, metadata_structs) do
     Map.has_key?(metadata_structs, module) or Introspection.module_is_struct?(module)
   end
