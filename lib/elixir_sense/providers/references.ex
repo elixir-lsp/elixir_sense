@@ -190,16 +190,11 @@ defmodule ElixirSense.Providers.References do
   defp check_arity(call_arity, buffer_arity, %State.ModFunInfo{} = info) do
     State.ModFunInfo.get_arities(info)
     |> Enum.any?(fn
-      {arity, default_args}
-      when arity - default_args == call_arity and buffer_arity == arity ->
-        true
+      {arity, default_args} ->
+        min_arity = arity - default_args
 
-      {arity, default_args}
-      when buffer_arity + default_args == call_arity and call_arity == arity ->
-        true
-
-      _ ->
-        false
+        min_arity <= call_arity and call_arity <= arity and
+          min_arity <= buffer_arity and buffer_arity <= arity
     end)
   end
 
