@@ -17,6 +17,7 @@ requires = [
   "elixir_sense/core/normalized/tokenizer.ex",
   "elixir_sense/core/normalized/typespec.ex",
   "elixir_sense/core/struct.ex",
+  "elixir_sense/core/binding.ex",
   "elixir_sense/providers/suggestion/complete.ex",
   "elixir_sense/providers/suggestion/hint.ex",
   "elixir_sense/providers/definition.ex",
