@@ -1142,40 +1142,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, {vars, nil}}
   end
 
-  # map
-  {:%{}, [line: 1], [adff: "sdf"]}
-
-  # struct
-  {:%, [line: 1],
-   [
-     {:__aliases__, [line: 1], [:A]},
-     {:%{}, [line: 1], [adff: "sdf"]}
-   ]}
-
-  # map update
-  {:%{}, [line: 1],
-   [
-     {:|, [line: 1],
-      [
-        {:x, [line: 1], nil},
-        [adff: "sdf"]
-      ]}
-   ]}
-
-  # struct update
-  {:%, [line: 1],
-   [
-     {:__aliases__, [line: 1], [:A]},
-     {:%{}, [line: 1],
-      [
-        {:|, [line: 1],
-         [
-           {:x, [line: 1], nil},
-           [adff: "sdf"]
-         ]}
-      ]}
-   ]}
-
   # struct or struct update
   def get_binding_type(
         state,
