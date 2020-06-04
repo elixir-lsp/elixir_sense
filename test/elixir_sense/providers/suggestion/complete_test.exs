@@ -302,7 +302,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       vars: [
         %VarInfo{
           name: :map,
-          type: {:map, [foo: 1, bar_1: 23, bar_2: 14]}
+          type: {:map, [foo: 1, bar_1: 23, bar_2: 14], nil}
         }
       ]
     }
@@ -338,7 +338,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       attributes: [
         %AttributeInfo{
           name: :map,
-          type: {:map, [foo: 1, bar_1: 23, bar_2: 14]}
+          type: {:map, [foo: 1, bar_1: 23, bar_2: 14], nil}
         }
       ]
     }
@@ -388,9 +388,9 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                          bar_2: 14,
                          mod: {:atom, String},
                          num: 1
-                       ]}
-                  ]}
-             ]}
+                       ], nil}
+                  ], nil}
+             ], nil}
         }
       ]
     }
@@ -439,7 +439,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       vars: [
         %VarInfo{
           name: :map,
-          type: {:map, [{"foo", 124}]}
+          type: {:map, [{"foo", 124}], nil}
         }
       ]
     }
@@ -452,7 +452,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       vars: [
         %VarInfo{
           name: :map,
-          type: {:map, [nested: {:map, [num: 23]}]}
+          type: {:map, [nested: {:map, [num: 23], nil}], nil}
         }
       ]
     }
@@ -460,6 +460,40 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert expand('num.print', env) == {:no, '', []}
     assert expand('map.nested.num.f', env) == {:no, '', []}
     assert expand('map.nested.num.key.f', env) == {:no, '', []}
+  end
+
+  test "autocomplete map fields from call binding" do
+    env = %Env{
+      vars: [
+        %VarInfo{
+          name: :map,
+          type: {:map, [{:foo, {:atom, String}}], nil}
+        },
+        %VarInfo{
+          name: :call,
+          type: {:call, {:variable, :map}, :foo, 0}
+        }
+      ]
+    }
+
+    assert {:yes, 'able?', _} = expand('call.print', env)
+  end
+
+  test "autocomplete call return binding" do
+    env = %Env{
+      vars: [
+        %VarInfo{
+          name: :call,
+          type: {:call, {:atom, DateTime}, :utc_now, 0}
+        }
+      ]
+    }
+
+    assert {:yes, 'ur', _} = expand('call.ho', env)
+    assert {:yes, 'ur', _} = expand('DateTime.utc_now.ho', env)
+    # FIXME Complete.reduce(expr) breaks things...
+    # assert {:yes, 'ur', _} = expand('DateTime.utc_now().', env)
+    # assert {:yes, 'ur', _} = expand('DateTime.utc_now().ho', env)
   end
 
   test "autocompletion off of unbound variables is not supported" do
@@ -884,10 +918,10 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
             {:struct,
              [
                a_mod: {:atom, String},
-               some_map: {:map, [asdf: 1]},
-               str: {:struct, [], MyStruct},
-               unknown_str: {:struct, [abc: nil], nil}
-             ], MyStruct}
+               some_map: {:map, [asdf: 1], nil},
+               str: {:struct, [], {:atom, MyStruct}, nil},
+               unknown_str: {:struct, [abc: nil], nil, nil}
+             ], {:atom, MyStruct}, nil}
         }
       ]
     }

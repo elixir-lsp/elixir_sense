@@ -60,7 +60,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
     %Metadata{
       structs: structs,
       mods_funs_to_positions: mods_and_funs,
-      specs: metadata_specs
+      specs: metadata_specs,
+      types: metadata_types
     } = buffer_metadata
 
     suggestions =
@@ -69,6 +70,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
         env,
         mods_and_funs,
         metadata_specs,
+        metadata_types,
         structs,
         text_before
       ).suggestions
@@ -150,6 +152,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
          },
          mods_and_funs,
          metadata_specs,
+         metadata_types,
          structs,
          text_before
        ) do
@@ -162,6 +165,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
       mods_and_funs: mods_and_funs,
       specs: metadata_specs,
       structs: structs,
+      types: metadata_types,
       scope: scope
     }
 

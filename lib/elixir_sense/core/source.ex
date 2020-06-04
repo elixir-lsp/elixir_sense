@@ -227,7 +227,7 @@ defmodule ElixirSense.Core.Source do
 
   @spec which_struct(String.t(), nil | module) ::
           nil
-          | {module | {:attribute, atom} | :_, [atom], boolean, var_or_attr_t}
+          | {{:atom, atom} | {:attribute, atom} | nil, [atom], boolean, var_or_attr_t}
           | {:map, [atom], var_or_attr_t}
   def which_struct(text_before, current_module) do
     code = text_before |> String.reverse()
@@ -315,7 +315,8 @@ defmodule ElixirSense.Core.Source do
 
   defp do_extract_struct_module({var, _, nil}, fields, _current_module, updated_var)
        when is_atom(var) and var != :__MODULE__ do
-    {:_, get_field_names(fields), false, updated_var}
+    # variable struct type is not supported
+    {nil, get_field_names(fields), false, updated_var}
   end
 
   defp do_extract_struct_module({:@, _, [{attr, _, nil}]}, fields, _current_module, updated_var)
@@ -326,10 +327,10 @@ defmodule ElixirSense.Core.Source do
   defp do_extract_struct_module(module, fields, current_module, updated_var) do
     case extract_module(module, current_module) do
       {:ok, extracted_module, elixir_prefix} ->
-        {extracted_module, get_field_names(fields), elixir_prefix, updated_var}
+        {{:atom, extracted_module}, get_field_names(fields), elixir_prefix, updated_var}
 
       _ ->
-        nil
+        {nil, get_field_names(fields), false, updated_var}
     end
   end
 

@@ -842,7 +842,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     %{found: false} = ElixirSense.definition(buffer, 2, 12)
   end
 
-  test "builtin types cannot now be found" do
+  test "builtin types cannot be found" do
     buffer = """
     defmodule MyModule do
       @type my_type :: integer
@@ -853,7 +853,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert %{found: false} = ElixirSense.definition(buffer, 2, 23)
   end
 
-  test "builtin elixir types cannot now be found" do
+  test "builtin elixir types cannot be found" do
     buffer = """
     defmodule MyModule do
       @type my_type :: Elixir.keyword
