@@ -44,8 +44,26 @@ defmodule ElixirSense.Core.MetadataBuilder do
   """
   @spec build(Macro.t()) :: State.t()
   def build(ast) do
-    {_ast, state} = Macro.traverse(ast, %State{}, &pre/2, &post/2)
+    {_ast, state} = Macro.traverse(ast, %State{}, safe_call(&pre/2), safe_call(&post/2))
     state
+  end
+
+  defp safe_call(fun) do
+    fn ast, state ->
+      try do
+        fun.(ast, state)
+      rescue
+        exception ->
+          IO.warn(
+            "#{inspect(exception.__struct__)} during metadata build: #{
+              Exception.message(exception)
+            }",
+            __STACKTRACE__
+          )
+
+          {nil, state}
+      end
+    end
   end
 
   defp pre_module(ast, state, {line, column} = position, module, types \\ [], functions \\ []) do
