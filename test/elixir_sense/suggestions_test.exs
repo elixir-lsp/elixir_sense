@@ -15,6 +15,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert Enum.find(list, fn s -> match?(%{name: "import", arity: 2}, s) end) == %{
              args: "module, opts",
              arity: 2,
+             def_arity: 2,
              name: "import",
              origin: "Kernel.SpecialForms",
              spec: "",
@@ -27,6 +28,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert Enum.find(list, fn s -> match?(%{name: "quote", arity: 2}, s) end) == %{
              arity: 2,
+             def_arity: 2,
              origin: "Kernel.SpecialForms",
              spec: "",
              type: :macro,
@@ -40,6 +42,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert Enum.find(list, fn s -> match?(%{name: "require", arity: 2}, s) end) == %{
              arity: 2,
+             def_arity: 2,
              origin: "Kernel.SpecialForms",
              spec: "",
              type: :macro,
@@ -65,6 +68,7 @@ defmodule ElixirSense.SuggestionsTest do
              %{
                args: "term",
                arity: 1,
+               def_arity: 1,
                name: "is_binary",
                origin: "Kernel",
                spec: "@spec is_binary(term) :: boolean",
@@ -77,6 +81,7 @@ defmodule ElixirSense.SuggestionsTest do
              %{
                args: "term",
                arity: 1,
+               def_arity: 1,
                name: "is_bitstring",
                origin: "Kernel",
                spec: "@spec is_bitstring(term) :: boolean",
@@ -90,6 +95,7 @@ defmodule ElixirSense.SuggestionsTest do
              %{
                args: "term",
                arity: 1,
+               def_arity: 1,
                name: "is_boolean",
                origin: "Kernel",
                spec: "@spec is_boolean(term) :: boolean",
@@ -117,6 +123,7 @@ defmodule ElixirSense.SuggestionsTest do
              %{
                args: "list",
                arity: 1,
+               def_arity: 1,
                name: "flatten",
                origin: "List",
                spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]",
@@ -129,6 +136,7 @@ defmodule ElixirSense.SuggestionsTest do
              %{
                args: "list, tail",
                arity: 2,
+               def_arity: 2,
                name: "flatten",
                origin: "List",
                spec:
@@ -157,6 +165,7 @@ defmodule ElixirSense.SuggestionsTest do
              %{
                args: "var",
                arity: 1,
+               def_arity: 1,
                name: "some",
                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
                spec: "@spec some(integer) :: Macro.t\n@spec some(b) :: Macro.t when b: float",
@@ -1268,6 +1277,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert [
              %{
                arity: 1,
+               def_arity: 1,
                name: "test_fun_pub",
                origin: "ElixirSenseExample.ModuleO",
                type: :function,
@@ -2038,6 +2048,7 @@ defmodule ElixirSense.SuggestionsTest do
                type: :function,
                args: "",
                arity: 0,
+               def_arity: 0,
                origin: "MyServer",
                spec: "",
                summary: "",
