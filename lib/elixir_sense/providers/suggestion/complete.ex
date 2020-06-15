@@ -528,31 +528,33 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         true ->
           []
       end
-      |> Enum.sort_by(fn {f, a, _, _, _, _} -> {f, -a} end)
+      |> Enum.sort_by(fn {f, a, _, _, _, _, _} -> {f, -a} end)
 
     list =
-      Enum.reduce(falist, [], fn {f, a, func_kind, doc, spec, arg}, acc ->
+      Enum.reduce(falist, [], fn {f, a, def_a, func_kind, doc, spec, arg}, acc ->
         case :lists.keyfind(f, 1, acc) do
-          {f, aa, func_kind, docs, specs, args} ->
+          {f, aa, def_arities, func_kind, docs, specs, args} ->
             :lists.keyreplace(
               f,
               1,
               acc,
-              {f, [a | aa], func_kind, [doc | docs], [spec | specs], [arg | args]}
+              {f, [a | aa], [def_a | def_arities], func_kind, [doc | docs], [spec | specs],
+               [arg | args]}
             )
 
           false ->
-            [{f, [a], func_kind, [doc], [spec], [arg]} | acc]
+            [{f, [a], [def_a], func_kind, [doc], [spec], [arg]} | acc]
         end
       end)
 
-    for {fun, arities, func_kind, docs, specs, args} <- list,
+    for {fun, arities, def_arities, func_kind, docs, specs, args} <- list,
         name = Atom.to_string(fun),
         starts_with?(name, hint) do
       %{
         kind: :function,
         name: name,
         arities: arities,
+        def_arities: def_arities,
         module: mod,
         func_kind: func_kind,
         docs: docs,
@@ -580,7 +582,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             end
 
           # TODO docs and meta
-          {f, a, info.type, {"", %{}}, specs,
+          {f, a, a, info.type, {"", %{}}, specs,
            info.params |> hd |> Enum.map_join(", ", &Macro.to_string/1)}
         end
     end
@@ -622,12 +624,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
         fun_args = Introspection.extract_fun_args(func_doc)
 
-        {f, a, func_kind, doc, Introspection.spec_to_string(spec), fun_args}
+        {f, a, new_arity, func_kind, doc, Introspection.spec_to_string(spec), fun_args}
       end
       |> Kernel.++(
         for {f, a} <- @builtin_functions,
             include_builtin,
-            do: {f, a, :function, {nil, %{}}, nil, nil}
+            do: {f, a, a, :function, {nil, %{}}, nil, nil}
       )
     else
       funs =
@@ -643,12 +645,13 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
         case f |> Atom.to_string() do
           "MACRO-" <> name ->
-            params = format_params(spec, a - 1)
-            {String.to_atom(name), a - 1, :macro, {"", %{}}, spec_str, params}
+            arity = a - 1
+            params = format_params(spec, arity)
+            {String.to_atom(name), arity, arity, :macro, {"", %{}}, spec_str, params}
 
           _name ->
             params = format_params(spec, a)
-            {f, a, :function, edoc_results[{f, a}] || {"", %{}}, spec_str, params}
+            {f, a, a, :function, edoc_results[{f, a}] || {"", %{}}, spec_str, params}
         end
       end
     end
@@ -763,17 +766,15 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
          kind: :function,
          name: name,
          arities: arities,
+         def_arities: def_arities,
          module: mod,
          func_kind: func_kind,
          docs: docs,
          specs: specs,
          args: args
        }) do
-    docs_specs = docs |> Enum.zip(specs)
-    arities_docs_specs = arities |> Enum.zip(docs_specs)
-    arities_docs_specs_args = arities_docs_specs |> Enum.zip(args)
-
-    for e <- arities_docs_specs_args, {{a, {{doc, metadata}, spec}}, args} = e do
+    for e <- Enum.zip([arities, docs, specs, args, def_arities]),
+        {a, {doc, metadata}, spec, args, def_arity} = e do
       kind =
         case func_kind do
           k when k in [:macro, :defmacro, :defmacrop, :defguard, :defguardp] -> :macro
@@ -797,6 +798,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           visibility: visibility,
           name: name,
           arity: a,
+          def_arity: def_arity,
           args: BuiltinFunctions.get_args(fa) |> Enum.join(", "),
           origin: mod_name,
           summary: "Built-in function",
@@ -810,6 +812,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           visibility: visibility,
           name: name,
           arity: a,
+          def_arity: def_arity,
           args: args,
           origin: mod_name,
           summary: doc,

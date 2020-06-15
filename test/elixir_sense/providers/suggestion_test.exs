@@ -26,6 +26,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert result |> Enum.at(0) == %{
              args: "atom",
              arity: 1,
+             def_arity: 1,
              name: "__info__",
              origin: "ElixirSenseExample.EmptyModule",
              spec:
@@ -40,6 +41,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert result |> Enum.at(1) == %{
              args: "",
              arity: 0,
+             def_arity: 0,
              name: "module_info",
              origin: "ElixirSenseExample.EmptyModule",
              spec:
@@ -54,6 +56,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     assert result |> Enum.at(2) == %{
              args: "key",
              arity: 1,
+             def_arity: 1,
              name: "module_info",
              origin: "ElixirSenseExample.EmptyModule",
              spec:
@@ -138,6 +141,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                %{
                  args: "",
                  arity: 0,
+                 def_arity: 0,
                  name: "say_hi",
                  origin: "ElixirSense.Providers.SuggestionTest.MyModule",
                  spec: "",
@@ -165,6 +169,56 @@ defmodule ElixirSense.Providers.SuggestionTest do
       |> Enum.map(& &1.name)
 
     refute "module_info" in suggestions_names
+  end
+
+  test "a function with default args generate multiple derived entries with same info, except arity" do
+    assert [
+             %{
+               arity: 1,
+               def_arity: 2,
+               name: "all?",
+               summary: "all?/2 docs",
+               type: :function
+             },
+             %{
+               arity: 2,
+               def_arity: 2,
+               name: "all?",
+               summary: "all?/2 docs",
+               type: :function
+             }
+           ] =
+             Suggestion.find(
+               "ElixirSenseExample.FunctionsWithTheSameName.all",
+               "",
+               @env,
+               %Metadata{}
+             )
+  end
+
+  test "functions with the same name but different arities generates independent entries" do
+    assert [
+             %{
+               arity: 1,
+               def_arity: 1,
+               name: "concat",
+               summary: "concat/1 docs",
+               type: :function
+             },
+             %{
+               arity: 2,
+               def_arity: 2,
+               name: "concat",
+               summary: "concat/2 docs",
+               type: :function
+             }
+           ] =
+             Suggestion.find(
+               "ElixirSenseExample.FunctionsWithTheSameName.conca",
+               "",
+               @env,
+               %Metadata{}
+             )
   end
 
   defmodule MyStruct do
