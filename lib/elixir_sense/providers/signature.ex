@@ -21,6 +21,7 @@ defmodule ElixirSense.Providers.Signature do
   @spec find(String.t(), State.Env.t(), Metadata.t()) :: signature_info | :none
   def find(prefix, env, metadata) do
     %State.Env{imports: imports, aliases: aliases, module: module} = env
+
     with %{
            candidate: {mod, fun},
            elixir_prefix: elixir_prefix,

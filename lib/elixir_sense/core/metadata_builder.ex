@@ -1199,7 +1199,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   def get_binding_type(state, {{:., _, [target, fun]}, _, args})
       when is_atom(fun) and is_list(args) do
     target = get_binding_type(state, target)
-    {:call, target, fun, length(args)}
+    {:call, target, fun, Enum.map(args, &get_binding_type(state, &1))}
   end
 
   # current module
@@ -1286,8 +1286,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # local call
-  def get_binding_type(_state, {var, _, args}) when is_atom(var) and is_list(args) do
-    {:local_call, var, length(args)}
+  def get_binding_type(state, {var, _, args}) when is_atom(var) and is_list(args) do
+    {:local_call, var, Enum.map(args, &get_binding_type(state, &1))}
   end
 
   # other

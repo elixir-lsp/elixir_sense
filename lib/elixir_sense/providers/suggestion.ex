@@ -72,10 +72,10 @@ defmodule ElixirSense.Providers.Suggestion do
 
   @type acc :: %{result: [suggestion], reducers: [atom], context: map}
   @type cursor_context :: %{
-    text_before: String.t(),
-    text_after: String.t(),
-    at_module_body?: boolean()
-  }
+          text_before: String.t(),
+          text_after: String.t(),
+          at_module_body?: boolean()
+        }
 
   @reducers [
     ecto: &ElixirSense.Plugins.Ecto.reduce/5,

@@ -44,7 +44,7 @@ defmodule ElixirSense.Core.Binding do
       case Enum.find(variables, fn %{name: name} -> name == variable end) do
         nil ->
           # no variable found - treat a local call
-          expand(env, {:local_call, variable, 0})
+          expand(env, {:local_call, variable, []})
 
         %State.VarInfo{name: name, type: type} ->
           # filter underscored variables
@@ -105,17 +105,17 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # remote call
-  def expand(env, {:call, target, function, arity}) do
+  def expand(env, {:call, target, function, arguments}) do
     expanded_target = expand(env, target)
     # do not include private funs on remote call
-    expand_call(env, expanded_target, function, arity, false)
+    expand_call(env, expanded_target, function, arguments, false)
     |> drop_no_spec
   end
 
   # local call
   def expand(
         %Binding{imports: imports, current_module: current_module} = env,
-        {:local_call, function, arity}
+        {:local_call, function, arguments}
       ) do
     candidate_targets = [current_module] ++ imports ++ [Kernel, Kernel.SpecialForms]
 
@@ -123,7 +123,7 @@ defmodule ElixirSense.Core.Binding do
     Enum.find_value(candidate_targets, fn candidate ->
       # include private from current module
       include_private = candidate == current_module
-      expand_call(env, {:atom, candidate}, function, arity, include_private)
+      expand_call(env, {:atom, candidate}, function, arguments, include_private)
     end)
     |> drop_no_spec
   end
@@ -141,7 +141,7 @@ defmodule ElixirSense.Core.Binding do
   # map field access
   defp expand_call(env, {:map, fields, _}, field, arity, _) do
     # field access is a call with arity 0, other are not allowed
-    if arity == 0 do
+    if arity == [] do
       expand(env, fields[field])
     end
   end
@@ -149,14 +149,192 @@ defmodule ElixirSense.Core.Binding do
   # struct field access
   defp expand_call(env, {:struct, fields, _, _}, field, arity, _) do
     # field access is a call with arity 0, other are not allowed
-    if arity == 0 do
+    if arity == [] do
       expand(env, fields[field])
     end
   end
 
+  defp expand_call(env, {:atom, Map}, fun, [map, key], _include_private)
+       when fun in [:fetch, :fetch!, :get] do
+    fields =
+      case expand(env, map) do
+        {:map, fields, nil} -> fields
+        _ -> []
+      end
+
+    case expand(env, key) do
+      {:atom, atom} ->
+        fields |> Keyword.get(atom)
+
+      _ ->
+        nil
+    end
+  end
+
+  defp expand_call(env, {:atom, Map}, fun, [map, key, default], _include_private)
+       when fun in [:get, :get_lazy] do
+    fields =
+      case expand(env, map) do
+        {:map, fields, nil} -> fields
+        _ -> []
+      end
+
+    case expand(env, key) do
+      {:atom, atom} ->
+        default = if fun == :get, do: expand(env, default)
+        fields |> Keyword.get(atom, default)
+
+      _ ->
+        nil
+    end
+  end
+
+  defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private)
+       when fun in [:put, :replace!] do
+    fields =
+      case expand(env, map) do
+        {:map, fields, nil} -> fields
+        _ -> []
+      end
+
+    case expand(env, key) do
+      {:atom, atom} ->
+        {:map, fields |> Keyword.put(atom, value), nil}
+
+      _ ->
+        {:map, fields, nil}
+    end
+  end
+
+  defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private)
+       when fun in [:put_new, :put_new_lazy] do
+    fields =
+      case expand(env, map) do
+        {:map, fields, nil} -> fields
+        _ -> []
+      end
+
+    case expand(env, key) do
+      {:atom, atom} ->
+        value = if fun == :put_new, do: value
+        {:map, fields |> Keyword.put_new(atom, value), nil}
+
+      _ ->
+        {:map, fields, nil}
+    end
+  end
+
+  defp expand_call(env, {:atom, Map}, :delete, [map, key], _include_private) do
+    fields =
+      case expand(env, map) do
+        {:map, fields, nil} -> fields
+        _ -> []
+      end
+
+    case expand(env, key) do
+      {:atom, atom} ->
+        {:map, fields |> Keyword.delete(atom), nil}
+
+      _ ->
+        {:map, fields, nil}
+    end
+  end
+
+  defp expand_call(env, {:atom, Map}, :merge, [map, other_map], _include_private) do
+    fields =
+      case expand(env, map) do
+        {:map, fields, nil} -> fields
+        _ -> []
+      end
+
+    other_fields =
+      case expand(env, other_map) do
+        {:map, fields, nil} -> fields
+        _ -> []
+      end
+
+    {:map, fields |> Keyword.merge(other_fields), nil}
+  end
+
+  defp expand_call(env, {:atom, Map}, :merge, [map, other_map, _fun], _include_private) do
+    fields =
+      case expand(env, map) do
+        {:map, fields, nil} -> fields
+        _ -> []
+      end
+
+    other_fields =
+      case expand(env, other_map) do
+        {:map, fields, nil} -> fields
+        _ -> []
+      end
+
+    conflicts =
+      MapSet.new(Keyword.keys(fields))
+      |> MapSet.intersection(MapSet.new(Keyword.keys(other_fields)))
+      |> MapSet.to_list()
+      |> Enum.map(&{&1, nil})
+
+    {:map, fields |> Keyword.merge(other_fields) |> Keyword.merge(conflicts), nil}
+  end
+
+  defp expand_call(env, {:atom, Map}, :update, [map, key, _initial, _fun], _include_private) do
+    fields =
+      case expand(env, map) do
+        {:map, fields, nil} -> fields
+        _ -> []
+      end
+
+    case expand(env, key) do
+      {:atom, atom} ->
+        {:map, fields |> Keyword.put(atom, nil), nil}
+
+      _ ->
+        {:map, fields, nil}
+    end
+  end
+
+  defp expand_call(env, {:atom, Map}, :update!, [map, key, _fun], _include_private) do
+    fields =
+      case expand(env, map) do
+        {:map, fields, nil} -> fields
+        _ -> []
+      end
+
+    case expand(env, key) do
+      {:atom, atom} ->
+        {:map, fields |> Keyword.put(atom, nil), nil}
+
+      _ ->
+        {:map, fields, nil}
+    end
+  end
+
+  defp expand_call(env, {:atom, Map}, :from_struct, [struct], _include_private) do
+    fields =
+      case expand(env, struct) do
+        {:struct, fields, _, nil} ->
+          fields
+
+        {:atom, atom} ->
+          case expand(env, {:struct, [], {:atom, atom}, nil}) do
+            {:struct, fields, _, nil} -> fields
+            _ -> []
+          end
+
+        _ ->
+          []
+      end
+      |> Keyword.delete(:__struct__)
+
+    {:map, fields, nil}
+  end
+
   # function call
-  defp expand_call(env, {:atom, mod}, fun, arity, include_private)
+  defp expand_call(env, {:atom, mod}, fun, arguments, include_private)
        when mod not in [nil, true, false] and fun not in [nil, true, false] do
+    arity = length(arguments)
+
     case expand_call_from_metadata(env, mod, fun, arity, include_private) do
       result when not is_nil(result) -> result
       nil -> expand_call_from_introspection(env, mod, fun, arity, include_private)
@@ -353,6 +531,10 @@ defmodule ElixirSense.Core.Binding do
           do: {field, parse_type(env, type, mod, include_private)}
 
     {:map, fields, nil}
+  end
+
+  defp parse_type(_env, {:map, _, []}, _mod, _include_private) do
+    {:map, [], nil}
   end
 
   # remote user type

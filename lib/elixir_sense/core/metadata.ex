@@ -48,6 +48,7 @@ defmodule ElixirSense.Core.Metadata do
   @spec at_module_body?(__MODULE__.t(), State.Env.t()) :: boolean()
   def at_module_body?(%__MODULE__{} = metadata, env) do
     mod_info = Map.get(metadata.mods_funs_to_positions, {env.module, nil, nil})
+
     with %State.ModFunInfo{positions: [{line, _}]} <- mod_info,
          %State.Env{scope_id: mod_scope_id} <- metadata.lines_to_env[line] do
       env.scope_id in mod_scope_id..(mod_scope_id + 1)

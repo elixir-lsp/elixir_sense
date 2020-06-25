@@ -251,24 +251,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert [
-             %VarInfo{name: :var1, type: {:call, {:atom, DateTime}, :now, 0}},
-             %VarInfo{name: :var2, type: {:call, {:atom, :erlang}, :now, 0}},
-             %VarInfo{name: :var3, type: {:call, {:atom, MyModule}, :now, 1}},
-             %VarInfo{name: :var4, type: {:call, {:atom, DateTime}, :now, 1}}
+             %VarInfo{name: :var1, type: {:call, {:atom, DateTime}, :now, []}},
+             %VarInfo{name: :var2, type: {:call, {:atom, :erlang}, :now, []}},
+             %VarInfo{name: :var3, type: {:call, {:atom, MyModule}, :now, [{:atom, :abc}]}},
+             %VarInfo{name: :var4, type: {:call, {:atom, DateTime}, :now, [nil]}}
            ] = state |> get_line_vars(7)
 
     assert [
              %VarInfo{name: :var1, type: {:variable, :now}},
-             %VarInfo{name: :var2, type: {:local_call, :now, 0}},
-             %VarInfo{name: :var3, type: {:local_call, :now, 1}},
-             %VarInfo{name: :var4, type: {:local_call, :now, 1}},
-             %VarInfo{name: :var5, type: {:local_call, :now, 2}}
+             %VarInfo{name: :var2, type: {:local_call, :now, []}},
+             %VarInfo{name: :var3, type: {:local_call, :now, [{:atom, :abc}]}},
+             %VarInfo{name: :var4, type: {:local_call, :now, [{:atom, :abc}]}},
+             %VarInfo{name: :var5, type: {:local_call, :now, [{:atom, :abc}, nil]}}
            ] = state |> get_line_vars(16)
 
     assert [
-             %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, 0}},
-             %VarInfo{name: :var2, type: {:call, {:attribute, :attr}, :qwe, 1}},
-             %VarInfo{name: :var3, type: {:call, {:call, {:variable, :abc}, :cde, 0}, :efg, 0}}
+             %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, []}},
+             %VarInfo{name: :var2, type: {:call, {:attribute, :attr}, :qwe, [nil]}},
+             %VarInfo{name: :var3, type: {:call, {:call, {:variable, :abc}, :cde, []}, :efg, []}}
            ] = state |> get_line_vars(24)
   end
 

@@ -441,6 +441,7 @@ defmodule ElixirSense.Plugins.Ecto.Schema do
         mod_str = inspect(module),
         Util.match_module?(mod_str, hint) do
       {doc, _} = Introspection.get_module_docs_summary(module)
+
       %{
         type: :generic,
         kind: :class,

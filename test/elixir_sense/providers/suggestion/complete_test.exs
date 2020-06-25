@@ -471,7 +471,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
         },
         %VarInfo{
           name: :call,
-          type: {:call, {:variable, :map}, :foo, 0}
+          type: {:call, {:variable, :map}, :foo, []}
         }
       ]
     }
@@ -484,7 +484,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       vars: [
         %VarInfo{
           name: :call,
-          type: {:call, {:atom, DateTime}, :utc_now, 0}
+          type: {:call, {:atom, DateTime}, :utc_now, []}
         }
       ]
     }

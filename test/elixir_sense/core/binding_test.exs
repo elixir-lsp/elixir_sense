@@ -173,7 +173,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{name: :map, type: {:map, [field: {:atom, :a}], nil}},
-                   %VarInfo{name: :ref, type: {:call, {:variable, :map}, :field, 0}}
+                   %VarInfo{name: :ref, type: {:call, {:variable, :map}, :field, []}}
                  ]),
                  {:variable, :ref}
                )
@@ -185,7 +185,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{name: :map, type: {:map, [field: {:atom, :a}], nil}},
-                   %VarInfo{name: :ref, type: {:call, {:variable, :map}, :field, 1}}
+                   %VarInfo{name: :ref, type: {:call, {:variable, :map}, :field, [nil]}}
                  ]),
                  {:variable, :ref}
                )
@@ -197,7 +197,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{name: :map, type: {:map, [field: {:atom, :a}], nil}},
-                   %VarInfo{name: :ref, type: {:call, {:variable, :map}, :not_existing, 0}}
+                   %VarInfo{name: :ref, type: {:call, {:variable, :map}, :not_existing, []}}
                  ]),
                  {:variable, :ref}
                )
@@ -214,7 +214,7 @@ defmodule ElixirSense.Core.BindingTest do
                        {:struct, [typed_field: {:atom, :abc}],
                         {:atom, ElixirSenseExample.ModuleWithTypedStruct}, nil}
                    },
-                   %VarInfo{name: :ref, type: {:call, {:variable, :map}, :typed_field, 0}}
+                   %VarInfo{name: :ref, type: {:call, {:variable, :map}, :typed_field, []}}
                  ]),
                  {:variable, :ref}
                )
@@ -231,7 +231,7 @@ defmodule ElixirSense.Core.BindingTest do
                        {:struct, [typed_field: {:atom, :abc}],
                         {:atom, ElixirSenseExample.ModuleWithTypedStruct}, nil}
                    },
-                   %VarInfo{name: :ref, type: {:call, {:variable, :map}, :not_existing, 0}}
+                   %VarInfo{name: :ref, type: {:call, {:variable, :map}, :not_existing, []}}
                  ]),
                  {:variable, :ref}
                )
@@ -248,7 +248,7 @@ defmodule ElixirSense.Core.BindingTest do
                        {:struct, [typed_field: {:atom, :abc}],
                         {:atom, ElixirSenseExample.ModuleWithTypedStruct}, nil}
                    },
-                   %VarInfo{name: :ref, type: {:call, {:variable, :map}, :typed_field, 1}}
+                   %VarInfo{name: :ref, type: {:call, {:variable, :map}, :typed_field, [nil]}}
                  ]),
                  {:variable, :ref}
                )
@@ -259,7 +259,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
-                   %VarInfo{name: :ref, type: {:call, nil, :not_existing, 0}}
+                   %VarInfo{name: :ref, type: {:call, nil, :not_existing, []}}
                  ]),
                  {:variable, :ref}
                )
@@ -274,7 +274,7 @@ defmodule ElixirSense.Core.BindingTest do
                      name: :ref,
                      type:
                        {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :not_existing,
-                        0}
+                        []}
                    }
                  ]),
                  {:variable, :ref}
@@ -288,7 +288,8 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f1, 1}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f1, [nil]}
                    }
                  ]),
                  {:variable, :ref}
@@ -302,7 +303,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f01, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f01, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -316,7 +317,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f02, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f02, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -330,7 +331,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f03, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f03, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -349,7 +350,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f1, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f1, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -366,7 +367,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f3, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f3, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -383,7 +384,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f5, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f5, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -397,7 +398,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f2, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f2, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -411,7 +412,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f4, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f4, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -425,7 +426,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f6, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f6, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -439,7 +440,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f7, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f7, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -453,7 +454,8 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f71, 1}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f71, [nil]}
                    }
                  ]),
                  {:variable, :ref}
@@ -467,7 +469,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f8, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f8, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -481,7 +483,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f91, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f91, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -494,7 +496,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.merge(%{
                    variables: [
-                     %VarInfo{name: :ref, type: {:local_call, :fun, 0}}
+                     %VarInfo{name: :ref, type: {:local_call, :fun, []}}
                    ],
                    current_module: MyMod,
                    specs: %{
@@ -527,7 +529,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.merge(%{
                    variables: [
-                     %VarInfo{name: :ref, type: {:local_call, :fun, 0}}
+                     %VarInfo{name: :ref, type: {:local_call, :fun, []}}
                    ],
                    current_module: MyMod,
                    specs: %{
@@ -568,7 +570,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.merge(%{
                    variables: [
-                     %VarInfo{name: :ref, type: {:local_call, :fun, 0}}
+                     %VarInfo{name: :ref, type: {:local_call, :fun, []}}
                    ],
                    current_module: MyMod,
                    specs: %{
@@ -611,7 +613,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.merge(%{
                    variables: [
-                     %VarInfo{name: :ref, type: {:call, {:atom, MyMod}, :fun, 0}}
+                     %VarInfo{name: :ref, type: {:call, {:atom, MyMod}, :fun, []}}
                    ],
                    current_module: SomeMod,
                    specs: %{
@@ -652,7 +654,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.merge(%{
                    variables: [
-                     %VarInfo{name: :ref, type: {:call, {:atom, MyMod}, :fun, 0}}
+                     %VarInfo{name: :ref, type: {:call, {:atom, MyMod}, :fun, []}}
                    ],
                    current_module: SomeMod,
                    specs: %{
@@ -695,7 +697,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.merge(%{
                    variables: [
-                     %VarInfo{name: :ref, type: {:call, {:atom, MyMod}, :fun, 0}}
+                     %VarInfo{name: :ref, type: {:call, {:atom, MyMod}, :fun, []}}
                    ],
                    current_module: SomeMod,
                    specs: %{
@@ -766,7 +768,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  env
                  |> Map.put(:variables, [
-                   %VarInfo{name: :ref, type: {:local_call, :fun, 0}}
+                   %VarInfo{name: :ref, type: {:local_call, :fun, []}}
                  ]),
                  {:variable, :ref}
                )
@@ -775,7 +777,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  env
                  |> Map.put(:variables, [
-                   %VarInfo{name: :ref, type: {:local_call, :fun, 1}}
+                   %VarInfo{name: :ref, type: {:local_call, :fun, [nil]}}
                  ]),
                  {:variable, :ref}
                )
@@ -784,7 +786,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  env
                  |> Map.put(:variables, [
-                   %VarInfo{name: :ref, type: {:local_call, :fun, 2}}
+                   %VarInfo{name: :ref, type: {:local_call, :fun, [nil, nil]}}
                  ]),
                  {:variable, :ref}
                )
@@ -793,7 +795,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  env
                  |> Map.put(:variables, [
-                   %VarInfo{name: :ref, type: {:local_call, :fun, 3}}
+                   %VarInfo{name: :ref, type: {:local_call, :fun, [nil, nil, nil]}}
                  ]),
                  {:variable, :ref}
                )
@@ -802,7 +804,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  env
                  |> Map.put(:variables, [
-                   %VarInfo{name: :ref, type: {:local_call, :fun, 4}}
+                   %VarInfo{name: :ref, type: {:local_call, :fun, [nil, nil, nil, nil]}}
                  ]),
                  {:variable, :ref}
                )
@@ -815,7 +817,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f10, 0}
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f10, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -827,7 +829,8 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f10, 1}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f10, [nil]}
                    }
                  ]),
                  {:variable, :ref}
@@ -839,7 +842,9 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f10, 2}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f10,
+                        [nil, nil]}
                    }
                  ]),
                  {:variable, :ref}
@@ -851,7 +856,9 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f10, 3}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f10,
+                        [nil, nil, nil]}
                    }
                  ]),
                  {:variable, :ref}
@@ -863,7 +870,9 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f10, 4}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f10,
+                        [nil, nil, nil, nil]}
                    }
                  ]),
                  {:variable, :ref}
@@ -876,7 +885,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.merge(%{
                    variables: [
-                     %VarInfo{name: :ref, type: {:local_call, :f02, 0}}
+                     %VarInfo{name: :ref, type: {:local_call, :f02, []}}
                    ],
                    imports: [ElixirSenseExample.FunctionsWithReturnSpec]
                  }),
@@ -908,8 +917,8 @@ defmodule ElixirSense.Core.BindingTest do
                        name: :ref,
                        type:
                          {:call,
-                          {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f1, 0},
-                          :abc, 0}
+                          {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f1, []},
+                          :abc, []}
                      }
                    ],
                    imports: [ElixirSenseExample.FunctionsWithReturnSpec]
@@ -928,8 +937,8 @@ defmodule ElixirSense.Core.BindingTest do
                        name: :ref,
                        type:
                          {:call,
-                          {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f2, 0},
-                          :abc, 0}
+                          {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f2, []},
+                          :abc, []}
                      }
                    ],
                    imports: [ElixirSenseExample.FunctionsWithReturnSpec]
@@ -938,7 +947,7 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "optimisticallyb extract optional map key type from typespec" do
+    test "optimistically extract optional map key type from typespec" do
       assert {:atom, :asd} ==
                Binding.expand(
                  @env
@@ -948,14 +957,174 @@ defmodule ElixirSense.Core.BindingTest do
                        name: :ref,
                        type:
                          {:call,
-                          {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f2, 0},
-                          :cde, 0}
+                          {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f2, []},
+                          :cde, []}
                      }
                    ],
                    imports: [ElixirSenseExample.FunctionsWithReturnSpec]
                  }),
                  {:variable, :ref}
                )
+    end
+  end
+
+  describe "Map functions" do
+    test "put" do
+      assert {:map, [cde: {:atom, :b}, abc: {:atom, :a}], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :put,
+                  [{:map, [abc: {:atom, :a}], nil}, {:atom, :cde}, {:atom, :b}]}
+               )
+    end
+
+    test "put not a map" do
+      assert {:map, [cde: {:atom, :b}], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :put, [nil, {:atom, :cde}, {:atom, :b}]}
+               )
+    end
+
+    test "put not an atom key" do
+      assert {:map, [], nil} =
+               Binding.expand(@env, {:call, {:atom, Map}, :put, [nil, nil, {:atom, :b}]})
+    end
+
+    test "delete" do
+      assert {:map, [abc: {:atom, :a}], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :delete,
+                  [{:map, [abc: {:atom, :a}, cde: nil], nil}, {:atom, :cde}]}
+               )
+    end
+
+    test "merge" do
+      assert {:map, [abc: {:atom, :a}, cde: {:atom, :b}], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :merge,
+                  [{:map, [abc: {:atom, :a}], nil}, {:map, [cde: {:atom, :b}], nil}]}
+               )
+    end
+
+    test "merge/3" do
+      assert {:map, [abc: {:atom, :a}, cde: {:atom, :b}], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :merge,
+                  [{:map, [abc: {:atom, :a}], nil}, {:map, [cde: {:atom, :b}], nil}, nil]}
+               )
+    end
+
+    test "from_struct" do
+      assert {:map, [other: nil, typed_field: nil], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :from_struct,
+                  [{:struct, [], {:atom, ElixirSenseExample.ModuleWithTypedStruct}, nil}]}
+               )
+    end
+
+    test "from_struct atom arg" do
+      assert {:map, [other: nil, typed_field: nil], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :from_struct,
+                  [{:atom, ElixirSenseExample.ModuleWithTypedStruct}]}
+               )
+    end
+
+    test "update" do
+      assert {:map, [abc: nil], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :update,
+                  [{:map, [abc: {:atom, :a}], nil}, {:atom, :abc}, nil, {:atom, :b}]}
+               )
+    end
+
+    test "update!" do
+      assert {:map, [abc: nil], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :update!,
+                  [{:map, [abc: {:atom, :a}], nil}, {:atom, :abc}, {:atom, :b}]}
+               )
+    end
+
+    test "replace!" do
+      assert {:map, [abc: {:atom, :b}], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :replace!,
+                  [{:map, [abc: {:atom, :a}], nil}, {:atom, :abc}, {:atom, :b}]}
+               )
+    end
+
+    test "put_new" do
+      assert {:map, [cde: {:atom, :b}, abc: {:atom, :a}], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :put_new,
+                  [{:map, [abc: {:atom, :a}], nil}, {:atom, :cde}, {:atom, :b}]}
+               )
+    end
+
+    test "put_new_lazy" do
+      assert {:map, [cde: nil, abc: {:atom, :a}], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :put_new_lazy,
+                  [{:map, [abc: {:atom, :a}], nil}, {:atom, :cde}, {:atom, :b}]}
+               )
+    end
+
+    test "fetch!" do
+      assert {:atom, :a} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :fetch!, [{:map, [abc: {:atom, :a}], nil}, {:atom, :abc}]}
+               )
+    end
+
+    test "fetch" do
+      assert {:atom, :a} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :fetch, [{:map, [abc: {:atom, :a}], nil}, {:atom, :abc}]}
+               )
+    end
+
+    test "get" do
+      assert {:atom, :a} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :get, [{:map, [abc: {:atom, :a}], nil}, {:atom, :abc}]}
+               )
+    end
+
+    test "get default" do
+      assert {:atom, :x} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :get,
+                  [{:map, [abc: {:atom, :a}], nil}, {:atom, :cde}, {:atom, :x}]}
+               )
+    end
+
+    test "get_lazy" do
+      assert nil ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :get_lazy,
+                  [{:map, [abc: {:atom, :a}], nil}, {:atom, :cde}, {:atom, :x}]}
+               )
+    end
+
+    test "new" do
+      assert {:map, [], nil} = Binding.expand(@env, {:call, {:atom, Map}, :new, []})
     end
   end
 end
