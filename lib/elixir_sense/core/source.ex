@@ -120,7 +120,7 @@ defmodule ElixirSense.Core.Source do
 
   @spec prefix(String.t(), pos_integer, pos_integer) :: String.t()
   def prefix(code, line, col) do
-    line = code |> String.split("\n") |> Enum.at(line - 1, "")
+    line = code |> split_lines |> Enum.at(line - 1, "")
 
     line =
       if String.length(line) < col do
@@ -158,7 +158,7 @@ defmodule ElixirSense.Core.Source do
 
     code =
       code
-      |> String.split(["\n", "\r\n"])
+      |> split_lines
       |> Enum.map_join("\n", fn line ->
         # this is a naive comment strip - it will not honour # in strings, chars etc
         Regex.replace(~r/[^<]\#.*$/, line, "")
@@ -687,4 +687,8 @@ defmodule ElixirSense.Core.Source do
   def concat_module_parts([_ | _], _, _), do: :error
 
   def concat_module_parts([], _, _), do: :error
+
+  def split_lines(src) do
+    String.split(src, ["\r\n", "\r", "\n"])
+  end
 end

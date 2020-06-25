@@ -7,6 +7,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   alias ElixirSense.Core.Ast
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.VarInfo
 
@@ -363,7 +364,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp post_string_literal(ast, state, line, str) do
     str
-    |> String.split(["\n", "\r\n"])
+    |> Source.split_lines()
     |> Enum.with_index()
     |> Enum.reduce(state, fn {_s, i}, acc -> add_current_env_to_line(acc, line + i) end)
     |> result(ast)

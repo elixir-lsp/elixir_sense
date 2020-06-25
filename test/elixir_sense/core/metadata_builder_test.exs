@@ -2,6 +2,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   use ExUnit.Case, async: true
 
   alias ElixirSense.Core.MetadataBuilder
+  alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, ModFunInfo, AttributeInfo}
 
@@ -4325,7 +4326,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     %{positions: positions} = Map.get(acc.mods_funs_to_positions, {module, func, arity})
     {line_number, _col} = List.last(positions)
 
-    File.read!(file) |> String.split("\n") |> Enum.at(line_number - 1)
+    File.read!(file) |> Source.split_lines() |> Enum.at(line_number - 1)
   end
 
   @tag requires_source: true

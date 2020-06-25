@@ -173,7 +173,7 @@ defmodule ElixirSense.Core.TypeInfo do
 
         case File.read!(file)
              |> Source.text_after(doc_line, 1)
-             |> String.split("\n")
+             |> Source.split_lines()
              |> Enum.with_index()
              |> Enum.find(fn {str, _} -> starts_with_type_def?(str, kind_str) end) do
           {str, index} ->
@@ -247,7 +247,7 @@ defmodule ElixirSense.Core.TypeInfo do
     |> (&"@#{kind} #{&1}").()
     |> Code.format_string!(line_length: line_length)
     |> to_string()
-    |> String.split("\n")
+    |> Source.split_lines()
     |> Enum.with_index()
     |> Enum.map(fn
       {l, i} when i > 0 -> String.slice(l, (kind_size + 2)..-1)

@@ -2,6 +2,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
   use ExUnit.Case, async: true
   alias ElixirSense.Providers.Definition
   alias ElixirSense.Location
+  alias ElixirSense.Core.Source
 
   doctest Definition
 
@@ -918,7 +919,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
   defp read_line(file, {line, column}) do
     file
     |> File.read!()
-    |> String.split(["\n", "\r\n"])
+    |> Source.split_lines()
     |> Enum.at(line - 1)
     |> String.slice((column - 1)..-1)
   end

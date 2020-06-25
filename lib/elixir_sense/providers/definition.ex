@@ -305,7 +305,7 @@ defmodule ElixirSense.Providers.Definition do
     index =
       file
       |> File.read!()
-      |> String.split(["\n", "\r\n"])
+      |> Source.split_lines()
       |> Enum.find_index(&String.match?(&1, regex))
 
     case index do

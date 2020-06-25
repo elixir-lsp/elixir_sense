@@ -5,6 +5,7 @@ defmodule ElixirSense.Core.Parser do
 
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.MetadataBuilder
+  alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
 
   @spec parse_file(String.t(), boolean, boolean, pos_integer | nil) :: Metadata.t()
@@ -142,7 +143,7 @@ defmodule ElixirSense.Core.Parser do
          {:error, {line_number, {"unexpected token: ", _text}, "do"}}
        ) do
     source
-    |> String.split(["\n", "\r\n"])
+    |> Source.split_lines()
     |> List.update_at(line_number - 1, fn line ->
       # try to replace token do with do: marker
       line
@@ -165,7 +166,7 @@ defmodule ElixirSense.Core.Parser do
 
     if terminator != nil do
       source
-      |> String.split(["\n", "\r\n"])
+      |> Source.split_lines()
       |> List.update_at(cursor_line_number - 1, fn line ->
         if cursor_line_number != line_number do
           # try to close the line with with missing terminator
@@ -179,7 +180,7 @@ defmodule ElixirSense.Core.Parser do
       |> Enum.join("\n")
     else
       source
-      |> String.split(["\n", "\r\n"])
+      |> Source.split_lines()
       |> List.update_at(line_number - 1, fn line ->
         # drop unexpected token
         line
@@ -198,7 +199,7 @@ defmodule ElixirSense.Core.Parser do
     terminator = Regex.replace(~r/[\"\']/, terminator_quoted, "")
 
     source
-    |> String.split(["\n", "\r\n"])
+    |> Source.split_lines()
     |> List.update_at(line_number - 1, fn line ->
       # try to prepend unexpected terminator with marker
       line
@@ -235,7 +236,7 @@ defmodule ElixirSense.Core.Parser do
 
     if terminator in ["\"", "\'"] do
       source
-      |> String.split(["\n", "\r\n"])
+      |> Source.split_lines()
       |> List.update_at(max(cursor_line_number, line_start) - 1, fn line ->
         # try to close line with terminator
         line <> terminator
@@ -250,7 +251,7 @@ defmodule ElixirSense.Core.Parser do
 
       line_intendations =
         source
-        |> String.split(["\n", "\r\n"])
+        |> Source.split_lines()
         |> Enum.map(fn line ->
           line = normalize_intendation(line)
           {line, get_intendation_level(line)}
@@ -303,7 +304,7 @@ defmodule ElixirSense.Core.Parser do
       end
 
     source
-    |> String.split(["\n", "\r\n"])
+    |> Source.split_lines()
     |> List.update_at(max(cursor_line_number, line_start) - 1, fn line ->
       # try to close line with terminator
       line <> "}"
@@ -331,7 +332,7 @@ defmodule ElixirSense.Core.Parser do
 
   defp fix_line_not_found(source, line_number) when is_integer(line_number) do
     source
-    |> String.split(["\n", "\r\n"])
+    |> Source.split_lines()
     # by replacing a line here we risk introducing a syntax error
     # instead we insert a line with marker
     |> List.insert_at(line_number - 1, marker(line_number))
@@ -341,7 +342,7 @@ defmodule ElixirSense.Core.Parser do
   defp replace_line_with_marker(source, line_number) when is_integer(line_number) do
     # IO.puts :stderr, "REPLACING LINE: #{line}"
     source
-    |> String.split(["\n", "\r\n"])
+    |> Source.split_lines()
     |> List.replace_at(line_number - 1, marker(line_number))
     |> Enum.join("\n")
   end

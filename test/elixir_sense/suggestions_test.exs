@@ -1,5 +1,6 @@
 defmodule ElixirSense.SuggestionsTest do
   use ExUnit.Case, async: true
+  alias ElixirSense.Core.Source
 
   import ExUnit.CaptureIO
 
@@ -2849,7 +2850,7 @@ defmodule ElixirSense.SuggestionsTest do
   end
 
   defp get_last_line_and_column(buffer) do
-    str_lines = String.split(buffer, "\n")
+    str_lines = buffer |> Source.split_lines()
     line = length(str_lines)
     column = (str_lines |> List.last() |> String.length()) + 1
     {line, column}
