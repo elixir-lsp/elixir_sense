@@ -474,6 +474,8 @@ defmodule ElixirSense.Core.Source do
           npar: non_neg_integer,
           pipe_before: boolean,
           unfinished_parm: boolean,
+          cursor_at_option: true | false | :maybe,
+          options_so_far: [atom],
           pos:
             nil | {{non_neg_integer, non_neg_integer}, {non_neg_integer, nil | non_neg_integer}}
         }
