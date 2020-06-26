@@ -487,16 +487,29 @@ defmodule ElixirSense.Core.Source do
       count: 0,
       count2: 0,
       count3: 0,
-      options_so_far: [],
+      kw_identifiers: [],
       candidate: [],
       pos: nil,
       pipe_before: false
     }
 
     result = scan(tokens, pattern)
-    %{candidate: candidate, npar: npar, pipe_before: pipe_before, pos: pos} = result
 
-    {cursor_at_option, options_so_far} = check_cursor_at_option(tokens, result)
+    %{
+      candidate: candidate,
+      npar: npar,
+      pipe_before: pipe_before,
+      pos: pos,
+      kw_identifiers: kw_identifiers,
+      count3: count3
+    } = result
+
+    options_so_far =
+      for {key, pos, ^count3} <- kw_identifiers do
+        {key, pos}
+      end
+
+    cursor_at_option = check_cursor_at_option(tokens, result)
     {normalized_candidate, elixir_prefix} = normalize_candidate(candidate, current_module)
 
     unfinished_parm =
@@ -542,19 +555,19 @@ defmodule ElixirSense.Core.Source do
 
     cond do
       !same_level ->
-        {false, []}
+        false
 
       comma_before_token in scan_result.npar ->
-        {:maybe, []}
+        :maybe
 
       comma_before_token ->
-        {true, Enum.reverse(scan_result.options_so_far)}
+        true
 
       first_arg? ->
-        {:maybe, []}
+        :maybe
 
       true ->
-        {false, []}
+        false
     end
   end
 
@@ -591,21 +604,21 @@ defmodule ElixirSense.Core.Source do
   defp normalize_npar(npar, true), do: npar + 1
   defp normalize_npar(npar, _pipe_before), do: npar
 
-  defp maybe_update_options_so_far(%{count: 0, count2: 0, count3: 0} = state, key) do
-    %{state | options_so_far: [key | state.options_so_far]}
+  defp maybe_update_kw_identifiers(%{count: 0, count2: 0} = state, key_pos) do
+    %{state | kw_identifiers: [key_pos | state.kw_identifiers]}
   end
 
-  defp maybe_update_options_so_far(state, _key) do
+  defp maybe_update_kw_identifiers(state, _key) do
     state
   end
 
-  defp scan([{:kw_identifier, _, key} | tokens], %{npar: [_]} = state) do
-    state = maybe_update_options_so_far(state, key)
+  defp scan([{:kw_identifier, pos, key} | tokens], %{npar: [_]} = state) do
+    state = maybe_update_kw_identifiers(state, {key, pos, state.count3})
     scan(tokens, %{state | npar: []})
   end
 
-  defp scan([{:kw_identifier, _, key} | tokens], state) do
-    state = maybe_update_options_so_far(state, key)
+  defp scan([{:kw_identifier, pos, key} | tokens], state) do
+    state = maybe_update_kw_identifiers(state, {key, pos, state.count3})
     scan(tokens, state)
   end
 

@@ -541,7 +541,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       |> Enum.sort_by(fn {f, a, _, _, _, _, _} -> {f, -a} end)
 
     list =
-      Enum.reduce(falist, [], fn {f, a, def_a, func_kind, doc, spec, arg}, acc ->
+      Enum.reduce(falist, [], fn {f, a, def_a, func_kind, {doc_str, meta}, spec, arg}, acc ->
+        doc = {Introspection.extract_summary_from_docs(doc_str), meta}
+
         case :lists.keyfind(f, 1, acc) do
           {f, aa, def_arities, func_kind, docs, specs, args} ->
             :lists.keyreplace(
@@ -598,7 +600,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  defp get_module_funs(mod, include_builtin) do
+  def get_module_funs(mod, include_builtin) do
     docs = NormalizedCode.get_docs(mod, :docs)
     specs = TypeInfo.get_module_specs(mod)
 
@@ -629,7 +631,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               {"", %{}}
 
             {{_fun, _}, _line, _kind, _args, doc, metadata} ->
-              {Introspection.extract_summary_from_docs(doc), metadata}
+              {doc, metadata}
           end
 
         fun_args = Introspection.extract_fun_args(func_doc)

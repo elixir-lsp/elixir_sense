@@ -578,7 +578,8 @@ defmodule ElixirSense.Core.SourceTest do
         sel\
       """
 
-      assert %{options_so_far: [:limit, :preload, :where]} = which_func(code)
+      options_so_far = [{:where, {3, 3, nil}}, {:preload, {4, 3, nil}}, {:limit, {5, 3, nil}}]
+      assert %{options_so_far: ^options_so_far} = which_func(code)
 
       code = """
       from(
@@ -587,20 +588,8 @@ defmodule ElixirSense.Core.SourceTest do
         preload: [assoc1: [assoc1_1: [], assoc1_2: [], \
       """
 
-      assert %{options_so_far: []} = which_func(code)
-    end
-
-    test "retrieve args so far" do
-      code = """
-      from(m in Mod
-        join: m1 in Mod1,
-        join: m2 in Mod2,
-        join: a1 in assoc(m1, :assoc1),
-        join: a2 in assoc(m2, :assoc2),
-        where: c.\
-      """
-
-      assert %{options_so_far: []} = which_func(code)
+      options_so_far = [{:where, {3, 3, nil}}, {:preload, {4, 3, nil}}]
+      assert %{options_so_far: ^options_so_far} = which_func(code)
     end
   end
 

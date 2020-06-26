@@ -46,7 +46,8 @@ defmodule ElixirSense.Providers.Suggestion do
   alias ElixirSense.Providers.Suggestion.Reducers
 
   @type suggestion ::
-          Reducers.Common.attribute()
+          Reducers.Common.generic()
+          | Reducers.Common.attribute()
           | Reducers.Common.variable()
           | Reducers.Struct.field()
           | Reducers.Returns.return()
@@ -60,6 +61,7 @@ defmodule ElixirSense.Providers.Suggestion do
   @type acc :: %{result: [suggestion], reducers: [atom], context: map}
 
   @reducers [
+    ecto_from_options: &ElixirSense.Plugins.Ecto.add_from_options/5,
     structs_fields: &Reducers.Struct.add_fields/5,
     returns: &Reducers.Returns.add_returns/5,
     callbacks: &Reducers.Callbacks.add_callbacks/5,
@@ -73,6 +75,10 @@ defmodule ElixirSense.Providers.Suggestion do
     macros: &Reducers.Common.add_macros/5,
     variable_fields: &Reducers.Common.add_fields/5,
     attributes: &Reducers.Common.add_attributes/5
+  ]
+
+  @decorators [
+    &ElixirSense.Plugins.Ecto.decorate/1
   ]
 
   @doc """
@@ -91,6 +97,8 @@ defmodule ElixirSense.Providers.Suggestion do
         end
       end)
 
-    result
+    for item <- result do
+      Enum.reduce(@decorators, item, fn d, item -> d.(item) end)
+    end
   end
 end

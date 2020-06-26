@@ -7,6 +7,15 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
   alias ElixirSense.Providers.Suggestion.Complete
   alias ElixirSense.Providers.Suggestion.Reducer
 
+  @type generic :: %{
+          label: String.t(),
+          detail: String.t() | nil,
+          documentation: String.t() | nil,
+          snippet: String.t() | nil,
+          priority: integer() | nil,
+          kind: String.t()
+        }
+
   @type attribute :: %{
           type: :attribute,
           name: String.t()

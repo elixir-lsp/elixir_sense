@@ -160,6 +160,22 @@ defmodule ElixirSense do
   def suggestions(buffer, line, column) do
     hint = Source.prefix(buffer, line, column)
     buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
+
+    # Suggesting fields/functions after `.` usually makes `Parser.parse_string/4` fails.
+    # We try to fix it here by adding a fake field.
+    buffer_file_metadata =
+      with false <- is_nil(buffer_file_metadata.error),
+           text_before = Source.text_before(buffer, line, column),
+           true <- String.ends_with?(text_before, "."),
+           text_after = Source.text_after(buffer, line, column),
+           new_buffer = text_before <> "fake_field" <> text_after,
+           %Metadata{error: nil} = meta <- Parser.parse_string(new_buffer, true, true, line) do
+        meta
+      else
+        _ ->
+          buffer_file_metadata
+      end
+
     text_before = Source.text_before(buffer, line, column)
 
     env = Metadata.get_env(buffer_file_metadata, line)
