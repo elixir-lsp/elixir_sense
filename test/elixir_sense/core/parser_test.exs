@@ -311,6 +311,36 @@ defmodule ElixirSense.Core.ParserTest do
            } = parse_string(source, true, true, 3)
   end
 
+  test "parse_string with incomplete key for multiline keyword as argument" do
+    source = """
+    defmodule MyModule do
+      IO.inspect(
+        :stderr,
+        label: "label",
+        limit
+      )
+    end
+    """
+
+    assert capture_io(:stderr, fn ->
+             assert %Metadata{error: nil} = parse_string(source, true, true, 5)
+           end) =~ "trailing commas are not allowed inside function/macro call arguments"
+  end
+
+  test "parse_string with missing value for multiline keyword as argument" do
+    source = """
+    defmodule MyModule do
+      IO.inspect(
+        :stderr,
+        label: "label",
+        limit:
+      )
+    end
+    """
+
+    %Metadata{error: nil} = parse_string(source, true, true, 5)
+  end
+
   test "parse_string ignores non existing modules in `use`" do
     source = """
     defmodule MyModule do

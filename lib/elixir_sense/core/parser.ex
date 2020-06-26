@@ -208,10 +208,13 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
-  defp fix_parse_error(source, _cursor_line_number, {:error, {line, "syntax" <> _, _token}})
+  defp fix_parse_error(source, _cursor_line_number, {:error, {line, "syntax" <> _, token}})
        when is_integer(line) do
-    source
-    |> replace_line_with_marker(line)
+    if Regex.match?(~r/^[a-zA-Z_][a-zA-Z0-9_]*$/, token) do
+      remove_line(source, line)
+    else
+      replace_line_with_marker(source, line)
+    end
   end
 
   defp fix_parse_error(_, nil, error) do
@@ -344,6 +347,14 @@ defmodule ElixirSense.Core.Parser do
     source
     |> Source.split_lines()
     |> List.replace_at(line_number - 1, marker(line_number))
+    |> Enum.join("\n")
+  end
+
+  defp remove_line(source, line_number) when is_integer(line_number) do
+    # IO.puts :stderr, "REMOVING LINE: #{line}"
+    source
+    |> Source.split_lines()
+    |> List.delete_at(line_number - 1)
     |> Enum.join("\n")
   end
 

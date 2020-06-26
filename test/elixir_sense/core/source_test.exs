@@ -6,507 +6,601 @@ defmodule ElixirSense.Core.SourceTest do
 
   describe "which_func/1" do
     test "at the beginning of a defmodule" do
-      assert which_func("defmo") ==
-               %{
-                 candidate: :none,
-                 elixir_prefix: false,
-                 npar: 0,
-                 pipe_before: false,
-                 unfinished_parm: false,
-                 pos: nil
-               }
+      assert %{
+               candidate: :none,
+               elixir_prefix: false,
+               npar: 0,
+               pipe_before: false,
+               unfinished_parm: false,
+               pos: nil
+             } = which_func("defmo")
     end
 
     test "functions without namespace" do
-      assert which_func("var = func(") == %{
+      assert %{
                candidate: {nil, :func},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = func(")
 
-      assert which_func("var = func(param1, ") == %{
+      assert %{
                candidate: {nil, :func},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = func(param1, ")
     end
 
     test "functions with namespace" do
-      assert which_func("var = Mod.func(param1, par") == %{
+      assert %{
                candidate: {Mod, :func},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Mod.func(param1, par")
 
-      assert which_func("var = Mod.SubMod.func(param1, param2, par") == %{
+      assert %{
                candidate: {Mod.SubMod, :func},
                elixir_prefix: false,
                npar: 2,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Mod.SubMod.func(param1, param2, par")
 
-      assert which_func("var = Elixir.SubMod.func(param1, param2, par") == %{
+      assert %{
                candidate: {SubMod, :func},
                elixir_prefix: true,
                npar: 2,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Elixir.SubMod.func(param1, param2, par")
     end
 
     test "functions with namespace atom module" do
-      assert which_func("var = :\"Elixir.Mod\".func(param1, par") == %{
+      assert %{
                candidate: {Mod, :func},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = :\"Elixir.Mod\".func(param1, par")
     end
 
     test "functions with namespace __MODULE__" do
-      assert which_func("var = __MODULE__.func(param1, par", Mod) == %{
+      assert %{
                candidate: {Mod, :func},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = __MODULE__.func(param1, par", Mod)
 
-      assert which_func("var = __MODULE__.Sub.func(param1, par", Mod) == %{
+      assert %{
                candidate: {Mod.Sub, :func},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = __MODULE__.Sub.func(param1, par", Mod)
     end
 
     test "nested functions calls" do
-      assert which_func("var = outer_func(Mod.SubMod.func(param1,") == %{
+      assert %{
                candidate: {Mod.SubMod, :func},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 18}, {1, nil}}
-             }
+             } = which_func("var = outer_func(Mod.SubMod.func(param1,")
 
-      assert which_func("var = outer_func(Mod.SubMod.func(param1, [inner_func(") == %{
+      assert %{
                candidate: {nil, :inner_func},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 43}, {1, nil}}
-             }
+             } = which_func("var = outer_func(Mod.SubMod.func(param1, [inner_func(")
 
-      assert which_func("var = outer_func(func(param1, inner_func, ") == %{
+      assert %{
                candidate: {nil, :func},
                elixir_prefix: false,
                npar: 2,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 18}, {1, nil}}
-             }
+             } = which_func("var = outer_func(func(param1, inner_func, ")
 
-      assert which_func("var = outer_func(func(param1, inner_func(), ") == %{
+      assert %{
                candidate: {nil, :func},
                elixir_prefix: false,
                npar: 2,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 18}, {1, nil}}
-             }
+             } = which_func("var = outer_func(func(param1, inner_func(), ")
 
-      assert which_func("var = func(param1, func2(fun(p3), 4, 5), func3(p1, p2), ") == %{
+      assert %{
                candidate: {nil, :func},
                elixir_prefix: false,
                npar: 3,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = func(param1, func2(fun(p3), 4, 5), func3(p1, p2), ")
     end
 
     test "function call with multiple lines" do
-      assert which_func("""
-             var = Mod.func(param1,
-               param2,
-
-             """) == %{
+      assert %{
                candidate: {Mod, :func},
                elixir_prefix: false,
                npar: 2,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } =
+               which_func("""
+               var = Mod.func(param1,
+                 param2,
+
+               """)
     end
 
     test "after double quotes" do
-      assert which_func("var = func(param1, \"not_a_func(, ") == %{
+      assert %{
                candidate: {nil, :func},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = func(param1, \"not_a_func(, ")
 
-      assert which_func("var = func(\"a_string_(param1\", ") == %{
+      assert %{
                candidate: {nil, :func},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = func(\"a_string_(param1\", ")
     end
 
     test "with operators" do
-      assert which_func("var = Mod.func1(param) + func2(param1, ") == %{
+      assert %{
                candidate: {nil, :func2},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 26}, {1, nil}}
-             }
+             } = which_func("var = Mod.func1(param) + func2(param1, ")
     end
 
     test "unfinished param" do
-      assert which_func("func2(param1") == %{
+      assert %{
                candidate: {nil, :func2},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 1}, {1, nil}}
-             }
+             } = which_func("func2(param1")
     end
 
     test "no param" do
-      assert which_func("func2(") == %{
+      assert %{
                candidate: {nil, :func2},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 1}, {1, nil}}
-             }
+             } = which_func("func2(")
 
-      assert which_func("func2(a + b,") == %{
+      assert %{
                candidate: {nil, :func2},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 1}, {1, nil}}
-             }
+             } = which_func("func2(a + b,")
     end
 
     test "erlang functions" do
-      assert which_func("var = :global.whereis_name( ") == %{
+      assert %{
                candidate: {:global, :whereis_name},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = :global.whereis_name( ")
     end
 
     test "call on variable" do
-      assert which_func("var = my_var.( ") == %{
+      assert %{
                candidate: :none,
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: false,
                pipe_before: false,
                pos: nil
-             }
+             } = which_func("var = my_var.( ")
     end
 
     test "call on result of other call" do
-      assert which_func("var = my_fun().( ") == %{
+      assert %{
                candidate: :none,
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: false,
                pipe_before: false,
                pos: nil
-             }
+             } = which_func("var = my_fun().( ")
     end
 
     # FIXME should return {nil, :some} or :none
     test "call on dynamic module from function" do
-      assert which_func("var = my_fun().some( ") == %{
+      assert %{
                candidate: {nil, :my_fun},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = my_fun().some( ")
     end
 
     # FIXME handle attribute or return :none
     test "call on dynamic module from attribute" do
-      assert which_func("var = @my_attr.some( ") == %{
+      assert %{
                candidate: {nil, :some},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 16}, {1, nil}}
-             }
+             } = which_func("var = @my_attr.some( ")
     end
 
     test "with fn" do
-      assert which_func("fn(a, ") == %{
+      assert %{
                candidate: :none,
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: false,
                pipe_before: false,
                pos: nil
-             }
+             } = which_func("fn(a, ")
     end
 
     test "with another fn before" do
-      assert which_func("var = Enum.sort_by(list, fn(i) -> i*i end, fn(a, ") == %{
+      assert %{
                candidate: {Enum, :sort_by},
                elixir_prefix: false,
                npar: 2,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.sort_by(list, fn(i) -> i*i end, fn(a, ")
     end
 
     test "inside fn body" do
-      assert which_func("var = Enum.map([1,2], fn(i) -> i*") == %{
+      assert %{
                candidate: {Enum, :map},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.map([1,2], fn(i) -> i*")
     end
 
     test "inside a list" do
-      assert which_func("var = Enum.map([1,2,3") == %{
+      assert %{
                candidate: {Enum, :map},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.map([1,2,3")
     end
 
     test "inside a list after comma" do
-      assert which_func("var = Enum.map([1,") == %{
+      assert %{
                candidate: {Enum, :map},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.map([1,")
     end
 
     test "inside an list without items" do
-      assert which_func("var = Enum.map([") == %{
+      assert %{
                candidate: {Enum, :map},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.map([")
     end
 
     test "inside a list with a list before" do
-      assert which_func("var = Enum.map([1,2], [1, ") == %{
+      assert %{
                candidate: {Enum, :map},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.map([1,2], [1, ")
     end
 
     test "inside a keyword list as last arg" do
-      assert which_func("var = IO.inspect([1,2], limit: 100, ") == %{
+      assert %{
                candidate: {IO, :inspect},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = IO.inspect([1,2], limit: 100, ")
     end
 
     test "inside a keyword list as last arg with last key without value" do
-      assert which_func("var = IO.inspect([1,2], limit: 100, labe: ") == %{
+      assert %{
                candidate: {IO, :inspect},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = IO.inspect([1,2], limit: 100, labe: ")
     end
 
     test "inside a keyword list as last arg with last key with value" do
-      assert which_func("var = IO.inspect([1,2], limit: 100, labe: :a") == %{
+      assert %{
                candidate: {IO, :inspect},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = IO.inspect([1,2], limit: 100, labe: :a")
     end
 
     test "inside a keyword list as last arg with more than one key" do
-      assert which_func("var = IO.inspect([1,2], limit: 100, label: :a, ") == %{
+      assert %{
                candidate: {IO, :inspect},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = IO.inspect([1,2], limit: 100, label: :a, ")
     end
 
     test "inside a delimited keyword list as last arg" do
-      assert which_func("var = IO.inspect([1,2], [limit: 1, ") == %{
+      assert %{
                candidate: {IO, :inspect},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = IO.inspect([1,2], [limit: 1, ")
     end
 
     test "inside a map" do
-      assert which_func("var = IO.inspect(%{a: 1, b: ") == %{
+      assert %{
                candidate: {IO, :inspect},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = IO.inspect(%{a: 1, b: ")
     end
 
     test "inside a tuple" do
-      assert which_func("var = Enum.map({1,2,3") == %{
+      assert %{
                candidate: {Enum, :map},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.map({1,2,3")
     end
 
     test "inside a tuple with another tuple before" do
-      assert which_func("var = Enum.map({1,2}, {1, ") == %{
+      assert %{
                candidate: {Enum, :map},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.map({1,2}, {1, ")
     end
 
     test "inside a tuple inside a list" do
-      assert which_func("var = Enum.map({1,2}, [{1, ") == %{
+      assert %{
                candidate: {Enum, :map},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.map({1,2}, [{1, ")
     end
 
     test "inside a tuple after comma" do
-      assert which_func("var = Enum.map([{1,") == %{
+      assert %{
                candidate: {Enum, :map},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.map([{1,")
     end
 
     test "inside a list inside a tuple inside a list" do
-      assert which_func("var = Enum.map([{1,[a, ") == %{
+      assert %{
                candidate: {Enum, :map},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.map([{1,[a, ")
     end
 
     test "fails when code has parsing errors before the cursor" do
-      assert which_func("} = Enum.map(list, ") == %{
+      assert %{
                candidate: :none,
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: false,
                pipe_before: false,
                pos: nil
-             }
+             } = which_func("} = Enum.map(list, ")
     end
 
     test "inside parens" do
-      assert which_func("var = Enum.map((1 + 2") == %{
+      assert %{
                candidate: {Enum, :map},
                elixir_prefix: false,
                npar: 0,
                unfinished_parm: true,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.map((1 + 2")
     end
 
     test "after parens" do
-      assert which_func("var = Enum.map((1 + 2), ") == %{
+      assert %{
                candidate: {Enum, :map},
                elixir_prefix: false,
                npar: 1,
                unfinished_parm: false,
                pipe_before: false,
                pos: {{1, 7}, {1, nil}}
-             }
+             } = which_func("var = Enum.map((1 + 2), ")
+    end
+
+    test "detect if cursor is at a viable option" do
+      code = "func(option1: 1, "
+      assert %{cursor_at_option: true} = which_func(code)
+
+      code = "func("
+      assert %{cursor_at_option: :maybe} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        \
+      """
+
+      assert %{cursor_at_option: :maybe} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        whe\
+      """
+
+      assert %{cursor_at_option: :maybe} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        where: is_nil(u.email),
+        \
+      """
+
+      assert %{cursor_at_option: true} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        where: is_nil(u.email),
+        sel\
+      """
+
+      assert %{cursor_at_option: true} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        where: is_nil(u.email),
+        limit: \
+      """
+
+      assert %{cursor_at_option: false} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        preload: [friends: [], per
+      """
+
+      assert %{cursor_at_option: false} = which_func(code)
+    end
+
+    test "retrieve options so far" do
+      code = """
+      from(
+        u in User,
+        where: is_nil(u.id),
+        preload: [assoc1: [assoc1_1: [], assoc1_2: []]],
+        limit: 10,
+        sel\
+      """
+
+      assert %{options_so_far: [:limit, :preload, :where]} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        where: is_nil(u.id),
+        preload: [assoc1: [assoc1_1: [], assoc1_2: [], \
+      """
+
+      assert %{options_so_far: []} = which_func(code)
+    end
+
+    test "retrieve args so far" do
+      code = """
+      from(m in Mod
+        join: m1 in Mod1,
+        join: m2 in Mod2,
+        join: a1 in assoc(m1, :assoc1),
+        join: a2 in assoc(m2, :assoc2),
+        where: c.\
+      """
+
+      assert %{options_so_far: []} = which_func(code)
     end
   end
 

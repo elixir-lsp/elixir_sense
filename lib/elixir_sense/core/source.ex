@@ -5,7 +5,8 @@ defmodule ElixirSense.Core.Source do
 
   alias ElixirSense.Core.Normalized.Tokenizer
 
-  @empty_graphemes [" ", "\n", "\r\n"]
+  @line_break ["\n", "\r\n"]
+  @empty_graphemes [" "] ++ @line_break
   @stop_graphemes [
                     "{",
                     "}",
@@ -430,7 +431,7 @@ defmodule ElixirSense.Core.Source do
         {new_rest, new_acc} = func.(grapheme, rest, line, col, acc)
 
         {new_line, new_col} =
-          if grapheme in ["\n", "\r\n"] do
+          if grapheme in @line_break do
             {line + 1, 1}
           else
             {line, col + 1}
@@ -448,7 +449,7 @@ defmodule ElixirSense.Core.Source do
     case String.next_grapheme(text) do
       {grapheme, rest} ->
         {new_pos, new_line, new_col} =
-          if grapheme in ["\n", "\r\n"] do
+          if grapheme in @line_break do
             if current_line == line do
               # this is the line we're lookin for
               # but it's shorter than expected
@@ -479,10 +480,21 @@ defmodule ElixirSense.Core.Source do
   def which_func(prefix, current_module \\ nil) do
     tokens = Tokenizer.tokenize(prefix)
 
-    pattern = %{npar: [], count: 0, count2: 0, candidate: [], pos: nil, pipe_before: false}
+    pattern = %{
+      npar: [],
+      count: 0,
+      count2: 0,
+      count3: 0,
+      options_so_far: [],
+      candidate: [],
+      pos: nil,
+      pipe_before: false
+    }
+
     result = scan(tokens, pattern)
     %{candidate: candidate, npar: npar, pipe_before: pipe_before, pos: pos} = result
 
+    {cursor_at_option, options_so_far} = check_cursor_at_option(tokens, result)
     {normalized_candidate, elixir_prefix} = normalize_candidate(candidate, current_module)
 
     unfinished_parm =
@@ -504,8 +516,44 @@ defmodule ElixirSense.Core.Source do
       npar: normalize_npar(length(npar), pipe_before),
       unfinished_parm: unfinished_parm,
       pipe_before: pipe_before,
+      cursor_at_option: cursor_at_option,
+      options_so_far: options_so_far,
       pos: pos
     }
+  end
+
+  defp check_cursor_at_option(tokens, scan_result) do
+    comma_before_token =
+      case tokens do
+        [{:",", _} = token | _] ->
+          token
+
+        [{:identifier, _, _}, {:",", _} = token | _] ->
+          token
+
+        _ ->
+          nil
+      end
+
+    same_level = scan_result.count3 == 0
+    first_arg? = scan_result.npar == []
+
+    cond do
+      !same_level ->
+        {false, []}
+
+      comma_before_token in scan_result.npar ->
+        {:maybe, []}
+
+      comma_before_token ->
+        {true, Enum.reverse(scan_result.options_so_far)}
+
+      first_arg? ->
+        {:maybe, []}
+
+      true ->
+        {false, []}
+    end
   end
 
   defp normalize_candidate(candidate, current_module) do
@@ -541,8 +589,22 @@ defmodule ElixirSense.Core.Source do
   defp normalize_npar(npar, true), do: npar + 1
   defp normalize_npar(npar, _pipe_before), do: npar
 
-  defp scan([{:kw_identifier, _, _} | tokens], %{npar: [_]} = state) do
+  defp maybe_update_options_so_far(%{count: 0, count2: 0, count3: 0} = state, key) do
+    %{state | options_so_far: [key | state.options_so_far]}
+  end
+
+  defp maybe_update_options_so_far(state, _key) do
+    state
+  end
+
+  defp scan([{:kw_identifier, _, key} | tokens], %{npar: [_]} = state) do
+    state = maybe_update_options_so_far(state, key)
     scan(tokens, %{state | npar: []})
+  end
+
+  defp scan([{:kw_identifier, _, key} | tokens], state) do
+    state = maybe_update_options_so_far(state, key)
+    scan(tokens, state)
   end
 
   defp scan([{:",", _} | _], %{count: 1} = state), do: state
@@ -563,15 +625,15 @@ defmodule ElixirSense.Core.Source do
   end
 
   defp scan([{token, _} | tokens], %{count2: 0} = state) when token in [:"[", :"{"] do
-    scan(tokens, %{state | npar: [], count2: 0})
+    scan(tokens, %{state | npar: [], count2: 0, count3: state.count3 + 1})
   end
 
   defp scan([{token, _} | tokens], state) when token in [:"[", :"{"] do
-    scan(tokens, %{state | count2: state.count2 + 1})
+    scan(tokens, %{state | count2: state.count2 + 1, count3: state.count3 + 1})
   end
 
   defp scan([{token, _} | tokens], state) when token in [:"]", :"}"] do
-    scan(tokens, %{state | count2: state.count2 - 1})
+    scan(tokens, %{state | count2: state.count2 - 1, count3: state.count3 - 1})
   end
 
   defp scan([{:paren_identifier, pos, value} | tokens], %{count: 1} = state) do
@@ -688,7 +750,7 @@ defmodule ElixirSense.Core.Source do
 
   def concat_module_parts([], _, _), do: :error
 
-  def split_lines(src) do
-    String.split(src, ["\r\n", "\r", "\n"])
+  def split_lines(src, opts \\ []) do
+    String.split(src, ["\r\n", "\r", "\n"], opts)
   end
 end
