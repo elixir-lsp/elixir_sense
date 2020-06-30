@@ -93,7 +93,13 @@ defmodule ElixirSense.Plugins.EctoTest do
       detail = "(from clause) Ecto.Query"
 
       assert [
-               %{documentation: doc1, label: "select", detail: ^detail, kind: :property},
+               %{
+                 documentation: doc1,
+                 label: "select",
+                 detail: ^detail,
+                 kind: :property,
+                 insert_text: "select: "
+               },
                %{documentation: doc2, label: "select_merge", detail: ^detail}
              ] = result
 
@@ -263,6 +269,57 @@ defmodule ElixirSense.Plugins.EctoTest do
                %{label: "title"},
                %{label: "user_id"}
              ] = suggestions(buffer, cursor)
+    end
+
+    test "list associations from assoc/2" do
+      buffer = """
+      import Ecto.Query
+      alias ElixirSense.Plugins.Ecto.FakeSchemas.Post
+
+      def query() do
+        from(
+          p in Post,
+          join: c in assoc(p,
+          #                  ^
+        )
+      end
+      """
+
+      [cursor] = cursors(buffer)
+
+      assert [
+               %{
+                 label: ":user",
+                 detail: detail,
+                 documentation: doc,
+                 kind: :field,
+                 type: :generic
+               },
+               %{label: ":comments"}
+             ] = suggestions(buffer, cursor)
+
+      assert doc == "Fake User schema."
+      assert detail == "(Ecto association) ElixirSense.Plugins.Ecto.FakeSchemas.User"
+    end
+
+    test "list bindings and binding fields inside nested functions" do
+      buffer = """
+      import Ecto.Query
+      alias ElixirSense.Plugins.Ecto.FakeSchemas.Post
+
+      def query() do
+        from(
+          p in Post,
+          where: is_nil(p.t
+          #             ^  ^
+        )
+      end
+      """
+
+      [cursor_1, cursor_2] = cursors(buffer)
+
+      assert [%{label: "p"} | _] = suggestions(buffer, cursor_1)
+      assert [%{label: "text"}, %{label: "title"}] = suggestions(buffer, cursor_2)
     end
   end
 end

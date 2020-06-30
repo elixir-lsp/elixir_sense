@@ -49,29 +49,69 @@ defmodule ElixirSense.Plugins.Ecto do
 
   @join_opts [on: "A query expression or keyword list to filter the join."] ++ @from_join_opts
 
-  def add_from_options(hint, prefix, env, buffer_metadata, acc) do
-    %State.Env{module: module} = env
-    func_info = Source.which_func(prefix, module)
+  @var_r "[a-z][a-zA-Z0-9_]*"
+  @mod_r "[A-Z][a-zA-Z0-9_]*"
+  @binding_r "(#{@var_r}) in (#{@mod_r}|assoc\\(\\s*#{@var_r},\\s*\\:#{@var_r}\\s*\\))"
 
-    with %{candidate: {mod, fun}, npar: 1} <- func_info,
-         mod_fun <- actual_mod_fun({mod, fun}, func_info.elixir_prefix, env, buffer_metadata),
-         {Ecto.Query, :from, true} <- mod_fun do
-      if func_info.cursor_at_option do
-        clauses_list =
-          clauses_suggestions(hint) ++ joins_suggestions(hint) ++ join_opts_suggestions(hint)
+  @doc """
+  A reducer that adds suggestions of available associations for `assoc/2`.
 
-        {:halt, %{acc | result: clauses_list}}
-      else
-        bindings = extract_bindings(prefix, func_info, env, buffer_metadata)
-        bindings_list = bindings_suggestions(hint, bindings)
-        {:cont, %{acc | result: acc.result ++ bindings_list}}
-      end
+  The suggestions are only added when inside a `from/2` call.
+  """
+  def add_associations(hint, prefix, env, buffer_metadata, acc) do
+    func_call_chain = func_call_chain_until({Ecto.Query, :from}, prefix, env, buffer_metadata)
+
+    with [{nil, :assoc, 1, assoc_info}, {_, :from, 1, from_info}] <- func_call_chain,
+         %{pos: {{line, col}, _}} <- assoc_info,
+         assoc_code <- Source.text_after(prefix, line, col),
+         [_, var] <- Regex.run(~r/^assoc\(\s*(#{@var_r})\s*,/, assoc_code),
+         %{^var => %{type: type}} <- extract_bindings(prefix, from_info, env, buffer_metadata),
+         true <- function_exported?(type, :__schema__, 1) do
+      {:halt, %{acc | result: find_assoc_suggestions(type, hint)}}
     else
       _ ->
         {:cont, acc}
     end
   end
 
+  @doc """
+  A reducer that adds suggestions for `Ecto.Query.from/2`.
+
+  Available Suggestions:
+
+  * From clauses - e.g. `select`, `where`, `join`, etc.
+  * Query bindings
+  * Query bindings' fields
+
+  """
+  def add_from_options(hint, prefix, env, buffer_metadata, acc) do
+    func_call_chain = func_call_chain_until({Ecto.Query, :from}, prefix, env, buffer_metadata)
+    from_call = List.last(func_call_chain)
+
+    case from_call do
+      {_mod, _fun, 1, %{cursor_at_option: false} = from_info} ->
+        bindings = extract_bindings(prefix, from_info, env, buffer_metadata)
+        bindings_list = bindings_suggestions(hint, bindings)
+        {:cont, %{acc | result: acc.result ++ bindings_list}}
+
+      {_mod, _fun, 1, _from_info} ->
+        clauses_list =
+          clauses_suggestions(hint) ++ joins_suggestions(hint) ++ join_opts_suggestions(hint)
+
+        {:halt, %{acc | result: clauses_list}}
+
+      _ ->
+        {:cont, acc}
+    end
+  end
+
+  @doc """
+  A decorator that adds customized snippets for:
+
+  * `Ecto.Schema.field`
+  * `Ecto.Migration.add`
+
+  """
   def decorate(%{origin: "Ecto.Schema", name: "field", arity: arity} = item)
       when arity in 1..3 do
     snippet = snippet_for_field(arity, @type_choices)
@@ -117,7 +157,7 @@ defmodule ElixirSense.Plugins.Ecto do
   end
 
   defp find_fields(type, hint) do
-    with {:module, _} = Code.ensure_compiled(type),
+    with {:module, _} <- Code.ensure_compiled(type),
          true <- function_exported?(type, :__schema__, 1) do
       for field <- Enum.sort(type.__schema__(:fields)),
           name = to_string(field),
@@ -127,6 +167,23 @@ defmodule ElixirSense.Plugins.Ecto do
     else
       _ ->
         []
+    end
+  end
+
+  defp find_assoc_suggestions(type, hint) do
+    for assoc <- type.__schema__(:associations),
+        assoc_str = inspect(assoc),
+        String.starts_with?(assoc_str, hint) do
+      assoc_mod = type.__schema__(:association, assoc).related
+      {doc, _} = Introspection.get_module_docs_summary(assoc_mod)
+
+      %{
+        type: :generic,
+        kind: :field,
+        label: assoc_str,
+        detail: "(Ecto association) #{inspect(assoc_mod)}",
+        documentation: doc
+      }
     end
   end
 
@@ -169,7 +226,7 @@ defmodule ElixirSense.Plugins.Ecto do
     doc_str =
       doc
       |> doc_sections()
-      |> Keyword.take([:summary, "Keywords examples", "Keywords example"])
+      |> Enum.filter(fn {k, _v} -> k in [:summary, "Keywords examples", "Keywords example"] end)
       |> Enum.map_join("\n\n", fn
         {:summary, text} ->
           text
@@ -179,13 +236,12 @@ defmodule ElixirSense.Plugins.Ecto do
           if first == "", do: "", else: "### Example\n\n#{first}"
       end)
 
-    origin = "Ecto.Query"
-
     %{
       type: :generic,
       kind: :property,
       label: option,
-      detail: "(#{detail}) #{origin}",
+      insert_text: "#{option}: ",
+      detail: "(#{detail}) Ecto.Query",
       documentation: doc_str
     }
   end
@@ -277,18 +333,14 @@ defmodule ElixirSense.Plugins.Ecto do
   end
 
   defp extract_bindings(prefix, %{pos: {{line, col}, _}} = func_info, env, buffer_metadata) do
-    var_r = "[a-z][a-zA-Z0-9_]*"
-    mod_r = "[A-Z][a-zA-Z0-9_]*"
-    binding_r = "(#{var_r}) in (#{mod_r}|assoc\\(\\s*#{var_r},\\s*\\:#{var_r}\\s*\\))"
-
     func_code = Source.text_after(prefix, line, col)
 
-    from_matches = Regex.scan(~r/^.+\(\s*(#{binding_r})/, func_code)
+    from_matches = Regex.scan(~r/^.+\(\s*(#{@binding_r})/, func_code)
 
     join_matches =
       for {join, {line, col, _}} when join in @joins <- func_info.options_so_far,
           code = Source.text_after(prefix, line, col),
-          match <- Regex.scan(~r/^#{join}\:\s*(#{binding_r})/, code) do
+          match <- Regex.scan(~r/^#{join}\:\s*(#{@binding_r})/, code) do
         match
       end
 
@@ -308,5 +360,39 @@ defmodule ElixirSense.Plugins.Ecto do
 
   defp extract_bindings(_prefix, _func_info, _env, _buffer_metadata) do
     %{}
+  end
+
+  defp partial_func_call(code, env, buffer_metadata) do
+    %State.Env{module: module} = env
+    func_info = Source.which_func(code, module)
+
+    with %{candidate: {mod, fun}, npar: npar} <- func_info,
+         mod_fun <- actual_mod_fun({mod, fun}, func_info.elixir_prefix, env, buffer_metadata),
+         {actual_mod, actual_fun, _} <- mod_fun do
+      {actual_mod, actual_fun, npar, func_info}
+    else
+      _ ->
+        :none
+    end
+  end
+
+  defp func_call_chain_until(mod_fun, code, env, buffer_metadata) do
+    func_call_chain_until(mod_fun, code, env, buffer_metadata, [])
+  end
+
+  defp func_call_chain_until(mod_fun, code, env, buffer_metadata, chain) do
+    {actual_mod, actual_fun} = mod_fun
+
+    case partial_func_call(code, env, buffer_metadata) do
+      :none ->
+        []
+
+      {^actual_mod, ^actual_fun, _npar, _info} = func_call ->
+        Enum.reverse([func_call | chain])
+
+      {_mod, _fun, _npar, %{pos: {{line, col}, _}}} = func_call ->
+        code_before = Source.text_before(code, line, col)
+        func_call_chain_until(mod_fun, code_before, env, buffer_metadata, [func_call | chain])
+    end
   end
 end

@@ -45,8 +45,18 @@ defmodule ElixirSense.Providers.Suggestion do
   alias ElixirSense.Core.State
   alias ElixirSense.Providers.Suggestion.Reducers
 
+  @type generic :: %{
+          label: String.t(),
+          detail: String.t() | nil,
+          documentation: String.t() | nil,
+          insert_text: String.t() | nil,
+          snippet: String.t() | nil,
+          priority: integer() | nil,
+          kind: String.t()
+        }
+
   @type suggestion ::
-          Reducers.Common.generic()
+          generic()
           | Reducers.Common.attribute()
           | Reducers.Common.variable()
           | Reducers.Struct.field()
@@ -61,6 +71,7 @@ defmodule ElixirSense.Providers.Suggestion do
   @type acc :: %{result: [suggestion], reducers: [atom], context: map}
 
   @reducers [
+    ecto_assoc_associations: &ElixirSense.Plugins.Ecto.add_associations/5,
     ecto_from_options: &ElixirSense.Plugins.Ecto.add_from_options/5,
     structs_fields: &Reducers.Struct.add_fields/5,
     returns: &Reducers.Returns.add_returns/5,
