@@ -47,7 +47,7 @@ defmodule ElixirSense.Plugins.Ecto do
     hints: "A string or a list of strings to be used as database hints."
   ]
 
-  @join_opts [on: "A query expression or keyword list to filter the join."] ++ @from_join_opts
+  @join_opts [on: "A query expression or keyword list to filter the join."]
 
   @var_r "[a-z][a-zA-Z0-9_]*"
   @mod_r "[A-Z][a-zA-Z0-9_]*"
@@ -149,10 +149,11 @@ defmodule ElixirSense.Plugins.Ecto do
   end
 
   defp join_opts_suggestions(hint) do
-    for {name, doc} <- @join_opts,
+    for {name, doc} <- @join_opts ++ @from_join_opts,
         clause = to_string(name),
         String.starts_with?(clause, hint) do
-      clause_to_suggestion(clause, doc, "from/join option")
+      type = if Keyword.has_key?(@join_opts, name), do: "join", else: "from/join"
+      clause_to_suggestion(clause, doc, "#{type} option")
     end
   end
 
@@ -335,7 +336,7 @@ defmodule ElixirSense.Plugins.Ecto do
   defp extract_bindings(prefix, %{pos: {{line, col}, _}} = func_info, env, buffer_metadata) do
     func_code = Source.text_after(prefix, line, col)
 
-    from_matches = Regex.scan(~r/^.+\(\s*(#{@binding_r})/, func_code)
+    from_matches = Regex.scan(~r/^.+\(?\s*(#{@binding_r})/, func_code)
 
     join_matches =
       for {join, {line, col, _}} when join in @joins <- func_info.options_so_far,

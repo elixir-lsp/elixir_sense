@@ -155,22 +155,30 @@ defmodule ElixirSense.Plugins.EctoTest do
       from(
         u in User,
         where: is_nil(u.id),
+        prefix: "pre",
+      #  ^
         o
       #  ^
       )
       """
 
-      [cursor] = cursors(buffer)
+      [cursor_1, cursor_2] = cursors(buffer)
 
       assert capture_io(:stderr, fn ->
-               result = suggestions(buffer, cursor)
-               send(self(), {:result, result})
+               results = {suggestions(buffer, cursor_1), suggestions(buffer, cursor_2)}
+               send(self(), {:results, results})
              end) =~ "trailing commas are not allowed inside function/macro call arguments"
 
-      assert_received {:result, result}
+      assert_received {:results, {result_1, result_2}}
 
-      assert [%{documentation: doc, label: "on", detail: detail, kind: :property}] = result
+      assert [%{documentation: doc, label: "prefix", detail: detail, kind: kind}] = result_1
+      assert kind == :property
       assert detail == "(from/join option) Ecto.Query"
+      assert doc == "The prefix to be used for the from/join when issuing a database query."
+
+      assert [%{documentation: doc, label: "on", detail: detail, kind: kind}] = result_2
+      assert kind == :property
+      assert detail == "(join option) Ecto.Query"
       assert doc == "A query expression or keyword list to filter the join."
     end
 
@@ -320,6 +328,68 @@ defmodule ElixirSense.Plugins.EctoTest do
 
       assert [%{label: "p"} | _] = suggestions(buffer, cursor_1)
       assert [%{label: "text"}, %{label: "title"}] = suggestions(buffer, cursor_2)
+    end
+
+    test "from/2 without parens" do
+      buffer = """
+      import Ecto.Query
+      alias ElixirSense.Plugins.Ecto.FakeSchemas.Post
+
+      def query() do
+        from p in Post, se
+          #               ^
+      end
+      """
+
+      [cursor] = cursors(buffer)
+
+      assert [%{label: "select"}, %{label: "select_merge"}] = suggestions(buffer, cursor)
+
+      buffer = """
+      import Ecto.Query
+      alias ElixirSense.Plugins.Ecto.FakeSchemas.Post
+
+      def query() do
+        from p in Post, where: p.id
+          #                       ^
+      end
+      """
+
+      [cursor] = cursors(buffer)
+
+      assert [%{label: "id"}] = suggestions(buffer, cursor)
+
+      buffer = """
+      import Ecto.Query
+      alias ElixirSense.Plugins.Ecto.FakeSchemas.Post
+
+      def query() do
+        from p in Post,
+          join: u in User,
+          se
+          # ^
+      end
+      """
+
+      [cursor] = cursors(buffer)
+
+      assert [%{label: "select"}, %{label: "select_merge"}] = suggestions(buffer, cursor)
+
+      buffer = """
+      import Ecto.Query
+      alias ElixirSense.Plugins.Ecto.FakeSchemas.Post
+
+      def query() do
+        from p in Post,
+          join: u in User,
+
+        # ^
+      end
+      """
+
+      [cursor] = cursors(buffer)
+
+      assert [%{detail: "(from clause) Ecto.Query"} | _] = suggestions(buffer, cursor)
     end
   end
 end

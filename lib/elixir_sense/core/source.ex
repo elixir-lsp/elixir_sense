@@ -490,7 +490,8 @@ defmodule ElixirSense.Core.Source do
       kw_identifiers: [],
       candidate: [],
       pos: nil,
-      pipe_before: false
+      pipe_before: false,
+      check_fun_at_cursor?: String.ends_with?(prefix, " ")
     }
 
     result = scan(tokens, pattern)
@@ -612,6 +613,49 @@ defmodule ElixirSense.Core.Source do
     state
   end
 
+  defp scan(tokens, %{check_fun_at_cursor?: true} = state) do
+    case tokens do
+      [{:identifier, pos, value} | other_tokens] ->
+        scan(other_tokens, %{
+          state
+          | candidate: [value | state.candidate],
+            count: 1,
+            check_fun_at_cursor?: false,
+            pos: update_pos(pos, state.pos)
+        })
+
+      _ ->
+        scan(tokens, %{state | check_fun_at_cursor?: false})
+    end
+  end
+
+  defp scan([{:eol, _}, token | _tokens], state)
+       when elem(token, 0) not in [:",", :"[", :"{", :"("] do
+    state
+  end
+
+  defp scan([token | _], %{count: 1} = state) when elem(token, 0) in [:",", :type_op] do
+    state
+  end
+
+  defp scan([{_, {l, _, _}, _} = next, {:identifier, {l, _, _}, _} = token | tokens], state) do
+    {_, {_, c1, _} = pos, value} = token
+    {next_kind, {_, c2, _}, _} = next
+    size = value |> to_charlist() |> length()
+    next_kind_str = to_string(next_kind)
+
+    if c2 > c1 + size && !String.ends_with?(next_kind_str, "_op") do
+      scan(tokens, %{
+        state
+        | candidate: [value | state.candidate],
+          count: 1,
+          pos: update_pos(pos, state.pos)
+      })
+    else
+      scan([token | tokens], state)
+    end
+  end
+
   defp scan([{:kw_identifier, pos, key} | tokens], %{npar: [_]} = state) do
     state = maybe_update_kw_identifiers(state, {key, pos, state.count3})
     scan(tokens, %{state | npar: []})
@@ -621,8 +665,6 @@ defmodule ElixirSense.Core.Source do
     state = maybe_update_kw_identifiers(state, {key, pos, state.count3})
     scan(tokens, state)
   end
-
-  defp scan([{:",", _} | _], %{count: 1} = state), do: state
 
   defp scan([{:",", _pos} = t | tokens], %{count: 0, count2: 0} = state) do
     scan(tokens, %{state | npar: [t | state.npar], candidate: []})
