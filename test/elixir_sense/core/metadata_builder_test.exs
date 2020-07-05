@@ -2791,7 +2791,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         alias Enum, as: E
         defdelegate func_delegated(par), to: OtherModule
         defdelegate func_delegated_erlang(par), to: :erlang_module
-        defdelegate func_delegated_as(par), to: __MODULE__.Sub, as: my_func
+        defdelegate func_delegated_as(par), to: __MODULE__.Sub, as: :my_func
         defdelegate func_delegated_alias(par), to: E
       end
       """

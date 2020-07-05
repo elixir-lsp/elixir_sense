@@ -167,7 +167,7 @@ defmodule ElixirSense.Providers.Definition do
               column: column
             }
 
-          %ModFunInfo{type: :defdelegate, target: target} ->
+          %ModFunInfo{type: :defdelegate, target: target} when not is_nil(target) ->
             find_function_or_module(
               target,
               mods_funs_to_positions,

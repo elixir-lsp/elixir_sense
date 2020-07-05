@@ -421,7 +421,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     target_function =
       case body |> Keyword.get(:as) do
         nil -> {:ok, name}
-        {as, _, nil} when is_atom(as) -> {:ok, as}
+        as when is_atom(as) -> {:ok, as}
         _ -> :error
       end
 

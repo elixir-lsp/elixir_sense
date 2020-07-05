@@ -188,6 +188,21 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "delegated_function"
   end
 
+  test "handle defdelegate with `as`" do
+    buffer = """
+    defmodule MyModule do
+      defdelegate my_function, to: ElixirSenseExample.ModuleWithFunctions.DelegatedModule, as: :delegated_function
+      #            ^
+    end
+    """
+
+    %{found: true, type: :function, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 2, 15)
+
+    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
+    assert read_line(file, {line, column}) =~ "delegated_function"
+  end
+
   test "handle recursion in defdelegate" do
     buffer = """
     defmodule MyModule do
