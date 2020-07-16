@@ -108,8 +108,14 @@ defmodule ElixirSense.Core.Parser do
     }
   end
 
-  def string_to_ast(source, errors_threshold, cursor_line_number, original_error \\ nil) do
-    case Code.string_to_quoted(source, columns: true) do
+  def string_to_ast(
+        source,
+        errors_threshold,
+        cursor_line_number,
+        original_error \\ nil,
+        opts \\ []
+      ) do
+    case Code.string_to_quoted(source, opts |> Keyword.put(:columns, true)) do
       {:ok, ast} ->
         {:ok, ast, source}
 
@@ -120,7 +126,7 @@ defmodule ElixirSense.Core.Parser do
         if errors_threshold > 0 do
           source
           |> fix_parse_error(cursor_line_number, error)
-          |> string_to_ast(errors_threshold - 1, cursor_line_number, original_error)
+          |> string_to_ast(errors_threshold - 1, cursor_line_number, original_error, opts)
         else
           original_error || error
         end
