@@ -383,7 +383,7 @@ defmodule ElixirSense do
   @spec string_to_quoted(String.t(), pos_integer | nil, non_neg_integer, keyword) ::
           {:ok, Macro.t()} | {:error, {line :: pos_integer(), term(), term()}}
   def string_to_quoted(source, cursor_line_number \\ nil, error_threshold \\ 6, opts \\ []) do
-    case Parser.string_to_ast(source, error_threshold, cursor_line_number, opts) do
+    case Parser.string_to_ast(source, error_threshold, cursor_line_number, nil, opts) do
       {:ok, ast, _source} -> {:ok, ast}
       other -> other
     end
