@@ -121,6 +121,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       h === ?@ and t == [] ->
         expand_attribute("", env)
 
+      h === ?^ and t == [] ->
+        expand_variable("", env)
+
       identifier?(h) ->
         expand_expr(reduce(expr), env)
 
@@ -333,7 +336,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp expand_variable_or_import(hint, env) do
-    variables = expand_variable(hint, env)
+    variables = do_expand_variable(hint, env)
     # import calls of builtin functions are not possible
     funs =
       match_module_funs(Kernel, hint, false, env) ++
@@ -345,7 +348,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     format_expansion(variables ++ funs, hint)
   end
 
-  defp expand_variable(hint, %Env{vars: vars}) do
+  defp expand_variable(hint, env) do
+    variables = do_expand_variable(hint, env)
+    format_expansion(variables, hint)
+  end
+
+  defp do_expand_variable(hint, %Env{vars: vars}) do
     for(
       %VarInfo{name: name} when is_atom(name) <- vars,
       name = Atom.to_string(name),

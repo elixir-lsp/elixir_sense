@@ -565,18 +565,13 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     env = %Env{
       vars: [
         %VarInfo{
-          name: :numeral
-        },
-        %VarInfo{
           name: :number
-        },
-        %VarInfo{
-          name: :nothing
         }
       ]
     }
 
     assert expand('^numb', env) == {:yes, 'er', [%{type: :variable, name: "number"}]}
+    assert expand('^', env) == {:yes, 'number', [%{type: :variable, name: "number"}]}
   end
 
   test "attribute name completion" do
