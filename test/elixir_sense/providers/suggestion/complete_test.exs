@@ -1394,4 +1394,8 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
              ]
            } = expand(':edoc.files')
   end
+
+  test "complete after ! operator" do
+    assert {:yes, 'ary', [%{name: "is_binary"}]} = expand('!is_bin')
+  end
 end

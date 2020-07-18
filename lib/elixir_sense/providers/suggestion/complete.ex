@@ -189,6 +189,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     |> Enum.reverse()
     |> trim_leading(?&)
     |> trim_leading(?%)
+    |> trim_leading(?!)
   end
 
   defp trim_leading([char | rest], char),
