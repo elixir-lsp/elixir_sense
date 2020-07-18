@@ -139,17 +139,21 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
+  @spec split_at(String.t(), pos_integer, pos_integer) :: {String.t(), String.t()}
+  def split_at(code, line, col) do
+    pos = find_position(code, line, col, {0, 1, 1})
+    String.split_at(code, pos)
+  end
+
   @spec text_before(String.t(), pos_integer, pos_integer) :: String.t()
   def text_before(code, line, col) do
-    pos = find_position(code, line, col, {0, 1, 1})
-    {text, _rest} = String.split_at(code, pos)
+    {text, _rest} = split_at(code, line, col)
     text
   end
 
   @spec text_after(String.t(), pos_integer, pos_integer) :: String.t()
   def text_after(code, line, col) do
-    pos = find_position(code, line, col, {0, 1, 1})
-    {_, rest} = String.split_at(code, pos)
+    {_, rest} = split_at(code, line, col)
     rest
   end
 

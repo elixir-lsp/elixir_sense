@@ -160,16 +160,16 @@ defmodule ElixirSense do
   def suggestions(buffer, line, column) do
     hint = Source.prefix(buffer, line, column)
     buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
-    text_before = Source.text_before(buffer, line, column)
+    {text_before, text_after} = Source.split_at(buffer, line, column)
 
     buffer_file_metadata =
-      maybe_fix_autocomple_on_cursor(buffer_file_metadata, text_before, buffer, line, column)
-
-    text_before = Source.text_before(buffer, line, column)
+      maybe_fix_autocomple_on_cursor(buffer_file_metadata, text_before, text_after, line)
 
     env = Metadata.get_env(buffer_file_metadata, line)
 
-    Suggestion.find(hint, text_before, env, buffer_file_metadata)
+    cursor_context = %{text_before: text_before, text_after: text_after}
+
+    Suggestion.find(hint, env, buffer_file_metadata, cursor_context)
   end
 
   @doc """
@@ -400,13 +400,11 @@ defmodule ElixirSense do
   #
   # Note: This will be removed after refactoring the parser to
   # allow unparseable nodes in the AST.
-  defp maybe_fix_autocomple_on_cursor(%Metadata{error: nil} = meta, _, _, _, _) do
+  defp maybe_fix_autocomple_on_cursor(%Metadata{error: nil} = meta, _, _, _) do
     meta
   end
 
-  defp maybe_fix_autocomple_on_cursor(buffer_file_metadata, text_before, buffer, line, col) do
-    text_after = Source.text_after(buffer, line, col)
-
+  defp maybe_fix_autocomple_on_cursor(metadata, text_before, text_after, line) do
     # Fix incomplete call, e.g. cursor after `var.`
     fix_incomplete_call = fn text_before, text_after ->
       if String.ends_with?(text_before, ".") do
@@ -444,7 +442,7 @@ defmodule ElixirSense do
         {:halt, meta}
       else
         _ ->
-          {:cont, buffer_file_metadata}
+          {:cont, metadata}
       end
     end)
   end

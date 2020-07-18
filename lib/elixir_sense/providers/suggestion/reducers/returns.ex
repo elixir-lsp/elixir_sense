@@ -17,9 +17,9 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Returns do
   """
   def add_returns(
         "" = _hint,
-        _text_before,
         %State.Env{scope: {fun, arity}} = env,
         buffer_metadata,
+        _context,
         acc
       ) do
     %State.Env{module: current_module, behaviours: behaviours, protocol: protocol} = env
@@ -65,7 +65,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Returns do
     {:cont, %{acc | result: acc.result ++ list}}
   end
 
-  def add_returns(_hint, _text_before, _env, _buffer_metadata, acc) do
+  def add_returns(_hint, _env, _buffer_metadata, _context, acc) do
     {:cont, acc}
   end
 

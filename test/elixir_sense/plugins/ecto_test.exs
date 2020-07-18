@@ -68,8 +68,187 @@ defmodule ElixirSense.Plugins.EctoTest do
     end
   end
 
-  describe "suggestions" do
-    test "list clauses (macros of Ecto.Query with first argument as `query`" do
+  describe "suggesting ecto types" do
+    test "suggestion info for bult-in types" do
+      buffer = """
+      import Ecto.Schema
+      field name, {:
+      #             ^
+      """
+
+      [cursor] = cursors(buffer)
+
+      result = suggestions(buffer, cursor)
+
+      assert [
+               %{
+                 detail: "Ecto type",
+                 label: "{:array, inner_type}",
+                 insert_text: "array, inner_type}",
+                 kind: :type_parameter,
+                 documentation: doc,
+                 type: :generic
+               },
+               %{detail: "Ecto type", label: "{:map, inner_type}"}
+             ] = result
+
+      assert doc == """
+             Built-in Ecto type.
+
+             * **Elixir type:** `list`
+             * **Literal syntax:** `[value, value, ...]`\
+             """
+    end
+
+    test "suggestion info for custom types" do
+      buffer = """
+      import Ecto.Schema
+      field name, Ecto.U
+      #                 ^
+      """
+
+      [cursor] = cursors(buffer)
+
+      result = suggestions(buffer, cursor)
+
+      assert [
+               %{
+                 detail: "Ecto custom type",
+                 label: "Ecto.UUID",
+                 kind: :type_parameter,
+                 documentation: doc,
+                 type: :generic
+               }
+             ] = result
+
+      assert doc == """
+             Fake Ecto.UUID
+             """
+    end
+
+    test "insert_text includes leading `:` if it's not present" do
+      buffer = """
+      import Ecto.Schema
+      field name,
+      #          ^
+      """
+
+      [cursor] = cursors(buffer)
+
+      result = suggestions(buffer, cursor)
+
+      assert [%{insert_text: ":string"} | _] = result
+    end
+
+    test "insert_text does not include leading `:` if it's already present" do
+      buffer = """
+      import Ecto.Schema
+      field name, :f
+      #             ^
+      """
+
+      [cursor] = cursors(buffer)
+
+      result = suggestions(buffer, cursor)
+
+      assert [%{insert_text: "float"}] = result
+    end
+
+    test "insert_text/snippet include trailing `}` if it's not present" do
+      buffer = """
+      import Ecto.Schema
+      field name, {:a
+      #              ^
+      """
+
+      [cursor] = cursors(buffer)
+
+      result = suggestions(buffer, cursor)
+
+      assert [%{insert_text: "array, inner_type}", snippet: "array, ${1:inner_type}}"}] = result
+    end
+
+    test "insert_text/snippet do not include trailing `}` if it's already present" do
+      buffer = """
+      import Ecto.Schema
+      field name, {:a}
+      #              ^
+      """
+
+      [cursor] = cursors(buffer)
+
+      result = suggestions(buffer, cursor)
+
+      assert [%{insert_text: "array, inner_type", snippet: "array, ${1:inner_type}"}] = result
+    end
+  end
+
+  describe "suggesting ecto schemas" do
+    setup do
+      Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Comment)
+      Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Post)
+      Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.User)
+      :ok
+    end
+
+    test "suggest all available schemas" do
+      buffer = """
+      import Ecto.Schema
+      has_many :posts,
+      #                ^
+      """
+
+      [cursor] = cursors(buffer)
+
+      [
+        %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Comment"},
+        %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post"},
+        %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.User"}
+      ] = suggestions(buffer, cursor)
+    end
+
+    test "match the hint ignoring the case against the full module name or just the last part" do
+      buffer = """
+      import Ecto.Schema
+      has_many :posts, po
+      #                  ^
+      """
+
+      [cursor] = cursors(buffer)
+      [%{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post"}] = suggestions(buffer, cursor)
+
+      buffer = """
+      import Ecto.Schema
+      has_many :posts, ElixirSense.Plugins.Ecto.FakeSchemas.Po
+      #                                                       ^
+      """
+
+      [cursor] = cursors(buffer)
+      [%{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post"}] = suggestions(buffer, cursor)
+    end
+
+    test "suggestion info" do
+      buffer = """
+      import Ecto.Schema
+      has_many :posts, Po
+      #                  ^
+      """
+
+      [cursor] = cursors(buffer)
+      [suggestion] = suggestions(buffer, cursor)
+
+      assert suggestion == %{
+               detail: "Ecto schema",
+               documentation: "Fake Post schema.\n",
+               kind: :class,
+               label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post",
+               type: :generic
+             }
+    end
+  end
+
+  describe "suggestions for Ecto.Query.from/2" do
+    test "list clauses (any Ecto.Query macro that has `query` as first argument" do
       buffer = """
       import Ecto.Query
 
@@ -390,6 +569,91 @@ defmodule ElixirSense.Plugins.EctoTest do
       [cursor] = cursors(buffer)
 
       assert [%{detail: "(from clause) Ecto.Query"} | _] = suggestions(buffer, cursor)
+    end
+  end
+
+  describe "suggestions for Ecto.Schema.field/3" do
+    test "at arg 1, suggest built-in and custom ecto types" do
+      buffer = """
+      import Ecto.Schema
+      field name,
+      #          ^
+      """
+
+      [cursor] = cursors(buffer)
+      result = suggestions(buffer, cursor)
+
+      assert Enum.any?(result, &(&1.detail in ["Ecto type", "Ecto custom type"]))
+    end
+  end
+
+  describe "suggestions for Ecto.Migration.add/3" do
+    test "at arg 1, suggest built-in ecto types" do
+      buffer = """
+      import Ecto.Migration
+      add :name,
+      #         ^
+      """
+
+      [cursor] = cursors(buffer)
+      result = suggestions(buffer, cursor)
+
+      assert Enum.all?(result, &(&1.detail == "Ecto type"))
+    end
+  end
+
+  describe "suggestions for Ecto.Schema.has_many/3" do
+    test "at arg 1, suggest only ecto schemas" do
+      buffer = """
+      import Ecto.Schema
+      has_many :posts,
+      #               ^
+      """
+
+      [cursor] = cursors(buffer)
+      result = suggestions(buffer, cursor)
+
+      assert Enum.all?(result, &(&1.detail == "Ecto schema"))
+    end
+
+    test "at arg 2, suggest has_many options" do
+      buffer = """
+      import Ecto.Schema
+      has_many :posts, Post,
+      #                     ^
+      """
+
+      [cursor] = cursors(buffer)
+      [first_suggestion | _] = result = suggestions(buffer, cursor)
+
+      assert Enum.map(result, & &1.label) == [
+               "defaults",
+               "foreign_key",
+               "on_delete",
+               "on_replace",
+               "references",
+               "through",
+               "where"
+             ]
+
+      assert first_suggestion == %{
+               detail: "has_many option",
+               documentation: """
+               Default values to use when building the association.
+               It may be a keyword list of options that override the association schema
+               or a `{module, function, args}` that receive the struct and the owner as
+               arguments. For example, if you set `Post.has_many :comments, defaults: [public: true]`,
+               then when using `Ecto.build_assoc(post, :comments)` that comment will have
+               `comment.public == true`. Alternatively, you can set it to
+               `Post.has_many :comments, defaults: {__MODULE__, :update_comment, []}`
+               and `Post.update_comment(comment, post)` will be invoked.
+               """,
+               insert_text: "defaults: ",
+               kind: :property,
+               label: "defaults",
+               snippet: nil,
+               type: :generic
+             }
     end
   end
 end

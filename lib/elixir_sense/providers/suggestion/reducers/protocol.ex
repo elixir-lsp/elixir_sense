@@ -18,13 +18,13 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Protocol do
   @doc """
   A reducer that adds suggestions of protocol functions.
   """
-  def add_functions(_hint, _text_before, %State.Env{scope: {_f, _a}}, _buffer_metadata, acc),
+  def add_functions(_hint, %State.Env{scope: {_f, _a}}, _metadata, _cursor_context, acc),
     do: {:cont, acc}
 
-  def add_functions(_hint, _text_before, %State.Env{protocol: nil}, _buffer_metadata, acc),
+  def add_functions(_hint, %State.Env{protocol: nil}, _metadata, _cursor_context, acc),
     do: {:cont, acc}
 
-  def add_functions(hint, _text_before, env, _buffer_metadata, acc) do
+  def add_functions(hint, env, _metadata, _cursor_context, acc) do
     %State.Env{protocol: {protocol, _implementations}} = env
 
     list =

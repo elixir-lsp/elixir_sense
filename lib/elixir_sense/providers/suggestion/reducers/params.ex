@@ -19,7 +19,9 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
   @doc """
   A reducer that adds suggestions of keyword list options.
   """
-  def add_options(hint, prefix, env, buffer_metadata, acc) do
+  def add_options(hint, env, buffer_metadata, cursor_context, acc) do
+    prefix = cursor_context.text_before
+
     %State.Env{imports: imports, aliases: aliases, module: module} = env
     %Metadata{mods_funs_to_positions: mods_funs, types: metadata_types} = buffer_metadata
 

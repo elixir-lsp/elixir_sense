@@ -57,7 +57,9 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
     * Variable fields
 
   """
-  def populate(hint, text_before, env, buffer_metadata, acc) do
+  def populate(hint, env, buffer_metadata, context, acc) do
+    text_before = context.text_before
+
     %Metadata{
       structs: structs,
       mods_funs_to_positions: mods_and_funs,
@@ -86,7 +88,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
 
   Note: requires populate/5.
   """
-  def add_modules(_hint, _text_before, _env, _file_metadata, acc) do
+  def add_modules(_hint, _env, _file_metadata, _context, acc) do
     add_suggestions(:module, acc)
   end
 
@@ -95,7 +97,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
 
   Note: requires populate/5.
   """
-  def add_functions(_hint, _text_before, _env, _file_metadata, acc) do
+  def add_functions(_hint, _env, _file_metadata, _context, acc) do
     add_suggestions(:function, acc)
   end
 
@@ -104,7 +106,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
 
   Note: requires populate/5.
   """
-  def add_macros(_hint, _text_before, _env, _file_metadata, acc) do
+  def add_macros(_hint, _env, _file_metadata, _context, acc) do
     add_suggestions(:macro, acc)
   end
 
@@ -113,7 +115,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
 
   Note: requires populate/5.
   """
-  def add_fields(_hint, _text_before, _env, _file_metadata, acc) do
+  def add_fields(_hint, _env, _file_metadata, _context, acc) do
     add_suggestions(:field, acc)
   end
 
@@ -122,7 +124,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
 
   Note: requires populate/5.
   """
-  def add_attributes(_hint, _text_before, _env, _file_metadata, acc) do
+  def add_attributes(_hint, _env, _file_metadata, _context, acc) do
     add_suggestions(:attribute, acc)
   end
 
@@ -131,7 +133,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
 
   Note: requires populate/5.
   """
-  def add_variables(_hint, _text_before, _env, _file_metadata, acc) do
+  def add_variables(_hint, _env, _file_metadata, _context, acc) do
     add_suggestions(:variable, acc)
   end
 

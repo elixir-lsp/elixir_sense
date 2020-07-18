@@ -69,10 +69,10 @@ defmodule ElixirSense.Providers.Suggestion do
           | Reducers.TypeSpecs.type_spec()
 
   @type acc :: %{result: [suggestion], reducers: [atom], context: map}
+  @type cursor_context :: %{text_before: String.t(), text_after: String.t()}
 
   @reducers [
-    ecto_assoc_associations: &ElixirSense.Plugins.Ecto.add_associations/5,
-    ecto_from_options: &ElixirSense.Plugins.Ecto.add_from_options/5,
+    ecto: &ElixirSense.Plugins.Ecto.reduce/5,
     structs_fields: &Reducers.Struct.add_fields/5,
     returns: &Reducers.Returns.add_returns/5,
     callbacks: &Reducers.Callbacks.add_callbacks/5,
@@ -95,14 +95,14 @@ defmodule ElixirSense.Providers.Suggestion do
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t(), String.t(), State.Env.t(), Metadata.t()) :: [suggestion()]
-  def find(hint, text_before, env, buffer_metadata) do
+  @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context) :: [suggestion()]
+  def find(hint, env, buffer_metadata, cursor_context) do
     acc = %{result: [], reducers: Keyword.keys(@reducers), context: %{}}
 
     %{result: result} =
       Enum.reduce_while(@reducers, acc, fn {key, fun}, acc ->
         if key in acc.reducers do
-          fun.(hint, text_before, env, buffer_metadata, acc)
+          fun.(hint, env, buffer_metadata, cursor_context, acc)
         else
           {:cont, acc}
         end

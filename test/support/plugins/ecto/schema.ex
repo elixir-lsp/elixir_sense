@@ -9,4 +9,12 @@ defmodule Ecto.Schema do
   defmacro field(name, type \\ :string, opts \\ []) do
     {name, type, opts}
   end
+
+  defmacro has_many(name, queryable, opts \\ []) do
+    {name, queryable, opts}
+  end
+
+  defmacro has_one(name, queryable, opts \\ []) do
+    {name, queryable, opts}
+  end
 end
