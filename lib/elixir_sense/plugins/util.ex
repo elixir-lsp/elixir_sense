@@ -6,6 +6,25 @@ defmodule ElixirSense.Plugins.Util do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
 
+  def match_module?(mod_str, hint) do
+    hint = String.downcase(hint)
+    mod_full = String.downcase(mod_str)
+    mod_last = mod_full |> String.split(".") |> List.last()
+    Enum.any?([mod_last, mod_full], &String.starts_with?(&1, hint))
+  end
+
+  def insert_text(hint, value) do
+    [_, hint_prefix] = Regex.run(~r/(.*?)[\w0-9\._!\?\->]*$/, hint)
+    String.replace_prefix(value, hint_prefix, "")
+  end
+
+  def command(:trigger_suggest) do
+    %{
+      "title" => "Trigger Parameter Hint",
+      "command" => "editor.action.triggerSuggest"
+    }
+  end
+
   def actual_mod_fun({mod, fun}, elixir_prefix, env, buffer_metadata) do
     %State.Env{imports: imports, aliases: aliases, module: module} = env
     %Metadata{mods_funs_to_positions: mods_funs, types: metadata_types} = buffer_metadata

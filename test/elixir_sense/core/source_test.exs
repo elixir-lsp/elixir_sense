@@ -592,6 +592,50 @@ defmodule ElixirSense.Core.SourceTest do
       assert %{options_so_far: ^options_so_far} = which_func(code)
     end
 
+    test "identify current option, if any" do
+      code = """
+      from(
+        u in User,
+        where: is_nil(u.id),
+        preload: [assoc1: [assoc1_1: [], assoc1_2: []]],
+        limit: 10,
+        select: \
+      """
+
+      assert %{option: :select} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        where: is_nil(u.id),
+        preload: [assoc1: [assoc1_1: [], assoc1_2: []]],
+        limit: 10,
+        select: u\
+      """
+
+      assert %{option: :select} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        where: is_nil(u.id),
+        preload: [assoc1: [assoc1_1: [], assoc1_2: []]],
+        limit: 10,
+        sel\
+      """
+
+      assert %{option: nil} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        where: is_nil(u.id),
+        preload: [assoc1: [assoc1_1: [], assoc1_2: [], \
+      """
+
+      assert %{option: nil} = which_func(code)
+    end
+
     test "functions without parens on first argument" do
       code = "from "
       assert %{candidate: {nil, :from}, npar: 0} = which_func(code)

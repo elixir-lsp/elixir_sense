@@ -479,6 +479,7 @@ defmodule ElixirSense.Core.Source do
           pipe_before: boolean,
           unfinished_parm: boolean,
           cursor_at_option: true | false | :maybe,
+          option: atom(),
           options_so_far: [atom],
           pos:
             nil | {{non_neg_integer, non_neg_integer}, {non_neg_integer, nil | non_neg_integer}}
@@ -515,6 +516,13 @@ defmodule ElixirSense.Core.Source do
       end
 
     cursor_at_option = check_cursor_at_option(tokens, result)
+
+    option =
+      if count3 == 0 and options_so_far != [] and cursor_at_option == false do
+        {name, _} = List.last(options_so_far)
+        name
+      end
+
     {normalized_candidate, elixir_prefix} = normalize_candidate(candidate, current_module)
 
     unfinished_parm =
@@ -538,6 +546,7 @@ defmodule ElixirSense.Core.Source do
       pipe_before: pipe_before,
       cursor_at_option: cursor_at_option,
       options_so_far: options_so_far,
+      option: option,
       pos: pos
     }
   end

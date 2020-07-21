@@ -8,6 +8,7 @@ defmodule ElixirSense.Plugins.Ecto do
 
   use ElixirSense.Providers.Suggestion.GenericReducer
 
+  @impl true
   def suggestions(hint, {Ecto.Migration, :add, 1, _info}, _chain, opts) do
     builtin_types = Types.find_builtin_types(hint, opts.cursor_context)
     builtin_types = Enum.reject(builtin_types, &String.starts_with?(&1.label, "{"))
@@ -26,18 +27,23 @@ defmodule ElixirSense.Plugins.Ecto do
     {:override, Schema.find_schemas(hint)}
   end
 
+  def suggestions(hint, {Ecto.Schema, :has_many, 2, %{option: option}}, _, _)
+      when option != nil do
+    {:override, Schema.find_option_values(hint, option, :has_many)}
+  end
+
   def suggestions(_hint, {Ecto.Schema, :has_many, 2, %{cursor_at_option: false}}, _, _) do
     :ignore
   end
 
   def suggestions(hint, {Ecto.Schema, :has_many, 2, _info}, _, _) do
-    {:override, Schema.find_has_many_options(hint)}
+    {:override, Schema.find_options(hint, :has_many)}
   end
 
   def suggestions(
         hint,
         _,
-        [{nil, :assoc, 1, assoc_info}, {Ecto.Query, :from, 1, from_info}],
+        [{nil, :assoc, 1, assoc_info}, {Ecto.Query, :from, 1, from_info} | _],
         opts
       ) do
     text_before = opts.cursor_context.text_before

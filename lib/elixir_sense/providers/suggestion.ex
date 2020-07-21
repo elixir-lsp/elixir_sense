@@ -52,7 +52,8 @@ defmodule ElixirSense.Providers.Suggestion do
           insert_text: String.t() | nil,
           snippet: String.t() | nil,
           priority: integer() | nil,
-          kind: String.t()
+          kind: String.t(),
+          command: map()
         }
 
   @type suggestion ::

@@ -652,8 +652,52 @@ defmodule ElixirSense.Plugins.EctoTest do
                kind: :property,
                label: "defaults",
                snippet: nil,
+               command: nil,
                type: :generic
              }
+    end
+
+    test "at arg 2, on option :on_replace, suggest possible values" do
+      buffer = """
+      import Ecto.Schema
+
+      has_many :posts, Post, on_replace: #
+      #                                  ^
+      """
+
+      [cursor] = cursors(buffer)
+      [_first_suggestion | _] = result = suggestions(buffer, cursor)
+
+      assert Enum.map(result, & &1.label) == [
+               ":raise",
+               ":mark_as_invalid",
+               ":nilify",
+               ":update",
+               ":delete"
+             ]
+
+      buffer = """
+      import Ecto.Schema
+
+      has_many :posts, Post, on_replace: :r #
+      #                                    ^
+      """
+
+      [cursor] = cursors(buffer)
+
+      assert [
+               %{
+                 detail: ":on_replace value",
+                 insert_text: "raise",
+                 kind: :enum_member,
+                 label: ":raise",
+                 type: :generic,
+                 documentation: """
+                 (default) - do not allow removing association or embedded
+                 data via parent changesets
+                 """
+               }
+             ] == suggestions(buffer, cursor)
     end
   end
 end
