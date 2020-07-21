@@ -1,4 +1,4 @@
-defmodule ElixirSense.Plugins.Ecto.From do
+defmodule ElixirSense.Plugins.Ecto.Query do
   @moduledoc false
 
   alias ElixirSense.Core.Introspection
@@ -6,6 +6,9 @@ defmodule ElixirSense.Plugins.Ecto.From do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Providers.Suggestion.Complete
+
+  # We'll keep these values hard-coded until Ecto provides the same information
+  # using docs' metadata.
 
   @joins [
     :join,

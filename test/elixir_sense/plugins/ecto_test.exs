@@ -585,6 +585,27 @@ defmodule ElixirSense.Plugins.EctoTest do
 
       assert Enum.any?(result, &(&1.detail in ["Ecto type", "Ecto custom type"]))
     end
+
+    test "at arg 2, suggest field options" do
+      buffer = """
+      import Ecto.Schema
+      field :name, :string,
+      #                     ^
+      """
+
+      [cursor] = cursors(buffer)
+      result = suggestions(buffer, cursor)
+
+      assert Enum.map(result, & &1.label) == [
+               "autogenerate",
+               "default",
+               "load_in_query",
+               "primary_key",
+               "read_after_writes",
+               "source",
+               "virtual"
+             ]
+    end
   end
 
   describe "suggestions for Ecto.Migration.add/3" do
@@ -698,6 +719,118 @@ defmodule ElixirSense.Plugins.EctoTest do
                  """
                }
              ] == suggestions(buffer, cursor)
+    end
+  end
+
+  describe "suggestions for Ecto.Schema.has_one/3" do
+    test "at arg 1, suggest only ecto schemas" do
+      buffer = """
+      import Ecto.Schema
+      has_one :post,
+      #              ^
+      """
+
+      [cursor] = cursors(buffer)
+      result = suggestions(buffer, cursor)
+
+      assert Enum.all?(result, &(&1.detail == "Ecto schema"))
+    end
+
+    test "at arg 2, suggest has_one options" do
+      buffer = """
+      import Ecto.Schema
+      has_one :post, Post,
+      #                    ^
+      """
+
+      [cursor] = cursors(buffer)
+      result = suggestions(buffer, cursor)
+
+      assert Enum.map(result, & &1.label) == [
+               "defaults",
+               "foreign_key",
+               "on_delete",
+               "on_replace",
+               "references",
+               "through",
+               "where"
+             ]
+    end
+  end
+
+  describe "suggestions for Ecto.Schema.belongs_to/3" do
+    test "at arg 1, suggest only ecto schemas" do
+      buffer = """
+      import Ecto.Schema
+      belongs_to :post,
+      #                 ^
+      """
+
+      [cursor] = cursors(buffer)
+      result = suggestions(buffer, cursor)
+
+      assert Enum.all?(result, &(&1.detail == "Ecto schema"))
+    end
+
+    test "at arg 2, suggest belongs_to options" do
+      buffer = """
+      import Ecto.Schema
+      belongs_to :post, Post,
+      #                       ^
+      """
+
+      [cursor] = cursors(buffer)
+      result = suggestions(buffer, cursor)
+
+      assert Enum.map(result, & &1.label) == [
+               "defaults",
+               "define_field",
+               "foreign_key",
+               "on_replace",
+               "primary_key",
+               "references",
+               "source",
+               "type",
+               "where"
+             ]
+    end
+  end
+
+  describe "suggestions for Ecto.Schema.many_to_many/3" do
+    test "at arg 1, suggest only ecto schemas" do
+      buffer = """
+      import Ecto.Schema
+      many_to_many :post,
+      #                   ^
+      """
+
+      [cursor] = cursors(buffer)
+      result = suggestions(buffer, cursor)
+
+      assert Enum.all?(result, &(&1.detail == "Ecto schema"))
+    end
+
+    test "at arg 2, suggest many_to_many options" do
+      buffer = """
+      import Ecto.Schema
+      many_to_many :post, Post,
+      #                         ^
+      """
+
+      [cursor] = cursors(buffer)
+      result = suggestions(buffer, cursor)
+
+      assert Enum.map(result, & &1.label) == [
+               "defaults",
+               "join_defaults",
+               "join_keys",
+               "join_through",
+               "join_where",
+               "on_delete",
+               "on_replace",
+               "unique",
+               "where"
+             ]
     end
   end
 end

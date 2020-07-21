@@ -17,4 +17,12 @@ defmodule Ecto.Schema do
   defmacro has_one(name, queryable, opts \\ []) do
     {name, queryable, opts}
   end
+
+  defmacro belongs_to(name, queryable, opts \\ []) do
+    {name, queryable, opts}
+  end
+
+  defmacro many_to_many(name, queryable, opts \\ []) do
+    {name, queryable, opts}
+  end
 end

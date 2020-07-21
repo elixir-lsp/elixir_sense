@@ -3,6 +3,9 @@ defmodule ElixirSense.Plugins.Ecto.Types do
 
   alias ElixirSense.Core.Introspection
 
+  # We'll keep these values hard-coded until Ecto provides the same information
+  # using docs' metadata.
+
   @ecto_types [
     {":string", "stringUTF-8 encoded", "\"hello\"", nil},
     {":boolean", "boolean", "true, false", nil},

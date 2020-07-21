@@ -2,11 +2,13 @@ defmodule ElixirSense.Plugins.Ecto do
   @moduledoc false
 
   alias ElixirSense.Core.Source
-  alias ElixirSense.Plugins.Ecto.From
+  alias ElixirSense.Plugins.Ecto.Query
   alias ElixirSense.Plugins.Ecto.Schema
   alias ElixirSense.Plugins.Ecto.Types
 
   use ElixirSense.Providers.Suggestion.GenericReducer
+
+  @schema_funcs [:field, :belongs_to, :has_one, :has_many, :many_to_many]
 
   @impl true
   def suggestions(hint, {Ecto.Migration, :add, 1, _info}, _chain, opts) do
@@ -23,21 +25,24 @@ defmodule ElixirSense.Plugins.Ecto do
     {:override, builtin_types ++ custom_types}
   end
 
-  def suggestions(hint, {Ecto.Schema, :has_many, 1, _info}, _chain, _opts) do
+  def suggestions(hint, {Ecto.Schema, func, 1, _info}, _chain, _opts)
+      when func in @schema_funcs do
     {:override, Schema.find_schemas(hint)}
   end
 
-  def suggestions(hint, {Ecto.Schema, :has_many, 2, %{option: option}}, _, _)
-      when option != nil do
-    {:override, Schema.find_option_values(hint, option, :has_many)}
+  def suggestions(hint, {Ecto.Schema, func, 2, %{option: option}}, _, _)
+      when func in @schema_funcs and option != nil do
+    {:override, Schema.find_option_values(hint, option, func)}
   end
 
-  def suggestions(_hint, {Ecto.Schema, :has_many, 2, %{cursor_at_option: false}}, _, _) do
+  def suggestions(_hint, {Ecto.Schema, func, 2, %{cursor_at_option: false}}, _, _)
+      when func in @schema_funcs do
     :ignore
   end
 
-  def suggestions(hint, {Ecto.Schema, :has_many, 2, _info}, _, _) do
-    {:override, Schema.find_options(hint, :has_many)}
+  def suggestions(hint, {Ecto.Schema, func, 2, _info}, _, _)
+      when func in @schema_funcs do
+    {:override, Schema.find_options(hint, func)}
   end
 
   def suggestions(
@@ -53,9 +58,10 @@ defmodule ElixirSense.Plugins.Ecto do
     with %{pos: {{line, col}, _}} <- assoc_info,
          assoc_code <- Source.text_after(text_before, line, col),
          [_, var] <- Regex.run(~r/^assoc\(\s*([a-z][a-zA-Z0-9_]*)\s*,/, assoc_code),
-         %{^var => %{type: type}} <- From.extract_bindings(text_before, from_info, env, metadata),
+         %{^var => %{type: type}} <-
+           Query.extract_bindings(text_before, from_info, env, metadata),
          true <- function_exported?(type, :__schema__, 1) do
-      {:override, From.find_assoc_suggestions(type, hint)}
+      {:override, Query.find_assoc_suggestions(type, hint)}
     else
       _ ->
         :ignore
@@ -68,11 +74,11 @@ defmodule ElixirSense.Plugins.Ecto do
         text_before = opts.cursor_context.text_before
         env = opts.env
         buffer_metadata = opts.buffer_metadata
-        bindings = From.extract_bindings(text_before, info, env, buffer_metadata)
-        {:add, From.bindings_suggestions(hint, bindings)}
+        bindings = Query.extract_bindings(text_before, info, env, buffer_metadata)
+        {:add, Query.bindings_suggestions(hint, bindings)}
 
       {_, _, _, _} ->
-        {:override, From.find_options(hint)}
+        {:override, Query.find_options(hint)}
 
       _ ->
         :ignore
