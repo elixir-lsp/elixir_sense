@@ -45,6 +45,16 @@ defmodule ElixirSense.Plugins.Ecto do
     {:override, Schema.find_options(hint, func)}
   end
 
+  def suggestions(hint, {Ecto.Query, :from, 0, _info}, _, opts) do
+    text_before = opts.cursor_context.text_before
+
+    if after_in?(hint, text_before) do
+      {:add, Schema.find_schemas(hint)}
+    else
+      :ignore
+    end
+  end
+
   def suggestions(
         hint,
         _,
@@ -53,13 +63,12 @@ defmodule ElixirSense.Plugins.Ecto do
       ) do
     text_before = opts.cursor_context.text_before
     env = opts.env
-    metadata = opts.buffer_metadata
+    meta = opts.buffer_metadata
 
     with %{pos: {{line, col}, _}} <- assoc_info,
          assoc_code <- Source.text_after(text_before, line, col),
          [_, var] <- Regex.run(~r/^assoc\(\s*([a-z][a-zA-Z0-9_]*)\s*,/, assoc_code),
-         %{^var => %{type: type}} <-
-           Query.extract_bindings(text_before, from_info, env, metadata),
+         %{^var => %{type: type}} <- Query.extract_bindings(text_before, from_info, env, meta),
          true <- function_exported?(type, :__schema__, 1) do
       {:override, Query.find_assoc_suggestions(type, hint)}
     else
@@ -74,8 +83,9 @@ defmodule ElixirSense.Plugins.Ecto do
         text_before = opts.cursor_context.text_before
         env = opts.env
         buffer_metadata = opts.buffer_metadata
+        schemas = if after_in?(hint, text_before), do: Schema.find_schemas(hint), else: []
         bindings = Query.extract_bindings(text_before, info, env, buffer_metadata)
-        {:add, Query.bindings_suggestions(hint, bindings)}
+        {:add, schemas ++ Query.bindings_suggestions(hint, bindings)}
 
       {_, _, _, _} ->
         {:override, Query.find_options(hint)}
@@ -113,4 +123,8 @@ defmodule ElixirSense.Plugins.Ecto do
 
   defp snippet_for_add(2, choices), do: "add :${1:column}, ${2|#{choices}|}"
   defp snippet_for_add(3, choices), do: "add :${1:column}, ${2|#{choices}|}, ${3:opts}"
+
+  defp after_in?(hint, text_before) do
+    Regex.match?(~r/\s+in\s+#{hint}$/, text_before)
+  end
 end

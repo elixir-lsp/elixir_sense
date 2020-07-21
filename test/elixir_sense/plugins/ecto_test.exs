@@ -489,6 +489,39 @@ defmodule ElixirSense.Plugins.EctoTest do
       assert detail == "(Ecto association) ElixirSense.Plugins.Ecto.FakeSchemas.User"
     end
 
+    test "list avaiable schemas after `in`" do
+      Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Comment)
+      Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Post)
+      Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.User)
+
+      buffer = """
+      import Ecto.Query
+      alias ElixirSense.Plugins.Ecto.FakeSchemas.Post
+      alias ElixirSense.Plugins.Ecto.FakeSchemas.Comment
+
+      def query() do
+        from p in Post, join: c in Comment
+          #       ^                ^
+      end
+      """
+
+      [cursor_1, cursor_2] = cursors(buffer)
+
+      assert [
+               %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Comment"},
+               %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post"},
+               %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.User"}
+               | _
+             ] = suggestions(buffer, cursor_1)
+
+      assert [
+               %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Comment"},
+               %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post"},
+               %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.User"}
+               | _
+             ] = suggestions(buffer, cursor_2)
+    end
+
     test "list bindings and binding fields inside nested functions" do
       buffer = """
       import Ecto.Query
