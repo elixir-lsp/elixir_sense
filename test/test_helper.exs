@@ -29,4 +29,9 @@ defmodule TestHelper do
     suggestions(buffer, cursor)
     |> Enum.filter(fn s -> s.type == type end)
   end
+
+  def suggestions_by_kind(buffer, cursor, kind) do
+    suggestions(buffer, cursor)
+    |> Enum.filter(fn s -> s[:kind] == kind end)
+  end
 end

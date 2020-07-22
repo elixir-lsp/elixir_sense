@@ -366,15 +366,17 @@ defmodule ElixirSense.Plugins.EctoTest do
       import Ecto.Query
       alias ElixirSense.Plugins.Ecto.FakeSchemas.User, as: User
 
-      from(
-        u in User,
-        join: m1 in Mod1,
-        join: m2 in Mod2,
-        left_join: a1 in assoc(u, :assoc1),
-        inner_join: a2 in assoc(u, :assoc2),
-        where: a2 in subquery(from(s in Sub, limit: 1)),
-        where: u.id == m
-      #        ^        ^
+      def query() do
+        from(
+          u in User,
+          join: m1 in Mod1,
+          join: m2 in Mod2,
+          left_join: a1 in assoc(u, :assoc1),
+          inner_join: a2 in assoc(u, :assoc2),
+          where: a2 in subquery(from(s in Sub, limit: 1)),
+          where: u.id == m
+        #        ^        ^
+      end
       """
 
       [cursor_1, cursor_2] = cursors(buffer)

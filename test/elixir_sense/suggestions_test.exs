@@ -2,6 +2,7 @@ defmodule ElixirSense.SuggestionsTest do
   use ExUnit.Case, async: true
   alias ElixirSense.Core.Source
 
+  import TestHelper
   import ExUnit.CaptureIO
 
   test "empty hint" do
@@ -1077,6 +1078,41 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{name: "@myattr", type: :attribute}
            ]
+  end
+
+  test "lists doc snippets in module scope" do
+    buffer = """
+    defmodule MyModule do
+      @
+      #^
+      @m
+      # ^
+      def some do
+        @m
+        # ^
+      end
+    end
+    """
+
+    [cursor_1, cursor_2, cursor_3] = cursors(buffer)
+
+    list = suggestions_by_kind(buffer, cursor_1, :snippet)
+
+    assert [
+             %{label: ~s(@doc """"""), detail: detail, documentation: doc},
+             %{label: ~s(@moduledoc """""")},
+             %{label: ~s(@typedoc """""")},
+             %{label: "@doc false"},
+             %{label: "@moduledoc false"}
+           ] = list
+
+    assert detail == "module attribute snippet"
+    assert doc == "Documents a function"
+
+    list = suggestions_by_kind(buffer, cursor_2, :snippet)
+    assert [%{label: ~S(@moduledoc """""")}, %{label: "@moduledoc false"}] = list
+
+    assert suggestions_by_kind(buffer, cursor_3, :snippet) == []
   end
 
   test "functions defined in the module" do

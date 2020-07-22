@@ -13,7 +13,7 @@ defmodule ElixirSense.Plugins.Util do
     Enum.any?([mod_last, mod_full], &String.starts_with?(&1, hint))
   end
 
-  def insert_text(hint, value) do
+  def trim_leading_for_insertion(hint, value) do
     [_, hint_prefix] = Regex.run(~r/(.*?)[\w0-9\._!\?\->]*$/, hint)
     String.replace_prefix(value, hint_prefix, "")
   end

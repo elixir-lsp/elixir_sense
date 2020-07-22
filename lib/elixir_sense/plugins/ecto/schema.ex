@@ -428,7 +428,7 @@ defmodule ElixirSense.Plugins.Ecto.Schema do
         type: :generic,
         kind: :enum_member,
         label: value_str,
-        insert_text: Util.insert_text(hint, value_str),
+        insert_text: Util.trim_leading_for_insertion(hint, value_str),
         detail: "#{inspect(option)} value",
         documentation: doc
       }

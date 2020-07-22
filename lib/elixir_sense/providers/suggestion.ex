@@ -50,6 +50,7 @@ defmodule ElixirSense.Providers.Suggestion do
           detail: String.t() | nil,
           documentation: String.t() | nil,
           insert_text: String.t() | nil,
+          filter_text: String.t() | nil,
           snippet: String.t() | nil,
           priority: integer() | nil,
           kind: String.t(),
@@ -86,7 +87,8 @@ defmodule ElixirSense.Providers.Suggestion do
     functions: &Reducers.Common.add_functions/5,
     macros: &Reducers.Common.add_macros/5,
     variable_fields: &Reducers.Common.add_fields/5,
-    attributes: &Reducers.Common.add_attributes/5
+    attributes: &Reducers.Common.add_attributes/5,
+    docs_snippets: &Reducers.DocsSnippets.add_snippets/5
   ]
 
   @decorators [
