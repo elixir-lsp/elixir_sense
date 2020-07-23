@@ -10,6 +10,10 @@ defmodule Ecto.Schema do
     {name, type, opts}
   end
 
+  defmacro schema(source, do: block) do
+    {source, block}
+  end
+
   defmacro has_many(name, queryable, opts \\ []) do
     {name, queryable, opts}
   end

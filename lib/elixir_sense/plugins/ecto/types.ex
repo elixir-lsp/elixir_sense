@@ -27,12 +27,6 @@ defmodule ElixirSense.Plugins.Ecto.Types do
     {":binary", "binary", "<<int, int, int, ...>>", nil}
   ]
 
-  @type_choices Enum.map_join(@ecto_types, ",", &String.replace(elem(&1, 0), ",", "\\,"))
-
-  def type_choices do
-    @type_choices
-  end
-
   def find_builtin_types(hint, cursor_context) do
     text_before = cursor_context.text_before
     text_after = cursor_context.text_after

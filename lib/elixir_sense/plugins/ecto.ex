@@ -95,34 +95,21 @@ defmodule ElixirSense.Plugins.Ecto do
     end
   end
 
-  @doc """
-  Adds customized snippets for `Ecto.Schema.field`
-  """
-  def decorate(%{origin: "Ecto.Schema", name: "field", arity: arity} = item)
-      when arity in 1..3 do
-    snippet = snippet_for_field(arity, Types.type_choices())
+  # Adds customized snippet for `Ecto.Schema.schema/2`
+  def decorate(%{origin: "Ecto.Schema", name: "schema", arity: 2} = item) do
+    snippet = """
+    schema "$1" do
+      $0
+    end
+    """
+
     Map.put(item, :snippet, snippet)
   end
 
-  @doc """
-  Adds customized snippets for `Ecto.Migration.add`
-  """
-  def decorate(%{origin: "Ecto.Migration", name: "add", arity: arity} = item)
-      when arity in 2..3 do
-    snippet = snippet_for_add(arity, Types.type_choices())
-    Map.put(item, :snippet, snippet)
-  end
-
+  # Fallback
   def decorate(item) do
     item
   end
-
-  defp snippet_for_field(1, _choices), do: "field :${1:name}"
-  defp snippet_for_field(2, choices), do: "field :${1:name}, ${2|#{choices}|}"
-  defp snippet_for_field(3, choices), do: "field :${1:name}, ${2|#{choices}|}, ${3:opts}"
-
-  defp snippet_for_add(2, choices), do: "add :${1:column}, ${2|#{choices}|}"
-  defp snippet_for_add(3, choices), do: "add :${1:column}, ${2|#{choices}|}, ${3:opts}"
 
   defp after_in?(hint, text_before) do
     Regex.match?(~r/\s+in\s+#{hint}$/, text_before)

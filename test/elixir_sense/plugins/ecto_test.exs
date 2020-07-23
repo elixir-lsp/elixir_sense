@@ -3,32 +3,11 @@ defmodule ElixirSense.Plugins.EctoTest do
   import ExUnit.CaptureIO
   import TestHelper
 
-  @ecto_types """
-  :string,\
-  :boolean,\
-  :integer,\
-  :float,\
-  :decimal,\
-  :id,\
-  :date,\
-  :time,\
-  :time_usec,\
-  :naive_datetime,\
-  :naive_datetime_usec,\
-  :utc_datetime,\
-  :utc_datetime_usec,\
-  {:array\\, inner_type},\
-  :map,\
-  {:map\\, inner_type},\
-  :binary_id,\
-  :binary\
-  """
-
   describe "decorate" do
-    test "update snippets to add type choices for Ecto.Schema.field/1..3" do
+    test "update snippet for Ecto.Schema.schema/2" do
       buffer = """
       import Ecto.Schema
-      fiel
+      sche
       #   ^
       """
 
@@ -36,35 +15,13 @@ defmodule ElixirSense.Plugins.EctoTest do
 
       result = suggestions(buffer, cursor)
 
-      assert [
-               %{name: "field", arity: 1, snippet: snippet1},
-               %{name: "field", arity: 2, snippet: snippet2},
-               %{name: "field", arity: 3, snippet: snippet3}
-             ] = result
+      assert [%{name: "schema", arity: 2, snippet: snippet}] = result
 
-      assert snippet1 == "field :${1:name}"
-      assert snippet2 == "field :${1:name}, ${2|#{@ecto_types}|}"
-      assert snippet3 == "field :${1:name}, ${2|#{@ecto_types}|}, ${3:opts}"
-    end
-
-    test "update snippets to add type choices for Ecto.Migration.add/2..3" do
-      buffer = """
-      import Ecto.Migration
-      ad
-      # ^
-      """
-
-      [cursor] = cursors(buffer)
-
-      result = suggestions(buffer, cursor)
-
-      assert [
-               %{name: "add", arity: 2, snippet: snippet2},
-               %{name: "add", arity: 3, snippet: snippet3}
-             ] = result
-
-      assert snippet2 == "add :${1:column}, ${2|#{@ecto_types}|}"
-      assert snippet3 == "add :${1:column}, ${2|#{@ecto_types}|}, ${3:opts}"
+      assert snippet == """
+             schema "$1" do
+               $0
+             end
+             """
     end
   end
 
