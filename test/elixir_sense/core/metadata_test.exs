@@ -84,4 +84,39 @@ defmodule ElixirSense.Core.MetadataTest do
              %{name: "func", params: ["{}", "optional \\\\ true"], documentation: "", spec: ""}
            ]
   end
+
+  test "at_module_body?" do
+    code = """
+    defmodule MyModule do # 1
+      @type a :: atom() # 2
+
+      defp func(1) do
+        IO.puts "" # 5
+      end
+
+      IO.puts "" # 8
+
+      schema do
+        IO.puts "" # 11
+      end
+    end
+    """
+
+    metadata = Parser.parse_string(code, true, true, 1)
+
+    env = Metadata.get_env(metadata, 1)
+    assert Metadata.at_module_body?(metadata, env)
+
+    env = Metadata.get_env(metadata, 2)
+    assert Metadata.at_module_body?(metadata, env)
+
+    env = Metadata.get_env(metadata, 8)
+    assert Metadata.at_module_body?(metadata, env)
+
+    env = Metadata.get_env(metadata, 5)
+    refute Metadata.at_module_body?(metadata, env)
+
+    env = Metadata.get_env(metadata, 11)
+    refute Metadata.at_module_body?(metadata, env)
+  end
 end

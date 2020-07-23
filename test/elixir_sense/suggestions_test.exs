@@ -1080,21 +1080,28 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
-  test "lists doc snippets in module scope" do
+  test "lists doc snippets in module body" do
     buffer = """
     defmodule MyModule do
       @
       #^
+
       @m
       # ^
+
       def some do
+        @m
+        # ^
+      end
+
+      schema do
         @m
         # ^
       end
     end
     """
 
-    [cursor_1, cursor_2, cursor_3] = cursors(buffer)
+    [cursor_1, cursor_2, cursor_3, cursor_4] = cursors(buffer)
 
     list = suggestions_by_kind(buffer, cursor_1, :snippet)
 
@@ -1113,6 +1120,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert [%{label: ~S(@moduledoc """""")}, %{label: "@moduledoc false"}] = list
 
     assert suggestions_by_kind(buffer, cursor_3, :snippet) == []
+    assert suggestions_by_kind(buffer, cursor_4, :snippet) == []
   end
 
   test "functions defined in the module" do

@@ -19,7 +19,8 @@ defmodule ElixirSense.Providers.Signature do
   Returns the signature info from the function or type defined in the prefix, if any.
   """
   @spec find(String.t(), State.Env.t(), Metadata.t()) :: signature_info | :none
-  def find(prefix, %State.Env{imports: imports, aliases: aliases, module: module}, metadata) do
+  def find(prefix, env, metadata) do
+    %State.Env{imports: imports, aliases: aliases, module: module} = env
     with %{
            candidate: {mod, fun},
            elixir_prefix: elixir_prefix,
@@ -37,7 +38,7 @@ defmodule ElixirSense.Providers.Signature do
              metadata.mods_funs_to_positions,
              metadata.types
            ) do
-      signatures = find_signatures({mod, fun}, npar, unfinished_parm, metadata)
+      signatures = find_signatures({mod, fun}, npar, unfinished_parm, env, metadata)
       %{active_param: npar, pipe_before: pipe_before, signatures: signatures}
     else
       _ ->
@@ -45,8 +46,17 @@ defmodule ElixirSense.Providers.Signature do
     end
   end
 
-  defp find_signatures({mod, fun}, npar, unfinished_parm, metadata) do
-    (find_function_signatures({mod, fun}, metadata) ++ find_type_signatures({mod, fun}, metadata))
+  defp find_signatures({mod, fun}, npar, unfinished_parm, env, metadata) do
+    signatures = find_function_signatures({mod, fun}, metadata)
+
+    signatures =
+      if Metadata.at_module_body?(metadata, env) do
+        signatures ++ find_type_signatures({mod, fun}, metadata)
+      else
+        signatures
+      end
+
+    signatures
     |> Enum.filter(fn %{params: params} ->
       params_length = length(params)
 

@@ -1,7 +1,6 @@
 defmodule ElixirSense.Providers.Suggestion.Reducers.DocsSnippets do
   @moduledoc false
 
-  alias ElixirSense.Core.State
   alias ElixirSense.Plugins.Util
 
   # Format:
@@ -17,10 +16,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.DocsSnippets do
   @doc """
   A reducer that adds suggestions for @doc, @moduledoc and @typedoc.
   """
-  def add_snippets(_hint, %State.Env{scope: {_f, _a}}, _metadata, _cursor_context, acc),
-    do: {:cont, acc}
-
-  def add_snippets(hint, _env, _metadata, _cursor_context, acc) do
+  def add_snippets(hint, _env, _metadata, %{at_module_body?: true}, acc) do
     list =
       for {label, snippet, doc, priority} <- @module_attr_snippets,
           String.starts_with?(label, hint) do
@@ -38,4 +34,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.DocsSnippets do
 
     {:cont, %{acc | result: acc.result ++ Enum.sort(list)}}
   end
+
+  def add_snippets(_hint, _env, _metadata, _cursor_context, acc),
+    do: {:cont, acc}
 end

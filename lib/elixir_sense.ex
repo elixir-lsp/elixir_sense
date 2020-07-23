@@ -167,7 +167,11 @@ defmodule ElixirSense do
 
     env = Metadata.get_env(buffer_file_metadata, line)
 
-    cursor_context = %{text_before: text_before, text_after: text_after}
+    cursor_context = %{
+      text_before: text_before,
+      text_after: text_after,
+      at_module_body?: Metadata.at_module_body?(buffer_file_metadata, env)
+    }
 
     Suggestion.find(hint, env, buffer_file_metadata, cursor_context)
   end
