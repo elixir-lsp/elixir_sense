@@ -2,6 +2,7 @@ defmodule ElixirSense.Plugins.Ecto.Types do
   @moduledoc false
 
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Plugins.Util
 
   # We'll keep these values hard-coded until Ecto provides the same information
   # using docs' metadata.
@@ -50,8 +51,8 @@ defmodule ElixirSense.Plugins.Ecto.Types do
     for {module, _} <- :code.all_loaded(),
         Ecto.Type in (module.module_info(:attributes)[:behaviour] || []),
         type_str = inspect(module),
-        String.starts_with?(type_str, hint) do
-      custom_type_to_suggestion(module)
+        Util.match_module?(type_str, hint) do
+      custom_type_to_suggestion(module, hint)
     end
   end
 
@@ -92,7 +93,7 @@ defmodule ElixirSense.Plugins.Ecto.Types do
     }
   end
 
-  defp custom_type_to_suggestion(type) do
+  defp custom_type_to_suggestion(type, hint) do
     type_str = inspect(type)
     {doc, _} = Introspection.get_module_docs_summary(type)
 
@@ -100,6 +101,7 @@ defmodule ElixirSense.Plugins.Ecto.Types do
       type: :generic,
       kind: :type_parameter,
       label: type_str,
+      insert_text: Util.trim_leading_for_insertion(hint, type_str),
       detail: "Ecto custom type",
       documentation: doc,
       priority: 1

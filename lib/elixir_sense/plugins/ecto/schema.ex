@@ -441,11 +441,11 @@ defmodule ElixirSense.Plugins.Ecto.Schema do
         mod_str = inspect(module),
         Util.match_module?(mod_str, hint) do
       {doc, _} = Introspection.get_module_docs_summary(module)
-
       %{
         type: :generic,
         kind: :class,
         label: mod_str,
+        insert_text: Util.trim_leading_for_insertion(hint, mod_str),
         detail: "Ecto schema",
         documentation: doc
       }

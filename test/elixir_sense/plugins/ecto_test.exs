@@ -73,6 +73,7 @@ defmodule ElixirSense.Plugins.EctoTest do
                  detail: "Ecto custom type",
                  label: "Ecto.UUID",
                  kind: :type_parameter,
+                 insert_text: "UUID",
                  documentation: doc,
                  type: :generic
                }
@@ -199,6 +200,7 @@ defmodule ElixirSense.Plugins.EctoTest do
                documentation: "Fake Post schema.\n",
                kind: :class,
                label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post",
+               insert_text: "ElixirSense.Plugins.Ecto.FakeSchemas.Post",
                type: :generic
              }
     end

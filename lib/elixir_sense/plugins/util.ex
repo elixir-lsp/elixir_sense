@@ -15,7 +15,17 @@ defmodule ElixirSense.Plugins.Util do
 
   def trim_leading_for_insertion(hint, value) do
     [_, hint_prefix] = Regex.run(~r/(.*?)[\w0-9\._!\?\->]*$/, hint)
-    String.replace_prefix(value, hint_prefix, "")
+    insert_text = String.replace_prefix(value, hint_prefix, "")
+
+    case String.split(hint, ".") do
+      [] ->
+        insert_text
+
+      hint_parts ->
+        parts = String.split(insert_text, ".")
+        {_, insert_parts} = Enum.split(parts, length(hint_parts) - 1)
+        Enum.join(insert_parts, ".")
+    end
   end
 
   def command(:trigger_suggest) do
