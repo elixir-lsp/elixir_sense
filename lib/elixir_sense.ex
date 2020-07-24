@@ -160,11 +160,20 @@ defmodule ElixirSense do
   def suggestions(buffer, line, column) do
     hint = Source.prefix(buffer, line, column)
     buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
-    text_before = Source.text_before(buffer, line, column)
+    {text_before, text_after} = Source.split_at(buffer, line, column)
+
+    buffer_file_metadata =
+      maybe_fix_autocomple_on_cursor(buffer_file_metadata, text_before, text_after, line)
 
     env = Metadata.get_env(buffer_file_metadata, line)
 
-    Suggestion.find(hint, text_before, env, buffer_file_metadata)
+    cursor_context = %{
+      text_before: text_before,
+      text_after: text_after,
+      at_module_body?: Metadata.at_module_body?(buffer_file_metadata, env)
+    }
+
+    Suggestion.find(hint, env, buffer_file_metadata, cursor_context)
   end
 
   @doc """
@@ -387,5 +396,58 @@ defmodule ElixirSense do
       {:ok, ast, _source} -> {:ok, ast}
       other -> other
     end
+  end
+
+  # Provides a last attempt to fix a couple of parse errors that
+  # commonly appear when working with autocomplete on functions
+  # without parens.
+  #
+  # Note: This will be removed after refactoring the parser to
+  # allow unparseable nodes in the AST.
+  defp maybe_fix_autocomple_on_cursor(%Metadata{error: nil} = meta, _, _, _) do
+    meta
+  end
+
+  defp maybe_fix_autocomple_on_cursor(metadata, text_before, text_after, line) do
+    # Fix incomplete call, e.g. cursor after `var.`
+    fix_incomplete_call = fn text_before, text_after ->
+      if String.ends_with?(text_before, ".") do
+        text_before <> "__fake_call__" <> text_after
+      end
+    end
+
+    # Fix incomplete kw, e.g. cursor after `option1: 1,`
+    fix_incomplete_kw = fn text_before, text_after ->
+      if Regex.match?(~r/\,\s*$/, text_before) do
+        text_before <> "__fake_key__: :__fake_value__" <> text_after
+      end
+    end
+
+    # Fix incomplete kw key, e.g. cursor after `option1: 1, opt`
+    fix_incomplete_kw_key = fn text_before, text_after ->
+      if Regex.match?(~r/\,\s*[a-z][a-zA-Z0-9_]*$/, text_before) do
+        text_before <> ": :__fake_value__" <> text_after
+      end
+    end
+
+    fixers = [
+      fix_incomplete_call,
+      fix_incomplete_kw,
+      fix_incomplete_kw_key
+    ]
+
+    Enum.reduce_while(fixers, nil, fn fun, _ ->
+      new_buffer = fun.(text_before, text_after)
+
+      with true <- new_buffer != nil,
+           meta <- Parser.parse_string(new_buffer, false, true, line),
+           %Metadata{error: error} <- meta,
+           true <- error == nil do
+        {:halt, meta}
+      else
+        _ ->
+          {:cont, metadata}
+      end
+    end)
   end
 end

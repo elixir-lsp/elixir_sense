@@ -18,7 +18,9 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
   @doc """
   A reducer that adds suggestions of struct fields.
   """
-  def add_fields(hint, text_before, env, buffer_metadata, acc) do
+  def add_fields(hint, env, buffer_metadata, context, acc) do
+    text_before = context.text_before
+
     case find_struct_fields(hint, text_before, env, buffer_metadata) do
       {[], _} ->
         {:cont, acc}

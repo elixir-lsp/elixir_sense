@@ -45,8 +45,21 @@ defmodule ElixirSense.Providers.Suggestion do
   alias ElixirSense.Core.State
   alias ElixirSense.Providers.Suggestion.Reducers
 
+  @type generic :: %{
+          label: String.t(),
+          detail: String.t() | nil,
+          documentation: String.t() | nil,
+          insert_text: String.t() | nil,
+          filter_text: String.t() | nil,
+          snippet: String.t() | nil,
+          priority: integer() | nil,
+          kind: String.t(),
+          command: map()
+        }
+
   @type suggestion ::
-          Reducers.Common.attribute()
+          generic()
+          | Reducers.Common.attribute()
           | Reducers.Common.variable()
           | Reducers.Struct.field()
           | Reducers.Returns.return()
@@ -58,8 +71,14 @@ defmodule ElixirSense.Providers.Suggestion do
           | Reducers.TypeSpecs.type_spec()
 
   @type acc :: %{result: [suggestion], reducers: [atom], context: map}
+  @type cursor_context :: %{
+    text_before: String.t(),
+    text_after: String.t(),
+    at_module_body?: boolean()
+  }
 
   @reducers [
+    ecto: &ElixirSense.Plugins.Ecto.reduce/5,
     structs_fields: &Reducers.Struct.add_fields/5,
     returns: &Reducers.Returns.add_returns/5,
     callbacks: &Reducers.Callbacks.add_callbacks/5,
@@ -72,25 +91,32 @@ defmodule ElixirSense.Providers.Suggestion do
     functions: &Reducers.Common.add_functions/5,
     macros: &Reducers.Common.add_macros/5,
     variable_fields: &Reducers.Common.add_fields/5,
-    attributes: &Reducers.Common.add_attributes/5
+    attributes: &Reducers.Common.add_attributes/5,
+    docs_snippets: &Reducers.DocsSnippets.add_snippets/5
+  ]
+
+  @decorators [
+    &ElixirSense.Plugins.Ecto.decorate/1
   ]
 
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t(), String.t(), State.Env.t(), Metadata.t()) :: [suggestion()]
-  def find(hint, text_before, env, buffer_metadata) do
+  @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context) :: [suggestion()]
+  def find(hint, env, buffer_metadata, cursor_context) do
     acc = %{result: [], reducers: Keyword.keys(@reducers), context: %{}}
 
     %{result: result} =
       Enum.reduce_while(@reducers, acc, fn {key, fun}, acc ->
         if key in acc.reducers do
-          fun.(hint, text_before, env, buffer_metadata, acc)
+          fun.(hint, env, buffer_metadata, cursor_context, acc)
         else
           {:cont, acc}
         end
       end)
 
-    result
+    for item <- result do
+      Enum.reduce(@decorators, item, fn d, item -> d.(item) end)
+    end
   end
 end

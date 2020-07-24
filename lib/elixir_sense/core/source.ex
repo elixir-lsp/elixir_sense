@@ -139,17 +139,21 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
+  @spec split_at(String.t(), pos_integer, pos_integer) :: {String.t(), String.t()}
+  def split_at(code, line, col) do
+    pos = find_position(code, line, col, {0, 1, 1})
+    String.split_at(code, pos)
+  end
+
   @spec text_before(String.t(), pos_integer, pos_integer) :: String.t()
   def text_before(code, line, col) do
-    pos = find_position(code, line, col, {0, 1, 1})
-    {text, _rest} = String.split_at(code, pos)
+    {text, _rest} = split_at(code, line, col)
     text
   end
 
   @spec text_after(String.t(), pos_integer, pos_integer) :: String.t()
   def text_after(code, line, col) do
-    pos = find_position(code, line, col, {0, 1, 1})
-    {_, rest} = String.split_at(code, pos)
+    {_, rest} = split_at(code, line, col)
     rest
   end
 
@@ -475,6 +479,7 @@ defmodule ElixirSense.Core.Source do
           pipe_before: boolean,
           unfinished_parm: boolean,
           cursor_at_option: true | false | :maybe,
+          option: atom(),
           options_so_far: [atom],
           pos:
             nil | {{non_neg_integer, non_neg_integer}, {non_neg_integer, nil | non_neg_integer}}
@@ -487,16 +492,37 @@ defmodule ElixirSense.Core.Source do
       count: 0,
       count2: 0,
       count3: 0,
-      options_so_far: [],
+      kw_identifiers: [],
       candidate: [],
       pos: nil,
-      pipe_before: false
+      pipe_before: false,
+      check_fun_at_cursor?: String.ends_with?(prefix, " ")
     }
 
     result = scan(tokens, pattern)
-    %{candidate: candidate, npar: npar, pipe_before: pipe_before, pos: pos} = result
 
-    {cursor_at_option, options_so_far} = check_cursor_at_option(tokens, result)
+    %{
+      candidate: candidate,
+      npar: npar,
+      pipe_before: pipe_before,
+      pos: pos,
+      kw_identifiers: kw_identifiers,
+      count3: count3
+    } = result
+
+    options_so_far =
+      for {key, pos, ^count3} <- kw_identifiers do
+        {key, pos}
+      end
+
+    cursor_at_option = check_cursor_at_option(tokens, result)
+
+    option =
+      if count3 == 0 and options_so_far != [] and cursor_at_option == false do
+        {name, _} = List.last(options_so_far)
+        name
+      end
+
     {normalized_candidate, elixir_prefix} = normalize_candidate(candidate, current_module)
 
     unfinished_parm =
@@ -520,6 +546,7 @@ defmodule ElixirSense.Core.Source do
       pipe_before: pipe_before,
       cursor_at_option: cursor_at_option,
       options_so_far: options_so_far,
+      option: option,
       pos: pos
     }
   end
@@ -542,19 +569,19 @@ defmodule ElixirSense.Core.Source do
 
     cond do
       !same_level ->
-        {false, []}
+        false
 
       comma_before_token in scan_result.npar ->
-        {:maybe, []}
+        :maybe
 
       comma_before_token ->
-        {true, Enum.reverse(scan_result.options_so_far)}
+        true
 
       first_arg? ->
-        {:maybe, []}
+        :maybe
 
       true ->
-        {false, []}
+        false
     end
   end
 
@@ -591,25 +618,66 @@ defmodule ElixirSense.Core.Source do
   defp normalize_npar(npar, true), do: npar + 1
   defp normalize_npar(npar, _pipe_before), do: npar
 
-  defp maybe_update_options_so_far(%{count: 0, count2: 0, count3: 0} = state, key) do
-    %{state | options_so_far: [key | state.options_so_far]}
+  defp maybe_update_kw_identifiers(%{count: 0, count2: 0} = state, key_pos) do
+    %{state | kw_identifiers: [key_pos | state.kw_identifiers]}
   end
 
-  defp maybe_update_options_so_far(state, _key) do
+  defp maybe_update_kw_identifiers(state, _key) do
     state
   end
 
-  defp scan([{:kw_identifier, _, key} | tokens], %{npar: [_]} = state) do
-    state = maybe_update_options_so_far(state, key)
+  defp scan(tokens, %{check_fun_at_cursor?: true} = state) do
+    case tokens do
+      [{:identifier, pos, value} | other_tokens] ->
+        scan(other_tokens, %{
+          state
+          | candidate: [value | state.candidate],
+            count: 1,
+            check_fun_at_cursor?: false,
+            pos: update_pos(pos, state.pos)
+        })
+
+      _ ->
+        scan(tokens, %{state | check_fun_at_cursor?: false})
+    end
+  end
+
+  defp scan([{:eol, _}, token | _tokens], state)
+       when elem(token, 0) not in [:",", :"[", :"{", :"("] do
+    state
+  end
+
+  defp scan([token | _], %{count: 1} = state) when elem(token, 0) in [:",", :type_op] do
+    state
+  end
+
+  defp scan([{_, {l, _, _}, _} = next, {:identifier, {l, _, _}, _} = token | tokens], state) do
+    {_, {_, c1, _} = pos, value} = token
+    {next_kind, {_, c2, _}, _} = next
+    size = value |> to_charlist() |> length()
+    next_kind_str = to_string(next_kind)
+
+    if c2 > c1 + size && !String.ends_with?(next_kind_str, "_op") do
+      scan(tokens, %{
+        state
+        | candidate: [value | state.candidate],
+          count: 1,
+          pos: update_pos(pos, state.pos)
+      })
+    else
+      scan([token | tokens], state)
+    end
+  end
+
+  defp scan([{:kw_identifier, pos, key} | tokens], %{npar: [_]} = state) do
+    state = maybe_update_kw_identifiers(state, {key, pos, state.count3})
     scan(tokens, %{state | npar: []})
   end
 
-  defp scan([{:kw_identifier, _, key} | tokens], state) do
-    state = maybe_update_options_so_far(state, key)
+  defp scan([{:kw_identifier, pos, key} | tokens], state) do
+    state = maybe_update_kw_identifiers(state, {key, pos, state.count3})
     scan(tokens, state)
   end
-
-  defp scan([{:",", _} | _], %{count: 1} = state), do: state
 
   defp scan([{:",", _pos} = t | tokens], %{count: 0, count2: 0} = state) do
     scan(tokens, %{state | npar: [t | state.npar], candidate: []})

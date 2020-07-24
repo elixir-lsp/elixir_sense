@@ -18,7 +18,9 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
   @doc """
   A reducer that adds suggestions of callbacks.
   """
-  def add_callbacks(hint, text_before, env, _buffer_metadata, acc) do
+  def add_callbacks(hint, env, _buffer_metadata, context, acc) do
+    text_before = context.text_before
+
     %State.Env{protocol: protocol, behaviours: behaviours, scope: scope} = env
 
     list =

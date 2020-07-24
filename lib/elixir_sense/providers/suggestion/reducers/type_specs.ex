@@ -19,25 +19,16 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
         }
 
   @doc """
-  A reducer that adds suggestions of types.
+  A reducer that adds suggestions of type specs.
   """
-  # We don't list typespecs when inside a function
-  def add_types(_hint, _text_before, %State.Env{scope: {_m, _f}}, _buffer_metadata, acc) do
-    {:cont, acc}
-  end
-
-  # We don't list typespecs outside of a module
-  def add_types(_hint, _text_before, %State.Env{scope: scope}, _buffer_metadata, acc)
-      when scope in [Elixir, nil] do
-    {:cont, acc}
-  end
 
   # We don't list typespecs when the hint is most likely an attribute
-  def add_types("@" <> _, _text_before, _env, _buffer_metadata, acc) do
+  def add_types("@" <> _, _env, _buffer_metadata, _context, acc) do
     {:cont, acc}
   end
 
-  def add_types(hint, _text_before, env, file_metadata, acc) do
+  # We only list type specs when inside the parent modules's body
+  def add_types(hint, env, file_metadata, %{at_module_body?: true}, acc) do
     %State.Env{aliases: aliases, module: module} = env
     %Metadata{mods_funs_to_positions: mods_and_funs, types: metadata_types} = file_metadata
 
@@ -50,6 +41,10 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
       |> Kernel.++(find_builtin_types({mod, hint}))
 
     {:cont, %{acc | result: acc.result ++ list}}
+  end
+
+  def add_types(_hint, _env, _buffer_metadata, _context, acc) do
+    {:cont, acc}
   end
 
   defp find_typespecs_for_mod_and_hint(

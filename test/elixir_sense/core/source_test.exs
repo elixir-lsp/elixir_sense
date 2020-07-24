@@ -562,7 +562,7 @@ defmodule ElixirSense.Core.SourceTest do
       code = """
       from(
         u in User,
-        preload: [friends: [], per
+        preload: [friends: [], per\
       """
 
       assert %{cursor_at_option: false} = which_func(code)
@@ -578,7 +578,8 @@ defmodule ElixirSense.Core.SourceTest do
         sel\
       """
 
-      assert %{options_so_far: [:limit, :preload, :where]} = which_func(code)
+      options_so_far = [{:where, {3, 3, nil}}, {:preload, {4, 3, nil}}, {:limit, {5, 3, nil}}]
+      assert %{options_so_far: ^options_so_far} = which_func(code)
 
       code = """
       from(
@@ -587,20 +588,116 @@ defmodule ElixirSense.Core.SourceTest do
         preload: [assoc1: [assoc1_1: [], assoc1_2: [], \
       """
 
-      assert %{options_so_far: []} = which_func(code)
+      options_so_far = [{:where, {3, 3, nil}}, {:preload, {4, 3, nil}}]
+      assert %{options_so_far: ^options_so_far} = which_func(code)
     end
 
-    test "retrieve args so far" do
+    test "identify current option, if any" do
       code = """
-      from(m in Mod
-        join: m1 in Mod1,
-        join: m2 in Mod2,
-        join: a1 in assoc(m1, :assoc1),
-        join: a2 in assoc(m2, :assoc2),
-        where: c.\
+      from(
+        u in User,
+        where: is_nil(u.id),
+        preload: [assoc1: [assoc1_1: [], assoc1_2: []]],
+        limit: 10,
+        select: \
       """
 
-      assert %{options_so_far: []} = which_func(code)
+      assert %{option: :select} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        where: is_nil(u.id),
+        preload: [assoc1: [assoc1_1: [], assoc1_2: []]],
+        limit: 10,
+        select: u\
+      """
+
+      assert %{option: :select} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        where: is_nil(u.id),
+        preload: [assoc1: [assoc1_1: [], assoc1_2: []]],
+        limit: 10,
+        sel\
+      """
+
+      assert %{option: nil} = which_func(code)
+
+      code = """
+      from(
+        u in User,
+        where: is_nil(u.id),
+        preload: [assoc1: [assoc1_1: [], assoc1_2: [], \
+      """
+
+      assert %{option: nil} = which_func(code)
+    end
+
+    test "functions without parens on first argument" do
+      code = "from "
+      assert %{candidate: {nil, :from}, npar: 0} = which_func(code)
+
+      code = "from u in "
+      assert %{candidate: {nil, :from}, npar: 0} = which_func(code)
+    end
+
+    test "functions without parens on second argument" do
+      code = "field :name, "
+      assert %{candidate: {nil, :field}, npar: 1} = which_func(code)
+
+      code = """
+      field :name,
+      """
+
+      assert %{candidate: {nil, :field}, npar: 1} = which_func(code)
+
+      code = """
+      from u in User,
+        where: not is_nil(u.id),
+        preload: [assoc1: [assoc1_1: [], assoc1_2: []]],
+        limit: 10,
+        where: u.name == u.email,
+        sel\
+      """
+
+      assert %{candidate: {nil, :from}, npar: 1} = which_func(code)
+
+      code = "from c in Comment, join: p in Post, "
+      assert %{candidate: {nil, :from}, npar: 1} = which_func(code)
+
+      code = """
+      from c in Comment,
+        join: p in Post,
+        on: p.id == c.\
+      """
+
+      assert %{candidate: {nil, :from}, npar: 1} = which_func(code)
+
+      code = """
+      Repo.all(
+        from c in Comment,
+          join: p in Post,
+          on: p.id == c.\
+      """
+
+      assert %{candidate: {nil, :from}, npar: 1} = which_func(code)
+    end
+
+    test "function without parens is ignored on a new line if it's already valid" do
+      code = """
+      field
+      """
+
+      assert %{candidate: :none} = which_func(code)
+
+      code = """
+      field :name
+      """
+
+      assert %{candidate: :none} = which_func(code)
     end
   end
 
