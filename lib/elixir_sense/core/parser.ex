@@ -274,6 +274,9 @@ defmodule ElixirSense.Core.Parser do
                                          {source_acc, current_line, missing_end} ->
           {modified_lines, missing_end} =
             cond do
+              source_acc == [] ->
+                {[line | source_acc], true}
+
               current_line <= line_start ->
                 {[line | source_acc], true}
 
