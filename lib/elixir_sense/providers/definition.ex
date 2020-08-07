@@ -6,6 +6,7 @@ defmodule ElixirSense.Providers.Definition do
   typespecs, variables and attributes.
   """
 
+  alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
@@ -45,16 +46,21 @@ defmodule ElixirSense.Providers.Definition do
   def find(
         subject,
         %State.Env{
-          imports: imports,
           aliases: aliases,
           module: module,
           vars: vars,
           attributes: attributes
-        },
+        } = env,
         mods_funs_to_positions,
         calls,
         metadata_types
       ) do
+    binding_env = %Binding{
+      attributes: attributes,
+      variables: vars,
+      current_module: module
+    }
+
     var_info =
       unless subject_is_call?(subject, calls) do
         vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
@@ -76,10 +82,9 @@ defmodule ElixirSense.Providers.Definition do
         |> Source.split_module_and_func(module, aliases)
         |> find_function_or_module(
           mods_funs_to_positions,
-          module,
-          imports,
-          aliases,
-          metadata_types
+          env,
+          metadata_types,
+          binding_env
         )
     end
   end
@@ -109,10 +114,9 @@ defmodule ElixirSense.Providers.Definition do
   defp find_function_or_module(
          {module, function},
          mods_funs_to_positions,
-         current_module,
-         imports,
-         aliases,
+         env,
          metadata_types,
+         binding_env,
          visited \\ []
        ) do
     if {module, function} in visited do
@@ -121,24 +125,52 @@ defmodule ElixirSense.Providers.Definition do
       do_find_function_or_module(
         {module, function},
         mods_funs_to_positions,
-        current_module,
-        imports,
-        aliases,
+        env,
         metadata_types,
+        binding_env,
         [{module, function} | visited]
       )
     end
   end
 
   defp do_find_function_or_module(
-         {module, function},
+         {{:attribute, _attr} = type, function},
          mods_funs_to_positions,
-         current_module,
-         imports,
-         aliases,
+         env,
          metadata_types,
+         binding_env,
          visited
        ) do
+    case Binding.expand(binding_env, type) do
+      {:atom, module} ->
+        do_find_function_or_module(
+          {Introspection.expand_alias(module, env.aliases), function},
+          mods_funs_to_positions,
+          env,
+          metadata_types,
+          binding_env,
+          visited
+        )
+
+      _ ->
+        %Location{found: false}
+    end
+  end
+
+  defp do_find_function_or_module(
+         {module, function},
+         mods_funs_to_positions,
+         env,
+         metadata_types,
+         binding_env,
+         visited
+       ) do
+    %State.Env{
+      module: current_module,
+      imports: imports,
+      aliases: aliases
+    } = env
+
     case {module, function}
          |> Introspection.actual_mod_fun(
            imports,
@@ -171,10 +203,9 @@ defmodule ElixirSense.Providers.Definition do
             find_function_or_module(
               target,
               mods_funs_to_positions,
-              current_module,
-              imports,
-              aliases,
+              env,
               metadata_types,
+              binding_env,
               visited
             )
 

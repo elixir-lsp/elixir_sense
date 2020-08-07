@@ -36,7 +36,7 @@ defmodule ElixirSense.Core.Source do
                   ] ++ @empty_graphemes
 
   @spec split_module_and_hint(String.t(), module | nil, [{module, module}]) ::
-          {nil | module, String.t()}
+          {nil | module | {:attribute, atom}, String.t()}
   def split_module_and_hint(hint, current_module \\ nil, aliases \\ []) do
     if String.ends_with?(hint, ".") do
       {mod, _} =
@@ -97,12 +97,16 @@ defmodule ElixirSense.Core.Source do
       {Keyword.A, nil}
       iex> ElixirSense.Core.Source.split_module_and_func("Elixir.Keyword", CurrentMod, [{Keyword, My.Mod}])
       {Keyword, nil}
+      iex> ElixirSense.Core.Source.split_module_and_func("@attr", CurrentMod)
+      {{:attribute, :attr}, nil}
+      iex> ElixirSense.Core.Source.split_module_and_func("@attr.my_func", CurrentMod)
+      {{:attribute, :attr}, :my_func}
+      iex> ElixirSense.Core.Source.split_module_and_func("__MODULE__.Sub", CurrentMod)
+      {CurrentMod.Sub, nil}
 
   """
-  @spec split_module_and_func(String.t()) :: {module | nil, atom | nil}
-  @spec split_module_and_func(String.t(), module | nil) :: {module | nil, atom | nil}
   @spec split_module_and_func(String.t(), module | nil, [{module, module}]) ::
-          {module | nil, atom | nil}
+          {module | {:attribute, atom} | nil, atom | nil}
   def split_module_and_func(call, current_module \\ nil, aliases \\ [])
   def split_module_and_func("", _current_module, _aliases), do: {nil, nil}
 
@@ -785,6 +789,12 @@ defmodule ElixirSense.Core.Source do
 
       {mod, func, []} when is_atom(mod) and is_atom(func) ->
         {mod, func}
+
+      {:@, [{attribute, _, nil}]} when is_atom(attribute) ->
+        {{:attribute, attribute}, nil}
+
+      {{:@, _, [{attribute, _, nil}]}, func, []} when is_atom(func) and is_atom(attribute) ->
+        {{:attribute, attribute}, func}
 
       {{:__MODULE__, _, nil}, func, []} when is_atom(func) ->
         {current_module, func}

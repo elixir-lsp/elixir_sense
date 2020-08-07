@@ -146,6 +146,51 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
+  test "find references with cursor over a function called via @attr.call" do
+    buffer = """
+    defmodule Caller do
+      @attr ElixirSense.Providers.ReferencesTest.Modules.Callee1
+      def func() do
+        @attr.func("test")
+        #      ^
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 4, 12)
+
+    assert references == [
+             %{
+               uri: "test/support/modules_with_references.ex",
+               range: %{start: %{line: 42, column: 60}, end: %{line: 42, column: 64}}
+             },
+             %{
+               uri: "test/support/modules_with_references.ex",
+               range: %{start: %{line: 65, column: 79}, end: %{line: 65, column: 83}}
+             }
+           ]
+  end
+
+  test "find references to function called via @attr.call" do
+    buffer = """
+    defmodule Caller do
+      def func() do
+        ElixirSense.Providers.ReferencesTest.Modules.Callee7.func_noarg()
+        #                                                     ^
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 3, 59)
+
+    assert references == [
+             %{
+               range: %{end: %{column: 23, line: 114}, start: %{column: 13, line: 114}},
+               uri: "test/support/modules_with_references.ex"
+             }
+           ]
+  end
+
   test "find references with cursor over a function with arity 1 called via pipe operator" do
     buffer = """
     defmodule Caller do

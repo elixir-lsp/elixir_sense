@@ -2530,6 +2530,31 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
     end
 
+    test "remote types - by attribute" do
+      buffer = """
+      defmodule My do
+        @type my_type :: integer
+        @attr My
+        @type some :: @attr.my\
+      """
+
+      [suggestion_1] = suggestions_by_name("my_type", buffer)
+
+      assert suggestion_1.signature == "my_type()"
+    end
+
+    test "remote types - by __MODULE__" do
+      buffer = """
+      defmodule My do
+        @type my_type :: integer
+        @type some :: __MODULE__.my\
+      """
+
+      [suggestion_1] = suggestions_by_name("my_type", buffer)
+
+      assert suggestion_1.signature == "my_type()"
+    end
+
     test "remote types - retrieve info from typespecs with params" do
       buffer = """
       defmodule My do

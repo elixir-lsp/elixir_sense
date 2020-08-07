@@ -1,6 +1,7 @@
 defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
   @moduledoc false
 
+  alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Source
@@ -22,19 +23,21 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
   A reducer that adds suggestions of type specs.
   """
 
-  # We don't list typespecs when the hint is most likely an attribute
-  def add_types("@" <> _, _env, _buffer_metadata, _context, acc) do
-    {:cont, acc}
-  end
-
   # We only list type specs when inside the parent modules's body
   def add_types(hint, env, file_metadata, %{at_module_body?: true}, acc) do
-    %State.Env{aliases: aliases, module: module} = env
+    %State.Env{aliases: aliases, module: module, attributes: attributes, vars: vars} = env
     %Metadata{mods_funs_to_positions: mods_and_funs, types: metadata_types} = file_metadata
+
+    binding_env = %Binding{
+      attributes: attributes,
+      variables: vars,
+      current_module: module
+    }
 
     {mod, hint} =
       hint
       |> Source.split_module_and_hint(module, aliases)
+      |> expand(binding_env, aliases)
 
     list =
       find_typespecs_for_mod_and_hint({mod, hint}, aliases, module, mods_and_funs, metadata_types)
@@ -45,6 +48,17 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
 
   def add_types(_hint, _env, _buffer_metadata, _context, acc) do
     {:cont, acc}
+  end
+
+  defp expand({{:attribute, _} = type, hint}, env, aliases) do
+    case Binding.expand(env, type) do
+      {:atom, module} -> {Introspection.expand_alias(module, aliases), hint}
+      _ -> {nil, ""}
+    end
+  end
+
+  defp expand({type, hint}, _env, _aliases) do
+    {type, hint}
   end
 
   defp find_typespecs_for_mod_and_hint(

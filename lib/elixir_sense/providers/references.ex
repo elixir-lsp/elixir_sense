@@ -5,6 +5,7 @@ defmodule ElixirSense.Providers.References do
   any function or module identified at the provided location.
   """
 
+  alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
@@ -36,12 +37,19 @@ defmodule ElixirSense.Providers.References do
   def find(
         subject,
         arity,
-        %State.Env{imports: imports, aliases: aliases, module: module, scope: scope},
+        %State.Env{
+          imports: imports,
+          aliases: aliases,
+          module: module,
+          scope: scope,
+          attributes: attributes
+        },
         vars,
         modules_funs,
         metadata_types
       ) do
     var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
+    # TODO attribute
 
     case var_info do
       %VarInfo{positions: positions} ->
@@ -49,9 +57,16 @@ defmodule ElixirSense.Providers.References do
         |> Enum.map(fn pos -> build_var_location(subject, pos) end)
 
       _ ->
+        binding_env = %Binding{
+          attributes: attributes,
+          variables: vars,
+          current_module: module
+        }
+
         {mod, fun, _found} =
           subject
           |> Source.split_module_and_func(module, aliases)
+          |> expand(binding_env, aliases)
           |> Introspection.actual_mod_fun(imports, aliases, module, modules_funs, metadata_types)
 
         {mod, fun}
@@ -146,15 +161,21 @@ defmodule ElixirSense.Providers.References do
         metadata = Parser.parse_string(code, true, true, line)
 
         %State.Env{
-          imports: imports,
-          aliases: aliases,
-          module: module
-        } = Metadata.get_env(metadata, line)
+          module: module,
+          vars: vars,
+          attributes: attributes
+        } = env = Metadata.get_env(metadata, line)
 
         calls =
           metadata
           |> Metadata.get_calls(line)
           |> fix_calls_positions(code)
+
+        binding_env = %Binding{
+          attributes: attributes,
+          variables: vars,
+          current_module: module
+        }
 
         for %State.CallInfo{arity: call_arity, position: {line, column} = call_position} <- calls,
             arity == call_arity,
@@ -167,11 +188,10 @@ defmodule ElixirSense.Providers.References do
               find_actual_mod_fun(
                 code,
                 call_position,
-                imports,
-                aliases,
-                module,
+                env,
                 metadata.mods_funs_to_positions,
-                metadata.types
+                metadata.types,
+                binding_env
               ),
             found_mod_fun == {mod, func} do
           Map.merge(xref_call, %{column: column, line: line})
@@ -202,7 +222,20 @@ defmodule ElixirSense.Providers.References do
     false
   end
 
-  defp find_actual_mod_fun(code, {line, col}, imports, aliases, module, mods_funs, metadata_types) do
+  defp find_actual_mod_fun(
+         code,
+         {line, col},
+         env,
+         mods_funs,
+         metadata_types,
+         binding_env
+       ) do
+    %State.Env{
+      imports: imports,
+      aliases: aliases,
+      module: module
+    } = env
+
     case Source.subject(code, line, col) do
       nil ->
         {nil, nil}
@@ -211,6 +244,7 @@ defmodule ElixirSense.Providers.References do
         {mod, fun, _found} =
           subject
           |> Source.split_module_and_func(module, aliases)
+          |> expand(binding_env, env.aliases)
           |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs, metadata_types)
 
         {mod, fun}
@@ -265,5 +299,16 @@ defmodule ElixirSense.Providers.References do
           %State.CallInfo{call | position: {line + line_offset, col_offset}}
       end
     end
+  end
+
+  defp expand({{:attribute, _} = type, func}, env, aliases) do
+    case Binding.expand(env, type) do
+      {:atom, module} -> {Introspection.expand_alias(module, aliases), func}
+      _ -> {nil, nil}
+    end
+  end
+
+  defp expand({type, func}, _env, _aliases) do
+    {type, func}
   end
 end

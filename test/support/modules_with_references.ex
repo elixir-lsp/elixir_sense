@@ -101,4 +101,17 @@ defmodule ElixirSense.Providers.ReferencesTest.Modules do
       ElixirSense.Providers.ReferencesTest.Modules.Callee6.module_info()
     end
   end
+
+  defmodule Callee7 do
+    def func_noarg() do
+      IO.puts("")
+    end
+  end
+
+  defmodule Caller7 do
+    @attr ElixirSense.Providers.ReferencesTest.Modules.Callee7
+    def func() do
+      @attr.func_noarg()
+    end
+  end
 end

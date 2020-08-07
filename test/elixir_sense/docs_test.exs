@@ -97,6 +97,36 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    test "retrieve function documentation on @attr call" do
+      buffer = """
+      defmodule MyModule do
+        @attr List
+        @attr.flatten(list)
+      end
+      """
+
+      %{
+        subject: subject,
+        actual_subject: actual_subject,
+        docs: %{docs: docs}
+      } = ElixirSense.docs(buffer, 3, 12)
+
+      assert subject == "@attr.flatten"
+      assert actual_subject == "List.flatten"
+
+      assert docs =~ """
+             > List.flatten(list)
+
+             ### Specs
+
+             ```
+             @spec flatten(deep_list) :: list when deep_list: [any | deep_list]
+             ```
+
+             Flattens the given `list` of nested lists.
+             """
+    end
+
     test "retrieve erlang function documentation edoc" do
       buffer = """
       defmodule MyModule do
