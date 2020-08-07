@@ -1028,6 +1028,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre(
+         {{:., _, [{:@, _, [{attribute, _, nil}]}, call]}, meta, params} = ast,
+         state
+       )
+       when is_call(call, params) and is_call_meta(meta) and is_atom(attribute) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    state
+    |> add_call_to_line({{:attribute, attribute}, call, length(params)}, {line, column + 1})
+    |> add_current_env_to_line(line)
+    |> result(ast)
+  end
+
+  defp pre(
          {{:., _, [module, call]}, meta, params} = ast,
          state
        )

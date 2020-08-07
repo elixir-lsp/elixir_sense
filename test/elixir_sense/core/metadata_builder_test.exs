@@ -3770,6 +3770,38 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            }
   end
 
+  test "registers calls on attribute with args" do
+    state =
+      """
+      defmodule NyModule do
+        def func do
+          @attr.func("test")
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{
+             3 => [%CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}]
+           }
+  end
+
+  test "registers calls on attribute without args" do
+    state =
+      """
+      defmodule NyModule do
+        def func do
+          @attr.func
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{
+             3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}]
+           }
+  end
+
   test "registers calls pipe with __MODULE__ operator no parens" do
     state =
       """

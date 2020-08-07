@@ -189,7 +189,7 @@ defmodule ElixirSense.Core.State do
             arity: non_neg_integer,
             position: ElixirSense.Core.State.position_t(),
             func: atom,
-            mod: module
+            mod: module | {:attribute, atom}
           }
     defstruct arity: 0,
               position: {1, 1},
