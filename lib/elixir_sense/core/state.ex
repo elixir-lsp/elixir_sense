@@ -872,14 +872,18 @@ defmodule ElixirSense.Core.State do
     attributes_from_scope =
       case existing_attribute_index do
         nil ->
-          [
-            %AttributeInfo{
-              name: attribute,
-              type: type,
-              positions: [position]
-            }
-            | attributes_from_scope
-          ]
+          if is_definition do
+            [
+              %AttributeInfo{
+                name: attribute,
+                type: type,
+                positions: [position]
+              }
+              | attributes_from_scope
+            ]
+          else
+            attributes_from_scope
+          end
 
         index ->
           attributes_from_scope

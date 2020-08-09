@@ -319,8 +319,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre_module_attribute(ast, state, {line, _} = position, name, type, is_definition) do
     state
-    |> add_current_env_to_line(line)
     |> add_attribute(name, type, is_definition, position)
+    |> add_current_env_to_line(line)
     |> result(ast)
   end
 

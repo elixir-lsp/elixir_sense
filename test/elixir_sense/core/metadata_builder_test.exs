@@ -43,13 +43,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_attributes(state, 3) == [
-             %AttributeInfo{name: :myattribute, positions: [{2, 3}], type: {:atom, String}}
+             %AttributeInfo{
+               name: :myattribute,
+               positions: [{2, 3}, {3, 11}],
+               type: {:atom, String}
+             }
            ]
 
     assert get_line_attributes(state, 7) == [
              %AttributeInfo{
                name: :inner_attr,
-               positions: [{5, 5}],
+               positions: [{5, 5}, {7, 13}],
                type: {:map, [abc: {:atom, nil}], nil}
              },
              %AttributeInfo{

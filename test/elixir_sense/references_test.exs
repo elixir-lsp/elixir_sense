@@ -600,7 +600,9 @@ defmodule ElixirSense.Providers.ReferencesTest do
     references = ElixirSense.references(buffer, 4, 7)
 
     assert references == [
-             %{range: %{end: %{column: 8, line: 2}, start: %{column: 3, line: 2}}, uri: nil}
+             %{range: %{end: %{column: 8, line: 2}, start: %{column: 3, line: 2}}, uri: nil},
+             %{range: %{end: %{column: 10, line: 4}, start: %{column: 5, line: 4}}, uri: nil}
+           ]
            ]
   end
 
