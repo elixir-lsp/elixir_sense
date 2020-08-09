@@ -11,6 +11,7 @@ defmodule ElixirSense.Providers.References do
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
+  alias ElixirSense.Core.State.AttributeInfo
   alias ElixirSense.Core.State.VarInfo
   alias Mix.Tasks.Xref
 
@@ -49,14 +50,31 @@ defmodule ElixirSense.Providers.References do
         metadata_types
       ) do
     var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
-    # TODO attribute
 
-    case var_info do
-      %VarInfo{positions: positions} ->
+    attribute_info =
+      case subject do
+        "@" <> attribute_name ->
+          attributes
+          |> Enum.find(fn %AttributeInfo{name: name} -> to_string(name) == attribute_name end)
+
+        _ ->
+          nil
+      end
+
+    cond do
+      var_info != nil ->
+        %VarInfo{positions: positions} = var_info
+
         positions
         |> Enum.map(fn pos -> build_var_location(subject, pos) end)
 
-      _ ->
+      attribute_info != nil ->
+        %AttributeInfo{positions: positions} = attribute_info
+
+        positions
+        |> Enum.map(fn pos -> build_var_location(subject, pos) end)
+
+      true ->
         binding_env = %Binding{
           attributes: attributes,
           variables: vars,

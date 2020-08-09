@@ -579,6 +579,23 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
+  test "find references of attributes" do
+    buffer = """
+    defmodule MyModule do
+      @attr "abc"
+      def fun do
+        @attr
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 4, 7)
+
+    assert references == [
+             %{range: %{end: %{column: 8, line: 2}, start: %{column: 3, line: 2}}, uri: nil}
+           ]
+  end
+
   test "find references with cursor over a module" do
     buffer = """
     defmodule Caller do
