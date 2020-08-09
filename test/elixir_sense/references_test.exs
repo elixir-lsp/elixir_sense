@@ -577,6 +577,14 @@ defmodule ElixirSense.Providers.ReferencesTest do
              %{uri: nil, range: %{start: %{line: 5, column: 5}, end: %{line: 5, column: 9}}},
              %{uri: nil, range: %{start: %{line: 6, column: 13}, end: %{line: 6, column: 17}}}
            ]
+
+    references = ElixirSense.references(buffer, 3, 6)
+
+    assert references == [
+             %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 9}}},
+             %{uri: nil, range: %{start: %{line: 5, column: 5}, end: %{line: 5, column: 9}}},
+             %{uri: nil, range: %{start: %{line: 6, column: 13}, end: %{line: 6, column: 17}}}
+           ]
   end
 
   test "find references of attributes" do

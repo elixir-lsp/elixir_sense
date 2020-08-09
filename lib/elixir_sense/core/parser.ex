@@ -67,19 +67,6 @@ defmodule ElixirSense.Core.Parser do
            |> string_to_ast(0, cursor_line_number) do
       acc = MetadataBuilder.build(ast)
 
-      # a line has been inserted, insert a fake lines_to_env
-      fixed_lines_to_env =
-        for {line, env} <- acc.lines_to_env,
-            into: %{},
-            do:
-              (if line > cursor_line_number do
-                 {line - 1, env}
-               else
-                 {line, env}
-               end)
-
-      acc = %State{acc | lines_to_env: fixed_lines_to_env}
-
       if Map.has_key?(acc.lines_to_env, cursor_line_number) do
         {:ok, acc}
       else
@@ -284,7 +271,14 @@ defmodule ElixirSense.Core.Parser do
                 compare_intendation(compare_mode, intendation, line_intendation_at_start) and
                   current_line < line_end ->
                 [previous | rest] = source_acc
-                {[line, previous <> " " <> terminator | rest], false}
+
+                replaced_line =
+                  case terminator do
+                    "end" -> previous <> "; " <> marker(length(rest)) <> "; end"
+                    _ -> previous <> " " <> terminator
+                  end
+
+                {[line, replaced_line | rest], false}
 
               true ->
                 {[line | source_acc], missing_end}
@@ -346,8 +340,8 @@ defmodule ElixirSense.Core.Parser do
     source
     |> Source.split_lines()
     # by replacing a line here we risk introducing a syntax error
-    # instead we insert a line with marker
-    |> List.insert_at(line_number - 1, marker(line_number))
+    # instead we append marker to the existing line
+    |> List.update_at(line_number - 1, &(&1 <> "; " <> marker(line_number)))
     |> Enum.join("\n")
   end
 
