@@ -31,7 +31,8 @@ defmodule ElixirSense.Providers.References do
           String.t(),
           non_neg_integer,
           State.Env.t(),
-          [atom],
+          [VarInfo.t()],
+          [AttributeInfo.t()],
           State.mods_funs_to_positions_t(),
           State.types_t()
         ) :: [ElixirSense.Providers.References.reference_info()]
@@ -42,10 +43,10 @@ defmodule ElixirSense.Providers.References do
           imports: imports,
           aliases: aliases,
           module: module,
-          scope: scope,
-          attributes: attributes
+          scope: scope
         },
         vars,
+        attributes,
         modules_funs,
         metadata_types
       ) do

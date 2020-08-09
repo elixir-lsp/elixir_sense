@@ -357,8 +357,12 @@ defmodule ElixirSense do
 
         env =
           %State.Env{
-            scope_id: scope_id
+            scope_id: scope_id,
+            module: module
           } = Metadata.get_env(buffer_file_metadata, line)
+
+        # find last env of current module
+        attributes = get_attributes(buffer_file_metadata.lines_to_env, module)
 
         vars = buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values()
         arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
@@ -368,6 +372,7 @@ defmodule ElixirSense do
           arity,
           env,
           vars,
+          attributes,
           buffer_file_metadata.mods_funs_to_positions,
           buffer_file_metadata.types
         )
@@ -375,6 +380,18 @@ defmodule ElixirSense do
       _ ->
         []
     end
+  end
+
+  defp get_attributes(_lines_to_env, module) when module in [nil, Elixir], do: []
+
+  defp get_attributes(lines_to_env, module) do
+    %State.Env{attributes: attributes} =
+      lines_to_env
+      |> Enum.filter(fn {_k, v} -> v.module == module end)
+      |> Enum.max_by(fn {k, _v} -> k end)
+      |> elem(1)
+
+    attributes
   end
 
   @doc ~S"""
