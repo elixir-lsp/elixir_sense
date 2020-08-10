@@ -17,8 +17,11 @@ defmodule ExUnitConfig do
       Version.match?(System.build_info().version, ">= 1.9.0") ->
         [requires_elixir_1_10: true]
 
+      Version.match?(System.build_info().version, ">= 1.8.0") ->
+        [requires_elixir_1_10: true, requires_elixir_1_9: true]
+
       true ->
-        [requires_elixir_1_9: true, requires_elixir_1_10: true]
+        [requires_elixir_1_10: true, requires_elixir_1_9: true, requires_elixir_1_8: true]
     end
   end
 
