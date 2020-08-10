@@ -248,6 +248,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert line_1 == line_2
   end
 
+  @tag requires_otp_23: true
   test "find definition of erlang modules" do
     buffer = """
     defmodule MyModule do
@@ -264,6 +265,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert file =~ "/src/lists.erl"
   end
 
+  @tag requires_otp_23: true
   test "find definition of remote erlang functions" do
     buffer = """
     defmodule MyModule do
@@ -281,6 +283,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "duplicate(N, X)"
   end
 
+  @tag requires_otp_23: true
   test "find definition of remote erlang functions from preloaded module" do
     buffer = """
     defmodule MyModule do
@@ -331,6 +334,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert ElixirSense.definition(buffer, 2, 12) == %Location{found: false}
   end
 
+  @tag requires_otp_23: true
   test "preloaded modules" do
     buffer = """
     defmodule MyModule do
@@ -838,6 +842,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "ElixirSenseExample.Macros.go"
   end
 
+  @tag requires_otp_23: true
   test "find erlang type definition" do
     buffer = """
     defmodule MyModule do
@@ -853,6 +858,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "-type tab()"
   end
 
+  @tag requires_otp_23: true
   test "find erlang type definition from preloaded module" do
     buffer = """
     defmodule MyModule do
