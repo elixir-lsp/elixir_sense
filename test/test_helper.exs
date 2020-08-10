@@ -10,10 +10,15 @@ defmodule ExUnitConfig do
   end
 
   defp elixir_related do
-    if Version.match?(System.build_info().version, ">= 1.10.0") do
-      []
-    else
-      [requires_elixir_1_10: true]
+    cond do
+      Version.match?(System.build_info().version, ">= 1.10.0") ->
+        []
+
+      Version.match?(System.build_info().version, ">= 1.9.0") ->
+        [requires_elixir_1_10: true]
+
+      true ->
+        [requires_elixir_1_9: true, requires_elixir_1_10: true]
     end
   end
 
