@@ -9,19 +9,13 @@ defmodule ExUnitConfig do
     end
   end
 
+  defp elixir_older_than(minor) do
+    !Version.match?(System.build_info().version, ">= 1.#{minor}.0")
+  end
+
   defp elixir_related do
-    cond do
-      Version.match?(System.build_info().version, ">= 1.10.0") ->
-        []
-
-      Version.match?(System.build_info().version, ">= 1.9.0") ->
-        [requires_elixir_1_10: true]
-
-      Version.match?(System.build_info().version, ">= 1.8.0") ->
-        [requires_elixir_1_10: true, requires_elixir_1_9: true]
-
-      true ->
-        [requires_elixir_1_10: true, requires_elixir_1_9: true, requires_elixir_1_8: true]
+    for minor_version <- 8..10, elixir_older_than(minor_version) do
+      {:"requires_elixir_1_#{minor_version}", true}
     end
   end
 
