@@ -221,14 +221,14 @@ end
 
 defmodule ElixirSenseExample.ExampleBehaviourWithDocCallback do
   @behaviour ElixirSenseExample.ExampleBehaviourWithDoc
-  @behaviour GenServer
-  @behaviour :gen_statem
 
+  @impl true
   def foo(), do: :ok
 
   @impl true
   def baz(), do: :ok
 
+  @impl true
   defmacro bar(), do: quote(do: :ok)
 end
 
