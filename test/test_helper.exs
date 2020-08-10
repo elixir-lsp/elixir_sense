@@ -1,6 +1,7 @@
 defmodule ExUnitConfig do
   defp otp_related do
     {otp_major_version, ""} = Integer.parse(System.build_info()[:otp_release])
+
     if otp_major_version < 23 do
       [requires_otp_23: true]
     else
