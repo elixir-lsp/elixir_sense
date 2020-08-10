@@ -1,13 +1,19 @@
-{otp_major_version, ""} = Integer.parse(System.build_info()[:otp_release])
-
-extra_excludes =
-  if otp_major_version < 23 do
-    [requires_otp_23: true]
-  else
-    []
+defmodule ExUnitConfig do
+  defp otp_related do
+    {otp_major_version, ""} = Integer.parse(System.build_info()[:otp_release])
+    if otp_major_version < 23 do
+      [requires_otp_23: true]
+    else
+      []
+    end
   end
 
-ExUnit.configure(exclude: [requires_source: true] ++ extra_excludes)
+  def excludes do
+    [requires_source: true] ++ otp_related()
+  end
+end
+
+ExUnit.configure(exclude: ExUnitConfig.excludes())
 ExUnit.start()
 
 defmodule TestHelper do
