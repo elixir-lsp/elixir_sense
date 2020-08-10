@@ -10,27 +10,21 @@ jobs:
   mix_test:
     name: mix test (Elixir ${{matrix.elixir}} | Erlang/OTP ${{matrix.otp}})
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.unsupported }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - elixir: 1.7.4
             otp: 19.3.6.13
-            unsupported: true
           - elixir: 1.8.2
             otp: 20.3.8.26
-            unsupported: true
           - elixir: 1.9.4
             otp: 20.3.8.26
-            unsupported: true
             warnings_as_errors: true # not 1.10 as its --warnigs-as-errors has bugs https://github.com/elixir-lang/elixir/issues/10073
           - elixir: 1.10.4
             otp: 21.3.8.16
-            unsupported: true
           - elixir: 1.10.4
             otp: 23.0.3
-            unsupported: false
             check_formatted: true
     env:
       MIX_ENV: test
