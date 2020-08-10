@@ -27,11 +27,11 @@ jobs:
             warnings_as_errors: true # not 1.10 as its --warnigs-as-errors has bugs https://github.com/elixir-lang/elixir/issues/10073
           - elixir: 1.10.4
             otp: 21.3.8.16
-            unsupported: false
+            unsupported: true
           - elixir: 1.10.4
             otp: 23.0.3
             unsupported: false
-            static_analysis: true
+            check_formatted: true
     env:
       MIX_ENV: test
     steps:
@@ -46,11 +46,29 @@ jobs:
           mix local.rebar --force
           mix deps.get --only test
       - run: mix format --check-formatted
-        if: matrix.static_analysis
+        if: matrix.check_formatted
       - run: mix compile --warnings-as-errors
         if: matrix.warnings_as_errors
       - run: mix test
+
+  static_analysis:
+    name: static analysis (Elixir ${{matrix.elixir}} | Erlang/OTP ${{matrix.otp}})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - elixir: 1.10.4
+            otp: 23.0.3
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-elixir@v1
+        with:
+          otp-version: ${{matrix.otp}}
+          elixir-version: ${{matrix.elixir}}
+      - name: Install Dependencies
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get
       - run: mix credo --all --strict
-        if: matrix.static_analysis
       - run: mix dialyzer
-        if: matrix.static_analysis
