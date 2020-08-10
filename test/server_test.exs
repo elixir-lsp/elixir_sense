@@ -55,7 +55,7 @@ defmodule ElixirSense.ServerTest do
       column: 7
     } = send_request(socket, request)
 
-    assert file =~ "#{File.cwd!}/test/support/module_with_functions.ex"
+    assert file =~ "#{File.cwd!()}/test/support/module_with_functions.ex"
   end
 
   test "signature request", %{socket: socket, auth_token: auth_token} do
