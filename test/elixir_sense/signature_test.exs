@@ -211,7 +211,6 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
-    @tag requires_otp_23: true
     test "find type signatures from builtin type" do
       code = """
       defmodule MyModule do
@@ -311,7 +310,6 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
-    @tag requires_otp_23: true
     test "find signatures from erlang module edoc" do
       code = """
       defmodule MyModule do

@@ -34,7 +34,6 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
               [%{name: "zlib", subtype: nil, summary: "", type: :module, metadata: %{}}]}
   end
 
-  @tag requires_otp_23: true
   test "erlang module completion edoc" do
     assert expand(':edoc_wi') ==
              {:yes, 'ki',

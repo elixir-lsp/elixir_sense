@@ -127,7 +127,6 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    @tag requires_otp_23: true
     test "retrieve erlang function documentation edoc" do
       buffer = """
       defmodule MyModule do
@@ -441,7 +440,6 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    @tag requires_otp_23: true
     test "retrieve documentation from erlang modules edoc" do
       buffer = """
       defmodule MyModule do
