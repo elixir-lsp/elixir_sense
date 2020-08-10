@@ -8,8 +8,16 @@ defmodule ExUnitConfig do
     end
   end
 
+  defp elixir_related do
+    if Version.match?(System.build_info().version, ">= 1.10.0") do
+      []
+    else
+      [requires_elixir_1_10: true]
+    end
+  end
+
   def excludes do
-    [requires_source: true] ++ otp_related()
+    [requires_source: true] ++ otp_related() ++ elixir_related()
   end
 end
 
