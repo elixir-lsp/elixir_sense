@@ -41,6 +41,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
            """
   end
 
+  @tag requires_elixir_1_9: true
   test "format_spec_ast for callback" do
     ast = get_callback_ast(GenServer, :code_change, 3)
 

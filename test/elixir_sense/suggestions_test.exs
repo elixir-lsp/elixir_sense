@@ -399,6 +399,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert [%{} | _] = ElixirSense.suggestions(buffer, 8, 5)
   end
 
+  @tag requires_elixir_1_9: true
   test "lists protocol functions" do
     buffer = """
     defimpl Enumerable, for: MyStruct do

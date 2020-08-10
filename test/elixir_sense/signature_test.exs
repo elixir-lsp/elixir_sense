@@ -446,6 +446,7 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    @tag requires_elixir_1_9: true
     test "find signatures when function with many clausess" do
       code = """
       defmodule MyModule do
