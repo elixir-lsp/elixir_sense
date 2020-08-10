@@ -1,11 +1,12 @@
 defmodule ExUnitConfig do
-  defp otp_related do
+  defp otp_older_than(major) do
     {otp_major_version, ""} = Integer.parse(System.build_info()[:otp_release])
+    otp_major_version < major
+  end
 
-    if otp_major_version < 23 do
-      [requires_otp_23: true]
-    else
-      []
+  defp otp_related do
+    for major <- 23..23, otp_older_than(major) do
+      {:"requires_otp_#{major}", true}
     end
   end
 
