@@ -69,5 +69,7 @@ jobs:
           mix local.hex --force
           mix local.rebar --force
           mix deps.get
+      - name: Restore timestamps to prevent unnecessary recompilation
+        run: IFS=$'\n'; for f in $(git ls-files); do touch -d "$(git log -n 1 --pretty='%cI' -- $f)" "$f"; done
       - run: mix credo --all --strict
       - run: mix dialyzer
