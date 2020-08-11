@@ -59,6 +59,11 @@ jobs:
         with:
           otp-version: ${{matrix.otp}}
           elixir-version: ${{matrix.elixir}}
+      - name: Cache build artifacts
+        uses: actions/cache@v2
+        with:
+          path: _build/dev/
+          key: ${{ matrix.otp }}-${{ matrix.elixir }}-static_analysis-build
       - name: Install Dependencies
         run: |
           mix local.hex --force
