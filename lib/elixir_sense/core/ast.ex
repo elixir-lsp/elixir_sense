@@ -14,7 +14,8 @@ defmodule ElixirSense.Core.Ast do
     attributes: [],
     mods_funs: [],
     types: [],
-    specs: []
+    specs: [],
+    overridable: []
   }
 
   @partials [
@@ -246,6 +247,16 @@ defmodule ElixirSense.Core.Ast do
          acc
        ) do
     {nil, %{acc | attributes: [attribute | acc.attributes]}}
+  end
+
+  # skip defoveridable called on behaviour (argument is atom in that case)
+  # behaviopurs are handled separately
+  defp pre_walk_expanded(
+         {{:., _, [Module, :make_overridable]}, _, [_module, keyword]},
+         acc
+       )
+       when is_list(keyword) do
+    {nil, %{acc | overridable: acc.overridable |> Keyword.merge(keyword)}}
   end
 
   defp pre_walk_expanded({type, _, [{:when, _, [{name, _, args}, _]} | _]}, acc)
