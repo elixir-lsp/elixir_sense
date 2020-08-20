@@ -399,6 +399,68 @@ defmodule ElixirSense.SuggestionsTest do
     assert [%{} | _] = ElixirSense.suggestions(buffer, 8, 5)
   end
 
+  test "lists overridable callbacks" do
+    buffer = """
+    defmodule MyServer do
+      use ElixirSenseExample.OverridableImplementation
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 7)
+      |> Enum.filter(fn s -> s.type == :callback && s.name == "foo" end)
+
+    assert [
+             %{
+               args: "",
+               arity: 0,
+               name: "foo",
+               origin: "ElixirSenseExample.OverridableBehaviour",
+               spec: "@callback foo :: any",
+               summary: "",
+               type: :callback,
+               metadata: %{optional: false}
+             }
+           ] = list
+  end
+
+  test "lists overridable functions and macros" do
+    buffer = """
+    defmodule MyServer do
+      use ElixirSenseExample.OverridableFunctions
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 7)
+      |> Enum.filter(fn s -> s.type == :callback end)
+
+    assert [
+             %{
+               args: "var",
+               arity: 1,
+               metadata: %{},
+               name: "required",
+               origin: "ElixirSenseExample.OverridableFunctions",
+               spec: "",
+               summary: "",
+               type: :callback
+             },
+             %{
+               args: "x, y",
+               arity: 2,
+               metadata: %{},
+               name: "test",
+               origin: "ElixirSenseExample.OverridableFunctions",
+               spec: "@spec test(number, number) :: number",
+               summary: "",
+               type: :callback
+             }
+           ] = list
+  end
+
   test "lists protocol functions" do
     buffer = """
     defimpl Enumerable, for: MyStruct do
