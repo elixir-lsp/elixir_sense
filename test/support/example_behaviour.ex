@@ -161,7 +161,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       end
 
       defdelegate delegated_func, to: ElixirSenseExample.Delegates
-
+      defoverridable public_func: 0
       @type my_pub_type :: any
       @typep my_priv_type :: any
       @opaque my_opaque_type :: any

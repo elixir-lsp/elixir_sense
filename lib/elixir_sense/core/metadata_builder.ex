@@ -778,7 +778,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # credo:disable-for-lines:115
-  defp pre({:use, [line: line, column: column], _} = ast, state) do
+  defp pre({:use, [line: line, column: column], [module_expression | _]} = ast, state) do
     # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
     current_module = get_current_module(state)
 
@@ -798,13 +798,23 @@ defmodule ElixirSense.Core.MetadataBuilder do
       attributes: attributes,
       mods_funs: mods_funs,
       types: types,
-      specs: specs
+      specs: specs,
+      overridable: overridable
     } = Ast.extract_use_info(ast, current_module, state)
+
+    module =
+      case module_expression do
+        {:__aliases__, _, mods} ->
+          concat_module_expression(state, mods) |> Module.concat()
+
+        atom when is_atom(atom) ->
+          atom
+      end
 
     state =
       state
       |> add_aliases(aliases)
-      |> add_requires(requires)
+      |> add_requires([module | requires])
       |> add_imports(imports)
       |> add_behaviours(behaviours)
       |> add_attributes(attributes, {line, column})
@@ -812,8 +822,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state =
       Enum.reduce(mods_funs, state, fn
         {name, args, type}, acc ->
+          options =
+            if {name, length(args)} in overridable do
+              [overridable: {true, module}]
+            else
+              []
+            end
+
           acc
-          |> add_func_to_index(name, args, {line, column}, type)
+          |> add_func_to_index(name, args, {line, column}, type, options)
 
         module, acc ->
           submodule_parts = Module.split(module) |> Enum.drop(current_module_length)
