@@ -372,7 +372,8 @@ defmodule ElixirSense.Core.State do
     info = %ModFunInfo{
       positions: new_positions,
       params: new_params,
-      type: type
+      type: type,
+      overridable: current_info |> Map.get(:overridable, false)
     }
 
     info =
