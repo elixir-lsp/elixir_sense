@@ -421,6 +421,16 @@ defmodule ElixirSense.SuggestionsTest do
                summary: "",
                type: :callback,
                metadata: %{optional: false}
+             },
+             %{
+               args: "",
+               arity: 0,
+               metadata: %{},
+               name: "foo",
+               origin: "ElixirSenseExample.OverridableImplementation",
+               spec: "",
+               summary: "",
+               type: :callback
              }
            ] = list
   end

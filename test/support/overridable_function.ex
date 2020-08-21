@@ -15,6 +15,7 @@ end
 
 defmodule ElixirSenseExample.OverridableBehaviour do
   @callback foo :: any
+  @macrocallback bar(any) :: Macro.t()
 end
 
 defmodule ElixirSenseExample.OverridableImplementation do
@@ -25,6 +26,8 @@ defmodule ElixirSenseExample.OverridableImplementation do
       def foo do
         "Override me"
       end
+
+      defmacro bar(var), do: Macro.expand(var, __CALLER__)
 
       defoverridable ElixirSenseExample.OverridableBehaviour
     end
