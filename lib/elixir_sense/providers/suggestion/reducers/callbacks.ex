@@ -40,13 +40,12 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
               def_prefix?(hint, spec) or String.starts_with?("#{name}", hint) do
             desc = Introspection.extract_summary_from_docs(doc)
             [_, args_str] = Regex.run(Regex.recompile!(~r/.\((.*)\)/), signature)
-            args = args_str |> String.replace(Regex.recompile!(~r/\s/), "")
 
             %{
               type: :callback,
               name: Atom.to_string(name),
               arity: arity,
-              args: args,
+              args: args_str,
               origin: mod_name,
               summary: desc,
               spec: spec,

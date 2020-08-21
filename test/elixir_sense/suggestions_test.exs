@@ -221,7 +221,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert [
              %{
-               args: "old_vsn,state,extra",
+               args: "old_vsn, state, extra",
                arity: 3,
                name: "code_change",
                origin: "GenServer",
@@ -372,7 +372,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert [
              %{
-               args: "oldVsn,oldState,oldData,extra",
+               args: "oldVsn, oldState, oldData, extra",
                arity: 4,
                name: "code_change",
                origin: ":gen_statem",
