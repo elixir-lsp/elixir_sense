@@ -52,20 +52,38 @@ defmodule ElixirSense.Core.Introspection do
     case Code.ensure_loaded(module) do
       {:module, _} ->
         for {f, a} <- module.module_info(:exports) do
-          case Atom.to_string(f) do
-            "MACRO-" <> macro_name ->
-              # extract macro name
-              {String.to_atom(macro_name), a - 1}
-
-            _ ->
-              # normal public fun
-              {f, a}
-          end
+          drop_macro_prefix({f, a})
         end
         |> Kernel.++(BuiltinFunctions.erlang_builtin_functions(module))
 
       _otherwise ->
         []
+    end
+  end
+
+  @spec get_callbacks(module) :: [{atom, non_neg_integer}]
+  def get_callbacks(Elixir), do: []
+
+  def get_callbacks(module) do
+    with {:module, _} <- Code.ensure_loaded(module),
+         true <- function_exported?(module, :behaviour_info, 1) do
+      for {f, a} <- module.behaviour_info(:callbacks) do
+        drop_macro_prefix({f, a})
+      end
+    else
+      _ -> []
+    end
+  end
+
+  def drop_macro_prefix({f, a}) do
+    case Atom.to_string(f) do
+      "MACRO-" <> macro_name ->
+        # extract macro name
+        {String.to_atom(macro_name), a - 1}
+
+      _ ->
+        # normal public fun
+        {f, a}
     end
   end
 
@@ -588,7 +606,7 @@ defmodule ElixirSense.Core.Introspection do
     mod
     |> Typespec.get_callbacks()
     |> Enum.any?(fn {{f, a}, _} ->
-      {f, a} == {fun, arity} or {f, a} == {:"MACRO-#{fun}", arity + 1}
+      drop_macro_prefix({f, a}) == {fun, arity}
     end)
   end
 
@@ -941,7 +959,7 @@ defmodule ElixirSense.Core.Introspection do
       module
       |> Typespec.get_callbacks()
       |> Enum.find(fn {{f, a}, _} ->
-        {f, a} == {callback, arity} or {f, a} == {:"MACRO-#{callback}", arity + 1}
+        drop_macro_prefix({f, a}) == {callback, arity}
       end)
 
     Typespec.spec_to_quoted(name, spec)
