@@ -323,6 +323,7 @@ defmodule ElixirSense.SuggestionsTest do
                args: "a",
                arity: 1,
                name: "optional",
+               subtype: :macrocallback,
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
                spec: "@macrocallback optional(a) :: Macro.t when a: atom",
                summary: "An optional macrocallback\n",
@@ -333,6 +334,7 @@ defmodule ElixirSense.SuggestionsTest do
                args: "atom",
                arity: 1,
                name: "required",
+               subtype: :macrocallback,
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
                spec: "@macrocallback required(atom) :: Macro.t",
                summary: "A required macrocallback\n",
@@ -379,7 +381,8 @@ defmodule ElixirSense.SuggestionsTest do
                spec:
                  "@callback code_change(oldVsn :: term | {:down, term}, oldState :: state, oldData :: data, extra :: term) ::\n  {:ok, newState :: state, newData :: data} |\n  reason :: term",
                summary: "",
-               type: :callback
+               type: :callback,
+               subtype: :callback
              }
            ] = list
   end
@@ -409,7 +412,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 3, 7)
-      |> Enum.filter(fn s -> s.type == :callback && s.name == "foo" end)
+      |> Enum.filter(fn s -> s.type == :callback end)
 
     assert [
              %{
@@ -420,15 +423,17 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "@callback foo :: any",
                summary: "",
                type: :callback,
+               subtype: :callback,
                metadata: %{optional: false}
              },
              %{
-               args: "",
-               arity: 0,
-               metadata: %{},
-               name: "foo",
-               origin: "ElixirSenseExample.OverridableImplementation",
-               spec: "",
+               args: "any",
+               arity: 1,
+               metadata: %{optional: false},
+               name: "bar",
+               origin: "ElixirSenseExample.OverridableBehaviour",
+               spec: "@macrocallback bar(any) :: Macro.t",
+               subtype: :macrocallback,
                summary: "",
                type: :callback
              }
@@ -456,7 +461,8 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "ElixirSenseExample.OverridableFunctions",
                spec: "",
                summary: "",
-               type: :callback
+               type: :callback,
+               subtype: :macrocallback
              },
              %{
                args: "x, y",
@@ -466,7 +472,8 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "ElixirSenseExample.OverridableFunctions",
                spec: "@spec test(number, number) :: number",
                summary: "",
-               type: :callback
+               type: :callback,
+               subtype: :callback
              }
            ] = list
   end

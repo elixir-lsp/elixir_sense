@@ -487,6 +487,7 @@ defmodule ElixirSense.Core.Introspection do
 
           %{
             name: name,
+            kind: :callback,
             arity: arity,
             callback: "@callback #{definition}",
             signature: signature,
@@ -690,6 +691,7 @@ defmodule ElixirSense.Core.Introspection do
 
     %{
       name: name,
+      kind: kind,
       arity: arity,
       callback: "@#{kind} #{definition}",
       signature: signature,

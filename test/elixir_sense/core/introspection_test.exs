@@ -61,7 +61,8 @@ defmodule ElixirSense.Core.IntrospectionTest do
                """,
                signature: "do_stuff(t, term)",
                doc: "Does stuff to opaque arg\n",
-               metadata: %{optional: false}
+               metadata: %{optional: false},
+               kind: :callback
              }
            ]
   end
@@ -78,7 +79,8 @@ defmodule ElixirSense.Core.IntrospectionTest do
                """,
                signature: "init(args)",
                doc: nil,
-               metadata: %{optional: false}
+               metadata: %{optional: false},
+               kind: :callback
              }
            ]
   end
@@ -92,7 +94,8 @@ defmodule ElixirSense.Core.IntrospectionTest do
                doc:
                  "Called from `Exception.blame/3` to augment the exception struct.\n\nCan be used to collect additional information about the exception\nor do some additional expensive computation.\n",
                signature: "blame(t, stacktrace)",
-               metadata: %{optional: true}
+               metadata: %{optional: true},
+               kind: :callback
              },
              %{
                arity: 1,
@@ -100,7 +103,8 @@ defmodule ElixirSense.Core.IntrospectionTest do
                doc: nil,
                callback: "@callback exception(term) :: t",
                signature: "exception(term)",
-               metadata: %{optional: false}
+               metadata: %{optional: false},
+               kind: :callback
              },
              %{
                arity: 1,
@@ -108,7 +112,8 @@ defmodule ElixirSense.Core.IntrospectionTest do
                callback: "@callback message(t) :: String.t",
                doc: nil,
                signature: "message(t)",
-               metadata: %{optional: false}
+               metadata: %{optional: false},
+               kind: :callback
              }
            ]
   end

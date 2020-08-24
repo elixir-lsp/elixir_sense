@@ -83,7 +83,7 @@ defmodule ElixirSense.Providers.Suggestion do
     returns: &Reducers.Returns.add_returns/5,
     callbacks: &Reducers.Callbacks.add_callbacks/5,
     protocol_functions: &Reducers.Protocol.add_functions/5,
-    overridable: &Reducers.Overridable.add_functions/5,
+    overridable: &Reducers.Overridable.add_overridable/5,
     param_options: &Reducers.Params.add_options/5,
     typespecs: &Reducers.TypeSpecs.add_types/5,
     populate_common: &Reducers.Common.populate/5,

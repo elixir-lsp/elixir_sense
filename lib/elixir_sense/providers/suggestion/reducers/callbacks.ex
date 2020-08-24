@@ -6,6 +6,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
 
   @type callback :: %{
           type: :callback,
+          subtype: :callback | :macrocallback,
           name: String.t(),
           arity: non_neg_integer,
           args: String.t(),
@@ -31,6 +32,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
           for %{
                 name: name,
                 arity: arity,
+                kind: kind,
                 callback: spec,
                 signature: signature,
                 doc: doc,
@@ -43,6 +45,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
 
             %{
               type: :callback,
+              subtype: kind,
               name: Atom.to_string(name),
               arity: arity,
               args: args_str,
