@@ -6,11 +6,12 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.DocsSnippets do
   # Format:
   # {label, snippet, documentation, priority}
   @module_attr_snippets [
-    {~s(@doc """"""), ~s(@doc """\n$0\n"""), "Documents a function", 13},
-    {"@doc false", "@doc false", "Marks this function as internal", 15},
+    {~s(@doc """"""), ~s(@doc """\n$0\n"""), "Documents a function/macro/callback", 13},
+    {"@doc false", "@doc false", "Marks this function/macro/callback as internal", 15},
     {~s(@moduledoc """"""), ~s(@moduledoc """\n$0\n"""), "Documents a module", 13},
     {"@moduledoc false", "@moduledoc false", "Marks this module as internal", 15},
-    {~s(@typedoc """"""), ~s(@typedoc """\n$0\n"""), "Documents a type specification", 13}
+    {~s(@typedoc """"""), ~s(@typedoc """\n$0\n"""), "Documents a type specification", 13},
+    {"@typedoc false", "@typedoc false", "Marks this type specification as internal", 15}
   ]
 
   @doc """

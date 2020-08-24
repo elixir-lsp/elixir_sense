@@ -1182,11 +1182,12 @@ defmodule ElixirSense.SuggestionsTest do
              %{label: ~s(@moduledoc """""")},
              %{label: ~s(@typedoc """""")},
              %{label: "@doc false"},
-             %{label: "@moduledoc false"}
+             %{label: "@moduledoc false"},
+             %{label: "@typedoc false"}
            ] = list
 
     assert detail == "module attribute snippet"
-    assert doc == "Documents a function"
+    assert doc == "Documents a function/macro/callback"
 
     list = suggestions_by_kind(buffer, cursor_2, :snippet)
     assert [%{label: ~S(@moduledoc """""")}, %{label: "@moduledoc false"}] = list
