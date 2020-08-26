@@ -25,25 +25,36 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
 
   # We only list type specs when inside the parent modules's body
   def add_types(hint, env, file_metadata, %{at_module_body?: true}, acc) do
-    %State.Env{aliases: aliases, module: module, attributes: attributes, vars: vars} = env
-    %Metadata{mods_funs_to_positions: mods_and_funs, types: metadata_types} = file_metadata
+    if String.starts_with?(hint, "@") and not String.contains?(hint, ".") do
+      # We don't list typespecs when the hint is most likely an attribute without call operator
+      {:cont, acc}
+    else
+      %State.Env{aliases: aliases, module: module, attributes: attributes, vars: vars} = env
+      %Metadata{mods_funs_to_positions: mods_and_funs, types: metadata_types} = file_metadata
 
-    binding_env = %Binding{
-      attributes: attributes,
-      variables: vars,
-      current_module: module
-    }
+      binding_env = %Binding{
+        attributes: attributes,
+        variables: vars,
+        current_module: module
+      }
 
-    {mod, hint} =
-      hint
-      |> Source.split_module_and_hint(module, aliases)
-      |> expand(binding_env, aliases)
+      {mod, hint} =
+        hint
+        |> Source.split_module_and_hint(module, aliases)
+        |> expand(binding_env, aliases)
 
-    list =
-      find_typespecs_for_mod_and_hint({mod, hint}, aliases, module, mods_and_funs, metadata_types)
-      |> Kernel.++(find_builtin_types({mod, hint}))
+      list =
+        find_typespecs_for_mod_and_hint(
+          {mod, hint},
+          aliases,
+          module,
+          mods_and_funs,
+          metadata_types
+        )
+        |> Kernel.++(find_builtin_types({mod, hint}))
 
-    {:cont, %{acc | result: acc.result ++ list}}
+      {:cont, %{acc | result: acc.result ++ list}}
+    end
   end
 
   def add_types(_hint, _env, _buffer_metadata, _context, acc) do
