@@ -8,6 +8,8 @@ defmodule ElixirSense.Core.Parser do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
 
+  @dialyzer {:nowarn_function, normalize_error: 1}
+
   @spec parse_file(String.t(), boolean, boolean, pos_integer | nil) :: Metadata.t()
   def parse_file(file, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
     case File.read(file) do
