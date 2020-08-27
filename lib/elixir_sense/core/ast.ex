@@ -59,7 +59,7 @@ defmodule ElixirSense.Core.Ast do
 
   def extract_use_info(use_ast, module, state) do
     current_aliases = State.current_aliases(state)
-    env = Map.merge(__ENV__, %{module: module, function: nil, aliases: current_aliases})
+    env = %Macro.Env{module: module, function: nil, aliases: current_aliases}
 
     {expanded_ast, _requires} = Macro.prewalk(use_ast, {env, 1}, &do_expand/2)
     {_ast, env_info} = Macro.prewalk(expanded_ast, @empty_env_info, &pre_walk_expanded/2)
