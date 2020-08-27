@@ -121,9 +121,12 @@ defmodule ElixirSense.Core.Parser do
   end
 
   # elixir < 1.11
-  defp normalize_error({:error, {line, msg, detail}}) when is_integer(line), do: {:error, {line, msg, detail}}
+  defp normalize_error({:error, {line, msg, detail}}) when is_integer(line),
+    do: {:error, {line, msg, detail}}
+
   # elixir >= 1.11
-  defp normalize_error({:error, {[line: line, column: _column], msg, detail}}), do: {:error, {line, msg, detail}}
+  defp normalize_error({:error, {[line: line, column: _column], msg, detail}}),
+    do: {:error, {line, msg, detail}}
 
   defp fix_parse_error(
          source,
@@ -157,7 +160,8 @@ defmodule ElixirSense.Core.Parser do
          cursor_line_number,
          {:error, {line_number, {message, text}, token}}
        )
-       when is_integer(cursor_line_number) and message in ["unexpected token: ", "unexpected reserved word: "] do
+       when is_integer(cursor_line_number) and
+              message in ["unexpected token: ", "unexpected reserved word: "] do
     terminator =
       case Regex.run(Regex.recompile!(~r/terminator\s\"([^\s\"]+)/), text) do
         [_, terminator] -> terminator
