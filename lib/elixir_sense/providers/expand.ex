@@ -27,7 +27,7 @@ defmodule ElixirSense.Providers.Expand do
 
     try do
       {:ok, expr} = code |> Code.string_to_quoted()
-      
+
       # Elixir >= 1.11 require some meta to expand ast
       expr = Ast.add_default_meta(expr)
 

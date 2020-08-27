@@ -91,19 +91,37 @@ defmodule ElixirSense.Evaltest do
                """
                |> String.trim()
 
-      assert result.expand_all =~
-               """
-               (
-                 require(Application)
+      if Version.match?(System.version(), "< 1.11.0-dev") do
+        # apparently no full expansion was preformed on earlier elixir versions
+
+        assert result.expand_all =~
+                 """
                  (
-                   @behaviour(Application)
-                   @doc(false)
-                   def(stop(_state)) do
-                     :ok
-                   end
-                   Module.make_overridable(MyModule, Application)
-               """
-               |> String.trim()
+                   require(Application)
+                   (
+                     @behaviour(Application)
+                     @doc(false)
+                     def(stop(_state)) do
+                       :ok
+                     end
+                     Module.make_overridable(MyModule, Application)
+                 """
+                 |> String.trim()
+      else
+        assert result.expand_all =~
+                 """
+                 (
+                   require(Application)
+                   (
+                     Module.__put_attribute__(MyModule, :behaviour, Application, nil)
+                     Module.__put_attribute__(MyModule, :doc, {0, false}, nil)
+                     def(stop(_state)) do
+                       :ok
+                     end
+                     Module.make_overridable(MyModule, Application)
+                 """
+                 |> String.trim()
+      end
     end
 
     test "with errors" do
