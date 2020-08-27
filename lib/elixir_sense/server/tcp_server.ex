@@ -127,7 +127,7 @@ defmodule ElixirSense.Server.TCPServer do
     rescue
       e ->
         message = Exception.message(e)
-        details = Exception.format_stacktrace(System.stacktrace())
+        details = Exception.format_stacktrace(__STACKTRACE__)
         {:error, request_id, message, details}
     end
   end
