@@ -138,10 +138,12 @@ defmodule ElixirSense.Core.Parser do
     |> replace_line_with_marker(line)
   end
 
+  # since elixir 1.11 error is {"unexpected reserved word: ", ...}, "do"}
+  # elixir < 1.11
   defp fix_parse_error(
          source,
          _cursor_line_number,
-         {:error, {line_number, {"unexpected token: ", _text}, "do"}}
+         {:error, {line_number, "unexpected token: ", "do"}}
        ) do
     source
     |> Source.split_lines()
@@ -153,7 +155,20 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
-  # since elixir 1.11 error is {"unexpected reserved word: ", ". The \"{\" at line 3 is missing terminator \"}\""}, "end"}
+  # elixir >= 1.11
+  defp fix_parse_error(
+         source,
+         cursor_line_number,
+         {:error, {line_number, {"unexpected reserved word: ", _text}, "do"}}
+       ) do
+    fix_parse_error(
+      source,
+      cursor_line_number,
+      {:error, {line_number, "unexpected token: ", "do"}}
+    )
+  end
+
+  # since elixir 1.11 error is {"unexpected reserved word: ", ...}, "end"}
 
   defp fix_parse_error(
          source,
