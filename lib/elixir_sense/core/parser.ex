@@ -150,12 +150,14 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
+  # since elixir 1.11 error is {"unexpected reserved word: ", ". The \"{\" at line 3 is missing terminator \"}\""}, "end"}
+
   defp fix_parse_error(
          source,
          cursor_line_number,
-         {:error, {line_number, {"unexpected token: ", text}, token}}
+         {:error, {line_number, {message, text}, token}}
        )
-       when is_integer(cursor_line_number) do
+       when is_integer(cursor_line_number) and message in ["unexpected token: ", "unexpected reserved word: "] do
     terminator =
       case Regex.run(Regex.recompile!(~r/terminator\s\"([^\s\"]+)/), text) do
         [_, terminator] -> terminator
