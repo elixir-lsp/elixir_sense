@@ -141,12 +141,12 @@ defmodule ElixirSense.Core.Parser do
   end
 
   # since elixir 1.11 error is {"unexpected reserved word: ", ...}, "do"}
-  # elixir < 1.11
   defp fix_parse_error(
          source,
          _cursor_line_number,
-         {:error, {line_number, "unexpected token: ", "do"}}
-       ) do
+         {:error, {line_number, {message, _}, "do"}}
+       )
+       when message in ["unexpected token: ", "unexpected reserved word: "] do
     source
     |> Source.split_lines()
     |> List.update_at(line_number - 1, fn line ->
@@ -155,19 +155,6 @@ defmodule ElixirSense.Core.Parser do
       |> String.replace("do", "do: " <> marker(line_number), global: false)
     end)
     |> Enum.join("\n")
-  end
-
-  # elixir >= 1.11
-  defp fix_parse_error(
-         source,
-         cursor_line_number,
-         {:error, {line_number, {"unexpected reserved word: ", _text}, "do"}}
-       ) do
-    fix_parse_error(
-      source,
-      cursor_line_number,
-      {:error, {line_number, "unexpected token: ", "do"}}
-    )
   end
 
   # since elixir 1.11 error is {"unexpected reserved word: ", ...}, "end"}
