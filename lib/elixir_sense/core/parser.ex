@@ -112,13 +112,18 @@ defmodule ElixirSense.Core.Parser do
 
         if errors_threshold > 0 do
           source
-          |> fix_parse_error(cursor_line_number, error)
+          |> fix_parse_error(cursor_line_number, normalize_error(error))
           |> string_to_ast(errors_threshold - 1, cursor_line_number, original_error, opts)
         else
           original_error || error
         end
     end
   end
+
+  # elixir < 1.11
+  defp normalize_error({:error, {line, msg, detail}}) when is_integer(line), do: {:error, {line, msg, detail}}
+  # elixir >= 1.11
+  defp normalize_error({:error, {[line: line, column: _column], msg, detail}}), do: {:error, {line, msg, detail}}
 
   defp fix_parse_error(
          source,
