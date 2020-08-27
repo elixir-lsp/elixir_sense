@@ -1114,7 +1114,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   # String literal in sigils
   # elixir >= 1.11
-  defp post({:<<>>, [indentation: _, line: line, column: _column], [str]} = ast, state) when is_binary(str) do
+  defp post({:<<>>, [indentation: _, line: line, column: _column], [str]} = ast, state)
+       when is_binary(str) do
     post_string_literal(ast, state, line, str)
   end
 
