@@ -57,11 +57,9 @@ defmodule ElixirSense.Core.Ast do
 
   @max_expand_count 30_000
 
-  def extract_use_info({:use, meta, args}, module, state) do
+  def extract_use_info(use_ast, module, state) do
     current_aliases = State.current_aliases(state)
     env = %Macro.Env{module: module, function: nil, aliases: current_aliases}
-
-    use_ast = {:use, meta |> Keyword.merge(context: Elixir, import: Kernel), args}
 
     {expanded_ast, _requires} = Macro.prewalk(use_ast, {env, 1}, &do_expand/2)
     {_ast, env_info} = Macro.prewalk(expanded_ast, @empty_env_info, &pre_walk_expanded/2)
@@ -90,6 +88,12 @@ defmodule ElixirSense.Core.Ast do
     catch
       e -> e
     end
+  end
+
+  def add_default_meta(expr) do
+    Macro.update_meta(expr, fn keyword ->
+      Keyword.merge(keyword, context: Elixir, import: Kernel)
+    end)
   end
 
   def set_module_for_env(env, module) do

@@ -790,6 +790,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     current_module_variants = get_current_module_variants(state)
 
+    # Elixir >= 1.11 require some meta to expand ast
+    use_ast = Ast.add_default_meta(ast)
+
     %{
       requires: requires,
       imports: imports,
@@ -800,7 +803,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       types: types,
       specs: specs,
       overridable: overridable
-    } = Ast.extract_use_info(ast, current_module, state)
+    } = Ast.extract_use_info(use_ast, current_module, state)
 
     module =
       case module_expression do

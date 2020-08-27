@@ -26,7 +26,10 @@ defmodule ElixirSense.Providers.Expand do
       |> Ast.add_imports_to_env(imports)
 
     try do
-      {_, expr} = code |> Code.string_to_quoted()
+      {:ok, expr} = code |> Code.string_to_quoted()
+      
+      # Elixir >= 1.11 require some meta to expand ast
+      expr = Ast.add_default_meta(expr)
 
       %{
         expand_once: expr |> Macro.expand_once(env) |> Macro.to_string(),
