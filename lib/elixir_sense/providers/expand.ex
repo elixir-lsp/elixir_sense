@@ -20,7 +20,7 @@ defmodule ElixirSense.Providers.Expand do
   @spec expand_full(String.t(), State.Env.t()) :: expanded_code_map
   def expand_full(code, %State.Env{requires: requires, imports: imports, module: module}) do
     env =
-      __ENV__
+      %Macro.Env{}
       |> Ast.set_module_for_env(module)
       |> Ast.add_requires_to_env(requires)
       |> Ast.add_imports_to_env(imports)
