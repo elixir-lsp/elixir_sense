@@ -62,7 +62,10 @@ jobs:
       - name: Cache build artifacts
         uses: actions/cache@v2
         with:
-          path: _build/dev/
+          path: |
+            ~/.hex
+            ~/.mix
+            _build
           key: ${{ matrix.otp }}-${{ matrix.elixir }}-static_analysis-build
       - name: Install Dependencies
         run: |
