@@ -608,20 +608,31 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_module_attribute(new_ast, state, {line, column}, name, type, is_definition)
   end
 
-  # import with v1.2 notation
+  # transform 1.2 alias/require/import/use syntax ast into regular
   defp pre(
-         {:import, [line: line, column: _column],
-          [{{:., _, [prefix_expression, :{}]}, _, imports} | _]} = ast,
+         {directive, [line: line, column: column],
+          [{{:., _, [prefix_expression, :{}]}, _, postfix_expressions} | _]} = ast,
          state
-       ) do
-    imports_modules = modules_from_12_syntax(state, imports, prefix_expression)
+       )
+       when directive in [:alias, :require, :import, :use] do
+    state =
+      modules_from_12_syntax(state, postfix_expressions, prefix_expression)
+      |> Enum.reduce(state, fn module_list, state_acc ->
+        transformed_ast =
+          {directive, [line: line, column: column], [{:__aliases__, [], module_list}]}
 
-    pre_import(ast, state, line, imports_modules)
+        {_ast, state_acc} = pre(transformed_ast, state_acc)
+        state_acc
+      end)
+
+    state
+    |> result(ast)
   end
 
-  # import without options
-  defp pre({:import, meta, [module_info]}, state) do
-    pre({:import, meta, [module_info, []]}, state)
+  # transform alias/require/import/use without options into with empty options
+  defp pre({directive, meta, [module_info]}, state)
+       when directive in [:alias, :require, :import, :use] do
+    pre({directive, meta, [module_info, []]}, state)
   end
 
   # import with options
@@ -638,22 +649,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp pre({:import, [line: line, column: _column], [atom | _] = ast}, state)
        when is_atom(atom) do
     pre_import(ast, state, line, atom)
-  end
-
-  # require with v1.2 notation
-  defp pre(
-         {:require, [line: line, column: _column],
-          [{{:., _, [prefix_expression, :{}]}, _, requires} | _]} = ast,
-         state
-       ) do
-    requires_modules = modules_from_12_syntax(state, requires, prefix_expression)
-
-    pre_require(ast, state, line, requires_modules)
-  end
-
-  # require without options
-  defp pre({:require, meta, [module_info]}, state) do
-    pre({:require, meta, [module_info, []]}, state)
   end
 
   # require with `as` option
@@ -692,40 +687,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_require(ast, state, line, mod)
   end
 
-  # alias with v1.2 notation
-  defp pre(
-         {:alias, [line: line, column: _column],
-          [{{:., _, [prefix_expression, :{}]}, _, aliases} | _]} = ast,
-         state
-       ) do
-    case split_module_expression(state, prefix_expression) do
-      {:ok, prefix_atoms} ->
-        aliases_tuples =
-          aliases
-          |> Enum.map(fn
-            {:__aliases__, _, mods} -> {Module.concat(mods), List.wrap(prefix_atoms) ++ mods}
-            mod when is_atom(mod) -> {mod, List.wrap(prefix_atoms) ++ [mod]}
-          end)
-
-        pre_alias(ast, state, line, aliases_tuples)
-
-      :error ->
-        state
-        |> result(ast)
-    end
-  end
-
-  # alias without options
-  defp pre(
-         {:alias, [line: line, column: _column], [{:__aliases__, _, module_expression = [_ | _]}]} =
-           ast,
-         state
-       ) do
-    module = concat_module_expression(state, module_expression)
-    alias_tuple = {Module.concat([List.last(module_expression)]), module}
-    pre_alias(ast, state, line, alias_tuple)
-  end
-
   # alias with `as` option
   defp pre(
          {:alias, [line: line, column: _column],
@@ -737,8 +698,27 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_alias(ast, state, line, alias_tuple)
   end
 
+  # alias atom module with `as` option
+  defp pre({:alias, [line: line, column: _column], [mod, [as: alias_expression]]} = ast, state)
+       when is_atom(mod) do
+    alias_tuple = alias_tuple(mod, alias_expression)
+    pre_alias(ast, state, line, alias_tuple)
+  end
+
+  # alias
+  defp pre(
+         {:alias, [line: line, column: _column],
+          [{:__aliases__, _, module_expression = [_ | _]}, _opts]} = ast,
+         state
+       ) do
+    module = concat_module_expression(state, module_expression)
+    alias_tuple = {Module.concat([List.last(module_expression)]), module}
+    pre_alias(ast, state, line, alias_tuple)
+  end
+
   # alias atom module
-  defp pre({:alias, [line: line, column: _column], [mod]} = ast, state) when is_atom(mod) do
+  defp pre({:alias, [line: line, column: _column], [mod, _opts]} = ast, state)
+       when is_atom(mod) do
     alias_tuple =
       if Introspection.elixir_module?(mod) do
         {Module.concat([List.last(Module.split(mod))]), mod}
@@ -746,13 +726,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
         {mod, mod}
       end
 
-    pre_alias(ast, state, line, alias_tuple)
-  end
-
-  # alias atom module with `as` option
-  defp pre({:alias, [line: line, column: _column], [mod, [as: alias_expression]]} = ast, state)
-       when is_atom(mod) do
-    alias_tuple = alias_tuple(mod, alias_expression)
     pre_alias(ast, state, line, alias_tuple)
   end
 
@@ -805,7 +778,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # credo:disable-for-lines:115
-  defp pre({:use, [line: line, column: column], _} = ast, state) do
+  defp pre({:use, [line: line, column: column], [module_expression | _]} = ast, state) do
     # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
     current_module = get_current_module(state)
 
@@ -825,13 +798,23 @@ defmodule ElixirSense.Core.MetadataBuilder do
       attributes: attributes,
       mods_funs: mods_funs,
       types: types,
-      specs: specs
+      specs: specs,
+      overridable: overridable
     } = Ast.extract_use_info(ast, current_module, state)
+
+    module =
+      case module_expression do
+        {:__aliases__, _, mods} ->
+          concat_module_expression(state, mods) |> Module.concat()
+
+        atom when is_atom(atom) ->
+          atom
+      end
 
     state =
       state
       |> add_aliases(aliases)
-      |> add_requires(requires)
+      |> add_requires([module | requires])
       |> add_imports(imports)
       |> add_behaviours(behaviours)
       |> add_attributes(attributes, {line, column})
@@ -839,8 +822,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state =
       Enum.reduce(mods_funs, state, fn
         {name, args, type}, acc ->
+          options =
+            if {name, length(args)} in overridable do
+              [overridable: {true, module}]
+            else
+              []
+            end
+
           acc
-          |> add_func_to_index(name, args, {line, column}, type)
+          |> add_func_to_index(name, args, {line, column}, type, options)
 
         module, acc ->
           submodule_parts = Module.split(module) |> Enum.drop(current_module_length)

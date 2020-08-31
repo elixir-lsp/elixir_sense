@@ -158,6 +158,31 @@ defmodule ElixirSense.Providers.Definition do
   end
 
   defp do_find_function_or_module(
+         {nil, :super},
+         mods_funs_to_positions,
+         %State.Env{scope: {function, arity}, module: module} = env,
+         metadata_types,
+         binding_env,
+         visited
+       ) do
+    case mods_funs_to_positions[{module, function, arity}] do
+      %ModFunInfo{overridable: {true, origin}} ->
+        # overridable function is most likely defined by __using__ macro
+        do_find_function_or_module(
+          {origin, :__using__},
+          mods_funs_to_positions,
+          env,
+          metadata_types,
+          binding_env,
+          visited
+        )
+
+      _ ->
+        %Location{found: false}
+    end
+  end
+
+  defp do_find_function_or_module(
          {module, function},
          mods_funs_to_positions,
          env,

@@ -6,6 +6,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
 
   @type callback :: %{
           type: :callback,
+          subtype: :callback | :macrocallback,
           name: String.t(),
           arity: non_neg_integer,
           args: String.t(),
@@ -31,6 +32,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
           for %{
                 name: name,
                 arity: arity,
+                kind: kind,
                 callback: spec,
                 signature: signature,
                 doc: doc,
@@ -40,13 +42,13 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
               def_prefix?(hint, spec) or String.starts_with?("#{name}", hint) do
             desc = Introspection.extract_summary_from_docs(doc)
             [_, args_str] = Regex.run(Regex.recompile!(~r/.\((.*)\)/), signature)
-            args = args_str |> String.replace(Regex.recompile!(~r/\s/), "")
 
             %{
               type: :callback,
+              subtype: kind,
               name: Atom.to_string(name),
               arity: arity,
-              args: args,
+              args: args_str,
               origin: mod_name,
               summary: desc,
               spec: spec,

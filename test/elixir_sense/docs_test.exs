@@ -1070,7 +1070,7 @@ defmodule ElixirSense.DocsTest do
   test "retrieve function documentation from behaviour if available" do
     buffer = """
     defmodule MyModule do
-      import ElixirSenseExample.ExampleBehaviourWithDocCallback
+      import ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl
       foo()
     end
     """
@@ -1082,10 +1082,10 @@ defmodule ElixirSense.DocsTest do
     } = ElixirSense.docs(buffer, 3, 5)
 
     assert subject == "foo"
-    assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallback.foo"
+    assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.foo"
 
     assert docs =~ """
-           > ElixirSenseExample.ExampleBehaviourWithDocCallback.foo()
+           > ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.foo()
 
            Docs for foo
            """
@@ -1094,7 +1094,7 @@ defmodule ElixirSense.DocsTest do
   test "retrieve function documentation from behaviour even if @doc is set to false" do
     buffer = """
     defmodule MyModule do
-      import ElixirSenseExample.ExampleBehaviourWithDocCallback
+      import ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl
       baz()
     end
     """
@@ -1106,10 +1106,10 @@ defmodule ElixirSense.DocsTest do
     } = ElixirSense.docs(buffer, 3, 5)
 
     assert subject == "baz"
-    assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallback.baz"
+    assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.baz"
 
     assert docs =~ """
-           > ElixirSenseExample.ExampleBehaviourWithDocCallback.baz()
+           > ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.baz()
 
            Docs for baz
            """
@@ -1118,7 +1118,7 @@ defmodule ElixirSense.DocsTest do
   test "retrieve macro documentation from behaviour if available" do
     buffer = """
     defmodule MyModule do
-      import ElixirSenseExample.ExampleBehaviourWithDocCallback
+      import ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl
       bar()
     end
     """
@@ -1130,12 +1130,34 @@ defmodule ElixirSense.DocsTest do
     } = ElixirSense.docs(buffer, 3, 5)
 
     assert subject == "bar"
-    assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallback.bar"
+    assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.bar"
 
     assert docs =~ """
-           > ElixirSenseExample.ExampleBehaviourWithDocCallback.bar()
+           > ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.bar()
 
            Docs for bar
+           """
+  end
+
+  test "do not crash for erlang behaviour callbacks" do
+    buffer = """
+    defmodule MyModule do
+      import ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang
+      init(:ok)
+    end
+    """
+
+    %{
+      subject: subject,
+      actual_subject: actual_subject,
+      docs: %{docs: docs}
+    } = ElixirSense.docs(buffer, 3, 5)
+
+    assert subject == "init"
+    assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init"
+
+    assert docs =~ """
+           > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(_)
            """
   end
 end

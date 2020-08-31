@@ -223,7 +223,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert [
              %{
-               args: "old_vsn,state,extra",
+               args: "old_vsn, state, extra",
                arity: 3,
                name: "code_change",
                origin: "GenServer",
@@ -326,6 +326,7 @@ defmodule ElixirSense.SuggestionsTest do
                args: "a",
                arity: 1,
                name: "optional",
+               subtype: :macrocallback,
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
                spec: "@macrocallback optional(a) :: Macro.t when a: atom",
                summary: "An optional macrocallback\n",
@@ -336,6 +337,7 @@ defmodule ElixirSense.SuggestionsTest do
                args: "atom",
                arity: 1,
                name: "required",
+               subtype: :macrocallback,
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
                spec: "@macrocallback required(atom) :: Macro.t",
                summary: "A required macrocallback\n",
@@ -375,14 +377,15 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert [
              %{
-               args: "oldVsn,oldState,oldData,extra",
+               args: "oldVsn, oldState, oldData, extra",
                arity: 4,
                name: "code_change",
                origin: ":gen_statem",
                spec:
                  "@callback code_change(oldVsn :: term | {:down, term}, oldState :: state, oldData :: data, extra :: term) ::\n  {:ok, newState :: state, newData :: data} |\n  reason :: term",
                summary: "",
-               type: :callback
+               type: :callback,
+               subtype: :callback
              }
            ] = list
   end
@@ -400,6 +403,82 @@ defmodule ElixirSense.SuggestionsTest do
     """
 
     assert [%{} | _] = ElixirSense.suggestions(buffer, 8, 5)
+  end
+
+  test "lists overridable callbacks" do
+    buffer = """
+    defmodule MyServer do
+      use ElixirSenseExample.OverridableImplementation
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 7)
+      |> Enum.filter(fn s -> s.type == :callback end)
+
+    assert [
+             %{
+               args: "",
+               arity: 0,
+               name: "foo",
+               origin: "ElixirSenseExample.OverridableBehaviour",
+               spec: "@callback foo :: any",
+               summary: "",
+               type: :callback,
+               subtype: :callback,
+               metadata: %{optional: false}
+             },
+             %{
+               args: "any",
+               arity: 1,
+               metadata: %{optional: false},
+               name: "bar",
+               origin: "ElixirSenseExample.OverridableBehaviour",
+               spec: "@macrocallback bar(any) :: Macro.t",
+               subtype: :macrocallback,
+               summary: "",
+               type: :callback
+             }
+           ] = list
+  end
+
+  test "lists overridable functions and macros" do
+    buffer = """
+    defmodule MyServer do
+      use ElixirSenseExample.OverridableFunctions
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 7)
+      |> Enum.filter(fn s -> s.type == :callback end)
+
+    assert [
+             %{
+               args: "var",
+               arity: 1,
+               metadata: %{},
+               name: "required",
+               origin: "ElixirSenseExample.OverridableFunctions",
+               spec: "",
+               summary: "",
+               type: :callback,
+               subtype: :macrocallback
+             },
+             %{
+               args: "x, y",
+               arity: 2,
+               metadata: %{},
+               name: "test",
+               origin: "ElixirSenseExample.OverridableFunctions",
+               spec: "@spec test(number, number) :: number",
+               summary: "",
+               type: :callback,
+               subtype: :callback
+             }
+           ] = list
   end
 
   @tag requires_elixir_1_9: true
@@ -1114,11 +1193,12 @@ defmodule ElixirSense.SuggestionsTest do
              %{label: ~s(@moduledoc """""")},
              %{label: ~s(@typedoc """""")},
              %{label: "@doc false"},
-             %{label: "@moduledoc false"}
+             %{label: "@moduledoc false"},
+             %{label: "@typedoc false"}
            ] = list
 
     assert detail == "module attribute snippet"
-    assert doc == "Documents a function"
+    assert doc == "Documents a function/macro/callback"
 
     list = suggestions_by_kind(buffer, cursor_2, :snippet)
     assert [%{label: ~S(@moduledoc """""")}, %{label: "@moduledoc false"}] = list

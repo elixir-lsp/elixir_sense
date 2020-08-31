@@ -952,6 +952,62 @@ defmodule ElixirSense.Providers.DefinitionTest do
     %{found: false} = ElixirSense.definition(buffer, 9, 35)
   end
 
+  test "find super inside overridable function" do
+    buffer = """
+    defmodule MyModule do
+      use ElixirSenseExample.OverridableFunctions
+
+      def test(x, y) do
+        super(x, y)
+      end
+
+      defmacro required(v) do
+        super(v)
+      end
+    end
+    """
+
+    assert %{found: true, type: :macro, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 5, 6)
+
+    assert file =~ "elixir_sense/test/support/overridable_function.ex"
+    assert read_line(file, {line, column}) =~ "__using__(_opts)"
+
+    assert %{found: true, type: :macro, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 9, 6)
+
+    assert file =~ "elixir_sense/test/support/overridable_function.ex"
+    assert read_line(file, {line, column}) =~ "__using__(_opts)"
+  end
+
+  test "find super inside overridable callback" do
+    buffer = """
+    defmodule MyModule do
+      use ElixirSenseExample.OverridableImplementation
+
+      def foo do
+        super()
+      end
+
+      defmacro bar(any) do
+        super(any)
+      end
+    end
+    """
+
+    assert %{found: true, type: :macro, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 5, 6)
+
+    assert file =~ "elixir_sense/test/support/overridable_function.ex"
+    assert read_line(file, {line, column}) =~ "__using__(_opts)"
+
+    assert %{found: true, type: :macro, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 9, 6)
+
+    assert file =~ "elixir_sense/test/support/overridable_function.ex"
+    assert read_line(file, {line, column}) =~ "__using__(_opts)"
+  end
+
   defp read_line(file, {line, column}) do
     file
     |> File.read!()

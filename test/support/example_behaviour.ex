@@ -161,7 +161,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       end
 
       defdelegate delegated_func, to: ElixirSenseExample.Delegates
-
+      defoverridable public_func: 0
       @type my_pub_type :: any
       @typep my_priv_type :: any
       @opaque my_opaque_type :: any
@@ -219,7 +219,7 @@ defmodule ElixirSenseExample.ExampleBehaviourWithDoc do
   @macrocallback bar() :: Macro.t()
 end
 
-defmodule ElixirSenseExample.ExampleBehaviourWithDocCallback do
+defmodule ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl do
   @behaviour ElixirSenseExample.ExampleBehaviourWithDoc
 
   @impl true
@@ -230,6 +230,24 @@ defmodule ElixirSenseExample.ExampleBehaviourWithDocCallback do
 
   @impl true
   defmacro bar(), do: quote(do: :ok)
+end
+
+defmodule ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl do
+  @behaviour ElixirSenseExample.ExampleBehaviourWithDoc
+
+  def foo(), do: :ok
+
+  def baz(), do: :ok
+
+  defmacro bar(), do: quote(do: :ok)
+end
+
+defmodule ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang do
+  @behaviour :gen_statem
+
+  def callback_mode, do: :state_functions
+
+  def init(_), do: :ignore
 end
 
 defmodule ElixirSenseExample.ExampleBehaviourWithStruct do

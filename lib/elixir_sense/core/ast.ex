@@ -14,7 +14,8 @@ defmodule ElixirSense.Core.Ast do
     attributes: [],
     mods_funs: [],
     types: [],
-    specs: []
+    specs: [],
+    overridable: []
   }
 
   @partials [
@@ -246,6 +247,24 @@ defmodule ElixirSense.Core.Ast do
          acc
        ) do
     {nil, %{acc | attributes: [attribute | acc.attributes]}}
+  end
+
+  defp pre_walk_expanded(
+         {{:., _, [Module, :make_overridable]}, _, [_module, keyword]},
+         acc
+       )
+       when is_list(keyword) do
+    {nil, %{acc | overridable: acc.overridable |> Keyword.merge(keyword)}}
+  end
+
+  defp pre_walk_expanded(
+         {{:., _, [Module, :make_overridable]}, _, [_module, behaviour]},
+         acc
+       )
+       when is_atom(behaviour) do
+    keyword = Introspection.get_callbacks(behaviour)
+
+    {nil, %{acc | overridable: acc.overridable |> Keyword.merge(keyword)}}
   end
 
   defp pre_walk_expanded({type, _, [{:when, _, [{name, _, args}, _]} | _]}, acc)

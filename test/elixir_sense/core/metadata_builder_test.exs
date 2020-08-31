@@ -3240,7 +3240,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {InheritMod, :public_func, 0} => %ModFunInfo{
                params: [[]],
                positions: [{2, 3}],
-               type: :def
+               type: :def,
+               overridable: {true, ElixirSenseExample.ExampleBehaviour}
              },
              {InheritMod, :public_func_arg, 2} => %ModFunInfo{
                params: [

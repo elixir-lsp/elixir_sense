@@ -206,6 +206,7 @@ defmodule ElixirSense.Core.State do
             params: list(list(term)),
             positions: list(ElixirSense.Core.State.position_t()),
             target: nil | {module, atom},
+            overridable: false | {true, module},
             # TODO defmodule defprotocol defimpl?
             type:
               :def
@@ -221,7 +222,8 @@ defmodule ElixirSense.Core.State do
     defstruct params: [],
               positions: [],
               target: nil,
-              type: :def
+              type: :def,
+              overridable: false
 
     def get_arities(%ModFunInfo{params: params_variants}) do
       params_variants
@@ -370,18 +372,23 @@ defmodule ElixirSense.Core.State do
     info = %ModFunInfo{
       positions: new_positions,
       params: new_params,
-      type: type
+      type: type,
+      overridable: current_info |> Map.get(:overridable, false)
     }
 
-    info = process_options(state, info, type, options)
+    info =
+      Enum.reduce(options, info, fn option, acc -> process_option(state, acc, type, option) end)
 
     mods_funs_to_positions = Map.put(state.mods_funs_to_positions, {module, fun, arity}, info)
 
     %__MODULE__{state | mods_funs_to_positions: mods_funs_to_positions}
   end
 
-  defp process_options(state, info, :defdelegate,
-         target: {target_module_expression, target_function}
+  defp process_option(
+         state,
+         info,
+         :defdelegate,
+         {:target, {target_module_expression, target_function}}
        ) do
     %ModFunInfo{
       info
@@ -389,7 +396,14 @@ defmodule ElixirSense.Core.State do
     }
   end
 
-  defp process_options(_state, info, _type, _options), do: info
+  defp process_option(_state, info, _, {:overridable, {true, module}}) do
+    %ModFunInfo{
+      info
+      | overridable: {true, module}
+    }
+  end
+
+  defp process_option(_state, info, _type, _option), do: info
 
   @dot_marker "(__dot__)"
   @or_marker "(__or__)"
