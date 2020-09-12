@@ -1,6 +1,6 @@
 defmodule ElixirSense.Providers.Eval do
   @moduledoc """
-  Provider responsible for evaluating Elixr expressions.
+  Provider responsible for evaluating Elixir expressions.
   """
 
   @type binding :: {name :: String.t(), value :: String.t()}
