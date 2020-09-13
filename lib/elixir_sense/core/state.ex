@@ -947,10 +947,16 @@ defmodule ElixirSense.Core.State do
             el
 
           var_info = %VarInfo{is_definition: false} ->
-            %VarInfo{el | positions: Enum.sort(var_info.positions ++ positions)}
+            %VarInfo{
+              el
+              | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort()
+            }
 
           var_info = %VarInfo{is_definition: true} ->
-            %VarInfo{var_info | positions: Enum.sort(var_info.positions ++ positions)}
+            %VarInfo{
+              var_info
+              | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort()
+            }
         end
 
       Map.put(acc, var, updated)
