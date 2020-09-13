@@ -908,7 +908,7 @@ defmodule ElixirSense.Core.State do
               existing
               | # FIXME this is wrong for accumulating attributes
                 type: type,
-                positions: existing.positions ++ [position]
+                positions: (existing.positions ++ [position]) |> Enum.uniq() |> Enum.sort()
             }
           end)
       end
