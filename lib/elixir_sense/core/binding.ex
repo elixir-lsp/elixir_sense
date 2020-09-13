@@ -117,7 +117,7 @@ defmodule ElixirSense.Core.Binding do
         %Binding{imports: imports, current_module: current_module} = env,
         {:local_call, function, arguments}
       ) do
-    candidate_targets = [current_module] ++ imports ++ [Kernel, Kernel.SpecialForms]
+    candidate_targets = List.wrap(current_module) ++ imports ++ [Kernel, Kernel.SpecialForms]
 
     # take first matching
     Enum.find_value(candidate_targets, fn candidate ->
