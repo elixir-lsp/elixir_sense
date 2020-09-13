@@ -7,6 +7,8 @@ defmodule ElixirSenseExample.FunctionsWithReturnSpec do
   @type x :: %{required(:abc) => atom_1, optional(:cde) => atom_1}
   @type atom_1 :: :asd
   @type num :: number
+  @type tup :: {:ok, :abc}
+  @type int :: 44
 
   @spec f01() :: Abc.non_existing()
   def f01(), do: :ok
@@ -16,6 +18,12 @@ defmodule ElixirSenseExample.FunctionsWithReturnSpec do
 
   @spec f03() :: num
   def f03(), do: :ok
+
+  @spec f04() :: tup
+  def f04(), do: :ok
+
+  @spec f05() :: int
+  def f05(), do: :ok
 
   @spec f1() :: t
   def f1(), do: :ok

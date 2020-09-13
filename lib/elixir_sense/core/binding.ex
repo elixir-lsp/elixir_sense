@@ -104,6 +104,16 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  def expand(env, {:tuple_nth, tuple_candidate, n}) do
+    case expand(env, tuple_candidate) do
+      {:tuple, size, fields} when size >= n ->
+        fields |> Enum.at(n)
+
+      _ ->
+        nil
+    end
+  end
+
   # remote call
   def expand(env, {:call, target, function, arguments}) do
     expanded_target = expand(env, target)
@@ -128,7 +138,12 @@ defmodule ElixirSense.Core.Binding do
     |> drop_no_spec
   end
 
+  def expand(env, {:tuple, size, fields}),
+    do: {:tuple, size, fields |> Enum.map(&expand(env, &1))}
+
   def expand(_env, {:atom, atom}), do: {:atom, atom}
+
+  def expand(_env, {:integer, integer}), do: {:integer, integer}
 
   def expand(_env, _other), do: nil
 
@@ -151,6 +166,16 @@ defmodule ElixirSense.Core.Binding do
     # field access is a call with arity 0, other are not allowed
     if arity == [] do
       expand(env, fields[field])
+    end
+  end
+
+  defp expand_call(env, {:atom, Kernel}, :elem, [tuple_candidate, n_candidate], _include_private) do
+    case expand(env, n_candidate) do
+      {:integer, n} ->
+        expand(env, {:tuple_nth, tuple_candidate, n})
+
+      _ ->
+        nil
     end
   end
 
@@ -537,6 +562,10 @@ defmodule ElixirSense.Core.Binding do
     {:map, [], nil}
   end
 
+  defp parse_type(env, {:{}, _, fields}, mod, include_private) do
+    {:tuple, length(fields), fields |> Enum.map(&parse_type(env, &1, mod, include_private))}
+  end
+
   # remote user type
   defp parse_type(env, {{:., _, [mod, atom]}, _, args}, _mod, _include_private)
        when is_atom(mod) and is_atom(atom) do
@@ -552,6 +581,10 @@ defmodule ElixirSense.Core.Binding do
 
   # atom
   defp parse_type(_env, atom, _, _include_private) when is_atom(atom), do: {:atom, atom}
+
+  defp parse_type(_env, integer, _, _include_private) when is_integer(integer) do
+    {:integer, integer}
+  end
 
   # other
   defp parse_type(_env, _, _, _include_private), do: nil

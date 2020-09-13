@@ -1172,6 +1172,22 @@ defmodule ElixirSense.Core.MetadataBuilder do
     match_var(state, left, {vars, nil})
   end
 
+  defp match_var(state, ast, {vars, match_context})
+       when is_tuple(ast) and not is_nil(match_context) do
+    destructured_vars =
+      ast
+      |> Tuple.to_list()
+      |> Enum.with_index()
+      |> Enum.reduce(vars, fn {nth_elem_ast, n}, vars_acc ->
+        {_ast, {new_vars, _match_context}} =
+          match_var(state, nth_elem_ast, {vars, {:tuple_nth, match_context, n}})
+
+        new_vars ++ vars_acc
+      end)
+
+    {ast, {destructured_vars, nil}}
+  end
+
   defp match_var(_state, ast, {vars, _match_context}) do
     {ast, {vars, nil}}
   end
@@ -1302,6 +1318,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # local call
   def get_binding_type(state, {var, _, args}) when is_atom(var) and is_list(args) do
     {:local_call, var, Enum.map(args, &get_binding_type(state, &1))}
+  end
+
+  # tuple
+  def get_binding_type(state, ast) when is_tuple(ast) do
+    list =
+      ast
+      |> Tuple.to_list()
+
+    {:tuple, length(list), list |> Enum.map(&get_binding_type(state, &1))}
+  end
+
+  # integer
+  def get_binding_type(_state, integer) when is_integer(integer) do
+    {:integer, integer}
   end
 
   # other

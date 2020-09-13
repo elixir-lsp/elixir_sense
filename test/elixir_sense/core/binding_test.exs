@@ -127,6 +127,10 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :abc} == Binding.expand(@env, {:atom, :abc})
     end
 
+    test "integer" do
+      assert {:integer, 77} == Binding.expand(@env, {:integer, 77})
+    end
+
     test "nil" do
       assert nil == Binding.expand(@env, nil)
     end
@@ -165,6 +169,45 @@ defmodule ElixirSense.Core.BindingTest do
 
     test "unknown attribute" do
       assert nil == Binding.expand(@env, {:attribute, :v})
+    end
+
+    test "tuple" do
+      assert {:tuple, 2, [nil, {:atom, :abc}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :tuple, type: {:tuple, 2, [nil, {:variable, :a}]}},
+                   %VarInfo{name: :a, type: {:atom, :abc}}
+                 ]),
+                 {:variable, :tuple}
+               )
+    end
+
+    test "tuple nth" do
+      assert {:atom, :a} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{name: :ref, type: {:tuple_nth, {:variable, :tuple}, 1}}
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "tuple elem" do
+      assert {:atom, :a} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     name: :ref,
+                     type: {:local_call, :elem, [{:variable, :tuple}, {:integer, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
     end
 
     test "call existing map field access" do
@@ -324,6 +367,20 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "remote call fun with spec t expanding to tuple" do
+      assert {:tuple, 2, [atom: :ok, atom: :abc]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f04, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
     test "remote call fun with spec t expanding to number" do
       assert nil ==
                Binding.expand(
@@ -332,6 +389,20 @@ defmodule ElixirSense.Core.BindingTest do
                    %VarInfo{
                      name: :ref,
                      type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f03, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "remote call fun with spec t expanding to integer" do
+      assert {:integer, 44} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f05, []}
                    }
                  ]),
                  {:variable, :ref}
