@@ -947,21 +947,37 @@ defmodule ElixirSense.Core.State do
             el
 
           var_info = %VarInfo{is_definition: false} ->
+            type = if var_info.positions == positions do
+              merge_type(el.type, var_info.type)
+            else
+              el.type
+            end
             %VarInfo{
               el
-              | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort()
+              | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort(),
+              type: type
             }
 
           var_info = %VarInfo{is_definition: true} ->
+            type = if var_info.positions == positions do
+              merge_type(el.type, var_info.type)
+            else
+              var_info.type
+            end
             %VarInfo{
               var_info
-              | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort()
+              | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort(),
+              type: type
             }
         end
 
       Map.put(acc, var, updated)
     end)
   end
+
+  defp merge_type(nil, new), do: new
+  defp merge_type(old, nil), do: old
+  defp merge_type(old, new), do: {:intersection, old, new}
 
   def get_closest_previous_env(%__MODULE__{} = metadata, line) do
     # Elixir 1.10 introduces a breaking change in Enum.max_by

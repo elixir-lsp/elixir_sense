@@ -743,10 +743,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre({:=, meta, [lhs, rhs]}, state) do
-    match_context = get_binding_type(state, rhs)
+    match_context_r = get_binding_type(state, rhs)
+    vars_l = find_vars(state, lhs, match_context_r)
+    vars = case rhs do
+      {:=, _, [nested_lhs, _nested_rhs]} ->
+        match_context_l = get_binding_type(state, lhs)
+        nested_vars = find_vars(state, nested_lhs, match_context_l)
+
+        (vars_l ++ nested_vars)
+        
+      _ -> vars_l
+    end
 
     state
-    |> add_vars(find_vars(state, lhs, match_context), true)
+    |> add_vars(vars, true)
     |> result({:=, meta, [:_, rhs]})
   end
 

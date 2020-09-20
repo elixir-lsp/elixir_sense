@@ -399,7 +399,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              state |> get_line_vars(13) |> Enum.find(&(&1.name == :asd))
 
     assert [
-             %VarInfo{name: :x, type: {:variable, :asd}},
+             %VarInfo{name: :x, type: {:intersection, {:variable, :z}, {:variable, :asd}}},
              %VarInfo{name: :z, type: {:variable, :asd}}
            ] = state |> get_line_vars(15) |> Enum.filter(&(&1.name in [:x, :z]))
   end
@@ -431,6 +431,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              %VarInfo{name: :var6, type: {:struct, [], {:atom, Regex}}},
              %VarInfo{name: :var7, type: {:struct, [], {:atom, Range}}}
            ] = state |> get_line_vars(10)
+  end
+
+  test "nested `=` binding" do
+    state =
+      """
+      defmodule MyModule do
+        def some() do
+          %State{formatted: formatted} = state = socket.assigns.state
+          IO.puts ""
+        end
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{name: :formatted, type: nil},
+             %VarInfo{name: :state, type: {:intersection, {:struct, [formatted: {:variable, :formatted}], {:atom, Elixir.State}, nil}, {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}}},
+           ] = state |> get_line_vars(4)
   end
 
   test "vars defined inside a function `after`/`rescue`/`catch`" do

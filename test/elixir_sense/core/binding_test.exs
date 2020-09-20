@@ -1214,4 +1214,102 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:map, [], nil} = Binding.expand(@env, {:call, {:atom, Map}, :new, []})
     end
   end
+
+  describe "intersection" do
+    test "intersection" do
+      assert {:struct, [{:__struct__, {:atom, State}}, {:abc, nil}, {:formatted, {:variable, :formatted}}], State, nil} == Binding.expand(@env|> Map.merge(%{
+        structs: %{
+          State => %StructInfo{
+            fields: [abc: nil, formatted: nil, __struct__: State]
+          }
+        }
+      }), {:intersection, {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}, {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}})
+    end
+
+    test "known unknown" do
+      assert {:atom, A} == Binding.expand(@env, {:intersection, {:atom, A}, nil})
+      assert {:atom, A} == Binding.expand(@env, {:intersection, nil, {:atom, A}})
+    end
+
+    test "equal" do
+      assert {:atom, A} == Binding.expand(@env, {:intersection, {:atom, A}, {:atom, A}})
+      assert nil == Binding.expand(@env, {:intersection, nil, nil})
+      assert nil == Binding.expand(@env, {:intersection, {:atom, A}, {:atom, B}})
+    end
+
+    test "tuple" do
+      assert {:tuple, 2, [{:atom, B}, {:atom, A}]} == Binding.expand(@env, {:intersection, {:tuple, 2, [nil, {:atom, A}]}, {:tuple, 2, [{:atom, B}, nil]}})
+      assert nil == Binding.expand(@env, {:intersection, {:tuple, 2, [nil, {:atom, A}]}, {:tuple, 1, [{:atom, B}]}})
+    end
+
+    test "map" do
+      assert {:map, [], nil} == Binding.expand(@env, {:intersection, {:map, [], nil}, {:map, [], nil}})
+      assert {:map, [{:a, nil}, {:b, {:tuple, 2, [atom: Z, atom: X]}}, {:c, {:atom, C}}], nil} == Binding.expand(@env, {:intersection, {:map, [a: nil, b: {:tuple, 2, [{:atom, Z}, nil]}], nil}, {:map, [c: {:atom, C}, b: {:tuple, 2, [nil, {:atom, X}]}], nil}})
+    end
+
+    test "struct and map" do
+      assert {:struct, [{:__struct__, {:atom, State}}, {:abc, {:atom, X}}, {:formatted, {:variable, :formatted}}], State, nil} == Binding.expand(@env|> Map.merge(%{
+        structs: %{
+          State => %StructInfo{
+            fields: [abc: nil, formatted: nil, __struct__: State]
+          }
+        }
+      }), {:intersection, {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}, {:map, [not_existing: nil, abc: {:atom, X}], nil}})
+
+      assert {:struct, [{:__struct__, {:atom, State}}, {:abc, {:atom, X}}, {:formatted, {:variable, :formatted}}], State, nil} == Binding.expand(@env|> Map.merge(%{
+        structs: %{
+          State => %StructInfo{
+            fields: [abc: nil, formatted: nil, __struct__: State]
+          }
+        }
+      }), {:intersection, {:map, [not_existing: nil, abc: {:atom, X}], nil}, {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}})
+    end
+
+    test "unknown struct and map" do
+      assert {:struct, [{:__struct__, nil}, {:formatted, {:variable, :formatted}}, {:not_existing, nil}, {:abc, {:atom, X}}], nil, nil} == Binding.expand(@env, {:intersection, {:struct, [formatted: {:variable, :formatted}], nil, nil}, {:map, [not_existing: nil, abc: {:atom, X}], nil}})
+    end
+
+    test "unknown struct and unknown struct" do
+      assert {:struct, [{:__struct__, nil}, {:formatted, {:variable, :formatted}}, {:not_existing, nil}, {:abc, {:atom, X}}], nil, nil} == Binding.expand(@env, {:intersection, {:struct, [formatted: {:variable, :formatted}], nil, nil}, {:struct, [not_existing: nil, abc: {:atom, X}], nil, nil}})
+    end
+
+    test "struct and unknown struct" do
+      assert {:struct, [{:__struct__, {:atom, State}}, {:abc, {:atom, X}}, {:formatted, {:variable, :formatted}}], State, nil} == Binding.expand(@env|> Map.merge(%{
+        structs: %{
+          State => %StructInfo{
+            fields: [abc: nil, formatted: nil, __struct__: State]
+          }
+        }
+      }), {:intersection, {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}, {:struct, [not_existing: nil, abc: {:atom, X}], nil, nil}})
+
+      assert {:struct, [{:__struct__, {:atom, State}}, {:abc, {:atom, X}}, {:formatted, {:variable, :formatted}}], State, nil} == Binding.expand(@env|> Map.merge(%{
+        structs: %{
+          State => %StructInfo{
+            fields: [abc: nil, formatted: nil, __struct__: State]
+          }
+        }
+      }), {:intersection, {:struct, [not_existing: nil, abc: {:atom, X}], nil, nil}, {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}})
+    end
+
+    test "struct" do
+      assert {:struct, [{:__struct__, {:atom, State}}, {:abc, {:atom, X}}, {:formatted, {:variable, :formatted}}], State, nil} == Binding.expand(@env|> Map.merge(%{
+        structs: %{
+          State => %StructInfo{
+            fields: [abc: nil, formatted: nil, __struct__: State]
+          }
+        }
+      }), {:intersection, {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}, {:struct, [not_existing: nil, abc: {:atom, X}], {:atom, State}, nil}})
+
+      assert nil == Binding.expand(@env|> Map.merge(%{
+        structs: %{
+          State => %StructInfo{
+            fields: [abc: nil, formatted: nil, __struct__: State]
+          },
+          Other => %StructInfo{
+            fields: [abc: nil, formatted: nil, __struct__: Other]
+          }
+        }
+      }), {:intersection, {:struct, [not_existing: nil, abc: {:atom, X}], {:atom, Other}, nil}, {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}})
+    end
+  end
 end

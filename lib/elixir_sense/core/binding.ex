@@ -45,6 +45,10 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  def do_expand(%Binding{} = env, {:intersection, type_1, type_2}, stack) do
+    combine_intersection(expand(env, type_1, stack), expand(env, type_2, stack))
+  end
+
   def do_expand(%Binding{variables: variables} = env, {:variable, variable}, stack) do
     type =
       case Enum.find(variables, fn %{name: name} -> name == variable end) do
@@ -648,4 +652,38 @@ defmodule ElixirSense.Core.Binding do
 
   defp drop_optional({:optional, _, [key]}), do: key
   defp drop_optional(other), do: other
+
+  defp combine_intersection(nil, type), do: type
+  defp combine_intersection(type, nil), do: type
+  defp combine_intersection(type, type), do: type
+  defp combine_intersection({:struct, fields_1, nil, nil}, {:struct, fields_2, nil, nil}) do
+    keys = (Keyword.keys(fields_1) ++ Keyword.keys(fields_2)) |> Enum.uniq
+    fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
+    {:struct, fields, nil, nil}
+  end
+  defp combine_intersection({:struct, fields_1, type, nil}, {:struct, fields_2, type_2, nil}) when type_2 == type or is_nil(type_2) do
+    keys = Keyword.keys(fields_1)
+    fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
+    {:struct, fields, type, nil}
+  end
+  defp combine_intersection({:struct, _fields_1, nil, nil} = s1, {:struct, _fields_2, _type, nil} = s2) do
+    combine_intersection(s2, s1)
+  end
+  defp combine_intersection({:map, fields_1, nil}, {:map, fields_2, nil}) do
+    keys = (Keyword.keys(fields_1) ++ Keyword.keys(fields_2)) |> Enum.uniq
+    fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
+    {:map, fields, nil}
+  end
+  defp combine_intersection({:struct, fields_1, type, nil}, {:map, fields_2, nil}) do
+    keys = if type != nil, do: Keyword.keys(fields_1), else: (Keyword.keys(fields_1) ++ Keyword.keys(fields_2)) |> Enum.uniq
+    fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
+    {:struct, fields, type, nil}
+  end
+  defp combine_intersection({:map, _fields_1, nil} = map, {:struct, _fields_2, _type, nil} = str) do
+    combine_intersection(str, map)
+  end
+  defp combine_intersection({:tuple, n, fields_1}, {:tuple, n, fields_2}) do
+    {:tuple, n, Enum.zip(fields_1, fields_2) |> Enum.map(fn {f1, f2} -> combine_intersection(f1, f2) end)}
+  end
+  defp combine_intersection(_, _), do: nil
 end
