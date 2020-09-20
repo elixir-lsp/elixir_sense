@@ -39,12 +39,18 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  def expand(%Binding{variables: variables} = env, {:variable, variable}) do
+  def expand(%Binding{} = env, expanded, stack \\ []) do
+    unless expanded in stack do
+      do_expand(env, expanded, [expanded, stack])
+    end
+  end
+
+  def do_expand(%Binding{variables: variables} = env, {:variable, variable}, stack) do
     type =
       case Enum.find(variables, fn %{name: name} -> name == variable end) do
         nil ->
           # no variable found - treat a local call
-          expand(env, {:local_call, variable, []})
+          expand(env, {:local_call, variable, []}, stack)
 
         %State.VarInfo{name: name, type: type} ->
           # filter underscored variables
@@ -53,20 +59,20 @@ defmodule ElixirSense.Core.Binding do
           end
       end
 
-    expand(env, type)
+    expand(env, type, stack)
   end
 
-  def expand(%Binding{attributes: attributes} = env, {:attribute, attribute}) do
+  def do_expand(%Binding{attributes: attributes} = env, {:attribute, attribute}, stack) do
     type =
       case Enum.find(attributes, fn %{name: name} -> name == attribute end) do
         nil -> nil
         %State.AttributeInfo{type: type} -> type
       end
 
-    expand(env, type)
+    expand(env, type, stack)
   end
 
-  def expand(%Binding{structs: structs} = env, {:struct, fields, module, updated_struct}) do
+  def do_expand(%Binding{structs: structs} = env, {:struct, fields, module, updated_struct}, stack) do
     # struct type must be a compile time atom or attribute
     module =
       case module do
@@ -76,13 +82,13 @@ defmodule ElixirSense.Core.Binding do
       end
 
     module =
-      case expand(env, module) do
+      case expand(env, module, stack) do
         {:atom, atom} -> atom
         _ -> nil
       end
 
     if module == nil or Struct.is_struct(module, structs) do
-      expanded = expand(env, updated_struct)
+      expanded = expand(env, updated_struct, stack)
 
       {fields, module} =
         get_struct_fields(env, get_fields_from(expanded) |> Keyword.merge(fields), module)
@@ -91,8 +97,8 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  def expand(env, {:map, fields, updated_map}) do
-    case expand(env, updated_map) do
+  def do_expand(env, {:map, fields, updated_map}, stack) do
+    case expand(env, updated_map, stack) do
       {:map, expanded_fields, nil} ->
         {:map, expanded_fields |> Keyword.merge(fields), nil}
 
@@ -104,8 +110,8 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  def expand(env, {:tuple_nth, tuple_candidate, n}) do
-    case expand(env, tuple_candidate) do
+  def do_expand(env, {:tuple_nth, tuple_candidate, n}, stack) do
+    case expand(env, tuple_candidate, stack) do
       {:tuple, size, fields} when size >= n ->
         fields |> Enum.at(n)
 
@@ -115,17 +121,17 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # remote call
-  def expand(env, {:call, target, function, arguments}) do
-    expanded_target = expand(env, target)
+  def do_expand(env, {:call, target, function, arguments}, stack) do
+    expanded_target = expand(env, target, stack)
     # do not include private funs on remote call
-    expand_call(env, expanded_target, function, arguments, false)
+    expand_call(env, expanded_target, function, arguments, false, stack)
     |> drop_no_spec
   end
 
   # local call
-  def expand(
+  def do_expand(
         %Binding{imports: imports, current_module: current_module} = env,
-        {:local_call, function, arguments}
+        {:local_call, function, arguments}, stack
       ) do
     candidate_targets = List.wrap(current_module) ++ imports ++ [Kernel, Kernel.SpecialForms]
 
@@ -133,61 +139,61 @@ defmodule ElixirSense.Core.Binding do
     Enum.find_value(candidate_targets, fn candidate ->
       # include private from current module
       include_private = candidate == current_module
-      expand_call(env, {:atom, candidate}, function, arguments, include_private)
+      expand_call(env, {:atom, candidate}, function, arguments, include_private, stack)
     end)
     |> drop_no_spec
   end
 
-  def expand(env, {:tuple, size, fields}),
-    do: {:tuple, size, fields |> Enum.map(&expand(env, &1))}
+  def do_expand(env, {:tuple, size, fields}, stack),
+    do: {:tuple, size, fields |> Enum.map(&expand(env, &1, stack))}
 
-  def expand(_env, {:atom, atom}), do: {:atom, atom}
+  def do_expand(_env, {:atom, atom}, _stack), do: {:atom, atom}
 
-  def expand(_env, {:integer, integer}), do: {:integer, integer}
+  def do_expand(_env, {:integer, integer}, _stack), do: {:integer, integer}
 
-  def expand(_env, _other), do: nil
+  def do_expand(_env, _other, _stack), do: nil
 
   defp drop_no_spec(:no_spec), do: nil
   defp drop_no_spec(other), do: other
 
   # not supported
-  defp expand_call(_env, nil, _, _, _), do: nil
+  defp expand_call(_env, nil, _, _, _, _stack), do: nil
 
   # map field access
-  defp expand_call(env, {:map, fields, _}, field, arity, _) do
+  defp expand_call(env, {:map, fields, _}, field, arity, _, stack) do
     # field access is a call with arity 0, other are not allowed
     if arity == [] do
-      expand(env, fields[field])
+      expand(env, fields[field], stack)
     end
   end
 
   # struct field access
-  defp expand_call(env, {:struct, fields, _, _}, field, arity, _) do
+  defp expand_call(env, {:struct, fields, _, _}, field, arity, _, stack) do
     # field access is a call with arity 0, other are not allowed
     if arity == [] do
-      expand(env, fields[field])
+      expand(env, fields[field], stack)
     end
   end
 
-  defp expand_call(env, {:atom, Kernel}, :elem, [tuple_candidate, n_candidate], _include_private) do
-    case expand(env, n_candidate) do
+  defp expand_call(env, {:atom, Kernel}, :elem, [tuple_candidate, n_candidate], _include_private, stack) do
+    case expand(env, n_candidate, stack) do
       {:integer, n} ->
-        expand(env, {:tuple_nth, tuple_candidate, n})
+        expand(env, {:tuple_nth, tuple_candidate, n}, stack)
 
       _ ->
         nil
     end
   end
 
-  defp expand_call(env, {:atom, Map}, fun, [map, key], _include_private)
+  defp expand_call(env, {:atom, Map}, fun, [map, key], _include_private, stack)
        when fun in [:fetch, :fetch!, :get] do
     fields =
-      case expand(env, map) do
+      case expand(env, map, stack) do
         {:map, fields, nil} -> fields
         _ -> []
       end
 
-    case expand(env, key) do
+    case expand(env, key, stack) do
       {:atom, atom} ->
         fields |> Keyword.get(atom)
 
@@ -196,17 +202,17 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, fun, [map, key, default], _include_private)
+  defp expand_call(env, {:atom, Map}, fun, [map, key, default], _include_private, stack)
        when fun in [:get, :get_lazy] do
     fields =
-      case expand(env, map) do
+      case expand(env, map, stack) do
         {:map, fields, nil} -> fields
         _ -> []
       end
 
-    case expand(env, key) do
+    case expand(env, key, stack) do
       {:atom, atom} ->
-        default = if fun == :get, do: expand(env, default)
+        default = if fun == :get, do: expand(env, default, stack)
         fields |> Keyword.get(atom, default)
 
       _ ->
@@ -214,15 +220,15 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private)
+  defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private, stack)
        when fun in [:put, :replace!] do
     fields =
-      case expand(env, map) do
+      case expand(env, map, stack) do
         {:map, fields, nil} -> fields
         _ -> []
       end
 
-    case expand(env, key) do
+    case expand(env, key, stack) do
       {:atom, atom} ->
         {:map, fields |> Keyword.put(atom, value), nil}
 
@@ -231,15 +237,15 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private)
+  defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private, stack)
        when fun in [:put_new, :put_new_lazy] do
     fields =
-      case expand(env, map) do
+      case expand(env, map, stack) do
         {:map, fields, nil} -> fields
         _ -> []
       end
 
-    case expand(env, key) do
+    case expand(env, key, stack) do
       {:atom, atom} ->
         value = if fun == :put_new, do: value
         {:map, fields |> Keyword.put_new(atom, value), nil}
@@ -249,14 +255,14 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, :delete, [map, key], _include_private) do
+  defp expand_call(env, {:atom, Map}, :delete, [map, key], _include_private, stack) do
     fields =
-      case expand(env, map) do
+      case expand(env, map, stack) do
         {:map, fields, nil} -> fields
         _ -> []
       end
 
-    case expand(env, key) do
+    case expand(env, key, stack) do
       {:atom, atom} ->
         {:map, fields |> Keyword.delete(atom), nil}
 
@@ -265,15 +271,15 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, :merge, [map, other_map], _include_private) do
+  defp expand_call(env, {:atom, Map}, :merge, [map, other_map], _include_private, stack) do
     fields =
-      case expand(env, map) do
+      case expand(env, map, stack) do
         {:map, fields, nil} -> fields
         _ -> []
       end
 
     other_fields =
-      case expand(env, other_map) do
+      case expand(env, other_map, stack) do
         {:map, fields, nil} -> fields
         _ -> []
       end
@@ -281,15 +287,15 @@ defmodule ElixirSense.Core.Binding do
     {:map, fields |> Keyword.merge(other_fields), nil}
   end
 
-  defp expand_call(env, {:atom, Map}, :merge, [map, other_map, _fun], _include_private) do
+  defp expand_call(env, {:atom, Map}, :merge, [map, other_map, _fun], _include_private, stack) do
     fields =
-      case expand(env, map) do
+      case expand(env, map, stack) do
         {:map, fields, nil} -> fields
         _ -> []
       end
 
     other_fields =
-      case expand(env, other_map) do
+      case expand(env, other_map, stack) do
         {:map, fields, nil} -> fields
         _ -> []
       end
@@ -303,14 +309,14 @@ defmodule ElixirSense.Core.Binding do
     {:map, fields |> Keyword.merge(other_fields) |> Keyword.merge(conflicts), nil}
   end
 
-  defp expand_call(env, {:atom, Map}, :update, [map, key, _initial, _fun], _include_private) do
+  defp expand_call(env, {:atom, Map}, :update, [map, key, _initial, _fun], _include_private, stack) do
     fields =
-      case expand(env, map) do
+      case expand(env, map, stack) do
         {:map, fields, nil} -> fields
         _ -> []
       end
 
-    case expand(env, key) do
+    case expand(env, key, stack) do
       {:atom, atom} ->
         {:map, fields |> Keyword.put(atom, nil), nil}
 
@@ -319,14 +325,14 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, :update!, [map, key, _fun], _include_private) do
+  defp expand_call(env, {:atom, Map}, :update!, [map, key, _fun], _include_private, stack) do
     fields =
-      case expand(env, map) do
+      case expand(env, map, stack) do
         {:map, fields, nil} -> fields
         _ -> []
       end
 
-    case expand(env, key) do
+    case expand(env, key, stack) do
       {:atom, atom} ->
         {:map, fields |> Keyword.put(atom, nil), nil}
 
@@ -335,14 +341,14 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, :from_struct, [struct], _include_private) do
+  defp expand_call(env, {:atom, Map}, :from_struct, [struct], _include_private, stack) do
     fields =
-      case expand(env, struct) do
+      case expand(env, struct, stack) do
         {:struct, fields, _, nil} ->
           fields
 
         {:atom, atom} ->
-          case expand(env, {:struct, [], {:atom, atom}, nil}) do
+          case expand(env, {:struct, [], {:atom, atom}, nil}, stack) do
             {:struct, fields, _, nil} -> fields
             _ -> []
           end
@@ -356,24 +362,24 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # function call
-  defp expand_call(env, {:atom, mod}, fun, arguments, include_private)
+  defp expand_call(env, {:atom, mod}, fun, arguments, include_private, stack)
        when mod not in [nil, true, false] and fun not in [nil, true, false] do
     arity = length(arguments)
 
-    case expand_call_from_metadata(env, mod, fun, arity, include_private) do
+    case expand_call_from_metadata(env, mod, fun, arity, include_private, stack) do
       result when not is_nil(result) -> result
-      nil -> expand_call_from_introspection(env, mod, fun, arity, include_private)
+      nil -> expand_call_from_introspection(env, mod, fun, arity, include_private, stack)
     end
   end
 
   # not a module
-  defp expand_call(_env, {:atom, _mod}, _fun, _arity, _include_private), do: nil
+  defp expand_call(_env, {:atom, _mod}, _fun, _arity, _include_private, _stack), do: nil
 
   defp call_arity_match?(fun_arity, fun_defaults, call_arity) do
     fun_arity - fun_defaults <= call_arity and call_arity <= fun_arity
   end
 
-  defp expand_call_from_introspection(env, mod, fun, arity, include_private) do
+  defp expand_call_from_introspection(env, mod, fun, arity, include_private, stack) do
     arity =
       case ElixirSense.Core.Normalized.Code.get_docs(mod, :docs) do
         nil ->
@@ -396,7 +402,7 @@ defmodule ElixirSense.Core.Binding do
     if arity do
       type = TypeInfo.get_spec(mod, fun, arity)
       return_type = get_return_from_spec(env, type, mod, include_private)
-      expand(env, return_type) || :no_spec
+      expand(env, return_type, stack) || :no_spec
     end
   end
 
@@ -405,7 +411,7 @@ defmodule ElixirSense.Core.Binding do
          mod,
          fun,
          arity,
-         include_private
+         include_private, stack
        ) do
     arity =
       case mods_and_funs[{mod, fun, nil}] do
@@ -430,7 +436,7 @@ defmodule ElixirSense.Core.Binding do
         nil
 
       {_, %State.SpecInfo{} = spec} ->
-        get_return_from_metadata(env, mod, spec, include_private) || :no_spec
+        get_return_from_metadata(env, mod, spec, include_private, stack) || :no_spec
 
       _ ->
         :no_spec
@@ -450,12 +456,12 @@ defmodule ElixirSense.Core.Binding do
     end)
   end
 
-  defp get_return_from_metadata(env, mod, %State.SpecInfo{specs: [func_spec]}, include_private) do
+  defp get_return_from_metadata(env, mod, %State.SpecInfo{specs: [func_spec]}, include_private, stack) do
     case Code.string_to_quoted(func_spec) do
       {:ok, {:@, _, [{_kind, _, [ast]}]}} ->
         type = extract_type(ast)
         parsed_type = parse_type(env, type, mod, include_private)
-        expand(env, parsed_type)
+        expand(env, parsed_type, stack)
 
       _ ->
         nil
@@ -467,7 +473,7 @@ defmodule ElixirSense.Core.Binding do
          env,
          mod,
          %State.SpecInfo{specs: [_ | _] = variants} = spec,
-         include_private
+         include_private, stack
        ) do
     # check if all variants return the same type
     # if so return it, otherwise nil
@@ -477,7 +483,7 @@ defmodule ElixirSense.Core.Binding do
               env,
               mod,
               %State.SpecInfo{spec | specs: [variant]},
-              include_private
+              include_private, stack
             )} do
         {:none, expanded} -> {:cont, expanded}
         {last, last} -> {:cont, last}

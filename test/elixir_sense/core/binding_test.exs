@@ -147,6 +147,14 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "known variable self referencing" do
+      assert nil ==
+               Binding.expand(
+                 @env |> Map.put(:variables, [%VarInfo{name: :v, type: {:variable, :v}}]),
+                 {:variable, :v}
+               )
+    end
+
     test "anonymous variable" do
       assert nil ==
                Binding.expand(
@@ -163,6 +171,14 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :abc} ==
                Binding.expand(
                  @env |> Map.put(:attributes, [%AttributeInfo{name: :v, type: {:atom, :abc}}]),
+                 {:attribute, :v}
+               )
+    end
+
+    test "known attribute self referencing" do
+      assert nil ==
+               Binding.expand(
+                 @env |> Map.put(:attributes, [%AttributeInfo{name: :v, type: {:attribute, :v}}]),
                  {:attribute, :v}
                )
     end
