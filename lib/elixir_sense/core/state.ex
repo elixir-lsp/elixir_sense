@@ -947,27 +947,31 @@ defmodule ElixirSense.Core.State do
             el
 
           var_info = %VarInfo{is_definition: false} ->
-            type = if var_info.positions == positions do
-              merge_type(el.type, var_info.type)
-            else
-              el.type
-            end
+            type =
+              if var_info.positions == positions do
+                merge_type(el.type, var_info.type)
+              else
+                el.type
+              end
+
             %VarInfo{
               el
               | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort(),
-              type: type
+                type: type
             }
 
           var_info = %VarInfo{is_definition: true} ->
-            type = if var_info.positions == positions do
-              merge_type(el.type, var_info.type)
-            else
-              var_info.type
-            end
+            type =
+              if var_info.positions == positions do
+                merge_type(el.type, var_info.type)
+              else
+                var_info.type
+              end
+
             %VarInfo{
               var_info
               | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort(),
-              type: type
+                type: type
             }
         end
 

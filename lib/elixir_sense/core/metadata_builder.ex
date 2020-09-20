@@ -745,15 +745,18 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp pre({:=, meta, [lhs, rhs]}, state) do
     match_context_r = get_binding_type(state, rhs)
     vars_l = find_vars(state, lhs, match_context_r)
-    vars = case rhs do
-      {:=, _, [nested_lhs, _nested_rhs]} ->
-        match_context_l = get_binding_type(state, lhs)
-        nested_vars = find_vars(state, nested_lhs, match_context_l)
 
-        (vars_l ++ nested_vars)
-        
-      _ -> vars_l
-    end
+    vars =
+      case rhs do
+        {:=, _, [nested_lhs, _nested_rhs]} ->
+          match_context_l = get_binding_type(state, lhs)
+          nested_vars = find_vars(state, nested_lhs, match_context_l)
+
+          vars_l ++ nested_vars
+
+        _ ->
+          vars_l
+      end
 
     state
     |> add_vars(vars, true)
@@ -1186,8 +1189,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # two element use {field_1, field_2} ast (probably as an optimization)
   # detect and convert to regular
   defp match_var(state, ast, {vars, match_context})
-  when is_tuple(ast) and tuple_size(ast) == 2 do
-    match_var(state, {:{}, [], ast |> Tuple.to_list}, {vars, match_context})
+       when is_tuple(ast) and tuple_size(ast) == 2 do
+    match_var(state, {:{}, [], ast |> Tuple.to_list()}, {vars, match_context})
   end
 
   defp match_var(state, {:{}, _, ast}, {vars, match_context}) when not is_nil(match_context) do
@@ -1338,6 +1341,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   def get_binding_type(state, ast) when is_tuple(ast) and tuple_size(ast) == 2 do
     get_binding_type(state, {:{}, [], Tuple.to_list(ast)})
   end
+
   def get_binding_type(state, {:{}, _, list}) do
     {:tuple, length(list), list |> Enum.map(&get_binding_type(state, &1))}
   end
@@ -1346,7 +1350,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   def get_binding_type(state, {var, _, args}) when is_atom(var) and is_list(args) do
     {:local_call, var, Enum.map(args, &get_binding_type(state, &1))}
   end
-  
+
   # integer
   def get_binding_type(_state, integer) when is_integer(integer) do
     {:integer, integer}

@@ -76,7 +76,11 @@ defmodule ElixirSense.Core.Binding do
     expand(env, type, stack)
   end
 
-  def do_expand(%Binding{structs: structs} = env, {:struct, fields, module, updated_struct}, stack) do
+  def do_expand(
+        %Binding{structs: structs} = env,
+        {:struct, fields, module, updated_struct},
+        stack
+      ) do
     # struct type must be a compile time atom or attribute
     module =
       case module do
@@ -135,7 +139,8 @@ defmodule ElixirSense.Core.Binding do
   # local call
   def do_expand(
         %Binding{imports: imports, current_module: current_module} = env,
-        {:local_call, function, arguments}, stack
+        {:local_call, function, arguments},
+        stack
       ) do
     candidate_targets = List.wrap(current_module) ++ imports ++ [Kernel, Kernel.SpecialForms]
 
@@ -179,7 +184,14 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Kernel}, :elem, [tuple_candidate, n_candidate], _include_private, stack) do
+  defp expand_call(
+         env,
+         {:atom, Kernel},
+         :elem,
+         [tuple_candidate, n_candidate],
+         _include_private,
+         stack
+       ) do
     case expand(env, n_candidate, stack) do
       {:integer, n} ->
         expand(env, {:tuple_nth, tuple_candidate, n}, stack)
@@ -313,7 +325,14 @@ defmodule ElixirSense.Core.Binding do
     {:map, fields |> Keyword.merge(other_fields) |> Keyword.merge(conflicts), nil}
   end
 
-  defp expand_call(env, {:atom, Map}, :update, [map, key, _initial, _fun], _include_private, stack) do
+  defp expand_call(
+         env,
+         {:atom, Map},
+         :update,
+         [map, key, _initial, _fun],
+         _include_private,
+         stack
+       ) do
     fields =
       case expand(env, map, stack) do
         {:map, fields, nil} -> fields
@@ -415,7 +434,8 @@ defmodule ElixirSense.Core.Binding do
          mod,
          fun,
          arity,
-         include_private, stack
+         include_private,
+         stack
        ) do
     arity =
       case mods_and_funs[{mod, fun, nil}] do
@@ -460,7 +480,13 @@ defmodule ElixirSense.Core.Binding do
     end)
   end
 
-  defp get_return_from_metadata(env, mod, %State.SpecInfo{specs: [func_spec]}, include_private, stack) do
+  defp get_return_from_metadata(
+         env,
+         mod,
+         %State.SpecInfo{specs: [func_spec]},
+         include_private,
+         stack
+       ) do
     case Code.string_to_quoted(func_spec) do
       {:ok, {:@, _, [{_kind, _, [ast]}]}} ->
         type = extract_type(ast)
@@ -477,7 +503,8 @@ defmodule ElixirSense.Core.Binding do
          env,
          mod,
          %State.SpecInfo{specs: [_ | _] = variants} = spec,
-         include_private, stack
+         include_private,
+         stack
        ) do
     # check if all variants return the same type
     # if so return it, otherwise nil
@@ -487,7 +514,8 @@ defmodule ElixirSense.Core.Binding do
               env,
               mod,
               %State.SpecInfo{spec | specs: [variant]},
-              include_private, stack
+              include_private,
+              stack
             )} do
         {:none, expanded} -> {:cont, expanded}
         {last, last} -> {:cont, last}
@@ -656,34 +684,51 @@ defmodule ElixirSense.Core.Binding do
   defp combine_intersection(nil, type), do: type
   defp combine_intersection(type, nil), do: type
   defp combine_intersection(type, type), do: type
+
   defp combine_intersection({:struct, fields_1, nil, nil}, {:struct, fields_2, nil, nil}) do
-    keys = (Keyword.keys(fields_1) ++ Keyword.keys(fields_2)) |> Enum.uniq
+    keys = (Keyword.keys(fields_1) ++ Keyword.keys(fields_2)) |> Enum.uniq()
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
     {:struct, fields, nil, nil}
   end
-  defp combine_intersection({:struct, fields_1, type, nil}, {:struct, fields_2, type_2, nil}) when type_2 == type or is_nil(type_2) do
+
+  defp combine_intersection({:struct, fields_1, type, nil}, {:struct, fields_2, type_2, nil})
+       when type_2 == type or is_nil(type_2) do
     keys = Keyword.keys(fields_1)
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
     {:struct, fields, type, nil}
   end
-  defp combine_intersection({:struct, _fields_1, nil, nil} = s1, {:struct, _fields_2, _type, nil} = s2) do
+
+  defp combine_intersection(
+         {:struct, _fields_1, nil, nil} = s1,
+         {:struct, _fields_2, _type, nil} = s2
+       ) do
     combine_intersection(s2, s1)
   end
+
   defp combine_intersection({:map, fields_1, nil}, {:map, fields_2, nil}) do
-    keys = (Keyword.keys(fields_1) ++ Keyword.keys(fields_2)) |> Enum.uniq
+    keys = (Keyword.keys(fields_1) ++ Keyword.keys(fields_2)) |> Enum.uniq()
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
     {:map, fields, nil}
   end
+
   defp combine_intersection({:struct, fields_1, type, nil}, {:map, fields_2, nil}) do
-    keys = if type != nil, do: Keyword.keys(fields_1), else: (Keyword.keys(fields_1) ++ Keyword.keys(fields_2)) |> Enum.uniq
+    keys =
+      if type != nil,
+        do: Keyword.keys(fields_1),
+        else: (Keyword.keys(fields_1) ++ Keyword.keys(fields_2)) |> Enum.uniq()
+
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
     {:struct, fields, type, nil}
   end
+
   defp combine_intersection({:map, _fields_1, nil} = map, {:struct, _fields_2, _type, nil} = str) do
     combine_intersection(str, map)
   end
+
   defp combine_intersection({:tuple, n, fields_1}, {:tuple, n, fields_2}) do
-    {:tuple, n, Enum.zip(fields_1, fields_2) |> Enum.map(fn {f1, f2} -> combine_intersection(f1, f2) end)}
+    {:tuple, n,
+     Enum.zip(fields_1, fields_2) |> Enum.map(fn {f1, f2} -> combine_intersection(f1, f2) end)}
   end
+
   defp combine_intersection(_, _), do: nil
 end
