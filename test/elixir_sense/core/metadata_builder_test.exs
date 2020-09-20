@@ -168,6 +168,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         {:ok, var} = @myattribute
         other = elem(@myattribute, 0)
         IO.puts
+        q = {:a, :b, :c}
+        {_, _, q1} = q
+        IO.puts
       end
       """
       |> string_to_state
@@ -187,6 +190,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              },
              %VarInfo{name: :var, type: {:tuple_nth, {:attribute, :myattribute}, 1}}
            ] = state |> get_line_vars(4)
+
+      assert [
+      %VarInfo{
+        name: :q,
+        type: {:tuple, 3, [{:atom, :a}, {:atom, :b}, {:atom, :c}]}
+      },
+      %VarInfo{name: :q1, type: {:tuple_nth, {:variable, :q}, 2}}
+    ] = state |> get_line_vars(8) |> Enum.filter(& &1.name |> Atom.to_string |> String.starts_with?("q"))
   end
 
   test "vars defined inside a function without params" do

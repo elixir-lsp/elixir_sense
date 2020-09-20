@@ -1172,11 +1172,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
     match_var(state, left, {vars, nil})
   end
 
+  # regular tuples use {:{}, [], [field_1, field_2]} ast
+  # two element use {field_1, field_2} ast (probably as an optimization)
+  # detect and convert to regular
   defp match_var(state, ast, {vars, match_context})
-       when is_tuple(ast) and not is_nil(match_context) do
+  when is_tuple(ast) and tuple_size(ast) == 2 do
+    match_var(state, {:{}, [], ast |> Tuple.to_list}, {vars, match_context})
+  end
+
+  defp match_var(state, {:{}, _, ast}, {vars, match_context}) when not is_nil(match_context) do
     destructured_vars =
       ast
-      |> Tuple.to_list()
       |> Enum.with_index()
       |> Enum.reduce(vars, fn {nth_elem_ast, n}, vars_acc ->
         {_ast, {new_vars, _match_context}} =
@@ -1315,20 +1321,22 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {:struct, [], {:atom, @builtin_sigils |> Map.fetch!(sigil)}}
   end
 
+  # tuple
+  # regular tuples use {:{}, [], [field_1, field_2]} ast
+  # two element use {field_1, field_2} ast (probably as an optimization)
+  # detect and convert to regular
+  def get_binding_type(state, ast) when is_tuple(ast) and tuple_size(ast) == 2 do
+    get_binding_type(state, {:{}, [], Tuple.to_list(ast)})
+  end
+  def get_binding_type(state, {:{}, _, list}) do
+    {:tuple, length(list), list |> Enum.map(&get_binding_type(state, &1))}
+  end
+
   # local call
   def get_binding_type(state, {var, _, args}) when is_atom(var) and is_list(args) do
     {:local_call, var, Enum.map(args, &get_binding_type(state, &1))}
   end
-
-  # tuple
-  def get_binding_type(state, ast) when is_tuple(ast) do
-    list =
-      ast
-      |> Tuple.to_list()
-
-    {:tuple, length(list), list |> Enum.map(&get_binding_type(state, &1))}
-  end
-
+  
   # integer
   def get_binding_type(_state, integer) when is_integer(integer) do
     {:integer, integer}
