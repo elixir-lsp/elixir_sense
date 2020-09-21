@@ -51,7 +51,9 @@ defmodule ElixirSense.Core.State do
           lines_to_env: lines_to_env_t,
           calls: calls_t,
           structs: structs_t,
-          types: types_t
+          types: types_t,
+          # TODO
+          binding_context: list
         }
 
   defstruct namespace: [[:"Elixir"]],
@@ -73,7 +75,8 @@ defmodule ElixirSense.Core.State do
             lines_to_env: %{},
             calls: %{},
             structs: %{},
-            types: %{}
+            types: %{},
+            binding_context: []
 
   defmodule Env do
     @moduledoc """
@@ -597,6 +600,20 @@ defmodule ElixirSense.Core.State do
         scope_id_count: scope_id,
         vars: [[] | state.vars],
         scope_vars: [[] | state.scope_vars]
+    }
+  end
+
+  def push_binding_context(%__MODULE__{} = state, binding_context) do
+    %__MODULE__{
+      state
+      | binding_context: [binding_context | state.binding_context]
+    }
+  end
+
+  def pop_binding_context(%__MODULE__{} = state) do
+    %__MODULE__{
+      state
+      | binding_context: tl(state.binding_context)
     }
   end
 

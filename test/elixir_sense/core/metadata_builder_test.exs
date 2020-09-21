@@ -448,8 +448,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
+    # FIXME formatted type should be {:call, {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}, :formatted, []}
+    # needs support for map/struct destructuring
     assert [
-             %VarInfo{name: :formatted, type: nil},
+             %VarInfo{name: :formatted, type: {:tuple_nth, {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}, 1}},
              %VarInfo{
                name: :state,
                type:
@@ -458,6 +460,28 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                   {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}}
              }
            ] = state |> get_line_vars(4)
+  end
+
+  test "case binding" do
+    state =
+      """
+      defmodule MyModule do
+        def some() do
+          case Some.call() do
+            {:ok, x} ->
+              IO.puts ""
+            end
+        end
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{
+               name: :x,
+               type: {:tuple_nth, {:call, {:atom, Some}, :call, []}, 1}
+             }
+           ] = state |> get_line_vars(5)
   end
 
   test "vars defined inside a function `after`/`rescue`/`catch`" do

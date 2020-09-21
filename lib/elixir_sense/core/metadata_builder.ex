@@ -259,17 +259,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_clause({_clause, [line: line, column: _column], _} = ast, state, lhs) do
+    # IO.inspect ast, label: "clause ast"
+    # IO.inspect hd(state.binding_context), label: "state context"
     state
     |> new_alias_scope
     |> new_import_scope
     |> new_require_scope
     |> new_vars_scope
-    |> add_vars(find_vars(state, lhs), true)
+    |> add_vars(find_vars(state, lhs, Enum.at(state.binding_context, 0)), true)
     |> add_current_env_to_line(line)
     |> result(ast)
   end
 
   defp post_clause(ast, state) do
+    
     state
     |> remove_alias_scope
     |> remove_import_scope
@@ -985,8 +988,26 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre(call, state)
   end
 
+  defp pre({:case, meta,
+  [
+    condition_ast,
+    [
+      do: clauses
+    ]
+  ]} = ast, state) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    state
+    |> push_binding_context(get_binding_type(state, condition_ast))
+    |> add_call_to_line({nil, :case, 2}, {line, column})
+    |> add_current_env_to_line(line)
+    |> result(ast)
+  end
+
   defp pre({call, meta, params} = ast, state)
        when is_call(call, params) and is_call_meta(meta) do
+    IO.inspect ast, label: "call ast"
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
 
@@ -1107,6 +1128,21 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, state}
   end
 
+  defp post({:case, meta,
+  [
+    condition_ast,
+    [
+      do: clauses
+    ]
+  ]} = ast, state) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    state
+    |> pop_binding_context
+    |> result(ast)
+  end
+
   defp post({atom, _, [_ | _]} = ast, state) when atom in @scope_keywords do
     post_scope_keyword(ast, state)
   end
@@ -1146,10 +1182,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp find_vars(state, ast, match_context \\ nil) do
+    IO.inspect match_context
     {_ast, {vars, _match_context}} =
       Macro.prewalk(ast, {[], match_context}, &match_var(state, &1, &2))
 
     vars
+    |> IO.inspect
   end
 
   defp match_var(
@@ -1176,6 +1214,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
          {vars, match_context}
        )
        when is_atom(var) do
+        IO.inspect match_context, label: "3 #{inspect ast}"
     var_info = %VarInfo{name: var, positions: [{line, column}], type: match_context}
     {ast, {[var_info | vars], nil}}
   end
@@ -1194,6 +1233,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp match_var(state, {:{}, _, ast}, {vars, match_context}) when not is_nil(match_context) do
+    IO.inspect match_context, label: "2"
     destructured_vars =
       ast
       |> Enum.with_index()
@@ -1207,8 +1247,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, {destructured_vars, nil}}
   end
 
-  defp match_var(_state, ast, {vars, _match_context}) do
-    {ast, {vars, nil}}
+  defp match_var(_state, ast, {vars, match_context}) do
+    IO.inspect match_context, label: "1 #{inspect ast}"
+    {ast, {vars, match_context}}
   end
 
   # struct or struct update
