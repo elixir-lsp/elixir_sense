@@ -1093,6 +1093,58 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [%{name: "my_var", type: :variable}]
   end
 
+  test "tuple destructuring" do
+    buffer = """
+    defmodule MyServer do
+      def new() do
+        case DateTime.new(1, 2, 3, 4) do
+          {:ok, x} -> x.h
+        end
+        case DateTime.new(1, 2, 3, 4) do
+          {:ok, x} -> %{x | h}
+        end
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 4, 22)
+      |> Enum.filter(fn s -> s.type == :field end)
+
+    assert [%{name: "hour", origin: "DateTime"}] = list
+
+    list =
+      ElixirSense.suggestions(buffer, 7, 26)
+      |> Enum.filter(fn s -> s.type == :field end)
+
+    assert [%{name: "hour", origin: "DateTime"}] = list
+  end
+
+  test "nested binding" do
+    buffer = """
+    defmodule State do
+      defstruct [formatted: nil]
+      def new(socket) do
+        %State{formatted: formatted} = state = socket.assigns.state
+        state.for
+        state = %{state | form}
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 5, 14)
+      |> Enum.filter(fn s -> s.type == :field end)
+
+    assert [%{name: "formatted", origin: "State"}] = list
+
+    list =
+      ElixirSense.suggestions(buffer, 6, 27)
+      |> Enum.filter(fn s -> s.type == :field end)
+
+    assert [%{name: "formatted", origin: "State"}] = list
+  end
+
   test "variable shadowing function" do
     buffer = """
     defmodule Mod do

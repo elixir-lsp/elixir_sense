@@ -957,7 +957,7 @@ defmodule ElixirSense.Core.State do
   end
 
   defp reduce_vars(vars) do
-    Enum.reduce(vars, %{}, fn %VarInfo{name: var, positions: positions} = el, acc ->
+    Enum.reduce(vars, %{}, fn %VarInfo{name: var, positions: [position]} = el, acc ->
       updated =
         case acc[var] do
           nil ->
@@ -965,7 +965,7 @@ defmodule ElixirSense.Core.State do
 
           var_info = %VarInfo{is_definition: false} ->
             type =
-              if var_info.positions == positions do
+              if position in var_info.positions do
                 merge_type(el.type, var_info.type)
               else
                 el.type
@@ -973,13 +973,13 @@ defmodule ElixirSense.Core.State do
 
             %VarInfo{
               el
-              | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort(),
+              | positions: (var_info.positions ++ [position]) |> Enum.uniq() |> Enum.sort(),
                 type: type
             }
 
           var_info = %VarInfo{is_definition: true} ->
             type =
-              if var_info.positions == positions do
+              if position in var_info.positions do
                 merge_type(el.type, var_info.type)
               else
                 var_info.type
@@ -987,7 +987,7 @@ defmodule ElixirSense.Core.State do
 
             %VarInfo{
               var_info
-              | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort(),
+              | positions: (var_info.positions ++ [position]) |> Enum.uniq() |> Enum.sort(),
                 type: type
             }
         end
@@ -998,7 +998,7 @@ defmodule ElixirSense.Core.State do
 
   defp merge_type(nil, new), do: new
   defp merge_type(old, nil), do: old
-  defp merge_type(old, new), do: {:intersection, old, new}
+  defp merge_type(old, new), do: {:intersection, [old, new]}
 
   def get_closest_previous_env(%__MODULE__{} = metadata, line) do
     # Elixir 1.10 introduces a breaking change in Enum.max_by

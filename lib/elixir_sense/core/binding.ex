@@ -41,12 +41,18 @@ defmodule ElixirSense.Core.Binding do
 
   def expand(%Binding{} = env, expanded, stack \\ []) do
     unless expanded in stack do
-      do_expand(env, expanded, [expanded, stack])
+      do_expand(env, expanded, [expanded | stack])
     end
   end
 
-  def do_expand(%Binding{} = env, {:intersection, type_1, type_2}, stack) do
-    combine_intersection(expand(env, type_1, stack), expand(env, type_2, stack))
+  def do_expand(%Binding{} = env, {:intersection, variants}, stack) do
+    combined =
+      variants
+      |> Enum.reduce(nil, fn variant, acc ->
+        combine_intersection(acc, expand(env, variant, stack))
+      end)
+
+    expand(env, combined, stack)
   end
 
   def do_expand(%Binding{variables: variables} = env, {:variable, variable}, stack) do
@@ -75,6 +81,14 @@ defmodule ElixirSense.Core.Binding do
 
     expand(env, type, stack)
   end
+
+  def do_expand(
+        _env,
+        {:struct, _fields, module, _updated_struct} = s,
+        _stack
+      )
+      when is_atom(module) and not is_nil(module),
+      do: s
 
   def do_expand(
         %Binding{structs: structs} = env,
@@ -159,6 +173,8 @@ defmodule ElixirSense.Core.Binding do
   def do_expand(_env, {:atom, atom}, _stack), do: {:atom, atom}
 
   def do_expand(_env, {:integer, integer}, _stack), do: {:integer, integer}
+
+  def do_expand(_env, {:union, variants}, _stack), do: {:union, variants}
 
   def do_expand(_env, _other, _stack), do: nil
 
@@ -506,22 +522,17 @@ defmodule ElixirSense.Core.Binding do
          include_private,
          stack
        ) do
-    # check if all variants return the same type
-    # if so return it, otherwise nil
-    Enum.reduce_while(variants, :none, fn variant, acc ->
-      case {acc,
-            get_return_from_metadata(
-              env,
-              mod,
-              %State.SpecInfo{spec | specs: [variant]},
-              include_private,
-              stack
-            )} do
-        {:none, expanded} -> {:cont, expanded}
-        {last, last} -> {:cont, last}
-        {_, _} -> {:halt, nil}
-      end
-    end)
+    {:intersection,
+     variants
+     |> Enum.map(
+       &get_return_from_metadata(
+         env,
+         mod,
+         %State.SpecInfo{spec | specs: [&1]},
+         include_private,
+         stack
+       )
+     )}
   end
 
   defp get_return_from_spec(_env, nil, _, _include_private), do: nil
@@ -533,28 +544,13 @@ defmodule ElixirSense.Core.Binding do
 
   # intersection specs
   defp get_return_from_spec(env, {{fun, arity}, [_ast | _] = variants}, mod, include_private) do
-    # check if all variants return the same type
-    # if so return it, otherwise nil
-    Enum.reduce_while(variants, :none, fn variant, acc ->
-      case {acc, get_return_from_spec(env, {{fun, arity}, [variant]}, mod, include_private)} do
-        {:none, expanded} -> {:cont, expanded}
-        {last, last} -> {:cont, last}
-        {_, _} -> {:halt, nil}
-      end
-    end)
+    {:intersection,
+     variants |> Enum.map(&get_return_from_spec(env, {{fun, arity}, [&1]}, mod, include_private))}
   end
 
   # union type
   defp parse_type(env, {:|, _, variants}, mod, include_private) do
-    # check if all variants expand to the same type
-    # if so return it, otherwise nil
-    Enum.reduce_while(variants, :none, fn variant, acc ->
-      case {acc, parse_type(env, variant, mod, include_private)} do
-        {:none, expanded} -> {:cont, expanded}
-        {last, last} -> {:cont, last}
-        {_, _} -> {:halt, nil}
-      end
-    end)
+    {:union, variants |> Enum.map(&parse_type(env, &1, mod, include_private))}
   end
 
   # struct
@@ -728,6 +724,13 @@ defmodule ElixirSense.Core.Binding do
   defp combine_intersection({:tuple, n, fields_1}, {:tuple, n, fields_2}) do
     {:tuple, n,
      Enum.zip(fields_1, fields_2) |> Enum.map(fn {f1, f2} -> combine_intersection(f1, f2) end)}
+  end
+
+  defp combine_intersection(other, {:union, variants}),
+    do: combine_intersection({:union, variants}, other)
+
+  defp combine_intersection({:union, variants}, other) do
+    Enum.find_value(variants, &combine_intersection(&1, other))
   end
 
   defp combine_intersection(_, _), do: nil

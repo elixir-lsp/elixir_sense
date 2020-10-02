@@ -550,7 +550,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "remote call fun with spec union" do
-      assert nil ==
+      assert {:union, [{:map, [abc: nil], nil}, {:atom, nil}]} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
@@ -1053,6 +1053,19 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref}
                )
     end
+
+    test "bonds on tuple element" do
+      assert {:atom, :some} =
+               Binding.expand(
+                 @env,
+                 {:tuple_nth,
+                  {:intersection,
+                   [
+                     {:tuple, 2, [{:atom, :ok}, {:variable, :x}]},
+                     {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f11, []}
+                   ]}, 1}
+               )
+    end
   end
 
   describe "Map functions" do
@@ -1230,45 +1243,51 @@ defmodule ElixirSense.Core.BindingTest do
                      }
                    }
                  }),
-                 {:intersection, {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []},
-                  {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}}
+                 {:intersection,
+                  [
+                    {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []},
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}
+                  ]}
                )
     end
 
     test "known unknown" do
-      assert {:atom, A} == Binding.expand(@env, {:intersection, {:atom, A}, nil})
-      assert {:atom, A} == Binding.expand(@env, {:intersection, nil, {:atom, A}})
+      assert {:atom, A} == Binding.expand(@env, {:intersection, [{:atom, A}, nil]})
+      assert {:atom, A} == Binding.expand(@env, {:intersection, [nil, {:atom, A}]})
     end
 
     test "equal" do
-      assert {:atom, A} == Binding.expand(@env, {:intersection, {:atom, A}, {:atom, A}})
-      assert nil == Binding.expand(@env, {:intersection, nil, nil})
-      assert nil == Binding.expand(@env, {:intersection, {:atom, A}, {:atom, B}})
+      assert {:atom, A} == Binding.expand(@env, {:intersection, [{:atom, A}, {:atom, A}]})
+      assert nil == Binding.expand(@env, {:intersection, [nil, nil]})
+      assert nil == Binding.expand(@env, {:intersection, [{:atom, A}, {:atom, B}]})
     end
 
     test "tuple" do
       assert {:tuple, 2, [{:atom, B}, {:atom, A}]} ==
                Binding.expand(
                  @env,
-                 {:intersection, {:tuple, 2, [nil, {:atom, A}]}, {:tuple, 2, [{:atom, B}, nil]}}
+                 {:intersection, [{:tuple, 2, [nil, {:atom, A}]}, {:tuple, 2, [{:atom, B}, nil]}]}
                )
 
       assert nil ==
                Binding.expand(
                  @env,
-                 {:intersection, {:tuple, 2, [nil, {:atom, A}]}, {:tuple, 1, [{:atom, B}]}}
+                 {:intersection, [{:tuple, 2, [nil, {:atom, A}]}, {:tuple, 1, [{:atom, B}]}]}
                )
     end
 
     test "map" do
       assert {:map, [], nil} ==
-               Binding.expand(@env, {:intersection, {:map, [], nil}, {:map, [], nil}})
+               Binding.expand(@env, {:intersection, [{:map, [], nil}, {:map, [], nil}]})
 
       assert {:map, [{:a, nil}, {:b, {:tuple, 2, [atom: Z, atom: X]}}, {:c, {:atom, C}}], nil} ==
                Binding.expand(
                  @env,
-                 {:intersection, {:map, [a: nil, b: {:tuple, 2, [{:atom, Z}, nil]}], nil},
-                  {:map, [c: {:atom, C}, b: {:tuple, 2, [nil, {:atom, X}]}], nil}}
+                 {:intersection,
+                  [
+                    {:map, [a: nil, b: {:tuple, 2, [{:atom, Z}, nil]}], nil},
+                    {:map, [c: {:atom, C}, b: {:tuple, 2, [nil, {:atom, X}]}], nil}
+                  ]}
                )
     end
 
@@ -1290,8 +1309,10 @@ defmodule ElixirSense.Core.BindingTest do
                    }
                  }),
                  {:intersection,
-                  {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil},
-                  {:map, [not_existing: nil, abc: {:atom, X}], nil}}
+                  [
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil},
+                    {:map, [not_existing: nil, abc: {:atom, X}], nil}
+                  ]}
                )
 
       assert {:struct,
@@ -1310,8 +1331,11 @@ defmodule ElixirSense.Core.BindingTest do
                      }
                    }
                  }),
-                 {:intersection, {:map, [not_existing: nil, abc: {:atom, X}], nil},
-                  {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}}
+                 {:intersection,
+                  [
+                    {:map, [not_existing: nil, abc: {:atom, X}], nil},
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}
+                  ]}
                )
     end
 
@@ -1326,8 +1350,11 @@ defmodule ElixirSense.Core.BindingTest do
               nil} ==
                Binding.expand(
                  @env,
-                 {:intersection, {:struct, [formatted: {:variable, :formatted}], nil, nil},
-                  {:map, [not_existing: nil, abc: {:atom, X}], nil}}
+                 {:intersection,
+                  [
+                    {:struct, [formatted: {:variable, :formatted}], nil, nil},
+                    {:map, [not_existing: nil, abc: {:atom, X}], nil}
+                  ]}
                )
     end
 
@@ -1342,8 +1369,11 @@ defmodule ElixirSense.Core.BindingTest do
               nil} ==
                Binding.expand(
                  @env,
-                 {:intersection, {:struct, [formatted: {:variable, :formatted}], nil, nil},
-                  {:struct, [not_existing: nil, abc: {:atom, X}], nil, nil}}
+                 {:intersection,
+                  [
+                    {:struct, [formatted: {:variable, :formatted}], nil, nil},
+                    {:struct, [not_existing: nil, abc: {:atom, X}], nil, nil}
+                  ]}
                )
     end
 
@@ -1365,8 +1395,10 @@ defmodule ElixirSense.Core.BindingTest do
                    }
                  }),
                  {:intersection,
-                  {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil},
-                  {:struct, [not_existing: nil, abc: {:atom, X}], nil, nil}}
+                  [
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil},
+                    {:struct, [not_existing: nil, abc: {:atom, X}], nil, nil}
+                  ]}
                )
 
       assert {:struct,
@@ -1385,8 +1417,11 @@ defmodule ElixirSense.Core.BindingTest do
                      }
                    }
                  }),
-                 {:intersection, {:struct, [not_existing: nil, abc: {:atom, X}], nil, nil},
-                  {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}}
+                 {:intersection,
+                  [
+                    {:struct, [not_existing: nil, abc: {:atom, X}], nil, nil},
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}
+                  ]}
                )
     end
 
@@ -1408,8 +1443,10 @@ defmodule ElixirSense.Core.BindingTest do
                    }
                  }),
                  {:intersection,
-                  {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil},
-                  {:struct, [not_existing: nil, abc: {:atom, X}], {:atom, State}, nil}}
+                  [
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil},
+                    {:struct, [not_existing: nil, abc: {:atom, X}], {:atom, State}, nil}
+                  ]}
                )
 
       assert nil ==
@@ -1426,8 +1463,10 @@ defmodule ElixirSense.Core.BindingTest do
                    }
                  }),
                  {:intersection,
-                  {:struct, [not_existing: nil, abc: {:atom, X}], {:atom, Other}, nil},
-                  {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}}
+                  [
+                    {:struct, [not_existing: nil, abc: {:atom, X}], {:atom, Other}, nil},
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}
+                  ]}
                )
     end
   end

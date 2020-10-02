@@ -62,6 +62,9 @@ defmodule ElixirSenseExample.FunctionsWithReturnSpec do
 
   @spec f10(integer, integer, any) :: String
   def f10(_a \\ 0, _b \\ 0, _c), do: String
+
+  @spec f11 :: {:ok, :some} | {:error, any}
+  def f11, do: {:ok, :some}
 end
 
 defmodule ElixirSenseExample.FunctionsWithReturnSpec.Remote do

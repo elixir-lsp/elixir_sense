@@ -259,8 +259,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_clause({_clause, [line: line, column: _column], _} = ast, state, lhs) do
-    # IO.inspect ast, label: "clause ast"
-    # IO.inspect hd(state.binding_context), label: "state context"
     state
     |> new_alias_scope
     |> new_import_scope
@@ -272,7 +270,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp post_clause(ast, state) do
-    
     state
     |> remove_alias_scope
     |> remove_import_scope
@@ -828,6 +825,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
         atom when is_atom(atom) ->
           atom
+
+        _other ->
+          nil
       end
 
     state =
@@ -988,13 +988,16 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre(call, state)
   end
 
-  defp pre({:case, meta,
-  [
-    condition_ast,
-    [
-      do: clauses
-    ]
-  ]} = ast, state) do
+  defp pre(
+         {:case, meta,
+          [
+            condition_ast,
+            [
+              do: _clauses
+            ]
+          ]} = ast,
+         state
+       ) do
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
 
@@ -1007,7 +1010,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre({call, meta, params} = ast, state)
        when is_call(call, params) and is_call_meta(meta) do
-    IO.inspect ast, label: "call ast"
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
 
@@ -1128,16 +1130,16 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, state}
   end
 
-  defp post({:case, meta,
-  [
-    condition_ast,
-    [
-      do: clauses
-    ]
-  ]} = ast, state) do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-
+  defp post(
+         {:case, _meta,
+          [
+            _condition_ast,
+            [
+              do: _clauses
+            ]
+          ]} = ast,
+         state
+       ) do
     state
     |> pop_binding_context
     |> result(ast)
@@ -1182,12 +1184,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp find_vars(state, ast, match_context \\ nil) do
-    IO.inspect match_context
     {_ast, {vars, _match_context}} =
       Macro.prewalk(ast, {[], match_context}, &match_var(state, &1, &2))
 
     vars
-    |> IO.inspect
   end
 
   defp match_var(
@@ -1214,7 +1214,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
          {vars, match_context}
        )
        when is_atom(var) do
-        IO.inspect match_context, label: "3 #{inspect ast}"
     var_info = %VarInfo{name: var, positions: [{line, column}], type: match_context}
     {ast, {[var_info | vars], nil}}
   end
@@ -1233,22 +1232,28 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp match_var(state, {:{}, _, ast}, {vars, match_context}) when not is_nil(match_context) do
-    IO.inspect match_context, label: "2"
-    destructured_vars =
-      ast
-      |> Enum.with_index()
-      |> Enum.reduce(vars, fn {nth_elem_ast, n}, vars_acc ->
-        {_ast, {new_vars, _match_context}} =
-          match_var(state, nth_elem_ast, {vars, {:tuple_nth, match_context, n}})
+    indexed = ast |> Enum.with_index()
+    total = length(ast)
 
-        new_vars ++ vars_acc
+    destructured_vars =
+      indexed
+      |> Enum.flat_map(fn {nth_elem_ast, n} ->
+        bond =
+          {:tuple, total,
+           indexed |> Enum.map(&if(n != elem(&1, 1), do: get_binding_type(state, elem(&1, 0))))}
+
+        match_context = {:intersection, [match_context, bond]}
+
+        {_ast, {new_vars, _match_context}} =
+          match_var(state, nth_elem_ast, {[], {:tuple_nth, match_context, n}})
+
+        new_vars
       end)
 
-    {ast, {destructured_vars, nil}}
+    {ast, {vars ++ destructured_vars, nil}}
   end
 
   defp match_var(_state, ast, {vars, match_context}) do
-    IO.inspect match_context, label: "1 #{inspect ast}"
     {ast, {vars, match_context}}
   end
 

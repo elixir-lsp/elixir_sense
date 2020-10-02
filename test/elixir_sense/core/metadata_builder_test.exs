@@ -188,7 +188,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :other,
                type: {:local_call, :elem, [{:attribute, :myattribute}, {:integer, 0}]}
              },
-             %VarInfo{name: :var, type: {:tuple_nth, {:attribute, :myattribute}, 1}}
+             %VarInfo{
+               name: :var,
+               type:
+                 {:tuple_nth,
+                  {:intersection, [{:attribute, :myattribute}, {:tuple, 2, [{:atom, :ok}, nil]}]},
+                  1}
+             }
            ] = state |> get_line_vars(4)
 
     assert [
@@ -196,7 +202,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :q,
                type: {:tuple, 3, [{:atom, :a}, {:atom, :b}, {:atom, :c}]}
              },
-             %VarInfo{name: :q1, type: {:tuple_nth, {:variable, :q}, 2}}
+             %VarInfo{
+               name: :q1,
+               type:
+                 {:tuple_nth,
+                  {:intersection,
+                   [{:variable, :q}, {:tuple, 3, [{:variable, :_}, {:variable, :_}, nil]}]}, 2}
+             }
            ] =
              state
              |> get_line_vars(8)
@@ -402,7 +414,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              state |> get_line_vars(13) |> Enum.find(&(&1.name == :asd))
 
     assert [
-             %VarInfo{name: :x, type: {:intersection, {:variable, :z}, {:variable, :asd}}},
+             %VarInfo{name: :x, type: {:intersection, [{:variable, :z}, {:variable, :asd}]}},
              %VarInfo{name: :z, type: {:variable, :asd}}
            ] = state |> get_line_vars(15) |> Enum.filter(&(&1.name in [:x, :z]))
   end
@@ -451,13 +463,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     # FIXME formatted type should be {:call, {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}, :formatted, []}
     # needs support for map/struct destructuring
     assert [
-             %VarInfo{name: :formatted, type: {:tuple_nth, {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}, 1}},
+             %VarInfo{
+               name: :formatted,
+               type:
+                 {:tuple_nth,
+                  {:intersection,
+                   [
+                     {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []},
+                     {:tuple, 2, [{:atom, :formatted}, nil]}
+                   ]}, 1}
+             },
              %VarInfo{
                name: :state,
                type:
                  {:intersection,
-                  {:struct, [formatted: {:variable, :formatted}], {:atom, Elixir.State}, nil},
-                  {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}}
+                  [
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, Elixir.State}, nil},
+                    {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}
+                  ]}
              }
            ] = state |> get_line_vars(4)
   end
@@ -479,7 +502,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert [
              %VarInfo{
                name: :x,
-               type: {:tuple_nth, {:call, {:atom, Some}, :call, []}, 1}
+               type:
+                 {:tuple_nth,
+                  {:intersection,
+                   [{:call, {:atom, Some}, :call, []}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
              }
            ] = state |> get_line_vars(5)
   end
