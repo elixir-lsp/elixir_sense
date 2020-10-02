@@ -1097,10 +1097,10 @@ defmodule ElixirSense.SuggestionsTest do
     buffer = """
     defmodule MyServer do
       def new() do
-        case DateTime.new(1, 2, 3, 4) do
+        case NaiveDateTime.new(1, 2) do
           {:ok, x} -> x.h
         end
-        case DateTime.new(1, 2, 3, 4) do
+        case NaiveDateTime.new(1, 2) do
           {:ok, x} -> %{x | h}
         end
       end
@@ -1111,13 +1111,13 @@ defmodule ElixirSense.SuggestionsTest do
       ElixirSense.suggestions(buffer, 4, 22)
       |> Enum.filter(fn s -> s.type == :field end)
 
-    assert [%{name: "hour", origin: "DateTime"}] = list
+    assert [%{name: "hour", origin: "NaiveDateTime"}] = list
 
     list =
       ElixirSense.suggestions(buffer, 7, 26)
       |> Enum.filter(fn s -> s.type == :field end)
 
-    assert [%{name: "hour", origin: "DateTime"}] = list
+    assert [%{name: "hour", origin: "NaiveDateTime"}] = list
   end
 
   test "nested binding" do
