@@ -28,6 +28,9 @@ defmodule ElixirSenseExample.FunctionsWithReturnSpec do
   @spec f1() :: t
   def f1(), do: :ok
 
+  @spec f1x(any) :: t
+  def f1x(_a), do: :ok
+
   @spec f2() :: x
   def f2(), do: :ok
 
@@ -63,7 +66,7 @@ defmodule ElixirSenseExample.FunctionsWithReturnSpec do
   @spec f10(integer, integer, any) :: String
   def f10(_a \\ 0, _b \\ 0, _c), do: String
 
-  @spec f11 :: {:ok, :some} | {:error, any}
+  @spec f11 :: {:ok, :some} | {:error, :some_error}
   def f11, do: {:ok, :some}
 end
 

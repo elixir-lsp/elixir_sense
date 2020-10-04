@@ -64,7 +64,9 @@ defmodule ElixirSense.Core.Binding do
 
         %State.VarInfo{name: name, type: type} ->
           # filter underscored variables
-          unless name |> Atom.to_string() |> String.starts_with?("_") do
+          if name |> Atom.to_string() |> String.starts_with?("_") do
+            :none
+          else
             type
           end
       end
@@ -75,7 +77,7 @@ defmodule ElixirSense.Core.Binding do
   def do_expand(%Binding{attributes: attributes} = env, {:attribute, attribute}, stack) do
     type =
       case Enum.find(attributes, fn %{name: name} -> name == attribute end) do
-        nil -> nil
+        nil -> :none
         %State.AttributeInfo{type: type} -> type
       end
 
@@ -100,22 +102,26 @@ defmodule ElixirSense.Core.Binding do
       case module do
         {:atom, atom} -> {:atom, atom}
         {:attribute, attr} -> {:attribute, attr}
-        _ -> nil
+        nil -> nil
+        _ -> :none
       end
 
     module =
       case expand(env, module, stack) do
         {:atom, atom} -> atom
-        _ -> nil
+        nil -> nil
+        _ -> :none
       end
 
-    if module == nil or Struct.is_struct(module, structs) do
+    if module == nil or (module != :none and Struct.is_struct(module, structs)) do
       expanded = expand(env, updated_struct, stack)
 
       {fields, module} =
         get_struct_fields(env, get_fields_from(expanded) |> Keyword.merge(fields), module)
 
       {:struct, fields, module, nil}
+    else
+      :none
     end
   end
 
@@ -127,8 +133,11 @@ defmodule ElixirSense.Core.Binding do
       {:struct, expanded_fields, type, nil} ->
         {:struct, expanded_fields |> Keyword.merge(fields), type, nil}
 
-      _ ->
+      nil ->
         {:map, fields, nil}
+
+      _ ->
+        :none
     end
   end
 
@@ -137,17 +146,24 @@ defmodule ElixirSense.Core.Binding do
       {:tuple, size, fields} when size >= n ->
         fields |> Enum.at(n)
 
-      _ ->
+      nil ->
         nil
+
+      _ ->
+        :none
     end
   end
 
   # remote call
   def do_expand(env, {:call, target, function, arguments}, stack) do
-    expanded_target = expand(env, target, stack)
-    # do not include private funs on remote call
-    expand_call(env, expanded_target, function, arguments, false, stack)
-    |> drop_no_spec
+    if :none in arguments do
+      :none
+    else
+      expanded_target = expand(env, target, stack)
+      # do not include private funs on remote call
+      expand_call(env, expanded_target, function, arguments, false, stack)
+      |> drop_no_spec
+    end
   end
 
   # local call
@@ -156,15 +172,19 @@ defmodule ElixirSense.Core.Binding do
         {:local_call, function, arguments},
         stack
       ) do
-    candidate_targets = List.wrap(current_module) ++ imports ++ [Kernel, Kernel.SpecialForms]
+    if :none in arguments do
+      :none
+    else
+      candidate_targets = List.wrap(current_module) ++ imports ++ [Kernel, Kernel.SpecialForms]
 
-    # take first matching
-    Enum.find_value(candidate_targets, fn candidate ->
-      # include private from current module
-      include_private = candidate == current_module
-      expand_call(env, {:atom, candidate}, function, arguments, include_private, stack)
-    end)
-    |> drop_no_spec
+      # take first matching
+      Enum.find_value(candidate_targets, fn candidate ->
+        # include private from current module
+        include_private = candidate == current_module
+        expand_call(env, {:atom, candidate}, function, arguments, include_private, stack)
+      end)
+      |> drop_no_spec
+    end
   end
 
   def do_expand(env, {:tuple, size, fields}, stack),
@@ -174,7 +194,15 @@ defmodule ElixirSense.Core.Binding do
 
   def do_expand(_env, {:integer, integer}, _stack), do: {:integer, integer}
 
-  def do_expand(_env, {:union, variants}, _stack), do: {:union, variants}
+  def do_expand(_env, {:union, [first | rest]} = u, _stack) do
+    if Enum.all?(rest, &(&1 == first)) do
+      first
+    else
+      u
+    end
+  end
+
+  def do_expand(_env, :none, _stack), do: :none
 
   def do_expand(_env, _other, _stack), do: nil
 
@@ -183,12 +211,15 @@ defmodule ElixirSense.Core.Binding do
 
   # not supported
   defp expand_call(_env, nil, _, _, _, _stack), do: nil
+  defp expand_call(_env, :none, _, _, _, _stack), do: :none
 
   # map field access
   defp expand_call(env, {:map, fields, _}, field, arity, _, stack) do
     # field access is a call with arity 0, other are not allowed
     if arity == [] do
       expand(env, fields[field], stack)
+    else
+      :none
     end
   end
 
@@ -197,6 +228,8 @@ defmodule ElixirSense.Core.Binding do
     # field access is a call with arity 0, other are not allowed
     if arity == [] do
       expand(env, fields[field], stack)
+    else
+      :none
     end
   end
 
@@ -212,8 +245,11 @@ defmodule ElixirSense.Core.Binding do
       {:integer, n} ->
         expand(env, {:tuple_nth, tuple_candidate, n}, stack)
 
-      _ ->
+      nil ->
         nil
+
+      _ ->
+        :none
     end
   end
 
@@ -222,15 +258,23 @@ defmodule ElixirSense.Core.Binding do
     fields =
       case expand(env, map, stack) do
         {:map, fields, nil} -> fields
-        _ -> []
+        nil -> []
+        _ -> [:none]
       end
 
-    case expand(env, key, stack) do
-      {:atom, atom} ->
-        fields |> Keyword.get(atom)
+    if :none in fields do
+      :none
+    else
+      case expand(env, key, stack) do
+        {:atom, atom} ->
+          fields |> Keyword.get(atom)
 
-      _ ->
-        nil
+        nil ->
+          nil
+
+        _ ->
+          :none
+      end
     end
   end
 
@@ -239,16 +283,24 @@ defmodule ElixirSense.Core.Binding do
     fields =
       case expand(env, map, stack) do
         {:map, fields, nil} -> fields
-        _ -> []
+        nil -> []
+        _ -> [:none]
       end
 
-    case expand(env, key, stack) do
-      {:atom, atom} ->
-        default = if fun == :get, do: expand(env, default, stack)
-        fields |> Keyword.get(atom, default)
+    if :none in fields do
+      :none
+    else
+      case expand(env, key, stack) do
+        {:atom, atom} ->
+          default = if fun == :get, do: expand(env, default, stack)
+          fields |> Keyword.get(atom, default)
 
-      _ ->
-        nil
+        nil ->
+          nil
+
+        _ ->
+          :none
+      end
     end
   end
 
@@ -257,15 +309,23 @@ defmodule ElixirSense.Core.Binding do
     fields =
       case expand(env, map, stack) do
         {:map, fields, nil} -> fields
-        _ -> []
+        nil -> []
+        _ -> [:none]
       end
 
-    case expand(env, key, stack) do
-      {:atom, atom} ->
-        {:map, fields |> Keyword.put(atom, value), nil}
+    if :none in fields do
+      :none
+    else
+      case expand(env, key, stack) do
+        {:atom, atom} ->
+          {:map, fields |> Keyword.put(atom, value), nil}
 
-      _ ->
-        {:map, fields, nil}
+        :none ->
+          :none
+
+        _ ->
+          {:map, fields, nil}
+      end
     end
   end
 
@@ -274,16 +334,24 @@ defmodule ElixirSense.Core.Binding do
     fields =
       case expand(env, map, stack) do
         {:map, fields, nil} -> fields
-        _ -> []
+        nil -> []
+        _ -> [:none]
       end
 
-    case expand(env, key, stack) do
-      {:atom, atom} ->
-        value = if fun == :put_new, do: value
-        {:map, fields |> Keyword.put_new(atom, value), nil}
+    if :none in fields do
+      :none
+    else
+      case expand(env, key, stack) do
+        {:atom, atom} ->
+          value = if fun == :put_new, do: value
+          {:map, fields |> Keyword.put_new(atom, value), nil}
 
-      _ ->
-        {:map, fields, nil}
+        :none ->
+          :none
+
+        _ ->
+          {:map, fields, nil}
+      end
     end
   end
 
@@ -291,15 +359,23 @@ defmodule ElixirSense.Core.Binding do
     fields =
       case expand(env, map, stack) do
         {:map, fields, nil} -> fields
-        _ -> []
+        nil -> []
+        _ -> [:none]
       end
 
-    case expand(env, key, stack) do
-      {:atom, atom} ->
-        {:map, fields |> Keyword.delete(atom), nil}
+    if :none in fields do
+      :none
+    else
+      case expand(env, key, stack) do
+        {:atom, atom} ->
+          {:map, fields |> Keyword.delete(atom), nil}
 
-      _ ->
-        {:map, fields, nil}
+        :none ->
+          :none
+
+        _ ->
+          {:map, fields, nil}
+      end
     end
   end
 
@@ -307,29 +383,39 @@ defmodule ElixirSense.Core.Binding do
     fields =
       case expand(env, map, stack) do
         {:map, fields, nil} -> fields
-        _ -> []
+        nil -> []
+        _ -> [:none]
       end
 
     other_fields =
       case expand(env, other_map, stack) do
         {:map, fields, nil} -> fields
-        _ -> []
+        nil -> []
+        _ -> [:none]
       end
 
-    {:map, fields |> Keyword.merge(other_fields), nil}
+    merged = fields |> Keyword.merge(other_fields)
+
+    if :none in merged do
+      :none
+    else
+      {:map, merged, nil}
+    end
   end
 
   defp expand_call(env, {:atom, Map}, :merge, [map, other_map, _fun], _include_private, stack) do
     fields =
       case expand(env, map, stack) do
         {:map, fields, nil} -> fields
-        _ -> []
+        nil -> []
+        _ -> [:none]
       end
 
     other_fields =
       case expand(env, other_map, stack) do
         {:map, fields, nil} -> fields
-        _ -> []
+        nil -> []
+        _ -> [:none]
       end
 
     conflicts =
@@ -338,7 +424,13 @@ defmodule ElixirSense.Core.Binding do
       |> MapSet.to_list()
       |> Enum.map(&{&1, nil})
 
-    {:map, fields |> Keyword.merge(other_fields) |> Keyword.merge(conflicts), nil}
+    merged = fields |> Keyword.merge(other_fields) |> Keyword.merge(conflicts)
+
+    if :none in merged do
+      :none
+    else
+      {:map, merged, nil}
+    end
   end
 
   defp expand_call(
@@ -352,15 +444,23 @@ defmodule ElixirSense.Core.Binding do
     fields =
       case expand(env, map, stack) do
         {:map, fields, nil} -> fields
-        _ -> []
+        nil -> []
+        _ -> [:none]
       end
 
-    case expand(env, key, stack) do
-      {:atom, atom} ->
-        {:map, fields |> Keyword.put(atom, nil), nil}
+    if :none in fields do
+      :none
+    else
+      case expand(env, key, stack) do
+        {:atom, atom} ->
+          {:map, fields |> Keyword.put(atom, nil), nil}
 
-      _ ->
-        {:map, fields, nil}
+        :none ->
+          :none
+
+        _ ->
+          {:map, fields, nil}
+      end
     end
   end
 
@@ -368,15 +468,23 @@ defmodule ElixirSense.Core.Binding do
     fields =
       case expand(env, map, stack) do
         {:map, fields, nil} -> fields
-        _ -> []
+        nil -> []
+        _ -> [:none]
       end
 
-    case expand(env, key, stack) do
-      {:atom, atom} ->
-        {:map, fields |> Keyword.put(atom, nil), nil}
+    if :none in fields do
+      :none
+    else
+      case expand(env, key, stack) do
+        {:atom, atom} ->
+          {:map, fields |> Keyword.put(atom, nil), nil}
 
-      _ ->
-        {:map, fields, nil}
+        :none ->
+          :none
+
+        _ ->
+          {:map, fields, nil}
+      end
     end
   end
 
@@ -389,15 +497,23 @@ defmodule ElixirSense.Core.Binding do
         {:atom, atom} ->
           case expand(env, {:struct, [], {:atom, atom}, nil}, stack) do
             {:struct, fields, _, nil} -> fields
-            _ -> []
+            nil -> []
+            _ -> [:none]
           end
 
-        _ ->
+        nil ->
           []
+
+        _ ->
+          [:none]
       end
       |> Keyword.delete(:__struct__)
 
-    {:map, fields, nil}
+    if :none in fields do
+      :none
+    else
+      {:map, fields, nil}
+    end
   end
 
   # function call
@@ -406,13 +522,13 @@ defmodule ElixirSense.Core.Binding do
     arity = length(arguments)
 
     case expand_call_from_metadata(env, mod, fun, arity, include_private, stack) do
-      result when not is_nil(result) -> result
-      nil -> expand_call_from_introspection(env, mod, fun, arity, include_private, stack)
+      result when result not in [nil, :none] -> result
+      _ -> expand_call_from_introspection(env, mod, fun, arity, include_private, stack)
     end
   end
 
   # not a module
-  defp expand_call(_env, {:atom, _mod}, _fun, _arity, _include_private, _stack), do: nil
+  defp expand_call(_env, {:atom, _mod}, _fun, _arity, _include_private, _stack), do: :none
 
   defp call_arity_match?(fun_arity, fun_defaults, call_arity) do
     fun_arity - fun_defaults <= call_arity and call_arity <= fun_arity
@@ -430,7 +546,7 @@ defmodule ElixirSense.Core.Binding do
         list ->
           # correct arity for calls with default params
           list
-          |> Enum.find_value(arity, fn {{f, a}, _, _, _, _, map} ->
+          |> Enum.find_value(nil, fn {{f, a}, _, _, _, _, map} ->
             if f == fun and call_arity_match?(a, Map.get(map, :defaults, 0), arity) do
               a
             end
@@ -442,6 +558,8 @@ defmodule ElixirSense.Core.Binding do
       type = TypeInfo.get_spec(mod, fun, arity)
       return_type = get_return_from_spec(env, type, mod, include_private)
       expand(env, return_type, stack) || :no_spec
+    else
+      :none
     end
   end
 
@@ -473,7 +591,7 @@ defmodule ElixirSense.Core.Binding do
     case {arity, specs[{mod, fun, arity}]} do
       {nil, _} ->
         # fun not found
-        nil
+        :none
 
       {_, %State.SpecInfo{} = spec} ->
         get_return_from_metadata(env, mod, spec, include_private, stack) || :no_spec
@@ -515,6 +633,8 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # intersection specs
+  # treat as union
+  # TODO get correct basing on call args
   defp get_return_from_metadata(
          env,
          mod,
@@ -522,7 +642,7 @@ defmodule ElixirSense.Core.Binding do
          include_private,
          stack
        ) do
-    {:intersection,
+    {:union,
      variants
      |> Enum.map(
        &get_return_from_metadata(
@@ -543,8 +663,10 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # intersection specs
+  # treat as union
+  # TODO get correct basing on call args
   defp get_return_from_spec(env, {{fun, arity}, [_ast | _] = variants}, mod, include_private) do
-    {:intersection,
+    {:union,
      variants |> Enum.map(&get_return_from_spec(env, {{fun, arity}, [&1]}, mod, include_private))}
   end
 
@@ -677,6 +799,8 @@ defmodule ElixirSense.Core.Binding do
   defp drop_optional({:optional, _, [key]}), do: key
   defp drop_optional(other), do: other
 
+  defp combine_intersection(:none, _), do: :none
+  defp combine_intersection(_, :none), do: :none
   defp combine_intersection(nil, type), do: type
   defp combine_intersection(type, nil), do: type
   defp combine_intersection(type, type), do: type
@@ -684,14 +808,24 @@ defmodule ElixirSense.Core.Binding do
   defp combine_intersection({:struct, fields_1, nil, nil}, {:struct, fields_2, nil, nil}) do
     keys = (Keyword.keys(fields_1) ++ Keyword.keys(fields_2)) |> Enum.uniq()
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
-    {:struct, fields, nil, nil}
+
+    if Enum.any?(fields, fn {_k, v} -> v == :none end) do
+      :none
+    else
+      {:struct, fields, nil, nil}
+    end
   end
 
   defp combine_intersection({:struct, fields_1, type, nil}, {:struct, fields_2, type_2, nil})
        when type_2 == type or is_nil(type_2) do
     keys = Keyword.keys(fields_1)
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
-    {:struct, fields, type, nil}
+
+    if Enum.any?(fields, fn {_k, v} -> v == :none end) do
+      :none
+    else
+      {:struct, fields, type, nil}
+    end
   end
 
   defp combine_intersection(
@@ -704,7 +838,12 @@ defmodule ElixirSense.Core.Binding do
   defp combine_intersection({:map, fields_1, nil}, {:map, fields_2, nil}) do
     keys = (Keyword.keys(fields_1) ++ Keyword.keys(fields_2)) |> Enum.uniq()
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
-    {:map, fields, nil}
+
+    if Enum.any?(fields, fn {_k, v} -> v == :none end) do
+      :none
+    else
+      {:map, fields, nil}
+    end
   end
 
   defp combine_intersection({:struct, fields_1, type, nil}, {:map, fields_2, nil}) do
@@ -714,7 +853,12 @@ defmodule ElixirSense.Core.Binding do
         else: (Keyword.keys(fields_1) ++ Keyword.keys(fields_2)) |> Enum.uniq()
 
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
-    {:struct, fields, type, nil}
+
+    if Enum.any?(fields, fn {_k, v} -> v == :none end) do
+      :none
+    else
+      {:struct, fields, type, nil}
+    end
   end
 
   defp combine_intersection({:map, _fields_1, nil} = map, {:struct, _fields_2, _type, nil} = str) do
@@ -722,16 +866,28 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp combine_intersection({:tuple, n, fields_1}, {:tuple, n, fields_2}) do
-    {:tuple, n,
-     Enum.zip(fields_1, fields_2) |> Enum.map(fn {f1, f2} -> combine_intersection(f1, f2) end)}
+    combined_fields =
+      Enum.zip(fields_1, fields_2) |> Enum.map(fn {f1, f2} -> combine_intersection(f1, f2) end)
+
+    if :none in combined_fields do
+      :none
+    else
+      {:tuple, n, combined_fields}
+    end
   end
 
   defp combine_intersection(other, {:union, variants}),
     do: combine_intersection({:union, variants}, other)
 
   defp combine_intersection({:union, variants}, other) do
-    Enum.find_value(variants, &combine_intersection(&1, other))
+    Enum.find_value(variants, fn v ->
+      combined = combine_intersection(v, other)
+
+      if combined != :none do
+        combined
+      end
+    end)
   end
 
-  defp combine_intersection(_, _), do: nil
+  defp combine_intersection(_, _), do: :none
 end
