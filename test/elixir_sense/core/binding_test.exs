@@ -605,6 +605,50 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "remote call fun with no_return" do
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f_no_return,
+                        []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "remote call fun with any" do
+      assert nil ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f_any, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert nil ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f_term, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
     test "remote call fun with spec parametrized map" do
       assert {:map, [abc: nil], nil} ==
                Binding.expand(

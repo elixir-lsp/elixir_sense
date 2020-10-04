@@ -729,6 +729,9 @@ defmodule ElixirSense.Core.Binding do
     expand_type(env, mod, atom, args, false)
   end
 
+  # no_return
+  defp parse_type(_env, {:no_return, _, _}, _, _include_private), do: :none
+
   # local user type
   defp parse_type(env, {atom, _, args}, mod, include_private) when is_atom(atom) do
     # propagate include_private when expanding local types

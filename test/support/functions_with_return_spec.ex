@@ -68,6 +68,15 @@ defmodule ElixirSenseExample.FunctionsWithReturnSpec do
 
   @spec f11 :: {:ok, :some} | {:error, :some_error}
   def f11, do: {:ok, :some}
+
+  @spec f_no_return :: no_return
+  def f_no_return, do: :ok
+
+  @spec f_any :: any
+  def f_any, do: :ok
+
+  @spec f_term :: term
+  def f_term, do: :ok
 end
 
 defmodule ElixirSenseExample.FunctionsWithReturnSpec.Remote do
