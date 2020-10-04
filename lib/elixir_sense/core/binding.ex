@@ -255,12 +255,7 @@ defmodule ElixirSense.Core.Binding do
 
   defp expand_call(env, {:atom, Map}, fun, [map, key], _include_private, stack)
        when fun in [:fetch, :fetch!, :get] do
-    fields =
-      case expand(env, map, stack) do
-        {:map, fields, nil} -> fields
-        nil -> []
-        _ -> [:none]
-      end
+    fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
       :none
@@ -280,12 +275,7 @@ defmodule ElixirSense.Core.Binding do
 
   defp expand_call(env, {:atom, Map}, fun, [map, key, default], _include_private, stack)
        when fun in [:get, :get_lazy] do
-    fields =
-      case expand(env, map, stack) do
-        {:map, fields, nil} -> fields
-        nil -> []
-        _ -> [:none]
-      end
+    fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
       :none
@@ -306,12 +296,7 @@ defmodule ElixirSense.Core.Binding do
 
   defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private, stack)
        when fun in [:put, :replace!] do
-    fields =
-      case expand(env, map, stack) do
-        {:map, fields, nil} -> fields
-        nil -> []
-        _ -> [:none]
-      end
+    fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
       :none
@@ -331,12 +316,7 @@ defmodule ElixirSense.Core.Binding do
 
   defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private, stack)
        when fun in [:put_new, :put_new_lazy] do
-    fields =
-      case expand(env, map, stack) do
-        {:map, fields, nil} -> fields
-        nil -> []
-        _ -> [:none]
-      end
+    fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
       :none
@@ -356,12 +336,7 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp expand_call(env, {:atom, Map}, :delete, [map, key], _include_private, stack) do
-    fields =
-      case expand(env, map, stack) do
-        {:map, fields, nil} -> fields
-        nil -> []
-        _ -> [:none]
-      end
+    fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
       :none
@@ -380,12 +355,7 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp expand_call(env, {:atom, Map}, :merge, [map, other_map], _include_private, stack) do
-    fields =
-      case expand(env, map, stack) do
-        {:map, fields, nil} -> fields
-        nil -> []
-        _ -> [:none]
-      end
+    fields = expand_map_fields(env, map, stack)
 
     other_fields =
       case expand(env, other_map, stack) do
@@ -404,19 +374,9 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp expand_call(env, {:atom, Map}, :merge, [map, other_map, _fun], _include_private, stack) do
-    fields =
-      case expand(env, map, stack) do
-        {:map, fields, nil} -> fields
-        nil -> []
-        _ -> [:none]
-      end
+    fields = expand_map_fields(env, map, stack)
 
-    other_fields =
-      case expand(env, other_map, stack) do
-        {:map, fields, nil} -> fields
-        nil -> []
-        _ -> [:none]
-      end
+    other_fields = expand_map_fields(env, other_map, stack)
 
     conflicts =
       MapSet.new(Keyword.keys(fields))
@@ -441,12 +401,7 @@ defmodule ElixirSense.Core.Binding do
          _include_private,
          stack
        ) do
-    fields =
-      case expand(env, map, stack) do
-        {:map, fields, nil} -> fields
-        nil -> []
-        _ -> [:none]
-      end
+    fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
       :none
@@ -465,12 +420,7 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp expand_call(env, {:atom, Map}, :update!, [map, key, _fun], _include_private, stack) do
-    fields =
-      case expand(env, map, stack) do
-        {:map, fields, nil} -> fields
-        nil -> []
-        _ -> [:none]
-      end
+    fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
       :none
@@ -893,4 +843,13 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp combine_intersection(_, _), do: :none
+
+  defp expand_map_fields(env, map_or_struct, stack) do
+    case expand(env, map_or_struct, stack) do
+      {:map, fields, nil} -> fields
+      {:struct, fields, _, nil} -> fields
+      nil -> []
+      _ -> [:none]
+    end
+  end
 end
