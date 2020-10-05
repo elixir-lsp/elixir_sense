@@ -503,6 +503,23 @@ defmodule ElixirSense.Plugins.EctoTest do
       assert [%{label: "text"}, %{label: "title"}] = suggestions(buffer, cursor_2)
     end
 
+    test "list bindings and binding fields using full module name" do
+      buffer = """
+      import Ecto.Query
+
+      def query() do
+        from p in ElixirSense.Plugins.Ecto.FakeSchemas.Post,
+          where: p.t
+        #        ^  ^
+      end
+      """
+
+      [cursor_1, cursor_2] = cursors(buffer)
+
+      assert [%{label: "p"} | _] = suggestions(buffer, cursor_1)
+      assert [%{label: "text"}, %{label: "title"}] = suggestions(buffer, cursor_2)
+    end
+
     test "from/2 without parens" do
       buffer = """
       import Ecto.Query
