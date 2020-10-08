@@ -188,8 +188,8 @@ defmodule ElixirSense.Plugins.Ecto.Query do
     }
   end
 
-  defp infer_type({:__aliases__, _, _} = mod_ast, _vars, env, buffer_metadata) do
-    mod = Macro.expand_once(mod_ast, %Macro.Env{})
+  defp infer_type({:__aliases__, _, mods}, _vars, env, buffer_metadata) do
+    mod = Module.concat(mods)
     {actual_mod, _, _} = actual_mod_fun({mod, nil}, false, env, buffer_metadata)
     actual_mod
   end
