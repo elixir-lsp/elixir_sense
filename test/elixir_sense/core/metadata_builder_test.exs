@@ -4397,6 +4397,44 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.types
   end
 
+  test "defrecord defines record macros" do
+    state =
+      """
+      defmodule MyRecords do
+        require Record
+        Record.defrecord(:user, name: "meg", age: "25")
+        @type user :: record(:user, name: String.t(), age: integer)
+        Record.defrecordp(:userp, name: "meg", age: "25")
+        Record.defrecord(:my_rec, Record.extract(:file_info, from_lib: "kernel/include/file.hrl")
+          |> Keyword.merge(fun_field: &__MODULE__.foo/2))
+        def foo(bar, baz), do: IO.inspect({bar, baz})
+      end
+      """
+      |> string_to_state
+
+    assert %{
+             {MyRecords, :user, 1} => %ModFunInfo{
+               params: [[{:\\, :args, []}]],
+               positions: [{3, 9}],
+               type: :defmacro
+             },
+             {MyRecords, :user, 2} => %ModFunInfo{
+               params: [[:record, :args]],
+               positions: [{3, 9}],
+               type: :defmacro
+             },
+             {MyRecords, :userp, 1} => %ModFunInfo{type: :defmacrop},
+             {MyRecords, :my_rec, 1} => %ModFunInfo{type: :defmacro}
+           } = state.mods_funs_to_positions
+
+    assert %{
+             {MyRecords, :user, 0} => %State.TypeInfo{
+               name: :user,
+               specs: ["@type user :: record(:user, name: String.t, age: integer)"]
+             }
+           } = state.types
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true)

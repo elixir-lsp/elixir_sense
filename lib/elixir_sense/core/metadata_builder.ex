@@ -1026,6 +1026,36 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre(
+         {{:., _, [{:__aliases__, _, module_expression = [:Record]}, call]}, meta,
+          params = [name, _]} = ast,
+         state
+       )
+       when is_call(call, params) and is_call_meta(meta) and call in [:defrecord, :defrecordp] and
+              is_atom(name) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    module = concat_module_expression(state, module_expression)
+
+    type =
+      case call do
+        :defrecord -> :defmacro
+        :defrecordp -> :defmacrop
+      end
+
+    options = []
+
+    state
+    |> new_named_func(name, 1)
+    |> add_func_to_index(name, [{:\\, :args, []}], {line, column}, type, options)
+    |> new_named_func(name, 2)
+    |> add_func_to_index(name, [:record, :args], {line, column}, type, options)
+    |> add_call_to_line({Module.concat(module), call, length(params)}, {line, column + 1})
+    |> add_current_env_to_line(line)
+    |> result(ast)
+  end
+
+  defp pre(
          {{:., _, [{:__aliases__, _, module_expression = [_ | _]}, call]}, meta, params} = ast,
          state
        )
