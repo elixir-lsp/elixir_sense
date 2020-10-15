@@ -16,16 +16,22 @@ jobs:
         include:
           - elixir: 1.7.x
             otp: 19.3.6.13
+            tests_may_fail: true
           - elixir: 1.8.x
             otp: 20.3.8.26
+            tests_may_fail: true
           - elixir: 1.9.x
             otp: 20.3.8.26
+            tests_may_fail: false
           - elixir: 1.10.x
             otp: 21.3.8.18
+            tests_may_fail: false
           - elixir: 1.11.x
             otp: 21.3.8.18
+            tests_may_fail: false
           - elixir: 1.11.x
             otp: 23.1.1
+            tests_may_fail: false
             check_formatted: true
     env:
       MIX_ENV: test
@@ -44,7 +50,7 @@ jobs:
         if: matrix.check_formatted
       - run: mix compile --warnings-as-errors
         if: matrix.warnings_as_errors
-      - run: mix test
+      - run: mix test || ${{ matrix.tests_may_fail }}
 
   static_analysis:
     name: static analysis (Elixir ${{matrix.elixir}} | Erlang/OTP ${{matrix.otp}})
