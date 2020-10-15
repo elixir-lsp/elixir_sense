@@ -11,12 +11,17 @@ defmodule ElixirSense.Server.TCPServer do
   @default_listen_options [:binary, active: false, reuseaddr: true, packet: 4]
 
   def start(socket_type: socket_type, port: port, env: env) do
-    import Supervisor.Spec
-
     children = [
-      worker(Task, [__MODULE__, :listen, [socket_type, "localhost", port]]),
-      supervisor(Task.Supervisor, [[name: @connection_handler_supervisor]]),
-      worker(ContextLoader, [env])
+      %{
+        id: ListenTask,
+        start: {Task, :start_link, [__MODULE__, :listen, [socket_type, "localhost", port]]}
+      },
+      %{
+        id: ConnectionHandlerSupervisor,
+        start: {Task.Supervisor, :start_link, [[name: @connection_handler_supervisor]]}
+      },
+      # {Task.Supervisor, [[name: @connection_handler_supervisor]]},
+      {ContextLoader, env}
     ]
 
     opts = [strategy: :one_for_one, name: __MODULE__]
@@ -127,7 +132,7 @@ defmodule ElixirSense.Server.TCPServer do
     rescue
       e ->
         message = Exception.message(e)
-        details = Exception.format_stacktrace(System.stacktrace())
+        details = Exception.format_stacktrace(__STACKTRACE__)
         {:error, request_id, message, details}
     end
   end

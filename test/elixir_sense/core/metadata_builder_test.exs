@@ -160,6 +160,61 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ] = state |> get_line_vars(5)
   end
 
+  test "tuple destructuring" do
+    state =
+      """
+      defmodule MyModule do
+        @myattribute {:ok, %{abc: nil}}
+        {:ok, var} = @myattribute
+        other = elem(@myattribute, 0)
+        IO.puts
+        q = {:a, :b, :c}
+        {_, _, q1} = q
+        IO.puts
+      end
+      """
+      |> string_to_state
+
+    assert get_line_attributes(state, 4) == [
+             %AttributeInfo{
+               name: :myattribute,
+               positions: [{2, 3}, {3, 16}, {4, 16}],
+               type: {:tuple, 2, [{:atom, :ok}, {:map, [abc: {:atom, nil}], nil}]}
+             }
+           ]
+
+    assert [
+             %VarInfo{
+               name: :other,
+               type: {:local_call, :elem, [{:attribute, :myattribute}, {:integer, 0}]}
+             },
+             %VarInfo{
+               name: :var,
+               type:
+                 {:tuple_nth,
+                  {:intersection, [{:attribute, :myattribute}, {:tuple, 2, [{:atom, :ok}, nil]}]},
+                  1}
+             }
+           ] = state |> get_line_vars(4)
+
+    assert [
+             %VarInfo{
+               name: :q,
+               type: {:tuple, 3, [{:atom, :a}, {:atom, :b}, {:atom, :c}]}
+             },
+             %VarInfo{
+               name: :q1,
+               type:
+                 {:tuple_nth,
+                  {:intersection,
+                   [{:variable, :q}, {:tuple, 3, [{:variable, :_}, {:variable, :_}, nil]}]}, 2}
+             }
+           ] =
+             state
+             |> get_line_vars(8)
+             |> Enum.filter(&(&1.name |> Atom.to_string() |> String.starts_with?("q")))
+  end
+
   test "vars defined inside a function without params" do
     state =
       """
@@ -266,12 +321,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              %VarInfo{name: :var2, type: {:local_call, :now, []}},
              %VarInfo{name: :var3, type: {:local_call, :now, [{:atom, :abc}]}},
              %VarInfo{name: :var4, type: {:local_call, :now, [{:atom, :abc}]}},
-             %VarInfo{name: :var5, type: {:local_call, :now, [{:atom, :abc}, nil]}}
+             %VarInfo{name: :var5, type: {:local_call, :now, [{:atom, :abc}, {:integer, 5}]}}
            ] = state |> get_line_vars(16)
 
     assert [
              %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, []}},
-             %VarInfo{name: :var2, type: {:call, {:attribute, :attr}, :qwe, [nil]}},
+             %VarInfo{name: :var2, type: {:call, {:attribute, :attr}, :qwe, [{:integer, 0}]}},
              %VarInfo{name: :var3, type: {:call, {:call, {:variable, :abc}, :cde, []}, :efg, []}}
            ] = state |> get_line_vars(24)
   end
@@ -299,20 +354,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert [%VarInfo{type: {:map, [asd: nil], nil}}] = state |> get_line_vars(4)
+    assert [%VarInfo{type: {:map, [asd: {:integer, 5}], nil}}] = state |> get_line_vars(4)
 
-    assert [%VarInfo{type: {:map, [asd: nil, nested: {:map, [wer: nil], nil}], nil}}] =
+    assert [%VarInfo{type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}}] =
              state |> get_line_vars(6)
 
     assert [%VarInfo{type: {:map, [], nil}}] = state |> get_line_vars(8)
 
-    assert [%VarInfo{type: {:map, [asd: nil, zxc: {:atom, String}], nil}}] =
+    assert [%VarInfo{type: {:map, [asd: {:integer, 5}, zxc: {:atom, String}], nil}}] =
              state |> get_line_vars(10)
 
-    assert %VarInfo{type: {:map, [asd: nil, zxc: nil], {:variable, :var}}} =
+    assert %VarInfo{type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var}}} =
              state |> get_line_vars(12) |> Enum.find(&(&1.name == :qwe))
 
-    assert %VarInfo{type: {:map, [{:asd, nil}], {:variable, :var}}} =
+    assert %VarInfo{type: {:map, [{:asd, {:integer, 2}}], {:variable, :var}}} =
              state |> get_line_vars(14) |> Enum.find(&(&1.name == :qwe))
   end
 
@@ -355,11 +410,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
            } = state |> get_line_vars(11) |> Enum.find(&(&1.name == :asd))
 
-    assert %VarInfo{name: :asd, type: {:map, [{:other, nil}], {:variable, :asd}}} =
+    assert %VarInfo{name: :asd, type: {:map, [{:other, {:integer, 123}}], {:variable, :asd}}} =
              state |> get_line_vars(13) |> Enum.find(&(&1.name == :asd))
 
     assert [
-             %VarInfo{name: :x, type: {:variable, :asd}},
+             %VarInfo{name: :x, type: {:intersection, [{:variable, :z}, {:variable, :asd}]}},
              %VarInfo{name: :z, type: {:variable, :asd}}
            ] = state |> get_line_vars(15) |> Enum.filter(&(&1.name in [:x, :z]))
   end
@@ -391,6 +446,68 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              %VarInfo{name: :var6, type: {:struct, [], {:atom, Regex}}},
              %VarInfo{name: :var7, type: {:struct, [], {:atom, Range}}}
            ] = state |> get_line_vars(10)
+  end
+
+  test "nested `=` binding" do
+    state =
+      """
+      defmodule MyModule do
+        def some() do
+          %State{formatted: formatted} = state = socket.assigns.state
+          IO.puts ""
+        end
+      end
+      """
+      |> string_to_state
+
+    # FIXME formatted type should be {:call, {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}, :formatted, []}
+    # needs support for map/struct destructuring
+    assert [
+             %VarInfo{
+               name: :formatted,
+               type:
+                 {:tuple_nth,
+                  {:intersection,
+                   [
+                     {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []},
+                     {:tuple, 2, [{:atom, :formatted}, nil]}
+                   ]}, 1}
+             },
+             %VarInfo{
+               name: :state,
+               type:
+                 {:intersection,
+                  [
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, Elixir.State}, nil},
+                    {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}
+                  ]}
+             }
+           ] = state |> get_line_vars(4)
+  end
+
+  test "case binding" do
+    state =
+      """
+      defmodule MyModule do
+        def some() do
+          case Some.call() do
+            {:ok, x} ->
+              IO.puts ""
+            end
+        end
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{
+               name: :x,
+               type:
+                 {:tuple_nth,
+                  {:intersection,
+                   [{:call, {:atom, Some}, :call, []}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
+             }
+           ] = state |> get_line_vars(5)
   end
 
   test "vars defined inside a function `after`/`rescue`/`catch`" do
@@ -4276,6 +4393,44 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              },
              {Proto, :local_type, nil} => %State.TypeInfo{
                specs: ["@type local_type :: Model.User.t"]
+             }
+           } = state.types
+  end
+
+  test "defrecord defines record macros" do
+    state =
+      """
+      defmodule MyRecords do
+        require Record
+        Record.defrecord(:user, name: "meg", age: "25")
+        @type user :: record(:user, name: String.t(), age: integer)
+        Record.defrecordp(:userp, name: "meg", age: "25")
+        Record.defrecord(:my_rec, Record.extract(:file_info, from_lib: "kernel/include/file.hrl")
+          |> Keyword.merge(fun_field: &__MODULE__.foo/2))
+        def foo(bar, baz), do: IO.inspect({bar, baz})
+      end
+      """
+      |> string_to_state
+
+    assert %{
+             {MyRecords, :user, 1} => %ModFunInfo{
+               params: [[{:\\, :args, []}]],
+               positions: [{3, 9}],
+               type: :defmacro
+             },
+             {MyRecords, :user, 2} => %ModFunInfo{
+               params: [[:record, :args]],
+               positions: [{3, 9}],
+               type: :defmacro
+             },
+             {MyRecords, :userp, 1} => %ModFunInfo{type: :defmacrop},
+             {MyRecords, :my_rec, 1} => %ModFunInfo{type: :defmacro}
+           } = state.mods_funs_to_positions
+
+    assert %{
+             {MyRecords, :user, 0} => %State.TypeInfo{
+               name: :user,
+               specs: ["@type user :: record(:user, name: String.t, age: integer)"]
              }
            } = state.types
   end

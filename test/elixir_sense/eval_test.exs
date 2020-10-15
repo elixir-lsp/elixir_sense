@@ -96,8 +96,8 @@ defmodule ElixirSense.Evaltest do
                (
                  require(Application)
                  (
-                   @behaviour(Application)
-                   @doc(false)
+                   Module.__put_attribute__(MyModule, :behaviour, Application, nil)
+                   Module.__put_attribute__(MyModule, :doc, {0, false}, nil)
                    def(stop(_state)) do
                      :ok
                    end
@@ -118,25 +118,25 @@ defmodule ElixirSense.Evaltest do
 
       assert result.expand_once =~
                """
-               {1, "missing terminator: } (for \\"{\\" starting at line 1)", ""}
+               "missing terminator: } (for \\"{\\" starting at line 1)", ""}
                """
                |> String.trim()
 
       assert result.expand =~
                """
-               {1, "missing terminator: } (for \\"{\\" starting at line 1)", ""}
+               "missing terminator: } (for \\"{\\" starting at line 1)", ""}
                """
                |> String.trim()
 
       assert result.expand_partial =~
                """
-               {1, "missing terminator: } (for \\"{\\" starting at line 1)", ""}
+               "missing terminator: } (for \\"{\\" starting at line 1)", ""}
                """
                |> String.trim()
 
       assert result.expand_all =~
                """
-               {1, "missing terminator: } (for \\"{\\" starting at line 1)", ""}
+               "missing terminator: } (for \\"{\\" starting at line 1)", ""}
                """
                |> String.trim()
     end
@@ -155,7 +155,7 @@ defmodule ElixirSense.Evaltest do
 
       assert ElixirSense.quote(code) =~
                """
-               {1, "missing terminator: ) (for \\"(\\" starting at line 1)", \""}
+               "missing terminator: ) (for \\"(\\" starting at line 1)", \""}
                """
                |> String.trim()
     end

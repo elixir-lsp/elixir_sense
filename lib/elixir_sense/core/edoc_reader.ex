@@ -62,13 +62,13 @@ defmodule ElixirSense.Core.EdocReader do
   end
 
   @spec extract_docs(:none | :hidden | map) :: nil | false | String.t()
-  def extract_docs(:none), do: nil
-  def extract_docs(:hidden), do: false
-
   def extract_docs(%{"en" => edoc_xml}) do
     :docsh_edoc.format_edoc(edoc_xml, %{})
     |> :erlang.iolist_to_binary()
   end
+
+  def extract_docs(:hidden), do: false
+  def extract_docs(_), do: nil
 
   defp key_to_module(m) when is_atom(m), do: m
   defp key_to_module({m, _, _}), do: m

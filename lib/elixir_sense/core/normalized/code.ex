@@ -68,7 +68,7 @@ defmodule ElixirSense.Core.Normalized.Code do
           String.t() | false | nil
   defp extract_docs(%{"en" => docs_en}), do: docs_en
   defp extract_docs(:hidden), do: false
-  defp extract_docs(:none), do: nil
+  defp extract_docs(_), do: nil
 
   defp get_fun_docs(module, docs) do
     docs_from_module =

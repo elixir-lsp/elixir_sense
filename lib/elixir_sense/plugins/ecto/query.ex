@@ -30,7 +30,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
   @join_opts [on: "A query expression or keyword list to filter the join."]
 
   @var_r "[a-z][a-zA-Z0-9_]*"
-  @mod_r "[A-Z][a-zA-Z0-9_]*"
+  @mod_r "[A-Z][a-zA-Z0-9_\.]*"
   @binding_r "(#{@var_r}) in (#{@mod_r}|assoc\\(\\s*#{@var_r},\\s*\\:#{@var_r}\\s*\\))"
 
   def find_assoc_suggestions(type, hint) do
@@ -188,8 +188,8 @@ defmodule ElixirSense.Plugins.Ecto.Query do
     }
   end
 
-  defp infer_type({:__aliases__, _, _} = mod_ast, _vars, env, buffer_metadata) do
-    mod = Macro.expand_once(mod_ast, %Macro.Env{})
+  defp infer_type({:__aliases__, _, mods}, _vars, env, buffer_metadata) do
+    mod = Module.concat(mods)
     {actual_mod, _, _} = actual_mod_fun({mod, nil}, false, env, buffer_metadata)
     actual_mod
   end

@@ -51,7 +51,9 @@ defmodule ElixirSense.Core.State do
           lines_to_env: lines_to_env_t,
           calls: calls_t,
           structs: structs_t,
-          types: types_t
+          types: types_t,
+          # TODO
+          binding_context: list
         }
 
   defstruct namespace: [[:"Elixir"]],
@@ -73,7 +75,8 @@ defmodule ElixirSense.Core.State do
             lines_to_env: %{},
             calls: %{},
             structs: %{},
-            types: %{}
+            types: %{},
+            binding_context: []
 
   defmodule Env do
     @moduledoc """
@@ -600,6 +603,20 @@ defmodule ElixirSense.Core.State do
     }
   end
 
+  def push_binding_context(%__MODULE__{} = state, binding_context) do
+    %__MODULE__{
+      state
+      | binding_context: [binding_context | state.binding_context]
+    }
+  end
+
+  def pop_binding_context(%__MODULE__{} = state) do
+    %__MODULE__{
+      state
+      | binding_context: tl(state.binding_context)
+    }
+  end
+
   def new_func_vars_scope(%__MODULE__{} = state) do
     %__MODULE__{state | vars: [[] | state.vars], scope_vars: [[]]}
   end
@@ -908,7 +925,7 @@ defmodule ElixirSense.Core.State do
               existing
               | # FIXME this is wrong for accumulating attributes
                 type: type,
-                positions: existing.positions ++ [position]
+                positions: (existing.positions ++ [position]) |> Enum.uniq() |> Enum.sort()
             }
           end)
       end
@@ -940,22 +957,48 @@ defmodule ElixirSense.Core.State do
   end
 
   defp reduce_vars(vars) do
-    Enum.reduce(vars, %{}, fn %VarInfo{name: var, positions: positions} = el, acc ->
+    Enum.reduce(vars, %{}, fn %VarInfo{name: var, positions: [position]} = el, acc ->
       updated =
         case acc[var] do
           nil ->
             el
 
           var_info = %VarInfo{is_definition: false} ->
-            %VarInfo{el | positions: Enum.sort(var_info.positions ++ positions)}
+            type =
+              if position in var_info.positions do
+                merge_type(el.type, var_info.type)
+              else
+                el.type
+              end
+
+            %VarInfo{
+              el
+              | positions: (var_info.positions ++ [position]) |> Enum.uniq() |> Enum.sort(),
+                type: type
+            }
 
           var_info = %VarInfo{is_definition: true} ->
-            %VarInfo{var_info | positions: Enum.sort(var_info.positions ++ positions)}
+            type =
+              if position in var_info.positions do
+                merge_type(el.type, var_info.type)
+              else
+                var_info.type
+              end
+
+            %VarInfo{
+              var_info
+              | positions: (var_info.positions ++ [position]) |> Enum.uniq() |> Enum.sort(),
+                type: type
+            }
         end
 
       Map.put(acc, var, updated)
     end)
   end
+
+  defp merge_type(nil, new), do: new
+  defp merge_type(old, nil), do: old
+  defp merge_type(old, new), do: {:intersection, [old, new]}
 
   def get_closest_previous_env(%__MODULE__{} = metadata, line) do
     # Elixir 1.10 introduces a breaking change in Enum.max_by

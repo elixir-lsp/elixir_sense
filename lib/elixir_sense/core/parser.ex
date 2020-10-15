@@ -8,6 +8,8 @@ defmodule ElixirSense.Core.Parser do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
 
+  @dialyzer {:nowarn_function, normalize_error: 1}
+
   @spec parse_file(String.t(), boolean, boolean, pos_integer | nil) :: Metadata.t()
   def parse_file(file, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
     case File.read(file) do
@@ -112,13 +114,21 @@ defmodule ElixirSense.Core.Parser do
 
         if errors_threshold > 0 do
           source
-          |> fix_parse_error(cursor_line_number, error)
+          |> fix_parse_error(cursor_line_number, normalize_error(error))
           |> string_to_ast(errors_threshold - 1, cursor_line_number, original_error, opts)
         else
           original_error || error
         end
     end
   end
+
+  # elixir < 1.11
+  defp normalize_error({:error, {line, msg, detail}}) when is_integer(line),
+    do: {:error, {line, msg, detail}}
+
+  # elixir >= 1.11
+  defp normalize_error({:error, {[line: line, column: _column], msg, detail}}),
+    do: {:error, {line, msg, detail}}
 
   defp fix_parse_error(
          source,
@@ -130,11 +140,13 @@ defmodule ElixirSense.Core.Parser do
     |> replace_line_with_marker(line)
   end
 
+  # since elixir 1.11 error is {"unexpected reserved word: ", ...}, "do"}
   defp fix_parse_error(
          source,
          _cursor_line_number,
-         {:error, {line_number, {"unexpected token: ", _text}, "do"}}
-       ) do
+         {:error, {line_number, {message, _}, "do"}}
+       )
+       when message in ["unexpected token: ", "unexpected reserved word: "] do
     source
     |> Source.split_lines()
     |> List.update_at(line_number - 1, fn line ->
@@ -145,12 +157,15 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
+  # since elixir 1.11 error is {"unexpected reserved word: ", ...}, "end"}
+
   defp fix_parse_error(
          source,
          cursor_line_number,
-         {:error, {line_number, {"unexpected token: ", text}, token}}
+         {:error, {line_number, {message, text}, token}}
        )
-       when is_integer(cursor_line_number) do
+       when is_integer(cursor_line_number) and
+              message in ["unexpected token: ", "unexpected reserved word: "] do
     terminator =
       case Regex.run(Regex.recompile!(~r/terminator\s\"([^\s\"]+)/), text) do
         [_, terminator] -> terminator

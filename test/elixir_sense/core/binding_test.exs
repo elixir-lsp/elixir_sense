@@ -40,7 +40,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "introspection module not a stuct" do
-      assert nil ==
+      assert :none ==
                Binding.expand(@env, {:struct, [], {:atom, ElixirSenseExample.EmptyModule}, nil})
     end
 
@@ -98,7 +98,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "introspection struct from variable" do
-      assert {:struct, [__struct__: nil], nil, nil} ==
+      assert :none ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
@@ -127,6 +127,10 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :abc} == Binding.expand(@env, {:atom, :abc})
     end
 
+    test "integer" do
+      assert {:integer, 77} == Binding.expand(@env, {:integer, 77})
+    end
+
     test "nil" do
       assert nil == Binding.expand(@env, nil)
     end
@@ -143,8 +147,16 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "anonymous variable" do
+    test "known variable self referencing" do
       assert nil ==
+               Binding.expand(
+                 @env |> Map.put(:variables, [%VarInfo{name: :v, type: {:variable, :v}}]),
+                 {:variable, :v}
+               )
+    end
+
+    test "anonymous variable" do
+      assert :none ==
                Binding.expand(
                  @env |> Map.put(:variables, [%VarInfo{name: :_, type: {:atom, :abc}}]),
                  {:variable, :_}
@@ -152,7 +164,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "unknown variable" do
-      assert nil == Binding.expand(@env, {:variable, :v})
+      assert :none == Binding.expand(@env, {:variable, :v})
     end
 
     test "known attribute" do
@@ -163,8 +175,55 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "known attribute self referencing" do
+      assert nil ==
+               Binding.expand(
+                 @env |> Map.put(:attributes, [%AttributeInfo{name: :v, type: {:attribute, :v}}]),
+                 {:attribute, :v}
+               )
+    end
+
     test "unknown attribute" do
-      assert nil == Binding.expand(@env, {:attribute, :v})
+      assert :none == Binding.expand(@env, {:attribute, :v})
+    end
+
+    test "tuple" do
+      assert {:tuple, 2, [nil, {:atom, :abc}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :tuple, type: {:tuple, 2, [nil, {:variable, :a}]}},
+                   %VarInfo{name: :a, type: {:atom, :abc}}
+                 ]),
+                 {:variable, :tuple}
+               )
+    end
+
+    test "tuple nth" do
+      assert {:atom, :a} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{name: :ref, type: {:tuple_nth, {:variable, :tuple}, 1}}
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "tuple elem" do
+      assert {:atom, :a} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     name: :ref,
+                     type: {:local_call, :elem, [{:variable, :tuple}, {:integer, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
     end
 
     test "call existing map field access" do
@@ -180,7 +239,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "call existing map field access invalid arity" do
-      assert nil ==
+      assert :none ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
@@ -238,7 +297,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "call existing struct field access invalid arity" do
-      assert nil ==
+      assert :none ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
@@ -254,7 +313,7 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "call on nil" do
+    test "call on nil, true, false, none" do
       assert nil ==
                Binding.expand(
                  @env
@@ -263,10 +322,37 @@ defmodule ElixirSense.Core.BindingTest do
                  ]),
                  {:variable, :ref}
                )
+
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :ref, type: {:call, :none, :not_existing, []}}
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :ref, type: {:call, {:atom, nil}, :not_existing, []}}
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :ref, type: {:call, {:atom, true}, :not_existing, []}}
+                 ]),
+                 {:variable, :ref}
+               )
     end
 
     test "remote call not existing fun" do
-      assert nil ==
+      assert :none ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
@@ -282,7 +368,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "remote call existing fun invalid arity" do
-      assert nil ==
+      assert :none ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
@@ -290,6 +376,21 @@ defmodule ElixirSense.Core.BindingTest do
                      name: :ref,
                      type:
                        {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f1, [nil]}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "remote call existing none arg" do
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f1x, [:none]}
                    }
                  ]),
                  {:variable, :ref}
@@ -324,6 +425,20 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "remote call fun with spec t expanding to tuple" do
+      assert {:tuple, 2, [atom: :ok, atom: :abc]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f04, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
     test "remote call fun with spec t expanding to number" do
       assert nil ==
                Binding.expand(
@@ -332,6 +447,20 @@ defmodule ElixirSense.Core.BindingTest do
                    %VarInfo{
                      name: :ref,
                      type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f03, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "remote call fun with spec t expanding to integer" do
+      assert {:integer, 44} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f05, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -434,7 +563,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "remote call fun with spec intersection different returns" do
-      assert nil ==
+      assert {:union, [{:map, [abc: nil], nil}, {:atom, nil}]} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
@@ -463,13 +592,57 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "remote call fun with spec union" do
-      assert nil ==
+      assert {:union, [{:map, [abc: nil], nil}, {:atom, nil}]} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
                      type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f8, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "remote call fun with no_return" do
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f_no_return,
+                        []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "remote call fun with any" do
+      assert nil ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f_any, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert nil ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f_term, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -692,7 +865,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "remote call metadata private fun returning local type expanding to struct" do
-      assert nil ==
+      assert :none ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -811,7 +984,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "remote call fun with default args" do
-      assert nil ==
+      assert :none ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
@@ -864,7 +1037,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref}
                )
 
-      assert nil ==
+      assert :none ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
@@ -964,6 +1137,30 @@ defmodule ElixirSense.Core.BindingTest do
                    imports: [ElixirSenseExample.FunctionsWithReturnSpec]
                  }),
                  {:variable, :ref}
+               )
+    end
+
+    test "bonds on tuple element" do
+      assert {:atom, :some} =
+               Binding.expand(
+                 @env,
+                 {:tuple_nth,
+                  {:intersection,
+                   [
+                     {:tuple, 2, [{:atom, :ok}, nil]},
+                     {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f11, []}
+                   ]}, 1}
+               )
+
+      assert {:atom, :some_error} =
+               Binding.expand(
+                 @env,
+                 {:tuple_nth,
+                  {:intersection,
+                   [
+                     {:tuple, 2, [{:atom, :error}, nil]},
+                     {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f11, []}
+                   ]}, 1}
                )
     end
   end
@@ -1125,6 +1322,271 @@ defmodule ElixirSense.Core.BindingTest do
 
     test "new" do
       assert {:map, [], nil} = Binding.expand(@env, {:call, {:atom, Map}, :new, []})
+    end
+  end
+
+  describe "intersection" do
+    test "intersection" do
+      assert {:struct,
+              [{:__struct__, {:atom, State}}, {:abc, nil}, {:formatted, {:variable, :formatted}}],
+              State,
+              nil} ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   structs: %{
+                     State => %StructInfo{
+                       fields: [abc: nil, formatted: nil, __struct__: State]
+                     }
+                   },
+                   variables: [
+                     %VarInfo{
+                       name: :socket,
+                       type: nil
+                     }
+                   ]
+                 }),
+                 {:intersection,
+                  [
+                    {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []},
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}
+                  ]}
+               )
+    end
+
+    test "none" do
+      assert :none == Binding.expand(@env, {:intersection, [{:atom, A}, :none]})
+      assert :none == Binding.expand(@env, {:intersection, [:none, {:atom, A}]})
+      assert :none == Binding.expand(@env, {:intersection, [:none, :none]})
+    end
+
+    test "unknown" do
+      assert {:atom, A} == Binding.expand(@env, {:intersection, [{:atom, A}, nil]})
+      assert {:atom, A} == Binding.expand(@env, {:intersection, [nil, {:atom, A}]})
+      assert nil == Binding.expand(@env, {:intersection, [nil, nil]})
+    end
+
+    test "equal" do
+      assert {:atom, A} == Binding.expand(@env, {:intersection, [{:atom, A}, {:atom, A}]})
+      assert :none == Binding.expand(@env, {:intersection, [{:atom, A}, {:atom, B}]})
+    end
+
+    test "tuple" do
+      assert {:tuple, 2, [{:atom, B}, {:atom, A}]} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:tuple, 2, [nil, {:atom, A}]}, {:tuple, 2, [{:atom, B}, nil]}]}
+               )
+
+      assert :none ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:tuple, 2, [nil, {:atom, A}]}, {:tuple, 1, [{:atom, B}]}]}
+               )
+    end
+
+    test "map" do
+      assert {:map, [], nil} ==
+               Binding.expand(@env, {:intersection, [{:map, [], nil}, {:map, [], nil}]})
+
+      assert {:map, [{:a, nil}, {:b, {:tuple, 2, [atom: Z, atom: X]}}, {:c, {:atom, C}}], nil} ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [
+                    {:map, [a: nil, b: {:tuple, 2, [{:atom, Z}, nil]}], nil},
+                    {:map, [c: {:atom, C}, b: {:tuple, 2, [nil, {:atom, X}]}], nil}
+                  ]}
+               )
+
+      assert :none ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [
+                    {:map, [c: {:atom, A}, b: {:tuple, 2, [{:atom, Z}, nil]}], nil},
+                    {:map, [c: {:atom, C}, b: {:tuple, 2, [nil, {:atom, X}]}], nil}
+                  ]}
+               )
+    end
+
+    test "struct and map" do
+      assert {:struct,
+              [
+                {:__struct__, {:atom, State}},
+                {:abc, {:atom, X}},
+                {:formatted, {:variable, :formatted}}
+              ], State,
+              nil} ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   structs: %{
+                     State => %StructInfo{
+                       fields: [abc: nil, formatted: nil, __struct__: State]
+                     }
+                   }
+                 }),
+                 {:intersection,
+                  [
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil},
+                    {:map, [not_existing: nil, abc: {:atom, X}], nil}
+                  ]}
+               )
+
+      assert {:struct,
+              [
+                {:__struct__, {:atom, State}},
+                {:abc, {:atom, X}},
+                {:formatted, {:variable, :formatted}}
+              ], State,
+              nil} ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   structs: %{
+                     State => %StructInfo{
+                       fields: [abc: nil, formatted: nil, __struct__: State]
+                     }
+                   }
+                 }),
+                 {:intersection,
+                  [
+                    {:map, [not_existing: nil, abc: {:atom, X}], nil},
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}
+                  ]}
+               )
+    end
+
+    test "unknown struct and map" do
+      assert {:struct,
+              [
+                {:__struct__, nil},
+                {:formatted, {:variable, :formatted}},
+                {:not_existing, nil},
+                {:abc, {:atom, X}}
+              ], nil,
+              nil} ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [
+                    {:struct, [formatted: {:variable, :formatted}], nil, nil},
+                    {:map, [not_existing: nil, abc: {:atom, X}], nil}
+                  ]}
+               )
+    end
+
+    test "unknown struct and unknown struct" do
+      assert {:struct,
+              [
+                {:__struct__, nil},
+                {:formatted, {:variable, :formatted}},
+                {:not_existing, nil},
+                {:abc, {:atom, X}}
+              ], nil,
+              nil} ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [
+                    {:struct, [formatted: {:variable, :formatted}], nil, nil},
+                    {:struct, [not_existing: nil, abc: {:atom, X}], nil, nil}
+                  ]}
+               )
+    end
+
+    test "struct and unknown struct" do
+      assert {:struct,
+              [
+                {:__struct__, {:atom, State}},
+                {:abc, {:atom, X}},
+                {:formatted, {:variable, :formatted}}
+              ], State,
+              nil} ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   structs: %{
+                     State => %StructInfo{
+                       fields: [abc: nil, formatted: nil, __struct__: State]
+                     }
+                   }
+                 }),
+                 {:intersection,
+                  [
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil},
+                    {:struct, [not_existing: nil, abc: {:atom, X}], nil, nil}
+                  ]}
+               )
+
+      assert {:struct,
+              [
+                {:__struct__, {:atom, State}},
+                {:abc, {:atom, X}},
+                {:formatted, {:variable, :formatted}}
+              ], State,
+              nil} ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   structs: %{
+                     State => %StructInfo{
+                       fields: [abc: nil, formatted: nil, __struct__: State]
+                     }
+                   }
+                 }),
+                 {:intersection,
+                  [
+                    {:struct, [not_existing: nil, abc: {:atom, X}], nil, nil},
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}
+                  ]}
+               )
+    end
+
+    test "struct" do
+      assert {:struct,
+              [
+                {:__struct__, {:atom, State}},
+                {:abc, {:atom, X}},
+                {:formatted, {:variable, :formatted}}
+              ], State,
+              nil} ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   structs: %{
+                     State => %StructInfo{
+                       fields: [abc: nil, formatted: nil, __struct__: State]
+                     }
+                   }
+                 }),
+                 {:intersection,
+                  [
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil},
+                    {:struct, [not_existing: nil, abc: {:atom, X}], {:atom, State}, nil}
+                  ]}
+               )
+
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   structs: %{
+                     State => %StructInfo{
+                       fields: [abc: nil, formatted: nil, __struct__: State]
+                     },
+                     Other => %StructInfo{
+                       fields: [abc: nil, formatted: nil, __struct__: Other]
+                     }
+                   }
+                 }),
+                 {:intersection,
+                  [
+                    {:struct, [not_existing: nil, abc: {:atom, X}], {:atom, Other}, nil},
+                    {:struct, [formatted: {:variable, :formatted}], {:atom, State}, nil}
+                  ]}
+               )
     end
   end
 end

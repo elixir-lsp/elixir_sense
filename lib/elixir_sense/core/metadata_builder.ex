@@ -264,7 +264,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> new_import_scope
     |> new_require_scope
     |> new_vars_scope
-    |> add_vars(find_vars(state, lhs), true)
+    |> add_vars(find_vars(state, lhs, Enum.at(state.binding_context, 0)), true)
     |> add_current_env_to_line(line)
     |> result(ast)
   end
@@ -743,10 +743,23 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre({:=, meta, [lhs, rhs]}, state) do
-    match_context = get_binding_type(state, rhs)
+    match_context_r = get_binding_type(state, rhs)
+    vars_l = find_vars(state, lhs, match_context_r)
+
+    vars =
+      case rhs do
+        {:=, _, [nested_lhs, _nested_rhs]} ->
+          match_context_l = get_binding_type(state, lhs)
+          nested_vars = find_vars(state, nested_lhs, match_context_l)
+
+          vars_l ++ nested_vars
+
+        _ ->
+          vars_l
+      end
 
     state
-    |> add_vars(find_vars(state, lhs, match_context), true)
+    |> add_vars(vars, true)
     |> result({:=, meta, [:_, rhs]})
   end
 
@@ -790,6 +803,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     current_module_variants = get_current_module_variants(state)
 
+    # Elixir >= 1.11 require some meta to expand ast
+    use_ast = Ast.add_default_meta(ast)
+
     %{
       requires: requires,
       imports: imports,
@@ -800,7 +816,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       types: types,
       specs: specs,
       overridable: overridable
-    } = Ast.extract_use_info(ast, current_module, state)
+    } = Ast.extract_use_info(use_ast, current_module, state)
 
     module =
       case module_expression do
@@ -809,6 +825,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
         atom when is_atom(atom) ->
           atom
+
+        _other ->
+          nil
       end
 
     state =
@@ -969,6 +988,26 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre(call, state)
   end
 
+  defp pre(
+         {:case, meta,
+          [
+            condition_ast,
+            [
+              do: _clauses
+            ]
+          ]} = ast,
+         state
+       ) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    state
+    |> push_binding_context(get_binding_type(state, condition_ast))
+    |> add_call_to_line({nil, :case, 2}, {line, column})
+    |> add_current_env_to_line(line)
+    |> result(ast)
+  end
+
   defp pre({call, meta, params} = ast, state)
        when is_call(call, params) and is_call_meta(meta) do
     line = Keyword.fetch!(meta, :line)
@@ -982,6 +1021,36 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end
 
     state
+    |> add_current_env_to_line(line)
+    |> result(ast)
+  end
+
+  defp pre(
+         {{:., _, [{:__aliases__, _, module_expression = [:Record]}, call]}, meta,
+          params = [name, _]} = ast,
+         state
+       )
+       when is_call(call, params) and is_call_meta(meta) and call in [:defrecord, :defrecordp] and
+              is_atom(name) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    module = concat_module_expression(state, module_expression)
+
+    type =
+      case call do
+        :defrecord -> :defmacro
+        :defrecordp -> :defmacrop
+      end
+
+    options = []
+
+    state
+    |> new_named_func(name, 1)
+    |> add_func_to_index(name, [{:\\, :args, []}], {line, column}, type, options)
+    |> new_named_func(name, 2)
+    |> add_func_to_index(name, [:record, :args], {line, column}, type, options)
+    |> add_call_to_line({Module.concat(module), call, length(params)}, {line, column + 1})
     |> add_current_env_to_line(line)
     |> result(ast)
   end
@@ -1091,6 +1160,21 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, state}
   end
 
+  defp post(
+         {:case, _meta,
+          [
+            _condition_ast,
+            [
+              do: _clauses
+            ]
+          ]} = ast,
+         state
+       ) do
+    state
+    |> pop_binding_context
+    |> result(ast)
+  end
+
   defp post({atom, _, [_ | _]} = ast, state) when atom in @scope_keywords do
     post_scope_keyword(ast, state)
   end
@@ -1110,6 +1194,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # String literal in sigils
+  # elixir >= 1.11
+  defp post({:<<>>, [indentation: _, line: line, column: _column], [str]} = ast, state)
+       when is_binary(str) do
+    post_string_literal(ast, state, line, str)
+  end
+
+  # elixir < 1.11
   defp post({:<<>>, [line: line, column: _column], [str]} = ast, state) when is_binary(str) do
     post_string_literal(ast, state, line, str)
   end
@@ -1162,8 +1253,38 @@ defmodule ElixirSense.Core.MetadataBuilder do
     match_var(state, left, {vars, nil})
   end
 
-  defp match_var(_state, ast, {vars, _match_context}) do
-    {ast, {vars, nil}}
+  # regular tuples use {:{}, [], [field_1, field_2]} ast
+  # two element use {field_1, field_2} ast (probably as an optimization)
+  # detect and convert to regular
+  defp match_var(state, ast, {vars, match_context})
+       when is_tuple(ast) and tuple_size(ast) == 2 do
+    match_var(state, {:{}, [], ast |> Tuple.to_list()}, {vars, match_context})
+  end
+
+  defp match_var(state, {:{}, _, ast}, {vars, match_context}) when not is_nil(match_context) do
+    indexed = ast |> Enum.with_index()
+    total = length(ast)
+
+    destructured_vars =
+      indexed
+      |> Enum.flat_map(fn {nth_elem_ast, n} ->
+        bond =
+          {:tuple, total,
+           indexed |> Enum.map(&if(n != elem(&1, 1), do: get_binding_type(state, elem(&1, 0))))}
+
+        match_context = {:intersection, [match_context, bond]}
+
+        {_ast, {new_vars, _match_context}} =
+          match_var(state, nth_elem_ast, {[], {:tuple_nth, match_context, n}})
+
+        new_vars
+      end)
+
+    {ast, {vars ++ destructured_vars, nil}}
+  end
+
+  defp match_var(_state, ast, {vars, match_context}) do
+    {ast, {vars, match_context}}
   end
 
   # struct or struct update
@@ -1289,9 +1410,26 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {:struct, [], {:atom, @builtin_sigils |> Map.fetch!(sigil)}}
   end
 
+  # tuple
+  # regular tuples use {:{}, [], [field_1, field_2]} ast
+  # two element use {field_1, field_2} ast (probably as an optimization)
+  # detect and convert to regular
+  def get_binding_type(state, ast) when is_tuple(ast) and tuple_size(ast) == 2 do
+    get_binding_type(state, {:{}, [], Tuple.to_list(ast)})
+  end
+
+  def get_binding_type(state, {:{}, _, list}) do
+    {:tuple, length(list), list |> Enum.map(&get_binding_type(state, &1))}
+  end
+
   # local call
   def get_binding_type(state, {var, _, args}) when is_atom(var) and is_list(args) do
     {:local_call, var, Enum.map(args, &get_binding_type(state, &1))}
+  end
+
+  # integer
+  def get_binding_type(_state, integer) when is_integer(integer) do
+    {:integer, integer}
   end
 
   # other
