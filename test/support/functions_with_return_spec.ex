@@ -52,21 +52,18 @@ defmodule ElixirSenseExample.FunctionsWithReturnSpec do
 
   @spec f71(integer) :: %{abc: atom}
   @spec f71(boolean) :: %{abc: atom}
-
   def f71(_x), do: :ok
 
   @spec f8() :: %{abc: atom} | nil
   def f8(), do: :ok
 
   @spec f9(a) :: %{abc: atom} when a: integer
-
   def f9(_a), do: :ok
 
   @spec f91() :: a when a: %{abc: atom}
   def f91(), do: :ok
 
   @spec f10(integer, integer, any) :: String
-
   def f10(_a \\ 0, _b \\ 0, _c), do: String
 
   @spec f11 :: {:ok, :some} | {:error, :some_error}
