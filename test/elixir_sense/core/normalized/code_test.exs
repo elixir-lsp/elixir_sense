@@ -48,6 +48,7 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
            ] == Code.get_docs(ElixirSenseExample.ModuleWithDocs, :type_docs)
   end
 
+  @tag requires_elixir_1_9: true
   test "gets callback docs" do
     assert [
              {{:soft_deprecated_callback, 1}, 83, :callback, "An example callback\n",

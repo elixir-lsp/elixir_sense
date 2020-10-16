@@ -233,6 +233,7 @@ defmodule ElixirSense.SignatureTest do
     end
   end
 
+  @tag requires_elixir_1_8: true
   describe "macro signature" do
     test "find signatures from aliased modules" do
       code = """
@@ -444,6 +445,7 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    @tag requires_elixir_1_9: true
     test "find signatures when function with many clausess" do
       code = """
       defmodule MyModule do
@@ -890,6 +892,7 @@ defmodule ElixirSense.SignatureTest do
       assert :none = ElixirSense.signature(buffer, 8, 5)
     end
 
+    @tag requires_otp_23: true
     test "find built-in erlang functions" do
       buffer = """
       defmodule MyModule do

@@ -207,6 +207,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    @tag requires_otp_23: true
     test "retrieve fallback erlang builtin function documentation" do
       buffer = """
       defmodule MyModule do
@@ -257,6 +258,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    @tag requires_elixir_1_8: true
     test "retrieve macro documentation" do
       buffer = """
       defmodule MyModule do
@@ -585,6 +587,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    @tag requires_elixir_1_8: true
     test "retrieve callback information from modules" do
       buffer = """
       defmodule MyModule do
@@ -629,6 +632,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    @tag requires_elixir_1_8: true
     test "retrieve macrocallback information from modules" do
       buffer = """
       defmodule MyModule do
@@ -837,6 +841,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    @tag requires_elixir_1_10: true
     test "retrieve builtin type documentation" do
       buffer = """
       defmodule MyModule do
@@ -915,6 +920,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    @tag requires_elixir_1_10: true
     test "retrieve basic and builtin type documentation" do
       buffer = """
       defmodule MyModule do

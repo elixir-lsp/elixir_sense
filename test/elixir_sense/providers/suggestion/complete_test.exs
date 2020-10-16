@@ -1295,6 +1295,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
             ]} = expand('ArgumentError.bla')
   end
 
+  @tag requires_otp_23: true
   test "complete build in :erlang functions" do
     assert {:yes, '',
             [
@@ -1380,6 +1381,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
             ]} = expand(':erlang.cancel_time')
   end
 
+  @tag requires_otp_23: true
   test "profide specs for erlang functions edoc" do
     assert {
              :yes,

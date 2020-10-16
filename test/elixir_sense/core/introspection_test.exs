@@ -41,6 +41,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
            """
   end
 
+  @tag requires_elixir_1_9: true
   test "format_spec_ast for callback" do
     ast = get_callback_ast(GenServer, :code_change, 3)
 
@@ -241,6 +242,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
     assert {:erlang, :orelse, true} = actual_mod_fun({:erlang, :orelse}, [], [], nil, %{}, %{})
   end
 
+  @tag requires_elixir_1_8: true
   describe "get_all_docs" do
     test "returns delageted metadata on functions" do
       assert %{docs: docs} =

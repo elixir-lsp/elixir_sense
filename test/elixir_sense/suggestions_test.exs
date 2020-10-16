@@ -57,6 +57,7 @@ defmodule ElixirSense.SuggestionsTest do
            }
   end
 
+  @tag requires_elixir_1_8: true
   test "without empty hint" do
     buffer = """
     defmodule MyModule do
@@ -153,6 +154,7 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  @tag requires_elixir_1_8: true
   test "with a require" do
     buffer = """
     defmodule MyModule do
@@ -306,6 +308,7 @@ defmodule ElixirSense.SuggestionsTest do
     refute Enum.any?(list, fn s -> s.type == :callback end)
   end
 
+  @tag requires_elixir_1_8: true
   test "lists macrocallbacks" do
     buffer = """
     defmodule MyServer do
@@ -478,6 +481,7 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
+  @tag requires_elixir_1_9: true
   test "lists protocol functions" do
     buffer = """
     defimpl Enumerable, for: MyStruct do

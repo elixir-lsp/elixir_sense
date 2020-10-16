@@ -1,4 +1,31 @@
-ExUnit.configure(exclude: [requires_source: true])
+defmodule ExUnitConfig do
+  defp otp_older_than(major) do
+    {otp_major_version, ""} = Integer.parse(System.build_info()[:otp_release])
+    otp_major_version < major
+  end
+
+  defp otp_related do
+    for major <- 23..23, otp_older_than(major) do
+      {:"requires_otp_#{major}", true}
+    end
+  end
+
+  defp elixir_older_than(minor) do
+    !Version.match?(System.build_info().version, ">= 1.#{minor}.0")
+  end
+
+  defp elixir_related do
+    for minor_version <- 8..10, elixir_older_than(minor_version) do
+      {:"requires_elixir_1_#{minor_version}", true}
+    end
+  end
+
+  def excludes do
+    [requires_source: true] ++ otp_related() ++ elixir_related()
+  end
+end
+
+ExUnit.configure(exclude: ExUnitConfig.excludes())
 ExUnit.start()
 
 defmodule TestHelper do
