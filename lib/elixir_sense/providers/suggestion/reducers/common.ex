@@ -151,7 +151,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
            module: module,
            vars: vars,
            attributes: attributes,
-           scope: scope
+           scope: scope,
+           behaviours: behaviours
          },
          mods_and_funs,
          metadata_specs,
@@ -169,7 +170,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
       specs: metadata_specs,
       structs: structs,
       types: metadata_types,
-      scope: scope
+      scope: scope,
+      behaviours: behaviours
     }
 
     {hint, prefix} =

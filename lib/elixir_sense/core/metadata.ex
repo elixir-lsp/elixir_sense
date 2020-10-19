@@ -127,7 +127,7 @@ defmodule ElixirSense.Core.Metadata do
       spec =
         case metadata.specs[{module, function, arity}] do
           nil ->
-            ""
+            nil
 
           %State.SpecInfo{specs: specs} ->
             Enum.join(specs, "\n")
@@ -136,7 +136,7 @@ defmodule ElixirSense.Core.Metadata do
       %{
         name: Atom.to_string(function),
         params: params |> Enum.with_index() |> Enum.map(&Introspection.param_to_var/1),
-        documentation: "",
+        documentation: nil,
         spec: spec
       }
     end)
@@ -186,5 +186,36 @@ defmodule ElixirSense.Core.Metadata do
           _ -> nil
         end)
     end
+  end
+
+  def get_docs_specs_from_behaviours(env) do
+    for behaviour <- env.behaviours, into: %{} do
+      docs =
+        NormalizedCode.callback_documentation(behaviour)
+        |> Map.new()
+
+      specs = TypeInfo.get_module_callbacks(behaviour) |> Map.new()
+      {behaviour, {docs, specs}}
+    end
+  end
+
+  def get_doc_spec_from_behaviours(callback_docs_specs, f, a) do
+    callback_docs_specs
+    |> Enum.find_value(fn {_behaviour, {docs, specs}} ->
+      case docs[{f, a}] do
+        nil ->
+          case specs[{f, a}] do
+            nil -> nil
+            spec -> {spec |> Introspection.spec_to_string(), "", %{}}
+          end
+
+        {_signatures, docs, metadata} ->
+          spec =
+            specs[{f, a}]
+            |> Introspection.spec_to_string()
+
+          {spec, docs |> NormalizedCode.extract_docs(), metadata}
+      end
+    end) || {"", "", %{}}
   end
 end

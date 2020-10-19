@@ -744,6 +744,70 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    test "finds signatures from metadata elixir behaviour call" do
+      code = """
+      defmodule MyModule do
+        use GenServer
+
+        def handle_call(request, _from, state) do
+          terminate()
+        end
+
+        def init(arg), do: arg
+
+        def handle_cast(arg, _state) when is_atom(arg) do
+          :ok
+        end
+      end
+      """
+
+      assert %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   name: "terminate",
+                   params: ["_reason", "_state"],
+                   documentation: "Invoked when the server is about to exit" <> _,
+                   spec:
+                     "@spec terminate(reason, state :: term) :: term when reason: :normal | :shutdown | {:shutdown, term} | term"
+                 }
+               ]
+             } = ElixirSense.signature(code, 5, 15)
+    end
+
+    test "finds signatures from metadata erlang behaviour call" do
+      code = """
+      defmodule MyModule do
+        @behaviour :gen_server
+
+        def handle_call(request, _from, state) do
+          init()
+        end
+
+        def init(arg), do: arg
+
+        def handle_cast(arg, _state) when is_atom(arg) do
+          :ok
+        end
+      end
+      """
+
+      assert %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   name: "init",
+                   params: ["arg"],
+                   documentation: "",
+                   spec:
+                     "@spec init(args :: term) :: {:ok, state :: term} | {:ok, state :: term, timeout | :hibernate | {:continue, term}} | {:stop, reason :: term} | :ignore"
+                 }
+               ]
+             } = ElixirSense.signature(code, 5, 10)
+    end
+
     test "returns :none when it cannot identify a function call" do
       code = """
       defmodule MyModule do

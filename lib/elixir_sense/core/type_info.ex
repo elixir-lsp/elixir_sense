@@ -327,6 +327,18 @@ defmodule ElixirSense.Core.TypeInfo do
     end)
   end
 
+  def get_module_callbacks(module) do
+    Typespec.get_callbacks(module)
+    |> Map.new(fn
+      {{f, a}, _spec} = spec ->
+        {{f, a}, spec}
+
+      {{^module, f, a}, spec} ->
+        # spec with module - transform it to moduleless form
+        {{f, a}, {{f, a}, spec}}
+    end)
+  end
+
   # Workaround since Code.Typespec.typespec_to_quoted/1 is private
   def typespec_to_quoted(type) do
     {:"::", [], [_, quoted]} = Typespec.type_to_quoted({:fake_var, type, []})

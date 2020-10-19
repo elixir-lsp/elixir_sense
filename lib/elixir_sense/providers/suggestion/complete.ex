@@ -40,6 +40,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.EdocReader
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
@@ -67,7 +68,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             attributes: [ElixirSense.Core.State.AttributeInfo.t()],
             structs: ElixirSense.Core.State.structs_t(),
             types: ElixirSense.Core.State.types_t(),
-            scope: ElixirSense.Core.State.scope()
+            scope: ElixirSense.Core.State.scope(),
+            behaviours: [module]
           }
     defstruct aliases: [],
               imports: [],
@@ -78,7 +80,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               attributes: [],
               structs: %{},
               types: %{},
-              scope: Elixir
+              scope: Elixir,
+              behaviours: []
   end
 
   @type hint :: %{
@@ -583,18 +586,23 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         []
 
       _funs ->
+        callback_docs_specs = Metadata.get_docs_specs_from_behaviours(env)
+
         for {{^mod, f, a}, info} <- env.mods_and_funs,
             a != nil,
             (mod == env.scope_module and not include_builtin) or Introspection.is_pub(info.type),
             include_builtin || not ({f, a} in @builtin_functions) do
-          specs =
+          {specs, docs, metadata} =
             case env.specs[{mod, f, a}] do
-              nil -> nil
-              %ElixirSense.Core.State.SpecInfo{specs: specs} -> specs |> Enum.join("\n")
+              nil ->
+                Metadata.get_doc_spec_from_behaviours(callback_docs_specs, f, a)
+
+              %ElixirSense.Core.State.SpecInfo{specs: specs} ->
+                {specs |> Enum.join("\n"), "", %{}}
             end
 
-          # TODO docs and meta
-          {f, a, a, info.type, {"", %{}}, specs,
+          # TODO docs and meta from metadata
+          {f, a, a, info.type, {docs, metadata}, specs,
            info.params |> hd |> Enum.map_join(", ", &Macro.to_string/1)}
         end
     end

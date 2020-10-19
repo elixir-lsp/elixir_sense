@@ -48,7 +48,7 @@ defmodule ElixirSense.Providers.Signature do
   end
 
   defp find_signatures({mod, fun}, npar, unfinished_parm, env, metadata) do
-    signatures = find_function_signatures({mod, fun}, metadata)
+    signatures = find_function_signatures({mod, fun}, env, metadata)
 
     signatures =
       if Metadata.at_module_body?(metadata, env) do
@@ -74,13 +74,33 @@ defmodule ElixirSense.Providers.Signature do
     |> Enum.sort_by(&length(&1.params))
   end
 
-  defp find_function_signatures({nil, _fun}, _metadata), do: []
+  defp find_function_signatures({nil, _fun}, _env, _metadata), do: []
 
-  defp find_function_signatures({mod, fun}, metadata) do
+  defp find_function_signatures({mod, fun}, env, metadata) do
     signatures =
       case Metadata.get_function_signatures(metadata, mod, fun) do
-        [] -> Introspection.get_signatures(mod, fun)
-        signatures -> signatures
+        [] ->
+          Introspection.get_signatures(mod, fun)
+
+        signatures ->
+          callback_docs_specs = Metadata.get_docs_specs_from_behaviours(env)
+
+          for signature <- signatures do
+            if signature.documentation == nil or signature.spec == nil do
+              arity = length(signature.params)
+
+              {spec, doc, _} =
+                Metadata.get_doc_spec_from_behaviours(callback_docs_specs, fun, arity)
+
+              %{
+                signature
+                | documentation: signature.documentation || doc,
+                  spec: signature.spec || spec
+              }
+            else
+              signature
+            end
+          end
       end
 
     signatures |> Enum.uniq_by(fn sig -> sig.params end)

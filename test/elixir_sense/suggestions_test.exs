@@ -647,6 +647,83 @@ defmodule ElixirSense.SuggestionsTest do
            ] == list
   end
 
+  test "lists callbacks in function suggestion - elixir behaviour" do
+    buffer = """
+    defmodule MyServer do
+      use GenServer
+
+      def handle_call(request, _from, state) do
+        term
+      end
+
+      def init(arg), do: arg
+
+      def handle_cast(arg, _state) when is_atom(arg) do
+        :ok
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 5, 9)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    assert [
+             %{
+               args: "_reason, _state",
+               arity: 2,
+               def_arity: 2,
+               metadata: %{},
+               name: "terminate",
+               origin: "MyServer",
+               spec:
+                 "@spec terminate(reason, state :: term) :: term when reason: :normal | :shutdown | {:shutdown, term} | term",
+               summary:
+                 "Invoked when the server is about to exit. It should do any cleanup required.",
+               type: :function,
+               visibility: :public
+             }
+           ] = list
+  end
+
+  test "lists callbacks in function suggestion - erlang behaviour" do
+    buffer = """
+    defmodule MyServer do
+      @behaviour :gen_server
+
+      def handle_call(request, _from, state) do
+        ini
+      end
+
+      def init(arg), do: arg
+
+      def handle_cast(arg, _state) when is_atom(arg) do
+        :ok
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 5, 8)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    assert [
+             %{
+               args: "arg",
+               arity: 1,
+               def_arity: 1,
+               metadata: %{},
+               name: "init",
+               origin: "MyServer",
+               spec:
+                 "@spec init(args :: term) :: {:ok, state :: term} | {:ok, state :: term, timeout | :hibernate | {:continue, term}} | {:stop, reason :: term} | :ignore",
+               summary: "",
+               type: :function,
+               visibility: :public
+             }
+           ] = list
+  end
+
   test "lists params and vars" do
     buffer = """
     defmodule MyServer do

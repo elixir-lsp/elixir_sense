@@ -66,9 +66,9 @@ defmodule ElixirSense.Core.Normalized.Code do
 
   @spec extract_docs(%{required(String.t()) => String.t()} | :hidden | :none) ::
           String.t() | false | nil
-  defp extract_docs(%{"en" => docs_en}), do: docs_en
-  defp extract_docs(:hidden), do: false
-  defp extract_docs(_), do: nil
+  def extract_docs(%{"en" => docs_en}), do: docs_en
+  def extract_docs(:hidden), do: false
+  def extract_docs(_), do: nil
 
   defp get_fun_docs(module, docs) do
     docs_from_module =
@@ -121,7 +121,7 @@ defmodule ElixirSense.Core.Normalized.Code do
     end
   end
 
-  defp callback_documentation(module) do
+  def callback_documentation(module) do
     case Code.fetch_docs(module) do
       {:docs_v1, _moduledoc_anno, :elixir, _mime_type, _moduledoc, _metadata, docs} ->
         docs
