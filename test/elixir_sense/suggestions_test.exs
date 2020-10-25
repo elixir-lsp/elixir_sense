@@ -647,6 +647,7 @@ defmodule ElixirSense.SuggestionsTest do
            ] == list
   end
 
+  @tag requires_elixir_1_10: true
   test "lists callbacks in function suggestion - elixir behaviour" do
     buffer = """
     defmodule MyServer do
@@ -686,6 +687,7 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
+  @tag requires_elixir_1_10: true
   test "lists callbacks in function suggestion - erlang behaviour" do
     buffer = """
     defmodule MyServer do
