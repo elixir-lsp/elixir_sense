@@ -278,7 +278,7 @@ defmodule ElixirSense.Providers.Definition do
       end
 
     file =
-      if file && File.exists?(file) do
+      if file && File.exists?(file, [:raw]) do
         file
       else
         with {_module, _binary, beam_filename} <- :code.get_object_code(module),
@@ -289,7 +289,7 @@ defmodule ElixirSense.Providers.Definition do
                  Regex.recompile!(~r/(.+)\/ebin\/([^\s]+)\.beam$/),
                  "\\1/src/\\2.erl"
                ),
-             true <- File.exists?(erl_file) do
+             true <- File.exists?(erl_file, [:raw]) do
           erl_file
         else
           _ -> nil
