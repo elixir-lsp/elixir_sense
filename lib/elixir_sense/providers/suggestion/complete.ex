@@ -47,6 +47,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.AttributeInfo
   alias ElixirSense.Core.State.VarInfo
+  alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
 
   @erlang_module_builtin_functions [{:module_info, 0}, {:module_info, 1}]
@@ -114,7 +115,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   def expand([h | t] = expr, env) do
     cond do
       h === ?. and t != [] ->
-        expand_dot(reduce(t), env)
+        expand_dot(reduce(t), Enum.reverse(expr), env)
 
       h === ?: and t == [] ->
         # we are expanding all erlang modules
@@ -136,6 +137,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       h in '([{' ->
         expand('', env)
 
+      h === ?% and t == [] ->
+        expand_struct_modules([], "", env)
+
       true ->
         no()
     end
@@ -145,13 +149,17 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     h in ?a..?z or h in ?A..?Z or h in ?0..?9 or h in [?_, ??, ?!]
   end
 
-  defp expand_dot(expr, env) do
+  defp expand_dot(expr, full_exp, env) do
     case Code.string_to_quoted(expr) do
       {:ok, atom} when is_atom(atom) ->
         expand_call(atom, "", env)
 
       {:ok, {:__aliases__, _, list}} ->
-        expand_elixir_modules(list, "", env)
+        if full_exp |> hd == ?% do
+          expand_struct_modules(list, "", env)
+        else
+          expand_elixir_modules(list, "", env)
+        end
 
       {:ok, {_, _, _} = ast_node} ->
         expand_call(ast_node, "", env)
@@ -186,6 +194,18 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       _ ->
         no()
     end
+  end
+
+  defp expand_struct_modules(list, hint, env) do
+    expand_elixir_modules(
+      list,
+      hint,
+      env,
+      fn
+        module -> Struct.is_struct(module, env.structs)
+      end,
+      false
+    )
   end
 
   defp reduce(expr) do
@@ -420,21 +440,33 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   ## Elixir modules
 
-  defp expand_elixir_modules([], hint, env) do
-    expand_elixir_modules_from_aliases(Elixir, hint, match_aliases(hint, env), env)
+  defp expand_elixir_modules(list, hint, env, filter \\ fn _ -> true end, include_funs \\ true)
+
+  defp expand_elixir_modules([], hint, env, filter, include_funs) do
+    expand_elixir_modules_from_aliases(
+      Elixir,
+      hint,
+      match_aliases(hint, env),
+      env,
+      filter,
+      include_funs
+    )
   end
 
-  defp expand_elixir_modules(list, hint, env) do
+  defp expand_elixir_modules(list, hint, env, filter, include_funs) do
     case expand_alias(list, env) do
-      {:ok, alias} -> expand_elixir_modules_from_aliases(alias, hint, [], env)
-      :error -> no()
+      {:ok, alias} ->
+        expand_elixir_modules_from_aliases(alias, hint, [], env, filter, include_funs)
+
+      :error ->
+        no()
     end
   end
 
-  defp expand_elixir_modules_from_aliases(mod, hint, aliases, env) do
+  defp expand_elixir_modules_from_aliases(mod, hint, aliases, env, filter, include_funs) do
     aliases
-    |> Kernel.++(match_elixir_modules(mod, hint, env))
-    |> Kernel.++(match_module_funs(mod, hint, true, env))
+    |> Kernel.++(match_elixir_modules(mod, hint, env, filter))
+    |> Kernel.++(if include_funs, do: match_module_funs(mod, hint, true, env), else: [])
     |> format_expansion(hint)
   end
 
@@ -450,24 +482,28 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  defp match_elixir_modules(module, hint, env) do
+  defp match_elixir_modules(module, hint, env, filter) do
     name = Atom.to_string(module)
     depth = length(String.split(name, ".")) + 1
     base = name <> "." <> hint
 
     for mod <- match_modules(base, module === Elixir, env),
+        mod_as_atom = mod |> String.to_atom(),
+        filter.(mod_as_atom),
         parts = String.split(mod, "."),
         depth <= length(parts),
         name = Enum.at(parts, depth - 1),
         valid_alias_piece?("." <> name),
-        uniq: true do
-      mod_as_atom = mod |> String.to_atom()
-      desc = Introspection.get_module_docs_summary(mod_as_atom)
-      subtype = Introspection.get_module_subtype(mod_as_atom)
-
-      %{kind: :module, type: :elixir, name: name, desc: desc, subtype: subtype}
+        concatted = parts |> Enum.take(depth) |> Module.concat(),
+        filter.(concatted) do
+      {name, concatted}
     end
-    |> Enum.uniq_by(fn %{name: name} -> name end)
+    |> Enum.uniq_by(&elem(&1, 1))
+    |> Enum.map(fn {name, module} ->
+      {desc, meta} = Introspection.get_module_docs_summary(module)
+      subtype = Introspection.get_module_subtype(module)
+      %{kind: :module, type: :elixir, name: name, desc: {desc, meta}, subtype: subtype}
+    end)
   end
 
   defp valid_alias_piece?(<<?., char, rest::binary>>) when char in ?A..?Z,

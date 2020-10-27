@@ -241,12 +241,22 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "elixir root submodule completion" do
-    assert {:yes, 'ss', [%{name: "Access"}]} = expand('Elixir.Acce')
+    assert {:yes, 'ss', [%{name: "Access", summary: "Key-based access to data structures."}]} =
+             expand('Elixir.Acce')
+
     assert {:yes, '', _} = expand('Elixir.')
   end
 
   test "elixir submodule completion" do
-    assert {:yes, 'rs', [%{name: "Chars", subtype: :protocol}]} = expand('String.Cha')
+    assert {:yes, 'rs',
+            [
+              %{
+                name: "Chars",
+                subtype: :protocol,
+                summary:
+                  "The `String.Chars` protocol is responsible for\nconverting a structure to a binary (only if applicable)."
+              }
+            ]} = expand('String.Cha')
   end
 
   test "elixir submodule no completion" do
@@ -1412,5 +1422,33 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
   test "complete after ! operator" do
     assert {:yes, 'ary', [%{name: "is_binary"}]} = expand('!is_bin')
+  end
+
+  test "correctly find subtype and doc for modules that have submodule" do
+    assert {:yes, 'le',
+            [
+              %{
+                name: "File",
+                type: :module,
+                metadata: %{},
+                subtype: nil,
+                summary: "This module contains functions to manipulate files."
+              }
+            ]} = expand('Fi')
+  end
+
+  test "complete only struct modules after %" do
+    assert {:yes, '', list} = expand('%')
+    refute Enum.any?(list, &(&1.type != :module))
+    assert Enum.any?(list, &(&1.name == "ArithmeticError"))
+    assert Enum.any?(list, &(&1.name == "URI"))
+    refute Enum.any?(list, &(&1.name == "File"))
+    refute Enum.any?(list, &(&1.subtype not in [:struct, :exception]))
+
+    assert {:yes, 'le', _} = expand('%Fi')
+    assert {:yes, '', list} = expand('%File.')
+    assert Enum.any?(list, &(&1.name == "CopyError"))
+    refute Enum.any?(list, &(&1.type != :module))
+    refute Enum.any?(list, &(&1.subtype not in [:struct, :exception]))
   end
 end
