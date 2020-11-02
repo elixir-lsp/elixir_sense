@@ -1171,7 +1171,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 2, 37)
-      |> Enum.filter(fn s -> s.type in [:variable, :hint] end)
+      |> Enum.filter(fn s -> s.type in [:variable] end)
 
     assert list == [%{name: "my_var", type: :variable}]
   end
@@ -1713,7 +1713,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 3, 11)
-      |> Enum.filter(&(&1.type in [:field, :hint]))
+      |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
              %{
@@ -1757,7 +1757,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 2, 13)
-      |> Enum.filter(&(&1.type in [:field, :hint]))
+      |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
              %{
@@ -1771,7 +1771,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 3, 15)
-      |> Enum.filter(&(&1.type in [:field, :hint]))
+      |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
              %{
@@ -1794,7 +1794,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 3, 21)
-      |> Enum.filter(&(&1.type in [:field, :hint]))
+      |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
              %{
@@ -1845,7 +1845,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 8, 15)
-      |> Enum.filter(&(&1.type in [:field, :hint]))
+      |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
              %{
@@ -1908,7 +1908,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 8, 17)
-      |> Enum.filter(&(&1.type in [:field, :hint]))
+      |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
              %{
@@ -2042,7 +2042,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 9, 12)
-      |> Enum.filter(&(&1.type in [:field, :hint]))
+      |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
              %{
@@ -2074,7 +2074,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 4, 12)
-      |> Enum.filter(&(&1.type in [:field, :hint]))
+      |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
              %{name: "key_1", origin: nil, type: :field, call?: true, subtype: :map_key},
@@ -2094,7 +2094,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 4, 13)
-      |> Enum.filter(&(&1.type in [:field, :hint]))
+      |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
              %{name: "key_1", origin: nil, type: :field, call?: true, subtype: :map_key},
@@ -2114,7 +2114,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list =
       ElixirSense.suggestions(buffer, 4, 15)
-      |> Enum.filter(&(&1.type in [:function, :hint]))
+      |> Enum.filter(&(&1.type in [:function]))
 
     assert [
              %{name: "to_string", origin: "Atom", type: :function}

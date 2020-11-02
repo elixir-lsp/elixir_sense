@@ -68,7 +68,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
     } = buffer_metadata
 
     suggestions =
-      find_hint_mods_funcs(
+      find_mods_funcs(
         hint,
         env,
         mods_and_funs,
@@ -76,7 +76,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
         metadata_types,
         structs,
         text_before
-      ).suggestions
+      )
 
     suggestions_by_type = Enum.group_by(suggestions, & &1.type)
 
@@ -143,7 +143,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
     {:cont, %{acc | result: acc.result ++ list}}
   end
 
-  defp find_hint_mods_funcs(
+  defp find_mods_funcs(
          hint,
          %State.Env{
            imports: imports,
@@ -174,42 +174,25 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
       behaviours: behaviours
     }
 
-    {hint, prefix} =
+    hint =
       case Source.get_v12_module_prefix(text_before, module) do
         nil ->
-          {hint, ""}
+          hint
 
         module_string ->
           # v1.2 alias syntax detected
           # prepend module prefix before running completion
           prefix = module_string <> "."
-          {prefix <> hint, prefix}
+          prefix <> hint
       end
 
-    {hint, module_special_form_replaced} =
+    hint =
       if String.starts_with?(hint, "__MODULE__") do
-        {hint |> String.replace_leading("__MODULE__", inspect(module)), true}
+        hint |> String.replace_leading("__MODULE__", inspect(module))
       else
-        {hint, false}
+        hint
       end
 
-    {%{type: :hint, value: prefixed_value}, suggestions} = Complete.complete(hint, env)
-
-    prefixed_value =
-      if module_special_form_replaced do
-        prefixed_value |> String.replace_leading(inspect(module), "__MODULE__")
-      else
-        prefixed_value
-      end
-
-    # drop module prefix from hint if added
-    value =
-      if prefix != "" do
-        prefixed_value |> String.replace_leading(prefix, "")
-      else
-        prefixed_value
-      end
-
-    %{hint: %{type: :hint, value: value}, suggestions: suggestions}
+    Complete.complete(hint, env)
   end
 end

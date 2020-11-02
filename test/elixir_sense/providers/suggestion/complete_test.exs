@@ -30,159 +30,149 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
   test "erlang module completion" do
     assert expand(':zl') ==
-             {:yes, 'ib',
-              [%{name: "zlib", subtype: nil, summary: "", type: :module, metadata: %{}}]}
+             [%{name: "zlib", subtype: nil, summary: "", type: :module, metadata: %{}}]
   end
 
   test "erlang module completion edoc" do
     assert expand(':edoc_wi') ==
-             {:yes, 'ki',
-              [
-                %{
-                  name: "edoc_wiki",
-                  subtype: nil,
-                  summary:
-                    "EDoc wiki expansion, parsing and postprocessing of XML text.\nUses XMerL.",
-                  type: :module,
-                  metadata: %{}
-                }
-              ]}
+             [
+               %{
+                 name: "edoc_wiki",
+                 subtype: nil,
+                 summary:
+                   "EDoc wiki expansion, parsing and postprocessing of XML text.\nUses XMerL.",
+                 type: :module,
+                 metadata: %{}
+               }
+             ]
   end
 
   test "erlang module no completion" do
-    assert expand(':unknown') == {:no, '', []}
-    assert expand('Enum:') == {:no, '', []}
+    assert expand(':unknown') == []
+    assert expand('Enum:') == []
   end
 
   test "erlang module multiple values completion" do
-    {:yes, '', list} = expand(':user')
+    list = expand(':user')
     assert list |> Enum.find(&(&1.name == "user"))
     assert list |> Enum.find(&(&1.name == "user_drv"))
   end
 
   test "erlang root completion" do
-    {:yes, '', list} = expand(':')
+    list = expand(':')
     assert is_list(list)
     assert list |> Enum.find(&(&1.name == "lists"))
   end
 
   test "elixir proxy" do
-    {:yes, '', list} = expand('E')
+    list = expand('E')
     assert list |> Enum.find(&(&1.name == "Elixir"))
   end
 
   test "elixir completion" do
-    assert {:yes, 'um', [_ | _]} = expand('En')
+    assert [_ | _] = expand('En')
 
-    assert {:yes, 'ble', [%{name: "Enumerable", subtype: :protocol, type: :module}]} =
-             expand('Enumera')
+    assert [%{name: "Enumerable", subtype: :protocol, type: :module}] = expand('Enumera')
   end
 
   test "elixir module completion with @moduledoc false" do
-    assert {:yes, 'e', [%{name: "ModuleWithDocFalse", summary: ""}]} =
+    assert [%{name: "ModuleWithDocFalse", summary: ""}] =
              expand('ElixirSenseExample.ModuleWithDocFals')
   end
 
   test "elixir function completion with @doc false" do
-    assert {
-             :yes,
-             '',
-             [
-               %{
-                 name: "some_fun_doc_false",
-                 summary: "",
-                 args: "a, b \\\\ nil",
-                 arity: 1,
-                 origin: "ElixirSenseExample.ModuleWithDocs",
-                 spec: "",
-                 type: :function
-               },
-               %{
-                 args: "a, b \\\\ nil",
-                 arity: 2,
-                 name: "some_fun_doc_false",
-                 origin: "ElixirSenseExample.ModuleWithDocs",
-                 spec: "",
-                 summary: "",
-                 type: :function
-               },
-               %{
-                 args: "a, b \\\\ nil",
-                 arity: 1,
-                 name: "some_fun_no_doc",
-                 origin: "ElixirSenseExample.ModuleWithDocs",
-                 spec: "",
-                 summary: "",
-                 type: :function
-               },
-               %{
-                 args: "a, b \\\\ nil",
-                 arity: 2,
-                 name: "some_fun_no_doc",
-                 origin: "ElixirSenseExample.ModuleWithDocs",
-                 spec: "",
-                 summary: "",
-                 type: :function
-               }
-             ]
-           } = expand('ElixirSenseExample.ModuleWithDocs.some_fun_')
+    assert [
+             %{
+               name: "some_fun_doc_false",
+               summary: "",
+               args: "a, b \\\\ nil",
+               arity: 1,
+               origin: "ElixirSenseExample.ModuleWithDocs",
+               spec: "",
+               type: :function
+             },
+             %{
+               args: "a, b \\\\ nil",
+               arity: 2,
+               name: "some_fun_doc_false",
+               origin: "ElixirSenseExample.ModuleWithDocs",
+               spec: "",
+               summary: "",
+               type: :function
+             },
+             %{
+               args: "a, b \\\\ nil",
+               arity: 1,
+               name: "some_fun_no_doc",
+               origin: "ElixirSenseExample.ModuleWithDocs",
+               spec: "",
+               summary: "",
+               type: :function
+             },
+             %{
+               args: "a, b \\\\ nil",
+               arity: 2,
+               name: "some_fun_no_doc",
+               origin: "ElixirSenseExample.ModuleWithDocs",
+               spec: "",
+               summary: "",
+               type: :function
+             }
+           ] = expand('ElixirSenseExample.ModuleWithDocs.some_fun_')
   end
 
   test "elixir completion with self" do
-    assert {:yes, '.', [%{name: "Enumerable", subtype: :protocol}]} = expand('Enumerable')
+    assert [%{name: "Enumerable", subtype: :protocol}] = expand('Enumerable')
   end
 
   test "elixir completion macro with default args" do
-    assert {:yes, 'h_default',
-            [
-              %{
-                args: "a \\\\ :asdf, b, var \\\\ 0",
-                arity: 1,
-                name: "with_default",
-                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
-                spec: "@spec with_default(atom, list, integer) :: Macro.t",
-                summary: "some macro with default arg\n",
-                type: :macro
-              },
-              %{
-                args: "a \\\\ :asdf, b, var \\\\ 0",
-                arity: 2,
-                name: "with_default",
-                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
-                spec: "@spec with_default(atom, list, integer) :: Macro.t",
-                summary: "some macro with default arg\n",
-                type: :macro
-              },
-              %{
-                args: "a \\\\ :asdf, b, var \\\\ 0",
-                arity: 3,
-                name: "with_default",
-                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
-                spec: "@spec with_default(atom, list, integer) :: Macro.t",
-                summary: "some macro with default arg\n",
-                type: :macro
-              }
-            ]} = expand('ElixirSenseExample.BehaviourWithMacrocallback.Impl.wit')
+    assert [
+             %{
+               args: "a \\\\ :asdf, b, var \\\\ 0",
+               arity: 1,
+               name: "with_default",
+               origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
+               spec: "@spec with_default(atom, list, integer) :: Macro.t",
+               summary: "some macro with default arg\n",
+               type: :macro
+             },
+             %{
+               args: "a \\\\ :asdf, b, var \\\\ 0",
+               arity: 2,
+               name: "with_default",
+               origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
+               spec: "@spec with_default(atom, list, integer) :: Macro.t",
+               summary: "some macro with default arg\n",
+               type: :macro
+             },
+             %{
+               args: "a \\\\ :asdf, b, var \\\\ 0",
+               arity: 3,
+               name: "with_default",
+               origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
+               spec: "@spec with_default(atom, list, integer) :: Macro.t",
+               summary: "some macro with default arg\n",
+               type: :macro
+             }
+           ] = expand('ElixirSenseExample.BehaviourWithMacrocallback.Impl.wit')
   end
 
   test "elixir completion on modules from load path" do
-    assert {:yes, [],
-            [
-              %{name: "Stream", subtype: :struct, type: :module},
-              %{name: "String", subtype: nil, type: :module},
-              %{name: "StringIO", subtype: nil, type: :module}
-            ]} = expand('Str')
+    assert [
+             %{name: "Stream", subtype: :struct, type: :module},
+             %{name: "String", subtype: nil, type: :module},
+             %{name: "StringIO", subtype: nil, type: :module}
+           ] = expand('Str')
 
-    assert {:yes, '',
-            [
-              %{name: "Macro"},
-              %{name: "Map"},
-              %{name: "MapSet"},
-              %{name: "MatchError"}
-            ]} = expand('Ma')
+    assert [
+             %{name: "Macro"},
+             %{name: "Map"},
+             %{name: "MapSet"},
+             %{name: "MatchError"}
+           ] = expand('Ma')
 
-    assert {:yes, 't', [%{name: "Dict"}]} = expand('Dic')
-    assert {:yes, [], suggestions} = expand('Ex')
+    assert [%{name: "Dict"}] = expand('Dic')
+    assert suggestions = expand('Ex')
     assert Enum.any?(suggestions, &(&1.name == "ExUnit"))
     assert Enum.any?(suggestions, &(&1.name == "Exception"))
   end
@@ -199,7 +189,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert {:docs_v1, _, _, _, _, _, _} = Code.fetch_docs(Sample)
 
     # IEx version asserts expansion on Sample._ but we also include :__info__ and there is more than 1 match
-    assert {:yes, 'ar__', [%{name: "__bar__"}]} = expand('Sample.__b')
+    assert [%{name: "__bar__"}] = expand('Sample.__b')
   after
     File.rm("Elixir.Sample.beam")
     :code.purge(Sample)
@@ -214,8 +204,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
     File.write!("ElixirSense.Providers.Suggestion.CompleteTest.Sample.beam", bytecode)
 
-    assert {:yes, '', [%{name: "foo"}]} =
-             expand('ElixirSense.Providers.Suggestion.CompleteTest.Sample.foo')
+    assert [%{name: "foo"}] = expand('ElixirSense.Providers.Suggestion.CompleteTest.Sample.foo')
 
     Code.compiler_options(ignore_module_conflict: true)
 
@@ -224,7 +213,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       def foobar(), do: 0
     end
 
-    assert {:yes, '', [%{name: "foo"}, %{name: "foobar"}]} =
+    assert [%{name: "foo"}, %{name: "foobar"}] =
              expand('ElixirSense.Providers.Suggestion.CompleteTest.Sample.foo')
   after
     File.rm("ElixirSense.Providers.Suggestion.CompleteTest.Sample.beam")
@@ -234,62 +223,60 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "elixir no completion" do
-    assert expand('.') == {:no, '', []}
-    assert expand('Xyz') == {:no, '', []}
-    assert expand('x.Foo') == {:no, '', []}
-    assert expand('x.Foo.get_by') == {:no, '', []}
+    assert expand('.') == []
+    assert expand('Xyz') == []
+    assert expand('x.Foo') == []
+    assert expand('x.Foo.get_by') == []
   end
 
   test "elixir root submodule completion" do
-    assert {:yes, 'ss', [%{name: "Access", summary: "Key-based access to data structures."}]} =
+    assert [%{name: "Access", summary: "Key-based access to data structures."}] =
              expand('Elixir.Acce')
 
-    assert {:yes, '', _} = expand('Elixir.')
+    assert [_ | _] = expand('Elixir.')
   end
 
   test "elixir submodule completion" do
-    assert {:yes, 'rs',
-            [
-              %{
-                name: "Chars",
-                subtype: :protocol,
-                summary:
-                  "The `String.Chars` protocol is responsible for\nconverting a structure to a binary (only if applicable)."
-              }
-            ]} = expand('String.Cha')
+    assert [
+             %{
+               name: "Chars",
+               subtype: :protocol,
+               summary:
+                 "The `String.Chars` protocol is responsible for\nconverting a structure to a binary (only if applicable)."
+             }
+           ] = expand('String.Cha')
   end
 
   test "elixir submodule no completion" do
-    assert expand('IEx.Xyz') == {:no, '', []}
+    assert expand('IEx.Xyz') == []
   end
 
   test "function completion" do
-    assert {:yes, 'rsion', [%{name: "version", origin: "System"}]} = expand('System.ve')
-    assert {:yes, 'ms', [%{name: "fun2ms", origin: ":ets"}]} = expand(':ets.fun2')
+    assert [%{name: "version", origin: "System"}] = expand('System.ve')
+    assert [%{name: "fun2ms", origin: ":ets"}] = expand(':ets.fun2')
   end
 
   test "function completion with arity" do
-    assert {:yes, '',
-            [
-              %{
-                name: "printable?",
-                arity: 1,
-                spec:
-                  "@spec printable?(t, 0) :: true\n@spec printable?(t, pos_integer | :infinity) :: boolean",
-                summary:
-                  "Checks if a string contains only printable characters up to `character_limit`."
-              },
-              %{
-                name: "printable?",
-                arity: 2,
-                spec:
-                  "@spec printable?(t, 0) :: true\n@spec printable?(t, pos_integer | :infinity) :: boolean",
-                summary:
-                  "Checks if a string contains only printable characters up to `character_limit`."
-              }
-            ]} = expand('String.printable?')
+    assert [
+             %{
+               name: "printable?",
+               arity: 1,
+               spec:
+                 "@spec printable?(t, 0) :: true\n@spec printable?(t, pos_integer | :infinity) :: boolean",
+               summary:
+                 "Checks if a string contains only printable characters up to `character_limit`."
+             },
+             %{
+               name: "printable?",
+               arity: 2,
+               spec:
+                 "@spec printable?(t, 0) :: true\n@spec printable?(t, pos_integer | :infinity) :: boolean",
+               summary:
+                 "Checks if a string contains only printable characters up to `character_limit`."
+             }
+           ] = expand('String.printable?')
 
-    assert {:yes, '', [%{name: "printable?", arity: 1}, %{name: "printable?", arity: 2}]} =
+    assert [%{name: "printable?", arity: 1}, %{name: "printable?", arity: 2}] =
              expand('String.printable?/')
   end
 
@@ -303,7 +290,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       ]
     }
 
-    assert {:yes, 'able?', [%{name: "printable?", arity: 1}, %{name: "printable?", arity: 2}]} =
+    assert [%{name: "printable?", arity: 1}, %{name: "printable?", arity: 2}] =
              expand('mod.print', env)
   end
 
@@ -318,29 +305,26 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     }
 
     assert expand('map.f', env) ==
-             {:yes, 'oo',
-              [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]}
+             [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]
 
-    assert {:yes, 'ar_', _} = expand('map.b', env)
+    assert [_ | _] = expand('map.b', env)
 
     assert expand('map.bar_', env) ==
-             {:yes, '',
-              [
-                %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
-                %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true}
-              ]}
+             [
+               %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
+               %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true}
+             ]
 
-    assert expand('map.c', env) == {:no, '', []}
+    assert expand('map.c', env) == []
 
     assert expand('map.', env) ==
-             {:yes, '',
-              [
-                %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
-                %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true},
-                %{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}
-              ]}
+             [
+               %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
+               %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true},
+               %{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}
+             ]
 
-    assert expand('map.foo', env) == {:no, '', []}
+    assert expand('map.foo', env) == []
   end
 
   test "map atom key completion is supported on attributes" do
@@ -354,29 +338,26 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     }
 
     assert expand('@map.f', env) ==
-             {:yes, 'oo',
-              [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]}
+             [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]
 
-    assert {:yes, 'ar_', _} = expand('@map.b', env)
+    assert [_ | _] = expand('@map.b', env)
 
     assert expand('@map.bar_', env) ==
-             {:yes, '',
-              [
-                %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
-                %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true}
-              ]}
+             [
+               %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
+               %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true}
+             ]
 
-    assert expand('@map.c', env) == {:no, '', []}
+    assert expand('@map.c', env) == []
 
     assert expand('@map.', env) ==
-             {:yes, '',
-              [
-                %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
-                %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true},
-                %{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}
-              ]}
+             [
+               %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
+               %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true},
+               %{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}
+             ]
 
-    assert expand('@map.foo', env) == {:no, '', []}
+    assert expand('@map.foo', env) == []
   end
 
   test "nested map atom key completion is supported" do
@@ -406,42 +387,37 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     }
 
     assert expand('map.nested.deeply.f', env) ==
-             {:yes, 'oo',
-              [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]}
+             [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]
 
-    assert {:yes, 'ar_', _} = expand('map.nested.deeply.b', env)
+    assert [_ | _] = expand('map.nested.deeply.b', env)
 
     assert expand('map.nested.deeply.bar_', env) ==
-             {:yes, '',
-              [
-                %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
-                %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true}
-              ]}
+             [
+               %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
+               %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true}
+             ]
 
     assert expand('map.nested.deeply.', env) ==
-             {:yes, '',
-              [
-                %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
-                %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true},
-                %{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true},
-                %{name: "mod", subtype: :map_key, type: :field, origin: nil, call?: true},
-                %{name: "num", subtype: :map_key, type: :field, origin: nil, call?: true}
-              ]}
+             [
+               %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
+               %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true},
+               %{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true},
+               %{name: "mod", subtype: :map_key, type: :field, origin: nil, call?: true},
+               %{name: "num", subtype: :map_key, type: :field, origin: nil, call?: true}
+             ]
 
-    assert {:yes, 'able?', _} = expand('map.nested.deeply.mod.print', env)
+    assert [_ | _] = expand('map.nested.deeply.mod.print', env)
 
     assert expand('map.nested', env) ==
-             {:yes, '.',
-              [%{name: "nested", subtype: :map_key, type: :field, origin: nil, call?: true}]}
+             [%{name: "nested", subtype: :map_key, type: :field, origin: nil, call?: true}]
 
     assert expand('map.nested.deeply', env) ==
-             {:yes, '.',
-              [%{name: "deeply", subtype: :map_key, type: :field, origin: nil, call?: true}]}
+             [%{name: "deeply", subtype: :map_key, type: :field, origin: nil, call?: true}]
 
-    assert expand('map.nested.deeply.foo', env) == {:no, '', []}
+    assert expand('map.nested.deeply.foo', env) == []
 
-    assert expand('map.nested.deeply.c', env) == {:no, '', []}
-    assert expand('map.a.b.c.f', env) == {:no, '', []}
+    assert expand('map.nested.deeply.c', env) == []
+    assert expand('map.a.b.c.f', env) == []
   end
 
   test "map string key completion is not supported" do
@@ -454,7 +430,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       ]
     }
 
-    assert expand('map.f', env) == {:no, '', []}
+    assert expand('map.f', env) == []
   end
 
   test "autocompletion off a bound variable only works for modules and maps" do
@@ -467,9 +443,9 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       ]
     }
 
-    assert expand('num.print', env) == {:no, '', []}
-    assert expand('map.nested.num.f', env) == {:no, '', []}
-    assert expand('map.nested.num.key.f', env) == {:no, '', []}
+    assert expand('num.print', env) == []
+    assert expand('map.nested.num.f', env) == []
+    assert expand('map.nested.num.key.f', env) == []
   end
 
   test "autocomplete map fields from call binding" do
@@ -486,7 +462,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       ]
     }
 
-    assert {:yes, 'able?', _} = expand('call.print', env)
+    assert [_ | _] = expand('call.print', env)
   end
 
   test "autocomplete call return binding" do
@@ -499,25 +475,24 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       ]
     }
 
-    assert {:yes, 'ur', _} = expand('call.ho', env)
-    assert {:yes, 'ur', _} = expand('DateTime.utc_now.ho', env)
+    assert [_ | _] = expand('call.ho', env)
+    assert [_ | _] = expand('DateTime.utc_now.ho', env)
     # FIXME Complete.reduce(expr) breaks things...
     # assert {:yes, 'ur', _} = expand('DateTime.utc_now().', env)
     # assert {:yes, 'ur', _} = expand('DateTime.utc_now().ho', env)
   end
 
   test "autocompletion off of unbound variables is not supported" do
-    assert expand('other_var.f') == {:no, '', []}
-    assert expand('a.b.c.d') == {:no, '', []}
+    assert expand('other_var.f') == []
+    assert expand('a.b.c.d') == []
   end
 
   test "macro completion" do
-    {:yes, '', list} = expand('Kernel.is_')
-    assert is_list(list)
+    assert [_ | _] = expand('Kernel.is_')
   end
 
   test "imports completion" do
-    {:yes, '', list} = expand('')
+    list = expand('')
     assert is_list(list)
 
     assert list |> Enum.find(&(&1.name == "unquote"))
@@ -527,25 +502,23 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "kernel import completion" do
-    assert {:yes, 'ct',
-            [
-              %{
-                args: "fields",
-                arity: 1,
-                name: "defstruct",
-                origin: "Kernel",
-                spec: "",
-                summary: "Defines a struct.",
-                type: :macro
-              }
-            ]} = expand('defstru')
+    assert [
+             %{
+               args: "fields",
+               arity: 1,
+               name: "defstruct",
+               origin: "Kernel",
+               spec: "",
+               summary: "Defines a struct.",
+               type: :macro
+             }
+           ] = expand('defstru')
 
-    assert {:yes, '',
-            [
-              %{arity: 3, name: "put_elem"},
-              %{arity: 2, name: "put_in"},
-              %{arity: 3, name: "put_in"}
-            ]} = expand('put_')
+    assert [
+             %{arity: 3, name: "put_elem"},
+             %{arity: 2, name: "put_in"},
+             %{arity: 3, name: "put_in"}
+           ] = expand('put_')
   end
 
   test "variable name completion" do
@@ -563,12 +536,12 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       ]
     }
 
-    assert expand('numb', env) == {:yes, 'er', [%{type: :variable, name: "number"}]}
+    assert expand('numb', env) == [%{type: :variable, name: "number"}]
 
     assert expand('num', env) ==
-             {:yes, '', [%{type: :variable, name: "number"}, %{type: :variable, name: "numeral"}]}
+             [%{type: :variable, name: "number"}, %{type: :variable, name: "numeral"}]
 
-    assert {:yes, '', [%{type: :variable, name: "nothing"} | _]} = expand('no', env)
+    assert [%{type: :variable, name: "nothing"} | _] = expand('no', env)
   end
 
   test "variable name completion after pin" do
@@ -580,8 +553,8 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       ]
     }
 
-    assert expand('^numb', env) == {:yes, 'er', [%{type: :variable, name: "number"}]}
-    assert expand('^', env) == {:yes, 'number', [%{type: :variable, name: "number"}]}
+    assert expand('^numb', env) == [%{type: :variable, name: "number"}]
+    assert expand('^', env) == [%{type: :variable, name: "number"}]
   end
 
   test "attribute name completion" do
@@ -600,19 +573,17 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       scope: {:some, 0}
     }
 
-    assert expand('@numb', env) == {:yes, 'er', [%{type: :attribute, name: "@number"}]}
+    assert expand('@numb', env) == [%{type: :attribute, name: "@number"}]
 
     assert expand('@num', env) ==
-             {:yes, '',
-              [%{type: :attribute, name: "@number"}, %{type: :attribute, name: "@numeral"}]}
+             [%{type: :attribute, name: "@number"}, %{type: :attribute, name: "@numeral"}]
 
     assert expand('@', env) ==
-             {:yes, 'n',
-              [
-                %{name: "@nothing", type: :attribute},
-                %{type: :attribute, name: "@number"},
-                %{type: :attribute, name: "@numeral"}
-              ]}
+             [
+               %{name: "@nothing", type: :attribute},
+               %{type: :attribute, name: "@number"},
+               %{type: :attribute, name: "@numeral"}
+             ]
   end
 
   test "builtin attribute name completion" do
@@ -631,55 +602,52 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       scope: Elixir
     }
 
-    assert expand('@befo', env_function) == {:no, [], []}
-    assert expand('@befo', env_outside_module) == {:no, [], []}
+    assert expand('@befo', env_function) == []
+    assert expand('@befo', env_outside_module) == []
 
     assert expand('@befo', env_module) ==
-             {:yes, 're_compile', [%{type: :attribute, name: "@before_compile"}]}
+             [%{type: :attribute, name: "@before_compile"}]
   end
 
   test "kernel special form completion" do
-    assert {:yes, 'icing', [%{name: "unquote_splicing", origin: "Kernel.SpecialForms"}]} =
-             expand('unquote_spl')
+    assert [%{name: "unquote_splicing", origin: "Kernel.SpecialForms"}] = expand('unquote_spl')
   end
 
   test "completion inside expression" do
-    assert {:yes, 'um', _} = expand('1 En')
-    assert {:yes, 'um', _} = expand('Test(En')
-    assert {:yes, 'ib', [_]} = expand('Test :zl')
-    assert {:yes, 'ib', [_]} = expand('[:zl')
-    assert {:yes, 'ib', [_]} = expand('{:zl')
+    assert [_ | _] = expand('1 En')
+    assert [_ | _] = expand('Test(En')
+    assert [_] = expand('Test :zl')
+    assert [_] = expand('[:zl')
+    assert [_] = expand('{:zl')
   end
 
   test "ampersand completion" do
-    assert {:yes, 'm', [_ | _]} = expand('&Enu')
+    assert [_ | _] = expand('&Enu')
 
-    assert {:yes, [],
-            [
-              %{name: "all?", arity: 1},
-              %{name: "all?", arity: 2},
-              %{name: "any?", arity: 1},
-              %{name: "any?", arity: 2},
-              %{name: "at", arity: 2},
-              %{name: "at", arity: 3}
-            ]} = expand('&Enum.a')
+    assert [
+             %{name: "all?", arity: 1},
+             %{name: "all?", arity: 2},
+             %{name: "any?", arity: 1},
+             %{name: "any?", arity: 2},
+             %{name: "at", arity: 2},
+             %{name: "at", arity: 3}
+           ] = expand('&Enum.a')
 
-    assert {:yes, [],
-            [
-              %{name: "all?", arity: 1},
-              %{name: "all?", arity: 2},
-              %{name: "any?", arity: 1},
-              %{name: "any?", arity: 2},
-              %{name: "at", arity: 2},
-              %{name: "at", arity: 3}
-            ]} = expand('f = &Enum.a')
+    assert [
+             %{name: "all?", arity: 1},
+             %{name: "all?", arity: 2},
+             %{name: "any?", arity: 1},
+             %{name: "any?", arity: 2},
+             %{name: "at", arity: 2},
+             %{name: "at", arity: 3}
+           ] = expand('f = &Enum.a')
   end
 
   defmodule SublevelTest.LevelA.LevelB do
   end
 
   test "elixir completion sublevel" do
-    assert {:yes, 'LevelA', [%{name: "LevelA"}]} =
+    assert [%{name: "LevelA"}] =
              expand('ElixirSense.Providers.Suggestion.CompleteTest.SublevelTest.')
   end
 
@@ -694,10 +662,10 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       aliases: [{MyList, List}]
     }
 
-    assert {:yes, 'ist', [%{name: "MyList"}]} = expand('MyL', env)
-    assert {:yes, '.', [%{name: "MyList"}]} = expand('MyList', env)
+    assert [%{name: "MyList"}] = expand('MyL', env)
+    assert [%{name: "MyList"}] = expand('MyList', env)
 
-    assert {:yes, [], [%{arity: 1, name: "to_integer"}, %{arity: 2, name: "to_integer"}]} =
+    assert [%{arity: 1, name: "to_integer"}, %{arity: 2, name: "to_integer"}] =
              expand('MyList.to_integer', env)
   end
 
@@ -706,15 +674,14 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       aliases: [{EList, :lists}]
     }
 
-    assert {:yes, 'ist', [%{name: "EList"}]} = expand('EL', env)
-    assert {:yes, '.', [%{name: "EList"}]} = expand('EList', env)
+    assert [%{name: "EList"}] = expand('EL', env)
+    assert [%{name: "EList"}] = expand('EList', env)
 
-    assert {:yes, [],
-            [
-              %{arity: 2, name: "map"},
-              %{arity: 3, name: "mapfoldl"},
-              %{arity: 3, name: "mapfoldr"}
-            ]} = expand('EList.map', env)
+    assert [
+             %{arity: 2, name: "map"},
+             %{arity: 3, name: "mapfoldl"},
+             %{arity: 3, name: "mapfoldr"}
+           ] = expand('EList.map', env)
   end
 
   test "complete local funs from scope module" do
@@ -763,48 +730,41 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       }
     }
 
-    assert {:yes, 'un_p', _} = expand('my_f', env)
+    assert [_ | _] = expand('my_f', env)
 
-    assert {:yes, 'iv',
-            [
-              %{
-                name: "my_fun_priv",
-                origin: "MyModule",
-                args: "some, other",
-                type: :function,
-                spec: "@spec my_fun_priv(atom, integer) :: boolean"
-              }
-            ]} = expand('my_fun_pr', env)
+    assert [
+             %{
+               name: "my_fun_priv",
+               origin: "MyModule",
+               args: "some, other",
+               type: :function,
+               spec: "@spec my_fun_priv(atom, integer) :: boolean"
+             }
+           ] = expand('my_fun_pr', env)
 
-    assert {:yes, 'b',
-            [
-              %{name: "my_fun_pub", origin: "MyModule", type: :function}
-            ]} = expand('my_fun_pu', env)
+    assert [
+             %{name: "my_fun_pub", origin: "MyModule", type: :function}
+           ] = expand('my_fun_pu', env)
 
-    assert {:yes, 'iv',
-            [
-              %{name: "my_macro_priv", origin: "MyModule", type: :macro}
-            ]} = expand('my_macro_pr', env)
+    assert [
+             %{name: "my_macro_priv", origin: "MyModule", type: :macro}
+           ] = expand('my_macro_pr', env)
 
-    assert {:yes, 'b',
-            [
-              %{name: "my_macro_pub", origin: "MyModule", type: :macro}
-            ]} = expand('my_macro_pu', env)
+    assert [
+             %{name: "my_macro_pub", origin: "MyModule", type: :macro}
+           ] = expand('my_macro_pu', env)
 
-    assert {:yes, 'iv',
-            [
-              %{name: "my_guard_priv", origin: "MyModule", type: :macro}
-            ]} = expand('my_guard_pr', env)
+    assert [
+             %{name: "my_guard_priv", origin: "MyModule", type: :macro}
+           ] = expand('my_guard_pr', env)
 
-    assert {:yes, 'b',
-            [
-              %{name: "my_guard_pub", origin: "MyModule", type: :macro}
-            ]} = expand('my_guard_pu', env)
+    assert [
+             %{name: "my_guard_pub", origin: "MyModule", type: :macro}
+           ] = expand('my_guard_pu', env)
 
-    assert {:yes, 'legated',
-            [
-              %{name: "my_delegated", origin: "MyModule", type: :function}
-            ]} = expand('my_de', env)
+    assert [
+             %{name: "my_delegated", origin: "MyModule", type: :function}
+           ] = expand('my_de', env)
   end
 
   test "complete remote funs from imported module" do
@@ -826,10 +786,9 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       }
     }
 
-    assert {:yes, 'un_other_pub',
-            [
-              %{name: "my_fun_other_pub", origin: "OtherModule"}
-            ]} = expand('my_f', env)
+    assert [
+             %{name: "my_fun_other_pub", origin: "OtherModule"}
+           ] = expand('my_f', env)
   end
 
   test "complete remote funs" do
@@ -850,10 +809,9 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       }
     }
 
-    assert {:yes, 'un_other_pub',
-            [
-              %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
-            ]} = expand('Some.OtherModule.my_f', env)
+    assert [
+             %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+           ] = expand('Some.OtherModule.my_f', env)
   end
 
   test "complete remote funs from aliased module" do
@@ -875,10 +833,9 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       }
     }
 
-    assert {:yes, 'un_other_pub',
-            [
-              %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
-            ]} = expand('S.my_f', env)
+    assert [
+             %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+           ] = expand('S.my_f', env)
   end
 
   test "complete modules" do
@@ -890,9 +847,9 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       }
     }
 
-    assert {:yes, 'me', [%{name: "Some", type: :module}]} = expand('So', env)
-    assert {:yes, 'OtherModule', [%{name: "OtherModule", type: :module}]} = expand('Some.', env)
-    assert {:yes, 'lias', [%{name: "MyAlias", type: :module}]} = expand('MyA', env)
+    assert [%{name: "Some", type: :module}] = expand('So', env)
+    assert [%{name: "OtherModule", type: :module}] = expand('Some.', env)
+    assert [%{name: "MyAlias", type: :module}] = expand('MyA', env)
   end
 
   test "alias rules" do
@@ -906,20 +863,19 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       }
     }
 
-    assert {:yes, 'es1',
-            [
-              %{
-                name: "values1",
-                type: :function,
-                args: "",
-                arity: 0,
-                origin: "MyKeyword",
-                spec: "",
-                summary: ""
-              }
-            ]} = expand('Keyword.valu', env)
+    assert [
+             %{
+               name: "values1",
+               type: :function,
+               args: "",
+               arity: 0,
+               origin: "MyKeyword",
+               spec: "",
+               summary: ""
+             }
+           ] = expand('Keyword.valu', env)
 
-    assert {:yes, 'es', [%{name: "values", type: :function, arity: 1, origin: "Keyword"}]} =
+    assert [%{name: "values", type: :function, arity: 1, origin: "Keyword"}] =
              expand('Elixir.Keyword.valu', env)
   end
 
@@ -928,8 +884,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "completion for structs" do
-    assert {:yes, 'uct', [%{name: "MyStruct"}]} =
-             expand('%ElixirSense.Providers.Suggestion.CompleteTest.MyStr')
+    assert [%{name: "MyStruct"}] = expand('%ElixirSense.Providers.Suggestion.CompleteTest.MyStr')
   end
 
   test "completion for struct keys" do
@@ -950,109 +905,103 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     }
 
     assert expand('struct.my', env) ==
-             {:yes, '_val',
-              [
-                %{
-                  name: "my_val",
-                  subtype: :struct_field,
-                  type: :field,
-                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                  call?: true
-                }
-              ]}
+             [
+               %{
+                 name: "my_val",
+                 subtype: :struct_field,
+                 type: :field,
+                 origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
+                 call?: true
+               }
+             ]
 
     assert expand('struct.some_m', env) ==
-             {:yes, 'ap',
-              [
-                %{
-                  name: "some_map",
-                  subtype: :struct_field,
-                  type: :field,
-                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                  call?: true
-                }
-              ]}
+             [
+               %{
+                 name: "some_map",
+                 subtype: :struct_field,
+                 type: :field,
+                 origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
+                 call?: true
+               }
+             ]
 
     assert expand('struct.some_map.', env) ==
-             {:yes, 'asdf',
-              [%{name: "asdf", subtype: :map_key, type: :field, origin: nil, call?: true}]}
+             [%{name: "asdf", subtype: :map_key, type: :field, origin: nil, call?: true}]
 
     assert expand('struct.str.', env) ==
-             {:yes, '',
-              [
-                %{
-                  name: "__struct__",
-                  subtype: :struct_field,
-                  type: :field,
-                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                  call?: true
-                },
-                %{
-                  name: "a_mod",
-                  subtype: :struct_field,
-                  type: :field,
-                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                  call?: true
-                },
-                %{
-                  name: "my_val",
-                  subtype: :struct_field,
-                  type: :field,
-                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                  call?: true
-                },
-                %{
-                  name: "some_map",
-                  subtype: :struct_field,
-                  type: :field,
-                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                  call?: true
-                },
-                %{
-                  name: "str",
-                  subtype: :struct_field,
-                  type: :field,
-                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                  call?: true
-                },
-                %{
-                  name: "unknown_str",
-                  subtype: :struct_field,
-                  type: :field,
-                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                  call?: true
-                }
-              ]}
+             [
+               %{
+                 name: "__struct__",
+                 subtype: :struct_field,
+                 type: :field,
+                 origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
+                 call?: true
+               },
+               %{
+                 name: "a_mod",
+                 subtype: :struct_field,
+                 type: :field,
+                 origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
+                 call?: true
+               },
+               %{
+                 name: "my_val",
+                 subtype: :struct_field,
+                 type: :field,
+                 origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
+                 call?: true
+               },
+               %{
+                 name: "some_map",
+                 subtype: :struct_field,
+                 type: :field,
+                 origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
+                 call?: true
+               },
+               %{
+                 name: "str",
+                 subtype: :struct_field,
+                 type: :field,
+                 origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
+                 call?: true
+               },
+               %{
+                 name: "unknown_str",
+                 subtype: :struct_field,
+                 type: :field,
+                 origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
+                 call?: true
+               }
+             ]
 
     assert expand('struct.str', env) ==
-             {:yes, '.',
-              [
-                %{
-                  name: "str",
-                  subtype: :struct_field,
-                  type: :field,
-                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                  call?: true
-                }
-              ]}
+             [
+               %{
+                 name: "str",
+                 subtype: :struct_field,
+                 type: :field,
+                 origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
+                 call?: true
+               }
+             ]
 
     assert expand('struct.unknown_str.', env) ==
-             {:yes, '',
-              [
-                %{
-                  call?: true,
-                  name: "__struct__",
-                  origin: nil,
-                  subtype: :struct_field,
-                  type: :field
-                },
-                %{call?: true, name: "abc", origin: nil, subtype: :struct_field, type: :field}
-              ]}
+             [
+               %{
+                 call?: true,
+                 name: "__struct__",
+                 origin: nil,
+                 subtype: :struct_field,
+                 type: :field
+               },
+               %{call?: true, name: "abc", origin: nil, subtype: :struct_field, type: :field}
+             ]
   end
 
   test "ignore invalid Elixir module literals" do
     defmodule :"ElixirSense.Providers.Suggestion.CompleteTest.Unicodé", do: nil
-    assert expand('ElixirSense.Providers.Suggestion.CompleteTest.Unicod') == {:no, '', []}
+    assert expand('ElixirSense.Providers.Suggestion.CompleteTest.Unicod') == []
   after
     :code.purge(:"ElixirSense.Providers.Suggestion.CompleteTest.Unicodé")
     :code.delete(:"ElixirSense.Providers.Suggestion.CompleteTest.Unicodé")
@@ -1070,73 +1019,70 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "complete macros and functions from not loaded modules" do
-    assert {:yes, 'st', [%{name: "test", type: :macro}]} =
+    assert [%{name: "test", type: :macro}] =
              expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.te')
 
-    assert {:yes, 'un', [%{name: "fun", type: :function}]} =
+    assert [%{name: "fun", type: :function}] =
              expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.f')
 
-    assert {:yes, 'uard', [%{name: "guard", type: :macro}]} =
+    assert [%{name: "guard", type: :macro}] =
              expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.g')
 
-    assert {:yes, 'legated', [%{name: "delegated", type: :function}]} =
+    assert [%{name: "delegated", type: :function}] =
              expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.de')
   end
 
   test "complete build in functions on non local calls" do
-    assert {:no, _, _} = expand('mo')
-    assert {:no, _, _} = expand('__in')
+    assert [] = expand('mo')
+    assert [] = expand('__in')
 
-    assert {:no, _, _} = expand('Elixir.mo')
-    assert {:no, _, _} = expand('Elixir.__in')
+    assert [] = expand('Elixir.mo')
+    assert [] = expand('Elixir.__in')
 
-    assert {:yes, 'dule_info',
-            [
-              %{
-                name: "module_info",
-                type: :function,
-                arity: 0,
-                spec:
-                  "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
-              },
-              %{
-                name: "module_info",
-                type: :function,
-                arity: 1,
-                spec:
-                  "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
-              }
-            ]} = expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.mo')
+    assert [
+             %{
+               name: "module_info",
+               type: :function,
+               arity: 0,
+               spec:
+                 "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
+             },
+             %{
+               name: "module_info",
+               type: :function,
+               arity: 1,
+               spec:
+                 "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
+             }
+           ] = expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.mo')
 
-    assert {:yes, 'fo__',
-            [
-              %{
-                name: "__info__",
-                type: :function,
-                spec:
-                  "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()"
-              }
-            ]} = expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.__in')
+    assert [
+             %{
+               name: "__info__",
+               type: :function,
+               spec:
+                 "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()"
+             }
+           ] = expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.__in')
 
-    assert {:yes, 'dule_info',
-            [
-              %{
-                name: "module_info",
-                type: :function,
-                arity: 0,
-                spec:
-                  "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
-              },
-              %{
-                name: "module_info",
-                type: :function,
-                arity: 1,
-                spec:
-                  "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
-              }
-            ]} = expand(':ets.mo')
+    assert [
+             %{
+               name: "module_info",
+               type: :function,
+               arity: 0,
+               spec:
+                 "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
+             },
+             %{
+               name: "module_info",
+               type: :function,
+               arity: 1,
+               spec:
+                 "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
+             }
+           ] = expand(':ets.mo')
 
-    assert {:no, _, _} = expand(':ets.__in')
+    assert [] = expand(':ets.__in')
 
     env = %Env{
       scope_module: MyModule,
@@ -1151,302 +1097,282 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       }
     }
 
-    assert {:no, _, _} = expand('mo', env)
-    assert {:no, _, _} = expand('__in', env)
+    assert [] = expand('mo', env)
+    assert [] = expand('__in', env)
 
-    assert {:yes, 'dule_info',
-            [
-              %{
-                name: "module_info",
-                type: :function,
-                arity: 0,
-                spec:
-                  "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
-              },
-              %{
-                name: "module_info",
-                type: :function,
-                arity: 1,
-                spec:
-                  "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
-              }
-            ]} = expand('MyModule.mo', env)
+    assert [
+             %{
+               name: "module_info",
+               type: :function,
+               arity: 0,
+               spec:
+                 "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
+             },
+             %{
+               name: "module_info",
+               type: :function,
+               arity: 1,
+               spec:
+                 "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
+             }
+           ] = expand('MyModule.mo', env)
 
-    assert {:yes, 'fo__',
-            [
-              %{
-                name: "__info__",
-                type: :function,
-                spec:
-                  "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()"
-              }
-            ]} = expand('MyModule.__in', env)
+    assert [
+             %{
+               name: "__info__",
+               type: :function,
+               spec:
+                 "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()"
+             }
+           ] = expand('MyModule.__in', env)
   end
 
   test "complete build in behaviour functions" do
-    assert {:no, _, _} = expand('Elixir.beh')
+    assert [] = expand('Elixir.beh')
 
-    assert {:yes, 'aviour_info',
-            [
-              %{
-                name: "behaviour_info",
-                type: :function,
-                arity: 1,
-                spec:
-                  "@spec behaviour_info(:callbacks | :optional_callbacks) :: [{atom, non_neg_integer}]"
-              }
-            ]} = expand(':gen_server.beh')
+    assert [
+             %{
+               name: "behaviour_info",
+               type: :function,
+               arity: 1,
+               spec:
+                 "@spec behaviour_info(:callbacks | :optional_callbacks) :: [{atom, non_neg_integer}]"
+             }
+           ] = expand(':gen_server.beh')
 
-    assert {:yes, 'aviour_info',
-            [
-              %{
-                name: "behaviour_info",
-                type: :function,
-                arity: 1,
-                spec:
-                  "@spec behaviour_info(:callbacks | :optional_callbacks) :: [{atom, non_neg_integer}]"
-              }
-            ]} = expand('GenServer.beh')
+    assert [
+             %{
+               name: "behaviour_info",
+               type: :function,
+               arity: 1,
+               spec:
+                 "@spec behaviour_info(:callbacks | :optional_callbacks) :: [{atom, non_neg_integer}]"
+             }
+           ] = expand('GenServer.beh')
   end
 
   test "complete build in protocol functions" do
-    assert {:no, _, _} = expand('Elixir.__pr')
+    assert [] = expand('Elixir.__pr')
 
-    assert {:yes, 'tocol__',
-            [
-              %{
-                name: "__protocol__",
-                type: :function,
-                arity: 1,
-                spec:
-                  "@spec __protocol__(:module) :: module\n@spec __protocol__(:functions) :: [{atom, non_neg_integer}]\n@spec __protocol__(:consolidated?) :: boolean\n@spec __protocol__(:impls) :: :not_consolidated | {:consolidated, [module]}"
-              }
-            ]} = expand('Enumerable.__pro')
+    assert [
+             %{
+               name: "__protocol__",
+               type: :function,
+               arity: 1,
+               spec:
+                 "@spec __protocol__(:module) :: module\n@spec __protocol__(:functions) :: [{atom, non_neg_integer}]\n@spec __protocol__(:consolidated?) :: boolean\n@spec __protocol__(:impls) :: :not_consolidated | {:consolidated, [module]}"
+             }
+           ] = expand('Enumerable.__pro')
 
-    assert {:yes, 'l_for', [_, _]} = expand('Enumerable.imp')
+    assert [_, _] = expand('Enumerable.imp')
 
-    assert {:yes, [],
-            [
-              %{
-                name: "impl_for!",
-                type: :function,
-                arity: 1,
-                spec: "@spec impl_for!(term) :: atom"
-              }
-            ]} = expand('Enumerable.impl_for!')
+    assert [
+             %{
+               name: "impl_for!",
+               type: :function,
+               arity: 1,
+               spec: "@spec impl_for!(term) :: atom"
+             }
+           ] = expand('Enumerable.impl_for!')
   end
 
   test "complete build in protocol implementation functions" do
-    assert {:no, _, _} = expand('Elixir.__im')
+    assert [] = expand('Elixir.__im')
 
-    assert {:yes, 'pl__',
-            [
-              %{
-                name: "__impl__",
-                type: :function,
-                arity: 1,
-                spec: "@spec __impl__(:for | :target | :protocol) :: module"
-              }
-            ]} = expand('Enumerable.List.__im')
+    assert [
+             %{
+               name: "__impl__",
+               type: :function,
+               arity: 1,
+               spec: "@spec __impl__(:for | :target | :protocol) :: module"
+             }
+           ] = expand('Enumerable.List.__im')
   end
 
   test "complete build in struct functions" do
-    assert {:no, _, _} = expand('Elixir.__str')
+    assert [] = expand('Elixir.__str')
 
-    assert {:yes, 'uct__',
-            [
-              %{
-                name: "__struct__",
-                type: :function,
-                arity: 0,
-                spec:
-                  "@spec __struct__() :: %{required(:__struct__) => module, optional(any) => any}"
-              },
-              %{
-                name: "__struct__",
-                type: :function,
-                arity: 1,
-                spec:
-                  "@spec __struct__(keyword) :: %{required(:__struct__) => module, optional(any) => any}"
-              }
-            ]} = expand('ElixirSenseExample.ModuleWithStruct.__str')
+    assert [
+             %{
+               name: "__struct__",
+               type: :function,
+               arity: 0,
+               spec:
+                 "@spec __struct__() :: %{required(:__struct__) => module, optional(any) => any}"
+             },
+             %{
+               name: "__struct__",
+               type: :function,
+               arity: 1,
+               spec:
+                 "@spec __struct__(keyword) :: %{required(:__struct__) => module, optional(any) => any}"
+             }
+           ] = expand('ElixirSenseExample.ModuleWithStruct.__str')
   end
 
   test "complete build in exception functions" do
-    assert {:no, _, _} = expand('Elixir.mes')
+    assert [] = expand('Elixir.mes')
 
-    assert {:yes, 'sage',
-            [
-              %{
-                name: "message",
-                type: :function,
-                arity: 1,
-                spec: "@spec message(Exception.t()) :: String.t()"
-              }
-            ]} = expand('ArgumentError.mes')
+    assert [
+             %{
+               name: "message",
+               type: :function,
+               arity: 1,
+               spec: "@spec message(Exception.t()) :: String.t()"
+             }
+           ] = expand('ArgumentError.mes')
 
-    assert {:no, _, _} = expand('Elixir.exce')
+    assert [] = expand('Elixir.exce')
 
-    assert {:yes, 'ption',
-            [
-              %{
-                name: "exception",
-                type: :function,
-                arity: 1,
-                spec: "@spec exception(term) :: Exception.t()"
-              }
-            ]} = expand('ArgumentError.exce')
+    assert [
+             %{
+               name: "exception",
+               type: :function,
+               arity: 1,
+               spec: "@spec exception(term) :: Exception.t()"
+             }
+           ] = expand('ArgumentError.exce')
 
-    assert {:no, _, _} = expand('Elixir.bla')
+    assert [] = expand('Elixir.bla')
 
-    assert {:yes, 'me',
-            [
-              %{name: "blame", type: :function, arity: 2}
-            ]} = expand('ArgumentError.bla')
+    assert [
+             %{name: "blame", type: :function, arity: 2}
+           ] = expand('ArgumentError.bla')
   end
 
   @tag requires_otp_23: true
   test "complete build in :erlang functions" do
-    assert {:yes, '',
-            [
-              %{
-                arity: 2,
-                name: "or",
-                spec: "@spec boolean or boolean :: boolean",
-                type: :function,
-                args: "boolean(), boolean()",
-                origin: ":erlang",
-                summary: ""
-              },
-              %{
-                args: "term, term",
-                arity: 2,
-                name: "orelse",
-                origin: ":erlang",
-                spec: "",
-                summary: "",
-                type: :function
-              }
-            ]} = expand(':erlang.or')
+    assert [
+             %{
+               arity: 2,
+               name: "or",
+               spec: "@spec boolean or boolean :: boolean",
+               type: :function,
+               args: "boolean(), boolean()",
+               origin: ":erlang",
+               summary: ""
+             },
+             %{
+               args: "term, term",
+               arity: 2,
+               name: "orelse",
+               origin: ":erlang",
+               spec: "",
+               summary: "",
+               type: :function
+             }
+           ] = expand(':erlang.or')
 
-    assert {:yes, '',
-            [
-              %{
-                arity: 2,
-                name: "and",
-                spec: "@spec boolean and boolean :: boolean",
-                type: :function,
-                args: "boolean(), boolean()",
-                origin: ":erlang",
-                summary: ""
-              },
-              %{
-                args: "term, term",
-                arity: 2,
-                name: "andalso",
-                origin: ":erlang",
-                spec: "",
-                summary: "",
-                type: :function
-              }
-            ]} = expand(':erlang.and')
+    assert [
+             %{
+               arity: 2,
+               name: "and",
+               spec: "@spec boolean and boolean :: boolean",
+               type: :function,
+               args: "boolean(), boolean()",
+               origin: ":erlang",
+               summary: ""
+             },
+             %{
+               args: "term, term",
+               arity: 2,
+               name: "andalso",
+               origin: ":erlang",
+               spec: "",
+               summary: "",
+               type: :function
+             }
+           ] = expand(':erlang.and')
   end
 
   test "profide specs for erlang functions" do
-    assert {:yes, 'e',
-            [
-              %{
-                arity: 0,
-                name: "date",
-                spec: "@spec date :: date when date: :calendar.date",
-                type: :function,
-                args: "",
-                origin: ":erlang",
-                summary: ""
-              }
-            ]} = expand(':erlang.dat')
+    assert [
+             %{
+               arity: 0,
+               name: "date",
+               spec: "@spec date :: date when date: :calendar.date",
+               type: :function,
+               args: "",
+               origin: ":erlang",
+               summary: ""
+             }
+           ] = expand(':erlang.dat')
 
-    assert {:yes, 'r',
-            [
-              %{
-                arity: 1,
-                name: "cancel_timer",
-                spec:
-                  "@spec cancel_timer(timerRef) :: result when timerRef: reference, time: non_neg_integer, result: time | false",
-                type: :function,
-                args: "timerRef",
-                origin: ":erlang",
-                summary: ""
-              },
-              %{
-                arity: 2,
-                name: "cancel_timer",
-                spec:
-                  "@spec cancel_timer(timerRef, options) :: result | :ok when timerRef: reference, async: boolean, info: boolean, option: {:async, async} | {:info, info}, options: [option], time: non_neg_integer, result: time | false",
-                type: :function,
-                args: "timerRef, options",
-                origin: ":erlang",
-                summary: ""
-              }
-            ]} = expand(':erlang.cancel_time')
+    assert [
+             %{
+               arity: 1,
+               name: "cancel_timer",
+               spec:
+                 "@spec cancel_timer(timerRef) :: result when timerRef: reference, time: non_neg_integer, result: time | false",
+               type: :function,
+               args: "timerRef",
+               origin: ":erlang",
+               summary: ""
+             },
+             %{
+               arity: 2,
+               name: "cancel_timer",
+               spec:
+                 "@spec cancel_timer(timerRef, options) :: result | :ok when timerRef: reference, async: boolean, info: boolean, option: {:async, async} | {:info, info}, options: [option], time: non_neg_integer, result: time | false",
+               type: :function,
+               args: "timerRef, options",
+               origin: ":erlang",
+               summary: ""
+             }
+           ] = expand(':erlang.cancel_time')
   end
 
   @tag requires_otp_23: true
   test "profide specs for erlang functions edoc" do
-    assert {
-             :yes,
-             '',
-             [
-               %{
-                 args: "term",
-                 arity: 1,
-                 name: "files",
-                 origin: ":edoc",
-                 spec: "",
-                 summary: "",
-                 type: :function
-               },
-               %{
-                 args: "term, term",
-                 arity: 2,
-                 name: "files",
-                 origin: ":edoc",
-                 spec: "",
-                 summary:
-                   "Runs EDoc on a given set of source files. See run/2 for\ndetails, including options.",
-                 type: :function
-               }
-             ]
-           } = expand(':edoc.files')
+    assert [
+             %{
+               args: "term",
+               arity: 1,
+               name: "files",
+               origin: ":edoc",
+               spec: "",
+               summary: "",
+               type: :function
+             },
+             %{
+               args: "term, term",
+               arity: 2,
+               name: "files",
+               origin: ":edoc",
+               spec: "",
+               summary:
+                 "Runs EDoc on a given set of source files. See run/2 for\ndetails, including options.",
+               type: :function
+             }
+           ] = expand(':edoc.files')
   end
 
   test "complete after ! operator" do
-    assert {:yes, 'ary', [%{name: "is_binary"}]} = expand('!is_bin')
+    assert [%{name: "is_binary"}] = expand('!is_bin')
   end
 
   test "correctly find subtype and doc for modules that have submodule" do
-    assert {:yes, 'le',
-            [
-              %{
-                name: "File",
-                type: :module,
-                metadata: %{},
-                subtype: nil,
-                summary: "This module contains functions to manipulate files."
-              }
-            ]} = expand('Fi')
+    assert [
+             %{
+               name: "File",
+               type: :module,
+               metadata: %{},
+               subtype: nil,
+               summary: "This module contains functions to manipulate files."
+             }
+           ] = expand('Fi')
   end
 
   test "complete only struct modules after %" do
-    assert {:yes, '', list} = expand('%')
+    assert list = expand('%')
     refute Enum.any?(list, &(&1.type != :module))
     assert Enum.any?(list, &(&1.name == "ArithmeticError"))
     assert Enum.any?(list, &(&1.name == "URI"))
     refute Enum.any?(list, &(&1.name == "File"))
     refute Enum.any?(list, &(&1.subtype not in [:struct, :exception]))
 
-    assert {:yes, 'le', _} = expand('%Fi')
-    assert {:yes, '', list} = expand('%File.')
+    assert [_ | _] = expand('%Fi')
+    assert list = expand('%File.')
     assert Enum.any?(list, &(&1.name == "CopyError"))
     refute Enum.any?(list, &(&1.type != :module))
     refute Enum.any?(list, &(&1.subtype not in [:struct, :exception]))

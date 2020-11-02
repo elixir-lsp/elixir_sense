@@ -27,7 +27,7 @@
 # Changes made to the original version include:
 # - different result format with added docs and spec
 # - built in and private funcs are not excluded
-# - does not omit results when returning hint
+# - hint generation removed
 # - added expansion basing on metadata besides introspection
 # - uses custom docs extraction function
 # - gets metadata by argument instead of environment variables
@@ -85,27 +85,16 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               behaviours: []
   end
 
-  @type hint :: %{
-          type: :hint,
-          value: String.t()
-        }
-
   @spec complete(String.t(), Env.t()) ::
-          {hint(),
-           [
-             ElixirSense.Providers.Suggestion.Reducers.Common.func()
-             | ElixirSense.Providers.Suggestion.Reducers.Common.mod()
-             | ElixirSense.Providers.Suggestion.Reducers.Common.variable()
-             | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
-           ]}
+          [
+            ElixirSense.Providers.Suggestion.Reducers.Common.func()
+            | ElixirSense.Providers.Suggestion.Reducers.Common.mod()
+            | ElixirSense.Providers.Suggestion.Reducers.Common.variable()
+            | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
+          ]
   def complete(hint, %Env{} = env) do
-    {_result, completion_hint, completions} =
-      expand(hint |> String.to_charlist() |> Enum.reverse(), env)
-
-    {build_hint(hint, completion_hint), completions}
+    expand(hint |> String.to_charlist() |> Enum.reverse(), env)
   end
-
-  defp build_hint(hint, completion_hint), do: %{type: :hint, value: "#{hint}#{completion_hint}"}
 
   def expand('', env) do
     # TODO change? add modules attributes
@@ -225,39 +214,22 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp trim_leading(expr, _char),
     do: expr
 
-  defp yes(hint, entries) do
-    {:yes, String.to_charlist(hint), entries}
-  end
-
   defp no do
-    {:no, '', []}
+    []
   end
 
   ## Formatting
 
-  defp format_expansion([], _) do
-    no()
-  end
+  # defp format_expansion([], _) do
+  #   no()
+  # end
 
-  defp format_expansion([uniq], hint) do
-    case to_hint(uniq, hint) do
-      "" -> yes("", to_entries(uniq))
-      hint -> yes(hint, to_entries(uniq))
-    end
-  end
+  # defp format_expansion([uniq], hint) do
+  #   to_entries(uniq)
+  # end
 
-  defp format_expansion([first | _] = entries, hint) do
-    binary = Enum.map(entries, & &1.name)
-    length = byte_size(hint)
-    prefix = :binary.longest_common_prefix(binary)
-
-    mapped = Enum.flat_map(entries, &to_entries/1)
-
-    if prefix in [0, length] do
-      yes("", mapped)
-    else
-      yes(binary_part(first.name, prefix, length - prefix), mapped)
-    end
+  defp format_expansion(entries) do
+    Enum.flat_map(entries, &to_entries/1)
   end
 
   ## Expand calls
@@ -350,12 +322,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         no()
 
       map_fields when is_list(map_fields) ->
-        format_expansion(map_fields, hint)
+        format_expansion(map_fields)
     end
   end
 
   defp expand_require(mod, hint, env) do
-    format_expansion(match_module_funs(mod, hint, true, env), hint)
+    format_expansion(match_module_funs(mod, hint, true, env))
   end
 
   defp expand_variable_or_import(hint, env) do
@@ -368,12 +340,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         (env.imports
          |> Enum.flat_map(fn scope_import -> match_module_funs(scope_import, hint, false, env) end))
 
-    format_expansion(variables ++ funs, hint)
+    format_expansion(variables ++ funs)
   end
 
   defp expand_variable(hint, env) do
     variables = do_expand_variable(hint, env)
-    format_expansion(variables, hint)
+    format_expansion(variables)
   end
 
   defp do_expand_variable(hint, %Env{vars: vars}) do
@@ -413,13 +385,13 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     )
     |> Enum.sort()
     |> Enum.map(&%{kind: :attribute, name: &1})
-    |> format_expansion(hint)
+    |> format_expansion()
   end
 
   ## Erlang modules
 
   defp expand_erlang_modules(hint \\ "", env, provide_edocs?) do
-    format_expansion(match_erlang_modules(hint, env, provide_edocs?), hint)
+    format_expansion(match_erlang_modules(hint, env, provide_edocs?))
   end
 
   defp match_erlang_modules(hint, env, provide_edocs?) do
@@ -467,7 +439,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     aliases
     |> Kernel.++(match_elixir_modules(mod, hint, env, filter))
     |> Kernel.++(if include_funs, do: match_module_funs(mod, hint, true, env), else: [])
-    |> format_expansion(hint)
+    |> format_expansion()
   end
 
   defp expand_alias(mod_parts, env) do
@@ -878,23 +850,5 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         }
       end
     end
-  end
-
-  defp to_hint(%{kind: :module, name: name}, hint) when name == hint do
-    format_hint(name, name) <> "."
-  end
-
-  defp to_hint(%{kind: :field, name: name, value_is_map: true}, hint) when name == hint do
-    format_hint(name, hint) <> "."
-  end
-
-  defp to_hint(%{kind: kind, name: name}, hint)
-       when kind in [:function, :field, :module, :variable, :attribute] do
-    format_hint(name, hint)
-  end
-
-  defp format_hint(name, hint) do
-    hint_size = byte_size(hint)
-    binary_part(name, hint_size, byte_size(name) - hint_size)
   end
 end
