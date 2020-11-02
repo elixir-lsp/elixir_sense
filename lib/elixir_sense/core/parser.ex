@@ -5,6 +5,7 @@ defmodule ElixirSense.Core.Parser do
 
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.MetadataBuilder
+  alias ElixirSense.Core.Normalized.Tokenizer
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
 
@@ -223,29 +224,34 @@ defmodule ElixirSense.Core.Parser do
 
   defp fix_parse_error(source, _cursor_line_number, {:error, {line, "syntax" <> _, token}})
        when is_integer(line) do
-        case source
-        |> Source.split_lines() |> Enum.at(line - 1)
-    |> ElixirSense.Core.Normalized.Tokenizer.tokenize()
-    |> Enum.at(-1) do
-      
+    case source
+         |> Source.split_lines()
+         |> Enum.at(line - 1)
+         |> Tokenizer.tokenize()
+         |> Enum.at(-1) do
       {:identifier, _, ident} when ident in [:with, :for] ->
-          # strip_before(source, line, token |> String.replace("'", ""))
-          source
-          |> Source.split_lines()
-          |> List.replace_at(line - 1, "#{ident} \\")
-          |> Enum.join("\n")
-          _ ->
-            if Regex.match?(~r/^[a-zA-Z_][a-zA-Z0-9_]*$/, token) do
-              remove_line(source, line)
-            else
-              replace_line_with_marker(source, line)
-            end
+        # strip_before(source, line, token |> String.replace("'", ""))
+        source
+        |> Source.split_lines()
+        |> List.replace_at(line - 1, "#{ident} \\")
+        |> Enum.join("\n")
+
+      _ ->
+        if Regex.match?(~r/^[a-zA-Z_][a-zA-Z0-9_]*$/, token) do
+          remove_line(source, line)
+        else
+          replace_line_with_marker(source, line)
+        end
     end
   end
 
-  defp fix_parse_error(source, _cursor_line_number, {:error, {line, "unexpected operator" <> _, token}})
+  defp fix_parse_error(
+         source,
+         _cursor_line_number,
+         {:error, {line, "unexpected operator" <> _, _token}}
+       )
        when is_integer(line) do
-        remove_line(source, line)
+    remove_line(source, line)
   end
 
   defp fix_parse_error(_, nil, error) do
@@ -380,16 +386,6 @@ defmodule ElixirSense.Core.Parser do
     # by replacing a line here we risk introducing a syntax error
     # instead we append marker to the existing line
     |> List.update_at(line_number - 1, &(&1 <> "; " <> marker(line_number)))
-    |> Enum.join("\n")
-  end
-
-  defp strip_before(source, line_number, token) when is_integer(line_number) do
-    # IO.puts :stderr, "STRIPPING LINE: #{line}"
-    source
-    |> Source.split_lines()
-    |> List.update_at(line_number - 1, fn line ->
-      line |> String.split(token) |> hd
-    end)
     |> Enum.join("\n")
   end
 

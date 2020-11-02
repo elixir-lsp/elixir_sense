@@ -134,7 +134,6 @@ defmodule ElixirSense.Core.Source do
       else
         line
       end
-      
 
     line_str = line |> String.slice(0, col - 1)
 

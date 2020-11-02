@@ -125,10 +125,10 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 5, 21)
 
-    assert list |> Enum.any?(& &1.type == :module)
-    assert list |> Enum.any?(& &1.type == :function)
-    assert list |> Enum.any?(& &1.type == :variable)
-    assert list |> Enum.any?(& &1.type == :attribute)
+    assert list |> Enum.any?(&(&1.type == :module))
+    assert list |> Enum.any?(&(&1.type == :function))
+    assert list |> Enum.any?(&(&1.type == :variable))
+    assert list |> Enum.any?(&(&1.type == :attribute))
   end
 
   test "pin hint 1" do
@@ -145,10 +145,10 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 5, 9)
 
-    refute list |> Enum.any?(& &1.type == :module)
-    refute list |> Enum.any?(& &1.type == :function)
-    assert list |> Enum.any?(& &1.type == :variable)
-    refute list |> Enum.any?(& &1.type == :attribute)
+    refute list |> Enum.any?(&(&1.type == :module))
+    refute list |> Enum.any?(&(&1.type == :function))
+    assert list |> Enum.any?(&(&1.type == :variable))
+    refute list |> Enum.any?(&(&1.type == :attribute))
   end
 
   test "pin hint 2" do
@@ -167,10 +167,10 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 4, 11)
 
-    refute list |> Enum.any?(& &1.type == :module)
-    refute list |> Enum.any?(& &1.type == :function)
-    assert list |> Enum.any?(& &1.type == :variable)
-    refute list |> Enum.any?(& &1.type == :attribute)
+    refute list |> Enum.any?(&(&1.type == :module))
+    refute list |> Enum.any?(&(&1.type == :function))
+    assert list |> Enum.any?(&(&1.type == :variable))
+    refute list |> Enum.any?(&(&1.type == :attribute))
   end
 
   test "pin hint 3" do
@@ -189,10 +189,10 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 4, 12)
 
-    refute list |> Enum.any?(& &1.type == :module)
-    refute list |> Enum.any?(& &1.type == :function)
-    assert list |> Enum.any?(& &1.type == :variable)
-    refute list |> Enum.any?(& &1.type == :attribute)
+    refute list |> Enum.any?(&(&1.type == :module))
+    refute list |> Enum.any?(&(&1.type == :function))
+    assert list |> Enum.any?(&(&1.type == :variable))
+    refute list |> Enum.any?(&(&1.type == :attribute))
   end
 
   test "pin hint 4" do
@@ -214,10 +214,10 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 9, 8)
 
-    refute list |> Enum.any?(& &1.type == :module)
-    refute list |> Enum.any?(& &1.type == :function)
-    assert list |> Enum.any?(& &1.type == :variable)
-    refute list |> Enum.any?(& &1.type == :attribute)
+    refute list |> Enum.any?(&(&1.type == :module))
+    refute list |> Enum.any?(&(&1.type == :function))
+    assert list |> Enum.any?(&(&1.type == :variable))
+    refute list |> Enum.any?(&(&1.type == :attribute))
   end
 
   test "with an alias" do

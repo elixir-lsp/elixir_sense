@@ -98,10 +98,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   def expand('', env) do
-    # TODO change? add modules attributes
-    expand_variable_or_import("", env)
+    expand_expr("", env)
   end
 
+  # credo:disable-for-lines:35
   def expand([h | t] = expr, env) do
     cond do
       h === ?. and t != [] ->
@@ -130,6 +130,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       h === ?% and t == [] ->
         expand_struct_modules([], "", env)
 
+      h === ?& and t == [] ->
+        expand_expr("", env)
+
       true ->
         no()
     end
@@ -157,6 +160,18 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       _ ->
         no()
     end
+  end
+
+  defp expand_expr("", env) do
+    variable_or_import = expand_variable_or_import("", env)
+    # we are expanding all erlang modules
+    # for performance reasons we do not extract edocs
+    erlang_modules = expand_erlang_modules("", env, false)
+    elixir_modules = expand_elixir_modules([], "", env)
+
+    attributes = expand_attribute("", env)
+
+    variable_or_import ++ erlang_modules ++ elixir_modules ++ attributes
   end
 
   defp expand_expr(expr, env) do
@@ -396,7 +411,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp match_erlang_modules(hint, env, provide_edocs?) do
-    for mod <- match_modules(hint, true, env), usable_as_unquoted_module?(mod) do
+    for mod <- match_modules(hint, true, env),
+        !String.starts_with?(mod, "Elixir"),
+        usable_as_unquoted_module?(mod) do
       mod_as_atom = String.to_atom(mod)
       subtype = Introspection.get_module_subtype(mod_as_atom)
 
@@ -407,7 +424,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           {"", %{}}
         end
 
-      %{kind: :module, name: mod, type: :erlang, desc: desc, subtype: subtype}
+      %{kind: :module, name: ":" <> mod, type: :erlang, desc: desc, subtype: subtype}
     end
   end
 

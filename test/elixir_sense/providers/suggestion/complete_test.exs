@@ -30,14 +30,14 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
   test "erlang module completion" do
     assert expand(':zl') ==
-             [%{name: "zlib", subtype: nil, summary: "", type: :module, metadata: %{}}]
+             [%{name: ":zlib", subtype: nil, summary: "", type: :module, metadata: %{}}]
   end
 
   test "erlang module completion edoc" do
     assert expand(':edoc_wi') ==
              [
                %{
-                 name: "edoc_wiki",
+                 name: ":edoc_wiki",
                  subtype: nil,
                  summary:
                    "EDoc wiki expansion, parsing and postprocessing of XML text.\nUses XMerL.",
@@ -54,14 +54,14 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
   test "erlang module multiple values completion" do
     list = expand(':user')
-    assert list |> Enum.find(&(&1.name == "user"))
-    assert list |> Enum.find(&(&1.name == "user_drv"))
+    assert list |> Enum.find(&(&1.name == ":user"))
+    assert list |> Enum.find(&(&1.name == ":user_drv"))
   end
 
   test "erlang root completion" do
     list = expand(':')
     assert is_list(list)
-    assert list |> Enum.find(&(&1.name == "lists"))
+    assert list |> Enum.find(&(&1.name == ":lists"))
   end
 
   test "elixir proxy" do
@@ -1376,5 +1376,12 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert Enum.any?(list, &(&1.name == "CopyError"))
     refute Enum.any?(list, &(&1.type != :module))
     refute Enum.any?(list, &(&1.subtype not in [:struct, :exception]))
+  end
+
+  test "complete modules and local funs after &" do
+    assert list = expand('&')
+    assert Enum.any?(list, &(&1.type == :module))
+    assert Enum.any?(list, &(&1.type == :function))
+    refute Enum.any?(list, &(&1.type not in [:function, :module, :macro]))
   end
 end
