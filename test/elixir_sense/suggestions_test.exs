@@ -112,6 +112,114 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  test "capture hint" do
+    buffer = """
+    defmodule MyModule do
+      @attr "asd"
+      def a(arg) do
+        arg
+        |> Enum.filter(&)
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 5, 21)
+
+    assert list |> Enum.any?(& &1.type == :module)
+    assert list |> Enum.any?(& &1.type == :function)
+    assert list |> Enum.any?(& &1.type == :variable)
+    assert list |> Enum.any?(& &1.type == :attribute)
+  end
+
+  test "pin hint 1" do
+    buffer = """
+    defmodule MyModule do
+      @attr "asd"
+      def a(arg) do
+        case x() do
+          {^} -> :ok
+        end
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 5, 9)
+
+    refute list |> Enum.any?(& &1.type == :module)
+    refute list |> Enum.any?(& &1.type == :function)
+    assert list |> Enum.any?(& &1.type == :variable)
+    refute list |> Enum.any?(& &1.type == :attribute)
+  end
+
+  test "pin hint 2" do
+    buffer = """
+    defmodule MyModule do
+      @attr "asd"
+      def a(arg) do
+        with ^ <- abc(),
+            x <- cde(),
+            y <- efg() do
+            :ok
+        end
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 4, 11)
+
+    refute list |> Enum.any?(& &1.type == :module)
+    refute list |> Enum.any?(& &1.type == :function)
+    assert list |> Enum.any?(& &1.type == :variable)
+    refute list |> Enum.any?(& &1.type == :attribute)
+  end
+
+  test "pin hint 3" do
+    buffer = """
+    defmodule MyModule do
+      @attr "asd"
+      def a(arg) do
+        with {^} <- abc(),
+            x <- cde(),
+            y <- efg() do
+            :ok
+        end
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 4, 12)
+
+    refute list |> Enum.any?(& &1.type == :module)
+    refute list |> Enum.any?(& &1.type == :function)
+    assert list |> Enum.any?(& &1.type == :variable)
+    refute list |> Enum.any?(& &1.type == :attribute)
+  end
+
+  test "pin hint 4" do
+    buffer = """
+    defmodule MyModule do
+      @attr "asd"
+      def a(arg) do
+        with a <- abc(),
+            x <- cde(),
+            y <- efg() do
+            :ok
+        else
+          ^ -> :ok
+          :ok -> :ok
+        end
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 9, 8)
+
+    refute list |> Enum.any?(& &1.type == :module)
+    refute list |> Enum.any?(& &1.type == :function)
+    assert list |> Enum.any?(& &1.type == :variable)
+    refute list |> Enum.any?(& &1.type == :attribute)
+  end
+
   test "with an alias" do
     buffer = """
     defmodule MyModule do
