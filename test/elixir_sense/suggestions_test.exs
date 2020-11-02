@@ -220,6 +220,19 @@ defmodule ElixirSense.SuggestionsTest do
     refute list |> Enum.any?(&(&1.type == :attribute))
   end
 
+  test "no typespecs in function scope" do
+    buffer = """
+    defmodule MyModule do
+      def go, do:
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 2, 15)
+
+    refute list |> Enum.any?(&(&1.type == :type_spec))
+    assert list |> Enum.any?(&(&1.type == :function))
+  end
+
   test "with an alias" do
     buffer = """
     defmodule MyModule do

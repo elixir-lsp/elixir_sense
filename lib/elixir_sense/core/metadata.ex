@@ -51,7 +51,7 @@ defmodule ElixirSense.Core.Metadata do
 
     with %State.ModFunInfo{positions: [{line, _}]} <- mod_info,
          %State.Env{scope_id: mod_scope_id} <- metadata.lines_to_env[line] do
-      env.scope_id in mod_scope_id..(mod_scope_id + 1)
+      env.scope_id in mod_scope_id..(mod_scope_id + 1) and not match?({_, _}, env.scope)
     else
       _ ->
         false

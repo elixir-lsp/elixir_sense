@@ -99,6 +99,11 @@ defmodule ElixirSense.Core.MetadataTest do
       schema do
         IO.puts "" # 11
       end
+
+      def go, do: :ok # 14
+
+      def go, # 16
+        do: :ok # 17
     end
     """
 
@@ -117,6 +122,15 @@ defmodule ElixirSense.Core.MetadataTest do
     refute Metadata.at_module_body?(metadata, env)
 
     env = Metadata.get_env(metadata, 11)
+    refute Metadata.at_module_body?(metadata, env)
+
+    env = Metadata.get_env(metadata, 14)
+    refute Metadata.at_module_body?(metadata, env)
+
+    env = Metadata.get_env(metadata, 16)
+    refute Metadata.at_module_body?(metadata, env)
+
+    env = Metadata.get_env(metadata, 17)
     refute Metadata.at_module_body?(metadata, env)
   end
 end
