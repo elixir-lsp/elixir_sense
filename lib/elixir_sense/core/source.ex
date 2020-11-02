@@ -134,10 +134,11 @@ defmodule ElixirSense.Core.Source do
       else
         line
       end
+      
 
     line_str = line |> String.slice(0, col - 1)
 
-    case Regex.run(Regex.recompile!(~r/[\w0-9\._!\?\:@]+$/), line_str) do
+    case Regex.run(Regex.recompile!(~r/[\w0-9\._!\?\:@&\^]+$/), line_str) do
       nil -> ""
       [prefix] -> prefix
     end
