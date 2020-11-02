@@ -90,6 +90,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             ElixirSense.Providers.Suggestion.Reducers.Common.func()
             | ElixirSense.Providers.Suggestion.Reducers.Common.mod()
             | ElixirSense.Providers.Suggestion.Reducers.Common.variable()
+            | ElixirSense.Providers.Suggestion.Reducers.Common.attribute()
             | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
           ]
   def complete(hint, %Env{} = env) do
