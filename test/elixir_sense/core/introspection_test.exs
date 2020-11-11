@@ -69,21 +69,18 @@ defmodule ElixirSense.Core.IntrospectionTest do
   end
 
   test "get_callbacks_with_docs for erlang behaviours" do
-    assert get_callbacks_with_docs(:supervisor) == [
+    assert [
              %{
-               name: :init,
-               arity: 1,
-               callback: """
-               @callback init(args :: term) ::
-                 {:ok, {supFlags :: sup_flags, [childSpec :: child_spec]}} |
-                 :ignore\
-               """,
-               signature: "init(args)",
+               arity: 0,
+               callback: "@callback callback_mode :: callback_mode_result",
                doc: nil,
+               kind: :callback,
                metadata: %{optional: false},
-               kind: :callback
+               name: :callback_mode,
+               signature: "callback_mode()"
              }
-           ]
+             | _
+           ] = get_callbacks_with_docs(:gen_statem)
   end
 
   test "get_callbacks_with_docs for Elixir behaviours with no docs defined" do

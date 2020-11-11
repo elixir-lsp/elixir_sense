@@ -40,9 +40,12 @@ defmodule ElixirSense.Core.Introspection do
 
   @no_documentation "No documentation available\n"
 
+  # TODO consider removing this when EEP 48 support lands
   @wrapped_behaviours %{
     :gen_server => GenServer,
-    :gen_event => GenEvent
+    :gen_event => GenEvent,
+    :supervisor => Supervisor,
+    :application => Application
   }
 
   @spec get_exports(module) :: [{atom, non_neg_integer}]
