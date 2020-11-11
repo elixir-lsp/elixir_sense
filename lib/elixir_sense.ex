@@ -17,6 +17,7 @@ defmodule ElixirSense do
   alias ElixirSense.Providers.Docs
   alias ElixirSense.Providers.Eval
   alias ElixirSense.Providers.Expand
+  alias ElixirSense.Providers.Implementation
   alias ElixirSense.Providers.References
   alias ElixirSense.Providers.Signature
   alias ElixirSense.Providers.Suggestion
@@ -98,6 +99,34 @@ defmodule ElixirSense do
           end)
 
         Definition.find(
+          subject,
+          env,
+          buffer_file_metadata.mods_funs_to_positions,
+          calls,
+          buffer_file_metadata.types
+        )
+    end
+  end
+
+  @spec implementations(String.t(), pos_integer, pos_integer) :: [Location.t()]
+  def implementations(code, line, column) do
+    case Source.subject(code, line, column) do
+      nil ->
+        []
+
+      subject ->
+        buffer_file_metadata = Parser.parse_string(code, true, true, line)
+
+        env = Metadata.get_env(buffer_file_metadata, line)
+
+        calls =
+          buffer_file_metadata.calls[line]
+          |> List.wrap()
+          |> Enum.filter(fn %State.CallInfo{position: {_call_line, call_column}} ->
+            call_column <= column
+          end)
+
+        Implementation.find(
           subject,
           env,
           buffer_file_metadata.mods_funs_to_positions,

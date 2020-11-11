@@ -24,6 +24,7 @@ defmodule ElixirSense.Core.Introspection do
   A collection of functions to introspect/format docs, specs, types and callbacks.
   """
 
+  alias ElixirSense.Core.Applications
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.EdocReader
@@ -1339,4 +1340,10 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def is_pub(type), do: type in [:def, :defmacro, :defdelegate, :defguard]
+
+  @spec get_all_behaviour_implementations(module) :: [module]
+  def get_all_behaviour_implementations(behaviour) do
+    Applications.get_modules_from_applications()
+    |> Enum.filter(&(behaviour in List.wrap(&1.module_info()[:attributes][:behaviour])))
+  end
 end
