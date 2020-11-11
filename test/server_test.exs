@@ -9,7 +9,7 @@ defmodule TCPHelper do
 
   def send_and_recv(socket, data) do
     :ok = :gen_tcp.send(socket, data)
-    {:ok, response} = :gen_tcp.recv(socket, 0, 1000)
+    {:ok, response} = :gen_tcp.recv(socket, 0, 3000)
     response
   end
 end
@@ -55,6 +55,31 @@ defmodule ElixirSense.ServerTest do
     } = send_request(socket, request)
 
     assert file =~ "#{File.cwd!()}/test/support/module_with_functions.ex"
+  end
+
+  test "implementations request", %{socket: socket, auth_token: auth_token} do
+    request = %{
+      "request_id" => 1,
+      "auth_token" => auth_token,
+      "request" => "implementations",
+      "payload" => %{
+        "buffer" => "ElixirSenseExample.ExampleProtocol.some()",
+        "line" => 1,
+        "column" => 37
+      }
+    }
+
+    [
+      %{
+        type: :function,
+        file: file,
+        line: 7,
+        column: 7
+      },
+      _
+    ] = send_request(socket, request)
+
+    assert file =~ "#{File.cwd!()}/test/support/example_protocol.ex"
   end
 
   test "signature request", %{socket: socket, auth_token: auth_token} do

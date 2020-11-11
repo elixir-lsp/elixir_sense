@@ -18,6 +18,7 @@ requires = [
   "elixir_sense/core/normalized/typespec.ex",
   "elixir_sense/core/struct.ex",
   "elixir_sense/core/binding.ex",
+  "elixir_sense/location.ex",
   "elixir_sense/providers/suggestion/complete.ex",
   "elixir_sense/providers/definition.ex",
   "elixir_sense/providers/docs.ex",
