@@ -17,6 +17,10 @@ defmodule ElixirSense.Server.RequestHandler do
     ElixirSense.definition(buffer, line, column)
   end
 
+  def handle_request("implementations", %{"buffer" => buffer, "line" => line, "column" => column}) do
+    ElixirSense.implementations(buffer, line, column)
+  end
+
   def handle_request("suggestions", %{"buffer" => buffer, "line" => line, "column" => column}) do
     ElixirSense.suggestions(buffer, line, column)
   end

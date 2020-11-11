@@ -10,10 +10,10 @@ defmodule ElixirSense.Location do
   alias ElixirSense.Location
 
   @type t :: %Location{
-          type: :module | :function | :variable | :typespec | :macro | :attribute | nil,
+          type: :module | :function | :variable | :typespec | :macro | :attribute,
           file: String.t() | nil,
-          line: pos_integer | nil,
-          column: pos_integer | nil
+          line: pos_integer,
+          column: pos_integer
         }
   defstruct [:type, :file, :line, :column]
 

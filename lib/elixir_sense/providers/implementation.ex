@@ -3,15 +3,9 @@ defmodule ElixirSense.Providers.Implementation do
   Provides a function to find out where symbols are implemented.
   """
 
-  alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.Metadata
-  alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
-  alias ElixirSense.Core.State.ModFunInfo
-  alias ElixirSense.Core.State.TypeInfo
-  alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Location
 
   @doc """
@@ -19,34 +13,25 @@ defmodule ElixirSense.Providers.Implementation do
   """
   @spec find(
           String.t(),
-          State.Env.t(),
-          State.mods_funs_to_positions_t(),
-          list(State.CallInfo.t()),
-          State.types_t()
+          State.Env.t()
         ) :: [%Location{}]
   def find(
         subject,
         %State.Env{
           aliases: aliases,
-          module: module,
-          vars: vars,
-          attributes: attributes
-        } = env,
-        mods_funs_to_positions,
-        calls,
-        metadata_types
+          module: module
+        }
       ) do
-    binding_env = %Binding{
-      attributes: attributes,
-      variables: vars,
-      current_module: module
-    }
+    {maybe_found_module, maybe_fun} = Source.split_module_and_func(subject, module, aliases)
 
-    case Source.split_module_and_func(subject, module, aliases) do
-      {found_module, nil} ->
+    case maybe_found_module || module do
+      nil ->
+        []
+
+      found_module ->
         Introspection.get_all_behaviour_implementations(found_module)
         |> Enum.map(fn implementation ->
-          Location.find_source({implementation, nil}, nil)
+          Location.find_source({implementation, maybe_fun}, nil)
         end)
     end
     |> Enum.reject(&is_nil/1)

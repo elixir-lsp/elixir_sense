@@ -108,6 +108,18 @@ defmodule ElixirSense do
     end
   end
 
+  @doc ~S"""
+  Returns the locations (file and line) where a behaviour or protocol was implemented.
+
+  ## Example
+
+      iex> code = ~S'''
+      ...> ElixirSenseExample.ExampleProtocol.some()
+      ...> '''
+      iex>  [%{file: path, line: line, column: column}, _] = ElixirSense.implementations(code, 1, 37)
+      iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
+      "example_protocol.ex:7:7"
+  """
   @spec implementations(String.t(), pos_integer, pos_integer) :: [Location.t()]
   def implementations(code, line, column) do
     case Source.subject(code, line, column) do
@@ -119,19 +131,9 @@ defmodule ElixirSense do
 
         env = Metadata.get_env(buffer_file_metadata, line)
 
-        calls =
-          buffer_file_metadata.calls[line]
-          |> List.wrap()
-          |> Enum.filter(fn %State.CallInfo{position: {_call_line, call_column}} ->
-            call_column <= column
-          end)
-
         Implementation.find(
           subject,
-          env,
-          buffer_file_metadata.mods_funs_to_positions,
-          calls,
-          buffer_file_metadata.types
+          env
         )
     end
   end
