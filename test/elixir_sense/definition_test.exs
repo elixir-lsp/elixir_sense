@@ -38,7 +38,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :function, file: file, line: line, column: column} =
+    %{type: :macro, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 1, 2)
 
     assert file =~ "lib/elixir/lib/kernel.ex"
@@ -54,7 +54,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :function, file: file, line: line, column: column} =
+    %{type: :macro, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 2, 4)
 
     assert file =~ "lib/elixir/lib/kernel/special_forms.ex"
