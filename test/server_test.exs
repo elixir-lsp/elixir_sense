@@ -48,7 +48,6 @@ defmodule ElixirSense.ServerTest do
     }
 
     %{
-      found: true,
       type: :function,
       file: file,
       line: 2,

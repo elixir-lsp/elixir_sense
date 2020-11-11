@@ -15,22 +15,6 @@ defmodule ElixirSense.Providers.Definition do
   alias ElixirSense.Core.State.ModFunInfo
   alias ElixirSense.Core.State.TypeInfo
   alias ElixirSense.Core.State.VarInfo
-
-  defmodule Elixir.ElixirSense.Location do
-    @moduledoc """
-    A location in a source file or buffer
-    """
-
-    @type t :: %ElixirSense.Location{
-            found: boolean,
-            type: :module | :function | :variable | :typespec | :macro | :attribute | nil,
-            file: String.t() | nil,
-            line: pos_integer | nil,
-            column: pos_integer | nil
-          }
-    defstruct [:found, :type, :file, :line, :column]
-  end
-
   alias ElixirSense.Location
 
   @doc """
@@ -42,7 +26,7 @@ defmodule ElixirSense.Providers.Definition do
           State.mods_funs_to_positions_t(),
           list(State.CallInfo.t()),
           State.types_t()
-        ) :: %Location{}
+        ) :: %Location{} | nil
   def find(
         subject,
         %State.Env{
@@ -71,11 +55,11 @@ defmodule ElixirSense.Providers.Definition do
     cond do
       var_info != nil ->
         %VarInfo{positions: [{line, column} | _]} = var_info
-        %Location{found: true, type: :variable, file: nil, line: line, column: column}
+        %Location{type: :variable, file: nil, line: line, column: column}
 
       attribute_info != nil ->
         %State.AttributeInfo{positions: [{line, column} | _]} = attribute_info
-        %Location{found: true, type: :attribute, file: nil, line: line, column: column}
+        %Location{type: :attribute, file: nil, line: line, column: column}
 
       true ->
         subject
@@ -119,9 +103,7 @@ defmodule ElixirSense.Providers.Definition do
          binding_env,
          visited \\ []
        ) do
-    if {module, function} in visited do
-      %Location{found: false}
-    else
+    unless {module, function} in visited do
       do_find_function_or_module(
         {module, function},
         mods_funs_to_positions,
@@ -153,7 +135,7 @@ defmodule ElixirSense.Providers.Definition do
         )
 
       _ ->
-        %Location{found: false}
+        nil
     end
   end
 
@@ -178,7 +160,7 @@ defmodule ElixirSense.Providers.Definition do
         )
 
       _ ->
-        %Location{found: false}
+        nil
     end
   end
 
@@ -205,7 +187,7 @@ defmodule ElixirSense.Providers.Definition do
            metadata_types
          ) do
       {_, _, false} ->
-        %Location{found: false}
+        nil
 
       {mod, fun, true} ->
         case mods_funs_to_positions[{mod, fun, nil}] || metadata_types[{mod, fun, nil}] do
@@ -217,7 +199,6 @@ defmodule ElixirSense.Providers.Definition do
             {line, column} = positions |> Enum.at(-1)
 
             %Location{
-              found: true,
               file: nil,
               type: :typespec,
               line: line,
@@ -239,7 +220,6 @@ defmodule ElixirSense.Providers.Definition do
             {line, column} = positions |> Enum.at(-1)
 
             %Location{
-              found: true,
               file: nil,
               type: ModFunInfo.get_category(mi),
               line: line,
@@ -256,13 +236,13 @@ defmodule ElixirSense.Providers.Definition do
       nil <- find_type_position({mod, file}, fun),
       nil <- find_type_position({current_module, file}, fun)
     ) do
-      %Location{found: false}
+      nil
     else
       %Location{} = location ->
         location
 
       _ ->
-        %Location{found: false}
+        nil
     end
   end
 
@@ -325,7 +305,7 @@ defmodule ElixirSense.Providers.Definition do
 
     case position do
       {line, column} ->
-        %Location{found: true, type: category, file: file, line: line, column: column}
+        %Location{type: category, file: file, line: line, column: column}
 
       _ ->
         nil
@@ -383,7 +363,7 @@ defmodule ElixirSense.Providers.Definition do
 
     case position do
       {line, column} ->
-        %Location{found: true, type: :typespec, file: file, line: line, column: column}
+        %Location{type: :typespec, file: file, line: line, column: column}
 
       _ ->
         nil
