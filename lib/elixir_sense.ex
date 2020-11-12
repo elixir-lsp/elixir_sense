@@ -133,7 +133,9 @@ defmodule ElixirSense do
 
         Implementation.find(
           subject,
-          env
+          env,
+          buffer_file_metadata.mods_funs_to_positions,
+          buffer_file_metadata.types
         )
     end
   end

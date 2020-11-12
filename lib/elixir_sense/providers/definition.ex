@@ -113,6 +113,7 @@ defmodule ElixirSense.Providers.Definition do
     end
   end
 
+  # credo:disable-for-lines:20
   defp do_find_function_or_module(
          {{:attribute, _attr} = type, function},
          mods_funs_to_positions,
@@ -167,8 +168,8 @@ defmodule ElixirSense.Providers.Definition do
          mods_funs_to_positions,
          env,
          metadata_types,
-         binding_env,
-         visited
+         _binding_env,
+         _visited
        ) do
     %State.Env{
       module: current_module,
@@ -202,16 +203,6 @@ defmodule ElixirSense.Providers.Definition do
               line: line,
               column: column
             }
-
-          %ModFunInfo{type: :defdelegate, target: target} when not is_nil(target) ->
-            find_function_or_module(
-              target,
-              mods_funs_to_positions,
-              env,
-              metadata_types,
-              binding_env,
-              visited
-            )
 
           %ModFunInfo{positions: positions} = mi ->
             # for simplicity take last position here as positions are reversed

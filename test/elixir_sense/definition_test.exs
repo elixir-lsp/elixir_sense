@@ -23,7 +23,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :module, file: file, line: line, column: column} =
+    %Location{type: :module, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 12)
 
     assert file =~ "elixir_sense/test/support/use_example.ex"
@@ -38,7 +38,8 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :macro, file: file, line: line, column: column} = ElixirSense.definition(buffer, 1, 2)
+    %Location{type: :macro, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 1, 2)
 
     assert file =~ "lib/elixir/lib/kernel.ex"
     assert read_line(file, {line, column}) =~ "defmodule("
@@ -53,7 +54,8 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :macro, file: file, line: line, column: column} = ElixirSense.definition(buffer, 2, 4)
+    %Location{type: :macro, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 2, 4)
 
     assert file =~ "lib/elixir/lib/kernel/special_forms.ex"
     assert read_line(file, {line, column}) =~ "import"
@@ -68,7 +70,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 4)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
@@ -84,7 +86,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 11)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
@@ -100,7 +102,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :macro, file: file, line: line, column: column} =
+    %Location{type: :macro, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 13)
 
     assert file =~ "elixir_sense/test/support/behaviour_with_macrocallbacks.ex"
@@ -116,7 +118,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 17)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
@@ -132,7 +134,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 17)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
@@ -148,7 +150,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 12)
 
     assert file =~ "elixir_sense/test/support/macro_generated.ex"
@@ -164,52 +166,11 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 11)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
     assert read_line(file, {line, column}) =~ "delegated_function"
-  end
-
-  test "handle defdelegate" do
-    buffer = """
-    defmodule MyModule do
-      defdelegate delegated_function, to: ElixirSenseExample.ModuleWithFunctions.DelegatedModule
-      #            ^
-    end
-    """
-
-    %{type: :function, file: file, line: line, column: column} =
-      ElixirSense.definition(buffer, 2, 15)
-
-    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
-    assert read_line(file, {line, column}) =~ "delegated_function"
-  end
-
-  test "handle defdelegate with `as`" do
-    buffer = """
-    defmodule MyModule do
-      defdelegate my_function, to: ElixirSenseExample.ModuleWithFunctions.DelegatedModule, as: :delegated_function
-      #            ^
-    end
-    """
-
-    %{type: :function, file: file, line: line, column: column} =
-      ElixirSense.definition(buffer, 2, 15)
-
-    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
-    assert read_line(file, {line, column}) =~ "delegated_function"
-  end
-
-  test "handle recursion in defdelegate" do
-    buffer = """
-    defmodule MyModule do
-      defdelegate delegated_function, to: MyModule
-      #            ^
-    end
-    """
-
-    refute ElixirSense.definition(buffer, 2, 15)
   end
 
   test "find definition of modules" do
@@ -221,7 +182,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :module, file: file, line: line, column: column} =
+    %Location{type: :module, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 23)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
@@ -236,9 +197,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :module, file: file_1, line: line_1} = ElixirSense.definition(buffer, 2, 30)
+    %Location{type: :module, file: file_1, line: line_1} = ElixirSense.definition(buffer, 2, 30)
 
-    %{type: :module, file: file_2, line: line_2} = ElixirSense.definition(buffer, 3, 38)
+    %Location{type: :module, file: file_2, line: line_2} = ElixirSense.definition(buffer, 3, 38)
 
     assert file_1 == file_2
     assert line_1 == line_2
@@ -270,7 +231,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 15)
 
     assert file =~ "/src/lists.erl"
@@ -287,7 +248,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 15)
 
     assert file =~ "/src/erlang.erl"
@@ -362,9 +323,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
     assert read_line(file, {line, column}) =~ "ElixirSenseExample.ModuleWithFunctions do"
 
-    assert %{type: :function} = ElixirSense.definition(buffer, 4, 42)
+    assert %Location{type: :function} = ElixirSense.definition(buffer, 4, 42)
 
-    assert %{type: :function} = ElixirSense.definition(buffer, 6, 42)
+    assert %Location{type: :function} = ElixirSense.definition(buffer, 6, 42)
   end
 
   test "built-in functions cannot be called locally" do
@@ -744,7 +705,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 2, 31)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
@@ -760,7 +721,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 13)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
@@ -776,7 +737,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 13)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
@@ -792,7 +753,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 12)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
@@ -808,7 +769,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 12)
 
     assert file =~ "elixir_sense/test/support/macro_generated.ex"
@@ -823,7 +784,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 2, 9)
 
     assert file =~ "/src/ets.erl"
@@ -838,7 +799,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 2, 12)
 
     assert file =~ "/src/erlang.erl"
@@ -888,7 +849,8 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :typespec, file: nil, line: 2, column: 3} = ElixirSense.definition(buffer, 4, 29)
+    %Location{type: :typespec, file: nil, line: 2, column: 3} =
+      ElixirSense.definition(buffer, 4, 29)
   end
 
   test "find remote metadata type definition" do
@@ -906,7 +868,8 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{type: :typespec, file: nil, line: 2, column: 3} = ElixirSense.definition(buffer, 9, 35)
+    %Location{type: :typespec, file: nil, line: 2, column: 3} =
+      ElixirSense.definition(buffer, 9, 35)
   end
 
   test "do not find remote private type definition" do
@@ -942,13 +905,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %{type: :macro, file: file, line: line, column: column} =
+    assert %Location{type: :macro, file: file, line: line, column: column} =
              ElixirSense.definition(buffer, 5, 6)
 
     assert file =~ "elixir_sense/test/support/overridable_function.ex"
     assert read_line(file, {line, column}) =~ "__using__(_opts)"
 
-    assert %{type: :macro, file: file, line: line, column: column} =
+    assert %Location{type: :macro, file: file, line: line, column: column} =
              ElixirSense.definition(buffer, 9, 6)
 
     assert file =~ "elixir_sense/test/support/overridable_function.ex"
@@ -970,13 +933,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %{type: :macro, file: file, line: line, column: column} =
+    assert %Location{type: :macro, file: file, line: line, column: column} =
              ElixirSense.definition(buffer, 5, 6)
 
     assert file =~ "elixir_sense/test/support/overridable_function.ex"
     assert read_line(file, {line, column}) =~ "__using__(_opts)"
 
-    assert %{type: :macro, file: file, line: line, column: column} =
+    assert %Location{type: :macro, file: file, line: line, column: column} =
              ElixirSense.definition(buffer, 9, 6)
 
     assert file =~ "elixir_sense/test/support/overridable_function.ex"
