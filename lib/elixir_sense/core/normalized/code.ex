@@ -84,7 +84,7 @@ defmodule ElixirSense.Core.Normalized.Code do
     non_documented =
       docs_from_module
       |> Stream.filter(fn {{_kind, _name, _arity}, _anno, _signatures, docs, _metadata} ->
-        docs in [:hidden, :none]
+        docs in [:hidden, :none] or not Map.has_key?(docs, "en")
       end)
       |> Enum.into(MapSet.new(), fn {{_kind, name, arity}, _anno, _signatures, _docs, _metadata} ->
         {name, arity}
