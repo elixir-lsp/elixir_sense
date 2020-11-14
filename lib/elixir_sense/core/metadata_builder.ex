@@ -11,7 +11,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.VarInfo
 
-  @scope_keywords [:for, :try, :fn]
+  @scope_keywords [:for, :fn, :with]
   @block_keywords [:do, :else, :rescue, :catch, :after]
   @defs [:def, :defp, :defmacro, :defmacrop, :defdelegate, :defguard, :defguardp]
   @protocol_types [{:t, [], :type, "@type t :: term"}]

@@ -662,7 +662,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert [%VarInfo{name: :a, positions: [{5, 13}], scope_id: 2}] = state |> get_line_vars(6)
     assert [%VarInfo{name: :a, positions: [{8, 13}], scope_id: 2}] = state |> get_line_vars(9)
     assert [%VarInfo{name: :y, positions: [{13, 5}], scope_id: 7}] = state |> get_line_vars(14)
-    assert [%VarInfo{name: :x, positions: [{17, 8}], scope_id: 2}] = state |> get_line_vars(18)
+    assert [%VarInfo{name: :x, positions: [{17, 8}], scope_id: 8}] = state |> get_line_vars(18)
     assert [%VarInfo{name: :a, positions: [{21, 13}], scope_id: 2}] = state |> get_line_vars(21)
   end
 
@@ -737,6 +737,44 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                scope_id: 3
              },
              %VarInfo{is_definition: true, name: :var_on1, positions: [{4, 37}], scope_id: 3},
+             %VarInfo{is_definition: true, name: :var_out1, positions: [{2, 3}], scope_id: 2}
+           ] = get_line_vars(state, 6)
+
+    assert [
+             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+             %VarInfo{name: :var_out2, positions: [{8, 3}], scope_id: 2}
+           ] = get_line_vars(state, 9)
+  end
+
+  test "vars defined in a `with` expression" do
+    state =
+      """
+      defmodule MyModule do
+        var_out1 = 1
+        IO.puts ""
+        with var_on <- [1,2], var_on != 2, var_on1 = var_on + 1 do
+          var_in = 1
+          IO.puts ""
+        end
+        var_out2 = 1
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+           ] = get_line_vars(state, 3)
+
+    assert [
+             %VarInfo{is_definition: true, name: :var_in, positions: [{5, 5}], scope_id: 4},
+             %VarInfo{
+               is_definition: true,
+               name: :var_on,
+               positions: [{4, 8}, {4, 25}, {4, 48}],
+               scope_id: 3
+             },
+             %VarInfo{is_definition: true, name: :var_on1, positions: [{4, 38}], scope_id: 3},
              %VarInfo{is_definition: true, name: :var_out1, positions: [{2, 3}], scope_id: 2}
            ] = get_line_vars(state, 6)
 
@@ -936,44 +974,44 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert [
-             %VarInfo{name: :var_in_try, positions: [{4, 5}], scope_id: 4},
+             %VarInfo{name: :var_in_try, positions: [{4, 5}], scope_id: 3},
              %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
            ] = get_line_vars(state, 5)
 
     assert [
-             %VarInfo{name: :e1, positions: [{7, 5}], scope_id: 6},
+             %VarInfo{name: :e1, positions: [{7, 5}], scope_id: 5},
              %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
            ] = get_line_vars(state, 7)
 
     assert [
-             %VarInfo{name: :e2, positions: [{8, 5}], scope_id: 7},
-             %VarInfo{name: :var_in_rescue, positions: [{9, 7}], scope_id: 7},
+             %VarInfo{name: :e2, positions: [{8, 5}], scope_id: 6},
+             %VarInfo{name: :var_in_rescue, positions: [{9, 7}], scope_id: 6},
              %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
            ] = get_line_vars(state, 10)
 
     assert [
-             %VarInfo{name: :reason1, positions: [{12, 12}], scope_id: 9},
+             %VarInfo{name: :reason1, positions: [{12, 12}], scope_id: 8},
              %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
            ] = get_line_vars(state, 12)
 
     assert [
-             %VarInfo{name: :reason2, positions: [{13, 5}], scope_id: 10},
-             %VarInfo{name: :var_in_catch, positions: [{14, 7}], scope_id: 10},
+             %VarInfo{name: :reason2, positions: [{13, 5}], scope_id: 9},
+             %VarInfo{name: :var_in_catch, positions: [{14, 7}], scope_id: 9},
              %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
            ] = get_line_vars(state, 15)
 
     assert [
-             %VarInfo{name: :var_on_else, positions: [{17, 13}], scope_id: 12},
+             %VarInfo{name: :var_on_else, positions: [{17, 13}], scope_id: 11},
              %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
            ] = get_line_vars(state, 17)
 
     assert [
-             %VarInfo{name: :var_in_else, positions: [{19, 7}], scope_id: 13},
+             %VarInfo{name: :var_in_else, positions: [{19, 7}], scope_id: 12},
              %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
            ] = get_line_vars(state, 20)
 
     assert [
-             %VarInfo{name: :var_in_after, positions: [{22, 5}], scope_id: 14},
+             %VarInfo{name: :var_in_after, positions: [{22, 5}], scope_id: 13},
              %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
            ] = get_line_vars(state, 23)
 
