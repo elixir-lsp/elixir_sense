@@ -510,6 +510,67 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ] = state |> get_line_vars(5)
   end
 
+  test "rescue binding" do
+    state =
+      """
+      defmodule MyModule do
+        def some() do
+          try do
+            Some.call()
+          rescue
+            e0 in ArgumentError ->
+              :ok
+            e1 in [ArgumentError] ->
+              :ok
+            e2 in [RuntimeError, Enum.EmptyError] ->
+              :ok
+            e3 ->
+              :ok
+          else
+            a ->
+              :ok
+          end
+        end
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{
+               name: :e0,
+               type: {:struct, [], {:atom, ArgumentError}, nil}
+             }
+           ] = state |> get_line_vars(6)
+
+    assert [
+             %VarInfo{
+               name: :e1,
+               type: {:struct, [], {:atom, ArgumentError}, nil}
+             }
+           ] = state |> get_line_vars(8)
+
+    assert [
+             %VarInfo{
+               name: :e2,
+               type: {:struct, [], {:atom, Exception}, nil}
+             }
+           ] = state |> get_line_vars(10)
+
+    assert [
+             %VarInfo{
+               name: :e3,
+               type: {:struct, [], {:atom, Exception}, nil}
+             }
+           ] = state |> get_line_vars(12)
+
+    assert [
+             %VarInfo{
+               name: :a,
+               type: nil
+             }
+           ] = state |> get_line_vars(15)
+  end
+
   test "vars defined inside a function `after`/`rescue`/`catch`" do
     state =
       """

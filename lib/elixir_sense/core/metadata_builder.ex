@@ -241,6 +241,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_block_keyword(ast, state) do
+    state =
+      case ast do
+        {:rescue, _} ->
+          state |> push_binding_context(:rescue)
+
+        _ ->
+          state
+      end
+
     state
     |> new_alias_scope
     |> new_import_scope
@@ -250,6 +259,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp post_block_keyword(ast, state) do
+    state =
+      case ast do
+        {:rescue, _} ->
+          state |> pop_binding_context
+
+        _ ->
+          state
+      end
+
     state
     |> remove_alias_scope
     |> remove_import_scope
@@ -1213,11 +1231,49 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, state}
   end
 
-  defp find_vars(state, ast, match_context \\ nil) do
+  defp find_vars(state, ast, match_context \\ nil)
+
+  defp find_vars(_state, [{var, [line: line, column: column], nil}], :rescue) when is_atom(var) do
+    match_context = {:struct, [], {:atom, Exception}, nil}
+    [%VarInfo{name: var, positions: [{line, column}], type: match_context}]
+  end
+
+  defp find_vars(state, ast, match_context) do
     {_ast, {vars, _match_context}} =
       Macro.prewalk(ast, {[], match_context}, &match_var(state, &1, &2))
 
     vars
+  end
+
+  defp match_var(
+         state,
+         {:in, _meta,
+          [
+            left,
+            right
+          ]},
+         {vars, _match_context}
+       ) do
+    exception_type =
+      case right do
+        [elem] ->
+          get_binding_type(state, elem)
+
+        list when is_list(list) ->
+          types = for elem <- list, do: get_binding_type(state, elem)
+          if Enum.all?(types, &match?({:atom, _}, &1)), do: {:atom, Exception}
+
+        elem ->
+          get_binding_type(state, elem)
+      end
+
+    match_context =
+      case exception_type do
+        {:atom, atom} -> {:struct, [], {:atom, atom}, nil}
+        _ -> nil
+      end
+
+    match_var(state, left, {vars, match_context})
   end
 
   defp match_var(
