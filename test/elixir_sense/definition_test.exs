@@ -7,11 +7,11 @@ defmodule ElixirSense.Providers.DefinitionTest do
   doctest Definition
 
   test "dont crash on empty buffer" do
-    assert %{found: false} = ElixirSense.definition("", 1, 1)
+    refute ElixirSense.definition("", 1, 1)
   end
 
   test "dont error on __MODULE__ when no module" do
-    assert %{found: false} = ElixirSense.definition("__MODULE__", 1, 1)
+    refute ElixirSense.definition("__MODULE__", 1, 1)
   end
 
   test "find definition of aliased modules in `use`" do
@@ -23,7 +23,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :module, file: file, line: line, column: column} =
+    %Location{type: :module, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 12)
 
     assert file =~ "elixir_sense/test/support/use_example.ex"
@@ -38,7 +38,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :function, file: file, line: line, column: column} =
+    %Location{type: :macro, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 1, 2)
 
     assert file =~ "lib/elixir/lib/kernel.ex"
@@ -54,7 +54,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :function, file: file, line: line, column: column} =
+    %Location{type: :macro, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 2, 4)
 
     assert file =~ "lib/elixir/lib/kernel/special_forms.ex"
@@ -70,7 +70,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 4)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
@@ -86,7 +86,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 11)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
@@ -102,7 +102,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :macro, file: file, line: line, column: column} =
+    %Location{type: :macro, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 13)
 
     assert file =~ "elixir_sense/test/support/behaviour_with_macrocallbacks.ex"
@@ -118,7 +118,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 17)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
@@ -134,7 +134,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 17)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
@@ -150,7 +150,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 12)
 
     assert file =~ "elixir_sense/test/support/macro_generated.ex"
@@ -166,52 +166,11 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 11)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
     assert read_line(file, {line, column}) =~ "delegated_function"
-  end
-
-  test "handle defdelegate" do
-    buffer = """
-    defmodule MyModule do
-      defdelegate delegated_function, to: ElixirSenseExample.ModuleWithFunctions.DelegatedModule
-      #            ^
-    end
-    """
-
-    %{found: true, type: :function, file: file, line: line, column: column} =
-      ElixirSense.definition(buffer, 2, 15)
-
-    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
-    assert read_line(file, {line, column}) =~ "delegated_function"
-  end
-
-  test "handle defdelegate with `as`" do
-    buffer = """
-    defmodule MyModule do
-      defdelegate my_function, to: ElixirSenseExample.ModuleWithFunctions.DelegatedModule, as: :delegated_function
-      #            ^
-    end
-    """
-
-    %{found: true, type: :function, file: file, line: line, column: column} =
-      ElixirSense.definition(buffer, 2, 15)
-
-    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
-    assert read_line(file, {line, column}) =~ "delegated_function"
-  end
-
-  test "handle recursion in defdelegate" do
-    buffer = """
-    defmodule MyModule do
-      defdelegate delegated_function, to: MyModule
-      #            ^
-    end
-    """
-
-    assert %{found: false} = ElixirSense.definition(buffer, 2, 15)
   end
 
   test "find definition of modules" do
@@ -223,7 +182,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :module, file: file, line: line, column: column} =
+    %Location{type: :module, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 23)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
@@ -238,11 +197,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :module, file: file_1, line: line_1} =
-      ElixirSense.definition(buffer, 2, 30)
+    %Location{type: :module, file: file_1, line: line_1} = ElixirSense.definition(buffer, 2, 30)
 
-    %{found: true, type: :module, file: file_2, line: line_2} =
-      ElixirSense.definition(buffer, 3, 38)
+    %Location{type: :module, file: file_2, line: line_2} = ElixirSense.definition(buffer, 3, 38)
 
     assert file_1 == file_2
     assert line_1 == line_2
@@ -258,7 +215,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %Location{found: true, type: :module, file: file, line: 20, column: 1} =
+    %Location{type: :module, file: file, line: 20, column: 1} =
       ElixirSense.definition(buffer, 3, 7)
 
     assert file =~ "/src/lists.erl"
@@ -274,7 +231,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 15)
 
     assert file =~ "/src/lists.erl"
@@ -291,7 +248,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :function, file: file, line: line, column: column} =
+    %Location{type: :function, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 15)
 
     assert file =~ "/src/erlang.erl"
@@ -305,7 +262,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert ElixirSense.definition(buffer, 2, 24) == %Location{found: false}
+    refute ElixirSense.definition(buffer, 2, 24)
   end
 
   test "cannot find map field calls" do
@@ -317,7 +274,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert ElixirSense.definition(buffer, 3, 16) == %Location{found: false}
+    refute ElixirSense.definition(buffer, 3, 16)
   end
 
   test "cannot find map fields" do
@@ -328,7 +285,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert ElixirSense.definition(buffer, 2, 12) == %Location{found: false}
+    refute ElixirSense.definition(buffer, 2, 12)
   end
 
   test "preloaded modules" do
@@ -339,7 +296,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %Location{found: true, line: 20, column: 1, type: :module, file: file} =
+    assert %Location{line: 20, column: 1, type: :module, file: file} =
              ElixirSense.definition(buffer, 2, 5)
 
     assert file =~ "/src/erlang.erl"
@@ -360,15 +317,15 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %{column: column, file: file, found: true, line: line, type: :function} =
+    assert %{column: column, file: file, line: line, type: :function} =
              ElixirSense.definition(buffer, 2, 42)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
     assert read_line(file, {line, column}) =~ "ElixirSenseExample.ModuleWithFunctions do"
 
-    assert %{found: true, type: :function} = ElixirSense.definition(buffer, 4, 42)
+    assert %Location{type: :function} = ElixirSense.definition(buffer, 4, 42)
 
-    assert %{found: true, type: :function} = ElixirSense.definition(buffer, 6, 42)
+    assert %Location{type: :function} = ElixirSense.definition(buffer, 6, 42)
   end
 
   test "built-in functions cannot be called locally" do
@@ -388,11 +345,11 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %{found: false} = ElixirSense.definition(buffer, 4, 5)
+    refute ElixirSense.definition(buffer, 4, 5)
 
-    assert %{found: false} = ElixirSense.definition(buffer, 6, 5)
+    refute ElixirSense.definition(buffer, 6, 5)
 
-    assert %{found: false} = ElixirSense.definition(buffer, 8, 5)
+    refute ElixirSense.definition(buffer, 8, 5)
   end
 
   test "does not find built-in erlang functions" do
@@ -405,9 +362,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %{found: false} = ElixirSense.definition(buffer, 2, 14)
+    refute ElixirSense.definition(buffer, 2, 14)
 
-    assert %{found: false} = ElixirSense.definition(buffer, 4, 12)
+    refute ElixirSense.definition(buffer, 4, 12)
   end
 
   test "find definition of variables" do
@@ -423,7 +380,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 6, 13) == %Location{
-             found: true,
              type: :variable,
              file: nil,
              line: 3,
@@ -431,7 +387,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
 
     assert ElixirSense.definition(buffer, 6, 21) == %Location{
-             found: true,
              type: :variable,
              file: nil,
              line: 4,
@@ -452,7 +407,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 6, 6) == %Location{
-             found: true,
              type: :function,
              file: nil,
              line: 2,
@@ -473,7 +427,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 6, 6) == %Location{
-             found: true,
              type: :function,
              file: nil,
              line: 2,
@@ -494,7 +447,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 6, 6) == %Location{
-             found: true,
              type: :variable,
              file: nil,
              line: 5,
@@ -515,7 +467,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 6, 6) == %Location{
-             found: true,
              type: :variable,
              file: nil,
              line: 5,
@@ -536,7 +487,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 6, 15) == %Location{
-             found: true,
              type: :attribute,
              file: nil,
              line: 3,
@@ -544,7 +494,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
 
     assert ElixirSense.definition(buffer, 6, 24) == %Location{
-             found: true,
              type: :attribute,
              file: nil,
              line: 4,
@@ -564,7 +513,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 5, 6) == %Location{
-             found: true,
              type: :function,
              file: nil,
              line: 2,
@@ -585,7 +533,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 6, 17) == %Location{
-             found: true,
              type: :function,
              file: nil,
              line: 2,
@@ -606,7 +553,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 6, 13) == %Location{
-             found: true,
              type: :function,
              file: nil,
              line: 2,
@@ -627,7 +573,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 6, 14) == %Location{
-             found: true,
              type: :function,
              file: nil,
              line: 2,
@@ -648,7 +593,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 6, 24) == %Location{
-             found: true,
              type: :function,
              file: nil,
              line: 2,
@@ -668,7 +612,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 5, 6) == %Location{
-             found: true,
              type: :macro,
              file: nil,
              line: 2,
@@ -691,7 +634,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 8, 7) == %Location{
-             found: true,
              type: :function,
              file: nil,
              line: 3,
@@ -712,9 +654,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert ElixirSense.definition(buffer, 7, 25) == %Location{
-             found: false
-           }
+    refute ElixirSense.definition(buffer, 7, 25)
   end
 
   test "find definition of local module" do
@@ -731,7 +671,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 7, 16) == %Location{
-             found: true,
              type: :module,
              file: nil,
              line: 2,
@@ -751,7 +690,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 4, 21) == %Location{
-             found: true,
              type: :variable,
              file: nil,
              line: 2,
@@ -767,7 +705,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 2, 31)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
@@ -783,7 +721,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 13)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
@@ -799,7 +737,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 13)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
@@ -815,7 +753,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 12)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
@@ -831,7 +769,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 3, 12)
 
     assert file =~ "elixir_sense/test/support/macro_generated.ex"
@@ -846,7 +784,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 2, 9)
 
     assert file =~ "/src/ets.erl"
@@ -861,7 +799,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :typespec, file: file, line: line, column: column} =
+    %Location{type: :typespec, file: file, line: line, column: column} =
       ElixirSense.definition(buffer, 2, 12)
 
     assert file =~ "/src/erlang.erl"
@@ -876,7 +814,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: false} = ElixirSense.definition(buffer, 2, 12)
+    refute ElixirSense.definition(buffer, 2, 12)
   end
 
   test "builtin types cannot be found" do
@@ -887,7 +825,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %{found: false} = ElixirSense.definition(buffer, 2, 23)
+    refute ElixirSense.definition(buffer, 2, 23)
   end
 
   test "builtin elixir types cannot be found" do
@@ -898,7 +836,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %{found: false} = ElixirSense.definition(buffer, 2, 29)
+    refute ElixirSense.definition(buffer, 2, 29)
   end
 
   test "find local metadata type definition" do
@@ -911,7 +849,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :typespec, file: nil, line: 2, column: 3} =
+    %Location{type: :typespec, file: nil, line: 2, column: 3} =
       ElixirSense.definition(buffer, 4, 29)
   end
 
@@ -930,7 +868,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: true, type: :typespec, file: nil, line: 2, column: 3} =
+    %Location{type: :typespec, file: nil, line: 2, column: 3} =
       ElixirSense.definition(buffer, 9, 35)
   end
 
@@ -949,7 +887,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    %{found: false} = ElixirSense.definition(buffer, 9, 35)
+    refute ElixirSense.definition(buffer, 9, 35)
   end
 
   test "find super inside overridable function" do
@@ -967,13 +905,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %{found: true, type: :macro, file: file, line: line, column: column} =
+    assert %Location{type: :macro, file: file, line: line, column: column} =
              ElixirSense.definition(buffer, 5, 6)
 
     assert file =~ "elixir_sense/test/support/overridable_function.ex"
     assert read_line(file, {line, column}) =~ "__using__(_opts)"
 
-    assert %{found: true, type: :macro, file: file, line: line, column: column} =
+    assert %Location{type: :macro, file: file, line: line, column: column} =
              ElixirSense.definition(buffer, 9, 6)
 
     assert file =~ "elixir_sense/test/support/overridable_function.ex"
@@ -995,13 +933,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %{found: true, type: :macro, file: file, line: line, column: column} =
+    assert %Location{type: :macro, file: file, line: line, column: column} =
              ElixirSense.definition(buffer, 5, 6)
 
     assert file =~ "elixir_sense/test/support/overridable_function.ex"
     assert read_line(file, {line, column}) =~ "__using__(_opts)"
 
-    assert %{found: true, type: :macro, file: file, line: line, column: column} =
+    assert %Location{type: :macro, file: file, line: line, column: column} =
              ElixirSense.definition(buffer, 9, 6)
 
     assert file =~ "elixir_sense/test/support/overridable_function.ex"

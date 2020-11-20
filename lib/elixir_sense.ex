@@ -17,6 +17,7 @@ defmodule ElixirSense do
   alias ElixirSense.Providers.Docs
   alias ElixirSense.Providers.Eval
   alias ElixirSense.Providers.Expand
+  alias ElixirSense.Providers.Implementation
   alias ElixirSense.Providers.References
   alias ElixirSense.Providers.Signature
   alias ElixirSense.Providers.Suggestion
@@ -75,15 +76,15 @@ defmodule ElixirSense do
       ...>   MyMod.function_arity_one("some string")
       ...> end
       ...> '''
-      iex>  %{found: true, file: path, line: line, column: column} = ElixirSense.definition(code, 3, 11)
+      iex>  %{file: path, line: line, column: column} = ElixirSense.definition(code, 3, 11)
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
       "module_with_functions.ex:6:7"
   """
-  @spec definition(String.t(), pos_integer, pos_integer) :: Location.t()
+  @spec definition(String.t(), pos_integer, pos_integer) :: Location.t() | nil
   def definition(code, line, column) do
     case Source.subject(code, line, column) do
       nil ->
-        %Location{found: false}
+        nil
 
       subject ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
@@ -102,6 +103,38 @@ defmodule ElixirSense do
           env,
           buffer_file_metadata.mods_funs_to_positions,
           calls,
+          buffer_file_metadata.types
+        )
+    end
+  end
+
+  @doc ~S"""
+  Returns the locations (file and line) where a behaviour or protocol was implemented.
+
+  ## Example
+
+      iex> code = ~S'''
+      ...> ElixirSenseExample.ExampleProtocol.some()
+      ...> '''
+      iex>  [%{file: path, line: line, column: column}, _] = ElixirSense.implementations(code, 1, 37)
+      iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
+      "example_protocol.ex:7:7"
+  """
+  @spec implementations(String.t(), pos_integer, pos_integer) :: [Location.t()]
+  def implementations(code, line, column) do
+    case Source.subject(code, line, column) do
+      nil ->
+        []
+
+      subject ->
+        buffer_file_metadata = Parser.parse_string(code, true, true, line)
+
+        env = Metadata.get_env(buffer_file_metadata, line)
+
+        Implementation.find(
+          subject,
+          env,
+          buffer_file_metadata.mods_funs_to_positions,
           buffer_file_metadata.types
         )
     end
