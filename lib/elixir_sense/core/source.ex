@@ -5,8 +5,8 @@ defmodule ElixirSense.Core.Source do
 
   alias ElixirSense.Core.Normalized.Tokenizer
 
-  @line_break ["\n", "\r\n"]
-  @empty_graphemes [" "] ++ @line_break
+  @line_break ["\n", "\r\n", "\r"]
+  @empty_graphemes [" ", "\t"] ++ @line_break
   @stop_graphemes [
                     "{",
                     "}",
