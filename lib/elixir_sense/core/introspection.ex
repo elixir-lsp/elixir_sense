@@ -1344,6 +1344,9 @@ defmodule ElixirSense.Core.Introspection do
   @spec get_all_behaviour_implementations(module) :: [module]
   def get_all_behaviour_implementations(behaviour) do
     Applications.get_modules_from_applications()
-    |> Enum.filter(&(behaviour in List.wrap(&1.module_info()[:attributes][:behaviour])))
+    |> Enum.filter(fn mod ->
+      Code.ensure_loaded?(mod) and
+        behaviour in List.wrap(mod.module_info(:attributes)[:behaviour])
+    end)
   end
 end
