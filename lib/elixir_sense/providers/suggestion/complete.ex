@@ -537,8 +537,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp get_modules(false, env) do
-    # TODO use all_available
-    # is this lib expected to be run in embedded mode?
     modules = Enum.map(:code.all_loaded(), &Atom.to_string(elem(&1, 0)))
 
     case :code.get_mode() do

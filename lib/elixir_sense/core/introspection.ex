@@ -24,6 +24,7 @@ defmodule ElixirSense.Core.Introspection do
   A collection of functions to introspect/format docs, specs, types and callbacks.
   """
 
+  alias ElixirSense.Core.Applications
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.EdocReader
@@ -1342,21 +1343,10 @@ defmodule ElixirSense.Core.Introspection do
 
   @spec get_all_behaviour_implementations(module) :: [module]
   def get_all_behaviour_implementations(behaviour) do
-    # this function can take a few seconds
-    # unfortunately it does not benefit from conversion to Task.async_stream
-    # at least on otp 23
-    all_available()
+    Applications.get_modules_from_applications()
     |> Enum.filter(fn mod ->
-      if Code.ensure_loaded?(mod) do
-        case mod.module_info(:attributes)[:behaviour] do
-          nil -> nil
-          list when is_list(list) -> behaviour in list
-        end
-      end
+      Code.ensure_loaded?(mod) and
+        behaviour in List.wrap(mod.module_info(:attributes)[:behaviour])
     end)
-  end
-
-  def all_available do
-    :code.all_available() |> Enum.map(&(elem(&1, 0) |> to_string |> String.to_atom()))
   end
 end
