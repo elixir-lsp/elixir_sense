@@ -1343,7 +1343,26 @@ defmodule ElixirSense.Core.Introspection do
 
   @spec get_all_behaviour_implementations(module) :: [module]
   def get_all_behaviour_implementations(behaviour) do
-    Applications.get_modules_from_applications()
+    # this function can take a few seconds
+    # unfortunately it does not benefit from conversion to Task.async_stream
+    # at least on otp 23
+
+    # TODO consider changing this to :code.all_available when otp 23 is required
+    all_loaded =
+      :code.all_loaded()
+      |> Enum.map(&(&1 |> elem(0)))
+
+    from_apps =
+      case :code.get_mode() do
+        :interactive ->
+          Applications.get_modules_from_applications()
+
+        _ ->
+          []
+      end
+
+    (all_loaded ++ from_apps)
+    |> Enum.uniq()
     |> Enum.filter(fn mod ->
       Code.ensure_loaded?(mod) and
         behaviour in List.wrap(mod.module_info(:attributes)[:behaviour])

@@ -537,6 +537,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp get_modules(false, env) do
+    # TODO consider changing this to :code.all_available when otp 23 is required
     modules = Enum.map(:code.all_loaded(), &Atom.to_string(elem(&1, 0)))
 
     case :code.get_mode() do
