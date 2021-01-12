@@ -4534,6 +4534,42 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.types
   end
 
+  test "gets ExUnit imports from `use ExUnit.Case`" do
+    state =
+      """
+      defmodule MyTest do
+        use ExUnit.Case
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_imports(state, 3) == [
+             ExUnit.DocTest,
+             ExUnit.Case,
+             ExUnit.Assertions,
+             ExUnit.Callbacks
+           ]
+  end
+
+  test "gets ExUnit imports from case template" do
+    state =
+      """
+      defmodule MyTest do
+        use ElixirSenseExample.CaseTemplateExample
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_imports(state, 3) == [
+             ExUnit.DocTest,
+             ExUnit.Case,
+             ExUnit.Assertions,
+             ExUnit.Callbacks
+           ]
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true)
