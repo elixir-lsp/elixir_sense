@@ -630,7 +630,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
           # TODO docs and meta from metadata
           {f, a, a, info.type, {docs, metadata}, specs,
-           info.params |> hd |> Enum.map_join(", ", &Macro.to_string/1)}
+           info.params |> hd |> Enum.map(&Macro.to_string/1)}
         end
     end
   end
@@ -706,14 +706,13 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   defp format_params({{_name, _arity}, [params | _]}, _arity_1) do
     TypeInfo.extract_params(params)
-    |> Enum.map_join(", ", &Atom.to_string/1)
+    |> Enum.map(&Atom.to_string/1)
   end
 
-  defp format_params(nil, 0), do: ""
+  defp format_params(nil, 0), do: []
 
   defp format_params(nil, arity) do
-    1..arity
-    |> Enum.map_join(", ", fn _ -> "term" end)
+    for _ <- 1..arity, do: "term"
   end
 
   defp get_edocs(mod) do
@@ -840,13 +839,16 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       fa = {name |> String.to_atom(), a}
 
       if fa in BuiltinFunctions.all() do
+        args = BuiltinFunctions.get_args(fa)
+
         %{
           type: kind,
           visibility: visibility,
           name: name,
           arity: a,
           def_arity: def_arity,
-          args: BuiltinFunctions.get_args(fa) |> Enum.join(", "),
+          args: args |> Enum.join(", "),
+          args_list: args,
           origin: mod_name,
           summary: "Built-in function",
           metadata: %{builtin: true},
@@ -860,7 +862,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           name: name,
           arity: a,
           def_arity: def_arity,
-          args: args,
+          args: args |> Enum.join(", "),
+          args_list: args,
           origin: mod_name,
           summary: doc,
           metadata: metadata,

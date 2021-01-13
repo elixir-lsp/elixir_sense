@@ -24,6 +24,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
           arity: non_neg_integer,
           def_arity: non_neg_integer,
           args: String.t(),
+          args_list: [String.t()],
           origin: String.t(),
           summary: String.t(),
           spec: String.t(),

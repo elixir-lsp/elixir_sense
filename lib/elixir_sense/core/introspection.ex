@@ -914,12 +914,13 @@ defmodule ElixirSense.Core.Introspection do
 
   def extract_fun_args({{_fun, _}, _line, _kind, args, _doc, _metadata}) do
     (args || [])
-    |> Enum.map_join(", ", &format_doc_arg(&1))
-    |> String.replace(Regex.recompile!(~r/\s+/), " ")
+    |> Enum.map(&format_doc_arg(&1))
+
+    # |> String.replace(Regex.recompile!(~r/\s+/), " ")
   end
 
-  def extract_fun_args(_) do
-    ""
+  def extract_fun_args(atom) when atom in [nil, false] do
+    []
   end
 
   def get_spec_as_string(module, function, arity, :macro) do

@@ -57,7 +57,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
   defp clauses_suggestions(hint) do
     funs = Complete.get_module_funs(Ecto.Query, false)
 
-    for {name, arity, arity, :macro, {doc, _}, _, "query," <> _} <- funs,
+    for {name, arity, arity, :macro, {doc, _}, _, ["query" | _]} <- funs,
         clause = to_string(name),
         String.starts_with?(clause, hint) do
       clause_to_suggestion(clause, doc, "from clause")

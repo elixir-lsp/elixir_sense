@@ -28,6 +28,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
     assert result |> Enum.at(0) == %{
              args: "atom",
+             args_list: ["atom"],
              arity: 1,
              def_arity: 1,
              name: "__info__",
@@ -43,6 +44,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
     assert result |> Enum.at(1) == %{
              args: "",
+             args_list: [],
              arity: 0,
              def_arity: 0,
              name: "module_info",
@@ -58,6 +60,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
     assert result |> Enum.at(2) == %{
              args: "key",
+             args_list: ["key"],
              arity: 1,
              def_arity: 1,
              name: "module_info",
@@ -149,6 +152,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              [
                %{
                  args: "",
+                 args_list: [],
                  arity: 0,
                  def_arity: 0,
                  name: "say_hi",

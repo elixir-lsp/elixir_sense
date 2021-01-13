@@ -16,6 +16,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert Enum.find(list, fn s -> match?(%{name: "import", arity: 2}, s) end) == %{
              args: "module, opts",
+             args_list: ["module", "opts"],
              arity: 2,
              def_arity: 2,
              name: "import",
@@ -35,6 +36,7 @@ defmodule ElixirSense.SuggestionsTest do
              spec: "",
              type: :macro,
              args: "opts, block",
+             args_list: ["opts", "block"],
              name: "quote",
              summary: "Gets the representation of any expression.",
              metadata: %{},
@@ -49,6 +51,7 @@ defmodule ElixirSense.SuggestionsTest do
              spec: "",
              type: :macro,
              args: "module, opts",
+             args_list: ["module", "opts"],
              name: "require",
              summary: "Requires a module in order to use its macros.",
              metadata: %{},
@@ -70,6 +73,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{
                args: "term",
+               args_list: ["term"],
                arity: 1,
                def_arity: 1,
                name: "is_binary",
@@ -83,6 +87,7 @@ defmodule ElixirSense.SuggestionsTest do
              },
              %{
                args: "term",
+               args_list: ["term"],
                arity: 1,
                def_arity: 1,
                name: "is_bitstring",
@@ -97,6 +102,7 @@ defmodule ElixirSense.SuggestionsTest do
              },
              %{
                args: "term",
+               args_list: ["term"],
                arity: 1,
                def_arity: 1,
                name: "is_boolean",
@@ -246,6 +252,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{
                args: "list",
+               args_list: ["list"],
                arity: 1,
                def_arity: 1,
                name: "flatten",
@@ -259,6 +266,7 @@ defmodule ElixirSense.SuggestionsTest do
              },
              %{
                args: "list, tail",
+               args_list: ["list", "tail"],
                arity: 2,
                def_arity: 2,
                name: "flatten",
@@ -289,6 +297,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{
                args: "var",
+               args_list: ["var"],
                arity: 1,
                def_arity: 1,
                name: "some",
@@ -1663,6 +1672,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "ElixirSenseExample.ModuleO",
                type: :function,
                args: "a",
+               args_list: ["a"],
                spec: "@spec test_fun_pub(integer) :: atom",
                summary: "",
                metadata: %{},
@@ -2428,6 +2438,7 @@ defmodule ElixirSense.SuggestionsTest do
                name: "other_func",
                type: :function,
                args: "",
+               args_list: [],
                arity: 0,
                def_arity: 0,
                origin: "MyServer",

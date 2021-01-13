@@ -46,6 +46,7 @@ defmodule ElixirSense.Providers.Suggestion do
   alias ElixirSense.Providers.Suggestion.Reducers
 
   @type generic :: %{
+          type: :generic,
           label: String.t(),
           detail: String.t() | nil,
           documentation: String.t() | nil,
@@ -53,7 +54,7 @@ defmodule ElixirSense.Providers.Suggestion do
           filter_text: String.t() | nil,
           snippet: String.t() | nil,
           priority: integer() | nil,
-          kind: String.t(),
+          kind: atom(),
           command: map()
         }
 
