@@ -454,6 +454,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert [
              %{
                args: "a",
+               args_list: ["a"],
                arity: 1,
                name: "optional",
                subtype: :macrocallback,
@@ -465,6 +466,7 @@ defmodule ElixirSense.SuggestionsTest do
              },
              %{
                args: "atom",
+               args_list: ["atom"],
                arity: 1,
                name: "required",
                subtype: :macrocallback,

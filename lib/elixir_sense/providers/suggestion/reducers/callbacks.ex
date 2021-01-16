@@ -10,6 +10,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
           name: String.t(),
           arity: non_neg_integer,
           args: String.t(),
+          args_list: [String.t()],
           origin: String.t(),
           summary: String.t(),
           spec: String.t(),
@@ -43,12 +44,18 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
             desc = Introspection.extract_summary_from_docs(doc)
             [_, args_str] = Regex.run(Regex.recompile!(~r/.\((.*)\)/), signature)
 
+            args_list =
+              args_str
+              |> String.split(",")
+              |> Enum.map(&String.trim/1)
+
             %{
               type: :callback,
               subtype: kind,
               name: Atom.to_string(name),
               arity: arity,
               args: args_str,
+              args_list: args_list,
               origin: mod_name,
               summary: desc,
               spec: spec,

@@ -952,8 +952,7 @@ defmodule ElixirSense.Core.Introspection do
 
       formatted_args =
         (args || [])
-        |> Enum.map_join(", ", &format_doc_arg(&1))
-        |> String.replace(Regex.recompile!(~r/\s+/), " ")
+        |> Enum.map(&format_doc_arg(&1))
 
       desc = extract_summary_from_docs(doc)
 

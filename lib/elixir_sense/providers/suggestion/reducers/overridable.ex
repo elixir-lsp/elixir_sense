@@ -40,7 +40,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Overridable do
             nil -> ""
           end
 
-        args = info.params |> hd |> Enum.map_join(", ", &(&1 |> elem(0) |> Atom.to_string()))
+        args_list = info.params |> hd |> Enum.map(&(&1 |> elem(0) |> Atom.to_string()))
+        args = args_list |> Enum.join(", ")
 
         subtype =
           case State.ModFunInfo.get_category(info) do
@@ -54,6 +55,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Overridable do
           name: Atom.to_string(name),
           arity: arity,
           args: args,
+          args_list: args_list,
           origin: inspect(origin),
           summary: "",
           metadata: %{},
