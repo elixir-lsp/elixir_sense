@@ -167,7 +167,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
 
     relations =
       Enum.map_join(associations, ", ", fn assoc ->
-        "`#{inspect(assoc.related)} (#{inspect(assoc.related_key)})`"
+        "`#{inspect(assoc.related)} (#{inspect(Map.get(assoc, :related_key))})`"
       end)
 
     related_info = if relations == "", do: "", else: "* **Related:** #{relations}"
