@@ -443,7 +443,8 @@ defmodule ElixirSense.Plugins.EctoTest do
                  kind: :field,
                  type: :generic
                },
-               %{label: ":comments"}
+               %{label: ":comments"},
+               %{label: ":tags"}
              ] = suggestions(buffer, cursor)
 
       assert doc == "Fake User schema."
@@ -580,6 +581,22 @@ defmodule ElixirSense.Plugins.EctoTest do
       [cursor] = cursors(buffer)
 
       assert [%{detail: "(from clause) Ecto.Query"} | _] = suggestions(buffer, cursor)
+    end
+
+    test "succeeds when using schema with many_to_many assoc" do
+      buffer = """
+      import Ecto.Query
+      alias ElixirSense.Plugins.Ecto.FakeSchemas.Post
+
+      def query() do
+        from p in Post, se
+          #               ^
+      end
+      """
+
+      [cursor] = cursors(buffer)
+
+      assert [%{label: "select"}, %{label: "select_merge"}] = suggestions(buffer, cursor)
     end
   end
 
