@@ -146,6 +146,7 @@ defmodule ElixirSense.Plugins.EctoTest do
       Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Comment)
       Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Post)
       Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.User)
+      Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Tag)
       :ok
     end
 
@@ -161,6 +162,7 @@ defmodule ElixirSense.Plugins.EctoTest do
       [
         %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Comment"},
         %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post"},
+        %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Tag"},
         %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.User"}
       ] = suggestions(buffer, cursor)
     end
@@ -455,6 +457,7 @@ defmodule ElixirSense.Plugins.EctoTest do
       Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Comment)
       Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Post)
       Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.User)
+      Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Tag)
 
       buffer = """
       import Ecto.Query
@@ -472,6 +475,7 @@ defmodule ElixirSense.Plugins.EctoTest do
       assert [
                %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Comment"},
                %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post"},
+               %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Tag"},
                %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.User"}
                | _
              ] = suggestions(buffer, cursor_1)
@@ -479,6 +483,7 @@ defmodule ElixirSense.Plugins.EctoTest do
       assert [
                %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Comment"},
                %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post"},
+               %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Tag"},
                %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.User"}
                | _
              ] = suggestions(buffer, cursor_2)
