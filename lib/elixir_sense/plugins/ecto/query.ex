@@ -172,7 +172,6 @@ defmodule ElixirSense.Plugins.Ecto.Query do
         %{related: related} ->
           # Ecto.Association.ManyToMany does not define :related_key
           "`#{inspect(related)}`"
-        "`#{inspect(assoc.related)} (#{inspect(Map.get(assoc, :related_key))})`"
       end)
 
     related_info = if relations == "", do: "", else: "* **Related:** #{relations}"
