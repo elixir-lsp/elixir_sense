@@ -43,7 +43,7 @@ defmodule ElixirSense.Plugins.Ecto.FakeSchemas.Post do
   alias ElixirSense.Plugins.Ecto.FakeSchemas.Comment
 
   def __schema__(:fields), do: [:id, :title, :text, :date, :user_id]
-  def __schema__(:associations), do: [:user, :comments]
+  def __schema__(:associations), do: [:user, :comments, :tags]
   def __schema__(:type, :id), do: :id
   def __schema__(:type, :user_id), do: :id
   def __schema__(:type, :title), do: :string
@@ -55,4 +55,23 @@ defmodule ElixirSense.Plugins.Ecto.FakeSchemas.Post do
 
   def __schema__(:association, :comments),
     do: %{related: Comment, related_key: :post_id, owner: __MODULE__, owner_key: :id}
+
+  def __schema__(:association, :tags),
+    do: %{related: Tag, owner: __MODULE__, owner_key: :id}
+end
+
+defmodule ElixirSense.Plugins.Ecto.FakeSchemas.Tag do
+  @moduledoc """
+  Fake Tag schema.
+  """
+
+  alias ElixirSense.Plugins.Ecto.FakeSchemas.Post
+
+  def __schema__(:fields), do: [:id, :name]
+  def __schema__(:associations), do: [:posts]
+  def __schema__(:type, :id), do: :id
+  def __schema__(:type, :name), do: :string
+
+  def __schema__(:association, :posts),
+    do: %{related: Post, owner: __MODULE__, owner_key: :id}
 end

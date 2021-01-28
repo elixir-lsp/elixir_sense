@@ -146,6 +146,7 @@ defmodule ElixirSense.Plugins.EctoTest do
       Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Comment)
       Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Post)
       Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.User)
+      Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Tag)
       :ok
     end
 
@@ -161,6 +162,7 @@ defmodule ElixirSense.Plugins.EctoTest do
       [
         %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Comment"},
         %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post"},
+        %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Tag"},
         %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.User"}
       ] = suggestions(buffer, cursor)
     end
@@ -443,7 +445,8 @@ defmodule ElixirSense.Plugins.EctoTest do
                  kind: :field,
                  type: :generic
                },
-               %{label: ":comments"}
+               %{label: ":comments"},
+               %{label: ":tags"}
              ] = suggestions(buffer, cursor)
 
       assert doc == "Fake User schema."
@@ -454,6 +457,7 @@ defmodule ElixirSense.Plugins.EctoTest do
       Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Comment)
       Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Post)
       Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.User)
+      Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Tag)
 
       buffer = """
       import Ecto.Query
@@ -471,6 +475,7 @@ defmodule ElixirSense.Plugins.EctoTest do
       assert [
                %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Comment"},
                %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post"},
+               %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Tag"},
                %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.User"}
                | _
              ] = suggestions(buffer, cursor_1)
@@ -478,6 +483,7 @@ defmodule ElixirSense.Plugins.EctoTest do
       assert [
                %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Comment"},
                %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Post"},
+               %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.Tag"},
                %{label: "ElixirSense.Plugins.Ecto.FakeSchemas.User"}
                | _
              ] = suggestions(buffer, cursor_2)
@@ -580,6 +586,22 @@ defmodule ElixirSense.Plugins.EctoTest do
       [cursor] = cursors(buffer)
 
       assert [%{detail: "(from clause) Ecto.Query"} | _] = suggestions(buffer, cursor)
+    end
+
+    test "succeeds when using schema with many_to_many assoc" do
+      buffer = """
+      import Ecto.Query
+      alias ElixirSense.Plugins.Ecto.FakeSchemas.Post
+
+      def query() do
+        from p in Post, se
+          #               ^
+      end
+      """
+
+      [cursor] = cursors(buffer)
+
+      assert [%{label: "select"}, %{label: "select_merge"}] = suggestions(buffer, cursor)
     end
   end
 

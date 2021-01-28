@@ -166,8 +166,13 @@ defmodule ElixirSense.Plugins.Ecto.Query do
     associations = find_field_relations(field, origin)
 
     relations =
-      Enum.map_join(associations, ", ", fn assoc ->
-        "`#{inspect(assoc.related)} (#{inspect(assoc.related_key)})`"
+      Enum.map_join(associations, ", ", fn
+        %{related: related, related_key: related_key} ->
+          "`#{inspect(related)} (#{inspect(related_key)})`"
+
+        %{related: related} ->
+          # Ecto.Association.ManyToMany does not define :related_key
+          "`#{inspect(related)}`"
       end)
 
     related_info = if relations == "", do: "", else: "* **Related:** #{relations}"
