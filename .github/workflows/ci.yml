@@ -15,19 +15,19 @@ jobs:
       matrix:
         include:
           - elixir: 1.7.x
-            otp: 19.3.6.x
+            otp: 19.3.6.13
             tests_may_fail: true
           - elixir: 1.8.x
-            otp: 20.3.8.x
+            otp: 20.3.8.26
             tests_may_fail: true
           - elixir: 1.9.x
-            otp: 20.3.8.x
+            otp: 20.3.8.26
             tests_may_fail: false
           - elixir: 1.10.x
-            otp: 21.3.8.x
+            otp: 21.3.8.20
             tests_may_fail: false
           - elixir: 1.11.x
-            otp: 21.3.8.x
+            otp: 21.3.8.20
             tests_may_fail: false
           - elixir: 1.11.x
             otp: 23.2.x
