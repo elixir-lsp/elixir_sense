@@ -70,52 +70,28 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 2, 7)
 
-    assert list == [
+    assert [
              %{
-               args: "term",
-               args_list: ["term"],
-               arity: 1,
-               def_arity: 1,
                name: "is_binary",
                origin: "Kernel",
-               spec: "@spec is_binary(term) :: boolean",
-               summary: "Returns `true` if `term` is a binary; otherwise returns `false`.",
-               type: :function,
-               metadata: %{guard: true},
-               snippet: nil,
-               visibility: :public
+               arity: 1
              },
              %{
-               args: "term",
-               args_list: ["term"],
-               arity: 1,
-               def_arity: 1,
                name: "is_bitstring",
                origin: "Kernel",
-               spec: "@spec is_bitstring(term) :: boolean",
-               summary:
-                 "Returns `true` if `term` is a bitstring (including a binary); otherwise returns `false`.",
-               type: :function,
-               metadata: %{guard: true},
-               snippet: nil,
-               visibility: :public
+               arity: 1
              },
              %{
-               args: "term",
-               args_list: ["term"],
-               arity: 1,
-               def_arity: 1,
                name: "is_boolean",
                origin: "Kernel",
-               spec: "@spec is_boolean(term) :: boolean",
-               summary:
-                 "Returns `true` if `term` is either the atom `true` or the atom `false` (i.e.,\na boolean); otherwise returns `false`.",
-               type: :function,
-               metadata: %{guard: true},
-               snippet: nil,
-               visibility: :public
+               arity: 1
+             },
+             %{
+               name: "is_number",
+               origin: "Kernel",
+               arity: 1
              }
-           ]
+           ] = list
   end
 
   test "capture hint" do
@@ -842,19 +818,9 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :function end)
 
     assert [
-             %{
-               args: "arg",
-               arity: 1,
-               def_arity: 1,
-               metadata: %{},
-               name: "init",
-               origin: "MyServer",
-               spec:
-                 "@spec init(args :: term) :: {:ok, state :: term} | {:ok, state :: term, timeout | :hibernate | {:continue, term}} | {:stop, reason :: term} | :ignore",
-               summary: "",
-               type: :function,
-               visibility: :public
-             }
+             %{name: "is_function", origin: "Kernel", arity: 1},
+             %{name: "is_function", origin: "Kernel", arity: 2},
+             %{name: "init", origin: "MyServer", arity: 1}
            ] = list
   end
 
@@ -1476,10 +1442,10 @@ defmodule ElixirSense.SuggestionsTest do
       def test_fun_pub(a), do: :ok
 
       def some_fun() do
-        te
+        test
         a = &test_fun_pr
         is_bo
-        del
+        delegate_
         my_
         a_m
       end
@@ -1514,7 +1480,7 @@ defmodule ElixirSense.SuggestionsTest do
                type: :function,
                visibility: :public
              }
-           ] = ElixirSense.suggestions(buffer, 5, 7)
+           ] = ElixirSense.suggestions(buffer, 5, 9)
 
     assert [
              %{
@@ -1553,7 +1519,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "ElixirSenseExample.ModuleA",
                type: :function
              }
-           ] = ElixirSense.suggestions(buffer, 8, 8)
+           ] = ElixirSense.suggestions(buffer, 8, 14)
 
     assert [
              %{
@@ -1660,8 +1626,8 @@ defmodule ElixirSense.SuggestionsTest do
     defmodule ElixirSenseExample.ModuleA do
       import ElixirSenseExample.ModuleO
       def some_fun() do
-        te
-        __i
+        test
+        __info
       end
     end
     """
@@ -1681,10 +1647,10 @@ defmodule ElixirSense.SuggestionsTest do
                snippet: nil,
                visibility: :public
              }
-           ] == ElixirSense.suggestions(buffer, 10, 7)
+           ] == ElixirSense.suggestions(buffer, 10, 9)
 
     # builtin functions not called locally
-    assert [] == ElixirSense.suggestions(buffer, 11, 8)
+    assert [] == ElixirSense.suggestions(buffer, 11, 11)
   end
 
   test "functions and module suggestions with __MODULE__" do
@@ -2240,18 +2206,16 @@ defmodule ElixirSense.SuggestionsTest do
     defmodule MyServer do
       def func do
         var_1 = Atom
-        var_1.to_s
+        var_1.to_str
       end
     end
     """
 
     list =
-      ElixirSense.suggestions(buffer, 4, 15)
+      ElixirSense.suggestions(buffer, 4, 17)
       |> Enum.filter(&(&1.type in [:function]))
 
-    assert [
-             %{name: "to_string", origin: "Atom", type: :function}
-           ] = list
+    assert [%{name: "to_string", origin: "Atom", type: :function}] = list
   end
 
   test "suggestion for vars in struct update" do
@@ -2267,12 +2231,12 @@ defmodule ElixirSense.SuggestionsTest do
       end
 
       def func(%MyServer{} = some_arg) do
-        %MyServer{so
+        %MyServer{some
       end
     end
     """
 
-    list = ElixirSense.suggestions(buffer, 12, 17)
+    list = ElixirSense.suggestions(buffer, 12, 19)
 
     assert [
              %{
@@ -2296,12 +2260,12 @@ defmodule ElixirSense.SuggestionsTest do
       ]
 
       def func(%MyServer{} = some_arg) do
-        %MyServer{some_arg | fi
+        %MyServer{some_arg | fiel
       end
     end
     """
 
-    list = ElixirSense.suggestions(buffer, 8, 28)
+    list = ElixirSense.suggestions(buffer, 8, 30)
 
     assert list == [
              %{
@@ -2323,12 +2287,12 @@ defmodule ElixirSense.SuggestionsTest do
       ]
 
       def func(%MyServer{} = some_arg) do
-        %{some_arg | fi
+        %{some_arg | fiel
       end
     end
     """
 
-    list = ElixirSense.suggestions(buffer, 8, 20)
+    list = ElixirSense.suggestions(buffer, 8, 22)
 
     assert list == [
              %{
@@ -2351,11 +2315,11 @@ defmodule ElixirSense.SuggestionsTest do
 
       @str %MyServer{}
 
-      %{@str | fi
+      %{@str | fiel
     end
     """
 
-    list = ElixirSense.suggestions(buffer, 9, 14)
+    list = ElixirSense.suggestions(buffer, 9, 16)
 
     assert list == [
              %{
@@ -2372,12 +2336,12 @@ defmodule ElixirSense.SuggestionsTest do
     buffer = """
     defmodule MyServer do
       def func(%var{field_1: "asd"} = some_arg) do
-        %{some_arg | fi
+        %{some_arg | fiel
       end
     end
     """
 
-    list = ElixirSense.suggestions(buffer, 3, 20)
+    list = ElixirSense.suggestions(buffer, 3, 22)
 
     assert list == [
              %{call?: false, name: "field_1", origin: nil, subtype: :struct_field, type: :field}
@@ -2403,12 +2367,12 @@ defmodule ElixirSense.SuggestionsTest do
     buffer = """
     defmodule MyServer do
       def func(%{field_1: "asd"} = some_arg) do
-        %{some_arg | fi
+        %{some_arg | fiel
       end
     end
     """
 
-    list = ElixirSense.suggestions(buffer, 3, 20)
+    list = ElixirSense.suggestions(buffer, 3, 22)
 
     assert list == [
              %{call?: false, name: "field_1", origin: nil, subtype: :map_key, type: :field}
