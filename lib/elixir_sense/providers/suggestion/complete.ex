@@ -50,6 +50,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
 
+  alias ElixirSense.Providers.Suggestion.Matcher
+
   @erlang_module_builtin_functions [{:module_info, 0}, {:module_info, 1}]
   @elixir_module_builtin_functions [{:__info__, 1}]
   @builtin_functions @erlang_module_builtin_functions ++ @elixir_module_builtin_functions
@@ -591,7 +593,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
     for {fun, arities, def_arities, func_kind, docs, specs, args} <- list,
         name = Atom.to_string(fun),
-        String.starts_with?(name, hint) do
+        Matcher.match?(name, hint) do
       %{
         kind: :function,
         name: name,
