@@ -467,7 +467,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp match_aliases(hint, env) do
     for {alias, _mod} <- env.aliases,
         [name] = Module.split(alias),
-        starts_with?(name, hint) do
+        String.starts_with?(name, hint) do
       %{kind: :module, type: :alias, name: name, desc: {"", %{}}, subtype: nil}
     end
   end
@@ -528,8 +528,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     |> get_modules(env)
     |> Enum.sort()
     |> Enum.dedup()
-    |> Enum.drop_while(&(not starts_with?(&1, hint)))
-    |> Enum.take_while(&starts_with?(&1, hint))
+    |> Enum.drop_while(&(not String.starts_with?(&1, hint)))
+    |> Enum.take_while(&String.starts_with?(&1, hint))
   end
 
   defp get_modules(true, env) do
@@ -591,7 +591,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
     for {fun, arities, def_arities, func_kind, docs, specs, args} <- list,
         name = Atom.to_string(fun),
-        starts_with?(name, hint) do
+        String.starts_with?(name, hint) do
       %{
         kind: :function,
         name: name,
@@ -757,9 +757,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   defp ensure_loaded(Elixir), do: {:error, :nofile}
   defp ensure_loaded(mod), do: Code.ensure_compiled(mod)
-
-  defp starts_with?(_string, ""), do: true
-  defp starts_with?(string, hint), do: String.starts_with?(string, hint)
 
   defp match_map_fields(fields, hint, type) do
     for {key, value} when is_atom(key) <- fields,
