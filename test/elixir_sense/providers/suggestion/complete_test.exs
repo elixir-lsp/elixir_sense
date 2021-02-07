@@ -1033,7 +1033,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "complete build in functions on non local calls" do
-    assert [] = expand('mo')
+    assert [] = expand('module_')
     assert [] = expand('__in')
 
     assert [] = expand('Elixir.mo')
@@ -1080,7 +1080,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                spec:
                  "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
              }
-           ] = expand(':ets.mo')
+           ] = expand(':ets.module_')
 
     assert [] = expand(':ets.__in')
 
@@ -1097,7 +1097,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       }
     }
 
-    assert [] = expand('mo', env)
+    assert [] = expand('module_', env)
     assert [] = expand('__in', env)
 
     assert [
@@ -1243,6 +1243,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   @tag requires_otp_23: true
   test "complete build in :erlang functions" do
     assert [
+             %{arity: 2, name: "open_port", origin: ":erlang"},
              %{
                arity: 2,
                name: "or",
@@ -1281,22 +1282,22 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                spec: "",
                summary: "",
                type: :function
-             }
+             },
+             %{arity: 2, name: "append", origin: ":erlang"},
+             %{arity: 2, name: "append_element", origin: ":erlang"}
            ] = expand(':erlang.and')
   end
 
-  test "profide specs for erlang functions" do
+  test "provide specs for erlang functions" do
     assert [
              %{
-               arity: 0,
-               name: "date",
-               spec: "@spec date :: date when date: :calendar.date",
-               type: :function,
-               args: "",
+               arity: 1,
+               name: "whereis",
                origin: ":erlang",
-               summary: ""
+               spec: "@spec whereis(regName) :: pid | port | :undefined when regName: atom",
+               type: :function
              }
-           ] = expand(':erlang.dat')
+           ] = expand(':erlang.where')
 
     assert [
              %{
@@ -1348,7 +1349,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "complete after ! operator" do
-    assert [%{name: "is_binary"}] = expand('!is_bin')
+    assert [%{name: "is_binary"}] = expand('!is_bina')
   end
 
   test "correctly find subtype and doc for modules that have submodule" do
