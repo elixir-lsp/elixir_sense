@@ -6,7 +6,7 @@ defmodule ElixirSense.Providers.Suggestion.Matcher do
   import Kernel, except: [match?: 2]
 
   @doc """
-  Naive sequential fuzzy matching without weight.
+  Naive sequential fuzzy matching without weight and requiring first char to match.
 
   ## Examples
 
