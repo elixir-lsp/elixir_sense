@@ -1384,4 +1384,8 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert Enum.any?(list, &(&1.type == :function))
     refute Enum.any?(list, &(&1.type not in [:function, :module, :macro]))
   end
+
+  test "complete Kernel.SpecialForms macros with fixed argument list" do
+    assert [%{args_list: ["term"]}] = expand('Kernel.SpecialForms.fn')
+  end
 end

@@ -671,6 +671,16 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
         fun_args = Introspection.extract_fun_args(func_doc)
 
+        # as of Elixir 1.11 some functions/macros, e.g. Kernel.SpecialForms.fn
+        # have broken specs in docs
+        # in that case we fill a dummy fun_args
+        fun_args =
+          if length(fun_args) != new_arity do
+            format_params(nil, new_arity)
+          else
+            fun_args
+          end
+
         {f, a, new_arity, func_kind, doc, Introspection.spec_to_string(spec), fun_args}
       end
       |> Kernel.++(
