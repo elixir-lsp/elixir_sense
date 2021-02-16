@@ -102,6 +102,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
     find_metadata_types(actual_mod, {mod, hint}, metadata_types, module)
     |> Kernel.++(TypeInfo.find_all(actual_mod, &String.starts_with?("#{&1.name}", hint)))
     |> Enum.map(&type_info_to_suggestion(&1, actual_mod))
+    |> Enum.uniq_by(fn %{name: name, arity: arity} -> {name, arity} end)
   end
 
   defp find_metadata_types(actual_mod, {mod, hint}, metadata_types, module) do
