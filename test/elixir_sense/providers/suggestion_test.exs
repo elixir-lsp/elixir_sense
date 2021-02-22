@@ -169,7 +169,13 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
   test "local calls should not return built-in functions" do
     list =
-      Suggestion.find("mo", @env, %Metadata{}, @cursor_context)
+      Suggestion.find(
+        # Trying to find module_info
+        "module_",
+        @env,
+        %Metadata{},
+        @cursor_context
+      )
       |> Enum.filter(fn item -> item.type in [:function] end)
 
     assert list == []
