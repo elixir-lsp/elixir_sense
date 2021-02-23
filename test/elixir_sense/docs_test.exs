@@ -258,7 +258,6 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    @tag requires_elixir_1_8: true
     test "retrieve macro documentation" do
       buffer = """
       defmodule MyModule do
@@ -587,7 +586,6 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    @tag requires_elixir_1_8: true
     test "retrieve callback information from modules" do
       buffer = """
       defmodule MyModule do
@@ -632,7 +630,6 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    @tag requires_elixir_1_8: true
     test "retrieve macrocallback information from modules" do
       buffer = """
       defmodule MyModule do

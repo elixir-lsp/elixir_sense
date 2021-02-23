@@ -233,7 +233,6 @@ defmodule ElixirSense.SignatureTest do
     end
   end
 
-  @tag requires_elixir_1_8: true
   describe "macro signature" do
     test "find signatures from aliased modules" do
       code = """

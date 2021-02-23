@@ -239,7 +239,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
     assert {:erlang, :orelse, true} = actual_mod_fun({:erlang, :orelse}, [], [], nil, %{}, %{})
   end
 
-  @tag requires_elixir_1_8: true
   describe "get_all_docs" do
     test "returns delageted metadata on functions" do
       assert %{docs: docs} =

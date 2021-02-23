@@ -2,7 +2,6 @@ defmodule ElixirSense.Core.Normalized.TypespecTest do
   use ExUnit.Case, async: true
   alias ElixirSense.Core.Normalized.Typespec
 
-  @tag requires_elixir_1_8: true
   test "get_specs" do
     assert [
              {{:"MACRO-some_macro", 2},
