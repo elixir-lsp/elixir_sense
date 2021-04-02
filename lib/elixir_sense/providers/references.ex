@@ -12,7 +12,6 @@ defmodule ElixirSense.Providers.References do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.AttributeInfo
-  alias ElixirSense.Core.State.CallInfo
   alias ElixirSense.Core.State.VarInfo
   alias Mix.Tasks.Xref
 
@@ -34,9 +33,7 @@ defmodule ElixirSense.Providers.References do
           State.Env.t(),
           [VarInfo.t()],
           [AttributeInfo.t()],
-          State.mods_funs_to_positions_t(),
-          [CallInfo.t()],
-          State.types_t()
+          Metadata.t()
         ) :: [ElixirSense.Providers.References.reference_info()]
   def find(
         subject,
@@ -49,9 +46,11 @@ defmodule ElixirSense.Providers.References do
         },
         vars,
         attributes,
-        modules_funs,
-        calls,
-        metadata_types
+        %Metadata{
+          mods_funs_to_positions: modules_funs,
+          calls: calls,
+          types: metadata_types
+        }
       ) do
     var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
 
