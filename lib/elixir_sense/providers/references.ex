@@ -12,6 +12,7 @@ defmodule ElixirSense.Providers.References do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.AttributeInfo
+  alias ElixirSense.Core.State.CallInfo
   alias ElixirSense.Core.State.VarInfo
   alias Mix.Tasks.Xref
 
@@ -34,6 +35,7 @@ defmodule ElixirSense.Providers.References do
           [VarInfo.t()],
           [AttributeInfo.t()],
           State.mods_funs_to_positions_t(),
+          [CallInfo.t()],
           State.types_t()
         ) :: [ElixirSense.Providers.References.reference_info()]
   def find(
@@ -48,6 +50,7 @@ defmodule ElixirSense.Providers.References do
         vars,
         attributes,
         modules_funs,
+        calls,
         metadata_types
       ) do
     var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
@@ -62,6 +65,11 @@ defmodule ElixirSense.Providers.References do
           nil
       end
 
+    private_info =
+      Enum.find(modules_funs, fn {{_mod, name, _args}, fun_info} ->
+        to_string(name) == subject && fun_info.type == :defp
+      end)
+
     cond do
       var_info != nil ->
         %VarInfo{positions: positions} = var_info
@@ -74,6 +82,13 @@ defmodule ElixirSense.Providers.References do
 
         positions
         |> Enum.map(fn pos -> build_var_location(subject, pos) end)
+
+      private_info != nil ->
+        calls
+        |> Map.values()
+        |> List.flatten()
+        |> Enum.filter(&(&1.mod == nil && to_string(&1.func) == subject))
+        |> Enum.map(fn %{position: pos} -> build_var_location(subject, pos) end)
 
       true ->
         binding_env = %Binding{

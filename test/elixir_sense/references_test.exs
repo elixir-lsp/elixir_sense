@@ -613,6 +613,58 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
+  test "find references of private functions from definition" do
+    buffer = """
+    defmodule MyModule do
+      def calls_private do
+        private_fun()
+      end
+
+      defp also_calls_private do
+        private_fun()
+      end
+
+      defp private_fun do
+        #     ^
+        :ok
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 10, 15)
+
+    assert references == [
+             %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 16}}},
+             %{uri: nil, range: %{start: %{line: 7, column: 5}, end: %{line: 7, column: 16}}}
+           ]
+  end
+
+  test "find references of private functions from invocation" do
+    buffer = """
+    defmodule MyModule do
+      def calls_private do
+        private_fun()
+        #     ^
+      end
+
+      defp also_calls_private do
+        private_fun()
+      end
+
+      defp private_fun do
+        :ok
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 3, 15)
+
+    assert references == [
+             %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 16}}},
+             %{uri: nil, range: %{start: %{line: 8, column: 5}, end: %{line: 8, column: 16}}}
+           ]
+  end
+
   test "find references with cursor over a module" do
     buffer = """
     defmodule Caller do
