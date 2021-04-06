@@ -408,8 +408,7 @@ defmodule ElixirSense do
           env,
           vars,
           attributes,
-          buffer_file_metadata.mods_funs_to_positions,
-          buffer_file_metadata.types
+          buffer_file_metadata
         )
 
       _ ->
