@@ -938,7 +938,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
           # assume that defexception is used but fields are not known
           add_struct_or_exception(state, :defexception, [], {line, column})
 
-        # elixir < 1.12 :struct, elixir >= 1.2 :__struct__
+        # elixir < 1.12 :struct, elixir >= 1.12 :__struct__
         :struct in attributes or :__struct__ in attributes ->
           # assume that defstruct is used but fields are not known
           add_struct_or_exception(state, :defstruct, [], {line, column})
