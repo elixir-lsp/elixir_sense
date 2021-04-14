@@ -2,6 +2,7 @@ defmodule ElixirSense.Plugins.Option do
   @moduledoc false
 
   alias ElixirSense.Plugins.Util
+  alias ElixirSense.Providers.Suggestion.Matcher
 
   def find(options, hint, fun) do
     for option <- options, match_hint?(option, hint) do
@@ -32,6 +33,6 @@ defmodule ElixirSense.Plugins.Option do
     option
     |> Map.fetch!(:name)
     |> to_string()
-    |> String.starts_with?(hint)
+    |> Matcher.match?(hint)
   end
 end
