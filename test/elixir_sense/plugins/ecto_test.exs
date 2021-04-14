@@ -639,6 +639,28 @@ defmodule ElixirSense.Plugins.EctoTest do
                "virtual"
              ]
     end
+
+    test "at arg 2, suggest fuzzy field options" do
+      buffer = """
+      import Ecto.Schema
+      field :name, :string, deau
+      #                         ^
+      """
+
+      [cursor] = cursors(buffer)
+      result = suggestions(buffer, cursor)
+      assert Enum.map(result, & &1.label) == ["default"]
+
+      buffer = """
+      import Ecto.Schema
+      field :name, :string, pri_ke
+      #                           ^
+      """
+
+      [cursor] = cursors(buffer)
+      result = suggestions(buffer, cursor)
+      assert Enum.map(result, & &1.label) == ["primary_key"]
+    end
   end
 
   describe "suggestions for Ecto.Migration.add/3" do
