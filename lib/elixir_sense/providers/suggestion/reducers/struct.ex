@@ -6,6 +6,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
+  alias ElixirSense.Providers.Suggestion.Matcher
 
   @type field :: %{
           type: :field,
@@ -103,7 +104,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
     for {key, _value} when is_atom(key) <- fields,
         key not in fields_so_far,
         key = Atom.to_string(key),
-        String.starts_with?(key, hint) do
+        Matcher.match?(key, hint) do
       {subtype, origin} =
         case type do
           {:struct, mod} -> {:struct_field, if(mod, do: inspect(mod))}

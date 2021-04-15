@@ -7,6 +7,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Providers.Suggestion.Matcher
 
   @type type_spec :: %{
           type: :type_spec,
@@ -110,7 +111,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
 
     for {{mod, type, arity}, type_info} when is_integer(arity) <- metadata_types,
         mod == actual_mod,
-        type |> Atom.to_string() |> String.starts_with?(hint),
+        type |> Atom.to_string() |> Matcher.match?(hint),
         include_private or type_info.kind != :typep,
         do: type_info
   end

@@ -2376,6 +2376,22 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  test "suggestion for fuzzy struct fields" do
+    buffer = """
+    defmodule MyServer do
+      def func(%{field_1: "asd"} = some_arg) do
+        %{some_arg | fie1
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 3, 22)
+
+    assert list == [
+             %{call?: false, name: "field_1", origin: nil, subtype: :map_key, type: :field}
+           ]
+  end
+
   test "suggestion for funcs and vars in struct" do
     buffer = """
     defmodule MyServer do
@@ -2900,6 +2916,28 @@ defmodule ElixirSense.SuggestionsTest do
         |> Enum.filter(fn %{type: t} -> t == :type_spec end)
 
       assert length(list) == 2
+    end
+
+    test "typespec fuzzy match" do
+      buffer = """
+      defmodule ElixirSenseExample.ModuleWithTypespecs.Local do
+        # The types are defined in `test/support/module_with_typespecs.ex`
+        @type fuzzy_type :: loca_
+        #                        ^
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 3, 27)
+        |> Enum.filter(fn %{type: t} -> t == :type_spec end)
+
+      [suggestion, _] = list
+
+      assert suggestion.spec == "@type local_t() :: atom()"
+      assert suggestion.signature == "local_t()"
+      assert suggestion.arity == 0
+      assert suggestion.doc == "Local type"
+      assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
     end
 
     test "local types - retrieve info from typespecs" do
