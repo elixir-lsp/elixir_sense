@@ -3,6 +3,8 @@ defmodule ElixirSense.Core.Normalized.Code do
   Shim to replicate the behavior of deprecated `Code.get_docs/2`
   """
 
+  alias ElixirSense.Core.ErlangHtml
+
   @type doc_t :: nil | false | String.t()
   @type fun_doc_entry_t ::
           {{atom, non_neg_integer}, pos_integer, :function | :macro, term, doc_t, map}
@@ -10,30 +12,33 @@ defmodule ElixirSense.Core.Normalized.Code do
           {{atom, non_neg_integer}, pos_integer, :callback | :macrocallback | :type, doc_t, map}
   @type moduledoc_entry_t :: {pos_integer, doc_t, map}
 
+  @supported_mime_types ["text/markdown", "application/erlang+html"]
+
   @spec get_docs(module, :docs) :: nil | [fun_doc_entry_t]
   @spec get_docs(module, :callback_docs | :type_docs) :: nil | [:doc_entry_t]
   @spec get_docs(module, :moduledoc) :: nil | moduledoc_entry_t
   def get_docs(module, category) do
     case Code.fetch_docs(module) do
-      {:docs_v1, moduledoc_anno, :elixir, "text/markdown", moduledoc, metadata, docs} ->
+      {:docs_v1, moduledoc_anno, _language, mime_type, moduledoc, metadata, docs}
+      when mime_type in @supported_mime_types ->
         case category do
           :moduledoc ->
-            moduledoc_en = extract_docs(moduledoc)
+            moduledoc_en = extract_docs(moduledoc, mime_type)
 
             {:erl_anno.line(moduledoc_anno), moduledoc_en, metadata}
 
           :docs ->
-            get_fun_docs(module, docs)
+            get_fun_docs(module, docs, mime_type)
 
           :callback_docs ->
             for {{kind, _name, _arity}, _anno, _signatures, _docs, _metadata} = entry
                 when kind in [:callback, :macrocallback] <- docs do
-              map_doc_entry(entry)
+              map_doc_entry(entry, mime_type)
             end
 
           :type_docs ->
             for {{:type, _name, _arity}, _anno, _signatures, _docs, _metadata} = entry <- docs do
-              map_doc_entry(entry)
+              map_doc_entry(entry, mime_type)
             end
         end
 
@@ -42,8 +47,8 @@ defmodule ElixirSense.Core.Normalized.Code do
     end
   end
 
-  defp map_doc_entry({{kind, name, arity}, anno, signatures, docs, metadata}) do
-    docs_en = extract_docs(docs)
+  defp map_doc_entry({{kind, name, arity}, anno, signatures, docs, metadata}, mime_type) do
+    docs_en = extract_docs(docs, mime_type)
     line = :erl_anno.line(anno)
 
     case kind do
@@ -64,13 +69,18 @@ defmodule ElixirSense.Core.Normalized.Code do
     end
   end
 
-  @spec extract_docs(%{required(String.t()) => String.t()} | :hidden | :none) ::
+  @spec extract_docs(%{required(String.t()) => String.t()} | :hidden | :none, String.t()) ::
           String.t() | false | nil
-  def extract_docs(%{"en" => docs_en}), do: docs_en
-  def extract_docs(:hidden), do: false
-  def extract_docs(_), do: nil
+  def extract_docs(%{"en" => docs_en}, "text/markdown"), do: docs_en
 
-  defp get_fun_docs(module, docs) do
+  def extract_docs(%{"en" => docs_en}, "application/erlang+html") do
+    ErlangHtml.to_markdown(docs_en)
+  end
+
+  def extract_docs(:hidden, _), do: false
+  def extract_docs(_, _), do: nil
+
+  defp get_fun_docs(module, docs, mime_type) do
     docs_from_module =
       Enum.filter(
         docs,
@@ -96,11 +106,11 @@ defmodule ElixirSense.Core.Normalized.Code do
       docs_from_module,
       fn
         {{kind, name, arity}, anno, signatures, docs, metadata} ->
-          {signatures, docs, metadata} =
-            Map.get(docs_from_behaviours, {name, arity}, {signatures, docs, metadata})
+          {signatures, docs, metadata, mime_type} =
+            Map.get(docs_from_behaviours, {name, arity}, {signatures, docs, metadata, mime_type})
 
           {{kind, name, arity}, anno, signatures, docs, metadata}
-          |> map_doc_entry
+          |> map_doc_entry(mime_type)
       end
     )
   end
@@ -114,7 +124,7 @@ defmodule ElixirSense.Core.Normalized.Code do
       module
       |> behaviours()
       |> Stream.flat_map(&callback_documentation/1)
-      |> Stream.filter(fn {name_arity, {_signatures, _docs, _metadata}} ->
+      |> Stream.filter(fn {name_arity, {_signatures, _docs, _metadata, _mime_type}} ->
         Enum.member?(funs, name_arity)
       end)
       |> Enum.into(%{})
@@ -123,22 +133,23 @@ defmodule ElixirSense.Core.Normalized.Code do
 
   def callback_documentation(module) do
     case Code.fetch_docs(module) do
-      {:docs_v1, _moduledoc_anno, :elixir, _mime_type, _moduledoc, _metadata, docs} ->
+      {:docs_v1, _moduledoc_anno, _language, mime_type, _moduledoc, _metadata, docs}
+      when mime_type in @supported_mime_types ->
         docs
+        |> Stream.filter(
+          &match?(
+            {{kind, _name, _arity}, _anno, _signatures, _docs, _metadata}
+            when kind in [:callback, :macrocallback],
+            &1
+          )
+        )
+        |> Stream.map(fn {{_kind, name, arity}, _anno, signatures, docs, metadata} ->
+          {{name, arity}, {signatures, docs, metadata, mime_type}}
+        end)
 
       _ ->
         []
     end
-    |> Stream.filter(
-      &match?(
-        {{kind, _name, _arity}, _anno, _signatures, _docs, _metadata}
-        when kind in [:callback, :macrocallback],
-        &1
-      )
-    )
-    |> Stream.map(fn {{_kind, name, arity}, _anno, signatures, docs, metadata} ->
-      {{name, arity}, {signatures, docs, metadata}}
-    end)
   end
 
   defp behaviours(module) do
