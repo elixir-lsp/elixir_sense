@@ -332,6 +332,29 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
+  # erlang name
+  defp get_metadata_entry_md({:name, _text}), do: nil
+
+  # erlang signature
+  defp get_metadata_entry_md({:signature, _text}), do: nil
+
+  # erlang edit_url
+  defp get_metadata_entry_md({:edit_url, _text}), do: nil
+
+  # erlang :otp_doc_vsn
+  defp get_metadata_entry_md({:otp_doc_vsn, _text}), do: nil
+
+  # erlang :source
+  defp get_metadata_entry_md({:source, _text}), do: nil
+
+  # erlang :types
+  defp get_metadata_entry_md({:types, _text}), do: nil
+
+  # erlang :equiv
+  defp get_metadata_entry_md({:equiv, {:function, name, arity}}) do
+    "**Equivalent**\n#{name}/#{arity}"
+  end
+
   defp get_metadata_entry_md({:deprecated, text}) do
     "**Deprecated**\n#{text}"
   end
