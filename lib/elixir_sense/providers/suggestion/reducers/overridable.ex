@@ -3,6 +3,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Overridable do
 
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State
+  alias ElixirSense.Providers.Suggestion.Matcher
 
   @doc """
   A reducer that adds suggestions of overridable functions.
@@ -32,7 +33,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Overridable do
     list =
       for {{^module, name, arity}, %State.ModFunInfo{overridable: {true, origin}} = info}
           when is_integer(arity) <- metadata.mods_funs_to_positions,
-          def_prefix?(hint, info.type) or String.starts_with?("#{name}", hint),
+          def_prefix?(hint, info.type) or Matcher.match?("#{name}", hint),
           {name, arity} not in behaviour_callbacks do
         spec =
           case metadata.specs[{module, name, arity}] do

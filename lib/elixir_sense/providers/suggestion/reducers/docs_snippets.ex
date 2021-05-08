@@ -2,6 +2,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.DocsSnippets do
   @moduledoc false
 
   alias ElixirSense.Plugins.Util
+  alias ElixirSense.Providers.Suggestion.Matcher
 
   # Format:
   # {label, snippet, documentation, priority}
@@ -20,7 +21,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.DocsSnippets do
   def add_snippets(hint, _env, _metadata, %{at_module_body?: true}, acc) do
     list =
       for {label, snippet, doc, priority} <- @module_attr_snippets,
-          String.starts_with?(label, hint) do
+          Matcher.match?(label, hint) do
         %{
           type: :generic,
           kind: :snippet,

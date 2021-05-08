@@ -6,6 +6,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Providers.Suggestion.Matcher
 
   @type param_option :: %{
           type: :param_option,
@@ -45,7 +46,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
         mod
         |> TypeInfo.extract_param_options(fun, npar)
         |> options_to_suggestions(mod)
-        |> Enum.filter(&String.starts_with?(&1.name, hint))
+        |> Enum.filter(&Matcher.match?(&1.name, hint))
 
       {:cont, %{acc | result: acc.result ++ list}}
     else
