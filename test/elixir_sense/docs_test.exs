@@ -127,6 +127,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    # TODO docsh fallback
     test "retrieve erlang function documentation edoc" do
       buffer = """
       defmodule MyModule do
@@ -176,7 +177,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    test "retrieve fallback erlang function documentation" do
+    test "retrieve erlang function documentation" do
       buffer = """
       defmodule MyModule do
         def func(list) do
@@ -203,7 +204,7 @@ defmodule ElixirSense.DocsTest do
              @spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]
              ```
 
-             No documentation available
+             Returns a flattened version of `DeepList`\\.
              """
     end
 

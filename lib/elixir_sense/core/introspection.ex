@@ -283,12 +283,16 @@ defmodule ElixirSense.Core.Introspection do
 
       docs ->
         for {{f, arity}, _, kind, args, text, metadata} <- docs, f == fun do
-          args = args || []
-
-          fun_args_text =
-            args
-            |> Enum.map_join(", ", &format_doc_arg(&1))
-            |> String.replace("\\\\", "\\\\\\\\")
+          # as of otp 23 erlang modules do not return args
+          # instead they return typespecs in metadata[:signature]
+          fun_args_text = case metadata[:signature] do
+            nil ->
+              args
+              |> Enum.map_join(", ", &format_doc_arg(&1))
+              |> String.replace("\\\\", "\\\\\\\\")
+            [{:attribute, _, :spec, {{^f, ^arity}, [params | _]}}] ->
+              TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
+          end
 
           "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
             get_spec_text(mod, fun, arity, kind)
