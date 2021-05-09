@@ -3,6 +3,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Protocol do
 
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State
+  alias ElixirSense.Providers.Suggestion.Matcher
 
   @type protocol_function :: %{
           type: :protocol_function,
@@ -31,7 +32,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Protocol do
     list =
       for {{name, arity}, {_type, args, docs, metadata, spec}} <-
             Introspection.module_functions_info(protocol),
-          hint == "" or String.starts_with?("#{name}", hint) do
+          hint == "" or Matcher.match?("#{name}", hint) do
         %{
           type: :protocol_function,
           name: Atom.to_string(name),

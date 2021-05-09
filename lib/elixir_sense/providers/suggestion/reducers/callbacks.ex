@@ -3,6 +3,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
 
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State
+  alias ElixirSense.Providers.Suggestion.Matcher
 
   @type callback :: %{
           type: :callback,
@@ -40,7 +41,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
                 metadata: metadata
               } <-
                 Introspection.get_callbacks_with_docs(mod),
-              def_prefix?(hint, spec) or String.starts_with?("#{name}", hint) do
+              def_prefix?(hint, spec) or Matcher.match?("#{name}", hint) do
             desc = Introspection.extract_summary_from_docs(doc)
             [_, args_str] = Regex.run(Regex.recompile!(~r/.\((.*)\)/), signature)
 

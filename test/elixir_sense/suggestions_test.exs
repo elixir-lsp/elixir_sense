@@ -586,6 +586,34 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
+  test "fuzzy match overridible functions" do
+    buffer = """
+    defmodule MyServer do
+      use ElixirSenseExample.OverridableFunctions
+
+      rqui
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 4, 5)
+      |> Enum.filter(fn s -> s.type == :callback end)
+
+    assert [
+             %{
+               args: "var",
+               arity: 1,
+               metadata: %{},
+               name: "required",
+               origin: "ElixirSenseExample.OverridableFunctions",
+               spec: "",
+               summary: "",
+               type: :callback,
+               subtype: :macrocallback
+             }
+           ] = list
+  end
+
   @tag requires_elixir_1_9: true
   test "lists protocol functions" do
     buffer = """
@@ -597,6 +625,32 @@ defmodule ElixirSense.SuggestionsTest do
     list =
       ElixirSense.suggestions(buffer, 2, 3)
       |> Enum.filter(fn s -> s[:name] == "reduce" end)
+
+    assert [
+             %{
+               args: "enumerable, acc, fun",
+               arity: 3,
+               name: "reduce",
+               origin: "Enumerable",
+               spec: "@spec reduce(t, acc, reducer) :: result",
+               summary: "Reduces the `enumerable` into an element.",
+               type: :protocol_function,
+               metadata: %{}
+             }
+           ] = list
+  end
+
+  @tag requires_elixir_1_9: true
+  test "lists fuzzy protocol functions" do
+    buffer = """
+    defimpl Enumerable, for: MyStruct do
+      reu
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 2, 5)
+      |> Enum.filter(fn s -> s[:type] == :protocol_function end)
 
     assert [
              %{
@@ -817,6 +871,36 @@ defmodule ElixirSense.SuggestionsTest do
     assert [
              %{name: "is_function", origin: "Kernel", arity: 1},
              %{name: "is_function", origin: "Kernel", arity: 2},
+             %{name: "init", origin: "MyServer", arity: 1}
+           ] = list
+  end
+
+  @tag requires_elixir_1_10: true
+  test "lists fuzzy callbacks in function suggestion - erlang behaviour" do
+    buffer = """
+    defmodule MyServer do
+      @behaviour :gen_server
+
+      def handle_call(request, _from, state) do
+        iit
+      end
+
+      def init(arg), do: arg
+
+      def handle_cast(arg, _state) when is_atom(arg) do
+        :ok
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 5, 8)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    assert [
+             %{name: "is_bitstring", origin: "Kernel", arity: 1},
+             %{name: "is_integer", origin: "Kernel", arity: 1},
+             %{name: "is_list", origin: "Kernel", arity: 1},
              %{name: "init", origin: "MyServer", arity: 1}
            ] = list
   end
@@ -1431,6 +1515,22 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert suggestions_by_kind(buffer, cursor_3, :snippet) == []
     assert suggestions_by_kind(buffer, cursor_4, :snippet) == []
+  end
+
+  test "fuzzy suggestions for doc snippets" do
+    buffer = """
+    defmodule MyModule do
+      @tydo
+      #    ^
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 2, 7)
+
+    assert [
+             %{label: ~s(@typedoc """""")},
+             %{label: "@typedoc false"}
+           ] = list
   end
 
   test "functions defined in the module" do
@@ -2525,6 +2625,12 @@ defmodule ElixirSense.SuggestionsTest do
 
       list = suggestions_by_type(:param_option, buffer)
       assert length(list) > 1
+    end
+
+    test "are fuzzy" do
+      buffer = "Local.func_with_options(remo_wi"
+      list = suggestions_by_type(:param_option, buffer)
+      assert [%{name: "remote_with_params_o"}] = list
     end
 
     test "suggest the same list when options are already set" do
