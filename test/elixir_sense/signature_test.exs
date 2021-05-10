@@ -179,7 +179,7 @@ defmodule ElixirSense.SignatureTest do
                active_param: 0,
                signatures: [
                  %{
-                   documentation: "",
+                   documentation: "Supported time unit representations:",
                    name: "time_unit",
                    params: [],
                    spec:
@@ -292,14 +292,14 @@ defmodule ElixirSense.SignatureTest do
                pipe_before: false,
                signatures: [
                  %{
-                   documentation: "",
+                   documentation: "Returns a flattened version of `DeepList`\\.",
                    name: "flatten",
                    params: ["deepList"],
                    spec:
                      "@spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]"
                  },
                  %{
-                   documentation: "",
+                   documentation: "Returns a flattened version of `DeepList` with tail `Tail` appended\\.",
                    name: "flatten",
                    params: ["deepList", "tail"],
                    spec:
@@ -801,7 +801,7 @@ defmodule ElixirSense.SignatureTest do
                  %{
                    name: "init",
                    params: ["arg"],
-                   documentation: "",
+                   documentation: "- Args = term\\(\\)\n- Result" <> _,
                    spec:
                      "@spec init(args :: term) :: {:ok, state :: term} | {:ok, state :: term, timeout | :hibernate | {:continue, term}} | {:stop, reason :: term} | :ignore"
                  }
@@ -1010,7 +1010,7 @@ defmodule ElixirSense.SignatureTest do
         pipe_before: false,
         signatures: [
           %{
-            documentation: "",
+            documentation: "Returns the current date as" <> _,
             name: "date",
             params: [],
             spec: "@spec date :: date when date: :calendar.date"
@@ -1023,14 +1023,14 @@ defmodule ElixirSense.SignatureTest do
                pipe_before: false,
                signatures: [
                  %{
-                   documentation: "",
+                   documentation: "Cancels a timer\\." <> _,
                    name: "cancel_timer",
                    params: ["timerRef"],
                    spec:
                      "@spec cancel_timer(timerRef) :: result when timerRef: reference, time: non_neg_integer, result: time | false"
                  },
                  %{
-                   documentation: "",
+                   documentation: "Cancels a timer that has been created by" <> _,
                    name: "cancel_timer",
                    params: ["timerRef", "options"],
                    spec:

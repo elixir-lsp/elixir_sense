@@ -157,8 +157,20 @@ defmodule ElixirSense.Core.Introspection do
   def get_signatures(mod, fun, code_docs) when not is_nil(mod) and not is_nil(fun) do
     case code_docs || NormalizedCode.get_docs(mod, :docs) do
       docs when is_list(docs) ->
-        for {{f, arity}, _, kind, args, text, _metadata} <- docs, f == fun do
-          fun_args = Enum.map(args || [], &format_doc_arg(&1))
+        for {{f, arity}, _, kind, args, text, metadata} <- docs, f == fun do
+          # as of otp 23 erlang modules do not return args
+          # instead they return typespecs in metadata[:signature]
+          fun_args = case metadata[:signature] do
+            nil ->
+              args
+              |> List.wrap
+              |> Enum.map(&format_doc_arg(&1))
+            [{:attribute, _, :spec, {{^f, ^arity}, [params | _]}}] ->
+              TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
+            [{:attribute, _, :spec, {{^mod, ^f, ^arity}, [params | _]}}] ->
+              TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
+          end
+
           fun_str = Atom.to_string(fun)
           doc = extract_summary_from_docs(text)
 
@@ -259,38 +271,25 @@ defmodule ElixirSense.Core.Introspection do
         case results do
           [] ->
             # no docs and no typespecs
-            # provide dummy docs basing on module_info(:exports)
-            for {f, arity} <- get_exports(mod),
-                f == fun do
-              fun_args_text =
-                if arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end)
-
-              {text, metadata} =
-                if {f, arity} in BuiltinFunctions.erlang_builtin_functions(mod) do
-                  {nil, %{builtin: true}}
-                else
-                  edoc_results[arity] || {nil, %{}}
-                end
-
-              "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
-                get_spec_text(mod, fun, arity, :function)
-              }#{text || @no_documentation}"
-            end
+            no_docs_no_typespec_fallback(mod, fun, edoc_results)
 
           other ->
             other
         end
 
       docs ->
-        for {{f, arity}, _, kind, args, text, metadata} <- docs, f == fun do
+        results = for {{f, arity}, _, kind, args, text, metadata} <- docs, f == fun do
           # as of otp 23 erlang modules do not return args
           # instead they return typespecs in metadata[:signature]
           fun_args_text = case metadata[:signature] do
             nil ->
               args
+              |> List.wrap
               |> Enum.map_join(", ", &format_doc_arg(&1))
               |> String.replace("\\\\", "\\\\\\\\")
             [{:attribute, _, :spec, {{^f, ^arity}, [params | _]}}] ->
+              TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
+            [{:attribute, _, :spec, {{^mod, ^f, ^arity}, [params | _]}}] ->
               TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
           end
 
@@ -298,6 +297,33 @@ defmodule ElixirSense.Core.Introspection do
             get_spec_text(mod, fun, arity, kind)
           }#{text}"
         end
+        
+        case results do
+          [] ->
+            no_docs_no_typespec_fallback(mod, fun)
+          other ->
+            other
+        end
+    end
+  end
+
+  defp no_docs_no_typespec_fallback(mod, fun, edoc_results \\ %{}) do
+    # provide dummy docs basing on module_info(:exports)
+    for {f, arity} <- get_exports(mod),
+        f == fun do
+      fun_args_text =
+        if arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end)
+
+      {text, metadata} =
+        if {f, arity} in BuiltinFunctions.erlang_builtin_functions(mod) do
+          {nil, %{builtin: true}}
+        else
+          edoc_results[arity] || {nil, %{}}
+        end
+
+      "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
+        get_spec_text(mod, fun, arity, :function)
+      }#{text || @no_documentation}"
     end
   end
 

@@ -443,7 +443,7 @@ defmodule ElixirSense.DocsTest do
     test "retrieve documentation from erlang modules edoc" do
       buffer = """
       defmodule MyModule do
-        alias :edoc, as: Erl
+        alias :edoc_wiki, as: Erl
       end
       """
 
@@ -451,23 +451,19 @@ defmodule ElixirSense.DocsTest do
         subject: subject,
         actual_subject: actual_subject,
         docs: %{docs: docs}
-      } = ElixirSense.docs(buffer, 2, 13)
+      } = ElixirSense.docs(buffer, 2, 18)
 
-      assert subject == ":edoc"
-      assert actual_subject == ":edoc"
+      assert subject == ":edoc_wiki"
+      assert actual_subject == ":edoc_wiki"
 
       assert docs =~ """
-             > :edoc
+             > :edoc_wiki
 
-             EDoc - the Erlang program documentation generator.
-
-             This module provides the main user interface to EDoc.
-               - EDoc User Manual
-               - Running EDoc
+             EDoc wiki expansion, parsing and postprocessing of XML text.\nUses XMerL.
              """
     end
 
-    test "retrieve fallback documentation from erlang modules" do
+    test "retrieve documentation from erlang modules" do
       buffer = """
       defmodule MyModule do
         alias :erlang, as: Erl
@@ -486,7 +482,7 @@ defmodule ElixirSense.DocsTest do
       assert docs =~ """
              > :erlang
 
-             No documentation available
+             By convention, most Built\\-In Functions \\(BIFs\\) are included in this module\
              """
     end
 
@@ -799,7 +795,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    test "retrieve fallback erlang type documentation" do
+    test "retrieve erlang type documentation" do
       buffer = """
       defmodule MyModule do
         alias ElixirSenseExample.ModuleWithTypespecs.Remote
@@ -817,7 +813,7 @@ defmodule ElixirSense.DocsTest do
       assert subject == ":erlang.time_unit"
       assert actual_subject == ":erlang.time_unit"
 
-      assert docs == """
+      assert docs =~ """
              > :erlang.time_unit()
 
              ### Specs
@@ -834,8 +830,7 @@ defmodule ElixirSense.DocsTest do
                | deprecated_time_unit()
              ```
 
-             No documentation available
-
+             Supported time unit representations:
              """
     end
 
