@@ -3100,34 +3100,22 @@ defmodule ElixirSense.SuggestionsTest do
     end
 
     test "erlang types" do
-      buffer = "defmodule My, do: @type my_type :: :erlang.tim"
+      buffer = "defmodule My, do: @type my_type :: :erlang.time_"
 
       suggestions = suggestions_by_type(:type_spec, buffer)
 
       assert [
                %{
                  arity: 0,
-                 doc: "",
+                 doc: "Supported time unit representations:",
                  name: "time_unit",
                  origin: ":erlang",
                  signature: "time_unit()",
                  spec:
                    "@type time_unit() ::\n  pos_integer()\n  | :second\n  | :millisecond\n  | :microsecond\n  | :nanosecond\n  | :native\n  | :perf_counter\n  | deprecated_time_unit()",
-                 type: :type_spec,
-                 metadata: %{}
-               },
-               %{
-                 arity: 0,
-                 doc: "",
-                 name: "timestamp",
-                 origin: ":erlang",
-                 signature: "timestamp()",
-                 spec:
-                   "@type timestamp() ::\n  {megaSecs ::\n     non_neg_integer(),\n   secs :: non_neg_integer(),\n   microSecs ::\n     non_neg_integer()}",
-                 type: :type_spec,
-                 metadata: %{}
+                 type: :type_spec
                }
-             ] == suggestions
+             ] = suggestions
     end
 
     test "erlang types edoc" do
