@@ -488,7 +488,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: ":gen_statem",
                spec:
                  "@callback code_change(oldVsn :: term | {:down, term}, oldState :: state, oldData :: data, extra :: term) ::\n  {:ok, newState :: state, newData :: data} |\n  reason :: term",
-               summary: "",
+               summary: "- OldVsn = Vsn" <> _,
                type: :callback,
                subtype: :callback
              }
