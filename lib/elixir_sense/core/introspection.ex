@@ -790,7 +790,6 @@ defmodule ElixirSense.Core.Introspection do
       |> NormalizedCode.get_docs(:callback_docs)
 
     # no fallback here as :docsh as ov v0.7.2 does not seem to support callbacks
-    # TODO report issue and link here
 
     {callbacks, docs || []}
   end
