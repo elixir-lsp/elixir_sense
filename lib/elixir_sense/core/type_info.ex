@@ -166,7 +166,8 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   def get_type_position_using_docs(module, type_name, file) do
-    case get_type_doc(module, type_name, :any) do
+    docs = NormalizedCode.get_docs(module, :type_docs)
+    case get_type_doc(docs, type_name, :any) do
       {_, doc_line, _, _, _} ->
         {kind, _} = get_type_spec(module, type_name)
         kind_str = "@#{kind}"
@@ -266,27 +267,23 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   @spec get_type_doc(
-          module,
+          [ElixirSense.Core.Normalized.Code.doc_entry_t()],
           atom,
-          non_neg_integer | :any,
-          [ElixirSense.Core.Normalized.Code.doc_entry_t()] | nil
+          non_neg_integer | :any
         ) :: ElixirSense.Core.Normalized.Code.doc_entry_t() | nil
-  def get_type_doc(module, type, type_n_args, docs \\ nil) do
-    docs = docs || NormalizedCode.get_docs(module, :type_docs) || []
-
+  def get_type_doc(docs, type, type_n_args) do
     Enum.find(docs, fn {{name, n_args}, _, _, _, _} ->
       type == name && (type_n_args == n_args || type_n_args == :any)
     end)
   end
 
   @spec get_type_doc_desc(
-          module,
+          [ElixirSense.Core.Normalized.Code.doc_entry_t()],
           atom,
-          non_neg_integer,
-          [ElixirSense.Core.Normalized.Code.doc_entry_t()] | nil
+          non_neg_integer
         ) :: {String.t(), map}
-  def get_type_doc_desc(module, type, type_n_args, docs \\ nil) do
-    case get_type_doc(module, type, type_n_args, docs) do
+  def get_type_doc_desc(docs, type, type_n_args) do
+    case get_type_doc(docs, type, type_n_args) do
       nil -> {BuiltinTypes.get_builtin_type_doc(type), %{}}
       doc -> get_doc_description(doc)
     end
@@ -384,14 +381,17 @@ defmodule ElixirSense.Core.TypeInfo do
         "#{inspect(mod)}.#{type_str(type)}"
       end
 
-    {docs, _metadata} =
-      case EdocReader.get_typedocs(module, name, n_args) do
-        [{_, _, _, maybe_doc, metadata}] ->
-          {EdocReader.extract_docs(maybe_doc), metadata}
-
-        _ ->
-          get_type_doc_desc(module, name, n_args)
-      end
+    {docs, _metadata} = case NormalizedCode.get_docs(module, :type_docs) do
+      docs when is_list(docs) -> 
+        get_type_doc_desc(docs, name, n_args)
+      _ ->
+        case EdocReader.get_typedocs(module, name, n_args) do
+          [{_, _, _, maybe_doc, metadata}] ->
+            {EdocReader.extract_docs(maybe_doc), metadata}
+          _ ->
+            {nil, %{}}
+        end
+    end
 
     %{
       origin: inspect(module),

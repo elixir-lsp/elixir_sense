@@ -611,7 +611,7 @@ defmodule ElixirSense.Core.Introspection do
         if edocs != nil do
           edocs[{t, length(args)}] || {nil, %{}}
         else
-          TypeInfo.get_type_doc_desc(module, t, length(args), docs)
+          TypeInfo.get_type_doc_desc(docs, t, length(args))
         end
 
       type_args = Enum.map_join(args, ", ", &(&1 |> elem(2) |> Atom.to_string()))
