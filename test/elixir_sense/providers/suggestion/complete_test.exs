@@ -29,7 +29,16 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "erlang module completion" do
-    assert [%{name: ":zlib", subtype: nil, summary: "This module provides an API for the zlib library \\([www\\.zlib\\.net]\\)\\. It is used to compress and decompress data\\. The data format is described by [RFC 1950], [RFC 1951], and [RFC 1952]\\.", type: :module, metadata: %{otp_doc_vsn: {1, 0, 0}}}] = expand(':zl')
+    assert [
+             %{
+               name: ":zlib",
+               subtype: nil,
+               summary:
+                 "This module provides an API for the zlib library \\([www\\.zlib\\.net]\\)\\. It is used to compress and decompress data\\. The data format is described by [RFC 1950], [RFC 1951], and [RFC 1952]\\.",
+               type: :module,
+               metadata: %{otp_doc_vsn: {1, 0, 0}}
+             }
+           ] = expand(':zl')
   end
 
   # Code.fetch_docs(:edoc_wiki) on OTP 23 returns
@@ -1309,7 +1318,8 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                type: :function,
                args: "timerRef",
                origin: ":erlang",
-               summary: "Cancels a timer\\. The same as calling [`erlang:cancel_timer(TimerRef, [])`]\\."
+               summary:
+                 "Cancels a timer\\. The same as calling [`erlang:cancel_timer(TimerRef, [])`]\\."
              },
              %{
                arity: 2,
@@ -1319,36 +1329,36 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                type: :function,
                args: "timerRef, options",
                origin: ":erlang",
-               summary: "Cancels a timer that has been created by [`erlang:start_timer`] or [`erlang:send_after`]\\. `TimerRef` identifies the timer, and was returned by the BIF that created the timer\\."
+               summary:
+                 "Cancels a timer that has been created by [`erlang:start_timer`] or [`erlang:send_after`]\\. `TimerRef` identifies the timer, and was returned by the BIF that created the timer\\."
              }
            ] = expand(':erlang.cancel_time')
   end
 
-  # TODO run on OTP <= 22
-  # @tag requires_otp_23: true
-  # test "profide specs for erlang functions edoc" do
-  #   assert [
-  #            %{
-  #              args: "term",
-  #              arity: 1,
-  #              name: "files",
-  #              origin: ":edoc",
-  #              spec: "",
-  #              summary: "",
-  #              type: :function
-  #            },
-  #            %{
-  #              args: "term, term",
-  #              arity: 2,
-  #              name: "files",
-  #              origin: ":edoc",
-  #              spec: "",
-  #              summary:
-  #                "Runs EDoc on a given set of source files. See run/2 for\ndetails, including options.",
-  #              type: :function
-  #            }
-  #          ] = expand(':edoc.files')
-  # end
+  # TODO doc_sh fallback
+  test "profide specs for erlang functions edoc" do
+    assert [
+             %{
+               args: "term",
+               arity: 1,
+               name: "files",
+               origin: ":edoc",
+               spec: "",
+               summary: "",
+               type: :function
+             },
+             %{
+               args: "term, term",
+               arity: 2,
+               name: "files",
+               origin: ":edoc",
+               spec: "",
+               summary:
+                 "Runs EDoc on a given set of source files. See run/2 for\ndetails, including options.",
+               type: :function
+             }
+           ] = expand(':edoc.files')
+  end
 
   test "complete after ! operator" do
     assert [%{name: "is_binary"}] = expand('!is_bina')

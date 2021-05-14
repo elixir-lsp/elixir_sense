@@ -167,6 +167,7 @@ defmodule ElixirSense.Core.TypeInfo do
 
   def get_type_position_using_docs(module, type_name, file) do
     docs = NormalizedCode.get_docs(module, :type_docs)
+
     case get_type_doc(docs, type_name, :any) do
       {_, doc_line, _, _, _} ->
         {kind, _} = get_type_spec(module, type_name)
@@ -381,17 +382,20 @@ defmodule ElixirSense.Core.TypeInfo do
         "#{inspect(mod)}.#{type_str(type)}"
       end
 
-    {docs, _metadata} = case NormalizedCode.get_docs(module, :type_docs) do
-      docs when is_list(docs) -> 
-        get_type_doc_desc(docs, name, n_args)
-      _ ->
-        case EdocReader.get_typedocs(module, name, n_args) do
-          [{_, _, _, maybe_doc, metadata}] ->
-            {EdocReader.extract_docs(maybe_doc), metadata}
-          _ ->
-            {nil, %{}}
-        end
-    end
+    {docs, _metadata} =
+      case NormalizedCode.get_docs(module, :type_docs) do
+        docs when is_list(docs) ->
+          get_type_doc_desc(docs, name, n_args)
+
+        _ ->
+          case EdocReader.get_typedocs(module, name, n_args) do
+            [{_, _, _, maybe_doc, metadata}] ->
+              {EdocReader.extract_docs(maybe_doc), metadata}
+
+            _ ->
+              {nil, %{}}
+          end
+      end
 
     %{
       origin: inspect(module),

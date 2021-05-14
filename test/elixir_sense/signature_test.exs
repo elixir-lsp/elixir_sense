@@ -299,7 +299,8 @@ defmodule ElixirSense.SignatureTest do
                      "@spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]"
                  },
                  %{
-                   documentation: "Returns a flattened version of `DeepList` with tail `Tail` appended\\.",
+                   documentation:
+                     "Returns a flattened version of `DeepList` with tail `Tail` appended\\.",
                    name: "flatten",
                    params: ["deepList", "tail"],
                    spec:
@@ -309,6 +310,7 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    # TODO test fallback to docsh
     test "find signatures from erlang module edoc" do
       code = """
       defmodule MyModule do

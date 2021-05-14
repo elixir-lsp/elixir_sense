@@ -696,27 +696,29 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         |> Kernel.--(if include_builtin, do: [], else: @builtin_functions)
         |> Kernel.++(BuiltinFunctions.erlang_builtin_functions(mod))
 
-      edoc_results = if docs == nil do
-        get_edocs(mod)
-      else
-        %{}
-      end
+      edoc_results =
+        if docs == nil do
+          get_edocs(mod)
+        else
+          %{}
+        end
 
       for {f, a} <- funs do
         spec = specs[{f, a}]
         spec_str = Introspection.spec_to_string(spec)
 
-        doc_result = if docs != nil do
-          {_kind, func_doc} = find_doc({f, a}, docs)
+        doc_result =
+          if docs != nil do
+            {_kind, func_doc} = find_doc({f, a}, docs)
 
-          case func_doc do
-            nil ->
-              nil
+            case func_doc do
+              nil ->
+                nil
 
-            {{_fun, _}, _line, _kind, _args, doc, metadata} ->
-              {doc, metadata}
+              {{_fun, _}, _line, _kind, _args, doc, metadata} ->
+                {doc, metadata}
+            end
           end
-        end
 
         case f |> Atom.to_string() do
           "MACRO-" <> name ->
@@ -726,7 +728,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
           _name ->
             params = format_params(spec, a)
-            {f, a, a, :function, doc_result || edoc_results[{f, a}] || {"", %{}}, spec_str, params}
+
+            {f, a, a, :function, doc_result || edoc_results[{f, a}] || {"", %{}}, spec_str,
+             params}
         end
       end
     end

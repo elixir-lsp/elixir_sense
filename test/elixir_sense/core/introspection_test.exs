@@ -79,7 +79,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
                name: :callback_mode,
                signature: "callback_mode()"
              }
-           ] = get_callbacks_with_docs(:gen_statem) |> Enum.filter(& &1.name == :callback_mode)
+           ] = get_callbacks_with_docs(:gen_statem) |> Enum.filter(&(&1.name == :callback_mode))
   end
 
   test "get_callbacks_with_docs for Elixir behaviours with no docs defined" do
