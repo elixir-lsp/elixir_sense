@@ -89,19 +89,15 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
     assert nil == Code.get_docs(ElixirSenseExample.NotExistingModule, :callback_docs)
 
     assert nil == Code.get_docs(ElixirSenseExample.NotExistingModule, :moduledoc)
-
-    assert nil == Code.get_docs(ElixirSenseExample.NotExistingModule, :all)
   end
 
   test "erlang module" do
-    assert nil == Code.get_docs(:lists, :docs)
+    assert is_list(Code.get_docs(:lists, :docs))
 
-    assert nil == Code.get_docs(:lists, :type_docs)
+    assert is_list(Code.get_docs(:erlang, :type_docs))
 
-    assert nil == Code.get_docs(:lists, :callback_docs)
+    assert is_list(Code.get_docs(:gen_server, :callback_docs))
 
-    assert nil == Code.get_docs(:lists, :moduledoc)
-
-    assert nil == Code.get_docs(:lists, :all)
+    assert is_tuple(Code.get_docs(:lists, :moduledoc))
   end
 end
