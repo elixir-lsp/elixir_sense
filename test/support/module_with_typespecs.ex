@@ -178,5 +178,10 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     def func_with_edoc_options(options) do
       options
     end
+
+    @spec func_with_erlang_type_options([{:erlang_t, :erlang.time_unit()}]) :: any
+    def func_with_erlang_type_options(options) do
+      options
+    end
   end
 end

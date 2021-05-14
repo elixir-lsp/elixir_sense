@@ -2812,6 +2812,21 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.doc == "Remote type with params"
     end
 
+    test "remote erlang type with doc" do
+      buffer = "Local.func_with_erlang_type_options("
+      suggestion = suggestion_by_name("erlang_t", buffer)
+
+      assert suggestion.type_spec ==
+               ":erlang.time_unit()"
+
+      assert suggestion.origin == ":erlang"
+
+      assert suggestion.expanded_spec ==
+               "@type time_unit() ::\n  pos_integer()\n  | :second\n  | :millisecond\n  | :microsecond\n  | :nanosecond\n  | :native\n  | :perf_counter\n  | deprecated_time_unit()"
+
+      assert suggestion.doc =~ "Supported time unit representations"
+    end
+
     test "remote erlang type with edoc" do
       buffer = "Local.func_with_edoc_options("
       suggestion = suggestion_by_name("edoc_t", buffer)
