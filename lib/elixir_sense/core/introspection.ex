@@ -162,9 +162,14 @@ defmodule ElixirSense.Core.Introspection do
           # instead they return typespecs in metadata[:signature]
           fun_args = case metadata[:signature] do
             nil ->
-              args
-              |> List.wrap
-              |> Enum.map(&format_doc_arg(&1))
+              if args != nil and length(args) == arity do
+                args
+                |> List.wrap
+                |> Enum.map(&format_doc_arg(&1))
+              else
+                # as of otp 23 erlang callback implementation do not have signature metadata
+                if arity == 0, do: [], else: Enum.map(1..arity, fn _ -> "term" end)
+              end
             [{:attribute, _, :spec, {{^f, ^arity}, [params | _]}}] ->
               TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
             [{:attribute, _, :spec, {{^mod, ^f, ^arity}, [params | _]}}] ->
@@ -272,10 +277,15 @@ defmodule ElixirSense.Core.Introspection do
           # instead they return typespecs in metadata[:signature]
           fun_args_text = case metadata[:signature] do
             nil ->
-              args
-              |> List.wrap
-              |> Enum.map_join(", ", &format_doc_arg(&1))
-              |> String.replace("\\\\", "\\\\\\\\")
+              if args != nil and length(args) == arity do
+                args
+                |> List.wrap
+                |> Enum.map_join(", ", &format_doc_arg(&1))
+                |> String.replace("\\\\", "\\\\\\\\")
+              else
+                # as of otp 23 erlang callback implementation do not have signature metadata
+                if arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end)
+              end
             [{:attribute, _, :spec, {{^f, ^arity}, [params | _]}}] ->
               TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
             [{:attribute, _, :spec, {{^mod, ^f, ^arity}, [params | _]}}] ->

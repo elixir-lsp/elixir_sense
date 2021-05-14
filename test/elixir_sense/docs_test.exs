@@ -1150,7 +1150,10 @@ defmodule ElixirSense.DocsTest do
     assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init"
 
     assert docs =~ """
-           > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(_)
+           > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(term)
+
+           **Since**
+           OTP 19.0
            """
   end
 end
