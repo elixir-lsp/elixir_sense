@@ -255,9 +255,6 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_func_docs_md(mod, fun) do
-    mod_str = inspect(mod)
-    fun_str = Atom.to_string(fun)
-
     case NormalizedCode.get_docs(mod, :docs) do
       nil ->
         edoc_results =
@@ -267,27 +264,7 @@ defmodule ElixirSense.Core.Introspection do
           end)
 
         # no docs, fallback to typespecs
-        results =
-          for {{_name, arity}, [params | _]} <-
-                TypeInfo.get_function_specs(mod, fun) do
-            fun_args_text =
-              TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
-
-            {text, metadata} = edoc_results[arity] || {nil, %{}}
-
-            "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
-              get_spec_text(mod, fun, arity, :function)
-            }#{text || @no_documentation}"
-          end
-
-        case results do
-          [] ->
-            # no docs and no typespecs
-            no_docs_no_typespec_fallback(mod, fun, edoc_results)
-
-          other ->
-            other
-        end
+        get_func_docs_md_from_typespec(mod, fun, edoc_results)
 
       docs ->
         results = for {{f, arity}, _, kind, args, text, metadata} <- docs, f == fun do
@@ -305,21 +282,45 @@ defmodule ElixirSense.Core.Introspection do
               TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
           end
 
-          "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
+          "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
             get_spec_text(mod, fun, arity, kind)
           }#{text}"
         end
         
         case results do
           [] ->
-            no_docs_no_typespec_fallback(mod, fun)
+            get_func_docs_md_from_typespec(mod, fun)
           other ->
             other
         end
     end
   end
 
-  defp no_docs_no_typespec_fallback(mod, fun, edoc_results \\ %{}) do
+  defp get_func_docs_md_from_typespec(mod, fun, edoc_results \\ %{}) do
+    results =
+          for {{_name, arity}, [params | _]} <-
+                TypeInfo.get_function_specs(mod, fun) do
+            fun_args_text =
+              TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
+
+            {text, metadata} = edoc_results[arity] || {nil, %{}}
+
+            "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
+              get_spec_text(mod, fun, arity, :function)
+            }#{text || @no_documentation}"
+          end
+
+        case results do
+          [] ->
+            # no docs and no typespecs
+            get_func_docs_md_from_module_info(mod, fun, edoc_results)
+
+          other ->
+            other
+        end
+  end
+
+  defp get_func_docs_md_from_module_info(mod, fun, edoc_results) do
     # provide dummy docs basing on module_info(:exports)
     for {f, arity} <- get_exports(mod),
         f == fun do
