@@ -3,7 +3,7 @@ defmodule ElixirSense.Core.ErlangHtml do
 
   # https://www.w3.org/TR/2011/WD-html-markup-20110113/syntax.html#void-element
   # except for img, br and hr
-  @void_elements ~W(area base col command embed input keygen link 
+  @void_elements ~W(area base col command embed input keygen link
     meta param source track wbr)a
 
   @doc """
