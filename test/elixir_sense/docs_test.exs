@@ -512,6 +512,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    @tag edoc_fallback: true
     test "retrieve type information from erlang modules edoc" do
       buffer = """
       defmodule MyModule do
@@ -762,6 +763,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
+    @tag edoc_fallback: true
     test "retrieve erlang type documentation edoc" do
       buffer = """
       defmodule MyModule do
@@ -1173,7 +1175,7 @@ defmodule ElixirSense.DocsTest do
              """
     else
       assert docs =~ """
-             > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(_)
+             > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(term)
              """
     end
   end

@@ -2833,6 +2833,7 @@ defmodule ElixirSense.SuggestionsTest do
       end
     end
 
+    @tag edoc_fallback: true
     test "remote erlang type with edoc" do
       buffer = "Local.func_with_edoc_options("
       suggestion = suggestion_by_name("edoc_t", buffer)
@@ -3143,6 +3144,7 @@ defmodule ElixirSense.SuggestionsTest do
       end
     end
 
+    @tag edoc_fallback: true
     test "erlang types edoc" do
       buffer = "defmodule My, do: @type my_type :: :docsh_edoc_xmerl.xml_element_con"
 
