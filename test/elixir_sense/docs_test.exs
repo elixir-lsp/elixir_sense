@@ -127,7 +127,7 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    @tag :edoc_fallback
+    @tag edoc_fallback: true
     test "retrieve erlang function documentation edoc" do
       buffer = """
       defmodule MyModule do

@@ -174,19 +174,23 @@ defmodule ElixirSense.SignatureTest do
       end
       """
 
-      assert ElixirSense.signature(code, 2, 32) == %{
+      assert %{
                pipe_before: false,
                active_param: 0,
                signatures: [
                  %{
-                   documentation: "Supported time unit representations:",
+                   documentation: summary,
                    name: "time_unit",
                    params: [],
                    spec:
                      "@type time_unit :: pos_integer | :second | :millisecond | :microsecond | :nanosecond | :native | :perf_counter | deprecated_time_unit"
                  }
                ]
-             }
+             } = ElixirSense.signature(code, 2, 32)
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert "Supported time unit representations:" <> _ = summary
+      end
     end
 
     test "find type signatures from erlang module edoc" do
@@ -287,30 +291,36 @@ defmodule ElixirSense.SignatureTest do
       end
       """
 
-      assert ElixirSense.signature(code, 2, 24) == %{
+      assert %{
                active_param: 0,
                pipe_before: false,
                signatures: [
                  %{
-                   documentation: "Returns a flattened version of `DeepList`\\.",
+                   documentation: summary1,
                    name: "flatten",
                    params: ["deepList"],
                    spec:
                      "@spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]"
                  },
                  %{
-                   documentation:
-                     "Returns a flattened version of `DeepList` with tail `Tail` appended\\.",
+                   documentation: summary2,
                    name: "flatten",
                    params: ["deepList", "tail"],
                    spec:
                      "@spec flatten(deepList, tail) :: list when deepList: [term | deepList], tail: [term], list: [term]"
                  }
                ]
-             }
+             } = ElixirSense.signature(code, 2, 24)
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert "Returns a flattened version of `DeepList`\\." <> _ = summary1
+
+        assert "Returns a flattened version of `DeepList` with tail `Tail` appended\\." <> _ =
+                 summary2
+      end
     end
 
-    @tag :edoc_fallback
+    @tag edoc_fallback: true
     test "find signatures from erlang module edoc" do
       code = """
       defmodule MyModule do
@@ -1012,7 +1022,7 @@ defmodule ElixirSense.SignatureTest do
         pipe_before: false,
         signatures: [
           %{
-            documentation: "Returns the current date as" <> _,
+            documentation: summary,
             name: "date",
             params: [],
             spec: "@spec date :: date when date: :calendar.date"
@@ -1020,19 +1030,23 @@ defmodule ElixirSense.SignatureTest do
         ]
       } = ElixirSense.signature(buffer, 2, 16)
 
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert "Returns the current date as" <> _ = summary
+      end
+
       assert %{
                active_param: 0,
                pipe_before: false,
                signatures: [
                  %{
-                   documentation: "Cancels a timer\\." <> _,
+                   documentation: summary1,
                    name: "cancel_timer",
                    params: ["timerRef"],
                    spec:
                      "@spec cancel_timer(timerRef) :: result when timerRef: reference, time: non_neg_integer, result: time | false"
                  },
                  %{
-                   documentation: "Cancels a timer that has been created by" <> _,
+                   documentation: summary2,
                    name: "cancel_timer",
                    params: ["timerRef", "options"],
                    spec:
@@ -1040,6 +1054,11 @@ defmodule ElixirSense.SignatureTest do
                  }
                ]
              } = ElixirSense.signature(buffer, 4, 24)
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert "Cancels a timer\\." <> _ = summary1
+        assert "Cancels a timer that has been created by" <> _ = summary2
+      end
     end
   end
 end

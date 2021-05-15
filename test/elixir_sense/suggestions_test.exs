@@ -488,11 +488,15 @@ defmodule ElixirSense.SuggestionsTest do
                origin: ":gen_statem",
                spec:
                  "@callback code_change(oldVsn :: term | {:down, term}, oldState :: state, oldData :: data, extra :: term) ::\n  {:ok, newState :: state, newData :: data} |\n  reason :: term",
-               summary: "- OldVsn = Vsn" <> _,
+               summary: summary,
                type: :callback,
                subtype: :callback
              }
            ] = list
+
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert "- OldVsn = Vsn" <> _ = summary
+    end
   end
 
   test "callback suggestions should not crash with unquote(__MODULE__)" do
@@ -2824,7 +2828,9 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.expanded_spec ==
                "@type time_unit() ::\n  pos_integer()\n  | :second\n  | :millisecond\n  | :microsecond\n  | :nanosecond\n  | :native\n  | :perf_counter\n  | deprecated_time_unit()"
 
-      assert suggestion.doc =~ "Supported time unit representations"
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert suggestion.doc =~ "Supported time unit representations"
+      end
     end
 
     test "remote erlang type with edoc" do
@@ -3122,7 +3128,7 @@ defmodule ElixirSense.SuggestionsTest do
       assert [
                %{
                  arity: 0,
-                 doc: "Supported time unit representations:",
+                 doc: summary,
                  name: "time_unit",
                  origin: ":erlang",
                  signature: "time_unit()",
@@ -3131,6 +3137,10 @@ defmodule ElixirSense.SuggestionsTest do
                  type: :type_spec
                }
              ] = suggestions
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert "Supported time unit representations:" <> _ = summary
+      end
     end
 
     test "erlang types edoc" do

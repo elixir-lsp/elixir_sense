@@ -20,13 +20,13 @@ defmodule ExUnitConfig do
     end
   end
 
-  defp edoc_fallback do
+  def erlang_eep48_supported do
     otp_release = System.otp_release() |> String.to_integer()
+    otp_release >= 23 and Version.match?(System.version(), ">= 1.11.0")
+  end
 
-    if otp_release >= 23 and Version.match?(System.version(), ">= 1.11.0") do
-      :edoc_fallback
-    end
-    |> List.wrap()
+  defp edoc_fallback do
+    [{:edoc_fallback, erlang_eep48_supported()}]
   end
 
   def excludes do

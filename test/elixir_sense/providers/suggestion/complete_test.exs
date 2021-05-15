@@ -33,12 +33,15 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
              %{
                name: ":zlib",
                subtype: nil,
-               summary:
-                 "This module provides an API for the zlib library \\([www\\.zlib\\.net]\\)\\. It is used to compress and decompress data\\. The data format is described by [RFC 1950], [RFC 1951], and [RFC 1952]\\.",
+               summary: summary,
                type: :module,
                metadata: %{otp_doc_vsn: {1, 0, 0}}
              }
            ] = expand(':zl')
+
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert "This module provides an API for the zlib library" <> _ = summary
+    end
   end
 
   # Code.fetch_docs(:edoc_wiki) on OTP 23 returns
@@ -1318,8 +1321,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                type: :function,
                args: "timerRef",
                origin: ":erlang",
-               summary:
-                 "Cancels a timer\\. The same as calling [`erlang:cancel_timer(TimerRef, [])`]\\."
+               summary: summary1
              },
              %{
                arity: 2,
@@ -1329,13 +1331,17 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                type: :function,
                args: "timerRef, options",
                origin: ":erlang",
-               summary:
-                 "Cancels a timer that has been created by [`erlang:start_timer`] or [`erlang:send_after`]\\. `TimerRef` identifies the timer, and was returned by the BIF that created the timer\\."
+               summary: summary2
              }
            ] = expand(':erlang.cancel_time')
+
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert "Cancels a timer\\." <> _ = summary1
+      assert "Cancels a timer that has been created by" <> _ = summary2
+    end
   end
 
-  @tag :edoc_fallback
+  @tag edoc_fallback: true
   test "profide specs for erlang functions edoc" do
     assert [
              %{
