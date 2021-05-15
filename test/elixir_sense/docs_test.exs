@@ -1161,11 +1161,6 @@ defmodule ElixirSense.DocsTest do
     assert subject == "init"
     assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init"
 
-    assert docs =~ """
-           > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(term)
-
-           """
-
     if ExUnitConfig.erlang_eep48_supported() do
       assert docs =~ """
              > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(term)
@@ -1175,7 +1170,7 @@ defmodule ElixirSense.DocsTest do
              """
     else
       assert docs =~ """
-             > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(term)
+             > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(_)
              """
     end
   end

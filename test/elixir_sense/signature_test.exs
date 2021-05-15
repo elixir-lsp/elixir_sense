@@ -193,6 +193,7 @@ defmodule ElixirSense.SignatureTest do
       end
     end
 
+    @tag edoc_fallback: true
     test "find type signatures from erlang module edoc" do
       code = """
       defmodule MyModule do

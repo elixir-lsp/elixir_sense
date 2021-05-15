@@ -253,6 +253,7 @@ defmodule ElixirSense.Core.BuiltinTypes do
     for {key, value} <- @types, match_key?(type_name, key) do
       value
     end
+    |> Enum.sort_by(&length(&1.params))
   end
 
   def builtin_type?(type_name) do
