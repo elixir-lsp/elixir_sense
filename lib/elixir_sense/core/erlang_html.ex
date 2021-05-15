@@ -35,7 +35,7 @@ defmodule ElixirSense.Core.ErlangHtml do
   Document AST is defined in http://erlang.org/doc/apps/erl_docgen/doc_storage.html
   """
 
-  @spec to_markdown(chunk_element()) :: String.t
+  @spec to_markdown(chunk_element()) :: String.t()
   def to_markdown(ast), do: to_markdown(ast, [], :normal)
 
   def to_markdown(binary, _parents, sanitize_mode) when is_binary(binary) do
@@ -115,8 +115,23 @@ defmodule ElixirSense.Core.ErlangHtml do
     end
   end
 
-  def to_markdown({:div, _attrs, inner}, parents, sanitize_mode) do
-    to_markdown(inner, parents, sanitize_mode)
+  def to_markdown({:div, attrs, inner}, parents, sanitize_mode) do
+    class = attrs[:class]
+    prefix = build_prefix(parents)
+    maybe_class = if class != nil, do: String.upcase(class) <> ":  \n" <> prefix, else: ""
+
+    "\n" <>
+      prefix <>
+      "\n" <>
+      prefix <>
+      "---" <>
+      "\n" <>
+      prefix <>
+      "\n" <>
+      prefix <>
+      maybe_class <>
+      to_markdown(inner, parents, sanitize_mode) <>
+      "\n" <> prefix <> "\n" <> prefix <> "---" <> "\n" <> prefix <> "\n" <> prefix
   end
 
   def to_markdown({:code, _attrs, inner}, parents, _sanitize_mode) do

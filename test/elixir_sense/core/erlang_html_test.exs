@@ -267,11 +267,40 @@ defmodule ElixirSense.Core.ErlangHtmlTest do
 
   test "div element" do
     ast =
+      {:div, [class: "note"],
+       [
+         "asd"
+       ]}
+
+    assert """
+
+
+           ---
+
+           NOTE:  
+           asd
+
+           ---
+
+           """ == to_markdown(ast)
+  end
+
+  test "div element without class" do
+    ast =
       {:div, [],
        [
          "asd"
        ]}
 
-    assert "asd" == to_markdown(ast)
+    assert """
+
+
+           ---
+
+           asd
+
+           ---
+
+           """ == to_markdown(ast)
   end
 end
