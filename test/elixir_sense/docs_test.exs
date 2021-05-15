@@ -1166,8 +1166,14 @@ defmodule ElixirSense.DocsTest do
 
     if ExUnitConfig.erlang_eep48_supported() do
       assert docs =~ """
+             > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(term)
+
              **Since**
              OTP 19.0
+             """
+    else
+      assert docs =~ """
+             > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(_)
              """
     end
   end
