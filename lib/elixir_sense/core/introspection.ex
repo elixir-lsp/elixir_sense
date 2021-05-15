@@ -324,7 +324,7 @@ defmodule ElixirSense.Core.Introspection do
             TypeInfo.get_function_specs(mod, fun) do
         fun_args_text = TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
 
-        {text, metadata} = edoc_results[arity] || {nil, %{}}
+        {text, metadata} = edoc_results[arity] || {"", %{}}
 
         "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
           get_spec_text(mod, fun, arity, :function)
@@ -352,7 +352,7 @@ defmodule ElixirSense.Core.Introspection do
         if {f, arity} in BuiltinFunctions.erlang_builtin_functions(mod) do
           {nil, %{builtin: true}}
         else
-          edoc_results[arity] || {nil, %{}}
+          edoc_results[arity] || {"", %{}}
         end
 
       "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
@@ -496,7 +496,7 @@ defmodule ElixirSense.Core.Introspection do
 
           type_args = Enum.map_join(args, ", ", &(&1 |> elem(2) |> Atom.to_string()))
 
-          {text, metadata} = edoc_results[length(args)] || {nil, %{}}
+          {text, metadata} = edoc_results[length(args)] || {"", %{}}
 
           format_type_doc_md({mod, fun}, type_args, text || @no_documentation, spec, metadata)
         end
@@ -620,7 +620,7 @@ defmodule ElixirSense.Core.Introspection do
     |> Enum.map(fn {_, {t, _, args}} = type ->
       {doc, metadata} =
         if edocs != nil do
-          edocs[{t, length(args)}] || {nil, %{}}
+          edocs[{t, length(args)}] || {"", %{}}
         else
           TypeInfo.get_type_doc_desc(docs, t, length(args))
         end

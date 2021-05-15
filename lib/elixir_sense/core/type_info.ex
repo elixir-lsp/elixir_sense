@@ -295,7 +295,7 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   defp get_doc_description(_) do
-    {nil, %{}}
+    {"", %{}}
   end
 
   def get_spec(module, function, arity)
@@ -393,7 +393,7 @@ defmodule ElixirSense.Core.TypeInfo do
               {EdocReader.extract_docs(maybe_doc), metadata}
 
             _ ->
-              {nil, %{}}
+              {"", %{}}
           end
       end
 

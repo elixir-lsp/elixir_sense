@@ -237,8 +237,6 @@ defmodule ElixirSense.DocsTest do
              @spec boolean or boolean :: boolean
              ```
 
-             No documentation available
-
              """
 
       %{

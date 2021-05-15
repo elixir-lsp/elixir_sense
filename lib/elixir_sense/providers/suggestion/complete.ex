@@ -688,7 +688,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       |> Kernel.++(
         for {f, a} <- @builtin_functions,
             include_builtin,
-            do: {f, a, a, :function, {nil, %{}}, nil, nil}
+            do: {f, a, a, :function, {"", %{}}, nil, nil}
       )
     else
       funs =
