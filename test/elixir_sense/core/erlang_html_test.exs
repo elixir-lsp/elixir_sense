@@ -89,24 +89,6 @@ defmodule ElixirSense.Core.ErlangHtmlTest do
            """ == to_markdown(ast)
   end
 
-  test "hr" do
-    ast = [
-      {:p, [], "lorem ipsum"},
-      {:hr, [], []},
-      {:p, [], "quick brown fox"}
-    ]
-
-    assert """
-           lorem ipsum
-
-
-           ---
-
-           quick brown fox
-
-           """ == to_markdown(ast)
-  end
-
   test "unordered list" do
     ast =
       {:ul, [],
@@ -166,39 +148,6 @@ defmodule ElixirSense.Core.ErlangHtmlTest do
            """ == to_markdown(ast)
   end
 
-  test "ordered list with blockquote" do
-    ast =
-      {:ol, [],
-       [
-         {:li, [],
-          [
-            {:p, [], "asd"},
-            {:blockquote, [],
-             [
-               {:p, [], "ccc"},
-               {:p, [], "ddd"}
-             ]}
-          ]},
-         {:li, [], "second"},
-         {:li, [], "third"}
-       ]}
-
-    assert """
-           1. asd
-              
-              > ccc
-              > 
-              > ddd
-              > 
-              > 
-              
-              
-           2. second
-           3. third
-
-           """ == to_markdown(ast)
-  end
-
   test "description list" do
     ast =
       {:dl, [],
@@ -248,7 +197,7 @@ defmodule ElixirSense.Core.ErlangHtmlTest do
       {:br, [], []},
       {:em, [], "em"},
       {:br, [], []},
-      {:bold, [], "bold"},
+      {:b, [], "bold"},
       {:br, [], []},
       {:strong, [], "strong"},
       {:br, [], []}
@@ -316,62 +265,13 @@ defmodule ElixirSense.Core.ErlangHtmlTest do
     assert "" == to_markdown(ast)
   end
 
-  test "image" do
-    ast = [
-      {:img, [src: "/some", alt: "image", title: "awesome"], []},
-      {:br, [], []}
-    ]
-
-    assert """
-           ![image](/some "awesome")  
-           """ == to_markdown(ast)
-  end
-
-  test "void element other than img br hr" do
-    for tag <- ~W(area base col command embed input keygen link 
-    meta param source track wbr)a do
-      ast = {tag, [], []}
-
-      assert "" == to_markdown(ast)
-    end
-  end
-
-  test "blockquote" do
-    ast = {:blockquote, [], "some string"}
-
-    assert """
-           > some string
-
-           """ == to_markdown(ast)
-  end
-
-  test "blockquote with paragraphs" do
+  test "div element" do
     ast =
-      {:blockquote, [],
+      {:div, [],
        [
-         {:p, [], "par 1"},
-         {:p, [], "par 2"}
+         "asd"
        ]}
 
-    assert """
-           > par 1
-           > 
-           > par 2
-           > 
-           > 
-
-           """ == to_markdown(ast)
-  end
-
-  test "container element" do
-    for tag <- ~W(div span article section aside nav)a do
-      ast =
-        {tag, [],
-         [
-           "asd"
-         ]}
-
-      assert "asd" == to_markdown(ast)
-    end
+    assert "asd" == to_markdown(ast)
   end
 end

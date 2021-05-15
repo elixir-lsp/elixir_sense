@@ -1,15 +1,41 @@
 defmodule ElixirSense.Core.ErlangHtml do
   @moduledoc false
 
-  # https://www.w3.org/TR/2011/WD-html-markup-20110113/syntax.html#void-element
-  # except for img, br and hr
-  @void_elements ~W(area base col command embed input keygen link
-    meta param source track wbr)a
+  # those typedefs mimic erl_docgen types (as of OTP 24) to not introduce dependency 
+  @type chunk_elements() :: [chunk_element()]
+  @type chunk_element() ::
+          {chunk_element_type(), chunk_element_attrs(), chunk_elements()}
+          | :unicode.unicode_binary()
+  @type chunk_element_attrs() :: [chunk_element_attr()]
+  @type chunk_element_attr() ::
+          {atom, :unicode.unicode_binary()}
+  @type chunk_element_type() :: chunk_element_inline_type() | chunk_element_block_type()
+  @type chunk_element_inline_type() :: :a | :code | :strong | :b | :em | :i
+  @type chunk_element_block_type() ::
+          :p
+          | :div
+          | :br
+          | :pre
+          | :ul
+          | :ol
+          | :li
+          | :dl
+          | :dt
+          | :dd
+          | :h1
+          | :h2
+          | :h3
+          | :h4
+          | :h5
+          | :h6
 
   @doc """
   Transform application/erlang+html AST into markdown string.
+
+  Document AST is defined in http://erlang.org/doc/apps/erl_docgen/doc_storage.html
   """
 
+  @spec to_markdown(chunk_element()) :: String.t
   def to_markdown(ast), do: to_markdown(ast, [], :normal)
 
   def to_markdown(binary, _parents, sanitize_mode) when is_binary(binary) do
@@ -24,15 +50,6 @@ defmodule ElixirSense.Core.ErlangHtml do
     "  \n" <> build_prefix(parents)
   end
 
-  def to_markdown({:hr, _attrs, []}, parents, _sanitize_mode) do
-    prefix = build_prefix(parents)
-    "\n" <> prefix <> "---" <> "\n" <> prefix <> "\n" <> prefix
-  end
-
-  def to_markdown({tag, _attrs, _inner}, _parents, _sanitize_mode) when tag in @void_elements do
-    ""
-  end
-
   def to_markdown({:p, _attrs, inner}, parents, sanitize_mode) do
     prefix = build_prefix(parents)
     to_markdown(inner, parents, sanitize_mode) <> "\n" <> prefix <> "\n" <> prefix
@@ -42,7 +59,7 @@ defmodule ElixirSense.Core.ErlangHtml do
     "*" <> to_markdown(inner, parents, sanitize_mode) <> "*"
   end
 
-  def to_markdown({tag, _attrs, inner}, parents, sanitize_mode) when tag in [:strong, :bold] do
+  def to_markdown({tag, _attrs, inner}, parents, sanitize_mode) when tag in [:strong, :b] do
     "**" <> to_markdown(inner, parents, sanitize_mode) <> "**"
   end
 
@@ -98,8 +115,7 @@ defmodule ElixirSense.Core.ErlangHtml do
     end
   end
 
-  def to_markdown({tag, _attrs, inner}, parents, sanitize_mode)
-      when tag in [:div, :span, :article, :section, :aside, :nav] do
+  def to_markdown({:div, _attrs, inner}, parents, sanitize_mode) do
     to_markdown(inner, parents, sanitize_mode)
   end
 
@@ -115,31 +131,12 @@ defmodule ElixirSense.Core.ErlangHtml do
     "[" <> to_markdown(inner, parents, sanitize_mode) <> "]"
   end
 
-  def to_markdown({:img, attrs, _inner}, _parents, sanitize_mode) do
-    "![" <>
-      sanitize(Keyword.get(attrs, :alt, ""), sanitize_mode) <>
-      "](" <>
-      sanitize(Keyword.get(attrs, :src, ""), sanitize_mode) <>
-      " \"" <> sanitize(Keyword.get(attrs, :title, ""), sanitize_mode) <> "\")"
-  end
-
-  def to_markdown({:blockquote, _attrs, inner}, parents, sanitize_mode) do
-    prefix = build_prefix(parents)
-
-    "> " <>
-      to_markdown(inner, [:blockquote | parents], sanitize_mode) <>
-      "\n" <> prefix <> "\n" <> prefix
-  end
-
   defp build_prefix(list), do: build_prefix(list, "")
   defp build_prefix([], acc), do: acc
   defp build_prefix([:li | rest], acc), do: build_prefix(rest, " " <> acc)
   defp build_prefix([:ul | rest], acc), do: build_prefix(rest, " " <> acc)
   defp build_prefix([:ol | rest], acc), do: build_prefix(rest, "  " <> acc)
-  defp build_prefix([:blockquote | rest], acc), do: build_prefix(rest, "> " <> acc)
   defp build_prefix([_other | rest], acc), do: build_prefix(rest, acc)
-
-  # TODO table
 
   @special_chars [
     "\\",
