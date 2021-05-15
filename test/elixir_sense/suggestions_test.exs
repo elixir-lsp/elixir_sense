@@ -875,8 +875,12 @@ defmodule ElixirSense.SuggestionsTest do
     assert [
              %{name: "is_function", origin: "Kernel", arity: 1},
              %{name: "is_function", origin: "Kernel", arity: 2},
-             %{name: "init", origin: "MyServer", arity: 1}
+             %{name: "init", origin: "MyServer", arity: 1, sumary: summary}
            ] = list
+
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert "- Args = term" <> _ = summary
+    end
   end
 
   @tag requires_elixir_1_10: true
