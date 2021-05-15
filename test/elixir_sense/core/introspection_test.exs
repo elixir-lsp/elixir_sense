@@ -73,13 +73,17 @@ defmodule ElixirSense.Core.IntrospectionTest do
              %{
                arity: 0,
                callback: "@callback callback_mode :: callback_mode_result",
-               doc: "- CallbackMode = " <> _,
+               doc: summary,
                kind: :callback,
                metadata: %{optional: false},
                name: :callback_mode,
                signature: "callback_mode()"
              }
            ] = get_callbacks_with_docs(:gen_statem) |> Enum.filter(&(&1.name == :callback_mode))
+
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert "- CallbackMode = " <> _ = summary
+    end
   end
 
   test "get_callbacks_with_docs for Elixir behaviours with no docs defined" do

@@ -813,12 +813,16 @@ defmodule ElixirSense.SignatureTest do
                  %{
                    name: "init",
                    params: ["arg"],
-                   documentation: "- Args = term\\(\\)\n- Result" <> _,
+                   documentation: summary,
                    spec:
                      "@spec init(args :: term) :: {:ok, state :: term} | {:ok, state :: term, timeout | :hibernate | {:continue, term}} | {:stop, reason :: term} | :ignore"
                  }
                ]
              } = ElixirSense.signature(code, 5, 10)
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert "- Args = term\\(\\)\n- Result" <> _ = summary
+      end
     end
 
     test "returns :none when it cannot identify a function call" do

@@ -35,12 +35,13 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                subtype: nil,
                summary: summary,
                type: :module,
-               metadata: %{otp_doc_vsn: {1, 0, 0}}
+               metadata: metadata
              }
            ] = expand(':zl')
 
     if ExUnitConfig.erlang_eep48_supported() do
       assert "This module provides an API for the zlib library" <> _ = summary
+      assert %{otp_doc_vsn: {1, 0, 0}} = metadata
     end
   end
 

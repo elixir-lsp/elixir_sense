@@ -203,9 +203,13 @@ defmodule ElixirSense.DocsTest do
              ```
              @spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]
              ```
-
-             Returns a flattened version of `DeepList`\\.
              """
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert docs =~ """
+               Returns a flattened version of `DeepList`\\.
+               """
+      end
     end
 
     @tag requires_otp_23: true
@@ -479,9 +483,13 @@ defmodule ElixirSense.DocsTest do
 
       assert docs =~ """
              > :erlang
-
-             By convention, most Built\\-In Functions \\(BIFs\\) are included in this module\
              """
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert docs =~ """
+               By convention, most Built\\-In Functions \\(BIFs\\) are included in this module\
+               """
+      end
     end
 
     test "retrieve type information from modules" do
@@ -827,9 +835,13 @@ defmodule ElixirSense.DocsTest do
                | :perf_counter
                | deprecated_time_unit()
              ```
-
-             Supported time unit representations:
              """
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert docs =~ """
+               Supported time unit representations:
+               """
+      end
     end
 
     @tag requires_elixir_1_10: true
@@ -1150,8 +1162,13 @@ defmodule ElixirSense.DocsTest do
     assert docs =~ """
            > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(term)
 
-           **Since**
-           OTP 19.0
            """
+
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert docs =~ """
+             **Since**
+             OTP 19.0
+             """
+    end
   end
 end

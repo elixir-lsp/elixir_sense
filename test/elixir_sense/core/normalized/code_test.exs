@@ -92,12 +92,22 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
   end
 
   test "erlang module" do
-    assert is_list(Code.get_docs(:lists, :docs))
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert is_list(Code.get_docs(:lists, :docs))
 
-    assert is_list(Code.get_docs(:erlang, :type_docs))
+      assert is_list(Code.get_docs(:erlang, :type_docs))
 
-    assert is_list(Code.get_docs(:gen_server, :callback_docs))
+      assert is_list(Code.get_docs(:gen_server, :callback_docs))
 
-    assert is_tuple(Code.get_docs(:lists, :moduledoc))
+      assert is_tuple(Code.get_docs(:lists, :moduledoc))
+    else
+      assert is_nil(Code.get_docs(:lists, :docs))
+
+      assert is_nil(Code.get_docs(:erlang, :type_docs))
+
+      assert is_nil(Code.get_docs(:gen_server, :callback_docs))
+
+      assert is_nil(Code.get_docs(:lists, :moduledoc))
+    end
   end
 end
