@@ -2,10 +2,55 @@ defmodule ElixirSense.Core.ErlangHtmlTest do
   use ExUnit.Case, async: true
   import ElixirSense.Core.ErlangHtml
 
-  # test "integration" do
-  #   ElixirSense.Core.Applications.load_all 
-  #   for m <- ElixirSense.Core.Applications.loadable_modules, t <- [:moduledoc, :docs, :type_docs, :callback_docs], do: ElixirSense.Core.Normalized.Code.get_docs(m, t)
-  # end
+  @tag requires_source: true
+  test "integration" do
+    for a <- [
+          :asn1,
+          :common_test,
+          :compiler,
+          :crypto,
+          :debugger,
+          :dialyzer,
+          :diameter,
+          :edoc,
+          :eldap,
+          :erl_docgen,
+          :erl_interface,
+          :et,
+          :eunit,
+          :ftp,
+          :inets,
+          :jinterface,
+          :kernel,
+          :megaco,
+          :mnesia,
+          :observer,
+          :odbc,
+          :os_mon,
+          :parsetools,
+          :public_key,
+          :reltool,
+          :runtime_tools,
+          :sasl,
+          :snmp,
+          :ssh,
+          :ssl,
+          :stdlib,
+          :syntax_tools,
+          :tftp,
+          :tools,
+          :wx,
+          :xmerl
+        ] do
+      Application.load(a)
+    end
+
+    loadable = :code.all_available() |> Enum.map(fn {m, _, _} -> :"#{m}" end)
+
+    for m <- loadable,
+        t <- [:moduledoc, :docs, :type_docs, :callback_docs],
+        do: ElixirSense.Core.Normalized.Code.get_docs(m, t)
+  end
 
   test "binary" do
     ast = "binary"
