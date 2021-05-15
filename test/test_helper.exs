@@ -20,8 +20,17 @@ defmodule ExUnitConfig do
     end
   end
 
+  defp edoc_fallback do
+    otp_release = System.otp_release() |> String.to_integer()
+
+    if otp_release >= 23 and Version.match?(System.version(), ">= 1.11.0") do
+      :edoc_fallback
+    end
+    |> List.wrap()
+  end
+
   def excludes do
-    [requires_source: true] ++ otp_related() ++ elixir_related()
+    [requires_source: true] ++ otp_related() ++ elixir_related() ++ edoc_fallback()
   end
 end
 

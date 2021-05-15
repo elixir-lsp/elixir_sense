@@ -310,7 +310,7 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
-    # TODO test fallback to docsh
+    @tag :edoc_fallback
     test "find signatures from erlang module edoc" do
       code = """
       defmodule MyModule do

@@ -1335,7 +1335,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
            ] = expand(':erlang.cancel_time')
   end
 
-  # TODO doc_sh fallback
+  @tag :edoc_fallback
   test "profide specs for erlang functions edoc" do
     assert [
              %{
