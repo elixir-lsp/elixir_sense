@@ -100,11 +100,11 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   def do_expand(hint, code, env) do
-    case NormalizedCode.CursorContext.cursor_context(code) do
+    case NormalizedCode.CursorContext.cursor_context(code |> Enum.reverse) do
       {:alias, alias} ->
-        # TODO why reverse is needed here?
-        expand_aliases(List.to_string(alias |> Enum.reverse), env)
-      #   mod, hint, aliases, env, filter, include_funs
+        expand_aliases(List.to_string(alias), env)
+      {:unquoted_atom, unquoted_atom} ->
+        expand_erlang_modules(List.to_string(unquoted_atom), env)
       _ -> expand(code, env)
     end
   end
@@ -178,7 +178,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     variable_or_import = expand_variable_or_import("", env)
     # we are expanding all erlang modules
     # for performance reasons we do not extract edocs
-    erlang_modules = expand_erlang_modules("", env, false)
+    erlang_modules = expand_erlang_modules("", env)
     elixir_modules = expand_elixir_modules([], "", env)
 
     attributes = expand_attribute("", env)
@@ -189,7 +189,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp expand_expr(expr, env) do
     case Code.string_to_quoted(expr) do
       {:ok, atom} when is_atom(atom) ->
-        expand_erlang_modules(Atom.to_string(atom), env, true)
+        expand_erlang_modules(Atom.to_string(atom), env)
 
       {:ok, {atom, _, nil}} when is_atom(atom) ->
         expand_variable_or_import(Atom.to_string(atom), env)
@@ -410,21 +410,22 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   ## Erlang modules
 
-  defp expand_erlang_modules(hint \\ "", env, provide_edocs?) do
-    format_expansion(match_erlang_modules(hint, env, provide_edocs?))
+  defp expand_erlang_modules(hint, env) do
+    format_expansion(match_erlang_modules(hint, env))
   end
 
-  defp match_erlang_modules(hint, env, provide_edocs?) do
+  defp match_erlang_modules(hint, env) do
     for mod <- match_modules(hint, true, env),
-        !String.starts_with?(mod, "Elixir"),
         usable_as_unquoted_module?(mod) do
       mod_as_atom = String.to_atom(mod)
       subtype = Introspection.get_module_subtype(mod_as_atom)
 
       desc =
-        if provide_edocs? do
+        if hint != "" do
           Introspection.get_module_docs_summary(mod_as_atom)
         else
+          # performance optimization
+          # TODO is it still needed on OTP 23+?
           {"", %{}}
         end
 
@@ -466,7 +467,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
       parts ->
         hint = List.last(parts)
-        list = Enum.take(parts, length(parts) - 1)
+        list = Enum.take(parts, length(parts) - 1) |> Enum.map(&String.to_atom/1)
 
         case value_from_alias(list, env) do
           {:ok, alias} -> expand_aliases(alias, hint, [], false, env, filter)
@@ -478,7 +479,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp expand_aliases(mod, hint, aliases, include_funs, env, filter) do
     aliases
     |> Kernel.++(match_elixir_modules(mod, hint, env, filter))
-    # TOOD get_module_funs
+    # TODO get_module_funs
     |> Kernel.++(if include_funs, do: match_module_funs(mod, hint, true, env), else: [])
     |> format_expansion()
   end
