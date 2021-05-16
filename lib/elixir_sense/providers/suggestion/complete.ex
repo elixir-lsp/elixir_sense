@@ -259,7 +259,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   # Elixir.fun
   defp expand_call({:__aliases__, _, list}, hint, env) do
-    case expand_alias(list, env) do
+    case value_from_alias(list, env) do
       {:ok, alias} -> expand_require(alias, hint, env)
       :error -> no()
     end
@@ -446,7 +446,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp expand_elixir_modules(list, hint, env, filter, include_funs) do
-    case expand_alias(list, env) do
+    case value_from_alias(list, env) do
       {:ok, alias} ->
         expand_elixir_modules_from_aliases(alias, hint, [], env, filter, include_funs)
 
@@ -462,7 +462,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     |> format_expansion()
   end
 
-  defp expand_alias(mod_parts, env) do
+  defp value_from_alias(mod_parts, env) do
     Source.concat_module_parts(mod_parts, env.scope_module, env.aliases)
   end
 
