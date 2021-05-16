@@ -96,7 +96,17 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
           ]
   def complete(hint, %Env{} = env) do
-    expand(hint |> String.to_charlist() |> Enum.reverse(), env)
+    do_expand(hint, hint |> String.to_charlist() |> Enum.reverse(), env)
+  end
+
+  def do_expand(hint, code, env) do
+    case NormalizedCode.CursorContext.cursor_context(code) do
+      {:alias, alias} ->
+        # TODO why reverse is needed here?
+        expand_aliases(List.to_string(alias |> Enum.reverse), env)
+      #   mod, hint, aliases, env, filter, include_funs
+      _ -> expand(code, env)
+    end
   end
 
   def expand('', env) do
@@ -455,7 +465,24 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  defp expand_elixir_modules_from_aliases(mod, hint, aliases, env, filter, include_funs) do
+  defp expand_aliases(all, env) do
+    filter = fn _ -> true end
+    case String.split(all, ".") do
+      [hint] ->
+        aliases = match_aliases(hint, env)
+        expand_aliases(Elixir, hint, aliases, false, env, filter)
+
+      parts ->
+        hint = List.last(parts)
+        list = Enum.take(parts, length(parts) - 1)
+
+        case value_from_alias(list, env) do
+          {:ok, alias} -> expand_aliases(alias, hint, [], false, env, filter)
+          :error -> no()
+        end
+    end
+  end
+
   defp expand_aliases(mod, hint, aliases, include_funs, env, filter) do
     aliases
     |> Kernel.++(match_elixir_modules(mod, hint, env, filter))
