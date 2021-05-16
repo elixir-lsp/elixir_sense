@@ -248,14 +248,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   ## Formatting
 
-  # defp format_expansion([], _) do
-  #   no()
-  # end
-
-  # defp format_expansion([uniq], hint) do
-  #   to_entries(uniq)
-  # end
-
   defp format_expansion(entries) do
     Enum.flat_map(entries, &to_entries/1)
   end
