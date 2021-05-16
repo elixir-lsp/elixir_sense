@@ -838,6 +838,71 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
            ] = expand('S.my_f', env)
   end
 
+  test "complete remote funs from injected module" do
+    env = %Env{
+      scope_module: MyModule,
+      mods_and_funs: %{
+        {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
+        {Some.OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
+        {Some.OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
+          type: :def,
+          params: [[{:some, [], nil}]]
+        },
+        {Some.OtherModule, :my_fun_other_priv, nil} => %ModFunInfo{type: :defp},
+        {Some.OtherModule, :my_fun_other_priv, 1} => %ModFunInfo{
+          type: :defp,
+          params: [[{:some, [], nil}]]
+        }
+      },
+      attributes: [
+        %AttributeInfo{
+          name: :get_module,
+          type:
+            {:call, {:atom, Application}, :get_env,
+             [atom: :elixir_sense, atom: :an_attribute, atom: Some.OtherModule]}
+        },
+        %AttributeInfo{
+          name: :compile_module,
+          type:
+            {:call, {:atom, Application}, :compile_env,
+             [atom: :elixir_sense, atom: :an_attribute, atom: Some.OtherModule]}
+        },
+        %AttributeInfo{
+          name: :fetch_module,
+          type:
+            {:call, {:atom, Application}, :fetch_env!,
+             [atom: :elixir_sense, atom: :other_attribute]}
+        },
+        %AttributeInfo{
+          name: :compile_bang_module,
+          type:
+            {:call, {:atom, Application}, :compile_env!,
+             [atom: :elixir_sense, atom: :other_attribute]}
+        }
+      ]
+    }
+
+    assert [
+             %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+           ] = expand('@get_module.my_f', env)
+
+    assert [
+             %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+           ] = expand('@compile_module.my_f', env)
+
+    Application.put_env(:elixir_sense, :other_attribute, Some.OtherModule)
+
+    assert [
+             %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+           ] = expand('@fetch_module.my_f', env)
+
+    assert [
+             %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+           ] = expand('@compile_bang_module.my_f', env)
+  after
+    Application.delete_env(:elixir_sense, :other_attribute)
+  end
+
   test "complete modules" do
     env = %Env{
       scope_module: MyModule,
