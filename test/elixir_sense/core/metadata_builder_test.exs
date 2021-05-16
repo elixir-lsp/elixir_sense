@@ -38,9 +38,25 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           IO.puts @inner_attr
         end
         IO.puts ""
+        @otherattribute Application.get_env(:elixir_sense, :some_attribute, InnerModule)
       end
       """
       |> string_to_state
+
+    assert get_line_attributes(state, 10) == [
+             %ElixirSense.Core.State.AttributeInfo{
+               name: :myattribute,
+               positions: [{2, 3}, {3, 11}],
+               type: {:atom, String}
+             },
+             %AttributeInfo{
+               name: :otherattribute,
+               positions: [{10, 3}],
+               type:
+                 {:call, {:atom, Application}, :get_env,
+                  [atom: :elixir_sense, atom: :some_attribute, atom: MyModule.InnerModule]}
+             }
+           ]
 
     assert get_line_attributes(state, 3) == [
              %AttributeInfo{
