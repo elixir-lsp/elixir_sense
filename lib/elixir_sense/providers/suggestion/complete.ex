@@ -435,20 +435,20 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp expand_elixir_modules(list, hint, env, filter \\ fn _ -> true end, include_funs \\ true)
 
   defp expand_elixir_modules([], hint, env, filter, include_funs) do
-    expand_elixir_modules_from_aliases(
+    expand_aliases(
       Elixir,
       hint,
       match_aliases(hint, env),
+      include_funs,
       env,
-      filter,
-      include_funs
+      filter
     )
   end
 
   defp expand_elixir_modules(list, hint, env, filter, include_funs) do
     case value_from_alias(list, env) do
       {:ok, alias} ->
-        expand_elixir_modules_from_aliases(alias, hint, [], env, filter, include_funs)
+        expand_aliases(alias, hint, [], include_funs, env, filter)
 
       :error ->
         no()
@@ -456,8 +456,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp expand_elixir_modules_from_aliases(mod, hint, aliases, env, filter, include_funs) do
+  defp expand_aliases(mod, hint, aliases, include_funs, env, filter) do
     aliases
     |> Kernel.++(match_elixir_modules(mod, hint, env, filter))
+    # TOOD get_module_funs
     |> Kernel.++(if include_funs, do: match_module_funs(mod, hint, true, env), else: [])
     |> format_expansion()
   end
