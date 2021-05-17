@@ -110,12 +110,15 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_aliases(List.to_string(alias), env, false)
       {:unquoted_atom, unquoted_atom} ->
         expand_erlang_modules(List.to_string(unquoted_atom), env)
-      {:dot, path, hint} = a ->
-        IO.inspect code
-        IO.inspect a
-        # expand(code, env)
-        
+      {:dot, path, hint} ->
         expand_dot(path, List.to_string(hint), env, only_struct)
+      {:dot_arity, path, hint} ->
+        expand_dot(path, List.to_string(hint), env, only_struct)
+      {:dot_call, _path, _hint} ->
+        # no need to expand signatures here, we have signatures provider
+        # expand_dot_call(path, List.to_atom(hint), env)
+        no()
+
       _ -> expand(code |> Enum.reverse, env)
     end
   end
