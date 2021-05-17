@@ -25,7 +25,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   alias ElixirSense.Core.State.{ModFunInfo, SpecInfo, VarInfo, AttributeInfo}
 
   def expand(expr, env \\ %Env{}) do
-    ElixirSense.Providers.Suggestion.Complete.do_expand(expr, Enum.reverse(expr), env)
+    ElixirSense.Providers.Suggestion.Complete.do_expand(expr, expr, env)
   end
 
   test "erlang module completion" do
