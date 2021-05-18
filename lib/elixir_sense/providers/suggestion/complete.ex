@@ -23,7 +23,7 @@
 # Since then the codebases have diverged as the requirements
 # put on editor and REPL autocomplete are different.
 # However some relevant changes have been merged back
-# from upstream Elixir (1.10).
+# from upstream Elixir (1.12).
 # Changes made to the original version include:
 # - different result format with added docs and spec
 # - built in and private funcs are not excluded
@@ -31,7 +31,10 @@
 # - added expansion basing on metadata besides introspection
 # - uses custom docs extraction function
 # - gets metadata by argument instead of environment variables
-# (original Elixir 1.1) and later GenServer
+#   (original Elixir 1.1) and later GenServer
+# - no signature completion as it's handled by signature provider
+# - added attribute completion
+# - improved completion after %, ^ and & operators
 
 defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.Applications
