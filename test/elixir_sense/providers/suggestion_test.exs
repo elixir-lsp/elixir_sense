@@ -264,16 +264,6 @@ defmodule ElixirSense.Providers.SuggestionTest do
              )
   end
 
-  test "do not return completion candidates for unknown erlang modules" do
-    assert [] =
-             Suggestion.find(
-               "Enum:",
-               @env_func,
-               %Metadata{},
-               @cursor_context
-             )
-  end
-
   test "do not return completion candidates for unknown modules" do
     assert [] =
              Suggestion.find(
