@@ -349,12 +349,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp value_from_alias(mod_parts, env) do
-    # TODO remove
-    mod_parts = case mod_parts do
-      [p | _] when is_binary(p) -> mod_parts |> Enum.map(&String.to_atom/1)
-      o -> o
-    end
-    Source.concat_module_parts(mod_parts, env.scope_module, env.aliases)
+    mod_parts
+    |> Enum.map(&String.to_atom/1)
+    |> Source.concat_module_parts(env.scope_module, env.aliases)
   end
 
   defp match_aliases(hint, env) do
