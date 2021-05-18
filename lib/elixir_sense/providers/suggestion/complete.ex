@@ -121,7 +121,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         no()
       :expr ->
         case code do
-          [?&] -> expand_expr("", env)
+          # [?&] -> expand_expr("", env)
           [?^] -> expand_variable("", env)
           [?%] -> expand_struct_modules([], "", env)
           _ ->
@@ -148,110 +148,42 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  defp expand('', env) do
-    expand_expr("", env)
-  end
-
-  # credo:disable-for-lines:35
-  defp expand([h | t] = expr, env) do
-    cond do
-      h === ?. and t != [] ->
-        expand_dot(reduce(t), Enum.reverse(expr), env, false)
-
-      h === ?: and t == [] ->
-        # we are expanding all erlang modules
-        # for performance reasons we do not extract edocs
-        expand_erlang_modules(env, false)
-
-      h === ?@ and t == [] ->
-        expand_attribute("", env)
-
-      h === ?^ and t == [] ->
-        expand_variable("", env)
-
-      identifier?(h) ->
-        expand_expr(reduce(expr), env)
-
-      h == ?/ and t != [] and identifier?(hd(t)) ->
-        expand_expr(reduce(t), env)
-
-      h in '([{' ->
-        expand('', env)
-
-      h === ?% and t == [] ->
-        expand_struct_modules([], "", env)
-
-      h === ?& and t == [] ->
-        expand_expr("", env)
-
-      true ->
-        no()
-    end
-  end
-
-  defp identifier?(h) do
-    h in ?a..?z or h in ?A..?Z or h in ?0..?9 or h in [?_, ??, ?!]
-  end
-
   defp expand_dot(path, hint, env, only_structs) do
     filter = if only_structs do
-      IO.puts "only structs"
       fn
-        module -> Struct.is_struct(module, env.structs) |> IO.inspect(label: "module #{module} is struct")
+        module -> Struct.is_struct(module, env.structs)
       end
     else
       fn _ -> true end
     end
-    case expand_dot_path(path, env) |> IO.inspect(label: "expand_dot_path") do
+    case expand_dot_path(path, env) do
       {:ok, mod} when is_atom(mod) and hint == "" ->
-        mod |> IO.inspect(label: "empty hint expand_aliases")
         expand_aliases(mod, "", [], not only_structs, env, filter)
-      {:ok, mod} when is_atom(mod) -> expand_require(mod, hint, env) |> IO.inspect(label: "require")
+      {:ok, mod} when is_atom(mod) -> expand_require(mod, hint, env)
       {:ok, {:map, fields, _}} -> expand_map_field_access(fields, hint, :map)
       {:ok, {:struct, fields, type, _}} -> expand_map_field_access(fields, hint, {:struct, type})
       _ -> no()
     end
   end
 
-  # defp expand_dot(expr, full_exp, env) do
-  #   case Code.string_to_quoted(expr) do
-  #     {:ok, atom} when is_atom(atom) ->
-  #       expand_call(atom, "", env)
-
-  #     {:ok, {:__aliases__, _, list}} ->
-  #       if full_exp |> hd == ?% do
-  #         expand_struct_modules(list, "", env)
-  #       else
-  #         expand_elixir_modules(list, "", env)
-  #       end
-
-  #     {:ok, {_, _, _} = ast_node} ->
-  #       expand_call(ast_node, "", env)
-
-  #     _ ->
-  #       no()
-  #   end
-  # end
-
   defp expand_dot_path({:var, var}, env) do
-    value_from_binding({List.to_atom(var), [], nil}, env) |> IO.inspect(label: "var")
+    value_from_binding({List.to_atom(var), [], nil}, env)
   end
 
   defp expand_dot_path({:module_attribute, attribute}, env) do
-    value_from_binding({:@, [], [{List.to_atom(attribute), [], nil}]}, env) |> IO.inspect(label: "module_attribute")
+    value_from_binding({:@, [], [{List.to_atom(attribute), [], nil}]}, env)
   end
 
   defp expand_dot_path({:alias, var}, env) do
-    var |> List.to_string() |> String.split(".") |> value_from_alias(env) |> IO.inspect(label: "alias")
+    var |> List.to_string() |> String.split(".") |> value_from_alias(env)
   end
 
   defp expand_dot_path({:unquoted_atom, var}, _env) do
-    {:ok, List.to_atom(var)} |> IO.inspect(label: "unquoted_atom")
+    {:ok, List.to_atom(var)}
   end
 
   defp expand_dot_path({:dot, parent, call}, env) do
-    IO.inspect {:dot, parent, call}
-    e = expand_dot_path(parent, env) |> IO.inspect(label: "expand_dot for #{inspect({:dot, parent, call})}")
+    e = expand_dot_path(parent, env)
 
     case e do
       {:ok, atom} when is_atom(atom) ->
@@ -267,7 +199,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             mods_and_funs: env.mods_and_funs
           },
           {:call, {:atom, atom}, List.to_atom(call), []}
-        ) |> IO.inspect(label: "bind") do
+        ) do
           :none -> :error
           nil -> :error
           {:atom, a} -> {:ok, a}
@@ -286,7 +218,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             mods_and_funs: env.mods_and_funs
           },
           {:call, x, List.to_atom(call), []}
-        ) |> IO.inspect(label: "bind") do
+        ) do
           :none -> :error
           nil -> :error
           {:atom, a} -> {:ok, a}
@@ -294,25 +226,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         end
       :error -> :error
     end
-    
-
-    # r = case expand_dot_path(parent, env) do
-    #   # {:ok, %{} = map} -> Map.fetch(map, List.to_atom(call))
-    #   # TODO {:atom, at} ?
-    #   {:ok, {:map, fields, _}} ->
-    #     Keyword.fetch(fields, List.to_atom(call))
-    #   {:ok, {:struct, fields, type, _}} ->
-    #     Keyword.fetch(fields, List.to_atom(call))
-    #   o ->
-    #     IO.inspect(o, label: "other")
-    #     :error
-    # end
-
-    # case r do
-    #   {:ok, {:atom, a}} -> {:ok, a}
-    #   o -> o
-    # end
-    # |> IO.inspect(label: "dot")
   end
 
   defp expand_expr("", env) do
@@ -365,23 +278,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       false
     )
   end
-
-  defp reduce(expr) do
-    Enum.reduce(' ([{', expr, fn token, acc ->
-      hd(:string.tokens(acc, [token]))
-    end)
-    |> Enum.reverse()
-    |> trim_leading(?&)
-    |> trim_leading(?%)
-    |> trim_leading(?!)
-    |> trim_leading(?^)
-  end
-
-  defp trim_leading([char | rest], char),
-    do: rest
-
-  defp trim_leading(expr, _char),
-    do: expr
 
   defp no do
     []
@@ -462,7 +358,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           types: types,
           mods_and_funs: mods_and_funs
         },
-        binding_type |> IO.inspect
+        binding_type
       )
 
     case value_from_binding do
@@ -513,12 +409,11 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     for(
       %VarInfo{name: name} when is_atom(name) <- vars,
       name = Atom.to_string(name),
-      String.starts_with?(name |> IO.inspect(label: "var name"), hint |> IO.inspect(label: "hint")),
+      String.starts_with?(name, hint),
       do: name
     )
     |> Enum.sort()
     |> Enum.map(&%{kind: :variable, name: &1})
-    |> IO.inspect(label: "match_var")
   end
 
   defp expand_variable_or_import(hint, env) do
@@ -630,7 +525,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp expand_aliases(all, env, only_structs) do
-    IO.inspect {all, only_structs}
     filter = if only_structs do
       fn
         module -> Struct.is_struct(module, env.structs)
@@ -765,7 +659,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp match_module_funs(mod, hint, include_builtin, env) do
-    IO.inspect({mod, hint}, label: "match mod funs")
     falist =
       cond do
         env.mods_and_funs |> Map.has_key?({mod, nil, nil}) ->
@@ -1110,13 +1003,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-
   defp value_from_binding(ast_node, env) do
-    # with {var, map_key_path} <- extract_from_ast(ast_node, []) do
       IO.inspect ast_node, label: "ast_node"
-      # IO.inspect var, label: "var"
-      # IO.inspect map_key_path, label: "map_key_path"
-      # IEx.Evaluator.value_from_binding(evaluator, server, var, map_key_path)
 
       # need to init namespace and aliases here so expansion work as expected
       namespace =
@@ -1161,24 +1049,5 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         {:atom, a} -> {:ok, a}
         other -> {:ok, other}
       end
-    # else
-    #   _ -> :error
-    # end
   end
-
-  # defp extract_from_ast(var_name, acc) when is_atom(var_name) do
-  #   {var_name, acc}
-  # end
-
-  # defp extract_from_ast({var_name, _, nil}, acc) when is_atom(var_name) do
-  #   {var_name, acc}
-  # end
-
-  # defp extract_from_ast({{:., _, [ast_node, fun]}, _, []}, acc) when is_atom(fun) do
-  #   extract_from_ast(ast_node, [fun | acc])
-  # end
-
-  # defp extract_from_ast(_ast_node, _acc) do
-  #   :error
-  # end
 end
