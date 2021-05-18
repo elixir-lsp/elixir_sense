@@ -29,10 +29,24 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "erlang module completion" do
-    assert expand(':zl') ==
-             [%{name: ":zlib", subtype: nil, summary: "", type: :module, metadata: %{}}]
+    assert [
+             %{
+               name: ":zlib",
+               subtype: nil,
+               summary: summary,
+               type: :module,
+               metadata: metadata
+             }
+           ] = expand(':zl')
+
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert "This module provides an API for the zlib library" <> _ = summary
+      assert %{otp_doc_vsn: {1, 0, 0}} = metadata
+    end
   end
 
+  # Code.fetch_docs(:edoc_wiki) on OTP 23 returns
+  # {:error, :chunk_not_found} yet doc_sh is able to retrieve docs 
   test "erlang module completion edoc" do
     assert expand(':edoc_wi') ==
              [
@@ -1288,7 +1302,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
            ] = expand(':erlang.and')
   end
 
-  test "provide specs for erlang functions" do
+  test "provide doc and specs for erlang functions" do
     assert [
              %{
                arity: 1,
@@ -1308,7 +1322,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                type: :function,
                args: "timerRef",
                origin: ":erlang",
-               summary: ""
+               summary: summary1
              },
              %{
                arity: 2,
@@ -1318,12 +1332,17 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                type: :function,
                args: "timerRef, options",
                origin: ":erlang",
-               summary: ""
+               summary: summary2
              }
            ] = expand(':erlang.cancel_time')
+
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert "Cancels a timer\\." <> _ = summary1
+      assert "Cancels a timer that has been created by" <> _ = summary2
+    end
   end
 
-  @tag requires_otp_23: true
+  @tag edoc_fallback: true
   test "profide specs for erlang functions edoc" do
     assert [
              %{

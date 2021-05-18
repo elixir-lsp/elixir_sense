@@ -157,13 +157,42 @@ defmodule ElixirSense.Core.Introspection do
   def get_signatures(mod, fun, code_docs) when not is_nil(mod) and not is_nil(fun) do
     case code_docs || NormalizedCode.get_docs(mod, :docs) do
       docs when is_list(docs) ->
-        for {{f, arity}, _, kind, args, text, _metadata} <- docs, f == fun do
-          fun_args = Enum.map(args || [], &format_doc_arg(&1))
-          fun_str = Atom.to_string(fun)
-          doc = extract_summary_from_docs(text)
+        results =
+          for {{f, arity}, _, kind, args, text, metadata} <- docs, f == fun do
+            # as of otp 23 erlang modules do not return args
+            # instead they return typespecs in metadata[:signature]
+            fun_args =
+              case metadata[:signature] do
+                nil ->
+                  if args != nil and length(args) == arity do
+                    args
+                    |> List.wrap()
+                    |> Enum.map(&format_doc_arg(&1))
+                  else
+                    # as of otp 23 erlang callback implementation do not have signature metadata
+                    if arity == 0, do: [], else: Enum.map(1..arity, fn _ -> "term" end)
+                  end
 
-          spec = get_spec_as_string(mod, fun, arity, kind)
-          %{name: fun_str, params: fun_args, documentation: doc, spec: spec}
+                [{:attribute, _, :spec, {{^f, ^arity}, [params | _]}}] ->
+                  TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
+
+                [{:attribute, _, :spec, {{^mod, ^f, ^arity}, [params | _]}}] ->
+                  TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
+              end
+
+            fun_str = Atom.to_string(fun)
+            doc = extract_summary_from_docs(text)
+
+            spec = get_spec_as_string(mod, fun, arity, kind)
+            %{name: fun_str, params: fun_args, documentation: doc, spec: spec}
+          end
+
+        case results do
+          [] ->
+            get_spec_from_typespec(mod, fun)
+
+          other ->
+            other
         end
 
       nil ->
@@ -173,41 +202,48 @@ defmodule ElixirSense.Core.Introspection do
             {arity, EdocReader.extract_docs(maybe_doc) |> extract_summary_from_docs}
           end)
 
-        # We are not expecting macros here
-        results =
-          for {{_name, arity}, [params | _]} = spec <-
-                TypeInfo.get_function_specs(mod, fun) do
-            params = TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
-
-            %{
-              name: Atom.to_string(fun),
-              params: params,
-              documentation: edoc_results[arity] || "",
-              spec: spec |> spec_to_string
-            }
-          end
-
-        case results do
-          [] ->
-            # no docs and notypespecs
-            # provide dummy spec basing on module_info(:exports)
-            for {f, a} <- get_exports(mod),
-                f == fun do
-              dummy_params = if a == 0, do: [], else: Enum.map(1..a, fn _ -> "term" end)
-
-              %{
-                name: Atom.to_string(fun),
-                params: dummy_params,
-                documentation: edoc_results[a] || "",
-                spec: ""
-              }
-            end
-
-          other ->
-            other
-        end
+        get_spec_from_typespec(mod, fun, edoc_results)
     end
     |> Enum.sort_by(&length(&1.params))
+  end
+
+  defp get_spec_from_typespec(mod, fun, edoc_results \\ %{}) do
+    results =
+      for {{_name, arity}, [params | _]} = spec <-
+            TypeInfo.get_function_specs(mod, fun) do
+        params = TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
+
+        %{
+          name: Atom.to_string(fun),
+          params: params,
+          documentation: edoc_results[arity] || "",
+          spec: spec |> spec_to_string
+        }
+      end
+
+    case results do
+      [] ->
+        # no typespecs
+        # provide dummy spec basing on module_info(:exports)
+        get_spec_from_module_info(mod, fun, edoc_results)
+
+      other ->
+        other
+    end
+  end
+
+  defp get_spec_from_module_info(mod, fun, edoc_results) do
+    for {f, a} <- get_exports(mod),
+        f == fun do
+      dummy_params = if a == 0, do: [], else: Enum.map(1..a, fn _ -> "term" end)
+
+      %{
+        name: Atom.to_string(fun),
+        params: dummy_params,
+        documentation: edoc_results[a] || "",
+        spec: ""
+      }
+    end
   end
 
   def get_func_docs_md(mod, fun)
@@ -231,9 +267,6 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_func_docs_md(mod, fun) do
-    mod_str = inspect(mod)
-    fun_str = Atom.to_string(fun)
-
     case NormalizedCode.get_docs(mod, :docs) do
       nil ->
         edoc_results =
@@ -243,57 +276,88 @@ defmodule ElixirSense.Core.Introspection do
           end)
 
         # no docs, fallback to typespecs
+        get_func_docs_md_from_typespec(mod, fun, edoc_results)
+
+      docs ->
         results =
-          for {{_name, arity}, [params | _]} <-
-                TypeInfo.get_function_specs(mod, fun) do
+          for {{f, arity}, _, kind, args, text, metadata} <- docs, f == fun do
+            # as of otp 23 erlang modules do not return args
+            # instead they return typespecs in metadata[:signature]
             fun_args_text =
-              TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
+              case metadata[:signature] do
+                nil ->
+                  if args != nil and length(args) == arity do
+                    args
+                    |> List.wrap()
+                    |> Enum.map_join(", ", &format_doc_arg(&1))
+                    |> String.replace("\\\\", "\\\\\\\\")
+                  else
+                    # as of otp 23 erlang callback implementation do not have signature metadata
+                    if arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end)
+                  end
 
-            {text, metadata} = edoc_results[arity] || {nil, %{}}
+                [{:attribute, _, :spec, {{^f, ^arity}, [params | _]}}] ->
+                  TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
 
-            "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
-              get_spec_text(mod, fun, arity, :function)
-            }#{text || @no_documentation}"
+                [{:attribute, _, :spec, {{^mod, ^f, ^arity}, [params | _]}}] ->
+                  TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
+              end
+
+            "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
+              get_spec_text(mod, fun, arity, kind)
+            }#{text}"
           end
 
         case results do
           [] ->
-            # no docs and no typespecs
-            # provide dummy docs basing on module_info(:exports)
-            for {f, arity} <- get_exports(mod),
-                f == fun do
-              fun_args_text =
-                if arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end)
-
-              {text, metadata} =
-                if {f, arity} in BuiltinFunctions.erlang_builtin_functions(mod) do
-                  {nil, %{builtin: true}}
-                else
-                  edoc_results[arity] || {nil, %{}}
-                end
-
-              "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
-                get_spec_text(mod, fun, arity, :function)
-              }#{text || @no_documentation}"
-            end
+            get_func_docs_md_from_typespec(mod, fun)
 
           other ->
             other
         end
+    end
+  end
 
-      docs ->
-        for {{f, arity}, _, kind, args, text, metadata} <- docs, f == fun do
-          args = args || []
+  defp get_func_docs_md_from_typespec(mod, fun, edoc_results \\ %{}) do
+    results =
+      for {{_name, arity}, [params | _]} <-
+            TypeInfo.get_function_specs(mod, fun) do
+        fun_args_text = TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
 
-          fun_args_text =
-            args
-            |> Enum.map_join(", ", &format_doc_arg(&1))
-            |> String.replace("\\\\", "\\\\\\\\")
+        {text, metadata} = edoc_results[arity] || {"", %{}}
 
-          "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
-            get_spec_text(mod, fun, arity, kind)
-          }#{text}"
+        "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
+          get_spec_text(mod, fun, arity, :function)
+        }#{text || @no_documentation}"
+      end
+
+    case results do
+      [] ->
+        # no docs and no typespecs
+        get_func_docs_md_from_module_info(mod, fun, edoc_results)
+
+      other ->
+        other
+    end
+  end
+
+  defp get_func_docs_md_from_module_info(mod, fun, edoc_results) do
+    # provide dummy docs basing on module_info(:exports)
+    for {f, arity} <- get_exports(mod),
+        f == fun do
+      fun_args_text =
+        if arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end)
+
+      {text, metadata} =
+        if {f, arity} in BuiltinFunctions.erlang_builtin_functions(mod) do
+          {nil, %{builtin: true}}
+        else
+          edoc_results[arity] || {"", %{}}
         end
+
+      "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
+        get_spec_text(mod, fun, arity, :function)
+      }#{text || @no_documentation}"
     end
   end
 
@@ -330,6 +394,29 @@ defmodule ElixirSense.Core.Introspection do
       "" -> ""
       not_empty -> not_empty <> "\n\n"
     end
+  end
+
+  # erlang name
+  defp get_metadata_entry_md({:name, _text}), do: nil
+
+  # erlang signature
+  defp get_metadata_entry_md({:signature, _text}), do: nil
+
+  # erlang edit_url
+  defp get_metadata_entry_md({:edit_url, _text}), do: nil
+
+  # erlang :otp_doc_vsn
+  defp get_metadata_entry_md({:otp_doc_vsn, _text}), do: nil
+
+  # erlang :source
+  defp get_metadata_entry_md({:source, _text}), do: nil
+
+  # erlang :types
+  defp get_metadata_entry_md({:types, _text}), do: nil
+
+  # erlang :equiv
+  defp get_metadata_entry_md({:equiv, {:function, name, arity}}) do
+    "**Equivalent**\n#{name}/#{arity}"
   end
 
   defp get_metadata_entry_md({:deprecated, text}) do
@@ -409,7 +496,7 @@ defmodule ElixirSense.Core.Introspection do
 
           type_args = Enum.map_join(args, ", ", &(&1 |> elem(2) |> Atom.to_string()))
 
-          {text, metadata} = edoc_results[length(args)] || {nil, %{}}
+          {text, metadata} = edoc_results[length(args)] || {"", %{}}
 
           format_type_doc_md({mod, fun}, type_args, text || @no_documentation, spec, metadata)
         end
@@ -533,9 +620,9 @@ defmodule ElixirSense.Core.Introspection do
     |> Enum.map(fn {_, {t, _, args}} = type ->
       {doc, metadata} =
         if edocs != nil do
-          edocs[{t, length(args)}] || {nil, %{}}
+          edocs[{t, length(args)}] || {"", %{}}
         else
-          TypeInfo.get_type_doc_desc(module, t, length(args), docs)
+          TypeInfo.get_type_doc_desc(docs, t, length(args))
         end
 
       type_args = Enum.map_join(args, ", ", &(&1 |> elem(2) |> Atom.to_string()))
@@ -665,7 +752,7 @@ defmodule ElixirSense.Core.Introspection do
          kind,
          doc,
          metadata,
-         {name, arity} = key,
+         {name, arity},
          callbacks,
          optional_callbacks
        ) do
@@ -674,7 +761,8 @@ defmodule ElixirSense.Core.Introspection do
       if kind == :macrocallback do
         {:"MACRO-#{name}", arity + 1}
       else
-        key
+        # some erlang callbacks have broken docs e.g. :gen_statem.state_name
+        {name |> Atom.to_string() |> Macro.underscore() |> String.to_atom(), arity}
       end
 
     {_, [spec | _]} = List.keyfind(callbacks, key, 0)
@@ -713,7 +801,6 @@ defmodule ElixirSense.Core.Introspection do
       |> NormalizedCode.get_docs(:callback_docs)
 
     # no fallback here as :docsh as ov v0.7.2 does not seem to support callbacks
-    # TODO report issue and link here
 
     {callbacks, docs || []}
   end

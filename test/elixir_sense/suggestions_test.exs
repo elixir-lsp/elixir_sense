@@ -488,11 +488,15 @@ defmodule ElixirSense.SuggestionsTest do
                origin: ":gen_statem",
                spec:
                  "@callback code_change(oldVsn :: term | {:down, term}, oldState :: state, oldData :: data, extra :: term) ::\n  {:ok, newState :: state, newData :: data} |\n  reason :: term",
-               summary: "",
+               summary: summary,
                type: :callback,
                subtype: :callback
              }
            ] = list
+
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert "- OldVsn = Vsn" <> _ = summary
+    end
   end
 
   test "callback suggestions should not crash with unquote(__MODULE__)" do
@@ -871,8 +875,12 @@ defmodule ElixirSense.SuggestionsTest do
     assert [
              %{name: "is_function", origin: "Kernel", arity: 1},
              %{name: "is_function", origin: "Kernel", arity: 2},
-             %{name: "init", origin: "MyServer", arity: 1}
+             %{name: "init", origin: "MyServer", arity: 1, summary: summary}
            ] = list
+
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert "- Args = term" <> _ = summary
+    end
   end
 
   @tag requires_elixir_1_10: true
@@ -2812,6 +2820,24 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.doc == "Remote type with params"
     end
 
+    test "remote erlang type with doc" do
+      buffer = "Local.func_with_erlang_type_options("
+      suggestion = suggestion_by_name("erlang_t", buffer)
+
+      assert suggestion.type_spec ==
+               ":erlang.time_unit()"
+
+      assert suggestion.origin == ":erlang"
+
+      assert suggestion.expanded_spec ==
+               "@type time_unit() ::\n  pos_integer()\n  | :second\n  | :millisecond\n  | :microsecond\n  | :nanosecond\n  | :native\n  | :perf_counter\n  | deprecated_time_unit()"
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert suggestion.doc =~ "Supported time unit representations"
+      end
+    end
+
+    @tag edoc_fallback: true
     test "remote erlang type with edoc" do
       buffer = "Local.func_with_edoc_options("
       suggestion = suggestion_by_name("edoc_t", buffer)
@@ -3100,36 +3126,29 @@ defmodule ElixirSense.SuggestionsTest do
     end
 
     test "erlang types" do
-      buffer = "defmodule My, do: @type my_type :: :erlang.tim"
+      buffer = "defmodule My, do: @type my_type :: :erlang.time_"
 
       suggestions = suggestions_by_type(:type_spec, buffer)
 
       assert [
                %{
                  arity: 0,
-                 doc: "",
+                 doc: summary,
                  name: "time_unit",
                  origin: ":erlang",
                  signature: "time_unit()",
                  spec:
                    "@type time_unit() ::\n  pos_integer()\n  | :second\n  | :millisecond\n  | :microsecond\n  | :nanosecond\n  | :native\n  | :perf_counter\n  | deprecated_time_unit()",
-                 type: :type_spec,
-                 metadata: %{}
-               },
-               %{
-                 arity: 0,
-                 doc: "",
-                 name: "timestamp",
-                 origin: ":erlang",
-                 signature: "timestamp()",
-                 spec:
-                   "@type timestamp() ::\n  {megaSecs ::\n     non_neg_integer(),\n   secs :: non_neg_integer(),\n   microSecs ::\n     non_neg_integer()}",
-                 type: :type_spec,
-                 metadata: %{}
+                 type: :type_spec
                }
-             ] == suggestions
+             ] = suggestions
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert "Supported time unit representations:" <> _ = summary
+      end
     end
 
+    @tag edoc_fallback: true
     test "erlang types edoc" do
       buffer = "defmodule My, do: @type my_type :: :docsh_edoc_xmerl.xml_element_con"
 

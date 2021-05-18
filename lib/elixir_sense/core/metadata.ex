@@ -209,12 +209,12 @@ defmodule ElixirSense.Core.Metadata do
             spec -> {spec |> Introspection.spec_to_string(), "", %{}}
           end
 
-        {_signatures, docs, metadata} ->
+        {_signatures, docs, metadata, mime_type} ->
           spec =
             specs[{f, a}]
             |> Introspection.spec_to_string()
 
-          {spec, docs |> NormalizedCode.extract_docs(), metadata}
+          {spec, docs |> NormalizedCode.extract_docs(mime_type), metadata}
       end
     end) || {"", "", %{}}
   end

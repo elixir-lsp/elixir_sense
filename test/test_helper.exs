@@ -20,8 +20,17 @@ defmodule ExUnitConfig do
     end
   end
 
+  def erlang_eep48_supported do
+    otp_release = System.otp_release() |> String.to_integer()
+    otp_release >= 23 and Version.match?(System.version(), ">= 1.11.0")
+  end
+
+  defp edoc_fallback do
+    [{:edoc_fallback, erlang_eep48_supported()}]
+  end
+
   def excludes do
-    [requires_source: true] ++ otp_related() ++ elixir_related()
+    [requires_source: true] ++ otp_related() ++ elixir_related() ++ edoc_fallback()
   end
 end
 
