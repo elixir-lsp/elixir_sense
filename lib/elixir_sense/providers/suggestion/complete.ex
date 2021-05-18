@@ -127,7 +127,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           [?^] -> expand_variable("", env)
           [?%] ->
             expand_aliases("", env, true)
-            # expand_struct_modules([], "", env)
           _ ->
             # TODO expand_expr?
             expand_local_or_var("", env)
@@ -143,11 +142,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_expr("", env)
       {:module_attribute, attribute} ->
         expand_attribute(List.to_string(attribute), env)
-      other ->
-        IO.inspect(other)
+      :none ->
         no()
-
-      # _ -> expand(code |> Enum.reverse, env)
     end
   end
 
@@ -232,16 +228,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp expand_expr("", env) do
-    variable_or_import = expand_variable_or_import("", env)
-    # we are expanding all erlang modules
-    # for performance reasons we do not extract edocs
+    local_or_var = expand_local_or_var("", env)
     erlang_modules = expand_erlang_modules("", env)
-    # elixir_modules = expand_elixir_modules([], "", env)
     elixir_modules = expand_aliases("", env, false)
-
     attributes = expand_attribute("", env)
 
-    variable_or_import ++ erlang_modules ++ elixir_modules ++ attributes
+    local_or_var ++ erlang_modules ++ elixir_modules ++ attributes
   end
 
   defp no do
@@ -295,19 +287,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     )
     |> Enum.sort()
     |> Enum.map(&%{kind: :variable, name: &1})
-  end
-
-  defp expand_variable_or_import(hint, env) do
-    variables = do_expand_variable(hint, env)
-    # import calls of builtin functions are not possible
-    funs =
-      match_module_funs(Kernel, hint, false, env) ++
-        match_module_funs(Kernel.SpecialForms, hint, false, env) ++
-        match_module_funs(env.scope_module, hint, false, env) ++
-        (env.imports
-         |> Enum.flat_map(fn scope_import -> match_module_funs(scope_import, hint, false, env) end))
-
-    format_expansion(variables ++ funs)
   end
 
   defp expand_variable(hint, env) do
@@ -410,7 +389,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp expand_aliases(mod, hint, aliases, include_funs, env, filter) do
     aliases
     |> Kernel.++(match_elixir_modules(mod, hint, env, filter))
-    # TODO get_module_funs
     |> Kernel.++(if include_funs, do: match_module_funs(mod, hint, true, env), else: [])
     |> format_expansion()
   end
