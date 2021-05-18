@@ -21,7 +21,7 @@
 
 defmodule ElixirSense.Core.Normalized.Code.CursorContext do
   @moduledoc false
-  
+
   @doc """
   Receives a string and returns the cursor context.
   This function receives a string with incomplete Elixir code,

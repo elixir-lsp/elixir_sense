@@ -101,26 +101,32 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   def do_expand(code, env) do
-    only_structs = case code do
-      [?% | _] -> true
-      _ -> false
-    end
+    only_structs =
+      case code do
+        [?% | _] -> true
+        _ -> false
+      end
 
     case NormalizedCode.CursorContext.cursor_context(code) do
       {:alias, alias} ->
         expand_aliases(List.to_string(alias), env, false)
+
       {:unquoted_atom, unquoted_atom} ->
         expand_erlang_modules(List.to_string(unquoted_atom), env)
+
       {:dot, path, hint} ->
         expand_dot(path, List.to_string(hint), env, only_structs)
+
       {:dot_arity, path, hint} ->
         expand_dot(path, List.to_string(hint), env, only_structs)
+
       {:dot_call, _path, _hint} ->
         # no need to expand signatures here, we have signatures provider
         # IEx calls
         # expand_dot_call(path, List.to_atom(hint), env)
         # to provide signatures and falls back to expand_local_or_var
         expand_expr(env)
+
       :expr ->
         # IEx calls expand_local_or_var("", env)
         # we choose to retun more and handle some special cases
@@ -129,10 +135,13 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           [?%] -> expand_aliases("", env, true)
           _ -> expand_expr(env)
         end
+
       {:local_or_var, local_or_var} ->
         expand_local_or_var(List.to_string(local_or_var), env)
+
       {:local_arity, local} ->
         expand_local(List.to_string(local), env)
+
       {:local_call, _local} ->
         # no need to expand signatures here, we have signatures provider
         # expand_local_call(List.to_atom(local), env)
@@ -140,8 +149,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         # expand_dot_call(path, List.to_atom(hint), env)
         # to provide signatures and falls back to expand_local_or_var
         expand_expr(env)
+
       {:module_attribute, attribute} ->
         expand_attribute(List.to_string(attribute), env)
+
       :none ->
         no()
     end
@@ -149,13 +160,22 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   defp expand_dot(path, hint, env, only_structs) do
     filter = struct_module_filter(only_structs, env)
+
     case expand_dot_path(path, env) do
       {:ok, {:atom, mod}} when hint == "" ->
         expand_aliases(mod, "", [], not only_structs, env, filter)
-      {:ok, {:atom, mod}} -> expand_require(mod, hint, env)
-      {:ok, {:map, fields, _}} -> expand_map_field_access(fields, hint, :map)
-      {:ok, {:struct, fields, type, _}} -> expand_map_field_access(fields, hint, {:struct, type})
-      _ -> no()
+
+      {:ok, {:atom, mod}} ->
+        expand_require(mod, hint, env)
+
+      {:ok, {:map, fields, _}} ->
+        expand_map_field_access(fields, hint, :map)
+
+      {:ok, {:struct, fields, type, _}} ->
+        expand_map_field_access(fields, hint, {:struct, type})
+
+      _ ->
+        no()
     end
   end
 
@@ -169,6 +189,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   defp expand_dot_path({:alias, var}, env) do
     alias = var |> List.to_string() |> String.split(".") |> value_from_alias(env)
+
     case alias do
       {:ok, atom} -> {:ok, {:atom, atom}}
       :error -> :error
@@ -183,7 +204,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     case expand_dot_path(parent, env) do
       {:ok, expanded} ->
         value_from_binding({:call, expanded, List.to_atom(call), []}, env)
-      :error -> :error
+
+      :error ->
+        :error
     end
   end
 
@@ -237,10 +260,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   defp match_local(hint, env) do
     match_module_funs(Kernel, hint, false, env) ++
-        match_module_funs(Kernel.SpecialForms, hint, false, env) ++
-        match_module_funs(env.scope_module, hint, false, env) ++
-        (env.imports
-         |> Enum.flat_map(fn scope_import -> match_module_funs(scope_import, hint, false, env) end))
+      match_module_funs(Kernel.SpecialForms, hint, false, env) ++
+      match_module_funs(env.scope_module, hint, false, env) ++
+      (env.imports
+       |> Enum.flat_map(fn scope_import -> match_module_funs(scope_import, hint, false, env) end))
   end
 
   defp match_var(hint, %Env{vars: vars}) do
@@ -311,6 +334,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp struct_module_filter(true, env) do
     fn module -> Struct.is_struct(module, env.structs) end
   end
+
   defp struct_module_filter(false, _) do
     fn _ -> true end
   end
@@ -787,22 +811,22 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp value_from_binding(binding_ast, env) do
-      case Binding.expand(
-        %Binding{
-          variables: env.vars,
-          attributes: env.attributes,
-          structs: env.structs,
-          imports: env.imports,
-          specs: env.specs,
-          current_module: env.scope_module,
-          types: env.types,
-          mods_and_funs: env.mods_and_funs
-        },
-        binding_ast
-      ) do
-        :none -> :error
-        nil -> :error
-        other -> {:ok, other}
-      end
+    case Binding.expand(
+           %Binding{
+             variables: env.vars,
+             attributes: env.attributes,
+             structs: env.structs,
+             imports: env.imports,
+             specs: env.specs,
+             current_module: env.scope_module,
+             types: env.types,
+             mods_and_funs: env.mods_and_funs
+           },
+           binding_ast
+         ) do
+      :none -> :error
+      nil -> :error
+      other -> {:ok, other}
+    end
   end
 end
