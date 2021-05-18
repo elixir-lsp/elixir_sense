@@ -99,10 +99,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
           ]
   def complete(hint, %Env{} = env) do
-    do_expand(hint, hint |> String.to_charlist(), env)
+    do_expand(hint |> String.to_charlist(), env)
   end
 
-  def do_expand(_hint, code, env) do
+  def do_expand(code, env) do
     only_struct = case code do
       [?% | _] -> true
       _ -> false
@@ -120,13 +120,14 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       {:dot_call, _path, _hint} ->
         # no need to expand signatures here, we have signatures provider
         # expand_dot_call(path, List.to_atom(hint), env)
-        # TODO expand_local_or_var?
-        no()
+        expand_expr("", env)
       :expr ->
         case code do
-          # [?&] -> expand_expr("", env)
+          [?&] -> expand_expr("", env)
           [?^] -> expand_variable("", env)
-          [?%] -> expand_struct_modules([], "", env)
+          [?%] ->
+            expand_aliases("", env, true)
+            # expand_struct_modules([], "", env)
           _ ->
             # TODO expand_expr?
             expand_local_or_var("", env)
@@ -139,8 +140,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         # no need to expand signatures here, we have signatures provider
         # expand_local_call(List.to_atom(local), env)
         # expand_dot_call(path, List.to_atom(hint), env)
-        # TODO expand_local_or_var?
-        no()
+        expand_expr("", env)
       {:module_attribute, attribute} ->
         expand_attribute(List.to_string(attribute), env)
       other ->
@@ -236,50 +236,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     # we are expanding all erlang modules
     # for performance reasons we do not extract edocs
     erlang_modules = expand_erlang_modules("", env)
-    elixir_modules = expand_elixir_modules([], "", env)
+    # elixir_modules = expand_elixir_modules([], "", env)
+    elixir_modules = expand_aliases("", env, false)
 
     attributes = expand_attribute("", env)
 
     variable_or_import ++ erlang_modules ++ elixir_modules ++ attributes
-  end
-
-  defp expand_expr(expr, env) do
-    case Code.string_to_quoted(expr) do
-      {:ok, atom} when is_atom(atom) ->
-        expand_erlang_modules(Atom.to_string(atom), env)
-
-      {:ok, {atom, _, nil}} when is_atom(atom) ->
-        expand_variable_or_import(Atom.to_string(atom), env)
-
-      {:ok, {:__aliases__, _, [root]}} ->
-        expand_elixir_modules([], Atom.to_string(root), env)
-
-      {:ok, {:__aliases__, _, [h | _] = list}} when is_atom(h) ->
-        hint = Atom.to_string(List.last(list))
-        list = Enum.take(list, length(list) - 1)
-        expand_elixir_modules(list, hint, env)
-
-      {:ok, {{:., _, [ast_node, fun]}, _, []}} when is_atom(fun) ->
-        expand_call(ast_node, Atom.to_string(fun), env)
-
-      {:ok, {:@, _, [{atom, _, nil}]}} when is_atom(atom) ->
-        expand_attribute(Atom.to_string(atom), env)
-
-      _ ->
-        no()
-    end
-  end
-
-  defp expand_struct_modules(list, hint, env) do
-    expand_elixir_modules(
-      list,
-      hint,
-      env,
-      fn
-        module -> Struct.is_struct(module, env.structs)
-      end,
-      false
-    )
   end
 
   defp no do
@@ -290,90 +252,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   defp format_expansion(entries) do
     Enum.flat_map(entries, &to_entries/1)
-  end
-
-  ## Expand calls
-
-  # :atom.fun
-  defp expand_call(mod, hint, env) when is_atom(mod) do
-    expand_require(mod, hint, env)
-  end
-
-  # Elixir.fun
-  defp expand_call({:__aliases__, _, list}, hint, env) do
-    case value_from_alias(list, env) do
-      {:ok, alias} -> expand_require(alias, hint, env)
-      :error -> no()
-    end
-  end
-
-  # variable.fun_or_key
-  # @attribute.fun_or_key
-  defp expand_call(
-         {_, _, _} = ast_node,
-         hint,
-         %Env{
-           aliases: aliases,
-           vars: vars,
-           attributes: attributes,
-           structs: structs,
-           imports: imports,
-           specs: specs,
-           scope_module: scope_module,
-           types: types,
-           mods_and_funs: mods_and_funs
-         } = env
-       ) do
-    # need to init namespace and aliases here so expansion work as expected
-    namespace =
-      case scope_module do
-        m when m in [nil, Elixir] ->
-          [[Elixir]]
-
-        _ ->
-          split =
-            Module.split(scope_module)
-            |> Enum.reverse()
-            |> Enum.map(&String.to_atom/1)
-            |> Kernel.++([Elixir])
-
-          [split, [Elixir]]
-      end
-
-    binding_type =
-      MetadataBuilder.get_binding_type(
-        %State{
-          namespace: namespace,
-          aliases: [aliases]
-        },
-        ast_node
-      )
-
-    value_from_binding =
-      Binding.expand(
-        %Binding{
-          variables: vars,
-          attributes: attributes,
-          structs: structs,
-          imports: imports,
-          specs: specs,
-          current_module: scope_module,
-          types: types,
-          mods_and_funs: mods_and_funs
-        },
-        binding_type
-      )
-
-    case value_from_binding do
-      {:atom, mod} -> expand_call(mod, hint, env)
-      {:map, fields, _} -> expand_map_field_access(fields, hint, :map)
-      {:struct, fields, type, _} -> expand_map_field_access(fields, hint, {:struct, type})
-      _otherwise -> no()
-    end
-  end
-
-  defp expand_call(_, _, _) do
-    no()
   end
 
   defp expand_map_field_access(fields, hint, type) do
@@ -503,29 +381,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   ## Elixir modules
-
-  defp expand_elixir_modules(list, hint, env, filter \\ fn _ -> true end, include_funs \\ true)
-
-  defp expand_elixir_modules([], hint, env, filter, include_funs) do
-    expand_aliases(
-      Elixir,
-      hint,
-      match_aliases(hint, env),
-      include_funs,
-      env,
-      filter
-    )
-  end
-
-  defp expand_elixir_modules(list, hint, env, filter, include_funs) do
-    case value_from_alias(list, env) do
-      {:ok, alias} ->
-        expand_aliases(alias, hint, [], include_funs, env, filter)
-
-      :error ->
-        no()
-    end
-  end
 
   defp expand_aliases(all, env, only_structs) do
     filter = if only_structs do
