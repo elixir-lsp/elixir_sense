@@ -125,7 +125,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         # IEx calls expand_local_or_var("", env)
         # we choose to retun more and handle some special cases
         case code do
-          [?^] -> expand_variable("", env)
+          [?^] -> expand_var("", env)
           [?%] -> expand_aliases("", env, true)
           _ -> expand_expr(env)
         end
@@ -236,6 +236,11 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     format_expansion(match_local(hint, env))
   end
 
+  defp expand_var(hint, env) do
+    variables = match_var(hint, env)
+    format_expansion(variables)
+  end
+
   defp match_local(hint, env) do
     match_module_funs(Kernel, hint, false, env) ++
         match_module_funs(Kernel.SpecialForms, hint, false, env) ++
@@ -245,22 +250,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp match_var(hint, %Env{vars: vars}) do
-    for(
-      %VarInfo{name: name} when is_atom(name) <- vars,
-      name = Atom.to_string(name),
-      String.starts_with?(name, hint),
-      do: name
-    )
-    |> Enum.sort()
-    |> Enum.map(&%{kind: :variable, name: &1})
-  end
-
-  defp expand_variable(hint, env) do
-    variables = do_expand_variable(hint, env)
-    format_expansion(variables)
-  end
-
-  defp do_expand_variable(hint, %Env{vars: vars}) do
     for(
       %VarInfo{name: name} when is_atom(name) <- vars,
       name = Atom.to_string(name),
