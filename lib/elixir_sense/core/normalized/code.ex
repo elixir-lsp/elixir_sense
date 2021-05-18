@@ -1,6 +1,6 @@
 defmodule ElixirSense.Core.Normalized.Code do
   @moduledoc """
-  Shim to replicate the behavior of deprecated `Code.get_docs/2`
+  Shims increasing portability of `Code` module
   """
 
   alias ElixirSense.Core.ErlangHtml
@@ -14,6 +14,9 @@ defmodule ElixirSense.Core.Normalized.Code do
 
   @supported_mime_types ["text/markdown", "application/erlang+html"]
 
+  @doc """
+  Shim to replicate the behavior of deprecated `Code.get_docs/2`
+  """
   @spec get_docs(module, :docs) :: nil | [fun_doc_entry_t]
   @spec get_docs(module, :callback_docs | :type_docs) :: nil | [:doc_entry_t]
   @spec get_docs(module, :moduledoc) :: nil | moduledoc_entry_t
