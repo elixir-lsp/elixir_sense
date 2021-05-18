@@ -491,9 +491,9 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
     assert [_ | _] = expand('call.ho', env)
     assert [_ | _] = expand('DateTime.utc_now.ho', env)
-    # FIXME Complete.reduce(expr) breaks things...
+    # Code.cursor_context returns :none for those cases
     # assert {:yes, 'ur', _} = expand('DateTime.utc_now().', env)
-    # assert {:yes, 'ur', _} = expand('DateTime.utc_now().ho', env)
+    assert {:yes, 'ur', _} = expand('DateTime.utc_now().ho', env)
   end
 
   test "autocompletion off of unbound variables is not supported" do
@@ -513,6 +513,45 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     # IEX version asserts IEx.Helpers are imported
     # assert list |> Enum.find(& &1.name == "h")
     # assert list |> Enum.find(& &1.name == "pwd")
+  end
+
+  test "imports completion in call arg" do
+    # local call
+    list = expand('asd(')
+    assert is_list(list)
+
+    assert list |> Enum.find(&(&1.name == "unquote"))
+
+    list = expand('asd(un')
+    assert is_list(list)
+
+    assert list |> Enum.find(&(&1.name == "unquote"))
+
+    # remote call
+
+    list = expand('Abc.asd(')
+    assert is_list(list)
+
+    assert list |> Enum.find(&(&1.name == "unquote"))
+
+    list = expand('Abc.asd(un')
+    assert is_list(list)
+
+    assert list |> Enum.find(&(&1.name == "unquote"))
+
+    # local call on var
+
+    # Code.cursor_context returns :none
+
+    # list = expand('asd.(')
+    # assert is_list(list)
+
+    # assert list |> Enum.find(&(&1.name == "unquote"))
+
+    list = expand('asd.(un')
+    assert is_list(list)
+
+    assert list |> Enum.find(&(&1.name == "unquote"))
   end
 
   test "kernel import completion" do
