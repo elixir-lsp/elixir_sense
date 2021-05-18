@@ -15,6 +15,7 @@ requires = [
   "elixir_sense/core/builtin_functions.ex",
   "elixir_sense/core/builtin_types.ex",
   "elixir_sense/core/normalized/code.ex",
+  "elixir_sense/core/normalized/code/cursor_context.ex",
   "elixir_sense/core/normalized/tokenizer.ex",
   "elixir_sense/core/normalized/typespec.ex",
   "elixir_sense/core/struct.ex",
