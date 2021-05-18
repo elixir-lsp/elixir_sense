@@ -101,20 +101,20 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   def do_expand(code, env) do
-    only_struct = case code do
+    only_structs = case code do
       [?% | _] -> true
       _ -> false
     end
 
-    case NormalizedCode.CursorContext.cursor_context(code) |> IO.inspect(label: "context for #{code}") do
+    case NormalizedCode.CursorContext.cursor_context(code) do
       {:alias, alias} ->
         expand_aliases(List.to_string(alias), env, false)
       {:unquoted_atom, unquoted_atom} ->
         expand_erlang_modules(List.to_string(unquoted_atom), env)
       {:dot, path, hint} ->
-        expand_dot(path, List.to_string(hint), env, only_struct)
+        expand_dot(path, List.to_string(hint), env, only_structs)
       {:dot_arity, path, hint} ->
-        expand_dot(path, List.to_string(hint), env, only_struct)
+        expand_dot(path, List.to_string(hint), env, only_structs)
       {:dot_call, _path, _hint} ->
         # no need to expand signatures here, we have signatures provider
         # IEx calls
@@ -148,13 +148,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp expand_dot(path, hint, env, only_structs) do
-    filter = if only_structs do
-      fn
-        module -> Struct.is_struct(module, env.structs)
-      end
-    else
-      fn _ -> true end
-    end
+    filter = struct_module_filter(only_structs, env)
     case expand_dot_path(path, env) do
       {:ok, {:atom, mod}} when hint == "" ->
         expand_aliases(mod, "", [], not only_structs, env, filter)
@@ -314,16 +308,17 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
+  defp struct_module_filter(true, env) do
+    fn module -> Struct.is_struct(module, env.structs) end
+  end
+  defp struct_module_filter(false, _) do
+    fn _ -> true end
+  end
+
   ## Elixir modules
 
   defp expand_aliases(all, env, only_structs) do
-    filter = if only_structs do
-      fn
-        module -> Struct.is_struct(module, env.structs)
-      end
-    else
-      fn _ -> true end
-    end
+    filter = struct_module_filter(only_structs, env)
 
     case String.split(all, ".") do
       [hint] ->
