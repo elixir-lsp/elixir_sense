@@ -156,9 +156,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       fn _ -> true end
     end
     case expand_dot_path(path, env) do
-      {:ok, mod} when is_atom(mod) and hint == "" ->
+      {:ok, {:atom, mod}} when hint == "" ->
         expand_aliases(mod, "", [], not only_structs, env, filter)
-      {:ok, mod} when is_atom(mod) -> expand_require(mod, hint, env)
+      {:ok, {:atom, mod}} -> expand_require(mod, hint, env)
       {:ok, {:map, fields, _}} -> expand_map_field_access(fields, hint, :map)
       {:ok, {:struct, fields, type, _}} -> expand_map_field_access(fields, hint, {:struct, type})
       _ -> no()
@@ -174,21 +174,21 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp expand_dot_path({:alias, var}, env) do
-    var |> List.to_string() |> String.split(".") |> value_from_alias(env)
+    alias = var |> List.to_string() |> String.split(".") |> value_from_alias(env)
+    case alias do
+      {:ok, atom} -> {:ok, {:atom, atom}}
+      :error -> :error
+    end
   end
 
   defp expand_dot_path({:unquoted_atom, var}, _env) do
-    {:ok, List.to_atom(var)}
+    {:ok, {:atom, List.to_atom(var)}}
   end
 
   defp expand_dot_path({:dot, parent, call}, env) do
-    e = expand_dot_path(parent, env)
-
-    case e do
-      {:ok, atom} when is_atom(atom) ->
-        value_from_binding({:call, {:atom, atom}, List.to_atom(call), []}, env)
-      {:ok, x} ->
-        value_from_binding({:call, x, List.to_atom(call), []}, env)
+    case expand_dot_path(parent, env) do
+      {:ok, expanded} ->
+        value_from_binding({:call, expanded, List.to_atom(call), []}, env)
       :error -> :error
     end
   end
@@ -821,7 +821,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       ) do
         :none -> :error
         nil -> :error
-        {:atom, a} -> {:ok, a}
         other -> {:ok, other}
       end
   end
