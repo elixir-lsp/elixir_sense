@@ -117,18 +117,43 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       {:dot_call, _path, _hint} ->
         # no need to expand signatures here, we have signatures provider
         # expand_dot_call(path, List.to_atom(hint), env)
+        # TODO expand_local_or_var?
+        no()
+      :expr ->
+        case code do
+          [?&] -> expand_expr("", env)
+          [?^] -> expand_variable("", env)
+          [?%] -> expand_struct_modules([], "", env)
+          _ ->
+            # TODO expand_expr?
+            expand_local_or_var("", env)
+        end
+      {:local_or_var, local_or_var} ->
+        expand_local_or_var(List.to_string(local_or_var), env)
+      {:local_arity, local} ->
+        expand_local(List.to_string(local), env)
+      {:local_call, _local} ->
+        # no need to expand signatures here, we have signatures provider
+        # expand_local_call(List.to_atom(local), env)
+        # expand_dot_call(path, List.to_atom(hint), env)
+        # TODO expand_local_or_var?
+        no()
+      {:module_attribute, attribute} ->
+        expand_attribute(List.to_string(attribute), env)
+      other ->
+        IO.inspect(other)
         no()
 
-      _ -> expand(code |> Enum.reverse, env)
+      # _ -> expand(code |> Enum.reverse, env)
     end
   end
 
-  def expand('', env) do
+  defp expand('', env) do
     expand_expr("", env)
   end
 
   # credo:disable-for-lines:35
-  def expand([h | t] = expr, env) do
+  defp expand([h | t] = expr, env) do
     cond do
       h === ?. and t != [] ->
         expand_dot(reduce(t), Enum.reverse(expr), env, false)
@@ -464,6 +489,36 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   defp expand_require(mod, hint, env) do
     format_expansion(match_module_funs(mod, hint, true, env))
+  end
+
+  ## Expand local or var
+
+  defp expand_local_or_var(hint, env) do
+    format_expansion(match_var(hint, env) ++ match_local(hint, env))
+  end
+
+  defp expand_local(hint, env) do
+    format_expansion(match_local(hint, env))
+  end
+
+  defp match_local(hint, env) do
+    match_module_funs(Kernel, hint, false, env) ++
+        match_module_funs(Kernel.SpecialForms, hint, false, env) ++
+        match_module_funs(env.scope_module, hint, false, env) ++
+        (env.imports
+         |> Enum.flat_map(fn scope_import -> match_module_funs(scope_import, hint, false, env) end))
+  end
+
+  defp match_var(hint, %Env{vars: vars}) do
+    for(
+      %VarInfo{name: name} when is_atom(name) <- vars,
+      name = Atom.to_string(name),
+      String.starts_with?(name |> IO.inspect(label: "var name"), hint |> IO.inspect(label: "hint")),
+      do: name
+    )
+    |> Enum.sort()
+    |> Enum.map(&%{kind: :variable, name: &1})
+    |> IO.inspect(label: "match_var")
   end
 
   defp expand_variable_or_import(hint, env) do
@@ -1111,19 +1166,19 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     # end
   end
 
-  defp extract_from_ast(var_name, acc) when is_atom(var_name) do
-    {var_name, acc}
-  end
+  # defp extract_from_ast(var_name, acc) when is_atom(var_name) do
+  #   {var_name, acc}
+  # end
 
-  defp extract_from_ast({var_name, _, nil}, acc) when is_atom(var_name) do
-    {var_name, acc}
-  end
+  # defp extract_from_ast({var_name, _, nil}, acc) when is_atom(var_name) do
+  #   {var_name, acc}
+  # end
 
-  defp extract_from_ast({{:., _, [ast_node, fun]}, _, []}, acc) when is_atom(fun) do
-    extract_from_ast(ast_node, [fun | acc])
-  end
+  # defp extract_from_ast({{:., _, [ast_node, fun]}, _, []}, acc) when is_atom(fun) do
+  #   extract_from_ast(ast_node, [fun | acc])
+  # end
 
-  defp extract_from_ast(_ast_node, _acc) do
-    :error
-  end
+  # defp extract_from_ast(_ast_node, _acc) do
+  #   :error
+  # end
 end
