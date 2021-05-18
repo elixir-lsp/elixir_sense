@@ -117,17 +117,17 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_dot(path, List.to_string(hint), env, only_struct)
       {:dot_call, _path, _hint} ->
         # no need to expand signatures here, we have signatures provider
+        # IEx calls
         # expand_dot_call(path, List.to_atom(hint), env)
-        expand_expr("", env)
+        # to provide signatures and falls back to expand_local_or_var
+        expand_expr(env)
       :expr ->
+        # IEx calls expand_local_or_var("", env)
+        # we choose to retun more and handle some special cases
         case code do
-          [?&] -> expand_expr("", env)
           [?^] -> expand_variable("", env)
-          [?%] ->
-            expand_aliases("", env, true)
-          _ ->
-            # TODO expand_expr?
-            expand_local_or_var("", env)
+          [?%] -> expand_aliases("", env, true)
+          _ -> expand_expr(env)
         end
       {:local_or_var, local_or_var} ->
         expand_local_or_var(List.to_string(local_or_var), env)
@@ -136,8 +136,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       {:local_call, _local} ->
         # no need to expand signatures here, we have signatures provider
         # expand_local_call(List.to_atom(local), env)
+        # IEx calls
         # expand_dot_call(path, List.to_atom(hint), env)
-        expand_expr("", env)
+        # to provide signatures and falls back to expand_local_or_var
+        expand_expr(env)
       {:module_attribute, attribute} ->
         expand_attribute(List.to_string(attribute), env)
       :none ->
@@ -191,7 +193,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  defp expand_expr("", env) do
+  defp expand_expr(env) do
     local_or_var = expand_local_or_var("", env)
     erlang_modules = expand_erlang_modules("", env)
     elixir_modules = expand_aliases("", env, false)
