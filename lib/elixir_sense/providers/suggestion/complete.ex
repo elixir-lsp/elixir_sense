@@ -44,10 +44,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.EdocReader
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
-  alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Source
-  alias ElixirSense.Core.State
   alias ElixirSense.Core.State.AttributeInfo
   alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.Struct
@@ -166,11 +164,11 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp expand_dot_path({:var, var}, env) do
-    value_from_binding({List.to_atom(var), [], nil}, env)
+    value_from_binding({:variable, List.to_atom(var)}, env)
   end
 
   defp expand_dot_path({:module_attribute, attribute}, env) do
-    value_from_binding({:@, [], [{List.to_atom(attribute), [], nil}]}, env)
+    value_from_binding({:attribute, List.to_atom(attribute)}, env)
   end
 
   defp expand_dot_path({:alias, var}, env) do
@@ -186,43 +184,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
     case e do
       {:ok, atom} when is_atom(atom) ->
-        case Binding.expand(
-          %Binding{
-            variables: env.vars,
-            attributes: env.attributes,
-            structs: env.structs,
-            imports: env.imports,
-            specs: env.specs,
-            current_module: env.scope_module,
-            types: env.types,
-            mods_and_funs: env.mods_and_funs
-          },
-          {:call, {:atom, atom}, List.to_atom(call), []}
-        ) do
-          :none -> :error
-          nil -> :error
-          {:atom, a} -> {:ok, a}
-          other -> {:ok, other}
-        end
+        value_from_binding({:call, {:atom, atom}, List.to_atom(call), []}, env)
       {:ok, x} ->
-        case Binding.expand(
-          %Binding{
-            variables: env.vars,
-            attributes: env.attributes,
-            structs: env.structs,
-            imports: env.imports,
-            specs: env.specs,
-            current_module: env.scope_module,
-            types: env.types,
-            mods_and_funs: env.mods_and_funs
-          },
-          {:call, x, List.to_atom(call), []}
-        ) do
-          :none -> :error
-          nil -> :error
-          {:atom, a} -> {:ok, a}
-          other -> {:ok, other}
-        end
+        value_from_binding({:call, x, List.to_atom(call), []}, env)
       :error -> :error
     end
   end
@@ -839,34 +803,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  defp value_from_binding(ast_node, env) do
-      IO.inspect ast_node, label: "ast_node"
-
-      # need to init namespace and aliases here so expansion work as expected
-      namespace =
-        case env.scope_module do
-          m when m in [nil, Elixir] ->
-            [[Elixir]]
-
-          _ ->
-            split =
-              Module.split(env.scope_module)
-              |> Enum.reverse()
-              |> Enum.map(&String.to_atom/1)
-              |> Kernel.++([Elixir])
-
-            [split, [Elixir]]
-        end
-
-      binding_type =
-        MetadataBuilder.get_binding_type(
-          %State{
-            namespace: namespace,
-            aliases: [env.aliases]
-          },
-          ast_node
-        )
-
+  defp value_from_binding(binding_ast, env) do
       case Binding.expand(
         %Binding{
           variables: env.vars,
@@ -878,7 +815,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           types: env.types,
           mods_and_funs: env.mods_and_funs
         },
-        binding_type
+        binding_ast
       ) do
         :none -> :error
         nil -> :error
