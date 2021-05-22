@@ -167,6 +167,8 @@ defmodule ElixirSense.Core.Binding do
     do_expand(env, {:call, {:atom, Application}, :get_env, args}, stack)
   end
 
+  # TODO maybe handle Application.fetch_env/2
+
   def do_expand(env, {:call, {:atom, Application}, fun, args}, stack)
       when fun in ~w(get_env fetch_env!)a do
     try do
@@ -183,6 +185,8 @@ defmodule ElixirSense.Core.Binding do
 
         mod when is_atom(mod) ->
           {:atom, mod}
+
+        # TODO handle other types
 
         _ ->
           nil
