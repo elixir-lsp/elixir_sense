@@ -4,6 +4,7 @@ defmodule ElixirSense.Plugins.Ecto.Schema do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Plugins.Option
   alias ElixirSense.Plugins.Util
+  alias ElixirSense.Providers.Suggestion.Matcher
 
   # We'll keep these values hard-coded until Ecto provides the same information
   # using docs' metadata.
@@ -423,7 +424,7 @@ defmodule ElixirSense.Plugins.Ecto.Schema do
   def find_option_values(hint, option, fun) do
     for {value, doc} <- Enum.find(@options[fun], &(&1.name == option))[:values] || [],
         value_str = inspect(value),
-        String.starts_with?(value_str, hint) do
+        Matcher.match?(value_str, hint) do
       %{
         type: :generic,
         kind: :enum_member,

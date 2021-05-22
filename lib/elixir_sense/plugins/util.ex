@@ -5,12 +5,13 @@ defmodule ElixirSense.Plugins.Util do
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
+  alias ElixirSense.Providers.Suggestion.Matcher
 
   def match_module?(mod_str, hint) do
     hint = String.downcase(hint)
     mod_full = String.downcase(mod_str)
     mod_last = mod_full |> String.split(".") |> List.last()
-    Enum.any?([mod_last, mod_full], &String.starts_with?(&1, hint))
+    Enum.any?([mod_last, mod_full], &Matcher.match?(&1, hint))
   end
 
   def trim_leading_for_insertion(hint, value) do

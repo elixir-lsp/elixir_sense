@@ -3,6 +3,7 @@ defmodule ElixirSense.Plugins.Ecto.Types do
 
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Plugins.Util
+  alias ElixirSense.Providers.Suggestion.Matcher
 
   # We'll keep these values hard-coded until Ecto provides the same information
   # using docs' metadata.
@@ -40,7 +41,7 @@ defmodule ElixirSense.Plugins.Ecto.Types do
       end
 
     for {name, _, _, _} = type <- @ecto_types,
-        String.starts_with?(name, actual_hint) do
+        Matcher.match?(name, actual_hint) do
       buitin_type_to_suggestion(type, actual_hint, text_after)
     end
   end

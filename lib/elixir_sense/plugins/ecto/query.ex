@@ -6,6 +6,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Providers.Suggestion.Complete
+  alias ElixirSense.Providers.Suggestion.Matcher
 
   # We'll keep these values hard-coded until Ecto provides the same information
   # using docs' metadata.
@@ -36,7 +37,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
   def find_assoc_suggestions(type, hint) do
     for assoc <- type.__schema__(:associations),
         assoc_str = inspect(assoc),
-        String.starts_with?(assoc_str, hint) do
+        Matcher.match?(assoc_str, hint) do
       assoc_mod = type.__schema__(:association, assoc).related
       {doc, _} = Introspection.get_module_docs_summary(assoc_mod)
 
@@ -59,7 +60,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
 
     for {name, arity, arity, :macro, {doc, _}, _, ["query" | _]} <- funs,
         clause = to_string(name),
-        String.starts_with?(clause, hint) do
+        Matcher.match?(clause, hint) do
       clause_to_suggestion(clause, doc, "from clause")
     end
   end
@@ -67,7 +68,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
   defp joins_suggestions(hint) do
     for name <- @joins -- [:join],
         clause = to_string(name),
-        String.starts_with?(clause, hint) do
+        Matcher.match?(clause, hint) do
       join_kind = String.replace(clause, "_", " ")
       doc = "A #{join_kind} query expression."
       clause_to_suggestion(clause, doc, "from clause")
@@ -77,7 +78,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
   defp join_opts_suggestions(hint) do
     for {name, doc} <- @join_opts ++ @from_join_opts,
         clause = to_string(name),
-        String.starts_with?(clause, hint) do
+        Matcher.match?(clause, hint) do
       type = if Keyword.has_key?(@join_opts, name), do: "join", else: "from/join"
       clause_to_suggestion(clause, doc, "#{type} option")
     end
@@ -88,7 +89,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
          true <- function_exported?(type, :__schema__, 1) do
       for field <- Enum.sort(type.__schema__(:fields)),
           name = to_string(field),
-          String.starts_with?(name, hint) do
+          Matcher.match?(name, hint) do
         %{name: field, type: type.__schema__(:type, field)}
       end
     else
@@ -119,7 +120,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
 
       _ ->
         for {name, %{type: type}} <- bindings,
-            String.starts_with?(name, hint) do
+            Matcher.match?(name, hint) do
           binding_to_suggestion(name, type)
         end
     end

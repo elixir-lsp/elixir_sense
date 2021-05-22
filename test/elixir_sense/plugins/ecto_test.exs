@@ -115,8 +115,8 @@ defmodule ElixirSense.Plugins.EctoTest do
     test "insert_text/snippet include trailing `}` if it's not present" do
       buffer = """
       import Ecto.Schema
-      field name, {:a
-      #              ^
+      field name, {:arr
+      #                ^
       """
 
       [cursor] = cursors(buffer)
@@ -129,8 +129,8 @@ defmodule ElixirSense.Plugins.EctoTest do
     test "insert_text/snippet do not include trailing `}` if it's already present" do
       buffer = """
       import Ecto.Schema
-      field name, {:a}
-      #              ^
+      field name, {:arr}
+      #                ^
       """
 
       [cursor] = cursors(buffer)
@@ -755,8 +755,8 @@ defmodule ElixirSense.Plugins.EctoTest do
       buffer = """
       import Ecto.Schema
 
-      has_many :posts, Post, on_replace: :r #
-      #                                    ^
+      has_many :posts, Post, on_replace: :rais #
+      #                                       ^
       """
 
       [cursor] = cursors(buffer)
