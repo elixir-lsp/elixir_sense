@@ -1538,7 +1538,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert [
              %{label: ~s(@typedoc """""")},
              %{label: "@typedoc false"}
-           ] = list
+           ] = list |> Enum.filter(& &1.type == :generic and &1.kind == :snippet)
   end
 
   test "functions defined in the module" do

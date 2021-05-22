@@ -270,7 +270,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     for(
       %VarInfo{name: name} when is_atom(name) <- vars,
       name = Atom.to_string(name),
-      String.starts_with?(name, hint),
+      Matcher.match?(name, hint),
       do: name
     )
     |> Enum.sort()
@@ -298,7 +298,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     for(
       attribute_name when is_atom(attribute_name) <- attribute_names,
       name = Atom.to_string(attribute_name),
-      String.starts_with?(name, hint),
+      Matcher.match?(name, hint),
       do: name
     )
     |> Enum.sort()
