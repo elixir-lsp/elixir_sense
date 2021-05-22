@@ -154,6 +154,45 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  # dependency injection
+  def do_expand(env, {:call, {:atom, Application}, fun, args}, stack)
+      when fun in ~w(compile_env!)a do
+    # `Application.compile_env!/2` underneath works like `fetch_env!/2`
+    do_expand(env, {:call, {:atom, Application}, :fetch_env!, args}, stack)
+  end
+
+  def do_expand(env, {:call, {:atom, Application}, fun, args}, stack)
+      when fun in ~w(compile_env)a do
+    # `Application.compile_env/3` underneath works like `get_env/3`
+    do_expand(env, {:call, {:atom, Application}, :get_env, args}, stack)
+  end
+
+  def do_expand(env, {:call, {:atom, Application}, fun, args}, stack)
+      when fun in ~w(get_env fetch_env!)a do
+    try do
+      expanded_args =
+        args
+        |> Enum.map(&expand(env, &1, stack))
+        |> Enum.map(&elem(&1, 1))
+
+      mod = apply(Application, fun, expanded_args)
+
+      case mod do
+        :error ->
+          :none
+
+        mod when is_atom(mod) ->
+          {:atom, mod}
+
+        _ ->
+          nil
+      end
+    rescue
+      _ ->
+        :none
+    end
+  end
+
   # remote call
   def do_expand(env, {:call, target, function, arguments}, stack) do
     if :none in arguments do

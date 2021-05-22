@@ -11,6 +11,70 @@ defmodule ElixirSense.Core.BindingTest do
   @env %Binding{}
 
   describe "expand" do
+    def build_dependency_injection_binding(fetcher \\ :get_env, default_value \\ nil)
+        when is_atom(default_value) do
+      arguments = [
+        atom: :elixir_sense,
+        atom: :some_attribute
+      ]
+
+      arguments = if(default_value, do: arguments ++ [{:atom, default_value}], else: arguments)
+
+      attribute_info = %AttributeInfo{
+        name: :some_module,
+        type: {:call, {:atom, Application}, fetcher, arguments}
+      }
+
+      Map.put(@env, :attributes, [
+        attribute_info
+      ])
+    end
+
+    test "misconfigured dependency injection" do
+      Application.delete_env(:elixir_sense, :some_attribute)
+
+      unsafe_fetchers = [:fetch_env!, :compile_env!]
+      safe_fetchers = [:get_env, :compile_env]
+
+      Enum.each(unsafe_fetchers, fn fetcher ->
+        assert :none ==
+                 Binding.expand(
+                   build_dependency_injection_binding(fetcher),
+                   {:attribute, :some_module}
+                 )
+      end)
+
+      Enum.each(safe_fetchers, fn fetcher ->
+        assert {:atom, nil} ==
+                 Binding.expand(
+                   build_dependency_injection_binding(fetcher),
+                   {:attribute, :some_module}
+                 )
+      end)
+    end
+
+    test "dependency injection without default value" do
+      Application.put_env(:elixir_sense, :some_attribute, ElixirSenseExample.SameModule)
+
+      fetchers = [:get_env, :fetch_env!, :compile_env, :compile_env!]
+
+      Enum.each(fetchers, fn fetcher ->
+        assert {:atom, ElixirSenseExample.SameModule} ==
+                 Binding.expand(
+                   build_dependency_injection_binding(fetcher),
+                   {:attribute, :some_module}
+                 )
+      end)
+    end
+
+    test "dependency injection with default value" do
+      assert {:atom, ElixirSenseExample.SameModule} ==
+               Binding.expand(
+                 build_dependency_injection_binding(:get_env, ElixirSenseExample.SameModule),
+                 {:attribute, :some_module}
+               )
+    end
+
     test "map" do
       assert {:map, [abc: nil, cde: {:variable, :a}], nil} ==
                Binding.expand(@env, {:map, [abc: nil, cde: {:variable, :a}], nil})
