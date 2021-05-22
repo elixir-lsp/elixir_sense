@@ -2968,7 +2968,7 @@ defmodule ElixirSense.SuggestionsTest do
       """
 
       list = suggestions_by_type(:type_spec, buffer)
-      assert length(list) == 2
+      assert length(list) == 4
     end
 
     test "remote types - retrieve info from typespecs" do
