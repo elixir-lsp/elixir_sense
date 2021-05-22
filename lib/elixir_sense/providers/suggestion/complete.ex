@@ -376,7 +376,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp match_aliases(hint, env) do
     for {alias, _mod} <- env.aliases,
         [name] = Module.split(alias),
-        String.starts_with?(name, hint) do
+        Matcher.match?(name, hint) do
       %{kind: :module, type: :alias, name: name, desc: {"", %{}}, subtype: nil}
     end
   end
@@ -433,12 +433,20 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp match_modules(hint, root, env) do
+    hint_parts = hint |> String.split(".")
+    hint_parts_length = length(hint_parts)
+    [hint_suffix | hint_prefix] = hint_parts |> Enum.reverse()
+
     root
     |> get_modules(env)
     |> Enum.sort()
     |> Enum.dedup()
-    |> Enum.drop_while(&(not String.starts_with?(&1, hint)))
-    |> Enum.take_while(&String.starts_with?(&1, hint))
+    |> Enum.filter(fn mod ->
+      [mod_suffix | mod_prefix] =
+        mod |> String.split(".") |> Enum.take(hint_parts_length) |> Enum.reverse()
+
+      hint_prefix == mod_prefix and Matcher.match?(mod_suffix, hint_suffix)
+    end)
   end
 
   defp get_modules(true, env) do
@@ -700,7 +708,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp match_map_fields(fields, hint, type) do
     for {key, value} when is_atom(key) <- fields,
         key = Atom.to_string(key),
-        String.starts_with?(key, hint) do
+        Matcher.match?(key, hint) do
       value_is_map =
         case value do
           {:map, _, _} -> true

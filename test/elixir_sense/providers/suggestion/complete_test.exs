@@ -176,16 +176,18 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
              %{name: "Stream", subtype: :struct, type: :module},
              %{name: "String", subtype: nil, type: :module},
              %{name: "StringIO", subtype: nil, type: :module}
-           ] = expand('Str')
+           ] = expand('Str') |> Enum.filter(&(&1.name |> String.starts_with?("Str")))
 
     assert [
              %{name: "Macro"},
              %{name: "Map"},
              %{name: "MapSet"},
              %{name: "MatchError"}
-           ] = expand('Ma')
+           ] = expand('Ma') |> Enum.filter(&(&1.name |> String.starts_with?("Ma")))
 
-    assert [%{name: "Dict"}] = expand('Dic')
+    assert [%{name: "Dict"}] =
+             expand('Dic') |> Enum.filter(&(&1.name |> String.starts_with?("Dic")))
+
     assert suggestions = expand('Ex')
     assert Enum.any?(suggestions, &(&1.name == "ExUnit"))
     assert Enum.any?(suggestions, &(&1.name == "Exception"))
@@ -900,7 +902,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       }
     }
 
-    assert [%{name: "Some", type: :module}] = expand('So', env)
+    assert [%{name: "Some", type: :module}] = expand('Som', env)
     assert [%{name: "OtherModule", type: :module}] = expand('Some.', env)
     assert [%{name: "MyAlias", type: :module}] = expand('MyA', env)
   end
@@ -1419,7 +1421,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                subtype: nil,
                summary: "This module contains functions to manipulate files."
              }
-           ] = expand('Fi')
+           ] = expand('Fi') |> Enum.filter(&(&1.name == "File"))
   end
 
   test "complete only struct modules after %" do

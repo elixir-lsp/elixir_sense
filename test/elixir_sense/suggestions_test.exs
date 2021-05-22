@@ -309,7 +309,8 @@ defmodule ElixirSense.SuggestionsTest do
                summary: "An example module\n",
                type: :module,
                metadata: %{since: "1.2.3"}
-             }
+             },
+             %{metadata: %{}, name: "ModuleWithNoDocs", subtype: nil, summary: "", type: :module}
            ]
   end
 
@@ -1538,7 +1539,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert [
              %{label: ~s(@typedoc """""")},
              %{label: "@typedoc false"}
-           ] = list |> Enum.filter(& &1.type == :generic and &1.kind == :snippet)
+           ] = list |> Enum.filter(&(&1.type == :generic and &1.kind == :snippet))
   end
 
   test "functions defined in the module" do
@@ -1781,7 +1782,9 @@ defmodule ElixirSense.SuggestionsTest do
                name: "SmodO",
                type: :module
              }
-           ] = ElixirSense.suggestions(buffer, 9, 18)
+           ] =
+             ElixirSense.suggestions(buffer, 9, 18)
+             |> Enum.filter(&(&1.name |> String.starts_with?("Smo")))
 
     assert [
              %{
@@ -2588,7 +2591,7 @@ defmodule ElixirSense.SuggestionsTest do
              %{name: "Stream"},
              %{name: "String"},
              %{name: "StringIO"}
-           ] = list
+           ] = list |> Enum.filter(&(&1.name |> String.starts_with?("Str")))
   end
 
   test "suggest modules to alias with __MODULE__" do

@@ -75,26 +75,6 @@ defmodule ElixirSense.Providers.SuggestionTest do
            }
   end
 
-  test "return completion candidates for 'Str'" do
-    assert Suggestion.find("ElixirSenseExample.ModuleWithDo", @env, %Metadata{}, @cursor_context) ==
-             [
-               %{
-                 name: "ModuleWithDocFalse",
-                 subtype: nil,
-                 summary: "",
-                 type: :module,
-                 metadata: %{}
-               },
-               %{
-                 name: "ModuleWithDocs",
-                 subtype: :behaviour,
-                 summary: "An example module\n",
-                 type: :module,
-                 metadata: %{since: "1.2.3"}
-               }
-             ]
-  end
-
   test "return completion candidates for 'List.del'" do
     assert [
              %{
