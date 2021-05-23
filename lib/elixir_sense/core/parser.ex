@@ -217,10 +217,23 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
-  # defp fix_parse_error(source, _cursor_line_number, {:error, {line, "syntax" <> _, "'<-'"}})
-  #      when is_integer(line) do
-  #   strip_before(source, line, "<-")
-  # end
+  defp fix_parse_error(
+         source,
+         _cursor_line_number,
+         {:error, {line_number, "unexpected expression after keyword list" <> _, token}}
+       )
+       when is_integer(line_number) do
+    token = Regex.replace(~r/[\"\']/, token, "")
+
+    source
+    |> Source.split_lines()
+    |> List.update_at(line_number - 1, fn line ->
+      # drop unexpected token
+      line
+      |> String.replace(token, "", global: false)
+    end)
+    |> Enum.join("\n")
+  end
 
   defp fix_parse_error(source, _cursor_line_number, {:error, {line, "syntax" <> _, token}})
        when is_integer(line) do

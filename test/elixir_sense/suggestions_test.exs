@@ -2648,11 +2648,11 @@ defmodule ElixirSense.SuggestionsTest do
       buffer1 = "Local.func_with_options("
       buffer2 = "Local.func_with_options(local_o: :an_atom, "
 
-      assert capture_io(:stderr, fn ->
-               result1 = suggestions_by_type(:param_option, buffer1)
-               result2 = suggestions_by_type(:param_option, buffer2)
-               send(self(), {:results, result1, result2})
-             end) =~ "trailing commas are not allowed inside function/macro"
+      capture_io(:stderr, fn ->
+        result1 = suggestions_by_type(:param_option, buffer1)
+        result2 = suggestions_by_type(:param_option, buffer2)
+        send(self(), {:results, result1, result2})
+      end)
 
       assert_received {:results, result1, result2}
       assert result1 == result2

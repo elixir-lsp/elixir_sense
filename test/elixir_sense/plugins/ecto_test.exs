@@ -223,10 +223,10 @@ defmodule ElixirSense.Plugins.EctoTest do
 
       [cursor] = cursors(buffer)
 
-      assert capture_io(:stderr, fn ->
-               result = suggestions(buffer, cursor)
-               send(self(), {:result, result})
-             end) =~ "trailing commas are not allowed inside function/macro call arguments"
+      capture_io(:stderr, fn ->
+        result = suggestions(buffer, cursor)
+        send(self(), {:result, result})
+      end)
 
       assert_received {:result, result}
 
@@ -270,10 +270,10 @@ defmodule ElixirSense.Plugins.EctoTest do
 
       [cursor] = cursors(buffer)
 
-      assert capture_io(:stderr, fn ->
-               result = suggestions(buffer, cursor)
-               send(self(), {:result, result})
-             end) =~ "trailing commas are not allowed inside function/macro call arguments"
+      capture_io(:stderr, fn ->
+        result = suggestions(buffer, cursor)
+        send(self(), {:result, result})
+      end)
 
       assert_received {:result, result}
 
@@ -304,10 +304,10 @@ defmodule ElixirSense.Plugins.EctoTest do
 
       [cursor_1, cursor_2] = cursors(buffer)
 
-      assert capture_io(:stderr, fn ->
-               results = {suggestions(buffer, cursor_1), suggestions(buffer, cursor_2)}
-               send(self(), {:results, results})
-             end) =~ "trailing commas are not allowed inside function/macro call arguments"
+      capture_io(:stderr, fn ->
+        results = {suggestions(buffer, cursor_1), suggestions(buffer, cursor_2)}
+        send(self(), {:results, results})
+      end)
 
       assert_received {:results, {result_1, result_2}}
 

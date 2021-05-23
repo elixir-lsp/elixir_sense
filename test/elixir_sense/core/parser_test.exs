@@ -322,9 +322,9 @@ defmodule ElixirSense.Core.ParserTest do
     end
     """
 
-    assert capture_io(:stderr, fn ->
-             assert %Metadata{error: nil} = parse_string(source, true, true, 5)
-           end) =~ "trailing commas are not allowed inside function/macro call arguments"
+    capture_io(:stderr, fn ->
+      assert %Metadata{error: nil} = parse_string(source, true, true, 5)
+    end)
   end
 
   test "parse_string with missing value for multiline keyword as argument" do
