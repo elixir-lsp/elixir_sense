@@ -464,6 +464,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ] = state |> get_line_vars(10)
   end
 
+  @tag requires_elixir_1_12: true
+  test "struct binding understands stepped ranges" do
+    state =
+      """
+      defmodule MyModule do
+        def some() do
+          var1 = 12..34//2
+          IO.puts ""
+        end
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{name: :var1, type: {:struct, [], {:atom, Range}}}
+           ] = state |> get_line_vars(4)
+  end
+
   test "nested `=` binding" do
     state =
       """
