@@ -30,10 +30,10 @@ jobs:
             otp: 22.3.4.19
             tests_may_fail: false
           - elixir: 1.12.x
-            otp: 24.0.1
+            otp: 23.3.x
             tests_may_fail: false
           - elixir: 1.12.x
-            otp: 24.0.1
+            otp: 24.0.x
             tests_may_fail: false
             warnings_as_errors: true
             check_formatted: true
@@ -62,8 +62,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - elixir: 1.11.x
-            otp: 23.3.x
+          - elixir: 1.12.x
+            otp: 24.0.x
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-elixir@v1

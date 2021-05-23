@@ -56,9 +56,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       rescue
         exception ->
           IO.warn(
-            "#{inspect(exception.__struct__)} during metadata build: #{
-              Exception.message(exception)
-            }",
+            "#{inspect(exception.__struct__)} during metadata build: #{Exception.message(exception)}",
             __STACKTRACE__
           )
 

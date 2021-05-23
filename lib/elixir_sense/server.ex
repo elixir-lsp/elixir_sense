@@ -10,9 +10,7 @@ defmodule ElixirSense.Server do
 
     IO.puts(
       :stderr,
-      "Initializing ElixirSense server for environment \"#{env}\" (Elixir version #{
-        System.version()
-      })"
+      "Initializing ElixirSense server for environment \"#{env}\" (Elixir version #{System.version()})"
     )
 
     IO.puts(:stderr, "Working directory is \"#{Path.expand(".")}\"")

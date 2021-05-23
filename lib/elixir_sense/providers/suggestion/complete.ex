@@ -535,7 +535,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         for {{^mod, f, a}, info} <- env.mods_and_funs,
             a != nil,
             (mod == env.scope_module and not include_builtin) or Introspection.is_pub(info.type),
-            include_builtin || not ({f, a} in @builtin_functions) do
+            include_builtin || {f, a} not in @builtin_functions do
           {specs, docs, metadata} =
             case env.specs[{mod, f, a}] do
               nil ->

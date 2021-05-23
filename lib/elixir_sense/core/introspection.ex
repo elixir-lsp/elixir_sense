@@ -260,9 +260,7 @@ defmodule ElixirSense.Core.Introspection do
       spec_text = "### Specs\n\n```\n#{spec |> Enum.join("\n")}\n```\n\n"
       metadata = %{builtin: true}
 
-      "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{spec_text}#{
-        @no_documentation
-      }"
+      "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{spec_text}#{@no_documentation}"
     end
   end
 
@@ -303,9 +301,7 @@ defmodule ElixirSense.Core.Introspection do
                   TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
               end
 
-            "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
-              get_spec_text(mod, fun, arity, kind)
-            }#{text}"
+            "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, kind)}#{text}"
           end
 
         case results do
@@ -326,9 +322,7 @@ defmodule ElixirSense.Core.Introspection do
 
         {text, metadata} = edoc_results[arity] || {"", %{}}
 
-        "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
-          get_spec_text(mod, fun, arity, :function)
-        }#{text || @no_documentation}"
+        "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, :function)}#{text || @no_documentation}"
       end
 
     case results do
@@ -355,9 +349,7 @@ defmodule ElixirSense.Core.Introspection do
           edoc_results[arity] || {"", %{}}
         end
 
-      "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{
-        get_spec_text(mod, fun, arity, :function)
-      }#{text || @no_documentation}"
+      "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, :function)}#{text || @no_documentation}"
     end
   end
 
@@ -1421,9 +1413,7 @@ defmodule ElixirSense.Core.Introspection do
         atom -> inspect(atom) <> "."
       end
 
-    "> #{mod_formatted}#{fun}(#{type_args})\n\n#{get_metadata_md(metadata)}### Specs\n\n#{
-      formatted_spec
-    }\n\n#{doc}"
+    "> #{mod_formatted}#{fun}(#{type_args})\n\n#{get_metadata_md(metadata)}### Specs\n\n#{formatted_spec}\n\n#{doc}"
   end
 
   def is_pub(type), do: type in [:def, :defmacro, :defdelegate, :defguard]
