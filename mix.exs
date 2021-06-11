@@ -5,7 +5,7 @@ defmodule ElixirSense.Mixfile do
   def project do
     [
       app: :elixir_sense,
-      version: "2.0.0",
+      version: "2.0.1",
       elixir: "~> 1.8",
       elixirc_paths: elixirc_paths(Mix.env()),
       build_embedded: Mix.env() == :prod,
