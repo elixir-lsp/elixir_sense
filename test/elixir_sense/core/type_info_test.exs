@@ -368,4 +368,12 @@ defmodule ElixirSense.Core.TypeInfoTest do
   test "fun_with_remote_opaque" do
     assert [] = TypeInfo.extract_param_options(Local, :fun_with_remote_opaque, 0)
   end
+
+  test "builtin_type_documentation" do
+    assert [%{name: "any", params: [], spec: "@type any"}] =
+             TypeInfo.get_signatures(nil, :any, nil)
+
+    assert [%{name: "pid", params: [], spec: "@type pid"}] =
+             TypeInfo.get_signatures(nil, :pid, nil)
+  end
 end
