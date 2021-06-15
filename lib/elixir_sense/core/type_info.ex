@@ -113,7 +113,7 @@ defmodule ElixirSense.Core.TypeInfo do
             case ti do
               %{spec: ast} -> spec_ast_to_string(ast)
               %{signature: signature} -> signature
-              nil -> "#{type}"
+              _ -> "#{type}"
             end
       }
     end
