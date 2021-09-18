@@ -7,6 +7,7 @@ defmodule ElixirSense.Plugins.Ecto do
   alias ElixirSense.Plugins.Ecto.Types
 
   use ElixirSense.Providers.Suggestion.GenericReducer
+  @behaviour ElixirSense.Plugins.Plugin
 
   @schema_funcs [:field, :belongs_to, :has_one, :has_many, :many_to_many]
 
@@ -96,6 +97,7 @@ defmodule ElixirSense.Plugins.Ecto do
   end
 
   # Adds customized snippet for `Ecto.Schema.schema/2`
+  @impl true
   def decorate(%{origin: "Ecto.Schema", name: "schema", arity: 2} = item) do
     snippet = """
     schema "$1" do

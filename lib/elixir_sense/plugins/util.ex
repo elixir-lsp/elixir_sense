@@ -7,6 +7,27 @@ defmodule ElixirSense.Plugins.Util do
   alias ElixirSense.Core.State
   alias ElixirSense.Providers.Suggestion.Matcher
 
+  @builtin_plugins [
+    ElixirSense.Plugins.Ecto
+  ]
+
+  def plugins do
+    Enum.each(@builtin_plugins, &Code.ensure_loaded/1)
+
+    :code.all_loaded()
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.filter(&is_plugin?/1)
+  end
+
+  def is_plugin?(module) do
+    behaviours =
+      module.module_info(:attributes)
+      |> Enum.filter(&(elem(&1, 0) == :behaviour))
+      |> Enum.flat_map(&elem(&1, 1))
+
+    ElixirSense.Plugins.Plugin in behaviours
+  end
+
   def match_module?(mod_str, hint) do
     hint = String.downcase(hint)
     mod_full = String.downcase(mod_str)

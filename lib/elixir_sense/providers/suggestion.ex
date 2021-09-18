@@ -43,6 +43,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.State
+  alias ElixirSense.Plugins.Util
   alias ElixirSense.Providers.Suggestion.Reducers
 
   @type generic :: %{
@@ -79,7 +80,6 @@ defmodule ElixirSense.Providers.Suggestion do
         }
 
   @reducers [
-    ecto: &ElixirSense.Plugins.Ecto.reduce/5,
     structs_fields: &Reducers.Struct.add_fields/5,
     returns: &Reducers.Returns.add_returns/5,
     callbacks: &Reducers.Callbacks.add_callbacks/5,
@@ -97,28 +97,43 @@ defmodule ElixirSense.Providers.Suggestion do
     docs_snippets: &Reducers.DocsSnippets.add_snippets/5
   ]
 
-  @decorators [
-    &ElixirSense.Plugins.Ecto.decorate/1
-  ]
-
   @doc """
   Finds all suggestions for a hint based on context information.
   """
   @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context) :: [suggestion()]
   def find(hint, env, buffer_metadata, cursor_context) do
-    acc = %{result: [], reducers: Keyword.keys(@reducers), context: %{}}
+    plugins = Util.plugins()
+
+    plugin_reducers =
+      plugins
+      |> Enum.filter(&:erlang.function_exported(&1, :reduce, 5))
+      |> Enum.map(fn plugin ->
+        {plugin, &plugin.reduce/5}
+      end)
+
+    plugin_decorators =
+      plugins
+      |> Enum.filter(&:erlang.function_exported(&1, :decorate, 1))
+      |> Enum.map(fn plugin ->
+        &plugin.decorate/1
+      end)
+
+    reducers = plugin_reducers ++ @reducers
+
+    acc = %{result: [], reducers: Keyword.keys(reducers), context: %{}}
 
     %{result: result} =
-      Enum.reduce_while(@reducers, acc, fn {key, fun}, acc ->
-        if key in acc.reducers do
-          fun.(hint, env, buffer_metadata, cursor_context, acc)
-        else
-          {:cont, acc}
-        end
+      Enum.reduce_while(reducers, acc, fn
+        {key, fun}, acc ->
+          if key in acc.reducers do
+            fun.(hint, env, buffer_metadata, cursor_context, acc)
+          else
+            {:cont, acc}
+          end
       end)
 
     for item <- result do
-      Enum.reduce(@decorators, item, fn d, item -> d.(item) end)
+      Enum.reduce(plugin_decorators, item, fn d, item -> d.(item) end)
     end
   end
 end
