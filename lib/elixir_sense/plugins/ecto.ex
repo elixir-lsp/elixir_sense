@@ -14,7 +14,6 @@ defmodule ElixirSense.Plugins.Ecto do
 
   @impl true
   def setup(context) do
-    Code.ensure_compiled(Ecto.UUID)
     ModuleStore.ensure_compiled(context, Ecto.UUID)
   end
 
