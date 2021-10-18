@@ -19,9 +19,22 @@ defmodule ElixirSense.Core.ModuleStore do
   end
 
   defp all_loaded do
-    for {module, _} <- :code.all_loaded(), match?({:module, _}, Code.ensure_compiled(module)) do
-      module
-    end
+    Enum.flat_map(:code.all_loaded(), fn
+      {module, _} ->
+        try do
+          if :erlang.function_exported(module, :module_info, 0) do
+            [module]
+          else
+            []
+          end
+        rescue
+          _ ->
+            []
+        end
+
+      _ ->
+        []
+    end)
   end
 
   defp add_behaviour(adopter, behaviour, module_store) do
