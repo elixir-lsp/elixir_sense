@@ -17,13 +17,21 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
       {:ok, tokens} ->
         Enum.reverse(tokens)
 
-      # Elixir >= 1.13
-      # {:ok, warnings, tokens}
+      # [WIP] Elixir 1.13-dev
       {:ok, _, tokens} ->
+        Enum.reverse(tokens)
+
+      # [WIP] Elixir 1.13-dev
+      {:ok, _line, _column, _warning, tokens} ->
         Enum.reverse(tokens)
 
       {:error, {_line, _column, _error_prefix, _token}, _rest, sofar} ->
         sofar
+
+      # [WIP] Elixir 1.13-dev
+      {:error, _, _, _, _} ->
+        []
+
     end
   end
 end
