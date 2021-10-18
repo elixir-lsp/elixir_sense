@@ -33,7 +33,8 @@ defmodule ElixirSense.Providers.Suggestion.GenericReducer do
         opts = %{
           env: env,
           buffer_metadata: buffer_metadata,
-          cursor_context: cursor_context
+          cursor_context: cursor_context,
+          module_store: acc.context.module_store
         }
 
         reducer.suggestions(hint, func_call, chain, opts) |> handle_suggestions(acc)

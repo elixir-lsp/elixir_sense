@@ -97,16 +97,30 @@ defmodule ElixirSense.Providers.Suggestion do
     docs_snippets: &Reducers.DocsSnippets.add_snippets/5
   ]
 
-  @decorators [
-    &ElixirSense.Plugins.Ecto.decorate/1
-  ]
-
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context) :: [suggestion()]
-  def find(hint, env, buffer_metadata, cursor_context) do
-    acc = %{result: [], reducers: Keyword.keys(@reducers), context: %{}}
+  @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context, Metadata.module_store()) ::
+          [suggestion()]
+  def find(hint, env, buffer_metadata, cursor_context, module_store) do
+    plugins = Application.get_env(:elixir_sense, :plugins, [ElixirSense.Plugins.Ecto])
+
+    reducers =
+      plugins
+      |> Enum.filter(&:erlang.function_exported(&1, :reduce, 5))
+      |> Enum.map(fn module ->
+        &module.reduce/5
+      end)
+      |> Enum.concat(Keyword.keys(@reducers))
+
+    context =
+      plugins
+      |> Enum.filter(&:erlang.function_exported(&1, :setup, 1))
+      |> Enum.reduce(%{module_store: module_store}, fn plugin, context ->
+        plugin.setup(context)
+      end)
+
+    acc = %{result: [], reducers: reducers, context: context}
 
     %{result: result} =
       Enum.reduce_while(@reducers, acc, fn {key, fun}, acc ->
@@ -118,7 +132,9 @@ defmodule ElixirSense.Providers.Suggestion do
       end)
 
     for item <- result do
-      Enum.reduce(@decorators, item, fn d, item -> d.(item) end)
+      plugins
+      |> Enum.filter(&:erlang.function_exported(&1, :decorate, 1))
+      |> Enum.reduce(item, fn module, item -> module.decorate(item) end)
     end
   end
 end
