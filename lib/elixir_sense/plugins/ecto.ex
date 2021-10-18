@@ -32,9 +32,9 @@ defmodule ElixirSense.Plugins.Ecto do
     {:override, builtin_types ++ custom_types}
   end
 
-  def suggestions(hint, {Ecto.Schema, func, 1, _info}, _chain, _opts)
+  def suggestions(hint, {Ecto.Schema, func, 1, _info}, _chain, opts)
       when func in @schema_funcs do
-    {:override, Schema.find_schemas(hint)}
+    {:override, Schema.find_schemas(hint, opts.module_store)}
   end
 
   def suggestions(hint, {Ecto.Schema, func, 2, %{option: option}}, _, _)
@@ -56,7 +56,7 @@ defmodule ElixirSense.Plugins.Ecto do
     text_before = opts.cursor_context.text_before
 
     if after_in?(hint, text_before) do
-      {:add, Schema.find_schemas(hint)}
+      {:add, Schema.find_schemas(hint, opts.module_store)}
     else
       :ignore
     end
@@ -90,7 +90,12 @@ defmodule ElixirSense.Plugins.Ecto do
         text_before = opts.cursor_context.text_before
         env = opts.env
         buffer_metadata = opts.buffer_metadata
-        schemas = if after_in?(hint, text_before), do: Schema.find_schemas(hint), else: []
+
+        schemas =
+          if after_in?(hint, text_before),
+            do: Schema.find_schemas(hint, opts.module_store),
+            else: []
+
         bindings = Query.extract_bindings(text_before, info, env, buffer_metadata)
         {:add, schemas ++ Query.bindings_suggestions(hint, bindings)}
 

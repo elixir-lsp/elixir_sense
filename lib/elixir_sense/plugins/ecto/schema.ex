@@ -436,8 +436,8 @@ defmodule ElixirSense.Plugins.Ecto.Schema do
     end
   end
 
-  def find_schemas(hint) do
-    for {module, _} <- :code.all_loaded(),
+  def find_schemas(hint, module_store) do
+    for module <- module_store.list,
         function_exported?(module, :__schema__, 1),
         mod_str = inspect(module),
         Util.match_module?(mod_str, hint) do
