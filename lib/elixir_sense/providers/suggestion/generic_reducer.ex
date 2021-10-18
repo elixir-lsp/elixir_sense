@@ -28,17 +28,24 @@ defmodule ElixirSense.Providers.Suggestion.GenericReducer do
   def reduce(reducer, hint, env, buffer_metadata, cursor_context, acc) do
     text_before = cursor_context.text_before
 
+    opts = %{
+      env: env,
+      buffer_metadata: buffer_metadata,
+      cursor_context: cursor_context,
+      module_store: acc.context.module_store
+    }
+
     case Util.func_call_chain(text_before, env, buffer_metadata) do
       [func_call | _] = chain ->
         if :erlang.function_exported(reducer, :suggestions, 4) do
-          reducer.suggestions(hint, func_call, chain, acc) |> handle_suggestions(acc)
+          reducer.suggestions(hint, func_call, chain, opts) |> handle_suggestions(acc)
         else
           {:cont, acc}
         end
 
       [] ->
         if :erlang.function_exported(reducer, :suggestions, 2) do
-          reducer.suggestions(hint, acc) |> handle_suggestions(acc)
+          reducer.suggestions(hint, opts) |> handle_suggestions(acc)
         else
           {:cont, acc}
         end
