@@ -473,7 +473,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     for {{k, nil, nil}, _} <- env.mods_and_funs, do: Atom.to_string(k)
   end
 
-  defp match_module_funs(mod, hint, include_builtin, env) do
+  def match_module_funs(mod, hint, include_builtin, env) do
     falist =
       cond do
         env.mods_and_funs |> Map.has_key?({mod, nil, nil}) ->
@@ -736,33 +736,33 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
             | ElixirSense.Providers.Suggestion.Reducers.Common.attribute()
           ]
-  defp to_entries(%{kind: :field, subtype: subtype, name: name, origin: origin}) do
+  def to_entries(%{kind: :field, subtype: subtype, name: name, origin: origin}) do
     [%{type: :field, name: name, subtype: subtype, origin: origin, call?: true}]
   end
 
-  defp to_entries(%{kind: :module, name: name, desc: {desc, metadata}, subtype: subtype}) do
+  def to_entries(%{kind: :module, name: name, desc: {desc, metadata}, subtype: subtype}) do
     [%{type: :module, name: name, subtype: subtype, summary: desc, metadata: metadata}]
   end
 
-  defp to_entries(%{kind: :variable, name: name}) do
+  def to_entries(%{kind: :variable, name: name}) do
     [%{type: :variable, name: name}]
   end
 
-  defp to_entries(%{kind: :attribute, name: name}) do
+  def to_entries(%{kind: :attribute, name: name}) do
     [%{type: :attribute, name: "@" <> name}]
   end
 
-  defp to_entries(%{
-         kind: :function,
-         name: name,
-         arities: arities,
-         def_arities: def_arities,
-         module: mod,
-         func_kind: func_kind,
-         docs: docs,
-         specs: specs,
-         args: args
-       }) do
+  def to_entries(%{
+        kind: :function,
+        name: name,
+        arities: arities,
+        def_arities: def_arities,
+        module: mod,
+        func_kind: func_kind,
+        docs: docs,
+        specs: specs,
+        args: args
+      }) do
     for e <- Enum.zip([arities, docs, specs, args, def_arities]),
         {a, {doc, metadata}, spec, args, def_arity} = e do
       kind =

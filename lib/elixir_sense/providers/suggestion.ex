@@ -79,7 +79,6 @@ defmodule ElixirSense.Providers.Suggestion do
         }
 
   @reducers [
-    ecto: &ElixirSense.Plugins.Ecto.reduce/5,
     structs_fields: &Reducers.Struct.add_fields/5,
     returns: &Reducers.Returns.add_returns/5,
     callbacks: &Reducers.Callbacks.add_callbacks/5,
@@ -103,9 +102,7 @@ defmodule ElixirSense.Providers.Suggestion do
   @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context, Metadata.module_store()) ::
           [suggestion()]
   def find(hint, env, buffer_metadata, cursor_context, module_store) do
-    plugins =
-      Application.get_env(:elixir_sense, :plugins, [ElixirSense.Plugins.Ecto])
-      |> IO.inspect(label: "DEBUG INFO - Plugins: ")
+    plugins = Application.get_env(:elixir_sense, :plugins, [ElixirSense.Plugins.Ecto])
 
     Enum.each(plugins, &Code.ensure_compiled/1)
 
@@ -113,9 +110,9 @@ defmodule ElixirSense.Providers.Suggestion do
       plugins
       |> Enum.filter(&:erlang.function_exported(&1, :reduce, 5))
       |> Enum.map(fn module ->
-        &module.reduce/5
+        {module, &module.reduce/5}
       end)
-      |> Enum.concat(Keyword.keys(@reducers))
+      |> Enum.concat(@reducers)
 
     context =
       plugins
@@ -124,10 +121,10 @@ defmodule ElixirSense.Providers.Suggestion do
         plugin.setup(context)
       end)
 
-    acc = %{result: [], reducers: reducers, context: context}
+    acc = %{result: [], reducers: Keyword.keys(reducers), context: context}
 
     %{result: result} =
-      Enum.reduce_while(@reducers, acc, fn {key, fun}, acc ->
+      Enum.reduce_while(reducers, acc, fn {key, fun}, acc ->
         if key in acc.reducers do
           fun.(hint, env, buffer_metadata, cursor_context, acc)
         else
