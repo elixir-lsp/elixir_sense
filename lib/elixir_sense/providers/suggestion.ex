@@ -104,6 +104,7 @@ defmodule ElixirSense.Providers.Suggestion do
           [suggestion()]
   def find(hint, env, buffer_metadata, cursor_context, module_store) do
     plugins = Application.get_env(:elixir_sense, :plugins, [ElixirSense.Plugins.Ecto])
+    Enum.each(plugins, &Code.ensure_compiled/1)
 
     reducers =
       plugins
