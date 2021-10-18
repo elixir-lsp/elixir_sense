@@ -10,11 +10,16 @@ defmodule ElixirSense.Core.ModuleStore do
 
   def build(list \\ all_loaded(), module_store \\ %__MODULE__{}) do
     Enum.reduce(list, module_store, fn module, module_store ->
-      module_store = %{module_store | list: [module | module_store.list]}
+      try do
+        module_store = %{module_store | list: [module | module_store.list]}
 
-      module.module_info(:attributes)[:behaviour]
-      |> List.wrap()
-      |> Enum.reduce(module_store, &add_behaviour(module, &1, &2))
+        module.module_info(:attributes)[:behaviour]
+        |> List.wrap()
+        |> Enum.reduce(module_store, &add_behaviour(module, &1, &2))
+      rescue
+        _ ->
+          module_store
+      end
     end)
   end
 
@@ -22,7 +27,7 @@ defmodule ElixirSense.Core.ModuleStore do
     Enum.flat_map(:code.all_loaded(), fn
       {module, _} ->
         try do
-          if :erlang.function_exported(module, :module_info, 0) do
+          if :erlang.function_exported(module, :module_info, 1) do
             [module]
           else
             []
