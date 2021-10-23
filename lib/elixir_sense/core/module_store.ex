@@ -24,21 +24,14 @@ defmodule ElixirSense.Core.ModuleStore do
   end
 
   defp all_loaded do
-    Enum.flat_map(:code.all_loaded(), fn
-      {module, _} ->
-        try do
-          if :erlang.function_exported(module, :module_info, 1) do
-            [module]
-          else
-            []
-          end
-        rescue
-          _ ->
-            []
-        end
-
-      _ ->
-        []
+    ElixirSense.Core.Applications.get_modules_from_applications()
+    |> Enum.filter(fn module ->
+      try do
+        :erlang.function_exported(module, :module_info, 1)
+      rescue
+        _ ->
+          false
+      end
     end)
   end
 
