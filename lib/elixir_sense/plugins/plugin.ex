@@ -1,4 +1,8 @@
 defmodule ElixirSense.Plugin do
+  @moduledoc """
+  A behaviour to implement for adding auto complete and snippets to elixir sense.
+  """
+
   alias ElixirSense.Core.State
   @type suggestion :: ElixirSense.Providers.Suggestion.generic()
 

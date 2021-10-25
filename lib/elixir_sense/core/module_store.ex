@@ -1,9 +1,14 @@
 defmodule ElixirSense.Core.ModuleStore do
+  @moduledoc """
+  Caches the module list and a list of modules keyed by the behaviour they implement.
+  """
   defstruct by_behaviour: %{}, list: []
+
+  alias ElixirSense.Core.Applications
 
   def ensure_compiled(context, module_or_modules) do
     modules = List.wrap(module_or_modules)
-    Enum.map(modules, &Code.ensure_compiled/1)
+    Enum.each(modules, &Code.ensure_compiled/1)
 
     Map.update!(context, :module_store, &build(modules, &1))
   end
@@ -24,7 +29,7 @@ defmodule ElixirSense.Core.ModuleStore do
   end
 
   defp all_loaded do
-    ElixirSense.Core.Applications.get_modules_from_applications()
+    Applications.get_modules_from_applications()
     |> Enum.filter(fn module ->
       try do
         :erlang.function_exported(module, :module_info, 1)
