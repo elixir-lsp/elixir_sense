@@ -43,7 +43,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
                 Introspection.get_callbacks_with_docs(mod),
               def_prefix?(hint, spec) or Matcher.match?("#{name}", hint) do
             desc = Introspection.extract_summary_from_docs(doc)
-            [_, args_str] = Regex.run(Regex.recompile!(~r/.\((.*)\)/), signature)
+            [_, args_str] = Regex.run(~r/.\(([^\)]*)\)/, signature)
 
             args_list =
               args_str
@@ -55,7 +55,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
               subtype: kind,
               name: Atom.to_string(name),
               arity: arity,
-              args: args_str,
+              args: args_str |> String.replace("\n", " "),
               args_list: args_list,
               origin: mod_name,
               summary: desc,
