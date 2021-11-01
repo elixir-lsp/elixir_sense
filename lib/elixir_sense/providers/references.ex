@@ -199,13 +199,15 @@ defmodule ElixirSense.Providers.References do
           attributes: attributes
         } = env = Metadata.get_env(metadata, line)
 
-        candidates = if line > 1 do
-          Metadata.get_calls(metadata, line) ++ Metadata.get_calls(metadata, line - 1)
-        else
-          Metadata.get_calls(metadata, line)
-        end
+        candidates =
+          if line > 1 do
+            Metadata.get_calls(metadata, line) ++ Metadata.get_calls(metadata, line - 1)
+          else
+            Metadata.get_calls(metadata, line)
+          end
 
-        calls = candidates
+        calls =
+          candidates
           |> fix_calls_positions(code)
 
         binding_env = %Binding{

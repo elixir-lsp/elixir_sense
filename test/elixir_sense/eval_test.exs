@@ -58,89 +58,89 @@ defmodule ElixirSense.Evaltest do
       result = ElixirSense.expand_full(buffer, code, 2)
 
       assert result.expand_once =~
-      (if Version.match?(System.version(), "< 1.13.0-dev") do
-               """
-               (
-                 require(Application)
-                 Application.__using__([])
-               )
-               """
-      else
-        """
-        (require Application
-        Application.__using__([]))
-        """
-      end)
+               (if Version.match?(System.version(), "< 1.13.0-dev") do
+                  """
+                  (
+                    require(Application)
+                    Application.__using__([])
+                  )
+                  """
+                else
+                  """
+                  (require Application
+                  Application.__using__([]))
+                  """
+                end)
                |> String.trim()
 
       assert result.expand =~
-      (if Version.match?(System.version(), "< 1.13.0-dev") do
-               """
-               (
-                 require(Application)
-                 Application.__using__([])
-               )
-               """
-      else
-        """
-        (require Application
-        Application.__using__([]))
-        """
-      end)
+               (if Version.match?(System.version(), "< 1.13.0-dev") do
+                  """
+                  (
+                    require(Application)
+                    Application.__using__([])
+                  )
+                  """
+                else
+                  """
+                  (require Application
+                  Application.__using__([]))
+                  """
+                end)
                |> String.trim()
 
       assert result.expand_partial =~
-      (if Version.match?(System.version(), "< 1.13.0-dev") do
-               """
-               (
-                 require(Application)
-                 (
-                   @behaviour(Application)
-                   @doc(false)
-                   def(stop(_state)) do
-                     :ok
-                   end
-                   defoverridable(Application)
-                 )
-               )
-               """
-                  else
-            """
-            (require Application
-            (@behaviour Application
-            @doc false
-            def stop(_state) do
-              :ok
-            end
-            defoverridable Application))
-            """
-                  end)
+               (if Version.match?(System.version(), "< 1.13.0-dev") do
+                  """
+                  (
+                    require(Application)
+                    (
+                      @behaviour(Application)
+                      @doc(false)
+                      def(stop(_state)) do
+                        :ok
+                      end
+                      defoverridable(Application)
+                    )
+                  )
+                  """
+                else
+                  """
+                  (require Application
+                  (@behaviour Application
+                  @doc false
+                  def stop(_state) do
+                    :ok
+                  end
+                  defoverridable Application))
+                  """
+                end)
                |> String.trim()
 
       assert result.expand_all =~
-      (if Version.match?(System.version(), "< 1.13.0-dev") do
-               """
-               (
-                 require(Application)
-                 (
-                   Module.__put_attribute__(MyModule, :behaviour, Application, nil)
-                   Module.__put_attribute__(MyModule, :doc, {0, false}, nil)
-                   def(stop(_state)) do
-                     :ok
-                   end
-                   Module.make_overridable(MyModule, Application)
-               """
-                  else
-            """
-            (require Application
-            (Module.__put_attribute__(MyModule, :behaviour, Application, nil)
-            Module.__put_attribute__(MyModule, :doc, {0, false}, nil)
-            def stop(_state) do
-              :ok
-            end
-            Module.make_overridable(MyModule, Application)))
-            """
-                  end)
+               (if Version.match?(System.version(), "< 1.13.0-dev") do
+                  """
+                  (
+                    require(Application)
+                    (
+                      Module.__put_attribute__(MyModule, :behaviour, Application, nil)
+                      Module.__put_attribute__(MyModule, :doc, {0, false}, nil)
+                      def(stop(_state)) do
+                        :ok
+                      end
+                      Module.make_overridable(MyModule, Application)
+                  """
+                else
+                  """
+                  (require Application
+                  (Module.__put_attribute__(MyModule, :behaviour, Application, nil)
+                  Module.__put_attribute__(MyModule, :doc, {0, false}, nil)
+                  def stop(_state) do
+                    :ok
+                  end
+                  Module.make_overridable(MyModule, Application)))
+                  """
+                end)
                |> String.trim()
     end
 

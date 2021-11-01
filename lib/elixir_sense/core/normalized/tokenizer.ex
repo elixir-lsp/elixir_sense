@@ -29,7 +29,6 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
       # Elixir >= 1.13
       {:error, _, _, _, sofar} ->
         sofar
-
     end
   end
 end

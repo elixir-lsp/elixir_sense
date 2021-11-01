@@ -744,7 +744,8 @@ defmodule ElixirSense.Core.Source do
     })
   end
 
-  defp scan([{kind, pos, value} | tokens], %{count: 1} = state) when kind in [:atom, :atom_quoted] do
+  defp scan([{kind, pos, value} | tokens], %{count: 1} = state)
+       when kind in [:atom, :atom_quoted] do
     scan(tokens, %{state | candidate: [value | state.candidate], pos: update_pos(pos, state.pos)})
   end
 

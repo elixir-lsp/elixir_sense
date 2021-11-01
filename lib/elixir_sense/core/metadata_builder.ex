@@ -1073,7 +1073,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre(
-         {{:., meta1, [{:__aliases__, _, module_expression = [_ | _]}, call]}, meta, params} = ast,
+         {{:., meta1, [{:__aliases__, _, module_expression = [_ | _]}, call]}, meta, params} =
+           ast,
          state
        )
        when is_call(call, params) and is_call_meta(meta) do
