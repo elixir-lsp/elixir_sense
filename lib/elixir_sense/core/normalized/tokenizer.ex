@@ -14,23 +14,21 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
 
   defp do_tokenize_1_7(prefix_charlist) do
     case :elixir_tokenizer.tokenize(prefix_charlist, 1, []) do
+      # Elixir < 1.13
       {:ok, tokens} ->
         Enum.reverse(tokens)
 
-      # [WIP] Elixir 1.13-dev
-      {:ok, _, tokens} ->
-        Enum.reverse(tokens)
-
-      # [WIP] Elixir 1.13-dev
+      # Elixir >= 1.13
       {:ok, _line, _column, _warning, tokens} ->
         Enum.reverse(tokens)
 
+      # Elixir < 1.13
       {:error, {_line, _column, _error_prefix, _token}, _rest, sofar} ->
         sofar
 
-      # [WIP] Elixir 1.13-dev
-      {:error, _, _, _, _} ->
-        []
+      # Elixir >= 1.13
+      {:error, _, _, _, sofar} ->
+        sofar
 
     end
   end
