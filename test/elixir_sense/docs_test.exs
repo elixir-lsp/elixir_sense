@@ -973,7 +973,7 @@ defmodule ElixirSense.DocsTest do
 
     test "issue #34" do
       buffer = """
-      use Mix.Config
+      use Config
 
       config :logger, :console,
         format: "$time $metadata[$level] $message\n"
