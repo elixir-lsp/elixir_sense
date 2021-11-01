@@ -487,8 +487,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 4,
                name: "code_change",
                origin: ":gen_statem",
-               spec:
-                 "@callback code_change" <> _,
+               spec: "@callback code_change" <> _,
                summary: summary,
                type: :callback,
                subtype: :callback

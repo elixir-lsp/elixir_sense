@@ -81,7 +81,12 @@ defmodule ElixirSense.Core.MetadataTest do
              %{name: "func", params: ["list", "par2"], documentation: nil, spec: nil},
              %{name: "func", params: ["par1", "list"], documentation: nil, spec: nil},
              %{name: "func", params: ["arg1", "par2"], documentation: nil, spec: nil},
-             %{name: "func", params: ["tuple", "optional \\\\ true"], documentation: nil, spec: nil}
+             %{
+               name: "func",
+               params: ["tuple", "optional \\\\ true"],
+               documentation: nil,
+               spec: nil
+             }
            ]
   end
 
