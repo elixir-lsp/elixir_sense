@@ -853,7 +853,7 @@ defmodule ElixirSense.SignatureTest do
       end
       """
 
-      assert ElixirSense.signature(code, 2, 24) == %{
+      assert %{
                active_param: 1,
                pipe_before: true,
                signatures: [
@@ -861,7 +861,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "inspect",
                    params: ["item", "opts \\\\ []"],
                    documentation: "Inspects and writes the given `item` to the device.",
-                   spec: "@spec inspect(item, keyword) :: item when item: var"
+                   spec: "@spec inspect(item" <> _
                  },
                  %{
                    name: "inspect",
@@ -871,7 +871,7 @@ defmodule ElixirSense.SignatureTest do
                    spec: "@spec inspect(device, item, keyword) :: item when item: var"
                  }
                ]
-             }
+             } = ElixirSense.signature(code, 2, 24)
     end
 
     test "find built-in functions" do
