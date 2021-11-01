@@ -898,11 +898,11 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp to_var({:%, meta, [name, _]}, _), do: {:%, meta, [name, {:%{}, meta, []}]}
-  defp to_var({name, meta, _}, _) when is_atom(name), do: {name, meta, nil}
   defp to_var([{:->, _, _} | _], _), do: {:function, [], nil}
   defp to_var({:<<>>, _, _}, _), do: {:binary, [], nil}
   defp to_var({:%{}, _, _}, _), do: {:map, [], nil}
   defp to_var({:{}, _, _}, _), do: {:tuple, [], nil}
+  defp to_var({name, meta, _}, _) when is_atom(name), do: {name, meta, nil}
   defp to_var({_, _}, _), do: {:tuple, [], nil}
   defp to_var(integer, _) when is_integer(integer), do: {:integer, [], nil}
   defp to_var(float, _) when is_integer(float), do: {:float, [], nil}
