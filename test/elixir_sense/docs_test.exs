@@ -629,8 +629,7 @@ defmodule ElixirSense.DocsTest do
 
       assert docs =~ """
              ```
-             @callback state_name(:enter, oldStateName :: state_name, data :: data) :: state_enter_result(:state_name)
-             ```\
+             @callback state_name\
              """
     end
 
