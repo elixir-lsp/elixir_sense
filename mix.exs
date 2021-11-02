@@ -42,13 +42,13 @@ defmodule ElixirSense.Mixfile do
   defp docs do
     [
       main: "ElixirSense",
-      nest_modules_by_prefix: [ElixirSense.Core, ElixirSense.Providers, ElixirSense.Server]
+      nest_modules_by_prefix: [ElixirSense.Core, ElixirSense.Providers]
     ]
   end
 
   defp description do
     """
-    An API/Server for Elixir projects that provides context-aware information
+    An API for Elixir projects that provides context-aware information
     for code completion, documentation, go/jump to definition, signature info
     and more.
     """
