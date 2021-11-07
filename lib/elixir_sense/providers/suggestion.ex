@@ -114,7 +114,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
     context =
       plugins
-      |> Enum.filter(&:erlang.function_exported(&1, :setup, 1))
+      |> Enum.filter(&function_exported?(&1, :setup, 1))
       |> Enum.reduce(%{module_store: module_store}, fn plugin, context ->
         plugin.setup(context)
       end)
