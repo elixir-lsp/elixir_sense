@@ -37,7 +37,7 @@ defmodule ElixirSense.Providers.Suggestion.GenericReducer do
 
     case Util.func_call_chain(text_before, env, buffer_metadata) do
       [func_call | _] = chain ->
-        if :erlang.function_exported(reducer, :suggestions, 4) do
+        if function_exported?(reducer, :suggestions, 4) do
           reducer.suggestions(hint, func_call, chain, opts) |> handle_suggestions(acc)
         else
           {:cont, acc}
