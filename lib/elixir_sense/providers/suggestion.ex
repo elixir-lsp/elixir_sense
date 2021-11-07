@@ -106,7 +106,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
     reducers =
       plugins
-      |> Enum.filter(&:erlang.function_exported(&1, :reduce, 5))
+      |> Enum.filter(&function_exported?(&1, :reduce, 5))
       |> Enum.map(fn module ->
         {module, &module.reduce/5}
       end)
