@@ -32,7 +32,7 @@ defmodule ElixirSense.Core.ModuleStore do
     Applications.get_modules_from_applications()
     |> Enum.filter(fn module ->
       try do
-        :erlang.function_exported(module, :module_info, 1)
+        function_exported?(module, :module_info, 1)
       rescue
         _ ->
           false
