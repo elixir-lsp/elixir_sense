@@ -44,7 +44,7 @@ defmodule ElixirSense.Providers.Suggestion.GenericReducer do
         end
 
       [] ->
-        if :erlang.function_exported(reducer, :suggestions, 2) do
+        if function_exported?(reducer, :suggestions, 2) do
           reducer.suggestions(hint, opts) |> handle_suggestions(acc)
         else
           {:cont, acc}
