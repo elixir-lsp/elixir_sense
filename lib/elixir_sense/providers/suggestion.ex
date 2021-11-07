@@ -132,7 +132,7 @@ defmodule ElixirSense.Providers.Suggestion do
 
     for item <- result do
       plugins
-      |> Enum.filter(&:erlang.function_exported(&1, :decorate, 1))
+      |> Enum.filter(&function_exported?(&1, :decorate, 1))
       |> Enum.reduce(item, fn module, item -> module.decorate(item) end)
     end
   end
