@@ -42,6 +42,7 @@ defmodule ElixirSense.Providers.Suggestion do
   """
 
   alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.ModuleStore
   alias ElixirSense.Core.State
   alias ElixirSense.Providers.Suggestion.Reducers
 
@@ -99,7 +100,7 @@ defmodule ElixirSense.Providers.Suggestion do
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context, Metadata.module_store()) ::
+  @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context, ModuleStore.t()) ::
           [suggestion()]
   def find(hint, env, buffer_metadata, cursor_context, module_store) do
     plugins = module_store.by_behaviour[ElixirSense.Plugin] || []

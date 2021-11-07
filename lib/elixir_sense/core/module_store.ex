@@ -4,6 +4,8 @@ defmodule ElixirSense.Core.ModuleStore do
   """
   defstruct by_behaviour: %{}, list: []
 
+  @type t :: %__MODULE__{by_behaviour: %{optional(atom) => module}, list: list(module)}
+
   alias ElixirSense.Core.Applications
 
   def ensure_compiled(context, module_or_modules) do
