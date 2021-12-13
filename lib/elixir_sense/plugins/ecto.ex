@@ -1,14 +1,21 @@
 defmodule ElixirSense.Plugins.Ecto do
   @moduledoc false
 
+  alias ElixirSense.Core.ModuleStore
   alias ElixirSense.Core.Source
   alias ElixirSense.Plugins.Ecto.Query
   alias ElixirSense.Plugins.Ecto.Schema
   alias ElixirSense.Plugins.Ecto.Types
 
+  @behaviour ElixirSense.Plugin
   use ElixirSense.Providers.Suggestion.GenericReducer
 
   @schema_funcs [:field, :belongs_to, :has_one, :has_many, :many_to_many]
+
+  @impl true
+  def setup(context) do
+    ModuleStore.ensure_compiled(context, Ecto.UUID)
+  end
 
   @impl true
   def suggestions(hint, {Ecto.Migration, :add, 1, _info}, _chain, opts) do
@@ -20,14 +27,14 @@ defmodule ElixirSense.Plugins.Ecto do
 
   def suggestions(hint, {Ecto.Schema, :field, 1, _info}, _chain, opts) do
     builtin_types = Types.find_builtin_types(hint, opts.cursor_context)
-    custom_types = Types.find_custom_types(hint)
+    custom_types = Types.find_custom_types(hint, opts.module_store)
 
     {:override, builtin_types ++ custom_types}
   end
 
-  def suggestions(hint, {Ecto.Schema, func, 1, _info}, _chain, _opts)
+  def suggestions(hint, {Ecto.Schema, func, 1, _info}, _chain, opts)
       when func in @schema_funcs do
-    {:override, Schema.find_schemas(hint)}
+    {:override, Schema.find_schemas(hint, opts.module_store)}
   end
 
   def suggestions(hint, {Ecto.Schema, func, 2, %{option: option}}, _, _)
@@ -49,7 +56,7 @@ defmodule ElixirSense.Plugins.Ecto do
     text_before = opts.cursor_context.text_before
 
     if after_in?(hint, text_before) do
-      {:add, Schema.find_schemas(hint)}
+      {:add, Schema.find_schemas(hint, opts.module_store)}
     else
       :ignore
     end
@@ -83,7 +90,12 @@ defmodule ElixirSense.Plugins.Ecto do
         text_before = opts.cursor_context.text_before
         env = opts.env
         buffer_metadata = opts.buffer_metadata
-        schemas = if after_in?(hint, text_before), do: Schema.find_schemas(hint), else: []
+
+        schemas =
+          if after_in?(hint, text_before),
+            do: Schema.find_schemas(hint, opts.module_store),
+            else: []
+
         bindings = Query.extract_bindings(text_before, info, env, buffer_metadata)
         {:add, schemas ++ Query.bindings_suggestions(hint, bindings)}
 
@@ -96,6 +108,7 @@ defmodule ElixirSense.Plugins.Ecto do
   end
 
   # Adds customized snippet for `Ecto.Schema.schema/2`
+  @impl true
   def decorate(%{origin: "Ecto.Schema", name: "schema", arity: 2} = item) do
     snippet = """
     schema "$1" do

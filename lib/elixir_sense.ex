@@ -9,6 +9,7 @@ defmodule ElixirSense do
   alias ElixirSense.Core.Applications
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.ModuleStore
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
@@ -201,6 +202,7 @@ defmodule ElixirSense do
       maybe_fix_autocomple_on_cursor(buffer_file_metadata, text_before, text_after, line)
 
     env = Metadata.get_env(buffer_file_metadata, line)
+    module_store = ModuleStore.build()
 
     cursor_context = %{
       text_before: text_before,
@@ -208,7 +210,7 @@ defmodule ElixirSense do
       at_module_body?: Metadata.at_module_body?(buffer_file_metadata, env)
     }
 
-    Suggestion.find(hint, env, buffer_file_metadata, cursor_context)
+    Suggestion.find(hint, env, buffer_file_metadata, cursor_context, module_store)
   end
 
   @doc """

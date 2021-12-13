@@ -42,6 +42,7 @@ defmodule ElixirSense.Providers.Suggestion do
   """
 
   alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.ModuleStore
   alias ElixirSense.Core.State
   alias ElixirSense.Providers.Suggestion.Reducers
 
@@ -79,7 +80,6 @@ defmodule ElixirSense.Providers.Suggestion do
         }
 
   @reducers [
-    ecto: &ElixirSense.Plugins.Ecto.reduce/5,
     structs_fields: &Reducers.Struct.add_fields/5,
     returns: &Reducers.Returns.add_returns/5,
     callbacks: &Reducers.Callbacks.add_callbacks/5,
@@ -97,19 +97,33 @@ defmodule ElixirSense.Providers.Suggestion do
     docs_snippets: &Reducers.DocsSnippets.add_snippets/5
   ]
 
-  @decorators [
-    &ElixirSense.Plugins.Ecto.decorate/1
-  ]
-
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context) :: [suggestion()]
-  def find(hint, env, buffer_metadata, cursor_context) do
-    acc = %{result: [], reducers: Keyword.keys(@reducers), context: %{}}
+  @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context, ModuleStore.t()) ::
+          [suggestion()]
+  def find(hint, env, buffer_metadata, cursor_context, module_store) do
+    plugins = module_store.by_behaviour[ElixirSense.Plugin] || []
+
+    reducers =
+      plugins
+      |> Enum.filter(&function_exported?(&1, :reduce, 5))
+      |> Enum.map(fn module ->
+        {module, &module.reduce/5}
+      end)
+      |> Enum.concat(@reducers)
+
+    context =
+      plugins
+      |> Enum.filter(&function_exported?(&1, :setup, 1))
+      |> Enum.reduce(%{module_store: module_store}, fn plugin, context ->
+        plugin.setup(context)
+      end)
+
+    acc = %{result: [], reducers: Keyword.keys(reducers), context: context}
 
     %{result: result} =
-      Enum.reduce_while(@reducers, acc, fn {key, fun}, acc ->
+      Enum.reduce_while(reducers, acc, fn {key, fun}, acc ->
         if key in acc.reducers do
           fun.(hint, env, buffer_metadata, cursor_context, acc)
         else
@@ -118,7 +132,9 @@ defmodule ElixirSense.Providers.Suggestion do
       end)
 
     for item <- result do
-      Enum.reduce(@decorators, item, fn d, item -> d.(item) end)
+      plugins
+      |> Enum.filter(&function_exported?(&1, :decorate, 1))
+      |> Enum.reduce(item, fn module, item -> module.decorate(item) end)
     end
   end
 end

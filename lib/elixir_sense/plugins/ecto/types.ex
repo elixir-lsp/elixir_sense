@@ -46,11 +46,8 @@ defmodule ElixirSense.Plugins.Ecto.Types do
     end
   end
 
-  def find_custom_types(hint) do
-    _ = Code.ensure_compiled(Ecto.UUID)
-
-    for {module, _} <- :code.all_loaded(),
-        Ecto.Type in (module.module_info(:attributes)[:behaviour] || []),
+  def find_custom_types(hint, module_store) do
+    for module <- Map.get(module_store.by_behaviour, Ecto.Type, []),
         type_str = inspect(module),
         Util.match_module?(type_str, hint) do
       custom_type_to_suggestion(module, hint)

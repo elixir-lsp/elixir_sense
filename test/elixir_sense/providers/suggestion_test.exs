@@ -21,10 +21,17 @@ defmodule ElixirSense.Providers.SuggestionTest do
   }
 
   @cursor_context %{text_before: "", text_after: ""}
+  @module_store %ElixirSense.Core.ModuleStore{}
 
   test "find definition of built-in functions" do
     result =
-      Suggestion.find("ElixirSenseExample.EmptyModule.", @env, %Metadata{}, @cursor_context)
+      Suggestion.find(
+        "ElixirSenseExample.EmptyModule.",
+        @env,
+        %Metadata{},
+        @cursor_context,
+        @module_store
+      )
 
     assert result |> Enum.at(0) == %{
              args: "atom",
@@ -95,7 +102,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                summary: "Produces a new list by " <> _,
                type: :function
              }
-           ] = Suggestion.find("List.del", @env, %Metadata{}, @cursor_context)
+           ] = Suggestion.find("List.del", @env, %Metadata{}, @cursor_context, @module_store)
   end
 
   test "return completion candidates for module with alias" do
@@ -123,12 +130,19 @@ defmodule ElixirSense.Providers.SuggestionTest do
                "MyList.del",
                %{@env | aliases: [{MyList, List}]},
                %Metadata{},
-               @cursor_context
+               @cursor_context,
+               @module_store
              )
   end
 
   test "return completion candidates for functions from import" do
-    assert Suggestion.find("say", %{@env | imports: [MyModule]}, %Metadata{}, @cursor_context) ==
+    assert Suggestion.find(
+             "say",
+             %{@env | imports: [MyModule]},
+             %Metadata{},
+             @cursor_context,
+             @module_store
+           ) ==
              [
                %{
                  args: "",
@@ -154,7 +168,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
         "module_",
         @env,
         %Metadata{},
-        @cursor_context
+        @cursor_context,
+        @module_store
       )
       |> Enum.filter(fn item -> item.type in [:function] end)
 
@@ -163,7 +178,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
 
   test "empty hint should not return built-in functions" do
     suggestions_names =
-      Suggestion.find("", @env, %Metadata{}, @cursor_context)
+      Suggestion.find("", @env, %Metadata{}, @cursor_context, @module_store)
       |> Enum.filter(&Map.has_key?(&1, :name))
       |> Enum.map(& &1.name)
 
@@ -191,7 +206,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
                "ElixirSenseExample.FunctionsWithTheSameName.all",
                @env,
                %Metadata{},
-               @cursor_context
+               @cursor_context,
+               @module_store
              )
   end
 
@@ -216,7 +232,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
                "ElixirSenseExample.FunctionsWithTheSameName.conca",
                @env,
                %Metadata{},
-               @cursor_context
+               @cursor_context,
+               @module_store
              )
   end
 
@@ -230,7 +247,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
                "%ElixirSense.Providers.SuggestionTest.MyStr",
                @env_func,
                %Metadata{},
-               @cursor_context
+               @cursor_context,
+               @module_store
              )
   end
 
@@ -240,7 +258,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
                "f = &Enum.al",
                @env_func,
                %Metadata{},
-               @cursor_context
+               @cursor_context,
+               @module_store
              )
   end
 
@@ -250,7 +269,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
                "x.Foo.get_by",
                @env_func,
                %Metadata{},
-               @cursor_context
+               @cursor_context,
+               @module_store
              )
   end
 
@@ -269,7 +289,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
                    }
                  }
                },
-               @cursor_context
+               @cursor_context,
+               @module_store
              )
 
     assert [%{type: :module, name: "SomeModule"} | _] =
@@ -281,7 +302,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
                    {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
                  }
                },
-               @cursor_context
+               @cursor_context,
+               @module_store
              )
   end
 
@@ -298,7 +320,8 @@ defmodule ElixirSense.Providers.SuggestionTest do
                    {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
                  }
                },
-               %{text_before: "%SomeModule{st", text_after: ""}
+               %{text_before: "%SomeModule{st", text_after: ""},
+               @module_store
              )
   end
 end
