@@ -22,7 +22,7 @@ defmodule ElixirSense.Core.ModuleStore do
 
         module.module_info(:attributes)
         |> Enum.flat_map(fn
-          {:behaviour, behaviours} when ->
+          {:behaviour, behaviours} when is_list(behaviours) ->
             behaviours
 
           _ ->
