@@ -34,7 +34,7 @@ defmodule ElixirSense.Core.ModuleStore do
     Applications.get_modules_from_applications()
     |> Enum.filter(fn module ->
       try do
-        Code.ensure_compiled(module)
+        _ = Code.ensure_compiled(module)
         function_exported?(module, :module_info, 0)
       rescue
         _ ->
