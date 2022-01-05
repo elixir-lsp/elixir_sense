@@ -23,11 +23,14 @@ jobs:
           - elixir: 1.12.x
             otp: 22.3.4.19
             tests_may_fail: false
-          - elixir: 1.12.x
+          - elixir: 1.13.x
+            otp: 22.3.4.19
+            tests_may_fail: false
+          - elixir: 1.13.x
             otp: 23.3.x
             tests_may_fail: false
-          - elixir: 1.12.x
-            otp: 24.0.x
+          - elixir: 1.13.x
+            otp: 24.2.x
             tests_may_fail: false
             warnings_as_errors: true
             check_formatted: true
