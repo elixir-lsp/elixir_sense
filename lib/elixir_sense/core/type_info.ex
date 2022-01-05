@@ -244,11 +244,14 @@ defmodule ElixirSense.Core.TypeInfo do
     line_length = opts[:line_length] || @doc_spec_line_length
     kind_size = kind |> to_string() |> String.length()
 
-    spec_ast
+    {sanitized, original} = sanitize_type_name(spec_ast)
+
+    sanitized
     |> Macro.to_string()
     |> (&"@#{kind} #{&1}").()
     |> Code.format_string!(line_length: line_length)
     |> to_string()
+    |> String.replace("__replace_me__", "#{original}")
     |> Source.split_lines()
     |> Enum.with_index()
     |> Enum.map(fn
@@ -256,6 +259,14 @@ defmodule ElixirSense.Core.TypeInfo do
       {l, _} -> l
     end)
     |> Enum.join("\n")
+  end
+
+  defp sanitize_type_name({:"::", meta1, [{type, meta2, args}, rest]}) do
+    {{:"::", meta1, [{:__replace_me__, meta2, args}, rest]}, type}
+  end
+
+  defp sanitize_type_name({type, meta, args}) do
+    {{:__replace_me__, meta, args}, type}
   end
 
   @spec get_type_docs(module, atom) :: [ElixirSense.Core.Normalized.Code.doc_entry_t()]
