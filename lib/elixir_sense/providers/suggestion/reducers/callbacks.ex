@@ -55,7 +55,11 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
               subtype: kind,
               name: Atom.to_string(name),
               arity: arity,
-              args: args_str |> String.replace("\n", " "),
+              args:
+                args_str
+                |> String.replace("\n", " ")
+                |> String.split(",")
+                |> Enum.map_join(", ", &String.trim/1),
               args_list: args_list,
               origin: mod_name,
               summary: desc,

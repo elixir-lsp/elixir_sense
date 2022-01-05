@@ -182,8 +182,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: summary,
                    name: "time_unit",
                    params: [],
-                   spec:
-                     "@type time_unit :: pos_integer | :second | :millisecond | :microsecond | :nanosecond | :native | :perf_counter | deprecated_time_unit"
+                   spec: "@type time_unit ::" <> _
                  }
                ]
              } = ElixirSense.signature(code, 2, 32)
@@ -782,8 +781,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "terminate",
                    params: ["_reason", "_state"],
                    documentation: "Invoked when the server is about to exit" <> _,
-                   spec:
-                     "@spec terminate(reason, state :: term) :: term when reason: :normal | :shutdown | {:shutdown, term} | term"
+                   spec: "@spec terminate(reason, state :: term) :: term" <> _
                  }
                ]
              } = ElixirSense.signature(code, 5, 15)
@@ -815,8 +813,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "init",
                    params: ["arg"],
                    documentation: summary,
-                   spec:
-                     "@spec init(args :: term) :: {:ok, state :: term} | {:ok, state :: term, timeout | :hibernate | {:continue, term}} | {:stop, reason :: term} | :ignore"
+                   spec: "@spec init(args :: term) ::" <> _
                  }
                ]
              } = ElixirSense.signature(code, 5, 10)
@@ -861,7 +858,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "inspect",
                    params: ["item", "opts \\\\ []"],
                    documentation: "Inspects and writes the given `item` to the device.",
-                   spec: "@spec inspect(item" <> _
+                   spec: "@spec inspect(" <> _
                  },
                  %{
                    name: "inspect",
@@ -1047,15 +1044,13 @@ defmodule ElixirSense.SignatureTest do
                    documentation: summary1,
                    name: "cancel_timer",
                    params: ["timerRef"],
-                   spec:
-                     "@spec cancel_timer(timerRef) :: result when timerRef: reference, time: non_neg_integer, result: time | false"
+                   spec: "@spec cancel_timer(timerRef) :: result" <> _
                  },
                  %{
                    documentation: summary2,
                    name: "cancel_timer",
                    params: ["timerRef", "options"],
-                   spec:
-                     "@spec cancel_timer(timerRef, options) :: result | :ok when timerRef: reference, async: boolean, info: boolean, option: {:async, async} | {:info, info}, options: [option], time: non_neg_integer, result: time | false"
+                   spec: "@spec cancel_timer(timerRef, options) :: result" <> _
                  }
                ]
              } = ElixirSense.signature(buffer, 4, 24)

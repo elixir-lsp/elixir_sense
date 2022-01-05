@@ -685,7 +685,7 @@ defmodule ElixirSense.SuggestionsTest do
       ElixirSense.suggestions(buffer, 5, 5)
       |> Enum.filter(fn s -> s.type == :return end)
 
-    assert list == [
+    assert [
              %{
                description: "{:reply, reply, new_state}",
                snippet: "{:reply, \"${1:reply}$\", \"${2:new_state}$\"}",
@@ -697,8 +697,7 @@ defmodule ElixirSense.SuggestionsTest do
                  "{:reply, reply, new_state, timeout | :hibernate | {:continue, term}}",
                snippet:
                  "{:reply, \"${1:reply}$\", \"${2:new_state}$\", \"${3:timeout | :hibernate | {:continue, term}}$\"}",
-               spec:
-                 "{:reply, reply, new_state, timeout | :hibernate | {:continue, term}} when reply: term, new_state: term, reason: term",
+               spec: "{:reply, reply, new_state, timeout | :hibernate | {:continue, term}}" <> _,
                type: :return
              },
              %{
@@ -711,8 +710,7 @@ defmodule ElixirSense.SuggestionsTest do
                description: "{:noreply, new_state, timeout | :hibernate | {:continue, term}}",
                snippet:
                  "{:noreply, \"${1:new_state}$\", \"${2:timeout | :hibernate | {:continue, term}}$\"}",
-               spec:
-                 "{:noreply, new_state, timeout | :hibernate | {:continue, term}} when reply: term, new_state: term, reason: term",
+               spec: "{:noreply, new_state, timeout | :hibernate | {:continue, term}}" <> _,
                type: :return
              },
              %{
@@ -728,7 +726,7 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "{:stop, reason, new_state} when reply: term, new_state: term, reason: term",
                type: :return
              }
-           ]
+           ] = list
   end
 
   test "lists macro return values" do
@@ -840,8 +838,7 @@ defmodule ElixirSense.SuggestionsTest do
                metadata: %{},
                name: "terminate",
                origin: "MyServer",
-               spec:
-                 "@spec terminate(reason, state :: term) :: term when reason: :normal | :shutdown | {:shutdown, term} | term",
+               spec: "@spec terminate(reason, state :: term) :: term" <> _,
                summary:
                  "Invoked when the server is about to exit. It should do any cleanup required.",
                type: :function,

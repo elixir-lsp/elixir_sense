@@ -1423,8 +1423,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
              %{
                arity: 1,
                name: "cancel_timer",
-               spec:
-                 "@spec cancel_timer(timerRef) :: result when timerRef: reference, time: non_neg_integer, result: time | false",
+               spec: "@spec cancel_timer(timerRef) :: result" <> _,
                type: :function,
                args: "timerRef",
                origin: ":erlang",
@@ -1433,8 +1432,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
              %{
                arity: 2,
                name: "cancel_timer",
-               spec:
-                 "@spec cancel_timer(timerRef, options) :: result | :ok when timerRef: reference, async: boolean, info: boolean, option: {:async, async} | {:info, info}, options: [option], time: non_neg_integer, result: time | false",
+               spec: "@spec cancel_timer(timerRef, options) :: result | :ok" <> _,
                type: :function,
                args: "timerRef, options",
                origin: ":erlang",
