@@ -1001,18 +1001,16 @@ defmodule ElixirSense.Core.State do
   defp merge_type(old, new), do: {:intersection, [old, new]}
 
   def get_closest_previous_env(%__MODULE__{} = metadata, line) do
-    # Elixir 1.10 introduces a breaking change in Enum.max_by
-    try do
-      metadata.lines_to_env
-      |> Enum.max_by(fn
+    metadata.lines_to_env
+    |> Enum.max_by(
+      fn
         {env_line, _} when env_line < line -> env_line
         _ -> 0
-      end)
-      |> elem(1)
-    rescue
-      Enum.EmptyError ->
-        default_env()
-    end
+      end,
+      &>=/2,
+      fn -> {0, default_env()} end
+    )
+    |> elem(1)
   end
 
   def default_env, do: %ElixirSense.Core.State.Env{}

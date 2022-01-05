@@ -1132,40 +1132,40 @@ defmodule ElixirSense.SuggestionsTest do
   end
 
   test "lists vars in unfinished heredoc interpolation" do
-      buffer = """
-      defmodule MyServer do
-        x = 4
-        \"\"\"
-        abc\#{
-        \"\"\"
+    buffer = """
+    defmodule MyServer do
+      x = 4
+      \"\"\"
+      abc\#{
+      \"\"\"
 
-      end
-      """
+    end
+    """
 
-      list =
-        ElixirSense.suggestions(buffer, 4, 8)
-        |> Enum.filter(fn s -> s.type == :variable end)
+    list =
+      ElixirSense.suggestions(buffer, 4, 8)
+      |> Enum.filter(fn s -> s.type == :variable end)
 
-      assert list == [
-               %{name: "x", type: :variable}
-             ]
+    assert list == [
+             %{name: "x", type: :variable}
+           ]
 
-      buffer = """
-      defmodule MyServer do
-        x = 4
-        \"\"\"
-        abc\#{
+    buffer = """
+    defmodule MyServer do
+      x = 4
+      \"\"\"
+      abc\#{
 
-      end
-      """
+    end
+    """
 
-      list =
-        ElixirSense.suggestions(buffer, 4, 8)
-        |> Enum.filter(fn s -> s.type == :variable end)
+    list =
+      ElixirSense.suggestions(buffer, 4, 8)
+      |> Enum.filter(fn s -> s.type == :variable end)
 
-      assert list == [
-               %{name: "x", type: :variable}
-             ]
+    assert list == [
+             %{name: "x", type: :variable}
+           ]
 
     buffer = """
     defmodule MyServer do
