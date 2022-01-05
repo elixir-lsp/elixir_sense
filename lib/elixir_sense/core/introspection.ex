@@ -1442,7 +1442,13 @@ defmodule ElixirSense.Core.Introspection do
     |> Enum.uniq()
     |> Enum.filter(fn mod ->
       Code.ensure_loaded?(mod) and
-        behaviour in List.wrap(mod.module_info(:attributes)[:behaviour])
+        behaviour in Enum.flat_map(mod.module_info(:attributes), fn
+          {:behaviour, behaviours} when is_list(behaviours) ->
+            behaviours
+
+          _ ->
+            []
+        end)
     end)
   end
 end
