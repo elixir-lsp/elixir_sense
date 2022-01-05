@@ -2726,7 +2726,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "local_t(atom(), integer())"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
-      assert suggestion.expanded_spec == "@type local_t(a, b) :: {a, b}"
+      assert suggestion.expanded_spec =~ "@type local_t(a, b) ::"
     end
 
     test "basic type" do
@@ -2771,7 +2771,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "keyword(term())"
       assert suggestion.origin == ""
-      assert suggestion.expanded_spec == "@type keyword(t) :: [{atom(), t}]"
+      assert suggestion.expanded_spec =~ "@type keyword(t) ::"
       assert suggestion.doc == "A keyword list with values of type `t`"
     end
 
@@ -2794,7 +2794,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "list_t()"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Local"
-      assert suggestion.expanded_spec == "@type list_t() :: [:trace | :log]"
+      assert suggestion.expanded_spec =~ "@type list_t() ::"
     end
 
     test "remote type" do
@@ -2815,7 +2815,7 @@ defmodule ElixirSense.SuggestionsTest do
                "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t(atom(), integer())"
 
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
-      assert suggestion.expanded_spec == "@type remote_t(a, b) :: {a, b}"
+      assert suggestion.expanded_spec =~ "@type remote_t(a, b) ::"
       assert suggestion.doc == "Remote type with params"
     end
 
@@ -3026,7 +3026,7 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion_1.doc == "Remote type"
       assert suggestion_1.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
 
-      assert suggestion_2.spec == "@type remote_t(a, b) :: {a, b}"
+      assert suggestion_2.spec =~ "@type remote_t(a, b) ::"
       assert suggestion_2.signature == "remote_t(a, b)"
       assert suggestion_2.arity == 2
       assert suggestion_2.doc == "Remote type with params"
@@ -3189,11 +3189,11 @@ defmodule ElixirSense.SuggestionsTest do
                  name: "some_type_doc_false",
                  origin: "ElixirSenseExample.ModuleWithDocs",
                  signature: "some_type_doc_false()",
-                 spec: "@type some_type_doc_false() ::\n  integer()",
+                 spec: "@type some_type_doc_false() ::" <> _,
                  type: :type_spec,
                  metadata: %{}
                }
-             ] == suggestions
+             ] = suggestions
     end
 
     test "local types from metadata" do

@@ -487,7 +487,7 @@ defmodule ElixirSense.DocsTest do
 
       if ExUnitConfig.erlang_eep48_supported() do
         assert docs =~ """
-               By convention, most Built\\-In Functions \\(BIFs\\) are included in this module\
+               By convention,\
                """
       end
     end
