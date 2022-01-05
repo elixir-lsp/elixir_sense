@@ -20,8 +20,14 @@ defmodule ElixirSense.Core.ModuleStore do
       try do
         module_store = %{module_store | list: [module | module_store.list]}
 
-        module.module_info(:attributes)[:behaviour]
-        |> List.wrap()
+        module.module_info(:attributes)
+        |> Enum.flat_map(fn
+          {:behaviour, behaviours} when is_list(behaviours) ->
+            behaviours
+
+          _ ->
+            []
+        end)
         |> Enum.reduce(module_store, &add_behaviour(module, &1, &2))
       rescue
         _ ->
