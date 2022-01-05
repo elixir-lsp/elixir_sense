@@ -25,7 +25,7 @@ jobs:
             tests_may_fail: false
           - elixir: 1.13.x
             otp: 22.3.4.19
-            tests_may_fail: false
+            tests_may_fail: true
           - elixir: 1.13.x
             otp: 23.3.x
             tests_may_fail: false
