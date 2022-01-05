@@ -149,7 +149,7 @@ defmodule ElixirSense.Providers.References do
     calls =
       calls()
       |> Enum.filter(caller_filter(mfa))
-      |> fix_caller_module()
+      |> Enum.uniq()
 
     arity =
       case mfa do
@@ -315,13 +315,6 @@ defmodule ElixirSense.Providers.References do
         end: %{line: line, column: column + String.length(subject)}
       }
     }
-  end
-
-  # For Elixir < v1.10.0
-  defp fix_caller_module(calls) do
-    calls
-    |> Enum.map(fn c -> Map.delete(c, :caller_module) end)
-    |> Enum.uniq()
   end
 
   defp fix_calls_positions(calls, code) do
