@@ -31,13 +31,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
             when is_atom(call) and is_list(params) and
                    call not in [:., :__aliases__, :"::", :{}, :|>]
 
-  # pre elixir 1.10 format
-  defguard is_call_meta_pre_1_10(list)
+  defguard is_call_meta_simple(list)
            when elem(hd(list), 0) == :line and elem(hd(tl(list)), 0) == :column
 
   defguard is_call_meta(list)
-           when (elem(hd(list), 0) == :no_parens and is_call_meta_pre_1_10(tl(list))) or
-                  is_call_meta_pre_1_10(list)
+           when (elem(hd(list), 0) == :no_parens and is_call_meta_simple(tl(list))) or
+                  is_call_meta_simple(list)
 
   @doc """
   Traverses the AST building/retrieving the environment information.
