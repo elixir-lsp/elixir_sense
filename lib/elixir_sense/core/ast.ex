@@ -224,22 +224,6 @@ defmodule ElixirSense.Core.Ast do
      %{acc | types: [{name, get_args(args), typespec_to_string(kind, spec), kind} | acc.types]}}
   end
 
-  # Elixir < 1.9
-  defp pre_walk_expanded(
-         {{:., _, [Module, :put_attribute]}, _, [_module, :behaviour, behaviour | _]},
-         acc
-       ) do
-    {nil, %{acc | behaviours: [behaviour | acc.behaviours]}}
-  end
-
-  defp pre_walk_expanded(
-         {{:., _, [Module, :put_attribute]}, _, [_module, attribute | _]},
-         acc
-       ) do
-    {nil, %{acc | attributes: [attribute | acc.attributes]}}
-  end
-
-  # Elixir >= 1.9
   defp pre_walk_expanded(
          {{:., _, [Module, :__put_attribute__]}, _, [_module, :behaviour, behaviour | _]},
          acc

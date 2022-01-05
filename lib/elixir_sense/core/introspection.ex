@@ -1063,15 +1063,7 @@ defmodule ElixirSense.Core.Introspection do
       ) do
     "MACRO-" <> rest = Atom.to_string(name)
 
-    # Prior to 1.10 elixir generated invalid specs for macros and macrocallbacks with `when`
-    # https://github.com/elixir-lang/elixir/issues/9687
-    sub =
-      if Version.match?(System.version(), ">= 1.10.0") do
-        [{String.to_atom(rest), info2, rest_args |> tl}, ret]
-      else
-        # specs is missing first argument of type term so nothing to drop here
-        [{String.to_atom(rest), info2, rest_args}, ret]
-      end
+    sub = [{String.to_atom(rest), info2, rest_args |> tl}, ret]
 
     {:when, info3, [{:"::", info, sub}, var_params]}
   end
