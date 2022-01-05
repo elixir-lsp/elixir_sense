@@ -254,11 +254,10 @@ defmodule ElixirSense.Core.TypeInfo do
     |> String.replace("__replace_me__", "#{original}")
     |> Source.split_lines()
     |> Enum.with_index()
-    |> Enum.map(fn
+    |> Enum.map_join("\n", fn
       {l, i} when i > 0 -> String.slice(l, (kind_size + 2)..-1)
       {l, _} -> l
     end)
-    |> Enum.join("\n")
   end
 
   defp sanitize_type_name({:"::", meta1, [{type, meta2, args}, rest]}) do

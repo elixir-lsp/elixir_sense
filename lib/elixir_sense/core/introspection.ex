@@ -670,8 +670,7 @@ defmodule ElixirSense.Core.Introspection do
       if parts.returns != [] do
         returns_str =
           parts.returns
-          |> Enum.map(&Macro.to_string(&1))
-          |> Enum.join(" |\n  ")
+          |> Enum.map_join(" |\n  ", &Macro.to_string(&1))
 
         case length(parts.returns) do
           1 -> " :: #{returns_str}#{when_str}"

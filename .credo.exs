@@ -152,6 +152,7 @@
         {Credo.Check.Refactor.ModuleDependencies, false},
         {Credo.Check.Refactor.VariableRebinding, false},
         {Credo.Check.Warning.MapGetUnsafePass, false},
+        {Credo.Check.Warning.SpecWithStruct, false},
         {Credo.Check.Warning.UnsafeToAtom, false}
 
         #
