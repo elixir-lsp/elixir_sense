@@ -294,6 +294,43 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
     assert [%{name: "printable?", arity: 1}, %{name: "printable?", arity: 2}] =
              expand('String.printable?/')
+
+    assert [%{
+      name: "count", arity: 1}, %{
+        name: "count", arity: 2}, %{
+          name: "count_until", arity: 2}, %{
+            name: "count_until", arity: 3}] = expand('Enum.count')
+
+    assert [%{
+      name: "count", arity: 1}, %{
+        name: "count", arity: 2}] = expand('Enum.count/')
+  end
+
+  test "operator completion" do
+    assert [%{name: "+", arity: 1}, %{name: "+", arity: 2}, %{name: "++", arity: 2}] = expand('+')
+    assert [%{name: "+", arity: 1}, %{name: "+", arity: 2}] = expand('+/')
+    assert [%{name: "++", arity: 2}] = expand('++/')
+  end
+
+  test "sigil completion" do
+    sigils = expand('~')
+    assert sigils |> Enum.any?(fn s -> s.name == "C" end)
+    # We choose not to provide sigil quotations
+    # {:yes, '', sigils} = expand('~r')
+    # assert '"' in sigils
+    # assert '(' in sigils
+    assert [] == expand('~r')
+
+    # eval("import Bitwise")
+    env = %Env{
+      imports: [Bitwise]
+    }
+    sigils = expand('~', env)
+    assert sigils |> Enum.any?(fn s -> s.name == "~~~" and s.arity == 1 end)
+
+    # assert [] = expand('~~', env)
+    assert [%{name: "~~~", arity: 1}] = expand('~~', env)
+    assert [%{name: "~~~", arity: 1}] = expand('~~~', env)
   end
 
   test "function completion using a variable bound to a module" do
@@ -1003,11 +1040,30 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     defstruct [:my_val, :some_map, :a_mod, :str, :unknown_str]
   end
 
-  test "completion for structs" do
+  test "completion for struct names" do
     assert [%{name: "MyStruct"}] = expand('%ElixirSense.Providers.Suggestion.CompleteTest.MyStr')
+    assert entries = expand('%')
+    assert entries |> Enum.any?(& &1.name == "URI")
+
+    assert [%{name: "MyStruct"}] = expand('%ElixirSense.Providers.Suggestion.CompleteTest.')
   end
 
-  test "completion for struct keys" do
+  # handled elsewhere
+  # test "completion for struct keys" do
+  #   assert {:yes, '', entries} = expand('%URI{')
+  #   assert 'path:' in entries
+  #   assert 'query:' in entries
+
+  #   assert {:yes, '', entries} = expand('%URI{path: "foo",')
+  #   assert 'path:' not in entries
+  #   assert 'query:' in entries
+
+  #   assert {:yes, 'ry: ', []} = expand('%URI{path: "foo", que')
+  #   assert {:no, [], []} = expand('%URI{path: "foo", unkno')
+  #   assert {:no, [], []} = expand('%Unkown{path: "foo", unkno')
+  # end
+
+  test "completion for struct var keys" do
     env = %Env{
       vars: [
         %VarInfo{
