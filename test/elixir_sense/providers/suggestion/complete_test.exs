@@ -310,6 +310,9 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [%{name: "+", arity: 1}, %{name: "+", arity: 2}, %{name: "++", arity: 2}] = expand('+')
     assert [%{name: "+", arity: 1}, %{name: "+", arity: 2}] = expand('+/')
     assert [%{name: "++", arity: 2}] = expand('++/')
+
+    assert entries = expand('+ ')
+    assert entries |> Enum.any?(& &1.name == "div")
   end
 
   test "sigil completion" do

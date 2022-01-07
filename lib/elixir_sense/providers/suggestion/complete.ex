@@ -115,6 +115,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_erlang_modules(List.to_string(unquoted_atom), env)
 
       {:dot, path, hint} ->
+        # TODO kill only_structs?
         expand_dot(path, List.to_string(hint), false, env, only_structs)
 
       {:dot_arity, path, hint} ->
@@ -138,16 +139,18 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         end
 
       {:local_or_var, local_or_var} ->
+        # expand_struct_fields_or_local_or_var(code, List.to_string(local_or_var), shell)
         expand_local_or_var(List.to_string(local_or_var), env)
 
       {:local_arity, local} ->
         expand_local(List.to_string(local), true, env)
 
       {:local_call, _local} ->
+        # TODO check this
         # no need to expand signatures here, we have signatures provider
         # expand_local_call(List.to_atom(local), env)
         # IEx calls
-        # expand_dot_call(path, List.to_atom(hint), env)
+        # expand_local_call(path, List.to_atom(hint), env)
         # to provide signatures and falls back to expand_local_or_var
         expand_expr(env)
 
@@ -163,8 +166,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       {:operator_arity, operator} ->
         expand_local(List.to_string(operator), true, env)
 
-      # {:operator_call, _operator} ->
-      #   expand_local_or_var("", env)
+      {:operator_call, _operator} ->
+        expand_local_or_var("", env)
 
       {:sigil, []} ->
         expand_sigil(env)
@@ -175,6 +178,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         no()
 
       {:struct, struct} ->
+        # TODO
         expand_aliases(List.to_string(struct), env, true)
         # expand_structs(List.to_string(struct), shell)
 
