@@ -101,12 +101,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   def do_expand(code, env) do
-    only_structs =
-      case code do
-        [?% | _] -> true
-        _ -> false
-      end
-
     case NormalizedCode.CursorContext.cursor_context(code) do
       {:alias, alias} ->
         expand_aliases(List.to_string(alias), env, false)
@@ -115,11 +109,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_erlang_modules(List.to_string(unquoted_atom), env)
 
       {:dot, path, hint} ->
-        # TODO kill only_structs?
-        expand_dot(path, List.to_string(hint), false, env, only_structs)
+        expand_dot(path, List.to_string(hint), false, env, false)
 
       {:dot_arity, path, hint} ->
-        expand_dot(path, List.to_string(hint), true, env, only_structs)
+        expand_dot(path, List.to_string(hint), true, env, false)
 
       {:dot_call, _path, _hint} ->
         # no need to expand signatures here, we have signatures provider
@@ -131,10 +124,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       :expr ->
         # IEx calls expand_local_or_var("", env)
         # we choose to retun more and handle some special cases
-        # TODO
         case code do
           [?^] -> expand_var("", env)
-          # [?%] -> expand_aliases("", env, true)
           _ -> expand_expr(env)
         end
 
@@ -146,7 +137,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_local(List.to_string(local), true, env)
 
       {:local_call, _local} ->
-        # TODO check this
         # no need to expand signatures here, we have signatures provider
         # expand_local_call(List.to_atom(local), env)
         # IEx calls
@@ -160,8 +150,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           [?&] -> expand_expr(env)
           _ -> expand_local(List.to_string(operator), false, env)
         end
-        # IO.inspect operator
-        # expand_local(List.to_string(operator), env)
 
       {:operator_arity, operator} ->
         expand_local(List.to_string(operator), true, env)
@@ -178,9 +166,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         no()
 
       {:struct, struct} ->
-        # TODO
         expand_aliases(List.to_string(struct), env, true)
-        # expand_structs(List.to_string(struct), shell)
 
       {:module_attribute, attribute} ->
         expand_attribute(List.to_string(attribute), env)
@@ -291,8 +277,11 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp expand_sigil(env) do
-    sigils = match_local("sigil_", false, env)
-      |> Enum.map(fn %{name: "sigil_" <> rest} = local -> %{local | name: rest, func_kind: :sigil} end)
+    sigils =
+      match_local("sigil_", false, env)
+      |> Enum.map(fn %{name: "sigil_" <> rest} = local ->
+        %{local | name: rest, func_kind: :sigil}
+      end)
 
     locals = match_local("~", false, env)
 
@@ -304,7 +293,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       match_module_funs(Kernel.SpecialForms, hint, exact?, false, env) ++
       match_module_funs(env.scope_module, hint, exact?, false, env) ++
       (env.imports
-       |> Enum.flat_map(fn scope_import -> match_module_funs(scope_import, hint, exact?, false, env) end))
+       |> Enum.flat_map(fn scope_import ->
+         match_module_funs(scope_import, hint, exact?, false, env)
+       end))
   end
 
   defp match_var(hint, %Env{vars: vars}) do
@@ -401,7 +392,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  # TODO exact?
   defp expand_aliases(mod, hint, aliases, include_funs, env, filter) do
     aliases
     |> Kernel.++(match_elixir_modules(mod, hint, env, filter))

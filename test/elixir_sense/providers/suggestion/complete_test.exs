@@ -295,15 +295,35 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [%{name: "printable?", arity: 1}, %{name: "printable?", arity: 2}] =
              expand('String.printable?/')
 
-    assert [%{
-      name: "count", arity: 1}, %{
-        name: "count", arity: 2}, %{
-          name: "count_until", arity: 2}, %{
-            name: "count_until", arity: 3}] = expand('Enum.count')
+    assert [
+             %{
+               name: "count",
+               arity: 1
+             },
+             %{
+               name: "count",
+               arity: 2
+             },
+             %{
+               name: "count_until",
+               arity: 2
+             },
+             %{
+               name: "count_until",
+               arity: 3
+             }
+           ] = expand('Enum.count')
 
-    assert [%{
-      name: "count", arity: 1}, %{
-        name: "count", arity: 2}] = expand('Enum.count/')
+    assert [
+             %{
+               name: "count",
+               arity: 1
+             },
+             %{
+               name: "count",
+               arity: 2
+             }
+           ] = expand('Enum.count/')
   end
 
   test "operator completion" do
@@ -312,7 +332,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [%{name: "++", arity: 2}] = expand('++/')
 
     assert entries = expand('+ ')
-    assert entries |> Enum.any?(& &1.name == "div")
+    assert entries |> Enum.any?(&(&1.name == "div"))
   end
 
   test "sigil completion" do
@@ -328,6 +348,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     env = %Env{
       imports: [Bitwise]
     }
+
     sigils = expand('~', env)
     assert sigils |> Enum.any?(fn s -> s.name == "~~~" and s.arity == 1 end)
 
@@ -1046,7 +1067,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   test "completion for struct names" do
     assert [%{name: "MyStruct"}] = expand('%ElixirSense.Providers.Suggestion.CompleteTest.MyStr')
     assert entries = expand('%')
-    assert entries |> Enum.any?(& &1.name == "URI")
+    assert entries |> Enum.any?(&(&1.name == "URI"))
 
     assert [%{name: "MyStruct"}] = expand('%ElixirSense.Providers.Suggestion.CompleteTest.')
   end
