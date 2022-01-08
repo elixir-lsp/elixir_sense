@@ -805,7 +805,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result({:when, meta, [:_, rhs]})
   end
 
-  # credo:disable-for-lines:115
   defp pre({:use, [line: line, column: column], [module_expression | _]} = ast, state) do
     # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
     current_module = get_current_module(state)

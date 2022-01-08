@@ -20,8 +20,11 @@
 # limitations under the License.
 
 defmodule ElixirSense.Core.Normalized.Code.CursorContext do
+  @moduledoc false
+
   def cursor_context(string, opts \\ [])
 
+  # credo:disable-for-lines:10
   def cursor_context(binary, opts) do
     cond do
       Version.match?(System.version(), ">= 1.13.0") ->

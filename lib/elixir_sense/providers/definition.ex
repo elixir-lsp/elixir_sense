@@ -113,7 +113,6 @@ defmodule ElixirSense.Providers.Definition do
     end
   end
 
-  # credo:disable-for-lines:20
   defp do_find_function_or_module(
          {{:attribute, _attr} = type, function},
          mods_funs_to_positions,
