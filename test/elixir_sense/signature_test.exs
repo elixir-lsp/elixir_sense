@@ -456,7 +456,6 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
-    @tag requires_elixir_1_9: true
     test "find signatures when function with many clausess" do
       code = """
       defmodule MyModule do
@@ -755,7 +754,6 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
-    @tag requires_elixir_1_10: true
     test "finds signatures from metadata elixir behaviour call" do
       code = """
       defmodule MyModule do
@@ -787,7 +785,6 @@ defmodule ElixirSense.SignatureTest do
              } = ElixirSense.signature(code, 5, 15)
     end
 
-    @tag requires_elixir_1_10: true
     test "finds signatures from metadata erlang behaviour call" do
       code = """
       defmodule MyModule do

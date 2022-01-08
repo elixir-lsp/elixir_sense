@@ -3,7 +3,6 @@ defmodule ElixirSense.Providers.ReferencesTest do
 
   # doctest References
 
-  @tag requires_elixir_1_10: true
   test "finds reference to local function shadowing builtin type" do
     buffer = """
     defmodule B.Callee do

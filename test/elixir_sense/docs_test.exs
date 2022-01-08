@@ -845,7 +845,6 @@ defmodule ElixirSense.DocsTest do
       end
     end
 
-    @tag requires_elixir_1_10: true
     test "retrieve builtin type documentation" do
       buffer = """
       defmodule MyModule do
@@ -924,7 +923,6 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    @tag requires_elixir_1_10: true
     test "retrieve basic and builtin type documentation" do
       buffer = """
       defmodule MyModule do
