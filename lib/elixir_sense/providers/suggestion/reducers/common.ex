@@ -18,7 +18,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
         }
 
   @type func :: %{
-          type: :function | :macro,
+          type: :function | :macro | :sigil,
           visibility: :public | :private,
           name: String.t(),
           arity: non_neg_integer,

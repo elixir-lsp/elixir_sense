@@ -20,6 +20,23 @@
 # limitations under the License.
 
 defmodule ElixirSense.Core.Normalized.Code.CursorContext do
+  def cursor_context(string, opts \\ [])
+
+  def cursor_context(binary, opts) do
+    cond do
+      Version.match?(System.version(), ">= 1.13.0") ->
+        Code.Fragment.cursor_context(binary, opts)
+
+      Version.match?(System.version(), ">= 1.12.0") ->
+        apply(Code, :cursor_context, [binary, opts])
+
+      true ->
+        ElixirSense.Core.Normalized.Code.CursorContext.Fallback.cursor_context(binary, opts)
+    end
+  end
+end
+
+defmodule ElixirSense.Core.Normalized.Code.CursorContext.Fallback do
   @moduledoc false
 
   @doc """
