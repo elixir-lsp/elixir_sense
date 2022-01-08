@@ -23,7 +23,7 @@
 # Since then the codebases have diverged as the requirements
 # put on editor and REPL autocomplete are different.
 # However some relevant changes have been merged back
-# from upstream Elixir (1.12).
+# from upstream Elixir (1.13).
 # Changes made to the original version include:
 # - different result format with added docs and spec
 # - built in and private funcs are not excluded
@@ -101,6 +101,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   def do_expand(code, env) do
+    # TODO remove when we require elixir 1.13
     only_structs =
       case code do
         [?% | _] -> true
@@ -115,10 +116,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_erlang_modules(List.to_string(unquoted_atom), env)
 
       {:dot, path, hint} ->
-        expand_dot(path, List.to_string(hint), env, only_structs)
+        expand_dot(path, List.to_string(hint), false, env, only_structs)
 
       {:dot_arity, path, hint} ->
-        expand_dot(path, List.to_string(hint), env, only_structs)
+        expand_dot(path, List.to_string(hint), true, env, only_structs)
 
       {:dot_call, _path, _hint} ->
         # no need to expand signatures here, we have signatures provider
@@ -130,6 +131,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       :expr ->
         # IEx calls expand_local_or_var("", env)
         # we choose to retun more and handle some special cases
+        # TODO expand_expr(env) after we require elixir 1.13
         case code do
           [?^] -> expand_var("", env)
           [?%] -> expand_aliases("", env, true)
@@ -137,10 +139,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         end
 
       {:local_or_var, local_or_var} ->
+        # TODO consider suggesting struct fields here when we require elixir 1.13
+        # expand_struct_fields_or_local_or_var(code, List.to_string(local_or_var), shell)
         expand_local_or_var(List.to_string(local_or_var), env)
 
       {:local_arity, local} ->
-        expand_local(List.to_string(local), env)
+        expand_local(List.to_string(local), true, env)
 
       {:local_call, _local} ->
         # no need to expand signatures here, we have signatures provider
@@ -150,6 +154,36 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         # to provide signatures and falls back to expand_local_or_var
         expand_expr(env)
 
+      # elixir >= 1.13
+      {:operator, operator} ->
+        case operator do
+          [?^] -> expand_var("", env)
+          [?&] -> expand_expr(env)
+          _ -> expand_local(List.to_string(operator), false, env)
+        end
+
+      # elixir >= 1.13
+      {:operator_arity, operator} ->
+        expand_local(List.to_string(operator), true, env)
+
+      # elixir >= 1.13
+      {:operator_call, _operator} ->
+        expand_local_or_var("", env)
+
+      # elixir >= 1.13
+      {:sigil, []} ->
+        expand_sigil(env)
+
+      # elixir >= 1.13
+      {:sigil, [_]} ->
+        # {:yes, [], ~w|" """ ' ''' \( / < [ { \||c}
+        # we choose to not provide sigil chars
+        no()
+
+      # elixir >= 1.13
+      {:struct, struct} ->
+        expand_aliases(List.to_string(struct), env, true)
+
       {:module_attribute, attribute} ->
         expand_attribute(List.to_string(attribute), env)
 
@@ -158,7 +192,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  defp expand_dot(path, hint, env, only_structs) do
+  defp expand_dot(path, hint, exact?, env, only_structs) do
     filter = struct_module_filter(only_structs, env)
 
     case expand_dot_path(path, env) do
@@ -166,7 +200,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_aliases(mod, "", [], not only_structs, env, filter)
 
       {:ok, {:atom, mod}} ->
-        expand_require(mod, hint, env)
+        expand_require(mod, hint, exact?, env)
 
       {:ok, {:map, fields, _}} ->
         expand_map_field_access(fields, hint, :map)
@@ -239,18 +273,18 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  defp expand_require(mod, hint, env) do
-    format_expansion(match_module_funs(mod, hint, true, env))
+  defp expand_require(mod, hint, exact?, env) do
+    format_expansion(match_module_funs(mod, hint, exact?, true, env))
   end
 
   ## Expand local or var
 
   defp expand_local_or_var(hint, env) do
-    format_expansion(match_var(hint, env) ++ match_local(hint, env))
+    format_expansion(match_var(hint, env) ++ match_local(hint, false, env))
   end
 
-  defp expand_local(hint, env) do
-    format_expansion(match_local(hint, env))
+  defp expand_local(hint, exact?, env) do
+    format_expansion(match_local(hint, exact?, env))
   end
 
   defp expand_var(hint, env) do
@@ -258,12 +292,26 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     format_expansion(variables)
   end
 
-  defp match_local(hint, env) do
-    match_module_funs(Kernel, hint, false, env) ++
-      match_module_funs(Kernel.SpecialForms, hint, false, env) ++
-      match_module_funs(env.scope_module, hint, false, env) ++
+  defp expand_sigil(env) do
+    sigils =
+      match_local("sigil_", false, env)
+      |> Enum.map(fn %{name: "sigil_" <> rest} = local ->
+        %{local | name: rest, func_kind: :sigil}
+      end)
+
+    locals = match_local("~", false, env)
+
+    format_expansion(sigils ++ locals)
+  end
+
+  defp match_local(hint, exact?, env) do
+    match_module_funs(Kernel, hint, exact?, false, env) ++
+      match_module_funs(Kernel.SpecialForms, hint, exact?, false, env) ++
+      match_module_funs(env.scope_module, hint, exact?, false, env) ++
       (env.imports
-       |> Enum.flat_map(fn scope_import -> match_module_funs(scope_import, hint, false, env) end))
+       |> Enum.flat_map(fn scope_import ->
+         match_module_funs(scope_import, hint, exact?, false, env)
+       end))
   end
 
   defp match_var(hint, %Env{vars: vars}) do
@@ -331,6 +379,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
+  # TODO remove when we require elixir 1.13
   defp struct_module_filter(true, env) do
     fn module -> Struct.is_struct(module, env.structs) end
   end
@@ -363,7 +412,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp expand_aliases(mod, hint, aliases, include_funs, env, filter) do
     aliases
     |> Kernel.++(match_elixir_modules(mod, hint, env, filter))
-    |> Kernel.++(if include_funs, do: match_module_funs(mod, hint, true, env), else: [])
+    |> Kernel.++(if include_funs, do: match_module_funs(mod, hint, false, true, env), else: [])
     |> format_expansion()
   end
 
@@ -429,7 +478,11 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp usable_as_unquoted_module?(name) do
     # Conversion to atom is not a problem because
     # it is only called with existing modules names.
-    Code.Identifier.classify(String.to_atom(name)) != :other
+    # TODO migrate to
+    # Macro.classify_atom(String.to_atom(name)) in [:identifier, :unquoted]
+    # when we require elixir 1.14
+    Code.Identifier.classify(String.to_atom(name)) != :other and
+      not String.starts_with?(name, "Elixir.")
   end
 
   defp match_modules(hint, root, env) do
@@ -473,7 +526,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     for {{k, nil, nil}, _} <- env.mods_and_funs, do: Atom.to_string(k)
   end
 
-  defp match_module_funs(mod, hint, include_builtin, env) do
+  defp match_module_funs(mod, hint, exact?, include_builtin, env) do
     falist =
       cond do
         env.mods_and_funs |> Map.has_key?({mod, nil, nil}) ->
@@ -508,7 +561,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
     for {fun, arities, def_arities, func_kind, docs, specs, args} <- list,
         name = Atom.to_string(fun),
-        Matcher.match?(name, hint) do
+        if(exact?, do: name == hint, else: Matcher.match?(name, hint)) do
       %{
         kind: :function,
         name: name,

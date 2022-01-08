@@ -125,7 +125,6 @@ defmodule ElixirSense.Providers.Implementation do
     end
   end
 
-  # credo:disable-for-lines:20
   defp do_find_delegatee(
          {{:attribute, _attr} = type, function},
          mods_funs_to_positions,

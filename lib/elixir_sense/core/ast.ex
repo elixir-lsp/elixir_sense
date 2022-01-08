@@ -282,7 +282,6 @@ defmodule ElixirSense.Core.Ast do
   defp get_args(args) when is_list(args), do: args
   defp get_args(_), do: []
 
-  # credo:disable-for-lines:40
   defp extract_directive_modules(directive, ast) do
     case ast do
       # v1.2 notation
