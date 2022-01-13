@@ -3341,6 +3341,41 @@ defmodule ElixirSense.SuggestionsTest do
            ] = ElixirSense.suggestions(buffer, 4, 15)
   end
 
+  test "operator" do
+    buffer = """
+    defmodule ElixirSenseExample.OtherModule do
+      def some_fun() do
+        a +
+      end
+    end
+    """
+
+    assert [%{name: "+"}, %{name: "+"}, %{name: "++"}] =
+             ElixirSense.suggestions(buffer, 3, 8) |> Enum.filter(&("#{&1.name}" =~ "+"))
+  end
+
+  test "sigil" do
+    buffer = """
+    defmodule ElixirSenseExample.OtherModule do
+      def some_fun() do
+        ~
+      end
+    end
+    """
+
+    suggestions = ElixirSense.suggestions(buffer, 3, 6)
+
+    assert [
+             %{
+               args: "term, modifiers",
+               arity: 2,
+               name: "~w",
+               summary: "Handles the sigil `~w` for list of words.",
+               type: :macro
+             }
+           ] = suggestions |> Enum.filter(&(&1.name == "~w"))
+  end
+
   defp suggestions_by_type(type, buffer) do
     {line, column} = get_last_line_and_column(buffer)
     suggestions_by_type(type, buffer, line, column)

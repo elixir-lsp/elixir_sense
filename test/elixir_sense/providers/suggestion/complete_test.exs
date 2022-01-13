@@ -342,7 +342,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   @tag requires_elixir_1_13: true
   test "sigil completion" do
     sigils = expand('~')
-    assert sigils |> Enum.any?(fn s -> s.name == "C" end)
+    assert sigils |> Enum.any?(fn s -> s.name == "~C" end)
     # We choose not to provide sigil quotations
     # {:yes, '', sigils} = expand('~r')
     # assert '"' in sigils

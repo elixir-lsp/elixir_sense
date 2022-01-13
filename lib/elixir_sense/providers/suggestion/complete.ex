@@ -296,7 +296,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     sigils =
       match_local("sigil_", false, env)
       |> Enum.map(fn %{name: "sigil_" <> rest} = local ->
-        %{local | name: rest, func_kind: :sigil}
+        %{local | name: "~" <> rest}
       end)
 
     locals = match_local("~", false, env)
