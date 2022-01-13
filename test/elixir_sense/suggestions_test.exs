@@ -3376,6 +3376,71 @@ defmodule ElixirSense.SuggestionsTest do
            ] = suggestions |> Enum.filter(&(&1.name == "~w"))
   end
 
+  test "bitstring options" do
+    buffer = """
+    defmodule ElixirSenseExample.OtherModule do
+      alias ElixirSenseExample.SameModule
+      def some_fun() do
+        <<abc::>>
+      end
+    end
+    """
+
+    options =
+      ElixirSense.suggestions(buffer, 4, 12)
+      |> Enum.filter(&(&1.type == :bitstring_option))
+      |> Enum.map(& &1.name)
+
+    assert "integer" in options
+    assert "native" in options
+    assert "signed" in options
+
+    buffer = """
+    defmodule ElixirSenseExample.OtherModule do
+      alias ElixirSenseExample.SameModule
+      def some_fun() do
+        <<abc::int>>
+      end
+    end
+    """
+
+    ["integer"] =
+      ElixirSense.suggestions(buffer, 4, 15)
+      |> Enum.filter(&(&1.type == :bitstring_option))
+      |> Enum.map(& &1.name)
+
+    buffer = """
+    defmodule ElixirSenseExample.OtherModule do
+      alias ElixirSenseExample.SameModule
+      def some_fun() do
+        <<abc::integer, asd::binary->>
+      end
+    end
+    """
+
+    options =
+      ElixirSense.suggestions(buffer, 4, 33)
+      |> Enum.filter(&(&1.type == :bitstring_option))
+      |> Enum.map(& &1.name)
+
+    assert "unit" in options
+    assert "size" in options
+
+    buffer = """
+    defmodule ElixirSenseExample.OtherModule do
+      alias ElixirSenseExample.SameModule
+      def some_fun() do
+        <<abc::integer, asd::integer-n>>
+      end
+    end
+    """
+
+    ["native"] =
+      ElixirSense.suggestions(buffer, 4, 35)
+      |> Enum.filter(&(&1.type == :bitstring_option))
+      |> Enum.map(& &1.name)
+  end
+
   defp suggestions_by_type(type, buffer) do
     {line, column} = get_last_line_and_column(buffer)
     suggestions_by_type(type, buffer, line, column)

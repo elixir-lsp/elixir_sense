@@ -834,4 +834,41 @@ defmodule ElixirSense.Core.Source do
   def split_lines(src, opts \\ []) do
     String.split(src, ["\r\n", "\r", "\n"], opts)
   end
+
+  def bitstring_options(prefix) do
+    tokens = Tokenizer.tokenize(prefix)
+
+    case scan_bitstring(tokens, nil) do
+      nil ->
+        nil
+
+      {line, column, _} ->
+        prefix
+        |> split_lines
+        |> Enum.at(line - 1)
+        |> String.slice((column + 1)..-1)
+    end
+  end
+
+  defp scan_bitstring([], acc), do: acc
+
+  defp scan_bitstring([{:type_op, candidate, :"::"}, {:identifier, _, _} | rest], _acc) do
+    scan_bitstring(rest, candidate)
+  end
+
+  defp scan_bitstring([{:"<<", _} | _rest], acc) when not is_nil(acc) do
+    acc
+  end
+
+  defp scan_bitstring([{:",", _} | _rest], acc) when not is_nil(acc) do
+    acc
+  end
+
+  defp scan_bitstring([{:">>", _} | _rest], _acc) do
+    nil
+  end
+
+  defp scan_bitstring([_token | rest], acc) do
+    scan_bitstring(rest, acc)
+  end
 end

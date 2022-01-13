@@ -1309,4 +1309,50 @@ defmodule ElixirSense.Core.SourceTest do
       assert col == 4
     end
   end
+
+  describe "bitstring_options" do
+    test "single line empty" do
+      text = "<<ident::"
+      assert "" == bitstring_options(text)
+    end
+
+    test "single line not empty" do
+      text = "<<ident::int"
+      assert "int" == bitstring_options(text)
+    end
+
+    test "single line multiple" do
+      text = "<<ident::integer, some::"
+      assert "" == bitstring_options(text)
+    end
+
+    test "single line multiple not empty" do
+      text = "<<ident::integer, some::integer-un"
+      assert "integer-un" == bitstring_options(text)
+    end
+
+    test "single closed" do
+      text = "<<ident::integer, some::binary>>"
+      assert nil == bitstring_options(text)
+    end
+
+    test "single line ident" do
+      text = "<<ident"
+      assert nil == bitstring_options(text)
+    end
+
+    test "single line opening" do
+      text = "<<"
+      assert nil == bitstring_options(text)
+    end
+
+    test "multi line multiple not empty" do
+      text = """
+      <<ident::integer,
+        some::integer-un\
+      """
+
+      assert "integer-un" == bitstring_options(text)
+    end
+  end
 end

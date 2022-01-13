@@ -71,6 +71,7 @@ defmodule ElixirSense.Providers.Suggestion do
           | Reducers.Common.mod()
           | Reducers.Params.param_option()
           | Reducers.TypeSpecs.type_spec()
+          | Reducers.Bitstring.bitstring_option()
 
   @type acc :: %{result: [suggestion], reducers: [atom], context: map}
   @type cursor_context :: %{
@@ -94,7 +95,8 @@ defmodule ElixirSense.Providers.Suggestion do
     macros: &Reducers.Common.add_macros/5,
     variable_fields: &Reducers.Common.add_fields/5,
     attributes: &Reducers.Common.add_attributes/5,
-    docs_snippets: &Reducers.DocsSnippets.add_snippets/5
+    docs_snippets: &Reducers.DocsSnippets.add_snippets/5,
+    bitstring_options: &Reducers.Bitstring.add_bitstring_options/5
   ]
 
   @doc """
