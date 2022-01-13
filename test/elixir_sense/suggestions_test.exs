@@ -3354,6 +3354,7 @@ defmodule ElixirSense.SuggestionsTest do
              ElixirSense.suggestions(buffer, 3, 8) |> Enum.filter(&("#{&1.name}" =~ "+"))
   end
 
+  @tag requires_elixir_1_13: true
   test "sigil" do
     buffer = """
     defmodule ElixirSenseExample.OtherModule do
