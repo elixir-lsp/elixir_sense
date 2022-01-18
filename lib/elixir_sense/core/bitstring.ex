@@ -11,6 +11,12 @@ defmodule ElixirSense.Core.Bitstring do
     :utf32
   ]
 
+  @utf_types [
+    :utf8,
+    :utf16,
+    :utf32
+  ]
+
   @type_aliases %{
     bits: :bitstring,
     bytes: :binary
@@ -82,10 +88,13 @@ defmodule ElixirSense.Core.Bitstring do
     |> Kernel.++(available_unit(map))
   end
 
-  def available_types(%{type: nil, sign_modifier: nil, endianness_modifier: nil}), do: @types
+  def available_types(%{type: nil, sign_modifier: nil, endianness_modifier: nil} = map),
+    do: filter_utf(map, @types)
 
-  def available_types(%{type: nil, sign_modifier: nil, endianness_modifier: endianness_modifier}),
-    do: @modifiers[endianness_modifier]
+  def available_types(
+        %{type: nil, sign_modifier: nil, endianness_modifier: endianness_modifier} = map
+      ),
+      do: filter_utf(map, @modifiers[endianness_modifier])
 
   def available_types(%{type: nil}), do: [:integer]
   def available_types(_), do: []
@@ -104,9 +113,15 @@ defmodule ElixirSense.Core.Bitstring do
 
   def available_endianness_modifiers(_), do: []
 
-  def available_size(%{size: nil}), do: [:size]
+  # It's not documented but as of elixir 1.13 size and unit are not supported on utf types
+  # and will fail to compile
+
+  def available_size(%{size: nil, type: type}) when type not in @utf_types, do: [:size]
   def available_size(_), do: []
 
-  def available_unit(%{unit: nil}), do: [:unit]
+  def available_unit(%{unit: nil, type: type}) when type not in @utf_types, do: [:unit]
   def available_unit(_), do: []
+
+  defp filter_utf(%{size: nil, unit: nil}, list), do: list
+  defp filter_utf(_, list), do: list -- @utf_types
 end

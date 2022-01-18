@@ -77,7 +77,7 @@ defmodule ElixirSense.Core.BitstringTest do
 
     assert [:little, :big, :size, :unit] == Bitstring.available_options(Bitstring.parse("float"))
 
-    assert [:little, :big, :native, :size, :unit] ==
+    assert [:little, :big, :native] ==
              Bitstring.available_options(Bitstring.parse("utf16"))
 
     assert [:size, :unit] == Bitstring.available_options(Bitstring.parse("binary"))
@@ -91,6 +91,50 @@ defmodule ElixirSense.Core.BitstringTest do
     assert [:integer, :little, :big, :native, :size, :unit] ==
              Bitstring.available_options(Bitstring.parse("signed"))
 
-    # TODO size modifiers
+    assert [
+             :integer,
+             :float,
+             :bitstring,
+             :binary,
+             :signed,
+             :unsigned,
+             :little,
+             :big,
+             :native,
+             :unit
+           ] ==
+             Bitstring.available_options(Bitstring.parse("size(2)"))
+
+    assert [
+             :integer,
+             :float,
+             :bitstring,
+             :binary,
+             :signed,
+             :unsigned,
+             :little,
+             :big,
+             :native,
+             :size
+           ] ==
+             Bitstring.available_options(Bitstring.parse("unit(2)"))
+
+    assert [
+             :integer,
+             :float,
+             :bitstring,
+             :binary,
+             :utf8,
+             :utf16,
+             :utf32,
+             :signed,
+             :unsigned,
+             :little,
+             :big,
+             :native,
+             :size,
+             :unit
+           ] ==
+             Bitstring.available_options(Bitstring.parse(""))
   end
 end
