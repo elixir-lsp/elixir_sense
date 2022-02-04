@@ -917,12 +917,15 @@ defmodule ElixirSense.Core.SourceTest do
 
           :ets. # for performance.
             match(:ac_tab, {{:loaded, :"$1"}, :_})
+
+          "String \#{inspect("Interpolation")}"
         end
       end
       """
 
       assert subject(code, 4, 10) == ":ets.match"
       assert subject(code, 7, 7) == ":ets.match"
+      assert subject(code, 9, 18) == "inspect"
     end
   end
 
