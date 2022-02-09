@@ -170,7 +170,7 @@ defmodule ElixirSense.Core.Source do
       |> split_lines
       |> Enum.map_join("\n", fn line ->
         # this is a naive comment strip - it will not honour # in strings, chars etc
-        Regex.replace(~r/[^<]\#.*$/, line, "")
+        Regex.replace(~r/[^<]\#(?!\{).*$/, line, "")
       end)
 
     case walk_text(code, acc, &find_subject/5) do
