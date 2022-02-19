@@ -1653,4 +1653,41 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
   end
+
+  describe "from_var" do
+    defmodule Elixir.Some do
+      defstruct [:asd]
+    end
+
+    defp assert_is_stable(expansion, expected) do
+      assert expansion == expected
+      assert Binding.expand(@env, expansion) == expected
+    end
+
+    test "integer" do
+      assert_is_stable(Binding.from_var(3), {:integer, 3})
+    end
+
+    test "atom" do
+      assert_is_stable(Binding.from_var(:asd), {:atom, :asd})
+      assert_is_stable(Binding.from_var(nil), {:atom, nil})
+      assert_is_stable(Binding.from_var(true), {:atom, true})
+      assert_is_stable(Binding.from_var(false), {:atom, false})
+    end
+
+    test "tuple" do
+      assert_is_stable(Binding.from_var({:asd, 123}), {:tuple, 2, [atom: :asd, integer: 123]})
+    end
+
+    test "map" do
+      assert_is_stable(Binding.from_var(%{asd: 123}), {:map, [asd: {:integer, 123}], nil})
+    end
+
+    test "struct" do
+      assert_is_stable(
+        Binding.from_var(%{__struct__: Some, asd: 123}),
+        {:struct, [{:__struct__, {:atom, Some}}, {:asd, {:integer, 123}}], Some, nil}
+      )
+    end
+  end
 end

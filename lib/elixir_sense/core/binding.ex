@@ -895,4 +895,39 @@ defmodule ElixirSense.Core.Binding do
       _ -> [:none]
     end
   end
+
+  def from_var(value) when is_atom(value) do
+    {:atom, value}
+  end
+
+  def from_var(%type{} = struct) do
+    fields =
+      for {key, value} <- struct |> Map.from_struct() do
+        {key, from_var(value)}
+      end
+
+    {:struct, fields |> Keyword.put(:__struct__, {:atom, type}), type, nil}
+  end
+
+  def from_var(map) when is_map(map) do
+    fields =
+      for {key, value} <- map do
+        {key, from_var(value)}
+      end
+
+    {:map, fields, nil}
+  end
+
+  def from_var(int) when is_integer(int), do: {:integer, int}
+
+  def from_var(tuple) when is_tuple(tuple) do
+    list =
+      tuple
+      |> Tuple.to_list()
+      |> Enum.map(&from_var(&1))
+
+    {:tuple, length(list), list}
+  end
+
+  def from_var(_), do: nil
 end
