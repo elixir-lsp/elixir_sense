@@ -1655,7 +1655,7 @@ defmodule ElixirSense.Core.BindingTest do
   end
 
   describe "from_var" do
-    defmodule Elixir.Some do
+    defmodule Elixir.BindingTest.Some do
       defstruct [:asd]
     end
 
@@ -1685,8 +1685,9 @@ defmodule ElixirSense.Core.BindingTest do
 
     test "struct" do
       assert_is_stable(
-        Binding.from_var(%{__struct__: Some, asd: 123}),
-        {:struct, [{:__struct__, {:atom, Some}}, {:asd, {:integer, 123}}], Some, nil}
+        Binding.from_var(%{__struct__: BindingTest.Some, asd: 123}),
+        {:struct, [{:__struct__, {:atom, BindingTest.Some}}, {:asd, {:integer, 123}}],
+         BindingTest.Some, nil}
       )
     end
   end
