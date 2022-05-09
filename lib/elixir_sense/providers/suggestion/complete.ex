@@ -88,7 +88,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               behaviours: []
   end
 
-  @spec complete(String.t(), Env.t()) ::
+  @spec complete(String.t(), Env.t(), list(keyword())) ::
           [
             ElixirSense.Providers.Suggestion.Reducers.Common.func()
             | ElixirSense.Providers.Suggestion.Reducers.Common.mod()
@@ -96,11 +96,11 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             | ElixirSense.Providers.Suggestion.Reducers.Common.attribute()
             | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
           ]
-  def complete(hint, %Env{} = env) do
-    do_expand(hint |> String.to_charlist(), env)
+  def complete(hint, %Env{} = env, opts \\ []) do
+    do_expand(hint |> String.to_charlist(), env, opts)
   end
 
-  def do_expand(code, env) do
+  def do_expand(code, env, opts \\ []) do
     # TODO remove when we require elixir 1.13
     only_structs =
       case code do
@@ -110,7 +110,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
     case NormalizedCode.CursorContext.cursor_context(code) do
       {:alias, hint} when is_list(hint) ->
-        expand_aliases(List.to_string(hint), env, false)
+        expand_aliases(List.to_string(hint), env, false, opts)
 
       {:alias, prefix, hint} ->
         expand_prefixed_aliases(prefix, hint, env, false)
@@ -119,17 +119,17 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_erlang_modules(List.to_string(unquoted_atom), env)
 
       {:dot, path, hint} ->
-        expand_dot(path, List.to_string(hint), false, env, only_structs)
+        expand_dot(path, List.to_string(hint), false, env, only_structs, opts)
 
       {:dot_arity, path, hint} ->
-        expand_dot(path, List.to_string(hint), true, env, only_structs)
+        expand_dot(path, List.to_string(hint), true, env, only_structs, opts)
 
       {:dot_call, _path, _hint} ->
         # no need to expand signatures here, we have signatures provider
         # IEx calls
         # expand_dot_call(path, List.to_atom(hint), env)
         # to provide signatures and falls back to expand_local_or_var
-        expand_expr(env)
+        expand_expr(env, opts)
 
       :expr ->
         # IEx calls expand_local_or_var("", env)
@@ -137,8 +137,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         # TODO expand_expr(env) after we require elixir 1.13
         case code do
           [?^] -> expand_var("", env)
-          [?%] -> expand_aliases("", env, true)
-          _ -> expand_expr(env)
+          [?%] -> expand_aliases("", env, true, opts)
+          _ -> expand_expr(env, opts)
         end
 
       {:local_or_var, local_or_var} ->
@@ -155,13 +155,13 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         # IEx calls
         # expand_dot_call(path, List.to_atom(hint), env)
         # to provide signatures and falls back to expand_local_or_var
-        expand_expr(env)
+        expand_expr(env, opts)
 
       # elixir >= 1.13
       {:operator, operator} ->
         case operator do
           [?^] -> expand_var("", env)
-          [?&] -> expand_expr(env)
+          [?&] -> expand_expr(env, opts)
           _ -> expand_local(List.to_string(operator), false, env)
         end
 
@@ -185,7 +185,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
       # elixir >= 1.13
       {:struct, struct} when is_list(struct) ->
-        expand_aliases(List.to_string(struct), env, true)
+        expand_aliases(List.to_string(struct), env, true, opts)
 
       # elixir >= 1.14
       {:struct, {:alias, prefix, hint}} ->
@@ -193,7 +193,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
       # elixir >= 1.14
       {:struct, {:dot, path, hint}} ->
-        expand_dot(path, List.to_string(hint), false, env, true)
+        expand_dot(path, List.to_string(hint), false, env, true, opts)
 
       # elixir >= 1.14
       {:struct, {:module_attribute, attribute}} ->
@@ -213,12 +213,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  defp expand_dot(path, hint, exact?, env, only_structs) do
+  defp expand_dot(path, hint, exact?, env, only_structs, opts) do
     filter = struct_module_filter(only_structs, env)
 
     case expand_dot_path(path, env) do
       {:ok, {:atom, mod}} when hint == "" ->
-        expand_aliases(mod, "", [], not only_structs, env, filter)
+        expand_aliases(mod, "", [], not only_structs, env, filter, opts)
 
       {:ok, {:atom, mod}} ->
         expand_require(mod, hint, exact?, env)
@@ -315,10 +315,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  defp expand_expr(env) do
+  defp expand_expr(env, opts) do
     local_or_var = expand_local_or_var("", env)
     erlang_modules = expand_erlang_modules("", env)
-    elixir_modules = expand_aliases("", env, false)
+    elixir_modules = expand_aliases("", env, false, opts)
     attributes = expand_attribute("", env)
 
     local_or_var ++ erlang_modules ++ elixir_modules ++ attributes
@@ -461,35 +461,35 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   ## Elixir modules
 
-  defp expand_aliases(all, env, only_structs) do
+  defp expand_aliases(all, env, only_structs, opts) do
     filter = struct_module_filter(only_structs, env)
 
     case String.split(all, ".") do
       [hint] ->
         aliases = match_aliases(hint, env)
-        expand_aliases(Elixir, hint, aliases, false, env, filter)
+        expand_aliases(Elixir, hint, aliases, false, env, filter, opts)
 
       parts ->
         hint = List.last(parts)
         list = Enum.take(parts, length(parts) - 1)
 
         case value_from_alias(list, env) do
-          {:ok, alias} -> expand_aliases(alias, hint, [], false, env, filter)
+          {:ok, alias} -> expand_aliases(alias, hint, [], false, env, filter, opts)
           :error -> no()
         end
     end
   end
 
-  defp expand_aliases(mod, hint, aliases, include_funs, env, filter) do
+  defp expand_aliases(mod, hint, aliases, include_funs, env, filter, opts) do
     aliases
-    |> Kernel.++(match_elixir_modules(mod, hint, env, filter))
+    |> Kernel.++(match_elixir_modules(mod, hint, env, filter, opts))
     |> Kernel.++(if include_funs, do: match_module_funs(mod, hint, false, true, env), else: [])
     |> format_expansion()
   end
 
   defp expand_prefixed_aliases({:local_or_var, '__MODULE__'}, hint, env, only_structs) do
     if env.scope_module != nil and Introspection.elixir_module?(env.scope_module) do
-      expand_aliases("#{env.scope_module}.#{hint}", env, only_structs)
+      expand_aliases("#{env.scope_module}.#{hint}", env, only_structs, [])
     else
       no()
     end
@@ -499,7 +499,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     case value_from_binding({:attribute, List.to_atom(attribute)}, env) do
       {:ok, {:atom, atom}} ->
         if Introspection.elixir_module?(atom) do
-          expand_aliases("#{atom}.#{hint}", env, only_structs)
+          expand_aliases("#{atom}.#{hint}", env, only_structs, [])
         else
           no()
         end
@@ -528,7 +528,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  defp match_elixir_modules(module, hint, env, filter) do
+  defp match_elixir_modules(module, hint, env, filter, opts) do
     name = Atom.to_string(module)
     depth = length(String.split(name, ".")) + 1
     base = name <> "." <> hint
@@ -542,13 +542,28 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         valid_alias_piece?("." <> name),
         concatted = parts |> Enum.take(depth) |> Module.concat(),
         filter.(concatted) do
-      {name, concatted}
+      {name, concatted, false}
     end
+    |> Kernel.++(match_elixir_modules_that_require_alias(module, hint, env, filter, opts))
+    |> Enum.reject(fn
+      {_, concatted, true} ->
+        Enum.find(env.aliases, fn {_as, module} ->
+          concatted == module
+        end)
+
+      _rest ->
+        false
+    end)
     |> Enum.uniq_by(&elem(&1, 1))
-    |> Enum.map(fn {name, module} ->
+    |> Enum.map(fn {name, module, required_alias?} ->
       {desc, meta} = Introspection.get_module_docs_summary(module)
       subtype = Introspection.get_module_subtype(module)
-      %{kind: :module, type: :elixir, name: name, desc: {desc, meta}, subtype: subtype}
+      result = %{kind: :module, type: :elixir, name: name, desc: {desc, meta}, subtype: subtype}
+
+      cond do
+        required_alias? -> Map.put(result, :required_alias, module)
+        true -> result
+      end
     end)
   end
 
@@ -584,6 +599,46 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       apply(Code.Identifier, :classify, [String.to_atom(name)]) != :other and
         not String.starts_with?(name, "Elixir.")
     end
+  end
+
+  defp match_elixir_modules_that_require_alias(Elixir, hint, env, filter, opts) do
+    if Keyword.get(opts, :required_alias) do
+      for {suggestion, required_alias} <-
+            find_elixir_modules_that_require_alias(Elixir, hint, env),
+          mod_as_atom = required_alias |> String.to_atom(),
+          filter.(mod_as_atom),
+          required_alias_mod = required_alias |> String.split(".") |> Module.concat() do
+        {suggestion, required_alias_mod, true}
+      end
+    else
+      []
+    end
+  end
+
+  defp match_elixir_modules_that_require_alias(_module, _hint, _env, _filter, _opts), do: []
+
+  def find_elixir_modules_that_require_alias(Elixir, hint, env) do
+    get_modules(true, env)
+    |> Enum.sort()
+    |> Enum.dedup()
+    |> Enum.reduce([], fn module, acc ->
+      module_parts = module |> String.split(".")
+
+      maybe_index =
+        Enum.find_index(module_parts, fn module_part -> Matcher.match?(module_part, hint) end)
+
+      case maybe_index do
+        nil ->
+          acc
+
+        index ->
+          required_alias = Enum.slice(module_parts, 0..index)
+          [suggestion | _] = Enum.reverse(required_alias)
+          required_alias = required_alias |> Module.concat() |> Atom.to_string()
+          [{suggestion, required_alias} | acc]
+      end
+    end)
+    |> Enum.filter(fn {suggestion, _required_alias} -> valid_alias_piece?("." <> suggestion) end)
   end
 
   defp match_modules(hint, root, env) do
@@ -892,6 +947,25 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           ]
   defp to_entries(%{kind: :field, subtype: subtype, name: name, origin: origin}) do
     [%{type: :field, name: name, subtype: subtype, origin: origin, call?: true}]
+  end
+
+  defp to_entries(%{
+         kind: :module,
+         name: name,
+         required_alias: module,
+         desc: {desc, metadata},
+         subtype: subtype
+       }) do
+    [
+      %{
+        type: :module,
+        name: name,
+        required_alias: module,
+        subtype: subtype,
+        summary: desc,
+        metadata: metadata
+      }
+    ]
   end
 
   defp to_entries(%{kind: :module, name: name, desc: {desc, metadata}, subtype: subtype}) do

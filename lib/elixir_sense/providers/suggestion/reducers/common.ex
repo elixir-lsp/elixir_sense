@@ -58,7 +58,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
     * Variable fields
 
   """
-  def populate(hint, env, buffer_metadata, context, acc) do
+  def populate(hint, env, buffer_metadata, context, acc, opts \\ []) do
     text_before = context.text_before
 
     %Metadata{
@@ -76,7 +76,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
         metadata_specs,
         metadata_types,
         structs,
-        text_before
+        text_before,
+        opts
       )
 
     suggestions_by_type = Enum.group_by(suggestions, & &1.type)
@@ -159,7 +160,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
          metadata_specs,
          metadata_types,
          structs,
-         text_before
+         text_before,
+         opts
        ) do
     env = %Complete.Env{
       aliases: aliases,
@@ -194,6 +196,6 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
         hint
       end
 
-    Complete.complete(hint, env)
+    Complete.complete(hint, env, opts)
   end
 end

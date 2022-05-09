@@ -88,7 +88,7 @@ defmodule ElixirSense.Providers.Suggestion do
     overridable: &Reducers.Overridable.add_overridable/5,
     param_options: &Reducers.Params.add_options/5,
     typespecs: &Reducers.TypeSpecs.add_types/5,
-    populate_common: &Reducers.Common.populate/5,
+    populate_common: &Reducers.Common.populate/6,
     variables: &Reducers.Common.add_variables/5,
     modules: &Reducers.Common.add_modules/5,
     functions: &Reducers.Common.add_functions/5,
@@ -99,12 +99,14 @@ defmodule ElixirSense.Providers.Suggestion do
     bitstring_options: &Reducers.Bitstring.add_bitstring_options/5
   ]
 
+  @add_opts_for [:populate_common]
+
   @doc """
   Finds all suggestions for a hint based on context information.
   """
   @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context, ModuleStore.t()) ::
           [suggestion()]
-  def find(hint, env, buffer_metadata, cursor_context, module_store) do
+  def find(hint, env, buffer_metadata, cursor_context, module_store, opts \\ []) do
     plugins = module_store.by_behaviour[ElixirSense.Plugin] || []
 
     reducers =
@@ -114,6 +116,7 @@ defmodule ElixirSense.Providers.Suggestion do
         {module, &module.reduce/5}
       end)
       |> Enum.concat(@reducers)
+      |> maybe_add_opts(opts)
 
     context =
       plugins
@@ -138,5 +141,19 @@ defmodule ElixirSense.Providers.Suggestion do
       |> Enum.filter(&function_exported?(&1, :decorate, 1))
       |> Enum.reduce(item, fn module, item -> module.decorate(item) end)
     end
+  end
+
+  defp maybe_add_opts(reducers, opts) do
+    Enum.map(reducers, fn {name, reducer} ->
+      if name in @add_opts_for do
+        {name, reducer_with_opts(reducer, opts)}
+      else
+        {name, reducer}
+      end
+    end)
+  end
+
+  defp reducer_with_opts(fun, opts) do
+    fn a, b, c, d, e -> fun.(a, b, c, d, e, opts) end
   end
 end
