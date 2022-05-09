@@ -14,7 +14,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 2, 7)
 
-    assert Enum.find(list, fn s -> match?(%{name: "import", arity: 2}, s) end) == %{
+    assert %{
              args: "module, opts",
              args_list: ["module", "opts"],
              arity: 2,
@@ -27,9 +27,9 @@ defmodule ElixirSense.SuggestionsTest do
              metadata: %{},
              snippet: nil,
              visibility: :public
-           }
+           } = Enum.find(list, fn s -> match?(%{name: "import", arity: 2}, s) end)
 
-    assert Enum.find(list, fn s -> match?(%{name: "quote", arity: 2}, s) end) == %{
+    assert %{
              arity: 2,
              def_arity: 2,
              origin: "Kernel.SpecialForms",
@@ -42,9 +42,9 @@ defmodule ElixirSense.SuggestionsTest do
              metadata: %{},
              snippet: nil,
              visibility: :public
-           }
+           } = Enum.find(list, fn s -> match?(%{name: "quote", arity: 2}, s) end)
 
-    assert Enum.find(list, fn s -> match?(%{name: "require", arity: 2}, s) end) == %{
+    assert %{
              arity: 2,
              def_arity: 2,
              origin: "Kernel.SpecialForms",
@@ -53,11 +53,10 @@ defmodule ElixirSense.SuggestionsTest do
              args: "module, opts",
              args_list: ["module", "opts"],
              name: "require",
-             summary: "Requires a module in order to use its macros.",
              metadata: %{},
              snippet: nil,
              visibility: :public
-           }
+           } = Enum.find(list, fn s -> match?(%{name: "require", arity: 2}, s) end)
   end
 
   test "without empty hint" do
