@@ -1350,12 +1350,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         alias __MODULE__.Sub
         alias __MODULE__
         alias __MODULE__.A.B, as: C
+        alias __MODULE__, as: Some
+        alias Some.Private
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 5) == [{Sub, MyModule.Sub}, {C, MyModule.A.B}]
+    assert get_line_aliases(state, 7) == [
+             {Sub, MyModule.Sub},
+             {C, MyModule.A.B},
+             {Some, MyModule},
+             {Private, MyModule.Private}
+           ]
   end
 
   test "aliases of aliases" do
@@ -1667,12 +1674,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       defmodule MyModule do
         require __MODULE__.Sub
+        require __MODULE__.A, as: B
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_requires(state, 3) == [MyModule.Sub]
+    assert get_line_requires(state, 4) == [MyModule.A, MyModule.Sub]
+    assert get_line_aliases(state, 4) == [{B, MyModule.A}]
   end
 
   test "requires with 1.2 notation" do

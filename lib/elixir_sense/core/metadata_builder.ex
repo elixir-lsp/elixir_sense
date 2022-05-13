@@ -713,6 +713,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_alias(ast, state, line, alias_tuple)
   end
 
+  # alias for submodule of __MODULE__ with `as` option
+  defp pre(
+         {:alias, [line: line, column: _column], [{:__MODULE__, _, nil}, [as: alias_expression]]} =
+           ast,
+         state
+       ) do
+    module = get_current_module(state)
+    alias_tuple = alias_tuple(module, alias_expression)
+    pre_alias(ast, state, line, alias_tuple)
+  end
+
   # alias atom module with `as` option
   defp pre({:alias, [line: line, column: _column], [mod, [as: alias_expression]]} = ast, state)
        when is_atom(mod) do
