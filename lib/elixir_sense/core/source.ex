@@ -759,11 +759,16 @@ defmodule ElixirSense.Core.Source do
   defp scan([_token | tokens], state), do: scan(tokens, state)
   defp scan([], state), do: state
 
+  defp normalize_end_col(list) when is_list(list), do: nil
+  defp normalize_end_col(other), do: other
+
   defp update_pos({line, init_col, end_col}, nil) do
+    end_col = normalize_end_col(end_col)
     {{line, init_col}, {line, end_col}}
   end
 
   defp update_pos({new_init_line, new_init_col, _}, {{_, _}, {end_line, end_col}}) do
+    end_col = normalize_end_col(end_col)
     {{new_init_line, new_init_col}, {end_line, end_col}}
   end
 
