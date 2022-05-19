@@ -332,18 +332,6 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     # assert '"' in sigils
     # assert '(' in sigils
     assert [] == expand('~r')
-
-    # eval("import Bitwise")
-    env = %Env{
-      imports: [Bitwise]
-    }
-
-    sigils = expand('~', env)
-    assert sigils |> Enum.any?(fn s -> s.name == "~~~" and s.arity == 1 end)
-
-    # assert [] = expand('~~', env)
-    assert [%{name: "~~~", arity: 1}] = expand('~~', env)
-    assert [%{name: "~~~", arity: 1}] = expand('~~~', env)
   end
 
   test "function completion using a variable bound to a module" do
