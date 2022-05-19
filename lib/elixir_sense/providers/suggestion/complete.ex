@@ -481,8 +481,14 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     # TODO migrate to
     # Macro.classify_atom(String.to_atom(name)) in [:identifier, :unquoted]
     # when we require elixir 1.14
-    Code.Identifier.classify(String.to_atom(name)) != :other and
+
+    # if Version.match?(System.version(), ">= 1.14.0") do
+      Macro.classify_atom(String.to_atom(name)) in [:identifier, :unquoted] and
       not String.starts_with?(name, "Elixir.")
+    # else
+    # Code.Identifier.classify(String.to_atom(name)) != :other and
+    #   not String.starts_with?(name, "Elixir.")
+    # end
   end
 
   defp match_modules(hint, root, env) do
