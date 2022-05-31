@@ -45,22 +45,6 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     end
   end
 
-  # Code.fetch_docs(:edoc_wiki) on OTP 23 returns
-  # {:error, :chunk_not_found} yet doc_sh is able to retrieve docs 
-  test "erlang module completion edoc" do
-    assert expand(':edoc_wi') ==
-             [
-               %{
-                 name: ":edoc_wiki",
-                 subtype: nil,
-                 summary:
-                   "EDoc wiki expansion, parsing and postprocessing of XML text.\nUses XMerL.",
-                 type: :module,
-                 metadata: %{}
-               }
-             ]
-  end
-
   test "erlang module no completion" do
     assert expand(':unknown') == []
   end

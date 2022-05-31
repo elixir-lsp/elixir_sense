@@ -999,7 +999,7 @@ defmodule ElixirSense.SignatureTest do
                  %{
                    documentation: "",
                    name: "or",
-                   params: ["boolean()", "boolean()"],
+                   params: [_, _],
                    spec: "@spec boolean or boolean :: boolean"
                  }
                ]

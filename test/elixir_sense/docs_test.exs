@@ -233,7 +233,6 @@ defmodule ElixirSense.DocsTest do
       assert actual_subject == ":erlang.or"
 
       assert docs =~ """
-             > :erlang.or(boolean(), boolean())
 
              ### Specs
 
