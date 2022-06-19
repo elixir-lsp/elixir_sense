@@ -420,7 +420,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp get_metadata_entry_md({:group, text}) do
-    "**Group** - #{text}"
+    "**Group**\n#{text}"
   end
 
   defp get_metadata_entry_md({:guard, true}) do
