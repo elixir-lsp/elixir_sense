@@ -419,6 +419,10 @@ defmodule ElixirSense.Core.Introspection do
     "**Since**\n#{text}"
   end
 
+  defp get_metadata_entry_md({:group, text}) do
+    "**Group**\n#{text}"
+  end
+
   defp get_metadata_entry_md({:guard, true}) do
     "**Guard**"
   end
@@ -441,6 +445,10 @@ defmodule ElixirSense.Core.Introspection do
 
   defp get_metadata_entry_md({:delegate_to, {m, f, a}}) do
     "**Delegates to**\n#{inspect(m)}.#{f}/#{a}"
+  end
+
+  defp get_metadata_entry_md({key, value}) do
+    "**#{key}**\n#{value}"
   end
 
   # no types inside a function
