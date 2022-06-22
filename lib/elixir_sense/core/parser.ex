@@ -123,11 +123,6 @@ defmodule ElixirSense.Core.Parser do
     end
   end
 
-  # elixir < 1.11
-  defp normalize_error({:error, {line, msg, detail}}) when is_integer(line),
-    do: {:error, {line, msg, detail}}
-
-  # elixir >= 1.11
   defp normalize_error({:error, {[line: line, column: _column], msg, detail}}),
     do: {:error, {line, msg, detail}}
 
@@ -141,13 +136,12 @@ defmodule ElixirSense.Core.Parser do
     |> replace_line_with_marker(line)
   end
 
-  # since elixir 1.11 error is {"unexpected reserved word: ", ...}, "do"}
   defp fix_parse_error(
          source,
          _cursor_line_number,
          {:error, {line_number, {message, _}, "do"}}
        )
-       when message in ["unexpected token: ", "unexpected reserved word: "] do
+       when message in ["unexpected reserved word: "] do
     source
     |> Source.split_lines()
     |> List.update_at(line_number - 1, fn line ->
@@ -157,8 +151,6 @@ defmodule ElixirSense.Core.Parser do
     end)
     |> Enum.join("\n")
   end
-
-  # since elixir 1.11 error is {"unexpected reserved word: ", ...}, "end"}
 
   defp fix_parse_error(
          source,

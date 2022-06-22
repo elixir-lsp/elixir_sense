@@ -22,7 +22,7 @@ defmodule ExUnitConfig do
 
   def erlang_eep48_supported do
     otp_release = System.otp_release() |> String.to_integer()
-    otp_release >= 23 and Version.match?(System.version(), ">= 1.11.0")
+    otp_release >= 23
   end
 
   defp edoc_fallback do

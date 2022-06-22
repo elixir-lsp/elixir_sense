@@ -828,7 +828,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     current_module_variants = get_current_module_variants(state)
 
-    # Elixir >= 1.11 require some meta to expand ast
+    # Elixir require some meta to expand ast
     use_ast = Ast.add_default_meta(ast)
 
     %{
@@ -1221,14 +1221,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # String literal in sigils
-  # elixir >= 1.11
   defp post({:<<>>, [indentation: _, line: line, column: _column], [str]} = ast, state)
        when is_binary(str) do
-    post_string_literal(ast, state, line, str)
-  end
-
-  # elixir < 1.11
-  defp post({:<<>>, [line: line, column: _column], [str]} = ast, state) when is_binary(str) do
     post_string_literal(ast, state, line, str)
   end
 
@@ -1463,19 +1457,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
     sigil_r: Regex
   }
 
-  @builtin_sigils_list [
-    :sigil_D,
-    :sigil_T,
-    :sigil_U,
-    :sigil_N,
-    :sigil_R,
-    :sigil_r
-  ]
-
   # builtin sigil struct
-  # TODO refactor to is_map_key(@builtin_sigils, sigil) when elixir 1.10 is required
-  def get_binding_type(_state, {sigil, _, _})
-      when is_atom(sigil) and sigil in @builtin_sigils_list do
+  def get_binding_type(_state, {sigil, _, _}) when is_map_key(@builtin_sigils, sigil) do
     # TODO support custom sigils
     {:struct, [], {:atom, @builtin_sigils |> Map.fetch!(sigil)}}
   end
