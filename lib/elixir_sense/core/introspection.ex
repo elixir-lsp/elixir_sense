@@ -39,6 +39,9 @@ defmodule ElixirSense.Core.Introspection do
   @type fun_docs :: %{docs: markdown, types: markdown}
   @type docs :: mod_docs | fun_docs
 
+  @type module_subtype ::
+          :exception | :protocol | :implementation | :behaviour | :struct | :task | nil
+
   @no_documentation "No documentation available\n"
 
   # TODO consider removing this when EEP 48 support lands
@@ -959,6 +962,7 @@ defmodule ElixirSense.Core.Introspection do
       iex> ElixirSense.Core.Introspection.get_module_subtype(Elixir)
       nil
   """
+  @spec get_module_subtype(module()) :: module_subtype()
   def get_module_subtype(module) do
     has_func = fn f, a -> module_has_function(module, f, a) end
 

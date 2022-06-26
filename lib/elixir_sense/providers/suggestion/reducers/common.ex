@@ -35,7 +35,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
   @type mod :: %{
           type: :module,
           name: String.t(),
-          subtype: String.t(),
+          subtype: ElixirSense.Core.Introspection.module_subtype(),
           summary: String.t(),
           metadata: map
         }
