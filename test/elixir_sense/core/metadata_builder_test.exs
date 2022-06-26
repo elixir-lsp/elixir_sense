@@ -9,7 +9,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @tag requires_source: true
   test "build metadata from kernel.ex" do
     assert get_subject_definition_line(Kernel, :defmodule, nil) =~
-             "defmacro defmodule(alias, do: block) do"
+             "defmacro defmodule(alias, do_block)"
   end
 
   @tag requires_source: true

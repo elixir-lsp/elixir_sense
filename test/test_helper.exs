@@ -5,7 +5,7 @@ defmodule ExUnitConfig do
   end
 
   defp otp_related do
-    for major <- 23..23, otp_older_than(major) do
+    for major <- 22..25, otp_older_than(major) do
       {:"requires_otp_#{major}", true}
     end
   end
