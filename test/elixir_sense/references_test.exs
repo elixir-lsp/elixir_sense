@@ -9,6 +9,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
 
     Code.compile_file("./test/support/modules_with_references.ex")
     Code.compile_file("./test/support/module_with_builtin_type_shadowing.ex")
+    Code.compile_file("./test/support/subscriber.ex")
 
     trace = Tracer.get()
 

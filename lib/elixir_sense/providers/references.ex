@@ -13,7 +13,6 @@ defmodule ElixirSense.Providers.References do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.AttributeInfo
   alias ElixirSense.Core.State.VarInfo
-  alias Mix.Tasks.Xref
 
   @type position :: %{line: pos_integer, column: pos_integer}
 
@@ -168,29 +167,6 @@ defmodule ElixirSense.Providers.References do
     |> List.flatten()
     |> Enum.filter(caller_filter(mfa))
     |> Enum.uniq()
-  end
-
-  defp calls do
-    if Mix.Project.umbrella?() do
-      umbrella_calls()
-    else
-      Xref.calls()
-    end
-  end
-
-  def umbrella_calls do
-    build_dir = Path.expand(Mix.Project.config()[:build_path])
-    app_paths = Mix.Project.apps_paths()
-
-    app_paths
-    |> Enum.flat_map(fn {app, path} ->
-      Mix.Project.in_project(app, path, [build_path: build_dir], fn _ ->
-        Xref.calls()
-        |> Enum.map(fn call ->
-          Map.update!(call, :file, fn file -> Path.expand(file) end)
-        end)
-      end)
-    end)
   end
 
   defp expand_xref_line_calls(xref_call, buffer_arity) do
