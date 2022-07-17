@@ -138,4 +138,71 @@ defmodule ElixirSense.Core.MetadataTest do
     env = Metadata.get_env(metadata, 17)
     refute Metadata.at_module_body?(metadata, env)
   end
+
+  test "get_position_to_insert_alias when aliases exist" do
+    code = """
+    defmodule MyModule do
+      alias Foo.Bar #2
+
+      def foo do
+        IO.puts() #5
+      end
+
+      defmodule Inner do
+        alias Foo.Bar #9
+        def bar do
+          IO.puts() #11
+        end
+      end
+    end
+    """
+
+    line_number = 5
+    metadata = Parser.parse_string(code, true, true, line_number)
+    position = Metadata.get_position_to_insert_alias(metadata, line_number)
+
+    assert {2, 3} == position
+
+    line_number = 11
+    metadata = Parser.parse_string(code, true, true, line_number)
+    position = Metadata.get_position_to_insert_alias(metadata, line_number)
+
+    assert {9, 5} == position
+  end
+
+  test "get_position_to_insert_alias when moduledoc exists" do
+    code = """
+    defmodule MyModule do
+      @moduledoc \"\"\"
+        New module without any aliases
+      \"\"\"
+
+      def foo do
+         #7
+      end
+    end
+    """
+
+    line_number = 7
+    metadata = Parser.parse_string(code, true, true, line_number)
+    position = Metadata.get_position_to_insert_alias(metadata, line_number)
+
+    assert {5, 3} == position
+  end
+
+  test "get_position_to_insert_alias when neither alias nor moduledoc exists" do
+    code = """
+    defmodule MyModule do
+      def foo do
+         #3
+      end
+    end
+    """
+
+    line_number = 3
+    metadata = Parser.parse_string(code, true, true, line_number)
+    position = Metadata.get_position_to_insert_alias(metadata, line_number)
+
+    assert {2, 3} == position
+  end
 end

@@ -26,6 +26,37 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ) =~ "def function_arity_zero"
   end
 
+  test "moduledoc heredoc version" do
+    state =
+      """
+      defmodule Outer do
+        @moduledoc \"\"\"
+        This is the here doc version
+        \"\"\"
+        defmodule Inner do
+          @moduledoc \"\"\"
+          This is the Inner modules moduledoc
+          \"\"\"
+        end
+      end
+      """
+      |> string_to_state
+
+    assert %{Outer => {5, 3}, Outer.Inner => {9, 5}} = state.moduledoc_positions
+  end
+
+  test "moduledoc boolean version" do
+    state =
+      """
+      defmodule Outer do
+        @moduledoc false
+      end
+      """
+      |> string_to_state
+
+    assert %{Outer => {3, 3}} = state.moduledoc_positions
+  end
+
   test "module attributes" do
     state =
       """
@@ -3380,6 +3411,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: :def
              }
            } = state.mods_funs_to_positions
+  end
+
+  test "first_alias_positions" do
+    state =
+      """
+      defmodule OuterMod do
+        alias Foo.Bar
+        alias Foo1.Bar1
+        defmodule InnerMod do
+          alias Baz.Quz
+        end
+      end
+      """
+      |> string_to_state
+
+    assert %{OuterMod => {2, 3}, OuterMod.InnerMod => {5, 5}} = state.first_alias_positions
   end
 
   test "use" do

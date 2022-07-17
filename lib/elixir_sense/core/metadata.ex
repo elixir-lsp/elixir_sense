@@ -28,7 +28,9 @@ defmodule ElixirSense.Core.Metadata do
             types: %{},
             specs: %{},
             structs: %{},
-            error: nil
+            error: nil,
+            first_alias_positions: nil,
+            moduledoc_positions: nil
 
   @type signature_t :: %{
           name: String.t(),
@@ -55,6 +57,31 @@ defmodule ElixirSense.Core.Metadata do
     else
       _ ->
         false
+    end
+  end
+
+  def get_position_to_insert_alias(%__MODULE__{} = metadata, line) do
+    env = get_env(metadata, line)
+    module = env.module
+
+    cond do
+      Map.has_key?(metadata.first_alias_positions, module) ->
+        Map.get(metadata.first_alias_positions, module)
+
+      Map.has_key?(metadata.moduledoc_positions, module) ->
+        Map.get(metadata.moduledoc_positions, module)
+
+      true ->
+        mod_info = Map.get(metadata.mods_funs_to_positions, {env.module, nil, nil})
+
+        case mod_info do
+          %State.ModFunInfo{positions: [{line, column}]} ->
+            # Hacky :shrug
+            {line + 1, column - 10 + 2}
+
+          _ ->
+            nil
+        end
     end
   end
 
