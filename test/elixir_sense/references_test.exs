@@ -5,7 +5,11 @@ defmodule ElixirSense.Providers.ReferencesTest do
   setup_all do
     {:ok, _} = Tracer.start_link()
 
-    Code.compiler_options(tracers: [Tracer], ignore_module_conflict: true)
+    Code.compiler_options(
+      tracers: [Tracer],
+      ignore_module_conflict: true,
+      parser_options: [columns: true]
+    )
 
     Code.compile_file("./test/support/modules_with_references.ex")
     Code.compile_file("./test/support/module_with_builtin_type_shadowing.ex")
@@ -283,12 +287,18 @@ defmodule ElixirSense.Providers.ReferencesTest do
 
     references = ElixirSense.references(buffer, 3, 59, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 55, column: 72}, end: %{line: 55, column: 83}}
+               range: range
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.14.0-rc.0") do
+      # before 1.14 tracer reports invalid positions for captures
+      # https://github.com/elixir-lang/elixir/issues/12023
+      assert range == %{start: %{line: 55, column: 72}, end: %{line: 55, column: 83}}
+    end
   end
 
   test "find references with cursor over a function with deault argument when caller uses default arguments",
@@ -540,7 +550,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
 
     assert reference == %{
              uri: "test/support/modules_with_references.ex",
-             range: %{start: %{line: 70, column: 8}, end: %{line: 70, column: 12}}
+             range: %{start: %{line: 70, column: 9}, end: %{line: 70, column: 13}}
            }
   end
 
@@ -603,7 +613,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
              %{uri: nil, range: %{start: %{line: 6, column: 13}, end: %{line: 6, column: 17}}}
            ]
 
-    references = ElixirSense.references(buffer, 3, 6)
+    references = ElixirSense.references(buffer, 3, 6, trace)
 
     assert references == [
              %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 9}}},
@@ -629,7 +639,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
              %{range: %{end: %{column: 10, line: 4}, start: %{column: 5, line: 4}}, uri: nil}
            ]
 
-    references = ElixirSense.references(buffer, 2, 4)
+    references = ElixirSense.references(buffer, 2, 4, trace)
 
     assert references == [
              %{range: %{end: %{column: 8, line: 2}, start: %{column: 3, line: 2}}, uri: nil},
@@ -663,7 +673,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references of private functions from invocation" do
+  test "find references of private functions from invocation", %{trace: trace} do
     buffer = """
     defmodule MyModule do
       def calls_private do
@@ -681,7 +691,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 15)
+    references = ElixirSense.references(buffer, 3, 15, trace)
 
     assert references == [
              %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 16}}},

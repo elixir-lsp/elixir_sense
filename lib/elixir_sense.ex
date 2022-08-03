@@ -23,6 +23,16 @@ defmodule ElixirSense do
   alias ElixirSense.Providers.Signature
   alias ElixirSense.Providers.Suggestion
 
+  @type callee_t :: {module, atom, non_neg_integer}
+
+  @type call_t :: %{
+          callee: callee_t,
+          file: nil | String.t(),
+          line: nil | pos_integer,
+          column: nil | pos_integer
+        }
+  @type call_trace_t :: %{optional(callee_t) => [call_t]}
+
   @doc ~S"""
   Returns all documentation related a module or function, including types and callback information.
 
@@ -372,7 +382,8 @@ defmodule ElixirSense do
       ...>   {ElixirSense.Providers.ReferencesTest.Modules.Callee1, :func, 0} => %{
       ...>     callee: {ElixirSense.Providers.ReferencesTest.Modules.Callee1, :func, 0},
       ...>     file: "test/support/modules_with_references.ex",
-      ...>     line: 36
+      ...>     line: 36,
+      ...>     column: 60,
       ...>   }
       ...> }
       iex> ElixirSense.references(code, 3, 6, trace)
@@ -390,9 +401,9 @@ defmodule ElixirSense do
           String.t(),
           pos_integer,
           pos_integer,
-          ElixirSense.Core.References.Tracer.call_trace_t() | nil
+          call_trace_t()
         ) :: [References.reference_info()]
-  def references(code, line, column, trace \\ nil) do
+  def references(code, line, column, trace) do
     case Source.subject_with_position(code, line, column) do
       {subject, {line, col}} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
