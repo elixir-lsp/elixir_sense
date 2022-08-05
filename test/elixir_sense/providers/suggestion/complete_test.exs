@@ -186,7 +186,11 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       end
 
     File.write!("Elixir.Sample.beam", bytecode)
-    assert {:docs_v1, _, _, _, _, _, _} = Code.fetch_docs(Sample)
+
+    case Code.fetch_docs(Sample) do
+      {:docs_v1, _, _, _, _, _, _} -> :ok
+      {:error, :chunk_not_found} -> :ok
+    end
 
     # IEx version asserts expansion on Sample._ but we also include :__info__ and there is more than 1 match
     assert [%{name: "__bar__"}] = expand('Sample.__b')
