@@ -1110,6 +1110,30 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [%{name: "Range"}] = expand('%__MODULE__.Ra', %Env{scope_module: Date})
   end
 
+  test "completion for struct attributes" do
+    assert [%{name: "@my_attr"}] =
+             expand('%@my', %Env{
+               attributes: [
+                 %AttributeInfo{
+                   name: :my_attr,
+                   type: {:atom, Date}
+                 }
+               ],
+               scope: MyMod
+             })
+
+    assert [%{name: "Range"}] =
+             expand('%@my_attr.R', %Env{
+               attributes: [
+                 %AttributeInfo{
+                   name: :my_attr,
+                   type: {:atom, Date}
+                 }
+               ],
+               scope: MyMod
+             })
+  end
+
   # handled elsewhere
   # TODO consider moving struct key completion here after elixir 1.13+ is required
   # test "completion for struct keys" do

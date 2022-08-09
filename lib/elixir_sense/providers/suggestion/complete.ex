@@ -195,6 +195,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       {:struct, {:dot, path, hint}} ->
         expand_dot(path, List.to_string(hint), false, env, true)
 
+      # elixir >= 1.14
+      {:struct, {:module_attribute, attribute}} ->
+        expand_attribute(List.to_string(attribute), env)
+
       {:module_attribute, attribute} ->
         expand_attribute(List.to_string(attribute), env)
 
