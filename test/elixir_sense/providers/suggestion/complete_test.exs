@@ -252,6 +252,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
            ] = expand('String.Cha')
   end
 
+  @tag requires_elixir_1_14: true
   test "elixir submodule completion with __MODULE__" do
     assert [
              %{
@@ -263,6 +264,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
            ] = expand('__MODULE__.Cha', %Env{scope_module: String})
   end
 
+  @tag requires_elixir_1_14: true
   test "elixir submodule completion with attribute bound to module" do
     assert [
              %{
@@ -291,16 +293,19 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [%{name: "fun2ms", origin: ":ets"}] = expand(':ets.fun2')
   end
 
+  @tag requires_elixir_1_14: true
   test "function completion on __MODULE__" do
     assert [%{name: "version", origin: "System"}] =
              expand('__MODULE__.ve', %Env{scope_module: System})
   end
 
+  @tag requires_elixir_1_14: true
   test "function completion on __MODULE__ submodules" do
     assert [%{name: "to_string", origin: "String.Chars"}] =
              expand('__MODULE__.Chars.to', %Env{scope_module: String})
   end
 
+  @tag requires_elixir_1_14: true
   test "function completion on attribute bound to module" do
     assert [%{name: "version", origin: "System"}] =
              expand('@my_attr.ve', %Env{
@@ -1106,11 +1111,13 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [%{name: "MyStruct"}] = expand('%ElixirSense.Providers.Suggestion.CompleteTest.')
   end
 
+  @tag requires_elixir_1_14: true
   test "completion for struct names with __MODULE__" do
     assert [%{name: "__MODULE__"}] = expand('%__MODU', %Env{scope_module: Date.Range})
     assert [%{name: "Range"}] = expand('%__MODULE__.Ra', %Env{scope_module: Date})
   end
 
+  @tag requires_elixir_1_14: true
   test "completion for struct attributes" do
     assert [%{name: "@my_attr"}] =
              expand('%@my', %Env{
