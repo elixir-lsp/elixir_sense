@@ -199,6 +199,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       {:struct, {:module_attribute, attribute}} ->
         expand_attribute(List.to_string(attribute), env)
 
+      # elixir >= 1.14
+      {:struct, {:local_or_var, local_or_var}} ->
+        # TODO consider suggesting struct fields here when we require elixir 1.13
+        # expand_struct_fields_or_local_or_var(code, List.to_string(local_or_var), shell)
+        expand_local_or_var(List.to_string(local_or_var), env)
+
       {:module_attribute, attribute} ->
         expand_attribute(List.to_string(attribute), env)
 

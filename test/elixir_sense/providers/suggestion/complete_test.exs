@@ -1107,6 +1107,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "completion for struct names with __MODULE__" do
+    assert [%{name: "__MODULE__"}] = expand('%__MODU', %Env{scope_module: Date.Range})
     assert [%{name: "Range"}] = expand('%__MODULE__.Ra', %Env{scope_module: Date})
   end
 
