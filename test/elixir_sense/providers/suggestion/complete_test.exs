@@ -252,6 +252,36 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
            ] = expand('String.Cha')
   end
 
+  test "elixir submodule completion with __MODULE__" do
+    assert [
+             %{
+               name: "Chars",
+               subtype: :protocol,
+               summary:
+                 "The `String.Chars` protocol is responsible for\nconverting a structure to a binary (only if applicable)."
+             }
+           ] = expand('__MODULE__.Cha', %Env{scope_module: String})
+  end
+
+  test "elixir submodule completion with attribute bound to module" do
+    assert [
+             %{
+               name: "Chars",
+               subtype: :protocol,
+               summary:
+                 "The `String.Chars` protocol is responsible for\nconverting a structure to a binary (only if applicable)."
+             }
+           ] =
+             expand('@my_attr.Cha', %Env{
+               attributes: [
+                 %AttributeInfo{
+                   name: :my_attr,
+                   type: {:atom, String}
+                 }
+               ]
+             })
+  end
+
   test "elixir submodule no completion" do
     assert expand('IEx.Xyz') == []
   end
@@ -259,6 +289,28 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   test "function completion" do
     assert [%{name: "version", origin: "System"}] = expand('System.ve')
     assert [%{name: "fun2ms", origin: ":ets"}] = expand(':ets.fun2')
+  end
+
+  test "function completion on __MODULE__" do
+    assert [%{name: "version", origin: "System"}] =
+             expand('__MODULE__.ve', %Env{scope_module: System})
+  end
+
+  test "function completion on __MODULE__ submodules" do
+    assert [%{name: "to_string", origin: "String.Chars"}] =
+             expand('__MODULE__.Chars.to', %Env{scope_module: String})
+  end
+
+  test "function completion on attribute bound to module" do
+    assert [%{name: "version", origin: "System"}] =
+             expand('@my_attr.ve', %Env{
+               attributes: [
+                 %AttributeInfo{
+                   name: :my_attr,
+                   type: {:atom, System}
+                 }
+               ]
+             })
   end
 
   test "function completion with arity" do
@@ -585,6 +637,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
     # local call on var
 
+    # TODO
     # Code.cursor_context returns :none
 
     # list = expand('asd.(')
@@ -1051,6 +1104,10 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert entries |> Enum.any?(&(&1.name == "URI"))
 
     assert [%{name: "MyStruct"}] = expand('%ElixirSense.Providers.Suggestion.CompleteTest.')
+  end
+
+  test "completion for struct names with __MODULE__" do
+    assert [%{name: "Range"}] = expand('%__MODULE__.Ra', %Env{scope_module: Date})
   end
 
   # handled elsewhere

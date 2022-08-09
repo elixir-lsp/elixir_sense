@@ -109,8 +109,11 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       end
 
     case NormalizedCode.CursorContext.cursor_context(code) do
-      {:alias, alias} ->
-        expand_aliases(List.to_string(alias), env, false)
+      {:alias, hint} when is_list(hint) ->
+        expand_aliases(List.to_string(hint), env, false)
+
+      {:alias, prefix, hint} ->
+        expand_prefixed_aliases(prefix, hint, env, false)
 
       {:unquoted_atom, unquoted_atom} ->
         expand_erlang_modules(List.to_string(unquoted_atom), env)
@@ -181,8 +184,16 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         no()
 
       # elixir >= 1.13
-      {:struct, struct} ->
+      {:struct, struct} when is_list(struct) ->
         expand_aliases(List.to_string(struct), env, true)
+
+      # elixir >= 1.14
+      {:struct, {:alias, prefix, hint}} ->
+        expand_prefixed_aliases(prefix, hint, env, true)
+
+      # elixir >= 1.14
+      {:struct, {:dot, path, hint}} ->
+        expand_dot(path, List.to_string(hint), false, env, true)
 
       {:module_attribute, attribute} ->
         expand_attribute(List.to_string(attribute), env)
@@ -213,6 +224,15 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
+  # elixir >= 1.14
+  defp expand_dot_path({:var, '__MODULE__'}, env) do
+    if env.scope_module != nil and Introspection.elixir_module?(env.scope_module) do
+      {:ok, {:atom, env.scope_module}}
+    else
+      :error
+    end
+  end
+
   defp expand_dot_path({:var, var}, env) do
     value_from_binding({:variable, List.to_atom(var)}, env)
   end
@@ -221,13 +241,54 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     value_from_binding({:attribute, List.to_atom(attribute)}, env)
   end
 
-  defp expand_dot_path({:alias, var}, env) do
-    alias = var |> List.to_string() |> String.split(".") |> value_from_alias(env)
+  defp expand_dot_path({:alias, hint}, env) do
+    alias = hint |> List.to_string() |> String.split(".") |> value_from_alias(env)
 
     case alias do
       {:ok, atom} -> {:ok, {:atom, atom}}
       :error -> :error
     end
+  end
+
+  # elixir >= 1.14
+  defp expand_dot_path({:alias, {:local_or_var, var}, hint}, env) do
+    case var do
+      '__MODULE__' ->
+        alias_suffix = hint |> List.to_string() |> String.split(".")
+        alias = [{:__MODULE__, [], nil} | alias_suffix] |> value_from_alias(env)
+
+        case alias do
+          {:ok, atom} -> {:ok, {:atom, atom}}
+          :error -> :error
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  defp expand_dot_path({:alias, {:module_attribute, attribute}, hint}, env) do
+    case value_from_binding({:attribute, List.to_atom(attribute)}, env) do
+      {:ok, {:atom, atom}} ->
+        if Introspection.elixir_module?(atom) do
+          alias_suffix = hint |> List.to_string() |> String.split(".")
+          alias = (Module.split(atom) ++ alias_suffix) |> value_from_alias(env)
+
+          case alias do
+            {:ok, atom} -> {:ok, {:atom, atom}}
+            :error -> :error
+          end
+        else
+          :error
+        end
+
+      :error ->
+        :error
+    end
+  end
+
+  defp expand_dot_path({:alias, _, _hint}, _env) do
+    :error
   end
 
   defp expand_dot_path({:unquoted_atom, var}, _env) do
@@ -416,9 +477,36 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     |> format_expansion()
   end
 
+  defp expand_prefixed_aliases({:local_or_var, '__MODULE__'}, hint, env, only_structs) do
+    if env.scope_module != nil and Introspection.elixir_module?(env.scope_module) do
+      expand_aliases("#{env.scope_module}.#{hint}", env, only_structs)
+    else
+      no()
+    end
+  end
+
+  defp expand_prefixed_aliases({:module_attribute, attribute}, hint, env, only_structs) do
+    case value_from_binding({:attribute, List.to_atom(attribute)}, env) do
+      {:ok, {:atom, atom}} ->
+        if Introspection.elixir_module?(atom) do
+          expand_aliases("#{atom}.#{hint}", env, only_structs)
+        else
+          no()
+        end
+
+      :error ->
+        no()
+    end
+  end
+
+  defp expand_prefixed_aliases(_, _hint, _env, _only_structs), do: no()
+
   defp value_from_alias(mod_parts, env) do
     mod_parts
-    |> Enum.map(&String.to_atom/1)
+    |> Enum.map(fn
+      bin when is_binary(bin) -> String.to_atom(bin)
+      other -> other
+    end)
     |> Source.concat_module_parts(env.scope_module, env.aliases)
   end
 
