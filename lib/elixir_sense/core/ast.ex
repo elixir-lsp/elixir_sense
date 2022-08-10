@@ -59,7 +59,13 @@ defmodule ElixirSense.Core.Ast do
 
   def extract_use_info(use_ast, module, state) do
     current_aliases = State.current_aliases(state)
-    env = %Macro.Env{module: module, function: nil, aliases: current_aliases}
+
+    env = %Macro.Env{
+      module: module,
+      function: nil,
+      aliases: current_aliases,
+      macros: __ENV__.macros
+    }
 
     {expanded_ast, _requires} = Macro.prewalk(use_ast, {env, 1}, &do_expand/2)
     {_ast, env_info} = Macro.prewalk(expanded_ast, @empty_env_info, &pre_walk_expanded/2)
@@ -222,6 +228,14 @@ defmodule ElixirSense.Core.Ast do
        when kind in @type_kinds do
     {nil,
      %{acc | types: [{name, get_args(args), typespec_to_string(kind, spec), kind} | acc.types]}}
+  end
+
+  # elixir 1.14
+  defp pre_walk_expanded(
+         {{:., _, [Kernel, :@]}, [], [{:behaviour, _, [behaviour]}]},
+         acc
+       ) do
+    {nil, %{acc | behaviours: [behaviour | acc.behaviours]}}
   end
 
   defp pre_walk_expanded(

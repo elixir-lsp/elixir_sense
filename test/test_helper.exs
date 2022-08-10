@@ -15,7 +15,7 @@ defmodule ExUnitConfig do
   end
 
   defp elixir_related do
-    for minor_version <- 10..13, elixir_older_than(minor_version) do
+    for minor_version <- 10..14, elixir_older_than(minor_version) do
       {:"requires_elixir_1_#{minor_version}", true}
     end
   end

@@ -186,7 +186,11 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       end
 
     File.write!("Elixir.Sample.beam", bytecode)
-    assert {:docs_v1, _, _, _, _, _, _} = Code.fetch_docs(Sample)
+
+    case Code.fetch_docs(Sample) do
+      {:docs_v1, _, _, _, _, _, _} -> :ok
+      {:error, :chunk_not_found} -> :ok
+    end
 
     # IEx version asserts expansion on Sample._ but we also include :__info__ and there is more than 1 match
     assert [%{name: "__bar__"}] = expand('Sample.__b')
@@ -248,6 +252,38 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
            ] = expand('String.Cha')
   end
 
+  @tag requires_elixir_1_14: true
+  test "elixir submodule completion with __MODULE__" do
+    assert [
+             %{
+               name: "Chars",
+               subtype: :protocol,
+               summary:
+                 "The `String.Chars` protocol is responsible for\nconverting a structure to a binary (only if applicable)."
+             }
+           ] = expand('__MODULE__.Cha', %Env{scope_module: String})
+  end
+
+  @tag requires_elixir_1_14: true
+  test "elixir submodule completion with attribute bound to module" do
+    assert [
+             %{
+               name: "Chars",
+               subtype: :protocol,
+               summary:
+                 "The `String.Chars` protocol is responsible for\nconverting a structure to a binary (only if applicable)."
+             }
+           ] =
+             expand('@my_attr.Cha', %Env{
+               attributes: [
+                 %AttributeInfo{
+                   name: :my_attr,
+                   type: {:atom, String}
+                 }
+               ]
+             })
+  end
+
   test "elixir submodule no completion" do
     assert expand('IEx.Xyz') == []
   end
@@ -255,6 +291,31 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   test "function completion" do
     assert [%{name: "version", origin: "System"}] = expand('System.ve')
     assert [%{name: "fun2ms", origin: ":ets"}] = expand(':ets.fun2')
+  end
+
+  @tag requires_elixir_1_14: true
+  test "function completion on __MODULE__" do
+    assert [%{name: "version", origin: "System"}] =
+             expand('__MODULE__.ve', %Env{scope_module: System})
+  end
+
+  @tag requires_elixir_1_14: true
+  test "function completion on __MODULE__ submodules" do
+    assert [%{name: "to_string", origin: "String.Chars"}] =
+             expand('__MODULE__.Chars.to', %Env{scope_module: String})
+  end
+
+  @tag requires_elixir_1_14: true
+  test "function completion on attribute bound to module" do
+    assert [%{name: "version", origin: "System"}] =
+             expand('@my_attr.ve', %Env{
+               attributes: [
+                 %AttributeInfo{
+                   name: :my_attr,
+                   type: {:atom, System}
+                 }
+               ]
+             })
   end
 
   test "function completion with arity" do
@@ -332,18 +393,6 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     # assert '"' in sigils
     # assert '(' in sigils
     assert [] == expand('~r')
-
-    # eval("import Bitwise")
-    env = %Env{
-      imports: [Bitwise]
-    }
-
-    sigils = expand('~', env)
-    assert sigils |> Enum.any?(fn s -> s.name == "~~~" and s.arity == 1 end)
-
-    # assert [] = expand('~~', env)
-    assert [%{name: "~~~", arity: 1}] = expand('~~', env)
-    assert [%{name: "~~~", arity: 1}] = expand('~~~', env)
   end
 
   test "function completion using a variable bound to a module" do
@@ -593,6 +642,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
     # local call on var
 
+    # TODO
     # Code.cursor_context returns :none
 
     # list = expand('asd.(')
@@ -1059,6 +1109,37 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert entries |> Enum.any?(&(&1.name == "URI"))
 
     assert [%{name: "MyStruct"}] = expand('%ElixirSense.Providers.Suggestion.CompleteTest.')
+  end
+
+  @tag requires_elixir_1_14: true
+  test "completion for struct names with __MODULE__" do
+    assert [%{name: "__MODULE__"}] = expand('%__MODU', %Env{scope_module: Date.Range})
+    assert [%{name: "Range"}] = expand('%__MODULE__.Ra', %Env{scope_module: Date})
+  end
+
+  @tag requires_elixir_1_14: true
+  test "completion for struct attributes" do
+    assert [%{name: "@my_attr"}] =
+             expand('%@my', %Env{
+               attributes: [
+                 %AttributeInfo{
+                   name: :my_attr,
+                   type: {:atom, Date}
+                 }
+               ],
+               scope: MyMod
+             })
+
+    assert [%{name: "Range"}] =
+             expand('%@my_attr.R', %Env{
+               attributes: [
+                 %AttributeInfo{
+                   name: :my_attr,
+                   type: {:atom, Date}
+                 }
+               ],
+               scope: MyMod
+             })
   end
 
   # handled elsewhere

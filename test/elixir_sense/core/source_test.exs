@@ -578,8 +578,8 @@ defmodule ElixirSense.Core.SourceTest do
         sel\
       """
 
-      options_so_far = [{:where, {3, 3, nil}}, {:preload, {4, 3, nil}}, {:limit, {5, 3, nil}}]
-      assert %{options_so_far: ^options_so_far} = which_func(code)
+      assert %{options_so_far: [{:where, {3, 3, _}}, {:preload, {4, 3, _}}, {:limit, {5, 3, _}}]} =
+               which_func(code)
 
       code = """
       from(
@@ -588,8 +588,7 @@ defmodule ElixirSense.Core.SourceTest do
         preload: [assoc1: [assoc1_1: [], assoc1_2: [], \
       """
 
-      options_so_far = [{:where, {3, 3, nil}}, {:preload, {4, 3, nil}}]
-      assert %{options_so_far: ^options_so_far} = which_func(code)
+      assert %{options_so_far: [{:where, {3, 3, _}}, {:preload, {4, 3, _}}]} = which_func(code)
     end
 
     test "identify current option, if any" do

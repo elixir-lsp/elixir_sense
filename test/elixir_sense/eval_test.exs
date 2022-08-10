@@ -141,20 +141,37 @@ defmodule ElixirSense.Evaltest do
                       Module.make_overridable(MyModule, Application)
                   """
                 else
-                  """
-                  (
-                    require Application
-
+                  if Version.match?(System.version(), ">= 1.14.0-dev") do
+                    """
                     (
-                      Module.__put_attribute__(MyModule, :behaviour, Application, nil)
-                      Module.__put_attribute__(MyModule, :doc, {0, false}, nil)
+                      require Application
 
-                      def stop(_state) do
-                        :ok
-                      end
+                      (
+                        Module.__put_attribute__(MyModule, :behaviour, Application, nil, [])
+                        Module.__put_attribute__(MyModule, :doc, {0, false}, nil, [])
 
-                      Module.make_overridable(MyModule, Application)
-                  """
+                        def stop(_state) do
+                          :ok
+                        end
+
+                        Module.make_overridable(MyModule, Application)
+                    """
+                  else
+                    """
+                    (
+                      require Application
+
+                      (
+                        Module.__put_attribute__(MyModule, :behaviour, Application, nil)
+                        Module.__put_attribute__(MyModule, :doc, {0, false}, nil)
+
+                        def stop(_state) do
+                          :ok
+                        end
+
+                        Module.make_overridable(MyModule, Application)
+                    """
+                  end
                 end)
                |> String.trim()
     end
