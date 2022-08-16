@@ -23,6 +23,16 @@ defmodule ElixirSense do
   alias ElixirSense.Providers.Signature
   alias ElixirSense.Providers.Suggestion
 
+  @type callee_t :: {module, atom, non_neg_integer}
+
+  @type call_t :: %{
+          callee: callee_t,
+          file: nil | String.t(),
+          line: nil | pos_integer,
+          column: nil | pos_integer
+        }
+  @type call_trace_t :: %{optional(callee_t) => [call_t]}
+
   @doc ~S"""
   Returns all documentation related a module or function, including types and callback information.
 
@@ -368,7 +378,15 @@ defmodule ElixirSense do
       ...>   C.func()
       ...> end
       ...> '''
-      iex> ElixirSense.references(code, 3, 6) |> Enum.take(2)
+      ...> trace = %{
+      ...>   {ElixirSense.Providers.ReferencesTest.Modules.Callee1, :func, 0} => %{
+      ...>     callee: {ElixirSense.Providers.ReferencesTest.Modules.Callee1, :func, 0},
+      ...>     file: "test/support/modules_with_references.ex",
+      ...>     line: 36,
+      ...>     column: 60,
+      ...>   }
+      ...> }
+      iex> ElixirSense.references(code, 3, 6, trace)
       [
         %{
           uri: "test/support/modules_with_references.ex",
@@ -376,18 +394,16 @@ defmodule ElixirSense do
             start: %{line: 36, column: 60},
             end: %{line: 36, column: 64}
           }
-        },
-        %{
-          uri: "test/support/modules_with_references.ex",
-          range: %{
-            start: %{line: 65, column: 16},
-            end: %{line: 65, column: 20}
-          }
         }
       ]
   """
-  @spec references(String.t(), pos_integer, pos_integer) :: [References.reference_info()]
-  def references(code, line, column) do
+  @spec references(
+          String.t(),
+          pos_integer,
+          pos_integer,
+          call_trace_t()
+        ) :: [References.reference_info()]
+  def references(code, line, column, trace) do
     case Source.subject_with_position(code, line, column) do
       {subject, {line, col}} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
@@ -410,7 +426,8 @@ defmodule ElixirSense do
           env,
           vars,
           attributes,
-          buffer_file_metadata
+          buffer_file_metadata,
+          trace
         )
 
       _ ->

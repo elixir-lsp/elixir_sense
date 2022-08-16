@@ -1,9 +1,26 @@
 defmodule ElixirSense.Providers.ReferencesTest do
   use ExUnit.Case, async: true
+  alias ElixirSense.Core.References.Tracer
 
-  # doctest References
+  setup_all do
+    {:ok, _} = Tracer.start_link()
 
-  test "finds reference to local function shadowing builtin type" do
+    Code.compiler_options(
+      tracers: [Tracer],
+      ignore_module_conflict: true,
+      parser_options: [columns: true]
+    )
+
+    Code.compile_file("./test/support/modules_with_references.ex")
+    Code.compile_file("./test/support/module_with_builtin_type_shadowing.ex")
+    Code.compile_file("./test/support/subscriber.ex")
+
+    trace = Tracer.get()
+
+    %{trace: trace}
+  end
+
+  test "finds reference to local function shadowing builtin type", %{trace: trace} do
     buffer = """
     defmodule B.Callee do
       def fun() do
@@ -16,17 +33,22 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 2, 8)
+    references = ElixirSense.references(buffer, 2, 8, trace)
 
-    assert references == [
+    assert [
              %{
-               range: %{start: %{column: 14, line: 4}, end: %{column: 17, line: 4}},
+               range: range_1,
                uri: "test/support/module_with_builtin_type_shadowing.ex"
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{column: 14, line: 4}, end: %{column: 17, line: 4}}
+    end
   end
 
-  test "find references with cursor over a function call" do
+  test "find references with cursor over a function call", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -36,25 +58,32 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 36, column: 60}, end: %{line: 36, column: 64}}
+               range: range_1
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 16}, end: %{line: 65, column: 20}}
+               range: range_2
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 63}, end: %{line: 65, column: 67}}
+               range: range_3
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 36, column: 60}, end: %{line: 36, column: 64}}
+      assert range_2 == %{start: %{line: 65, column: 16}, end: %{line: 65, column: 20}}
+      assert range_3 == %{start: %{line: 65, column: 63}, end: %{line: 65, column: 67}}
+    end
   end
 
-  test "find references with cursor over a function definition" do
+  test "find references with cursor over a function definition", %{trace: trace} do
     buffer = """
     defmodule ElixirSense.Providers.ReferencesTest.Modules.Callee1 do
       def func() do
@@ -68,38 +97,51 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 2, 10)
+    references = ElixirSense.references(buffer, 2, 10, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 36, column: 60}, end: %{line: 36, column: 64}}
+               range: range_1
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 16}, end: %{line: 65, column: 20}}
+               range: range_2
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 63}, end: %{line: 65, column: 67}}
+               range: range_3
              }
-           ]
+           ] = references
 
-    references = ElixirSense.references(buffer, 6, 10)
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 36, column: 60}, end: %{line: 36, column: 64}}
+      assert range_2 == %{start: %{line: 65, column: 16}, end: %{line: 65, column: 20}}
+      assert range_3 == %{start: %{line: 65, column: 63}, end: %{line: 65, column: 67}}
+    end
 
-    assert references == [
+    references = ElixirSense.references(buffer, 6, 10, trace)
+
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 42, column: 60}, end: %{line: 42, column: 64}}
+               range: range_1
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 79}, end: %{line: 65, column: 83}}
+               range: range_2
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 42, column: 60}, end: %{line: 42, column: 64}}
+      assert range_2 == %{start: %{line: 65, column: 79}, end: %{line: 65, column: 83}}
+    end
   end
 
-  test "find references with cursor over a function definition with default arg" do
+  test "find references with cursor over a function definition with default arg", %{trace: trace} do
     buffer = """
     defmodule ElixirSenseExample.Subscription do
       def check(resource, models, user, opts \\\\ []) do
@@ -108,21 +150,27 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 2, 10)
+    references = ElixirSense.references(buffer, 2, 10, trace)
 
-    assert references == [
+    assert [
              %{
-               range: %{end: %{column: 42, line: 3}, start: %{column: 37, line: 3}},
+               range: range_1,
                uri: "test/support/subscriber.ex"
              },
              %{
-               range: %{end: %{column: 42, line: 4}, start: %{column: 37, line: 4}},
+               range: range_2,
                uri: "test/support/subscriber.ex"
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{end: %{column: 42, line: 3}, start: %{column: 37, line: 3}}
+      assert range_2 == %{end: %{column: 42, line: 4}, start: %{column: 37, line: 4}}
+    end
   end
 
-  test "find references with cursor over a function with arity 1" do
+  test "find references with cursor over a function with arity 1", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -132,21 +180,27 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 42, column: 60}, end: %{line: 42, column: 64}}
+               range: range_1
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 79}, end: %{line: 65, column: 83}}
+               range: range_2
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 42, column: 60}, end: %{line: 42, column: 64}}
+      assert range_2 == %{start: %{line: 65, column: 79}, end: %{line: 65, column: 83}}
+    end
   end
 
-  test "find references with cursor over a function called via @attr.call" do
+  test "find references with cursor over a function called via @attr.call", %{trace: trace} do
     buffer = """
     defmodule Caller do
       @attr ElixirSense.Providers.ReferencesTest.Modules.Callee1
@@ -157,21 +211,27 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 12)
+    references = ElixirSense.references(buffer, 4, 12, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 42, column: 60}, end: %{line: 42, column: 64}}
+               range: range_1
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 79}, end: %{line: 65, column: 83}}
+               range: range_2
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 42, column: 60}, end: %{line: 42, column: 64}}
+      assert range_2 == %{start: %{line: 65, column: 79}, end: %{line: 65, column: 83}}
+    end
   end
 
-  test "find references to function called via @attr.call" do
+  test "find references to function called via @attr.call", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -181,17 +241,24 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
-    assert references == [
+    assert [
              %{
-               range: %{end: %{column: 23, line: 114}, start: %{column: 13, line: 114}},
+               range: range_1,
                uri: "test/support/modules_with_references.ex"
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{end: %{column: 23, line: 114}, start: %{column: 13, line: 114}}
+    end
   end
 
-  test "find references with cursor over a function with arity 1 called via pipe operator" do
+  test "find references with cursor over a function with arity 1 called via pipe operator", %{
+    trace: trace
+  } do
     buffer = """
     defmodule Caller do
       def func() do
@@ -202,17 +269,22 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 62)
+    references = ElixirSense.references(buffer, 4, 62, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 49, column: 63}, end: %{line: 49, column: 71}}
+               range: range_1
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 49, column: 63}, end: %{line: 49, column: 71}}
+    end
   end
 
-  test "find references with cursor over a function with arity 1 captured" do
+  test "find references with cursor over a function with arity 1 captured", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -222,17 +294,24 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 72)
+    references = ElixirSense.references(buffer, 3, 72, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 49, column: 63}, end: %{line: 49, column: 71}}
+               range: range_1
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 49, column: 63}, end: %{line: 49, column: 71}}
+    end
   end
 
-  test "find references with cursor over a function when caller uses pipe operator" do
+  test "find references with cursor over a function when caller uses pipe operator", %{
+    trace: trace
+  } do
     buffer = """
     defmodule Caller do
       def func() do
@@ -242,17 +321,24 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 49, column: 63}, end: %{line: 49, column: 71}}
+               range: range_1
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 49, column: 63}, end: %{line: 49, column: 71}}
+    end
   end
 
-  test "find references with cursor over a function when caller uses capture operator" do
+  test "find references with cursor over a function when caller uses capture operator", %{
+    trace: trace
+  } do
     buffer = """
     defmodule Caller do
       def func() do
@@ -262,17 +348,24 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 55, column: 72}, end: %{line: 55, column: 83}}
+               range: range
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.14.0-rc.0") do
+      # before 1.14 tracer reports invalid positions for captures
+      # https://github.com/elixir-lang/elixir/issues/12023
+      assert range == %{start: %{line: 55, column: 72}, end: %{line: 55, column: 83}}
+    end
   end
 
-  test "find references with cursor over a function with deault argument when caller uses default arguments" do
+  test "find references with cursor over a function with deault argument when caller uses default arguments",
+       %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -283,26 +376,37 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 90, column: 60}, end: %{line: 90, column: 68}}
+               range: range_1
              }
-           ]
+           ] = references
 
-    references = ElixirSense.references(buffer, 4, 59)
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 90, column: 60}, end: %{line: 90, column: 68}}
+    end
 
-    assert references == [
+    references = ElixirSense.references(buffer, 4, 59, trace)
+
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 90, column: 60}, end: %{line: 90, column: 68}}
+               range: range_1
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 90, column: 60}, end: %{line: 90, column: 68}}
+    end
   end
 
-  test "find references with cursor over a function with deault argument when caller does not uses default arguments" do
+  test "find references with cursor over a function with deault argument when caller does not uses default arguments",
+       %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -313,26 +417,36 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 59)
+    references = ElixirSense.references(buffer, 3, 59, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 91, column: 60}, end: %{line: 91, column: 69}}
+               range: range_1
              }
-           ]
+           ] = references
 
-    references = ElixirSense.references(buffer, 4, 59)
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 91, column: 60}, end: %{line: 91, column: 69}}
+    end
 
-    assert references == [
+    references = ElixirSense.references(buffer, 4, 59, trace)
+
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 91, column: 60}, end: %{line: 91, column: 69}}
+               range: range_1
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 91, column: 60}, end: %{line: 91, column: 69}}
+    end
   end
 
-  test "find references with cursor over a module with funs with deault argument" do
+  test "find references with cursor over a module with funs with deault argument", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -342,21 +456,27 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 55)
+    references = ElixirSense.references(buffer, 3, 55, trace)
 
-    assert references == [
+    assert [
              %{
-               range: %{end: %{column: 68, line: 90}, start: %{column: 60, line: 90}},
+               range: range_1,
                uri: "test/support/modules_with_references.ex"
              },
              %{
-               range: %{end: %{column: 69, line: 91}, start: %{column: 60, line: 91}},
+               range: range_2,
                uri: "test/support/modules_with_references.ex"
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{end: %{column: 68, line: 90}, start: %{column: 60, line: 90}}
+      assert range_2 == %{end: %{column: 69, line: 91}, start: %{column: 60, line: 91}}
+    end
   end
 
-  test "find references with cursor over a module with 1.2 alias syntax" do
+  test "find references with cursor over a module with 1.2 alias syntax", %{trace: trace} do
     buffer = """
     defmodule Caller do
       alias ElixirSense.Providers.ReferencesTest.Modules.Callee5
@@ -364,14 +484,14 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references_1 = ElixirSense.references(buffer, 2, 57)
-    references_2 = ElixirSense.references(buffer, 3, 58)
+    references_1 = ElixirSense.references(buffer, 2, 57, trace)
+    references_2 = ElixirSense.references(buffer, 3, 58, trace)
 
     assert references_1 == references_2
     assert [_, _] = references_1
   end
 
-  test "find references with cursor over a function call from an aliased module" do
+  test "find references with cursor over a function call from an aliased module", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def my() do
@@ -382,25 +502,32 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 8)
+    references = ElixirSense.references(buffer, 4, 8, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 36, column: 60}, end: %{line: 36, column: 64}}
+               range: range_1
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 16}, end: %{line: 65, column: 20}}
+               range: range_2
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 63}, end: %{line: 65, column: 67}}
+               range: range_3
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 36, column: 60}, end: %{line: 36, column: 64}}
+      assert range_2 == %{start: %{line: 65, column: 16}, end: %{line: 65, column: 20}}
+      assert range_3 == %{start: %{line: 65, column: 63}, end: %{line: 65, column: 67}}
+    end
   end
 
-  test "find references with cursor over a function call from an imported module" do
+  test "find references with cursor over a function call from an imported module", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def my() do
@@ -411,25 +538,34 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 6)
+    references = ElixirSense.references(buffer, 4, 6, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 36, column: 60}, end: %{line: 36, column: 64}}
+               range: range_1
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 16}, end: %{line: 65, column: 20}}
+               range: range_2
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 63}, end: %{line: 65, column: 67}}
+               range: range_3
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 36, column: 60}, end: %{line: 36, column: 64}}
+      assert range_2 == %{start: %{line: 65, column: 16}, end: %{line: 65, column: 20}}
+      assert range_3 == %{start: %{line: 65, column: 63}, end: %{line: 65, column: 67}}
+    end
   end
 
-  test "find references with cursor over a function call pipe from an imported module" do
+  test "find references with cursor over a function call pipe from an imported module", %{
+    trace: trace
+  } do
     buffer = """
     defmodule Caller do
       def my() do
@@ -440,21 +576,29 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 12)
+    references = ElixirSense.references(buffer, 4, 12, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 42, column: 60}, end: %{line: 42, column: 64}}
+               range: range_1
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 79}, end: %{line: 65, column: 83}}
+               range: range_2
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 42, column: 60}, end: %{line: 42, column: 64}}
+      assert range_2 == %{start: %{line: 65, column: 79}, end: %{line: 65, column: 83}}
+    end
   end
 
-  test "find references with cursor over a function capture from an imported module" do
+  test "find references with cursor over a function capture from an imported module", %{
+    trace: trace
+  } do
     buffer = """
     defmodule Caller do
       def my() do
@@ -465,25 +609,32 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 7)
+    references = ElixirSense.references(buffer, 4, 7, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 36, column: 60}, end: %{line: 36, column: 64}}
+               range: range_1
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 16}, end: %{line: 65, column: 20}}
+               range: range_2
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 63}, end: %{line: 65, column: 67}}
+               range: range_3
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 36, column: 60}, end: %{line: 36, column: 64}}
+      assert range_2 == %{start: %{line: 65, column: 16}, end: %{line: 65, column: 20}}
+      assert range_3 == %{start: %{line: 65, column: 63}, end: %{line: 65, column: 67}}
+    end
   end
 
-  test "find imported references" do
+  test "find imported references", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -493,7 +644,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    reference = ElixirSense.references(buffer, 3, 59) |> Enum.at(0)
+    reference = ElixirSense.references(buffer, 3, 59, trace) |> Enum.at(0)
 
     assert reference == %{
              uri: "test/support/modules_with_references.ex",
@@ -501,7 +652,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            }
   end
 
-  test "find references from remote calls with the function in the next line" do
+  test "find references from remote calls with the function in the next line", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -511,15 +662,20 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    reference = ElixirSense.references(buffer, 3, 59) |> Enum.at(1)
+    reference = ElixirSense.references(buffer, 3, 59, trace) |> Enum.at(1)
 
-    assert reference == %{
+    assert %{
              uri: "test/support/modules_with_references.ex",
-             range: %{start: %{line: 70, column: 8}, end: %{line: 70, column: 12}}
-           }
+             range: range_1
+           } = reference
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 70, column: 9}, end: %{line: 70, column: 13}}
+    end
   end
 
-  test "find references when module with __MODULE__ special form" do
+  test "find references when module with __MODULE__ special form", %{trace: trace} do
     buffer = """
     defmodule ElixirSense.Providers.ReferencesTest.Modules do
       def func() do
@@ -529,7 +685,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    reference = ElixirSense.references(buffer, 3, 25) |> Enum.at(0)
+    reference = ElixirSense.references(buffer, 3, 25, trace) |> Enum.at(0)
 
     assert reference == %{
              uri: "test/support/modules_with_references.ex",
@@ -537,7 +693,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            }
   end
 
-  test "find references with atom module" do
+  test "find references with atom module", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -547,7 +703,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    reference = ElixirSense.references(buffer, 3, 69) |> Enum.at(0)
+    reference = ElixirSense.references(buffer, 3, 69, trace) |> Enum.at(0)
 
     assert reference == %{
              uri: "test/support/modules_with_references.ex",
@@ -555,7 +711,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            }
   end
 
-  test "find references of variables" do
+  test "find references of variables", %{trace: trace} do
     buffer = """
     defmodule MyModule do
       def func do
@@ -570,7 +726,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 6, 13)
+    references = ElixirSense.references(buffer, 6, 13, trace)
 
     assert references == [
              %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 9}}},
@@ -578,7 +734,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
              %{uri: nil, range: %{start: %{line: 6, column: 13}, end: %{line: 6, column: 17}}}
            ]
 
-    references = ElixirSense.references(buffer, 3, 6)
+    references = ElixirSense.references(buffer, 3, 6, trace)
 
     assert references == [
              %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 9}}},
@@ -587,7 +743,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references of attributes" do
+  test "find references of attributes", %{trace: trace} do
     buffer = """
     defmodule MyModule do
       @attr "abc"
@@ -597,14 +753,14 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 4, 7)
+    references = ElixirSense.references(buffer, 4, 7, trace)
 
     assert references == [
              %{range: %{end: %{column: 8, line: 2}, start: %{column: 3, line: 2}}, uri: nil},
              %{range: %{end: %{column: 10, line: 4}, start: %{column: 5, line: 4}}, uri: nil}
            ]
 
-    references = ElixirSense.references(buffer, 2, 4)
+    references = ElixirSense.references(buffer, 2, 4, trace)
 
     assert references == [
              %{range: %{end: %{column: 8, line: 2}, start: %{column: 3, line: 2}}, uri: nil},
@@ -612,7 +768,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references of private functions from definition" do
+  test "find references of private functions from definition", %{trace: trace} do
     buffer = """
     defmodule MyModule do
       def calls_private do
@@ -630,7 +786,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 10, 15)
+    references = ElixirSense.references(buffer, 10, 15, trace)
 
     assert references == [
              %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 16}}},
@@ -638,7 +794,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references of private functions from invocation" do
+  test "find references of private functions from invocation", %{trace: trace} do
     buffer = """
     defmodule MyModule do
       def calls_private do
@@ -656,7 +812,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 15)
+    references = ElixirSense.references(buffer, 3, 15, trace)
 
     assert references == [
              %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 16}}},
@@ -664,7 +820,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
-  test "find references with cursor over a module" do
+  test "find references with cursor over a module", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -674,33 +830,42 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 53)
+    references = ElixirSense.references(buffer, 3, 53, trace)
 
-    assert references == [
+    assert [
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 36, column: 60}, end: %{line: 36, column: 64}}
+               range: range_1
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 42, column: 60}, end: %{line: 42, column: 64}}
+               range: range_2
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 16}, end: %{line: 65, column: 20}}
+               range: range_3
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 63}, end: %{line: 65, column: 67}}
+               range: range_4
              },
              %{
                uri: "test/support/modules_with_references.ex",
-               range: %{start: %{line: 65, column: 79}, end: %{line: 65, column: 83}}
+               range: range_5
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{line: 36, column: 60}, end: %{line: 36, column: 64}}
+      assert range_2 == %{start: %{line: 42, column: 60}, end: %{line: 42, column: 64}}
+      assert range_3 == %{start: %{line: 65, column: 16}, end: %{line: 65, column: 20}}
+      assert range_4 == %{start: %{line: 65, column: 63}, end: %{line: 65, column: 67}}
+      assert range_5 == %{start: %{line: 65, column: 79}, end: %{line: 65, column: 83}}
+    end
   end
 
-  test "find references with cursor over an erlang module" do
+  test "find references with cursor over an erlang module", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -711,17 +876,23 @@ defmodule ElixirSense.Providers.ReferencesTest do
     """
 
     references =
-      ElixirSense.references(buffer, 3, 7) |> Enum.filter(&(&1.uri =~ "modules_with_references"))
+      ElixirSense.references(buffer, 3, 7, trace)
+      |> Enum.filter(&(&1.uri =~ "modules_with_references"))
 
-    assert references == [
+    assert [
              %{
-               range: %{start: %{column: 12, line: 74}, end: %{column: 15, line: 74}},
+               range: range_1,
                uri: "test/support/modules_with_references.ex"
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{column: 12, line: 74}, end: %{column: 15, line: 74}}
+    end
   end
 
-  test "find references with cursor over an erlang function call" do
+  test "find references with cursor over an erlang function call", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -731,17 +902,22 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 11)
+    references = ElixirSense.references(buffer, 3, 11, trace)
 
-    assert references == [
+    assert [
              %{
-               range: %{start: %{column: 12, line: 74}, end: %{column: 15, line: 74}},
+               range: range_1,
                uri: "test/support/modules_with_references.ex"
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{column: 12, line: 74}, end: %{column: 15, line: 74}}
+    end
   end
 
-  test "find references with cursor over builtin function call" do
+  test "find references with cursor over builtin function call", %{trace: trace} do
     buffer = """
     defmodule Caller do
       def func() do
@@ -751,13 +927,18 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
     """
 
-    references = ElixirSense.references(buffer, 3, 60)
+    references = ElixirSense.references(buffer, 3, 60, trace)
 
-    assert references == [
+    assert [
              %{
-               range: %{start: %{column: 60, line: 101}, end: %{column: 71, line: 101}},
+               range: range_1,
                uri: "test/support/modules_with_references.ex"
              }
-           ]
+           ] = references
+
+    if Version.match?(System.version(), ">= 1.13.0") do
+      # elixir 1.13 changed positions reurned from tracer
+      assert range_1 == %{start: %{column: 60, line: 101}, end: %{column: 71, line: 101}}
+    end
   end
 end
