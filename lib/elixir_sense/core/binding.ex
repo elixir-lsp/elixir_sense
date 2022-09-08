@@ -154,6 +154,32 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  def do_expand(env, {:list_head, list_candidate}, stack) do
+    case expand(env, list_candidate, stack) do
+      {:list, type} when type not in [:empty, :none] ->
+        type
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  def do_expand(env, {:list_tail, list_candidate}, stack) do
+    case expand(env, list_candidate, stack) do
+      {:list, type} when type not in [:empty, :none] ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
   # dependency injection
   def do_expand(env, {:call, {:atom, Application}, fun, args}, stack)
       when fun in ~w(compile_env!)a do

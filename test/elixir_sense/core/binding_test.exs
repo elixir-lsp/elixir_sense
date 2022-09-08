@@ -301,6 +301,51 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :list}
                )
     end
+
+    test "list head" do
+      assert {:atom, :abc} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list_head, {:variable, :a}}},
+                   %VarInfo{name: :a, type: {:list, {:atom, :abc}}}
+                 ]),
+                 {:variable, :list}
+               )
+
+               assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list_head, {:variable, :a}}},
+                   %VarInfo{name: :a, type: {:list, :empty}}
+                 ]),
+                 {:variable, :list}
+               )
+    end
+
+    test "list tail" do
+      assert {:list, {:atom, :abc}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list_tail, {:variable, :a}}},
+                   %VarInfo{name: :a, type: {:list, {:atom, :abc}}}
+                 ]),
+                 {:variable, :list}
+               )
+
+               assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list_tail, {:variable, :a}}},
+                   %VarInfo{name: :a, type: {:list, :empty}}
+                 ]),
+                 {:variable, :list}
+               )
+    end
+
     test "call existing map field access" do
       assert {:atom, :a} ==
                Binding.expand(
