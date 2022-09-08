@@ -233,6 +233,12 @@ defmodule ElixirSense.Core.Binding do
   def do_expand(env, {:tuple, size, fields}, stack),
     do: {:tuple, size, fields |> Enum.map(&expand(env, &1, stack))}
 
+  def do_expand(_env, {:list, :empty}, _stack),
+    do: {:list, :empty}
+
+  def do_expand(env, {:list, type}, stack),
+    do: {:list, expand(env, type, stack)}
+
   def do_expand(_env, {:atom, atom}, _stack), do: {:atom, atom}
 
   def do_expand(_env, {:integer, integer}, _stack), do: {:integer, integer}
@@ -715,6 +721,33 @@ defmodule ElixirSense.Core.Binding do
     {:tuple, length(fields), fields |> Enum.map(&parse_type(env, &1, mod, include_private))}
   end
 
+  defp parse_type(env, [], mod, include_private) do
+    {:list, :empty}
+  end
+
+  defp parse_type(env, [type | _], mod, include_private) do
+    {:list, parse_type(env, type, mod, include_private)}
+  end
+
+  # for simplicity we skip terminator type
+  defp parse_type(env, {kind, _, [type, _]}, mod, include_private) when kind in [:maybe_improper_list, :nonempty_improper_list, :nonempty_maybe_improper_list] do
+    {:list, parse_type(env, type, mod, include_private)}
+  end
+
+  defp parse_type(env, {:list, _, []}, mod, include_private) do
+    {:list, nil}
+  end
+
+  defp parse_type(env, {:keyword, _, []}, mod, include_private) do
+    # TODO no support for atom type for now
+    {:list, {:tuple, 2, [nil, nil]}}
+  end
+
+  defp parse_type(env, {:keyword, _, [type]}, mod, include_private) do
+    # TODO no support for atom type for now
+    {:list, {:tuple, 2, [nil, parse_type(env, type, mod, include_private)]}}
+  end
+
   # remote user type
   defp parse_type(env, {{:., _, [mod, atom]}, _, args}, _mod, _include_private)
        when is_atom(mod) and is_atom(atom) do
@@ -739,6 +772,10 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # other
+  # defp parse_type(_env, t, _, _include_private) do
+  #   IO.inspect t
+  #   nil
+  # end
   defp parse_type(_env, _, _, _include_private), do: nil
 
   defp expand_type(env, mod, type_name, args, include_private) do
