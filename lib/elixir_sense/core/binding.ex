@@ -747,7 +747,7 @@ defmodule ElixirSense.Core.Binding do
     {:tuple, length(fields), fields |> Enum.map(&parse_type(env, &1, mod, include_private))}
   end
 
-  defp parse_type(env, [], mod, include_private) do
+  defp parse_type(_env, [], _mod, _include_private) do
     {:list, :empty}
   end
 
@@ -760,11 +760,11 @@ defmodule ElixirSense.Core.Binding do
     {:list, parse_type(env, type, mod, include_private)}
   end
 
-  defp parse_type(env, {:list, _, []}, mod, include_private) do
+  defp parse_type(_env, {:list, _, []}, _mod, _include_private) do
     {:list, nil}
   end
 
-  defp parse_type(env, {:keyword, _, []}, mod, include_private) do
+  defp parse_type(_env, {:keyword, _, []}, _mod, _include_private) do
     # TODO no support for atom type for now
     {:list, {:tuple, 2, [nil, nil]}}
   end

@@ -262,6 +262,50 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              |> Enum.filter(&(&1.name |> Atom.to_string() |> String.starts_with?("q")))
   end
 
+  test "list destructuring" do
+    state =
+      """
+      defmodule MyModule do
+        @a []
+        @myattribute [:ok, :error, :other]
+        @other1 [:some, :error | @myattribute]
+        @other2 [:some | @myattribute]
+        [var, _var1, _var2] = @myattribute
+        [other | rest] = @myattribute
+        [a] = @other
+        [b] = []
+        IO.puts
+      end
+      """
+      |> string_to_state
+
+    assert get_line_attributes(state, 5) == [
+      %AttributeInfo{
+        name: :a,
+        positions: [{2, 3}],
+        type: {:list, :empty}
+      },
+      %AttributeInfo{name: :myattribute, positions: [{3, 3}, {4, 28}, {5, 20}], type: {:list, {:atom, :ok}}},
+      %AttributeInfo{name: :other1, positions: [{4, 3}], type: {:list, {:atom, :some}}},
+      %AttributeInfo{name: :other2, positions: [{5, 3}], type: {:list, {:atom, :some}}}
+           ]
+
+    assert [
+      %VarInfo{
+        name: :a,
+        type: {:list_head, {:attribute, :other}},
+      },
+      %VarInfo{
+        name: :b,
+        type: {:list_head, {:list, :empty}},
+      },
+      %VarInfo{name: :other, type: {:list_head, {:attribute, :myattribute}}},
+      %VarInfo{name: :rest, type: {:list_tail, {:attribute, :myattribute}}},
+      %VarInfo{name: :var, type: {:list_head, {:attribute, :myattribute}}}
+           ] = state |> get_line_vars(10)
+
+  end
+
   test "vars defined inside a function without params" do
     state =
       """
@@ -558,7 +602,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           case Some.call() do
             {:ok, x} ->
               IO.puts ""
-            end
+          end
         end
       end
       """
