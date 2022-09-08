@@ -328,6 +328,66 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  defp expand_call(
+         env,
+         {:atom, Kernel},
+         :hd,
+         [list_candidate],
+         _include_private,
+         stack
+       ) do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        type
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Kernel},
+         :tl,
+         [list_candidate],
+         _include_private,
+         stack
+       ) do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Enum},
+         :at,
+         [list_candidate | _],
+         _include_private,
+         stack
+       ) do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        type
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
   defp expand_call(env, {:atom, Map}, fun, [map, key], _include_private, stack)
        when fun in [:fetch, :fetch!, :get] do
     fields = expand_map_fields(env, map, stack)

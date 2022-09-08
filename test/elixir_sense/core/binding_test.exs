@@ -275,21 +275,6 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "tuple elem" do
-      assert {:atom, :a} ==
-               Binding.expand(
-                 @env
-                 |> Map.put(:variables, [
-                   %VarInfo{name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
-                   %VarInfo{
-                     name: :ref,
-                     type: {:local_call, :elem, [{:variable, :tuple}, {:integer, 1}]}
-                   }
-                 ]),
-                 {:variable, :ref}
-               )
-    end
-
     test "list" do
       assert {:list, {:atom, :abc}} ==
                Binding.expand(
@@ -1456,6 +1441,53 @@ defmodule ElixirSense.Core.BindingTest do
     end
   end
 
+  describe "Kernel functions" do
+    test "tuple elem" do
+      assert {:atom, :a} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     name: :ref,
+                     type: {:local_call, :elem, [{:variable, :tuple}, {:integer, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "list hd" do
+      assert {:atom, :a} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list, {:atom, :a}}},
+                   %VarInfo{
+                     name: :ref,
+                     type: {:local_call, :hd, [{:variable, :list}]}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "list tl" do
+      assert {:list, {:atom, :a}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list, {:atom, :a}}},
+                   %VarInfo{
+                     name: :ref,
+                     type: {:local_call, :tl, [{:variable, :list}]}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+  end
+
   describe "Map functions" do
     test "put" do
       assert {:map, [cde: {:atom, :b}, abc: {:atom, :a}], nil} =
@@ -1613,6 +1645,22 @@ defmodule ElixirSense.Core.BindingTest do
 
     test "new" do
       assert {:map, [], nil} = Binding.expand(@env, {:call, {:atom, Map}, :new, []})
+    end
+  end
+
+  describe "Enum functions" do
+    test "at" do
+      assert {:atom, :a} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :at, [{:list, {:atom, :a}}, nil]}
+               )
+
+      assert {:atom, :a} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :at, [{:list, {:atom, :a}}, nil, nil]}
+               )
     end
   end
 
