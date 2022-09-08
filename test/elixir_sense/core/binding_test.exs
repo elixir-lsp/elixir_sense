@@ -313,7 +313,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :list}
                )
 
-               assert :none ==
+      assert :none ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
@@ -335,7 +335,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :list}
                )
 
-               assert :none ==
+      assert :none ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
@@ -566,151 +566,164 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list1, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list1, []}
                    }
                  ]),
                  {:variable, :ref}
                )
 
-               assert {:list, nil} ==
+      assert {:list, nil} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list2, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list2, []}
                    }
                  ]),
                  {:variable, :ref}
                )
 
-               assert {:list, nil} ==
+      assert {:list, nil} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list3, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list3, []}
                    }
                  ]),
                  {:variable, :ref}
                )
 
-              assert {:list, {:atom, :ok}} ==
+      assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list4, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list4, []}
                    }
                  ]),
                  {:variable, :ref}
                )
 
-               assert {:list, {:atom, :ok}} ==
+      assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list5, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list5, []}
                    }
                  ]),
                  {:variable, :ref}
                )
 
-               assert {:list, {:atom, :ok}} ==
+      assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list6, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list6, []}
                    }
                  ]),
                  {:variable, :ref}
                )
 
-               assert {:list, {:atom, :ok}} ==
+      assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list7, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list7, []}
                    }
                  ]),
                  {:variable, :ref}
                )
 
-               assert {:list, {:atom, :ok}} ==
+      assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list8, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list8, []}
                    }
                  ]),
                  {:variable, :ref}
                )
 
-               assert {:list, {:atom, :ok}} ==
+      assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list9, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list9, []}
                    }
                  ]),
                  {:variable, :ref}
                )
 
-               assert {:list, {:atom, :ok}} ==
+      assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list10, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list10, []}
                    }
                  ]),
                  {:variable, :ref}
                )
 
-               assert {:list, {:tuple, 2, [nil, nil]}} ==
+      assert {:list, {:tuple, 2, [nil, nil]}} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list11, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list11, []}
                    }
                  ]),
                  {:variable, :ref}
                )
 
-               assert {:list, {:tuple, 2, [nil, {:atom, :ok}]}} ==
+      assert {:list, {:tuple, 2, [nil, {:atom, :ok}]}} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list12, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list12, []}
                    }
                  ]),
                  {:variable, :ref}
                )
 
-               assert {:list, {:tuple, 2, [{:atom, :some}, {:atom, :ok}]}} ==
+      assert {:list, {:tuple, 2, [{:atom, :some}, {:atom, :ok}]}} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
-                     type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list13, []}
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list13, []}
                    }
                  ]),
                  {:variable, :ref}

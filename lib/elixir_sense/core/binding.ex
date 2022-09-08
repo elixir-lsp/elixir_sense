@@ -756,7 +756,8 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # for simplicity we skip terminator type
-  defp parse_type(env, {kind, _, [type, _]}, mod, include_private) when kind in [:maybe_improper_list, :nonempty_improper_list, :nonempty_maybe_improper_list] do
+  defp parse_type(env, {kind, _, [type, _]}, mod, include_private)
+       when kind in [:maybe_improper_list, :nonempty_improper_list, :nonempty_maybe_improper_list] do
     {:list, parse_type(env, type, mod, include_private)}
   end
 

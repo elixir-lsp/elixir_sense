@@ -1344,11 +1344,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
           {:tuple, total,
            indexed |> Enum.map(&if(n != elem(&1, 1), do: get_binding_type(state, elem(&1, 0))))}
 
-        match_context = if match_context != bond do
-          {:intersection, [match_context, bond]}
-        else
-          match_context
-        end
+        match_context =
+          if match_context != bond do
+            {:intersection, [match_context, bond]}
+          else
+            match_context
+          end
 
         {_ast, {new_vars, _match_context}} =
           match_var(state, nth_elem_ast, {[], {:tuple_nth, match_context, n}})
@@ -1365,10 +1366,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     match_var(state, {:->, meta, [left, right]}, {vars, match_context})
   end
 
-  defp match_var(state, list, {vars, match_context}) when not is_nil(match_context) and is_list(list) do
+  defp match_var(state, list, {vars, match_context})
+       when not is_nil(match_context) and is_list(list) do
     match_var_list = fn head, tail ->
       {_ast, {new_vars_head, _match_context}} =
         match_var(state, head, {[], {:list_head, match_context}})
+
       {_ast, {new_vars_tail, _match_context}} =
         match_var(state, tail, {[], {:list_tail, match_context}})
 
@@ -1376,9 +1379,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     end
 
     case list do
-      [] -> {list, {vars, nil}}
+      [] ->
+        {list, {vars, nil}}
+
       [{:|, _, [head, tail]}] ->
         match_var_list.(head, tail)
+
       [head | tail] ->
         match_var_list.(head, tail)
     end
@@ -1518,11 +1524,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   def get_binding_type(state, list) when is_list(list) do
-    type = case list do
-      [] -> :empty
-      [{:|, _, [head, _tail]}] -> get_binding_type(state, head)
-      [head | _] -> get_binding_type(state, head)
-    end
+    type =
+      case list do
+        [] -> :empty
+        [{:|, _, [head, _tail]}] -> get_binding_type(state, head)
+        [head | _] -> get_binding_type(state, head)
+      end
+
     {:list, type}
   end
 
