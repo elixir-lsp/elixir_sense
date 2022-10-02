@@ -397,7 +397,13 @@ defmodule ElixirSense.Core.Binding do
     else
       case expand(env, key, stack) do
         {:atom, atom} ->
-          fields |> Keyword.get(atom)
+          value = fields |> Keyword.get(atom)
+
+          if fun == :fetch and value != nil do
+            {:tuple, 2, [{:atom, :ok}, value]}
+          else
+            value
+          end
 
         nil ->
           nil
