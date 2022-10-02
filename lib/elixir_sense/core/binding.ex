@@ -371,14 +371,146 @@ defmodule ElixirSense.Core.Binding do
   defp expand_call(
          env,
          {:atom, Enum},
-         :at,
+         name,
          [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:at, :fetch, :fetch!, :find, :max, :max_by, :min, :min_by, :random] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        if name == :fetch do
+          {:tuple, 2, {{:atom, :ok}, type}}
+        else
+          type
+        end
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Enum},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:split, :split_while] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:tuple, 2, [{:list, type}, {:list, type}]}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Enum},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:min_max, :min_max_by] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:tuple, 2, [type, type]}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Enum},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:chunk_by, :chunk_every, :chunk_while] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:list, {:list, type}}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Enum},
+         :concat,
+         [list_candidate],
          _include_private,
          stack
        ) do
     case expand(env, list_candidate, stack) do
+      {:list, {:list, type}} ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Enum},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [
+              :concat,
+              :dedup,
+              :dedup_while,
+              :drop,
+              :drop_every,
+              :drop_while,
+              :filter,
+              :intrperse,
+              :reject,
+              :reverse,
+              :reverse_slice,
+              :shuffle,
+              :slice,
+              :sort,
+              :sort_by,
+              :take,
+              :take_every,
+              :take_random,
+              :take_while,
+              :to_list,
+              :uniq,
+              :uniq_by
+            ] do
+    case expand(env, list_candidate, stack) do
       {:list, type} ->
-        type
+        {:list, type}
 
       nil ->
         nil

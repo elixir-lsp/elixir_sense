@@ -1662,6 +1662,54 @@ defmodule ElixirSense.Core.BindingTest do
                  {:call, {:atom, Enum}, :at, [{:list, {:atom, :a}}, nil, nil]}
                )
     end
+
+    test "fetch" do
+      assert {:tuple, 2, {{:atom, :ok}, {:atom, :a}}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :fetch, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+
+    test "filter" do
+      assert {:list, {:atom, :a}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :filter, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+
+    test "concat" do
+      assert {:list, {:atom, :a}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :concat, [{:list, {:list, {:atom, :a}}}]}
+               )
+    end
+
+    test "split" do
+      assert {:tuple, 2, [list: {:atom, :a}, list: {:atom, :a}]} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :split, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+
+    test "min_max" do
+      assert {:tuple, 2, [atom: :a, atom: :a]} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :min_max, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+
+    test "chunk_by" do
+      assert {:list, {:list, {:atom, :a}}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :chunk_by, [{:list, {:atom, :a}}, nil]}
+               )
+    end
   end
 
   describe "intersection" do
