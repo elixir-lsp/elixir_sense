@@ -560,9 +560,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       subtype = Introspection.get_module_subtype(module)
       result = %{kind: :module, type: :elixir, name: name, desc: {desc, meta}, subtype: subtype}
 
-      cond do
-        required_alias? -> Map.put(result, :required_alias, module)
-        true -> result
+      if required_alias? do
+        Map.put(result, :required_alias, module)
+      else
+        result
       end
     end)
   end
