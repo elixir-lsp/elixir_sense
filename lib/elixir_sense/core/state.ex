@@ -316,8 +316,8 @@ defmodule ElixirSense.Core.State do
       when is_integer(line) and is_binary(here_doc) do
     module_name = module_name(state)
 
-    line_to_insert_alias =
-      here_doc |> String.split("\n") |> Enum.count() |> then(fn count -> line + count + 1 end)
+    new_line_count = here_doc |> String.split("\n") |> Enum.count()
+    line_to_insert_alias = new_line_count + line + 1
 
     %__MODULE__{
       state
@@ -368,13 +368,13 @@ defmodule ElixirSense.Core.State do
   defp module_name(state) do
     hd(state.scopes)
     |> Enum.reverse()
-    |> then(fn
-      [Elixir | rest] -> rest
-      rest -> rest
-    end)
+    |> after_elixir_prefix()
     |> Enum.filter(&is_atom/1)
     |> Module.concat()
   end
+
+  defp after_elixir_prefix([Elixir | rest]), do: rest
+  defp after_elixir_prefix(rest), do: rest
 
   def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, {line, _column} = position) do
     call = %CallInfo{mod: mod, func: func, arity: arity, position: position}

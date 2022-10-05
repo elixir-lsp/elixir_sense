@@ -88,7 +88,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               behaviours: []
   end
 
-  @spec complete(String.t(), Env.t(), list(keyword())) ::
+  @spec complete(String.t(), Env.t(), keyword()) ::
           [
             ElixirSense.Providers.Suggestion.Reducers.Common.func()
             | ElixirSense.Providers.Suggestion.Reducers.Common.mod()

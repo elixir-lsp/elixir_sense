@@ -104,7 +104,7 @@ defmodule ElixirSense.Providers.Suggestion do
   @doc """
   Finds all suggestions for a hint based on context information.
   """
-  @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context, ModuleStore.t()) ::
+  @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context, ModuleStore.t(), keyword()) ::
           [suggestion()]
   def find(hint, env, buffer_metadata, cursor_context, module_store, opts \\ []) do
     plugins = module_store.by_behaviour[ElixirSense.Plugin] || []

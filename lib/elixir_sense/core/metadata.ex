@@ -17,7 +17,9 @@ defmodule ElixirSense.Core.Metadata do
           types: State.types_t(),
           specs: State.specs_t(),
           structs: State.structs_t(),
-          error: nil | term
+          error: nil | term,
+          first_alias_positions: map(),
+          moduledoc_positions: map()
         }
 
   defstruct source: "",
@@ -29,8 +31,8 @@ defmodule ElixirSense.Core.Metadata do
             specs: %{},
             structs: %{},
             error: nil,
-            first_alias_positions: nil,
-            moduledoc_positions: nil
+            first_alias_positions: %{},
+            moduledoc_positions: %{}
 
   @type signature_t :: %{
           name: String.t(),
@@ -77,7 +79,9 @@ defmodule ElixirSense.Core.Metadata do
         case mod_info do
           %State.ModFunInfo{positions: [{line, column}]} ->
             # Hacky :shrug
-            {line + 1, column - 10 + 2}
+            line_offset = 1
+            column_offset = -8
+            {line + line_offset, column + column_offset}
 
           _ ->
             nil
