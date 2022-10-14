@@ -4,6 +4,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
   """
 
   import ElixirSense.Core.State
+  import ElixirSense.Log
+
   alias ElixirSense.Core.Ast
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.Introspection
@@ -54,7 +56,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         fun.(ast, state)
       rescue
         exception ->
-          IO.warn(
+          warn(
             "#{inspect(exception.__struct__)} during metadata build: #{Exception.message(exception)}",
             __STACKTRACE__
           )

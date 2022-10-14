@@ -5,6 +5,7 @@ defmodule ElixirSense.Core.Ast do
 
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State
+  import ElixirSense.Log
 
   @empty_env_info %{
     requires: [],
@@ -72,7 +73,7 @@ defmodule ElixirSense.Core.Ast do
     env_info
   catch
     {:expand_error, _} ->
-      IO.puts(:stderr, "Info: ignoring recursive macro")
+      info(:stderr, "ignoring recursive macro", label: "Info")
       @empty_env_info
   end
 
