@@ -24,8 +24,8 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   alias ElixirSense.Providers.Suggestion.Complete.Env
   alias ElixirSense.Core.State.{ModFunInfo, SpecInfo, VarInfo, AttributeInfo}
 
-  def expand(expr, env \\ %Env{}) do
-    ElixirSense.Providers.Suggestion.Complete.do_expand(expr, env)
+  def expand(expr, env \\ %Env{}, opts \\ []) do
+    ElixirSense.Providers.Suggestion.Complete.do_expand(expr, env, opts)
   end
 
   test "erlang module completion" do
@@ -282,6 +282,29 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                  }
                ]
              })
+  end
+
+  test "find elixir modules that require alias" do
+    assert [
+             %{metadata: %{}, name: "Chars", required_alias: String.Chars},
+             %{metadata: %{}, name: "Chars", required_alias: List.Chars},
+             %{
+               metadata: %{},
+               name: "CallerWithAliasesAndImports",
+               required_alias:
+                 ElixirSense.Providers.ReferencesTest.Modules.CallerWithAliasesAndImports
+             }
+           ] = expand('Char', %Env{}, required_alias: true)
+  end
+
+  test "does not suggest required_alias when alias already exists" do
+    env = %Env{
+      aliases: [{MyChars, String.Chars}]
+    }
+
+    results = expand('Char', env, required_alias: true)
+
+    refute Enum.find(results, fn expansion -> expansion[:required_alias] == String.Chars end)
   end
 
   test "elixir submodule no completion" do

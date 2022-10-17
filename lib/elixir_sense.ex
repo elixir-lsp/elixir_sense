@@ -202,8 +202,8 @@ defmodule ElixirSense do
         name: "insert_at", metadata: %{}, snippet: nil, visibility: :public,
         spec: "@spec insert_at(list, integer, any) :: list", summary: "Returns a list with `value` inserted at the specified `index`."}]
   """
-  @spec suggestions(String.t(), pos_integer, pos_integer) :: [Suggestion.suggestion()]
-  def suggestions(buffer, line, column) do
+  @spec suggestions(String.t(), pos_integer, pos_integer, keyword()) :: [Suggestion.suggestion()]
+  def suggestions(buffer, line, column, opts \\ []) do
     hint = Source.prefix(buffer, line, column)
     buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
     {text_before, text_after} = Source.split_at(buffer, line, column)
@@ -220,7 +220,7 @@ defmodule ElixirSense do
       at_module_body?: Metadata.at_module_body?(buffer_file_metadata, env)
     }
 
-    Suggestion.find(hint, env, buffer_file_metadata, cursor_context, module_store)
+    Suggestion.find(hint, env, buffer_file_metadata, cursor_context, module_store, opts)
   end
 
   @doc """

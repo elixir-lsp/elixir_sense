@@ -52,6 +52,8 @@ defmodule ElixirSense.Core.State do
           calls: calls_t,
           structs: structs_t,
           types: types_t,
+          first_alias_positions: map(),
+          moduledoc_positions: map(),
           # TODO
           binding_context: list
         }
@@ -76,7 +78,9 @@ defmodule ElixirSense.Core.State do
             calls: %{},
             structs: %{},
             types: %{},
-            binding_context: []
+            binding_context: [],
+            first_alias_positions: %{},
+            moduledoc_positions: %{}
 
   defmodule Env do
     @moduledoc """
@@ -302,6 +306,75 @@ defmodule ElixirSense.Core.State do
     env = get_current_env(state)
     %__MODULE__{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
   end
+
+  def add_moduledoc_positions(
+        %__MODULE__{} = state,
+        [line: line, column: column],
+        [{:moduledoc, _meta, [here_doc]}],
+        line
+      )
+      when is_integer(line) and is_binary(here_doc) do
+    module_name = module_name(state)
+
+    new_line_count = here_doc |> String.split("\n") |> Enum.count()
+    line_to_insert_alias = new_line_count + line + 1
+
+    %__MODULE__{
+      state
+      | moduledoc_positions:
+          Map.put(state.moduledoc_positions, module_name, {line_to_insert_alias, column})
+    }
+  end
+
+  def add_moduledoc_positions(
+        %__MODULE__{} = state,
+        [line: line, column: column],
+        [{:moduledoc, _meta, [params]}],
+        line
+      )
+      when is_integer(line) and is_boolean(params) do
+    module_name = module_name(state)
+
+    line_to_insert_alias = line + 1
+
+    %__MODULE__{
+      state
+      | moduledoc_positions:
+          Map.put(state.moduledoc_positions, module_name, {line_to_insert_alias, column})
+    }
+  end
+
+  def add_moduledoc_positions(state, _, _, _), do: state
+
+  def add_first_alias_positions(%__MODULE__{} = state, line, column)
+      when is_integer(line) and is_integer(column) do
+    current_scope = hd(hd(state.scopes))
+
+    is_module? = is_atom(current_scope)
+
+    if is_module? do
+      module_name = module_name(state)
+
+      %__MODULE__{
+        state
+        | first_alias_positions:
+            Map.put_new(state.first_alias_positions, module_name, {line, column})
+      }
+    else
+      state
+    end
+  end
+
+  defp module_name(state) do
+    hd(state.scopes)
+    |> Enum.reverse()
+    |> after_elixir_prefix()
+    |> Enum.filter(&is_atom/1)
+    |> Module.concat()
+  end
+
+  defp after_elixir_prefix([Elixir | rest]), do: rest
+  defp after_elixir_prefix(rest), do: rest
 
   def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, {line, _column} = position) do
     call = %CallInfo{mod: mod, func: func, arity: arity, position: position}
