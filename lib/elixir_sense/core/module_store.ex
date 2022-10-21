@@ -49,7 +49,7 @@ defmodule ElixirSense.Core.ModuleStore do
 
   defp is_plugin?(module) do
     module.module_info(:attributes)
-    |> Enum.flat_map(fn
+    |> Enum.any?(fn
       {:behaviour, behaviours} when is_list(behaviours) ->
         ElixirSense.Plugin in behaviours
 
