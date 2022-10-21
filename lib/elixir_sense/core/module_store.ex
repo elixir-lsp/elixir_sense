@@ -7,7 +7,7 @@ defmodule ElixirSense.Core.ModuleStore do
   @type t :: %__MODULE__{
           by_behaviour: %{optional(atom) => module},
           list: list(module),
-          plugins: []
+          plugins: list(module)
         }
 
   alias ElixirSense.Core.Applications
