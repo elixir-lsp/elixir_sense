@@ -225,6 +225,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_scope_keyword(ast, state, line) do
+    state =
+      case ast do
+        {:for, _, _} ->
+          state |> push_binding_context(:for)
+
+        _ ->
+          state
+      end
+
     state
     |> add_current_env_to_line(line)
     |> new_vars_scope
@@ -232,6 +241,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp post_scope_keyword(ast, state) do
+    state =
+      case ast do
+        {:for, _, _} ->
+          state |> pop_binding_context
+
+        _ ->
+          state
+      end
+
     state
     |> remove_vars_scope
     |> result(ast)
@@ -772,12 +790,24 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_block_keyword(ast, state)
   end
 
+  defp pre({:->, meta, [[lhs], rhs]}, state) do
+    pre_clause({:->, meta, [:_, rhs]}, state, lhs)
+  end
+
   defp pre({:->, meta, [lhs, rhs]}, state) do
     pre_clause({:->, meta, [:_, rhs]}, state, lhs)
   end
 
-  defp pre({:=, meta, [lhs, rhs]}, state) do
+  defp pre({atom, meta, [lhs, rhs]}, state) when atom in [:=, :<-] do
     match_context_r = get_binding_type(state, rhs)
+
+    match_context_r =
+      if atom == :<- and match?([:for | _], state.binding_context) do
+        {:list_head, match_context_r}
+      else
+        match_context_r
+      end
+
     vars_l = find_vars(state, lhs, match_context_r)
 
     vars =
@@ -810,12 +840,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> add_current_env_to_line(line)
     end
     |> result(ast)
-  end
-
-  defp pre({:<-, meta, [lhs, rhs]}, state) do
-    state
-    |> add_vars(find_vars(state, lhs), true)
-    |> result({:<-, meta, [:_, rhs]})
   end
 
   defp pre({:when, meta, [lhs, rhs]}, state) do
@@ -1245,7 +1269,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp find_vars(state, ast, match_context \\ nil)
 
-  defp find_vars(_state, [{var, [line: line, column: column], nil}], :rescue) when is_atom(var) do
+  defp find_vars(_state, {var, [line: line, column: column], nil}, :rescue) when is_atom(var) do
     match_context = {:struct, [], {:atom, Exception}, nil}
     [%VarInfo{name: var, positions: [{line, column}], type: match_context}]
   end
@@ -1322,7 +1346,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # regular tuples use {:{}, [], [field_1, field_2]} ast
-  # two element use {field_1, field_2} ast (probably as an optimization)
+  # two element use `{field_1, field_2}` ast (probably as an optimization)
   # detect and convert to regular
   defp match_var(state, ast, {vars, match_context})
        when is_tuple(ast) and tuple_size(ast) == 2 do
@@ -1340,7 +1364,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
           {:tuple, total,
            indexed |> Enum.map(&if(n != elem(&1, 1), do: get_binding_type(state, elem(&1, 0))))}
 
-        match_context = {:intersection, [match_context, bond]}
+        match_context =
+          if match_context != bond do
+            {:intersection, [match_context, bond]}
+          else
+            match_context
+          end
 
         {_ast, {new_vars, _match_context}} =
           match_var(state, nth_elem_ast, {[], {:tuple_nth, match_context, n}})
@@ -1349,6 +1378,36 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end)
 
     {ast, {vars ++ destructured_vars, nil}}
+  end
+
+  # two element tuples on the left of `->` are encoded as list `[field1, field2]`
+  # detect and convert to regular
+  defp match_var(state, {:->, meta, [[left], right]}, {vars, match_context}) do
+    match_var(state, {:->, meta, [left, right]}, {vars, match_context})
+  end
+
+  defp match_var(state, list, {vars, match_context})
+       when not is_nil(match_context) and is_list(list) do
+    match_var_list = fn head, tail ->
+      {_ast, {new_vars_head, _match_context}} =
+        match_var(state, head, {[], {:list_head, match_context}})
+
+      {_ast, {new_vars_tail, _match_context}} =
+        match_var(state, tail, {[], {:list_tail, match_context}})
+
+      {list, {vars ++ new_vars_head ++ new_vars_tail, nil}}
+    end
+
+    case list do
+      [] ->
+        {list, {vars, nil}}
+
+      [{:|, _, [head, tail]}] ->
+        match_var_list.(head, tail)
+
+      [head | tail] ->
+        match_var_list.(head, tail)
+    end
   end
 
   defp match_var(_state, ast, {vars, match_context}) do
@@ -1482,6 +1541,21 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   def get_binding_type(state, {:{}, _, list}) do
     {:tuple, length(list), list |> Enum.map(&get_binding_type(state, &1))}
+  end
+
+  def get_binding_type(state, list) when is_list(list) do
+    type =
+      case list do
+        [] -> :empty
+        [{:|, _, [head, _tail]}] -> get_binding_type(state, head)
+        [head | _] -> get_binding_type(state, head)
+      end
+
+    {:list, type}
+  end
+
+  def get_binding_type(state, list) when is_list(list) do
+    {:list, list |> Enum.map(&get_binding_type(state, &1))}
   end
 
   # local call
