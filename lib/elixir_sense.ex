@@ -127,7 +127,7 @@ defmodule ElixirSense do
       iex> code = ~S'''
       ...> ElixirSenseExample.ExampleProtocol.some()
       ...> '''
-      iex>  [%{file: path, line: line, column: column}, _] = ElixirSense.implementations(code, 1, 37)
+      iex>  [%{file: path, line: line, column: column}, _] = ElixirSense.implementations(code, 1, 37) |> Enum.sort
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
       "example_protocol.ex:7:7"
   """
