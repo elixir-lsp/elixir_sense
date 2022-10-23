@@ -1,8 +1,6 @@
 defmodule ElixirSense.Providers.References do
   @moduledoc """
-  This module provides References support by using
-  the `Mix.Tasks.Xref.call/0` task to find all references to
-  any function or module identified at the provided location.
+  This module provides References to function or module identified at the provided location.
   """
 
   alias ElixirSense.Core.Binding

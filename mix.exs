@@ -23,7 +23,7 @@ defmodule ElixirSense.Mixfile do
   end
 
   def application do
-    [extra_applications: [:logger, :mix]]
+    [extra_applications: [:logger]]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
