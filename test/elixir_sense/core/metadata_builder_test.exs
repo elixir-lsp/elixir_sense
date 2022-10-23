@@ -309,6 +309,56 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ] = state |> get_line_vars(10)
   end
 
+  test "list destructuring for" do
+    state =
+      """
+      defmodule MyModule do
+        @myattribute [:ok, :error, :other]
+        for a <- @myattribute do
+          b = a
+          IO.puts
+        end
+
+        for a <- @myattribute, a1 = @myattribute, a2 <- a1 do
+          b = a
+          IO.puts
+        end
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{name: :a, type: {:list_head, {:attribute, :myattribute}}},
+             %VarInfo{name: :b, type: {:variable, :a}}
+           ] = state |> get_line_vars(5)
+
+    assert [
+             %VarInfo{name: :a, type: {:list_head, {:attribute, :myattribute}}},
+             %VarInfo{name: :a1, type: {:attribute, :myattribute}},
+             %VarInfo{name: :a2, type: {:list_head, {:variable, :a1}}},
+             %VarInfo{name: :b, type: {:variable, :a}}
+           ] = state |> get_line_vars(10)
+  end
+
+  test "binding in with expression" do
+    state =
+      """
+      defmodule MyModule do
+        @myattribute [:ok, :error, :other]
+        with a <- @myattribute do
+          b = a
+          IO.puts
+        end
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{name: :a, type: {:attribute, :myattribute}},
+             %VarInfo{name: :b, type: {:variable, :a}}
+           ] = state |> get_line_vars(5)
+  end
+
   test "vars defined inside a function without params" do
     state =
       """

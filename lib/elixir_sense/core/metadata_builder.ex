@@ -225,6 +225,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_scope_keyword(ast, state, line) do
+    state =
+      case ast do
+        {:for, _, _} ->
+          state |> push_binding_context(:for)
+
+        _ ->
+          state
+      end
+
     state
     |> add_current_env_to_line(line)
     |> new_vars_scope
@@ -232,6 +241,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp post_scope_keyword(ast, state) do
+    state =
+      case ast do
+        {:for, _, _} ->
+          state |> pop_binding_context
+
+        _ ->
+          state
+      end
+
     state
     |> remove_vars_scope
     |> result(ast)
@@ -780,8 +798,16 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_clause({:->, meta, [:_, rhs]}, state, lhs)
   end
 
-  defp pre({:=, meta, [lhs, rhs]}, state) do
+  defp pre({atom, meta, [lhs, rhs]}, state) when atom in [:=, :<-] do
     match_context_r = get_binding_type(state, rhs)
+
+    match_context_r =
+      if atom == :<- and match?([:for | _], state.binding_context) do
+        {:list_head, match_context_r}
+      else
+        match_context_r
+      end
+
     vars_l = find_vars(state, lhs, match_context_r)
 
     vars =
@@ -814,12 +840,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> add_current_env_to_line(line)
     end
     |> result(ast)
-  end
-
-  defp pre({:<-, meta, [lhs, rhs]}, state) do
-    state
-    |> add_vars(find_vars(state, lhs), true)
-    |> result({:<-, meta, [:_, rhs]})
   end
 
   defp pre({:when, meta, [lhs, rhs]}, state) do
