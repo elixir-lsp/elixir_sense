@@ -39,9 +39,8 @@ jobs:
             otp: 24.3.x
             tests_may_fail: false
           - elixir: 1.14.x
-            otp: 25.0.x
+            otp: 25.x
             tests_may_fail: false
-            warnings_as_errors: true
             check_formatted: true
     env:
       MIX_ENV: test
@@ -56,10 +55,6 @@ jobs:
           mix local.hex --force
           mix local.rebar --force
           mix deps.get --only test
-      - run: mix format --check-formatted
-        if: matrix.check_formatted
-      - run: mix compile --warnings-as-errors
-        if: matrix.warnings_as_errors
       - run: mix test || ${{ matrix.tests_may_fail }}
 
   static_analysis:
@@ -68,8 +63,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - elixir: 1.13.x
-            otp: 24.3.x
+          - elixir: 1.14.x
+            otp: 25.x
     steps:
       - uses: actions/checkout@v3
       - uses: erlef/setup-beam@v1
@@ -91,5 +86,6 @@ jobs:
           mix deps.get
       - name: Restore timestamps to prevent unnecessary recompilation
         run: IFS=$'\n'; for f in $(git ls-files); do touch -d "$(git log -n 1 --pretty='%cI' -- $f)" "$f"; done
+      - run: mix format --check-formatted
       - run: mix credo --all --strict
       - run: mix dialyzer
