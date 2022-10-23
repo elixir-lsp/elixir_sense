@@ -1712,6 +1712,44 @@ defmodule ElixirSense.Core.BindingTest do
     end
   end
 
+  describe "List functions" do
+    test "first" do
+      assert {:atom, :a} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, List}, :first, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+
+    test "update_at" do
+      assert {:list, {:atom, :a}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, List}, :update_at, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+
+    test "wrap" do
+      assert {:list, {:atom, :a}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, List}, :wrap, [{:list, {:atom, :a}}]}
+               )
+
+      assert {:list, {:atom, :a}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, List}, :wrap, [{:atom, :a}]}
+               )
+
+      assert {:list, :empty} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, List}, :wrap, [{:atom, nil}]}
+               )
+    end
+  end
+
   describe "intersection" do
     test "intersection" do
       assert {:struct,

@@ -520,6 +520,138 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  defp expand_call(
+         env,
+         {:atom, List},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:delete, :delete_at, :insert_at, :replace_at, :update_at] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, List},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:flatten] do
+    case expand(env, list_candidate, stack) do
+      {:list, {:list, type}} ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, List},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:wrap] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:list, type}
+
+      {:atom, nil} ->
+        {:list, :empty}
+
+      nil ->
+        nil
+
+      :none ->
+        :none
+
+      type ->
+        {:list, type}
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, List},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:pop_at] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:tuple, 2, [type, {:list, type}]}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, List},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:first, :last] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        type
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, List},
+         name,
+         [element | _],
+         _include_private,
+         stack
+       )
+       when name in [:duplicate] do
+    case expand(env, element, stack) do
+      nil ->
+        nil
+
+      :none ->
+        :none
+
+      type ->
+        {:list, type}
+    end
+  end
+
   defp expand_call(env, {:atom, Map}, fun, [map, key], _include_private, stack)
        when fun in [:fetch, :fetch!, :get] do
     fields = expand_map_fields(env, map, stack)
