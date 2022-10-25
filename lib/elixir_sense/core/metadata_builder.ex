@@ -57,8 +57,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
       rescue
         exception ->
           warn(
-            "#{inspect(exception.__struct__)} during metadata build: #{Exception.message(exception)}",
-            __STACKTRACE__
+            Exception.format(
+              :error,
+              "#{inspect(exception.__struct__)} during metadata build: #{Exception.message(exception)}",
+              __STACKTRACE__
+            )
           )
 
           {nil, state}

@@ -73,7 +73,7 @@ defmodule ElixirSense.Core.Ast do
     env_info
   catch
     {:expand_error, _} ->
-      info(:stderr, "ignoring recursive macro", label: "Info")
+      info("ignoring recursive macro")
       @empty_env_info
   end
 
