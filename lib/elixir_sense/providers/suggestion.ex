@@ -106,9 +106,14 @@ defmodule ElixirSense.Providers.Suggestion do
   """
   @spec find(String.t(), State.Env.t(), Metadata.t(), cursor_context, ModuleStore.t(), keyword()) ::
           [suggestion()]
-  def find(hint, env, buffer_metadata, cursor_context, module_store, opts \\ []) do
-    plugins = module_store.by_behaviour[ElixirSense.Plugin] || []
-
+  def find(
+        hint,
+        env,
+        buffer_metadata,
+        cursor_context,
+        %{plugins: plugins} = module_store,
+        opts \\ []
+      ) do
     reducers =
       plugins
       |> Enum.filter(&function_exported?(&1, :reduce, 5))

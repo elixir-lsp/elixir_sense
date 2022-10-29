@@ -2,9 +2,13 @@ defmodule ElixirSense.Core.ModuleStore do
   @moduledoc """
   Caches the module list and a list of modules keyed by the behaviour they implement.
   """
-  defstruct by_behaviour: %{}, list: []
+  defstruct by_behaviour: %{}, list: [], plugins: []
 
-  @type t :: %__MODULE__{by_behaviour: %{optional(atom) => module}, list: list(module)}
+  @type t :: %__MODULE__{
+          by_behaviour: %{optional(atom) => module},
+          list: list(module),
+          plugins: list(module)
+        }
 
   alias ElixirSense.Core.Applications
 
@@ -20,6 +24,13 @@ defmodule ElixirSense.Core.ModuleStore do
       try do
         module_store = %{module_store | list: [module | module_store.list]}
 
+        module_store =
+          if is_plugin?(module) do
+            %{module_store | plugins: [module | module_store.plugins]}
+          else
+            module_store
+          end
+
         module.module_info(:attributes)
         |> Enum.flat_map(fn
           {:behaviour, behaviours} when is_list(behaviours) ->
@@ -33,6 +44,20 @@ defmodule ElixirSense.Core.ModuleStore do
         _ ->
           module_store
       end
+    end)
+  end
+
+  defp is_plugin?(module) do
+    module.module_info(:attributes)
+    |> Enum.any?(fn
+      {:behaviour, behaviours} when is_list(behaviours) ->
+        ElixirSense.Plugin in behaviours
+
+      {:is_elixir_sense_plugin, true} ->
+        true
+
+      _ ->
+        false
     end)
   end
 
