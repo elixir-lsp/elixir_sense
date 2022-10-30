@@ -139,7 +139,7 @@ defmodule ElixirSense.Core.Source do
 
     case Regex.run(Regex.recompile!(~r/[\w0-9\._!\?\:@&\^~+<>=*\/|\\]+$/), line_str) do
       nil -> ""
-      [prefix] -> prefix
+      [prefix] when is_binary(prefix) -> prefix
     end
   end
 
