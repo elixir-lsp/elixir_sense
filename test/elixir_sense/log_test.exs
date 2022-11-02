@@ -13,12 +13,14 @@ defmodule ElixirSense.LogTest do
   describe "log messages" do
     test "an info message has an info label by default" do
       message = assert capture_log(fn -> info("good morning") end)
-      assert message =~ "[info] good morning\n"
+      assert message =~ "[info] "
+      assert message =~ "good morning\n"
     end
 
     test "an error message has an error label by default" do
       message = assert capture_log(fn -> error("good morning") end)
-      assert message =~ "[error] good morning\n"
+      assert message =~ "[error] "
+      assert message =~ "good morning\n"
     end
   end
 
