@@ -1,4 +1,4 @@
-import  Config
+import Config
 
 config :elixir_sense,
   logging_enabled: true
