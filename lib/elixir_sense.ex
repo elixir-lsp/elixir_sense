@@ -417,7 +417,12 @@ defmodule ElixirSense do
         # find last env of current module
         attributes = get_attributes(buffer_file_metadata.lines_to_env, module)
 
-        vars = buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values()
+        # in (h|l)?eex templates vars_info_per_scope_id[scope_id] is ni
+        vars =
+          if buffer_file_metadata.vars_info_per_scope_id[scope_id],
+            do: buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values(),
+            else: %{}
+
         arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
 
         References.find(
