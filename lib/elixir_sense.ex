@@ -417,7 +417,7 @@ defmodule ElixirSense do
         # find last env of current module
         attributes = get_attributes(buffer_file_metadata.lines_to_env, module)
 
-        # in (h|l)?eex templates vars_info_per_scope_id[scope_id] is ni
+        # in (h|l)?eex templates vars_info_per_scope_id[scope_id] is nil
         vars =
           if buffer_file_metadata.vars_info_per_scope_id[scope_id],
             do: buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values(),
