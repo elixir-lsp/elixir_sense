@@ -7,33 +7,6 @@ defmodule ElixirSense.Core.Source do
 
   @line_break ["\n", "\r\n", "\r"]
   @empty_graphemes [" ", "\t"] ++ @line_break
-  @stop_graphemes [
-                    "{",
-                    "}",
-                    "(",
-                    ")",
-                    "[",
-                    "]",
-                    "<",
-                    ">",
-                    "+",
-                    "-",
-                    "*",
-                    "&",
-                    "^",
-                    ",",
-                    ";",
-                    "~",
-                    "%",
-                    "=",
-                    "\\",
-                    "\/",
-                    "$",
-                    "!",
-                    "?",
-                    "`",
-                    "#"
-                  ] ++ @empty_graphemes
 
   @spec split_module_and_hint(String.t(), module | nil, [{module, module}]) ::
           {nil | module | {:attribute, atom}, String.t()}
@@ -159,50 +132,6 @@ defmodule ElixirSense.Core.Source do
   def text_after(code, line, col) do
     {_, rest} = split_at(code, line, col)
     rest
-  end
-
-  @spec subject(String.t(), pos_integer, pos_integer) :: nil | String.t()
-  def subject(code, line, col) do
-    acc = %{line: line, col: col, pos_found: false, candidate: [], pos: nil}
-
-    code =
-      code
-      |> split_lines
-      |> Enum.map_join("\n", fn line ->
-        # this is a naive comment strip - it will not honour # in strings, chars etc
-        Regex.replace(~r/(?<!\<)\#(?!\{).*$/, line, "")
-      end)
-
-    case walk_text(code, acc, &find_subject/5) do
-      %{candidate: []} ->
-        nil
-
-      %{candidate: candidate} ->
-        candidate |> Enum.reverse() |> Enum.join()
-    end
-  end
-
-  @spec subject_with_position(String.t(), pos_integer, pos_integer) ::
-          nil | {String.t(), {pos_integer, pos_integer}}
-  def subject_with_position(code, line, col) do
-    acc = %{line: line, col: col, pos_found: false, candidate: [], pos: nil}
-
-    case walk_text(code, acc, &find_subject/5) do
-      %{candidate: []} ->
-        nil
-
-      %{candidate: candidate, pos: {line, col}} ->
-        subject = candidate |> Enum.reverse() |> Enum.join()
-
-        last_part =
-          subject
-          |> String.reverse()
-          |> String.split(".", parts: 2)
-          |> Enum.at(0)
-          |> String.reverse()
-
-        {subject, {line, col - String.length(last_part) + 1}}
-    end
   end
 
   @doc ~S"""
@@ -392,42 +321,6 @@ defmodule ElixirSense.Core.Source do
 
   defp find_struct(grapheme, rest, _line, _col, %{buffer: buffer} = acc) do
     {rest, %{acc | buffer: [grapheme | buffer]}}
-  end
-
-  defp find_subject(grapheme, rest, line, col, %{pos_found: false, line: line, col: col} = acc) do
-    find_subject(grapheme, rest, line, col, %{acc | pos_found: true})
-  end
-
-  defp find_subject("." = grapheme, rest, _line, _col, %{pos_found: false} = acc) do
-    {rest, %{acc | candidate: [grapheme | acc.candidate]}}
-  end
-
-  defp find_subject(".", _rest, line, col, %{pos_found: true} = acc) do
-    {"", %{acc | pos: {line, col - 1}}}
-  end
-
-  defp find_subject(grapheme, rest, _line, _col, %{candidate: [_ | _]} = acc)
-       when grapheme in ["!", "?"] do
-    {rest, %{acc | candidate: [grapheme | acc.candidate]}}
-  end
-
-  defp find_subject(grapheme, rest, _line, _col, %{candidate: ["." | _]} = acc)
-       when grapheme in @stop_graphemes do
-    {rest, acc}
-  end
-
-  defp find_subject(grapheme, rest, _line, _col, %{pos_found: false} = acc)
-       when grapheme in @stop_graphemes do
-    {rest, %{acc | candidate: []}}
-  end
-
-  defp find_subject(grapheme, _rest, line, col, %{pos_found: true} = acc)
-       when grapheme in @stop_graphemes do
-    {"", %{acc | pos: {line, col - 1}}}
-  end
-
-  defp find_subject(grapheme, rest, _line, _col, acc) do
-    {rest, %{acc | candidate: [grapheme | acc.candidate]}}
   end
 
   defp do_walk_text(text, func, line, col, acc) do

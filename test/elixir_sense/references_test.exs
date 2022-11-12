@@ -675,6 +675,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     end
   end
 
+  @tag requires_elixir_1_14: true
   test "find references when module with __MODULE__ special form", %{trace: trace} do
     buffer = """
     defmodule ElixirSense.Providers.ReferencesTest.Modules do
@@ -686,24 +687,6 @@ defmodule ElixirSense.Providers.ReferencesTest do
     """
 
     reference = ElixirSense.references(buffer, 3, 25, trace) |> Enum.at(0)
-
-    assert reference == %{
-             uri: "test/support/modules_with_references.ex",
-             range: %{start: %{line: 65, column: 47}, end: %{line: 65, column: 51}}
-           }
-  end
-
-  test "find references with atom module", %{trace: trace} do
-    buffer = """
-    defmodule Caller do
-      def func() do
-        :"Elixir.ElixirSense.Providers.ReferencesTest.Modules.Callee3".func()
-        #                                                               ^
-      end
-    end
-    """
-
-    reference = ElixirSense.references(buffer, 3, 69, trace) |> Enum.at(0)
 
     assert reference == %{
              uri: "test/support/modules_with_references.ex",

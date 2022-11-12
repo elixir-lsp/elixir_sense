@@ -50,29 +50,37 @@ defmodule ElixirSense do
       iex> types |> String.split("\n") |> Enum.at(4)
       "@type default :: any"
   """
-  @spec docs(String.t(), pos_integer, pos_integer) :: %{
-          subject: String.t(),
-          actual_subject: String.t(),
-          docs: Introspection.docs()
-        }
+  @spec docs(String.t(), pos_integer, pos_integer) ::
+          %{
+            actual_subject: String.t(),
+            docs: Introspection.docs(),
+            range: %{
+              begin: {pos_integer, pos_integer},
+              end: {pos_integer, pos_integer}
+            }
+          }
+          | nil
   def docs(code, line, column) do
-    case Source.subject(code, line, column) do
-      nil ->
-        %{
-          subject: "",
-          actual_subject: "",
-          docs: %{docs: "No documentation available\n", types: ""}
-        }
+    case Code.Fragment.surround_context(code, {line, column}) do
+      :none ->
+        nil
 
-      subject ->
+      %{begin: begin_pos, end: end_pos, context: context} ->
         metadata = Parser.parse_string(code, true, true, line)
 
         env = Metadata.get_env(metadata, line)
 
         {actual_subject, docs} =
-          Docs.all(subject, env, metadata.mods_funs_to_positions, metadata.types)
+          Docs.all(context, env, metadata.mods_funs_to_positions, metadata.types)
 
-        %{subject: subject, actual_subject: actual_subject, docs: docs}
+        %{
+          actual_subject: actual_subject,
+          docs: docs,
+          range: %{
+            begin: begin_pos,
+            end: end_pos
+          }
+        }
     end
   end
 
@@ -93,27 +101,19 @@ defmodule ElixirSense do
   """
   @spec definition(String.t(), pos_integer, pos_integer) :: Location.t() | nil
   def definition(code, line, column) do
-    case Source.subject(code, line, column) do
-      nil ->
+    case Code.Fragment.surround_context(code, {line, column}) do
+      :none ->
         nil
 
-      subject ->
+      %{context: context} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
         env = Metadata.get_env(buffer_file_metadata, line)
 
-        calls =
-          buffer_file_metadata.calls[line]
-          |> List.wrap()
-          |> Enum.filter(fn %State.CallInfo{position: {_call_line, call_column}} ->
-            call_column <= column
-          end)
-
         Definition.find(
-          subject,
+          context,
           env,
           buffer_file_metadata.mods_funs_to_positions,
-          calls,
           buffer_file_metadata.types
         )
     end
@@ -133,17 +133,17 @@ defmodule ElixirSense do
   """
   @spec implementations(String.t(), pos_integer, pos_integer) :: [Location.t()]
   def implementations(code, line, column) do
-    case Source.subject(code, line, column) do
-      nil ->
+    case Code.Fragment.surround_context(code, {line, column}) do
+      :none ->
         []
 
-      subject ->
+      %{context: context} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
         env = Metadata.get_env(buffer_file_metadata, line)
 
         Implementation.find(
-          subject,
+          context,
           env,
           buffer_file_metadata.mods_funs_to_positions,
           buffer_file_metadata.types
@@ -404,8 +404,14 @@ defmodule ElixirSense do
           call_trace_t()
         ) :: [References.reference_info()]
   def references(code, line, column, trace) do
-    case Source.subject_with_position(code, line, column) do
-      {subject, {line, col}} ->
+    case Code.Fragment.surround_context(code, {line, column}) do
+      :none ->
+        []
+
+      %{
+        context: context,
+        end: {line, col}
+      } ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
         env =
@@ -426,7 +432,7 @@ defmodule ElixirSense do
         arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
 
         References.find(
-          subject,
+          context,
           arity,
           env,
           vars,
@@ -434,9 +440,6 @@ defmodule ElixirSense do
           buffer_file_metadata,
           trace
         )
-
-      _ ->
-        []
     end
   end
 

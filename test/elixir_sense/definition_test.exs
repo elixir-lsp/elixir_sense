@@ -11,7 +11,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
   end
 
   test "dont error on __MODULE__ when no module" do
-    refute ElixirSense.definition("__MODULE__", 1, 1)
+    assert nil == ElixirSense.definition("__MODULE__", 1, 1)
   end
 
   test "find definition of aliased modules in `use`" do
@@ -558,6 +558,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
+  @tag requires_elixir_1_14: true
   test "find definition of local functions with @attr" do
     buffer = """
     defmodule MyModule do
@@ -591,26 +592,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     assert ElixirSense.definition(buffer, 6, 14) == %Location{
-             type: :function,
-             file: nil,
-             line: 2,
-             column: 7
-           }
-  end
-
-  test "find definition of local functions with atom module" do
-    buffer = """
-    defmodule MyModule do
-      def my_fun(), do: :ok
-
-      def a do
-        my_fun1 = 1
-        :"Elixir.MyModule".my_fun()
-      end
-    end
-    """
-
-    assert ElixirSense.definition(buffer, 6, 24) == %Location{
              type: :function,
              file: nil,
              line: 2,

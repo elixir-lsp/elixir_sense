@@ -8,33 +8,30 @@ defmodule ElixirSense.Providers.Definition do
 
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.ModFunInfo
   alias ElixirSense.Core.State.TypeInfo
   alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Location
+  alias ElixirSense.Core.SurroundContext
 
   @doc """
   Finds out where a module, function, macro or variable was defined.
   """
   @spec find(
-          String.t(),
+          any(),
           State.Env.t(),
           State.mods_funs_to_positions_t(),
-          list(State.CallInfo.t()),
           State.types_t()
         ) :: %Location{} | nil
   def find(
-        subject,
+        context,
         %State.Env{
-          aliases: aliases,
           module: module,
           vars: vars,
           attributes: attributes
         } = env,
         mods_funs_to_positions,
-        calls,
         metadata_types
       ) do
     binding_env = %Binding{
@@ -43,26 +40,42 @@ defmodule ElixirSense.Providers.Definition do
       current_module: module
     }
 
-    var_info =
-      unless subject_is_call?(subject, calls) do
-        vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
-      end
+    type = SurroundContext.to_binding(context, module)
 
-    attribute_info = find_attribute(subject, attributes)
+    case type do
+      nil ->
+        nil
 
-    cond do
-      var_info != nil ->
-        %VarInfo{positions: [{line, column} | _]} = var_info
-        %Location{type: :variable, file: nil, line: line, column: column}
+      {:variable, variable} ->
+        var_info = vars |> Enum.find(fn %VarInfo{name: name} -> name == variable end)
 
-      attribute_info != nil ->
-        %State.AttributeInfo{positions: [{line, column} | _]} = attribute_info
-        %Location{type: :attribute, file: nil, line: line, column: column}
+        if var_info != nil do
+          %VarInfo{positions: [{line, column} | _]} = var_info
+          %Location{type: :variable, file: nil, line: line, column: column}
+        else
+          find_function_or_module(
+            {nil, variable},
+            mods_funs_to_positions,
+            env,
+            metadata_types,
+            binding_env
+          )
+        end
 
-      true ->
-        subject
-        |> Source.split_module_and_func(module, aliases)
-        |> find_function_or_module(
+      {:attribute, attribute} ->
+        attribute_info =
+          Enum.find(attributes, fn
+            %State.AttributeInfo{name: name} -> name == attribute
+          end)
+
+        if attribute_info != nil do
+          %State.AttributeInfo{positions: [{line, column} | _]} = attribute_info
+          %Location{type: :attribute, file: nil, line: line, column: column}
+        end
+
+      {module, function} ->
+        find_function_or_module(
+          {module, function},
           mods_funs_to_positions,
           env,
           metadata_types,
@@ -70,28 +83,6 @@ defmodule ElixirSense.Providers.Definition do
         )
     end
   end
-
-  defp subject_is_call?(subject, calls) do
-    Enum.find(calls, fn
-      %State.CallInfo{func: func} ->
-        Atom.to_string(func) == subject
-
-      _ ->
-        false
-    end) != nil
-  end
-
-  defp find_attribute("@" <> attribute_name, attributes) do
-    Enum.find(attributes, fn
-      %State.AttributeInfo{name: name} ->
-        Atom.to_string(name) == attribute_name
-
-      _ ->
-        false
-    end)
-  end
-
-  defp find_attribute(_, _attributes), do: nil
 
   defp find_function_or_module(
          {module, function},
@@ -124,7 +115,7 @@ defmodule ElixirSense.Providers.Definition do
     case Binding.expand(binding_env, type) do
       {:atom, module} ->
         do_find_function_or_module(
-          {Introspection.expand_alias(module, env.aliases), function},
+          {{:atom, Introspection.expand_alias(module, env.aliases)}, function},
           mods_funs_to_positions,
           env,
           metadata_types,
@@ -149,7 +140,7 @@ defmodule ElixirSense.Providers.Definition do
       %ModFunInfo{overridable: {true, origin}} ->
         # overridable function is most likely defined by __using__ macro
         do_find_function_or_module(
-          {origin, :__using__},
+          {{:atom, origin}, :__using__},
           mods_funs_to_positions,
           env,
           metadata_types,
@@ -176,7 +167,24 @@ defmodule ElixirSense.Providers.Definition do
       aliases: aliases
     } = env
 
-    case {module, function}
+    m =
+      case module do
+        nil ->
+          nil
+
+        {:variable, :__MODULE__} ->
+          current_module
+
+        {:variable, _} ->
+          # map field call
+          nil
+
+        {:atom, a} ->
+          a
+          # a when is_atom(a) -> a
+      end
+
+    case {m, function}
          |> Introspection.actual_mod_fun(
            imports,
            aliases,
