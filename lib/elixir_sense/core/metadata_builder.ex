@@ -982,9 +982,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
           # assume that defexception is used but fields are not known
           add_struct_or_exception(state, :defexception, [], {line, column})
 
-        # elixir < 1.12 :struct, elixir >= 1.12 :__struct__
+        # elixir >= 1.12 :__struct__
         # elixir >= 1.14 {:__struct__, [], :def}
-        :struct in attributes or :__struct__ in attributes or {:__struct__, [], :def} in mods_funs ->
+        :__struct__ in attributes or {:__struct__, [], :def} in mods_funs ->
           # assume that defstruct is used but fields are not known
           add_struct_or_exception(state, :defstruct, [], {line, column})
 
@@ -1511,7 +1511,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     get_binding_type(state, ast)
   end
 
-  # elixir 1.12 stepped range
+  # stepped range struct
   def get_binding_type(_state, {:"..//", _, [_, _, _]}) do
     {:struct, [], {:atom, Range}}
   end
