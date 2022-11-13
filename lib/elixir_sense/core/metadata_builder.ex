@@ -803,7 +803,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_clause({:->, meta, [:_, rhs]}, state, lhs)
   end
 
-  defp pre({atom, [line: line, column: _column] = meta, [lhs, rhs]}, state) when atom in [:=, :<-] do
+  defp pre({atom, [line: line, column: _column] = meta, [lhs, rhs]}, state)
+       when atom in [:=, :<-] do
     match_context_r = get_binding_type(state, rhs)
 
     match_context_r =
