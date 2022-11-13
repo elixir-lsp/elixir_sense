@@ -6,14 +6,21 @@ defmodule ElixirSense.Mixfile do
     [
       app: :elixir_sense,
       version: "2.0.0",
-      elixir: "~> 1.11",
+      elixir: "~> 1.12",
       elixirc_paths: elixirc_paths(Mix.env()),
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       test_coverage: [tool: ExCoveralls],
       preferred_cli_env: [coveralls: :test, "coveralls.detail": :test, "coveralls.html": :test],
       dialyzer: [
-        flags: [:unmatched_returns, :error_handling, :race_conditions, :unknown, :underspecs]
+        flags: [
+          :unmatched_returns,
+          :error_handling,
+          :unknown,
+          :underspecs,
+          :extra_return,
+          :missing_return
+        ]
       ],
       deps: deps(),
       docs: docs(),
@@ -23,7 +30,7 @@ defmodule ElixirSense.Mixfile do
   end
 
   def application do
-    [extra_applications: [:logger, :mix]]
+    [extra_applications: [:logger]]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]

@@ -275,18 +275,59 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "tuple elem" do
-      assert {:atom, :a} ==
+    test "list" do
+      assert {:list, {:atom, :abc}} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
-                   %VarInfo{name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
-                   %VarInfo{
-                     name: :ref,
-                     type: {:local_call, :elem, [{:variable, :tuple}, {:integer, 1}]}
-                   }
+                   %VarInfo{name: :list, type: {:list, {:variable, :a}}},
+                   %VarInfo{name: :a, type: {:atom, :abc}}
                  ]),
-                 {:variable, :ref}
+                 {:variable, :list}
+               )
+    end
+
+    test "list head" do
+      assert {:atom, :abc} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list_head, {:variable, :a}}},
+                   %VarInfo{name: :a, type: {:list, {:atom, :abc}}}
+                 ]),
+                 {:variable, :list}
+               )
+
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list_head, {:variable, :a}}},
+                   %VarInfo{name: :a, type: {:list, :empty}}
+                 ]),
+                 {:variable, :list}
+               )
+    end
+
+    test "list tail" do
+      assert {:list, {:atom, :abc}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list_tail, {:variable, :a}}},
+                   %VarInfo{name: :a, type: {:list, {:atom, :abc}}}
+                 ]),
+                 {:variable, :list}
+               )
+
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list_tail, {:variable, :a}}},
+                   %VarInfo{name: :a, type: {:list, :empty}}
+                 ]),
+                 {:variable, :list}
                )
     end
 
@@ -497,6 +538,177 @@ defmodule ElixirSense.Core.BindingTest do
                    %VarInfo{
                      name: :ref,
                      type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f04, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "remote call fun with spec t expanding to list" do
+      assert {:list, :empty} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list1, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert {:list, nil} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list2, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert {:list, nil} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list3, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert {:list, {:atom, :ok}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list4, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert {:list, {:atom, :ok}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list5, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert {:list, {:atom, :ok}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list6, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert {:list, {:atom, :ok}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list7, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert {:list, {:atom, :ok}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list8, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert {:list, {:atom, :ok}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list9, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert {:list, {:atom, :ok}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list10, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert {:list, {:tuple, 2, [nil, nil]}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list11, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert {:list, {:tuple, 2, [nil, {:atom, :ok}]}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list12, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+
+      assert {:list, {:tuple, 2, [{:atom, :some}, {:atom, :ok}]}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :list13, []}
                    }
                  ]),
                  {:variable, :ref}
@@ -1229,6 +1441,53 @@ defmodule ElixirSense.Core.BindingTest do
     end
   end
 
+  describe "Kernel functions" do
+    test "tuple elem" do
+      assert {:atom, :a} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     name: :ref,
+                     type: {:local_call, :elem, [{:variable, :tuple}, {:integer, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "list hd" do
+      assert {:atom, :a} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list, {:atom, :a}}},
+                   %VarInfo{
+                     name: :ref,
+                     type: {:local_call, :hd, [{:variable, :list}]}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "list tl" do
+      assert {:list, {:atom, :a}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list, {:atom, :a}}},
+                   %VarInfo{
+                     name: :ref,
+                     type: {:local_call, :tl, [{:variable, :list}]}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+  end
+
   describe "Map functions" do
     test "put" do
       assert {:map, [cde: {:atom, :b}, abc: {:atom, :a}], nil} =
@@ -1351,7 +1610,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "fetch" do
-      assert {:atom, :a} =
+      assert {:tuple, 2, [atom: :ok, atom: :a]} =
                Binding.expand(
                  @env,
                  {:call, {:atom, Map}, :fetch, [{:map, [abc: {:atom, :a}], nil}, {:atom, :abc}]}
@@ -1386,6 +1645,108 @@ defmodule ElixirSense.Core.BindingTest do
 
     test "new" do
       assert {:map, [], nil} = Binding.expand(@env, {:call, {:atom, Map}, :new, []})
+    end
+  end
+
+  describe "Enum functions" do
+    test "at" do
+      assert {:atom, :a} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :at, [{:list, {:atom, :a}}, nil]}
+               )
+
+      assert {:atom, :a} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :at, [{:list, {:atom, :a}}, nil, nil]}
+               )
+    end
+
+    test "fetch" do
+      assert {:tuple, 2, {{:atom, :ok}, {:atom, :a}}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :fetch, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+
+    test "filter" do
+      assert {:list, {:atom, :a}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :filter, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+
+    test "concat" do
+      assert {:list, {:atom, :a}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :concat, [{:list, {:list, {:atom, :a}}}]}
+               )
+    end
+
+    test "split" do
+      assert {:tuple, 2, [list: {:atom, :a}, list: {:atom, :a}]} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :split, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+
+    test "min_max" do
+      assert {:tuple, 2, [atom: :a, atom: :a]} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :min_max, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+
+    test "chunk_by" do
+      assert {:list, {:list, {:atom, :a}}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :chunk_by, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+  end
+
+  describe "List functions" do
+    test "first" do
+      assert {:atom, :a} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, List}, :first, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+
+    test "update_at" do
+      assert {:list, {:atom, :a}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, List}, :update_at, [{:list, {:atom, :a}}, nil]}
+               )
+    end
+
+    test "wrap" do
+      assert {:list, {:atom, :a}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, List}, :wrap, [{:list, {:atom, :a}}]}
+               )
+
+      assert {:list, {:atom, :a}} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, List}, :wrap, [{:atom, :a}]}
+               )
+
+      assert {:list, :empty} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, List}, :wrap, [{:atom, nil}]}
+               )
     end
   end
 

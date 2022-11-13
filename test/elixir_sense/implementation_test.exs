@@ -85,7 +85,7 @@ defmodule ElixirSense.Providers.ImplementationTest do
     [
       %Location{type: :module, file: file1, line: line1, column: column1},
       %Location{type: :module, file: file2, line: line2, column: column2}
-    ] = ElixirSense.implementations(buffer, 1, 32)
+    ] = ElixirSense.implementations(buffer, 1, 32) |> Enum.sort()
 
     assert file1 =~ "elixir_sense/test/support/example_protocol.ex"
     assert read_line(file1, {line1, column1}) =~ "ElixirSenseExample.ExampleProtocol, for: List"

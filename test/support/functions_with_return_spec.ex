@@ -69,6 +69,45 @@ defmodule ElixirSenseExample.FunctionsWithReturnSpec do
   @spec f11 :: {:ok, :some} | {:error, :some_error}
   def f11, do: {:ok, :some}
 
+  @spec list1 :: []
+  def list1, do: []
+
+  @spec list2 :: list
+  def list2, do: []
+
+  @spec list3 :: [...]
+  def list3, do: []
+
+  @spec list4 :: [:ok]
+  def list4, do: [:ok]
+
+  @spec list5 :: list(:ok)
+  def list5, do: [:ok]
+
+  @spec list6 :: [:ok, ...]
+  def list6, do: [:ok]
+
+  @spec list7 :: nonempty_list(:ok)
+  def list7, do: [:ok]
+
+  @spec list8 :: maybe_improper_list(:ok, integer)
+  def list8, do: [:ok]
+
+  @spec list9 :: nonempty_improper_list(:ok, integer)
+  def list9, do: [:ok]
+
+  @spec list10 :: nonempty_maybe_improper_list(:ok, integer)
+  def list10, do: [:ok]
+
+  @spec list11 :: keyword
+  def list11, do: [some: :ok]
+
+  @spec list12 :: keyword(:ok)
+  def list12, do: [some: :ok]
+
+  @spec list13 :: [some: :ok]
+  def list13, do: [some: :ok]
+
   @spec f_no_return :: no_return
   def f_no_return, do: :ok
 

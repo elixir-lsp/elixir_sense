@@ -1071,6 +1071,7 @@ defmodule ElixirSense.Core.State do
 
   defp merge_type(nil, new), do: new
   defp merge_type(old, nil), do: old
+  defp merge_type(old, old), do: old
   defp merge_type(old, new), do: {:intersection, [old, new]}
 
   def get_closest_previous_env(%__MODULE__{} = metadata, line) do

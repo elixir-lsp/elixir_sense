@@ -127,7 +127,7 @@ defmodule ElixirSense do
       iex> code = ~S'''
       ...> ElixirSenseExample.ExampleProtocol.some()
       ...> '''
-      iex>  [%{file: path, line: line, column: column}, _] = ElixirSense.implementations(code, 1, 37)
+      iex>  [%{file: path, line: line, column: column}, _] = ElixirSense.implementations(code, 1, 37) |> Enum.sort
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
       "example_protocol.ex:7:7"
   """
@@ -417,7 +417,12 @@ defmodule ElixirSense do
         # find last env of current module
         attributes = get_attributes(buffer_file_metadata.lines_to_env, module)
 
-        vars = buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values()
+        # in (h|l)?eex templates vars_info_per_scope_id[scope_id] is nil
+        vars =
+          if buffer_file_metadata.vars_info_per_scope_id[scope_id],
+            do: buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values(),
+            else: %{}
+
         arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
 
         References.find(

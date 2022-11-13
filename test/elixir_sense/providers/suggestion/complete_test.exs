@@ -364,26 +364,24 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [%{name: "printable?", arity: 1}, %{name: "printable?", arity: 2}] =
              expand('String.printable?/')
 
-    if Version.match?(System.version(), ">= 1.12.0") do
-      assert [
-               %{
-                 name: "count",
-                 arity: 1
-               },
-               %{
-                 name: "count",
-                 arity: 2
-               },
-               %{
-                 name: "count_until",
-                 arity: 2
-               },
-               %{
-                 name: "count_until",
-                 arity: 3
-               }
-             ] = expand('Enum.count')
-    end
+    assert [
+             %{
+               name: "count",
+               arity: 1
+             },
+             %{
+               name: "count",
+               arity: 2
+             },
+             %{
+               name: "count_until",
+               arity: 2
+             },
+             %{
+               name: "count_until",
+               arity: 3
+             }
+           ] = expand('Enum.count')
 
     assert [
              %{

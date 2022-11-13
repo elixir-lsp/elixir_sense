@@ -1,8 +1,6 @@
 defmodule ElixirSense.Providers.References do
   @moduledoc """
-  This module provides References support by using
-  the `Mix.Tasks.Xref.call/0` task to find all references to
-  any function or module identified at the provided location.
+  This module provides References to function or module identified at the provided location.
   """
 
   alias ElixirSense.Core.Binding
@@ -171,13 +169,20 @@ defmodule ElixirSense.Providers.References do
 
   defp build_location(call) do
     %{callee: {_, func, _}} = call
-    func_length = func |> to_string() |> String.length()
+
+    {start_column, end_column} =
+      if call.column != nil do
+        func_length = func |> to_string() |> String.length()
+        {call.column, call.column + func_length}
+      else
+        {1, 1}
+      end
 
     %{
       uri: call.file,
       range: %{
-        start: %{line: call.line, column: call.column},
-        end: %{line: call.line, column: call.column + func_length}
+        start: %{line: call.line, column: start_column},
+        end: %{line: call.line, column: end_column}
       }
     }
   end

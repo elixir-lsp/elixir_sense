@@ -154,6 +154,32 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  def do_expand(env, {:list_head, list_candidate}, stack) do
+    case expand(env, list_candidate, stack) do
+      {:list, type} when type not in [:empty, :none] ->
+        type
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  def do_expand(env, {:list_tail, list_candidate}, stack) do
+    case expand(env, list_candidate, stack) do
+      {:list, type} when type not in [:empty, :none] ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
   # dependency injection
   def do_expand(env, {:call, {:atom, Application}, fun, args}, stack)
       when fun in ~w(compile_env!)a do
@@ -233,6 +259,12 @@ defmodule ElixirSense.Core.Binding do
   def do_expand(env, {:tuple, size, fields}, stack),
     do: {:tuple, size, fields |> Enum.map(&expand(env, &1, stack))}
 
+  def do_expand(_env, {:list, :empty}, _stack),
+    do: {:list, :empty}
+
+  def do_expand(env, {:list, type}, stack),
+    do: {:list, expand(env, type, stack)}
+
   def do_expand(_env, {:atom, atom}, _stack), do: {:atom, atom}
 
   def do_expand(_env, {:integer, integer}, _stack), do: {:integer, integer}
@@ -296,6 +328,330 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  defp expand_call(
+         env,
+         {:atom, Kernel},
+         :hd,
+         [list_candidate],
+         _include_private,
+         stack
+       ) do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        type
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Kernel},
+         :tl,
+         [list_candidate],
+         _include_private,
+         stack
+       ) do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Enum},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:at, :fetch, :fetch!, :find, :max, :max_by, :min, :min_by, :random] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        if name == :fetch do
+          {:tuple, 2, {{:atom, :ok}, type}}
+        else
+          type
+        end
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Enum},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:split, :split_while] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:tuple, 2, [{:list, type}, {:list, type}]}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Enum},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:min_max, :min_max_by] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:tuple, 2, [type, type]}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Enum},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:chunk_by, :chunk_every, :chunk_while] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:list, {:list, type}}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Enum},
+         :concat,
+         [list_candidate],
+         _include_private,
+         stack
+       ) do
+    case expand(env, list_candidate, stack) do
+      {:list, {:list, type}} ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Enum},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [
+              :concat,
+              :dedup,
+              :dedup_while,
+              :drop,
+              :drop_every,
+              :drop_while,
+              :filter,
+              :intrperse,
+              :reject,
+              :reverse,
+              :reverse_slice,
+              :shuffle,
+              :slice,
+              :sort,
+              :sort_by,
+              :take,
+              :take_every,
+              :take_random,
+              :take_while,
+              :to_list,
+              :uniq,
+              :uniq_by
+            ] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, List},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:delete, :delete_at, :insert_at, :replace_at, :update_at] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, List},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:flatten] do
+    case expand(env, list_candidate, stack) do
+      {:list, {:list, type}} ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, List},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:wrap] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:list, type}
+
+      {:atom, nil} ->
+        {:list, :empty}
+
+      nil ->
+        nil
+
+      :none ->
+        :none
+
+      type ->
+        {:list, type}
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, List},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:pop_at] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:tuple, 2, [type, {:list, type}]}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, List},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:first, :last] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        type
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, List},
+         name,
+         [element | _],
+         _include_private,
+         stack
+       )
+       when name in [:duplicate] do
+    case expand(env, element, stack) do
+      nil ->
+        nil
+
+      :none ->
+        :none
+
+      type ->
+        {:list, type}
+    end
+  end
+
   defp expand_call(env, {:atom, Map}, fun, [map, key], _include_private, stack)
        when fun in [:fetch, :fetch!, :get] do
     fields = expand_map_fields(env, map, stack)
@@ -305,7 +661,13 @@ defmodule ElixirSense.Core.Binding do
     else
       case expand(env, key, stack) do
         {:atom, atom} ->
-          fields |> Keyword.get(atom)
+          value = fields |> Keyword.get(atom)
+
+          if fun == :fetch and value != nil do
+            {:tuple, 2, [{:atom, :ok}, value]}
+          else
+            value
+          end
 
         nil ->
           nil
@@ -715,6 +1077,34 @@ defmodule ElixirSense.Core.Binding do
     {:tuple, length(fields), fields |> Enum.map(&parse_type(env, &1, mod, include_private))}
   end
 
+  defp parse_type(_env, [], _mod, _include_private) do
+    {:list, :empty}
+  end
+
+  defp parse_type(env, [type | _], mod, include_private) do
+    {:list, parse_type(env, type, mod, include_private)}
+  end
+
+  # for simplicity we skip terminator type
+  defp parse_type(env, {kind, _, [type, _]}, mod, include_private)
+       when kind in [:maybe_improper_list, :nonempty_improper_list, :nonempty_maybe_improper_list] do
+    {:list, parse_type(env, type, mod, include_private)}
+  end
+
+  defp parse_type(_env, {:list, _, []}, _mod, _include_private) do
+    {:list, nil}
+  end
+
+  defp parse_type(_env, {:keyword, _, []}, _mod, _include_private) do
+    # TODO no support for atom type for now
+    {:list, {:tuple, 2, [nil, nil]}}
+  end
+
+  defp parse_type(env, {:keyword, _, [type]}, mod, include_private) do
+    # TODO no support for atom type for now
+    {:list, {:tuple, 2, [nil, parse_type(env, type, mod, include_private)]}}
+  end
+
   # remote user type
   defp parse_type(env, {{:., _, [mod, atom]}, _, args}, _mod, _include_private)
        when is_atom(mod) and is_atom(atom) do
@@ -739,6 +1129,10 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # other
+  # defp parse_type(_env, t, _, _include_private) do
+  #   IO.inspect t
+  #   nil
+  # end
   defp parse_type(_env, _, _, _include_private), do: nil
 
   defp expand_type(env, mod, type_name, args, include_private) do
