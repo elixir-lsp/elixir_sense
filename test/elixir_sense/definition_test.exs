@@ -394,6 +394,24 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
+  test "find definition of variables defined on the next line" do
+    buffer = """
+    defmodule MyModule do
+      def func do
+        var1 = 
+          1
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 3, 5) == %Location{
+             type: :variable,
+             file: nil,
+             line: 3,
+             column: 5
+           }
+  end
+
   test "find definition of functions when name not same as variable" do
     buffer = """
     defmodule MyModule do
