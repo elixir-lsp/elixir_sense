@@ -743,6 +743,25 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
+  test "find reference for variable split across lines", %{trace: trace} do
+    buffer = """
+    defmodule MyModule do
+      def func do
+        var1 = 
+          1
+        var1
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 3, 6, trace)
+
+    assert references == [
+             %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 9}}},
+             %{uri: nil, range: %{start: %{line: 5, column: 5}, end: %{line: 5, column: 9}}}
+           ]
+  end
+
   test "find references of attributes", %{trace: trace} do
     buffer = """
     defmodule MyModule do
