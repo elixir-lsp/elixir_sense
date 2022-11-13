@@ -324,6 +324,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ] = state |> get_line_vars(18)
   end
 
+  test "variables are added to environment" do
+    state =
+      """
+      defmodule MyModule do
+        def func do
+          var = :my_var
+        end
+      end
+      """
+      |> string_to_state
+
+    assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
+  end
+
   test "call binding" do
     state =
       """
