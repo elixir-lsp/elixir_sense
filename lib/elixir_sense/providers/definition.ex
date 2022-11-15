@@ -210,7 +210,6 @@ defmodule ElixirSense.Providers.Definition do
       {mod, fun, true} ->
         fn_definition = find_fn_definition(mod, fun, line, mods_funs_to_positions, calls)
 
-        # TODO: Figure out why tests fail when I remove the mods_funs_to_positions thing below
         case fn_definition || mods_funs_to_positions[{mod, fun, nil}] ||
                metadata_types[{mod, fun, nil}] do
           nil ->
