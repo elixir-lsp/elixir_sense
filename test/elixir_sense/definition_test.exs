@@ -161,15 +161,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
     buffer = """
     defmodule MyModule do
       def main, do: my_func("a", "b")
-      def main2, do: my_func("a", "b")
-      def main3, do: my_func()
       #               ^ 
       def my_func, do: "not this one"
       def my_func(a, b), do: a <> b
     end
     """
 
-    assert %Location{type: :function, file: nil, line: 7, column: 7} =
+    assert %Location{type: :function, file: nil, line: 5, column: 7} =
              ElixirSense.definition(buffer, 2, 18)
   end
 
