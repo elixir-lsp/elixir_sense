@@ -68,7 +68,6 @@ defmodule ElixirSense.Providers.Definition do
         |> Source.split_module_and_func(module, aliases)
         |> find_function_or_module(
           line,
-          column,
           calls,
           mods_funs_to_positions,
           env,
@@ -103,7 +102,6 @@ defmodule ElixirSense.Providers.Definition do
   defp find_function_or_module(
          {module, function},
          line,
-         column,
          calls,
          mods_funs_to_positions,
          env,
@@ -115,7 +113,6 @@ defmodule ElixirSense.Providers.Definition do
       do_find_function_or_module(
         {module, function},
         line,
-        column,
         calls,
         mods_funs_to_positions,
         env,
@@ -129,7 +126,6 @@ defmodule ElixirSense.Providers.Definition do
   defp do_find_function_or_module(
          {{:attribute, _attr} = type, function},
          line,
-         column,
          calls,
          mods_funs_to_positions,
          env,
@@ -142,7 +138,6 @@ defmodule ElixirSense.Providers.Definition do
         do_find_function_or_module(
           {Introspection.expand_alias(module, env.aliases), function},
           line,
-          column,
           calls,
           mods_funs_to_positions,
           env,
@@ -159,7 +154,6 @@ defmodule ElixirSense.Providers.Definition do
   defp do_find_function_or_module(
          {nil, :super},
          line,
-         column,
          calls,
          mods_funs_to_positions,
          %State.Env{scope: {function, arity}, module: module} = env,
@@ -173,7 +167,6 @@ defmodule ElixirSense.Providers.Definition do
         do_find_function_or_module(
           {origin, :__using__},
           line,
-          column,
           calls,
           mods_funs_to_positions,
           env,
@@ -190,7 +183,6 @@ defmodule ElixirSense.Providers.Definition do
   defp do_find_function_or_module(
          {module, function},
          line,
-         column,
          calls,
          mods_funs_to_positions,
          env,
@@ -216,22 +208,7 @@ defmodule ElixirSense.Providers.Definition do
         nil
 
       {mod, fun, true} ->
-        fn_definition =
-          mods_funs_to_positions
-          |> Enum.find(fn
-            {{^mod, ^fun, fn_arity}, %{positions: fn_positions}} when not is_nil(fn_arity) ->
-              case calls do
-                [] -> Enum.any?(fn_positions, fn {fn_line, _fn_col} -> fn_line == line end)
-                [%{arity: call_arity} | _] -> fn_arity == call_arity
-              end
-
-            _ ->
-              false
-          end)
-          |> case do
-            {_, mod_fun_info} -> mod_fun_info
-            nil -> nil
-          end
+        fn_definition = find_fn_definition(mod, fun, line, mods_funs_to_positions, calls)
 
         # TODO: Figure out why tests fail when I remove the mods_funs_to_positions thing below
         case fn_definition || mods_funs_to_positions[{mod, fun, nil}] ||
@@ -261,6 +238,24 @@ defmodule ElixirSense.Providers.Definition do
               column: column
             }
         end
+    end
+  end
+
+  defp find_fn_definition(mod, fun, line, mods_funs_to_positions, calls) do
+    mods_funs_to_positions
+    |> Enum.find(fn
+      {{^mod, ^fun, fn_arity}, %{positions: fn_positions}} when not is_nil(fn_arity) ->
+        case calls do
+          [] -> Enum.any?(fn_positions, fn {fn_line, _fn_col} -> fn_line == line end)
+          [%{arity: call_arity} | _] -> fn_arity == call_arity
+        end
+
+      _ ->
+        false
+    end)
+    |> case do
+      {_, mod_fun_info} -> mod_fun_info
+      nil -> nil
     end
   end
 end
