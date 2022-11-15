@@ -112,7 +112,6 @@ defmodule ElixirSense do
         Definition.find(
           subject,
           line,
-          column,
           env,
           buffer_file_metadata.mods_funs_to_positions,
           calls,

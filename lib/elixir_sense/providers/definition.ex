@@ -21,7 +21,6 @@ defmodule ElixirSense.Providers.Definition do
   @spec find(
           String.t(),
           pos_integer,
-          pos_integer,
           State.Env.t(),
           State.mods_funs_to_positions_t(),
           list(State.CallInfo.t()),
@@ -30,7 +29,6 @@ defmodule ElixirSense.Providers.Definition do
   def find(
         subject,
         line,
-        column,
         %State.Env{
           aliases: aliases,
           module: module,
