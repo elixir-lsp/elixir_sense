@@ -127,56 +127,6 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    @tag edoc_fallback: true
-    test "retrieve erlang function documentation edoc" do
-      buffer = """
-      defmodule MyModule do
-        def func(list) do
-          :edoc.file(list, "")
-        end
-      end
-      """
-
-      %{
-        subject: subject,
-        actual_subject: actual_subject,
-        docs: %{docs: docs}
-      } = ElixirSense.docs(buffer, 3, 12)
-
-      assert subject == ":edoc.file"
-      assert actual_subject == ":edoc.file"
-
-      assert docs =~ """
-             > :edoc.file(term, term)
-
-             Reads a source code file and outputs formatted documentation to
-             a corresponding file.
-
-             Options:
-               {dir, filename()}
-
-                   Specifies the output directory for the created file. (By
-                   default, the output is written to the directory of the source
-                   file.)
-
-               {source_suffix, string()}
-
-                   Specifies the expected suffix of the input file. The default
-                   value is ".erl".
-
-               {file_suffix, string()}
-
-                   Specifies the suffix for the created file. The default value is
-                   ".html".
-
-             See get_doc/2 and layout/2 for further
-             options.
-
-             For running EDoc from a Makefile or similar, see
-             edoc_run:file/1.
-             """
-    end
-
     test "retrieve erlang function documentation" do
       buffer = """
       defmodule MyModule do
@@ -255,8 +205,6 @@ defmodule ElixirSense.DocsTest do
              > :erlang.orelse(term, term)
 
              **Built-in**
-
-             No documentation available
              """
     end
 
@@ -441,29 +389,6 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    test "retrieve documentation from erlang modules edoc" do
-      buffer = """
-      defmodule MyModule do
-        alias :edoc_wiki, as: Erl
-      end
-      """
-
-      %{
-        subject: subject,
-        actual_subject: actual_subject,
-        docs: %{docs: docs}
-      } = ElixirSense.docs(buffer, 2, 18)
-
-      assert subject == ":edoc_wiki"
-      assert actual_subject == ":edoc_wiki"
-
-      assert docs =~ """
-             > :edoc_wiki
-
-             EDoc wiki expansion, parsing and postprocessing of XML text.\nUses XMerL.
-             """
-    end
-
     test "retrieve documentation from erlang modules" do
       buffer = """
       defmodule MyModule do
@@ -508,27 +433,6 @@ defmodule ElixirSense.DocsTest do
              ```
 
              Tuple describing the client of a call request.
-             """
-    end
-
-    @tag edoc_fallback: true
-    test "retrieve type information from erlang modules edoc" do
-      buffer = """
-      defmodule MyModule do
-        alias :docsh_edoc_xmerl
-      end
-      """
-
-      %{subject: subject, docs: %{types: docs}} = ElixirSense.docs(buffer, 2, 12)
-
-      assert subject == ":docsh_edoc_xmerl"
-
-      assert docs =~ """
-             ```
-             @type xml_element_content :: [record(:xmlElement) | record(:xmlText) | record(:xmlPI) | record(:xmlComment) | record(:xmlDecl)]
-             ```
-
-             #xmlElement.content as defined by xmerl.hrl.
              """
     end
 
@@ -757,46 +661,6 @@ defmodule ElixirSense.DocsTest do
              ```
 
              Opaque type
-
-             """
-    end
-
-    @tag edoc_fallback: true
-    test "retrieve erlang type documentation edoc" do
-      buffer = """
-      defmodule MyModule do
-        alias ElixirSenseExample.ModuleWithTypespecs.Remote
-        @type my_list :: :docsh_edoc_xmerl.xml_element_content
-        #                                    ^
-      end
-      """
-
-      %{
-        subject: subject,
-        actual_subject: actual_subject,
-        docs: %{docs: docs}
-      } = ElixirSense.docs(buffer, 3, 40)
-
-      assert subject == ":docsh_edoc_xmerl.xml_element_content"
-      assert actual_subject == ":docsh_edoc_xmerl.xml_element_content"
-
-      assert docs == """
-             > :docsh_edoc_xmerl.xml_element_content()
-
-             ### Specs
-
-             ```
-             @type xml_element_content() :: [
-               record(:xmlElement)
-               | record(:xmlText)
-               | record(:xmlPI)
-               | record(:xmlComment)
-               | record(:xmlDecl)
-             ]
-             ```
-
-             #xmlElement.content as defined by xmerl.hrl.
-
 
              """
     end

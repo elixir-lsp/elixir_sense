@@ -1618,31 +1618,6 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     end
   end
 
-  @tag edoc_fallback: true
-  test "profide specs for erlang functions edoc" do
-    assert [
-             %{
-               args: "term",
-               arity: 1,
-               name: "files",
-               origin: ":edoc",
-               spec: "",
-               summary: "",
-               type: :function
-             },
-             %{
-               args: "term, term",
-               arity: 2,
-               name: "files",
-               origin: ":edoc",
-               spec: "",
-               summary:
-                 "Runs EDoc on a given set of source files. See run/2 for\ndetails, including options.",
-               type: :function
-             }
-           ] = expand(':edoc.files')
-  end
-
   test "complete after ! operator" do
     assert [%{name: "is_binary"}] = expand('!is_bina')
   end

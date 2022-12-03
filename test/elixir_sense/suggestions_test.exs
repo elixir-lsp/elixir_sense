@@ -2825,22 +2825,6 @@ defmodule ElixirSense.SuggestionsTest do
       end
     end
 
-    @tag edoc_fallback: true
-    test "remote erlang type with edoc" do
-      buffer = "Local.func_with_edoc_options("
-      suggestion = suggestion_by_name("edoc_t", buffer)
-
-      assert suggestion.type_spec ==
-               ":docsh_edoc_xmerl.xml_element_content()"
-
-      assert suggestion.origin == ":docsh_edoc_xmerl"
-
-      assert suggestion.expanded_spec ==
-               "@type xml_element_content() :: [\n  record(:xmlElement)\n  | record(:xmlText)\n  | record(:xmlPI)\n  | record(:xmlComment)\n  | record(:xmlDecl)\n]"
-
-      assert suggestion.doc == "#xmlElement.content as defined by xmerl.hrl.\n\n"
-    end
-
     test "remote aliased type" do
       buffer = "Local.func_with_options("
       suggestion = suggestion_by_name("remote_aliased_o", buffer)
@@ -3134,27 +3118,6 @@ defmodule ElixirSense.SuggestionsTest do
       if ExUnitConfig.erlang_eep48_supported() do
         assert "Supported time unit representations:" <> _ = summary
       end
-    end
-
-    @tag edoc_fallback: true
-    test "erlang types edoc" do
-      buffer = "defmodule My, do: @type my_type :: :docsh_edoc_xmerl.xml_element_con"
-
-      suggestions = suggestions_by_type(:type_spec, buffer)
-
-      assert [
-               %{
-                 arity: 0,
-                 doc: "#xmlElement.content as defined by xmerl.hrl.",
-                 name: "xml_element_content",
-                 origin: ":docsh_edoc_xmerl",
-                 signature: "xml_element_content()",
-                 spec:
-                   "@type xml_element_content() :: [\n  record(:xmlElement)\n  | record(:xmlText)\n  | record(:xmlPI)\n  | record(:xmlComment)\n  | record(:xmlDecl)\n]",
-                 type: :type_spec,
-                 metadata: %{}
-               }
-             ] == suggestions
     end
 
     test "no erlang private types" do

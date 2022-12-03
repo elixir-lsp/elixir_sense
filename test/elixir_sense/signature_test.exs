@@ -192,29 +192,6 @@ defmodule ElixirSense.SignatureTest do
       end
     end
 
-    @tag edoc_fallback: true
-    test "find type signatures from erlang module edoc" do
-      code = """
-      defmodule MyModule do
-        @type a :: :docsh_edoc_xmerl.xml_element_content(
-      end
-      """
-
-      assert ElixirSense.signature(code, 2, 52) == %{
-               active_param: 0,
-               pipe_before: false,
-               signatures: [
-                 %{
-                   documentation: "#xmlElement.content as defined by xmerl.hrl.",
-                   name: "xml_element_content",
-                   params: '',
-                   spec:
-                     "@type xml_element_content :: [record(:xmlElement) | record(:xmlText) | record(:xmlPI) | record(:xmlComment) | record(:xmlDecl)]"
-                 }
-               ]
-             }
-    end
-
     test "find type signatures from builtin type" do
       code = """
       defmodule MyModule do
@@ -318,30 +295,6 @@ defmodule ElixirSense.SignatureTest do
         assert "Returns a flattened version of `DeepList` with tail `Tail` appended\\." <> _ =
                  summary2
       end
-    end
-
-    @tag edoc_fallback: true
-    test "find signatures from erlang module edoc" do
-      code = """
-      defmodule MyModule do
-        :edoc.file(
-      end
-      """
-
-      assert ElixirSense.signature(code, 2, 14) == %{
-               active_param: 0,
-               pipe_before: false,
-               signatures: [
-                 %{documentation: "", name: "file", params: ["term"], spec: ""},
-                 %{
-                   documentation:
-                     "Reads a source code file and outputs formatted documentation to\na corresponding file.",
-                   name: "file",
-                   params: ["term", "term"],
-                   spec: ""
-                 }
-               ]
-             }
     end
 
     test "find signatures from aliased modules" do

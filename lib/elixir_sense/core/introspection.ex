@@ -27,7 +27,6 @@ defmodule ElixirSense.Core.Introspection do
   alias ElixirSense.Core.Applications
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.BuiltinTypes
-  alias ElixirSense.Core.EdocReader
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.State
@@ -199,27 +198,21 @@ defmodule ElixirSense.Core.Introspection do
         end
 
       nil ->
-        edoc_results =
-          EdocReader.get_docs(mod, fun)
-          |> Map.new(fn {{:function, ^fun, arity}, _, _, maybe_doc, _} ->
-            {arity, EdocReader.extract_docs(maybe_doc) |> extract_summary_from_docs}
-          end)
-
-        get_spec_from_typespec(mod, fun, edoc_results)
+        get_spec_from_typespec(mod, fun)
     end
     |> Enum.sort_by(&length(&1.params))
   end
 
-  defp get_spec_from_typespec(mod, fun, edoc_results \\ %{}) do
+  defp get_spec_from_typespec(mod, fun) do
     results =
-      for {{_name, arity}, [params | _]} = spec <-
+      for {{_name, _arity}, [params | _]} = spec <-
             TypeInfo.get_function_specs(mod, fun) do
         params = TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
 
         %{
           name: Atom.to_string(fun),
           params: params,
-          documentation: edoc_results[arity] || "",
+          documentation: "",
           spec: spec |> spec_to_string
         }
       end
@@ -228,14 +221,14 @@ defmodule ElixirSense.Core.Introspection do
       [] ->
         # no typespecs
         # provide dummy spec basing on module_info(:exports)
-        get_spec_from_module_info(mod, fun, edoc_results)
+        get_spec_from_module_info(mod, fun)
 
       other ->
         other
     end
   end
 
-  defp get_spec_from_module_info(mod, fun, edoc_results) do
+  defp get_spec_from_module_info(mod, fun) do
     for {f, a} <- get_exports(mod),
         f == fun do
       dummy_params = if a == 0, do: [], else: Enum.map(1..a, fn _ -> "term" end)
@@ -243,7 +236,7 @@ defmodule ElixirSense.Core.Introspection do
       %{
         name: Atom.to_string(fun),
         params: dummy_params,
-        documentation: edoc_results[a] || "",
+        documentation: "",
         spec: ""
       }
     end
@@ -270,14 +263,8 @@ defmodule ElixirSense.Core.Introspection do
   def get_func_docs_md(mod, fun) do
     case NormalizedCode.get_docs(mod, :docs) do
       nil ->
-        edoc_results =
-          EdocReader.get_docs(mod, fun)
-          |> Map.new(fn {{:function, ^fun, arity}, _, _, maybe_doc, metadata} ->
-            {arity, {EdocReader.extract_docs(maybe_doc), metadata}}
-          end)
-
         # no docs, fallback to typespecs
-        get_func_docs_md_from_typespec(mod, fun, edoc_results)
+        get_func_docs_md_from_typespec(mod, fun)
 
       docs ->
         results =
@@ -317,28 +304,26 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  defp get_func_docs_md_from_typespec(mod, fun, edoc_results \\ %{}) do
+  defp get_func_docs_md_from_typespec(mod, fun) do
     results =
       for {{_name, arity}, [params | _]} <-
             TypeInfo.get_function_specs(mod, fun) do
         fun_args_text = TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
 
-        {text, metadata} = edoc_results[arity] || {"", %{}}
-
-        "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, :function)}#{text || @no_documentation}"
+        "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(%{})}#{get_spec_text(mod, fun, arity, :function)}"
       end
 
     case results do
       [] ->
         # no docs and no typespecs
-        get_func_docs_md_from_module_info(mod, fun, edoc_results)
+        get_func_docs_md_from_module_info(mod, fun)
 
       other ->
         other
     end
   end
 
-  defp get_func_docs_md_from_module_info(mod, fun, edoc_results) do
+  defp get_func_docs_md_from_module_info(mod, fun) do
     # provide dummy docs basing on module_info(:exports)
     for {f, arity} <- get_exports(mod),
         f == fun do
@@ -347,9 +332,9 @@ defmodule ElixirSense.Core.Introspection do
 
       {text, metadata} =
         if {f, arity} in BuiltinFunctions.erlang_builtin_functions(mod) do
-          {nil, %{builtin: true}}
+          {"", %{builtin: true}}
         else
-          edoc_results[arity] || {"", %{}}
+          {"", %{}}
         end
 
       "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, :function)}#{text || @no_documentation}"
@@ -364,16 +349,10 @@ defmodule ElixirSense.Core.Introspection do
         "> #{mod_str}\n\n" <> get_metadata_md(metadata) <> doc
 
       _ ->
-        case EdocReader.get_moduledoc(mod) do
-          [{_line, doc, metadata}] when is_map(doc) ->
-            "> #{mod_str}\n\n" <> get_metadata_md(metadata) <> EdocReader.extract_docs(doc)
-
-          _ ->
-            if Code.ensure_loaded?(mod) do
-              "> #{mod_str}\n\n" <> @no_documentation
-            else
-              @no_documentation
-            end
+        if Code.ensure_loaded?(mod) do
+          "> #{mod_str}\n\n" <> @no_documentation
+        else
+          @no_documentation
         end
     end
   end
@@ -486,12 +465,6 @@ defmodule ElixirSense.Core.Introspection do
   def get_type_docs_md(mod, fun, _scope) do
     case TypeInfo.get_type_docs(mod, fun) do
       [] ->
-        edoc_results =
-          EdocReader.get_typedocs(mod, fun)
-          |> Map.new(fn {{:type, ^fun, arity}, _, _, maybe_doc, metadata} ->
-            {arity, {EdocReader.extract_docs(maybe_doc), metadata}}
-          end)
-
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(mod),
             name == fun,
             kind in [:type, :opaque] do
@@ -499,9 +472,7 @@ defmodule ElixirSense.Core.Introspection do
 
           type_args = Enum.map_join(args, ", ", &(&1 |> elem(2) |> Atom.to_string()))
 
-          {text, metadata} = edoc_results[length(args)] || {"", %{}}
-
-          format_type_doc_md({mod, fun}, type_args, text || @no_documentation, spec, metadata)
+          format_type_doc_md({mod, fun}, type_args, "", spec, %{})
         end
 
       docs ->
@@ -609,24 +580,11 @@ defmodule ElixirSense.Core.Introspection do
   def get_types_with_docs(module) when is_atom(module) do
     docs = NormalizedCode.get_docs(module, :type_docs)
 
-    edocs =
-      if docs == nil do
-        EdocReader.get_typedocs(module)
-        |> Map.new(fn {{:type, fun, arity}, _, _, maybe_doc, metadata} ->
-          {{fun, arity}, {EdocReader.extract_docs(maybe_doc), metadata}}
-        end)
-      end
-
     module
     |> Typespec.get_types()
     |> Enum.filter(fn {kind, {_t, _, _args}} -> kind in [:type, :opaque] end)
     |> Enum.map(fn {_, {t, _, args}} = type ->
-      {doc, metadata} =
-        if edocs != nil do
-          edocs[{t, length(args)}] || {"", %{}}
-        else
-          TypeInfo.get_type_doc_desc(docs, t, length(args))
-        end
+      {doc, metadata} = TypeInfo.get_type_doc_desc(docs, t, length(args))
 
       type_args = Enum.map_join(args, ", ", &(&1 |> elem(2) |> Atom.to_string()))
 
@@ -926,17 +884,7 @@ defmodule ElixirSense.Core.Introspection do
         {extract_summary_from_docs(doc), metadata}
 
       _ ->
-        case EdocReader.get_moduledoc(module) do
-          [{_line, doc, metadata}] ->
-            doc =
-              EdocReader.extract_docs(doc)
-              |> extract_summary_from_docs
-
-            {doc, metadata}
-
-          _ ->
-            {"", %{}}
-        end
+        {"", %{}}
     end
   end
 

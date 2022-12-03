@@ -41,7 +41,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.BuiltinAttributes
   alias ElixirSense.Core.BuiltinFunctions
-  alias ElixirSense.Core.EdocReader
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
@@ -821,13 +820,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         |> Kernel.--(if include_builtin, do: [], else: @builtin_functions)
         |> Kernel.++(BuiltinFunctions.erlang_builtin_functions(mod))
 
-      edoc_results =
-        if docs == nil do
-          get_edocs(mod)
-        else
-          %{}
-        end
-
       for {f, a} <- funs do
         spec = specs[{f, a}]
         spec_str = Introspection.spec_to_string(spec)
@@ -854,8 +846,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           _name ->
             params = format_params(spec, a)
 
-            {f, a, a, :function, doc_result || edoc_results[{f, a}] || {"", %{}}, spec_str,
-             params}
+            {f, a, a, :function, doc_result || {"", %{}}, spec_str, params}
         end
       end
     end
@@ -870,17 +861,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   defp format_params(nil, arity) do
     for _ <- 1..arity, do: "term"
-  end
-
-  defp get_edocs(mod) do
-    EdocReader.get_docs(mod, :any)
-    |> Map.new(fn {{:function, fun, arity}, _, _, maybe_doc, metadata} ->
-      doc =
-        EdocReader.extract_docs(maybe_doc)
-        |> Introspection.extract_summary_from_docs()
-
-      {{fun, arity}, {doc || "", metadata}}
-    end)
   end
 
   defp special_buildins(mod) do

@@ -41,8 +41,7 @@ defmodule ElixirSense.Mixfile do
       {:excoveralls, "~> 0.10", only: :test},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:credo, "~> 1.0", only: [:dev], runtime: false},
-      {:ex_doc, "~> 0.18", only: [:dev], runtime: false},
-      {:docsh, "~> 0.7"}
+      {:ex_doc, "~> 0.18", only: [:dev], runtime: false}
     ]
   end
 

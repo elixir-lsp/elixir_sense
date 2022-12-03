@@ -25,12 +25,8 @@ defmodule ExUnitConfig do
     otp_release >= 23
   end
 
-  defp edoc_fallback do
-    [{:edoc_fallback, erlang_eep48_supported()}]
-  end
-
   def excludes do
-    [requires_source: true] ++ otp_related() ++ elixir_related() ++ edoc_fallback()
+    [requires_source: true] ++ otp_related() ++ elixir_related()
   end
 end
 
