@@ -330,14 +330,14 @@ defmodule ElixirSense.Core.Introspection do
       fun_args_text =
         if arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end)
 
-      {text, metadata} =
+      metadata =
         if {f, arity} in BuiltinFunctions.erlang_builtin_functions(mod) do
-          {"", %{builtin: true}}
+          %{builtin: true}
         else
-          {"", %{}}
+          %{}
         end
 
-      "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, :function)}#{text || @no_documentation}"
+      "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, :function)}"
     end
   end
 
@@ -592,7 +592,7 @@ defmodule ElixirSense.Core.Introspection do
         type_name: t,
         type_args: type_args,
         type: format_type(type),
-        doc: doc || @no_documentation,
+        doc: doc,
         metadata: metadata
       }
     end)
