@@ -79,6 +79,9 @@ jobs:
     env:
       MIX_ENV: test
     steps:
+      - name: Set git to use original line ending
+        run: |
+          git config --global core.autocrlf false
       - uses: actions/checkout@v3
       - uses: erlef/setup-beam@v1
         with:
