@@ -584,7 +584,12 @@ defmodule ElixirSense.Core.Introspection do
     |> Typespec.get_types()
     |> Enum.filter(fn {kind, {_t, _, _args}} -> kind in [:type, :opaque] end)
     |> Enum.map(fn {_, {t, _, args}} = type ->
-      {doc, metadata} = TypeInfo.get_type_doc_desc(docs, t, length(args))
+      {doc, metadata} =
+        if docs do
+          TypeInfo.get_type_doc_desc(docs, t, length(args))
+        else
+          {"", %{}}
+        end
 
       type_args = Enum.map_join(args, ", ", &(&1 |> elem(2) |> Atom.to_string()))
 
