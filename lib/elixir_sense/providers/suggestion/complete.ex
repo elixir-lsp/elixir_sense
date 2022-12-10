@@ -565,6 +565,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         result
       end
     end)
+    |> Enum.reject(fn
+      %{required_alias: _, subtype: :implementation} -> true
+      _ -> false
+    end)
   end
 
   defp valid_alias_piece?(<<?., char, rest::binary>>) when char in ?A..?Z,
