@@ -445,7 +445,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           {"", %{}}
         end
 
-      %{kind: :module, name: ":" <> mod, type: :erlang, desc: desc, subtype: subtype}
+      name = ":" <> mod
+      %{kind: :module, name: name, full_name: name, type: :erlang, desc: desc, subtype: subtype}
     end
   end
 
@@ -520,10 +521,17 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp match_aliases(hint, env) do
-    for {alias, _mod} <- env.aliases,
+    for {alias, mod} <- env.aliases,
         [name] = Module.split(alias),
         Matcher.match?(name, hint) do
-      %{kind: :module, type: :alias, name: name, desc: {"", %{}}, subtype: nil}
+      %{
+        kind: :module,
+        type: :alias,
+        name: name,
+        full_name: inspect(mod),
+        desc: {"", %{}},
+        subtype: nil
+      }
     end
   end
 
@@ -557,7 +565,15 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     |> Enum.map(fn {name, module, required_alias?} ->
       {desc, meta} = Introspection.get_module_docs_summary(module)
       subtype = Introspection.get_module_subtype(module)
-      result = %{kind: :module, type: :elixir, name: name, desc: {desc, meta}, subtype: subtype}
+
+      result = %{
+        kind: :module,
+        type: :elixir,
+        name: name,
+        full_name: inspect(module),
+        desc: {desc, meta},
+        subtype: subtype
+      }
 
       if required_alias? do
         Map.put(result, :required_alias, module)
@@ -566,8 +582,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       end
     end)
     |> Enum.reject(fn
-      %{required_alias: _, subtype: :implementation} -> true
-      _ -> false
+      %{required_alias: _, subtype: :implementation} ->
+        # reject protocol implementations, there is rarely a reason to alias them
+        true
+
+      _ ->
+        false
     end)
   end
 
@@ -937,6 +957,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp to_entries(%{
          kind: :module,
          name: name,
+         full_name: full_name,
          required_alias: module,
          desc: {desc, metadata},
          subtype: subtype
@@ -945,6 +966,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       %{
         type: :module,
         name: name,
+        full_name: full_name,
         required_alias: module,
         subtype: subtype,
         summary: desc,
@@ -953,8 +975,23 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     ]
   end
 
-  defp to_entries(%{kind: :module, name: name, desc: {desc, metadata}, subtype: subtype}) do
-    [%{type: :module, name: name, subtype: subtype, summary: desc, metadata: metadata}]
+  defp to_entries(%{
+         kind: :module,
+         full_name: full_name,
+         name: name,
+         desc: {desc, metadata},
+         subtype: subtype
+       }) do
+    [
+      %{
+        type: :module,
+        name: name,
+        full_name: full_name,
+        subtype: subtype,
+        summary: desc,
+        metadata: metadata
+      }
+    ]
   end
 
   defp to_entries(%{kind: :variable, name: name}) do

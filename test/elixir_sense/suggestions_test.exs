@@ -297,6 +297,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{
                name: "ModuleWithDocFalse",
+               full_name: "ElixirSenseExample.ModuleWithDocFalse",
                subtype: nil,
                summary: "",
                type: :module,
@@ -304,12 +305,20 @@ defmodule ElixirSense.SuggestionsTest do
              },
              %{
                name: "ModuleWithDocs",
+               full_name: "ElixirSenseExample.ModuleWithDocs",
                subtype: :behaviour,
                summary: "An example module\n",
                type: :module,
                metadata: %{since: "1.2.3"}
              },
-             %{metadata: %{}, name: "ModuleWithNoDocs", subtype: nil, summary: "", type: :module}
+             %{
+               metadata: %{},
+               name: "ModuleWithNoDocs",
+               full_name: "ElixirSenseExample.ModuleWithNoDocs",
+               subtype: nil,
+               summary: "",
+               type: :module
+             }
            ]
   end
 
@@ -1805,6 +1814,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert Enum.at(list, 0) == %{
              type: :module,
              name: "Elixir",
+             full_name: "Elixir.Elixir",
              subtype: nil,
              summary: "",
              metadata: %{}

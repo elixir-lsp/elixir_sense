@@ -32,6 +32,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [
              %{
                name: ":zlib",
+               full_name: ":zlib",
                subtype: nil,
                summary: summary,
                type: :module,
@@ -64,13 +65,14 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
   test "elixir proxy" do
     list = expand('E')
-    assert list |> Enum.find(&(&1.name == "Elixir"))
+    assert list |> Enum.find(&(&1.name == "Elixir" and &1.full_name == "Elixir.Elixir"))
   end
 
   test "elixir completion" do
     assert [_ | _] = expand('En')
 
-    assert [%{name: "Enumerable", subtype: :protocol, type: :module}] = expand('Enumera')
+    assert [%{name: "Enumerable", full_name: "Enumerable", subtype: :protocol, type: :module}] =
+             expand('Enumera')
   end
 
   test "elixir module completion with @moduledoc false" do
@@ -235,8 +237,13 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "elixir root submodule completion" do
-    assert [%{name: "Access", summary: "Key-based access to data structures."}] =
-             expand('Elixir.Acce')
+    assert [
+             %{
+               name: "Access",
+               full_name: "Access",
+               summary: "Key-based access to data structures."
+             }
+           ] = expand('Elixir.Acce')
 
     assert [_ | _] = expand('Elixir.')
   end
@@ -245,6 +252,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [
              %{
                name: "Chars",
+               full_name: "String.Chars",
                subtype: :protocol,
                summary:
                  "The `String.Chars` protocol is responsible for\nconverting a structure to a binary (only if applicable)."
@@ -257,6 +265,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [
              %{
                name: "Chars",
+               full_name: "String.Chars",
                subtype: :protocol,
                summary:
                  "The `String.Chars` protocol is responsible for\nconverting a structure to a binary (only if applicable)."
@@ -269,6 +278,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [
              %{
                name: "Chars",
+               full_name: "String.Chars",
                subtype: :protocol,
                summary:
                  "The `String.Chars` protocol is responsible for\nconverting a structure to a binary (only if applicable)."
@@ -286,11 +296,18 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
   test "find elixir modules that require alias" do
     assert [
-             %{metadata: %{}, name: "Chars", required_alias: String.Chars},
-             %{metadata: %{}, name: "Chars", required_alias: List.Chars},
+             %{
+               metadata: %{},
+               name: "Chars",
+               full_name: "String.Chars",
+               required_alias: String.Chars
+             },
+             %{metadata: %{}, name: "Chars", full_name: "List.Chars", required_alias: List.Chars},
              %{
                metadata: %{},
                name: "CallerWithAliasesAndImports",
+               full_name:
+                 "ElixirSense.Providers.ReferencesTest.Modules.CallerWithAliasesAndImports",
                required_alias:
                  ElixirSense.Providers.ReferencesTest.Modules.CallerWithAliasesAndImports
              }
@@ -1088,9 +1105,13 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       }
     }
 
-    assert [%{name: "Some", type: :module}] = expand('Som', env)
-    assert [%{name: "OtherModule", type: :module}] = expand('Some.', env)
-    assert [%{name: "MyAlias", type: :module}] = expand('MyA', env)
+    assert [%{name: "Some", full_name: "Some", type: :module}] = expand('Som', env)
+
+    assert [%{name: "OtherModule", full_name: "Some.OtherModule", type: :module}] =
+             expand('Some.', env)
+
+    assert [%{name: "MyAlias", full_name: "Some.OtherModule.Nested", type: :module}] =
+             expand('MyA', env)
   end
 
   test "alias rules" do
@@ -1626,6 +1647,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [
              %{
                name: "File",
+               full_name: "File",
                type: :module,
                metadata: %{},
                subtype: nil,
