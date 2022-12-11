@@ -13,7 +13,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
           type: :type_spec,
           name: String.t(),
           arity: non_neg_integer,
-          origin: String.t(),
+          origin: String.t() | nil,
+          args_list: list(String.t()),
           spec: String.t(),
           doc: String.t(),
           signature: String.t(),
@@ -117,7 +118,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
   end
 
   defp type_info_to_suggestion(type_info, module) do
-    origin = if module, do: inspect(module), else: ""
+    origin = if module, do: inspect(module)
 
     case type_info do
       %ElixirSense.Core.State.TypeInfo{args: [args]} ->
@@ -127,6 +128,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
           type: :type_spec,
           name: type_info.name |> Atom.to_string(),
           arity: length(args),
+          args_list: args,
           signature: "#{type_info.name}(#{args_stringified})",
           origin: origin,
           doc: "",
@@ -136,10 +138,31 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
         }
 
       _ ->
+        args_list =
+          if type_info.signature do
+            part =
+              type_info.signature
+              |> String.split("(")
+              |> Enum.at(1)
+
+            if part do
+              part
+              |> String.split(")")
+              |> Enum.at(0)
+              |> String.split(",")
+              |> Enum.map(&String.trim/1)
+            else
+              []
+            end
+          else
+            []
+          end
+
         %{
           type: :type_spec,
           name: type_info.name |> Atom.to_string(),
           arity: type_info.arity,
+          args_list: args_list,
           signature: type_info.signature,
           origin: origin,
           doc: type_info.doc,

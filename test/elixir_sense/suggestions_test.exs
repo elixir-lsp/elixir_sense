@@ -3092,7 +3092,7 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.signature == "list()"
       assert suggestion.arity == 0
       assert suggestion.doc == "A list"
-      assert suggestion.origin == ""
+      assert suggestion.origin == nil
     end
 
     test "builtin types - retrieve info from typespecs with params" do
@@ -3104,7 +3104,7 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.signature == "list(t)"
       assert suggestion.arity == 1
       assert suggestion.doc == "Proper list ([]-terminated)"
-      assert suggestion.origin == ""
+      assert suggestion.origin == nil
     end
 
     test "erlang types" do
@@ -3180,6 +3180,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "MyModule",
                type: :type_spec,
                signature: "my_local_t()",
+               args_list: [],
                doc: "",
                spec: "",
                metadata: %{}
@@ -3191,6 +3192,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "MyModule",
                type: :type_spec,
                signature: "my_local_arg_t(a, b)",
+               args_list: ["a", "b"],
                doc: "",
                spec: "",
                metadata: %{}
@@ -3219,6 +3221,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "MyModule",
                type: :type_spec,
                signature: "my_local_t()",
+               args_list: [],
                doc: "",
                spec: "",
                metadata: %{}
@@ -3252,6 +3255,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "SomeModule",
                type: :type_spec,
                signature: "my_local_pub_t(a, b)",
+               args_list: ["a", "b"],
                doc: "",
                spec: "",
                metadata: %{}
@@ -3263,6 +3267,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "SomeModule",
                type: :type_spec,
                signature: "my_local_op_t()",
+               args_list: [],
                doc: "",
                spec: "",
                metadata: %{}
