@@ -32,13 +32,13 @@ defmodule ElixirSense.Providers.Signature do
     with %{
           #  candidate: {mod, fun},
            elixir_prefix: elixir_prefix,
-           npar: npar,
+          #  npar: npar,
            unfinished_parm: unfinished_parm,
            pipe_before: pipe_before
          } <-
            Source.which_func(prefix, module),
            {:ok, ast} <- Code.Fragment.container_cursor_to_quoted(prefix),
-           {_, {:ok, call}} <- Macro.traverse(ast, [], &find_call_pre/2, &find_call_post/2),
+           {_, {:ok, call, npar}} <- Macro.prewalk(ast, nil, &find_call_pre/2),
            {m, f} <- get_mod_fun(call, binding_env),
          {mod, fun, true} <-
            Introspection.actual_mod_fun(
@@ -57,20 +57,35 @@ defmodule ElixirSense.Providers.Signature do
     end
   end
 
-  def find_call_pre(ast, {:ok, candidate}), do: {ast, {:ok, candidate}}
-  def find_call_pre({:__cursor__, _, []} = ast, []), do: {ast, nil}
-  def find_call_pre({:__cursor__, _, []} = ast, [candidate | _]), do: {ast, {:ok, candidate}}
-  def find_call_pre({{:., _, call}, _, _} = ast, list), do: {ast, [call | list]}
-  def find_call_pre({:__aliases__, _, _} = ast, state), do: {ast, state}
-  def find_call_pre({:., _, _} = ast, state), do: {ast, state}
-  def find_call_pre({atom, _, _} = ast, list) when is_atom(atom), do: {ast, [atom | list]}
+  def find_call_pre(ast, {:ok, call, npar}), do: {ast, {:ok, call, npar}}
+  # def find_call_pre({:__cursor__, _, []} = ast, []), do: {ast, nil}
+  # def find_call_pre({:__cursor__, _, []} = ast, [candidate | _]), do: {ast, {:ok, candidate}}
+  # transform `a |> b(c)` calls into `b(a, c)`
+  def find_call_pre({:|>, _, [params_1, {call, meta, params_rest}]}, state) do
+    params = [params_1 | params_rest || []]
+    find_call_pre({call, meta, params}, state)
+  end
+  def find_call_pre({{:., _, call}, _, params} = ast, list) when is_list(params) do
+    case Enum.find_index(params, &match?({:__cursor__, _, []}, &1)) do
+      nil -> {ast, nil}
+      npar -> {ast, {:ok, call, npar}}
+    end
+  end
+  # def find_call_pre({:__aliases__, _, _} = ast, state), do: {ast, state}
+  # def find_call_pre({:., _, _} = ast, state), do: {ast, state}
+  def find_call_pre({atom, _, params} = ast, list) when is_atom(atom) and is_list(params) do
+    case Enum.find_index(params, &match?({:__cursor__, _, []}, &1)) do
+      nil -> {ast, nil}
+      npar -> {ast, {:ok, atom, npar}}
+    end
+  end
   def find_call_pre(ast, state), do: {ast, state}
 
-  def find_call_post({{:., _, _call}, _, _} = ast, [_ | rest]), do: {ast, rest}
-  def find_call_post({:__aliases__, _, _} = ast, state), do: {ast, state}
-  def find_call_post({:., _, _} = ast, state), do: {ast, state}
-  def find_call_post({atom, _, _} = ast, [_ | rest]) when is_atom(atom), do: {ast, rest}
-  def find_call_post(ast, state), do: {ast, state}
+  # def find_call_post({{:., _, _call}, _, _} = ast, [_ | rest]), do: {ast, rest}
+  # def find_call_post({:__aliases__, _, _} = ast, state), do: {ast, state}
+  # def find_call_post({:., _, _} = ast, state), do: {ast, state}
+  # def find_call_post({atom, _, _} = ast, [_ | rest]) when is_atom(atom), do: {ast, rest}
+  # def find_call_post(ast, state), do: {ast, state}
 
   def get_mod_fun(atom, _binding_env) when is_atom(atom), do: {nil, atom}
   def get_mod_fun([{:__aliases__, _, list}, fun], binding_env) do
