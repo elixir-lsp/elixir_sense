@@ -32,7 +32,7 @@ defmodule ElixirSense.Providers.Signature do
           #  candidate: {mod, fun},
            elixir_prefix: elixir_prefix,
           #  npar: npar,
-           unfinished_parm: unfinished_parm
+          #  unfinished_parm: unfinished_parm
           #  pipe_before: pipe_before
          } <-
            Source.which_func(prefix, module),
@@ -48,7 +48,7 @@ defmodule ElixirSense.Providers.Signature do
              metadata.mods_funs_to_positions,
              metadata.types
            ) do
-      signatures = find_signatures({mod, fun}, npar, unfinished_parm, env, metadata)
+      signatures = find_signatures({mod, fun}, npar, env, metadata)
       %{active_param: npar, signatures: signatures}
     else
       _ ->
@@ -62,13 +62,13 @@ defmodule ElixirSense.Providers.Signature do
     params = [params_1 | params_rest || []]
     find_call_pre({call, meta, params}, state)
   end
-  def find_call_pre({{:., _, call}, _, params} = ast, list) when is_list(params) do
+  def find_call_pre({{:., _, call}, _, params} = ast, _state) when is_list(params) do
     case Enum.find_index(params, &match?({:__cursor__, _, []}, &1)) do
       nil -> {ast, nil}
       npar -> {ast, {:ok, call, npar}}
     end
   end
-  def find_call_pre({atom, _, params} = ast, list) when is_atom(atom) and is_list(params) do
+  def find_call_pre({atom, _, params} = ast, _state) when is_atom(atom) and is_list(params) do
     case Enum.find_index(params, &match?({:__cursor__, _, []}, &1)) do
       nil -> {ast, nil}
       npar -> {ast, {:ok, atom, npar}}
@@ -131,7 +131,7 @@ defmodule ElixirSense.Providers.Signature do
 
   def get_mod(_list, _binding_env), do: nil
 
-  defp find_signatures({mod, fun}, npar, unfinished_parm, env, metadata) do
+  defp find_signatures({mod, fun}, npar, env, metadata) do
     signatures = find_function_signatures({mod, fun}, env, metadata)
 
     signatures =
@@ -146,13 +146,9 @@ defmodule ElixirSense.Providers.Signature do
       params_length = length(params)
 
       if params_length == 0 do
-        not unfinished_parm and npar == 0
+        npar == 0
       else
-        if unfinished_parm do
-          params_length >= npar + 1
-        else
-          params_length > npar
-        end
+        params_length > npar
       end
     end)
     |> Enum.sort_by(&length(&1.params))
