@@ -236,7 +236,6 @@ defmodule ElixirSense do
       ...> '''
       iex> ElixirSense.signature(code, 3, 22)
       %{active_param: 0,
-        pipe_before: false,
         signatures: [
           %{name: "flatten",
             params: ["list"],
