@@ -30,7 +30,7 @@ defmodule ElixirSense.Providers.Signature do
 
     with %{
           #  candidate: {mod, fun},
-           elixir_prefix: elixir_prefix,
+          #  elixir_prefix: elixir_prefix,
           #  npar: npar,
           #  unfinished_parm: unfinished_parm
           #  pipe_before: pipe_before
@@ -38,11 +38,12 @@ defmodule ElixirSense.Providers.Signature do
            Source.which_func(prefix, module),
            {:ok, ast} <- Code.Fragment.container_cursor_to_quoted(prefix),
            {_, {:ok, call, npar}} <- Macro.prewalk(ast, nil, &find_call_pre/2),
-           {m, f} <- get_mod_fun(call, binding_env),
+           {{m, elixir_prefix}, f} <- get_mod_fun(call, binding_env),
          {mod, fun, true} <-
            Introspection.actual_mod_fun(
              {m, f},
              imports,
+            #  aliases,
              if(elixir_prefix, do: [], else: aliases),
              module,
              metadata.mods_funs_to_positions,
@@ -76,7 +77,7 @@ defmodule ElixirSense.Providers.Signature do
   end
   def find_call_pre(ast, state), do: {ast, state}
 
-  def get_mod_fun(atom, _binding_env) when is_atom(atom), do: {nil, atom}
+  def get_mod_fun(atom, _binding_env) when is_atom(atom), do: {{nil, false}, atom}
   def get_mod_fun([{:__aliases__, _, list}, fun], binding_env) do
     mod = get_mod(list, binding_env)
     if mod do
@@ -85,48 +86,50 @@ defmodule ElixirSense.Providers.Signature do
   end
   def get_mod_fun([{:__MODULE__, _, nil}, fun], binding_env) do
     if binding_env.current_module not in [nil, Elixir] do
-      {binding_env.current_module, fun}
+      {{binding_env.current_module, false}, fun}
     end
   end
   def get_mod_fun([{:@, _, [{name, _, nil}]}, fun], binding_env) when is_atom(name) do
     case Binding.expand(binding_env, {:attribute, name}) do
       {:atom, atom} ->
-        {atom, fun}
+        {{atom, false}, fun}
       _ -> nil
     end
   end
   def get_mod_fun([{name, _, nil}, fun], binding_env) when is_atom(name) do
     case Binding.expand(binding_env, {:variable, name}) do
       {:atom, atom} ->
-        {atom, fun}
+        {{atom, false}, fun}
       _ -> nil
     end
   end
-  def get_mod_fun([atom, fun], _binding_env) when is_atom(atom), do: {atom, fun}
+  def get_mod_fun([atom, fun], _binding_env) when is_atom(atom), do: {{atom, false}, fun}
   def get_mod_fun(_, _binding_env), do: nil
 
   def get_mod([{:__MODULE__, _, nil} | rest], binding_env) do
     if binding_env.current_module not in [nil, Elixir] do
-      binding_env.current_module
+      mod = binding_env.current_module
       |> Module.split()
       |> Kernel.++(rest)
       |> Module.concat()
+      {mod, false}
     end
   end
 
   def get_mod([{:@, _, [{name, _, nil}]} | rest], binding_env) when is_atom(name) do
     case Binding.expand(binding_env, {:attribute, name}) do
       {:atom, atom} ->
-        atom
+        mod = atom
         |> Module.split()
         |> Kernel.++(rest)
         |> Module.concat()
+        {mod, false}
       _ -> nil
     end
   end
 
   def get_mod([head | _rest] = list, _binding_env) when is_atom(head) do
-    Module.concat(list)
+    {Module.concat(list), head == Elixir}
   end
 
   def get_mod(_list, _binding_env), do: nil
