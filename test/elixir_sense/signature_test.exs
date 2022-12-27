@@ -484,6 +484,28 @@ defmodule ElixirSense.SignatureTest do
 
     test "find signatures from __MODULE__" do
       code = """
+      defmodule Inspect.Algebra do
+        __MODULE__.glue(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 24) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation:
+                     "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
+                   name: "glue",
+                   params: ["doc1", "break_string \\\\ \" \"", "doc2"],
+                   spec: "@spec glue(t, binary, t) :: t"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures from __MODULE__ submodule" do
+      code = """
       defmodule Inspect do
         __MODULE__.Algebra.glue(par1,
       end
@@ -502,6 +524,109 @@ defmodule ElixirSense.SignatureTest do
                  }
                ]
              }
+    end
+
+    test "find signatures from attribute" do
+      code = """
+      defmodule MyMod do
+        @attribute Inspect.Algebra
+        @attribute.glue(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 24) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation:
+                     "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
+                   name: "glue",
+                   params: ["doc1", "break_string \\\\ \" \"", "doc2"],
+                   spec: "@spec glue(t, binary, t) :: t"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures from attribute submodule" do
+      code = """
+      defmodule Inspect do
+        @attribute Inspect
+        @attribute.Algebra.glue(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 32) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation:
+                     "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
+                   name: "glue",
+                   params: ["doc1", "break_string \\\\ \" \"", "doc2"],
+                   spec: "@spec glue(t, binary, t) :: t"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures from variable" do
+      code = """
+      defmodule MyMod do
+        myvariable = Inspect.Algebra
+        myvariable.glue(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 24) == %{
+               active_param: 1,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation:
+                     "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
+                   name: "glue",
+                   params: ["doc1", "break_string \\\\ \" \"", "doc2"],
+                   spec: "@spec glue(t, binary, t) :: t"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures from variable submodule - don't crash" do
+      code = """
+      defmodule Inspect do
+        myvariable = Inspect
+        myvariable.Algebra.glue(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 32) == :none
+    end
+
+    test "find signatures from variable call" do
+      code = """
+      defmodule Inspect do
+        myvariable = &Inspect.Algebra.glue/2
+        myvariable.(par1,
+      end
+      """
+
+      # TODO?
+      assert ElixirSense.signature(code, 3, 20) == :none
+    end
+
+    test "find signatures from attribute call" do
+      code = """
+      defmodule Inspect do
+        @attribute &Inspect.Algebra.glue/2
+        @attribute.(par1,
+      end
+      """
+      # TODO?
+      assert ElixirSense.signature(code, 3, 20) == :none
     end
 
     test "finds signatures from Kernel functions" do
@@ -906,19 +1031,19 @@ defmodule ElixirSense.SignatureTest do
         import GenServer
         @ callback cb() :: term
         module_info()
-        #^
+        #           ^
         __info__(:macros)
-        #^
+        #        ^
         behaviour_info(:callbacks)
-        #^
+        #              ^
       end
       """
 
-      assert :none = ElixirSense.signature(buffer, 4, 5)
+      assert :none = ElixirSense.signature(buffer, 4, 15)
 
-      assert :none = ElixirSense.signature(buffer, 6, 5)
+      assert :none = ElixirSense.signature(buffer, 6, 12)
 
-      assert :none = ElixirSense.signature(buffer, 8, 5)
+      assert :none = ElixirSense.signature(buffer, 8, 18)
     end
 
     @tag requires_otp_23: true

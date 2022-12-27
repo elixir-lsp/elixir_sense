@@ -3,6 +3,7 @@ defmodule ElixirSense.Providers.Signature do
   Provider responsible for introspection information about function signatures.
   """
 
+  alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Source
@@ -20,19 +21,28 @@ defmodule ElixirSense.Providers.Signature do
   """
   @spec find(String.t(), State.Env.t(), Metadata.t()) :: signature_info | :none
   def find(prefix, env, metadata) do
-    %State.Env{imports: imports, aliases: aliases, module: module} = env
+    %State.Env{imports: imports, aliases: aliases, module: module, vars: vars, attributes: attributes} = env
+
+    binding_env = %Binding{
+      attributes: attributes,
+      variables: vars,
+      current_module: module
+    }
 
     with %{
-           candidate: {mod, fun},
+          #  candidate: {mod, fun},
            elixir_prefix: elixir_prefix,
            npar: npar,
            unfinished_parm: unfinished_parm,
            pipe_before: pipe_before
          } <-
            Source.which_func(prefix, module),
+           {:ok, ast} <- Code.Fragment.container_cursor_to_quoted(prefix),
+           {_, {:ok, call}} <- Macro.traverse(ast, [], &find_call_pre/2, &find_call_post/2),
+           {m, f} <- get_mod_fun(call, binding_env),
          {mod, fun, true} <-
            Introspection.actual_mod_fun(
-             {mod, fun},
+             {m, f},
              imports,
              if(elixir_prefix, do: [], else: aliases),
              module,
@@ -46,6 +56,76 @@ defmodule ElixirSense.Providers.Signature do
         :none
     end
   end
+
+  def find_call_pre(ast, {:ok, candidate}), do: {ast, {:ok, candidate}}
+  def find_call_pre({:__cursor__, _, []} = ast, []), do: {ast, nil}
+  def find_call_pre({:__cursor__, _, []} = ast, [candidate | _]), do: {ast, {:ok, candidate}}
+  def find_call_pre({{:., _, call}, _, _} = ast, list), do: {ast, [call | list]}
+  def find_call_pre({:__aliases__, _, _} = ast, state), do: {ast, state}
+  def find_call_pre({:., _, _} = ast, state), do: {ast, state}
+  def find_call_pre({atom, _, _} = ast, list) when is_atom(atom), do: {ast, [atom | list]}
+  def find_call_pre(ast, state), do: {ast, state}
+
+  def find_call_post({{:., _, _call}, _, _} = ast, [_ | rest]), do: {ast, rest}
+  def find_call_post({:__aliases__, _, _} = ast, state), do: {ast, state}
+  def find_call_post({:., _, _} = ast, state), do: {ast, state}
+  def find_call_post({atom, _, _} = ast, [_ | rest]) when is_atom(atom), do: {ast, rest}
+  def find_call_post(ast, state), do: {ast, state}
+
+  def get_mod_fun(atom, _binding_env) when is_atom(atom), do: {nil, atom}
+  def get_mod_fun([{:__aliases__, _, list}, fun], binding_env) do
+    mod = get_mod(list, binding_env)
+    if mod do
+      {mod, fun}
+    end
+  end
+  def get_mod_fun([{:__MODULE__, _, nil}, fun], binding_env) do
+    if binding_env.current_module not in [nil, Elixir] do
+      {binding_env.current_module, fun}
+    end
+  end
+  def get_mod_fun([{:@, _, [{name, _, nil}]}, fun], binding_env) when is_atom(name) do
+    case Binding.expand(binding_env, {:attribute, name}) do
+      {:atom, atom} ->
+        {atom, fun}
+      _ -> nil
+    end
+  end
+  def get_mod_fun([{name, _, nil}, fun], binding_env) when is_atom(name) do
+    case Binding.expand(binding_env, {:variable, name}) do
+      {:atom, atom} ->
+        {atom, fun}
+      _ -> nil
+    end
+  end
+  def get_mod_fun([atom, fun], _binding_env) when is_atom(atom), do: {atom, fun}
+  def get_mod_fun(_, _binding_env), do: nil
+
+  def get_mod([{:__MODULE__, _, nil} | rest], binding_env) do
+    if binding_env.current_module not in [nil, Elixir] do
+      binding_env.current_module
+      |> Module.split()
+      |> Kernel.++(rest)
+      |> Module.concat()
+    end
+  end
+
+  def get_mod([{:@, _, [{name, _, nil}]} | rest], binding_env) when is_atom(name) do
+    case Binding.expand(binding_env, {:attribute, name}) do
+      {:atom, atom} ->
+        atom
+        |> Module.split()
+        |> Kernel.++(rest)
+        |> Module.concat()
+      _ -> nil
+    end
+  end
+
+  def get_mod([head | _rest] = list, _binding_env) when is_atom(head) do
+    Module.concat(list)
+  end
+
+  def get_mod(_list, _binding_env), do: nil
 
   defp find_signatures({mod, fun}, npar, unfinished_parm, env, metadata) do
     signatures = find_function_signatures({mod, fun}, env, metadata)
