@@ -20,6 +20,7 @@ defmodule ElixirSense.Providers.Definition do
   """
   @spec find(
           String.t(),
+          pos_integer,
           State.Env.t(),
           State.mods_funs_to_positions_t(),
           list(State.CallInfo.t()),
@@ -27,6 +28,7 @@ defmodule ElixirSense.Providers.Definition do
         ) :: %Location{} | nil
   def find(
         subject,
+        line,
         %State.Env{
           aliases: aliases,
           module: module,
@@ -63,6 +65,8 @@ defmodule ElixirSense.Providers.Definition do
         subject
         |> Source.split_module_and_func(module, aliases)
         |> find_function_or_module(
+          line,
+          calls,
           mods_funs_to_positions,
           env,
           metadata_types,
@@ -95,6 +99,8 @@ defmodule ElixirSense.Providers.Definition do
 
   defp find_function_or_module(
          {module, function},
+         line,
+         calls,
          mods_funs_to_positions,
          env,
          metadata_types,
@@ -104,6 +110,8 @@ defmodule ElixirSense.Providers.Definition do
     unless {module, function} in visited do
       do_find_function_or_module(
         {module, function},
+        line,
+        calls,
         mods_funs_to_positions,
         env,
         metadata_types,
@@ -115,6 +123,8 @@ defmodule ElixirSense.Providers.Definition do
 
   defp do_find_function_or_module(
          {{:attribute, _attr} = type, function},
+         line,
+         calls,
          mods_funs_to_positions,
          env,
          metadata_types,
@@ -125,6 +135,8 @@ defmodule ElixirSense.Providers.Definition do
       {:atom, module} ->
         do_find_function_or_module(
           {Introspection.expand_alias(module, env.aliases), function},
+          line,
+          calls,
           mods_funs_to_positions,
           env,
           metadata_types,
@@ -139,6 +151,8 @@ defmodule ElixirSense.Providers.Definition do
 
   defp do_find_function_or_module(
          {nil, :super},
+         line,
+         calls,
          mods_funs_to_positions,
          %State.Env{scope: {function, arity}, module: module} = env,
          metadata_types,
@@ -150,6 +164,8 @@ defmodule ElixirSense.Providers.Definition do
         # overridable function is most likely defined by __using__ macro
         do_find_function_or_module(
           {origin, :__using__},
+          line,
+          calls,
           mods_funs_to_positions,
           env,
           metadata_types,
@@ -164,6 +180,8 @@ defmodule ElixirSense.Providers.Definition do
 
   defp do_find_function_or_module(
          {module, function},
+         line,
+         calls,
          mods_funs_to_positions,
          env,
          metadata_types,
@@ -188,7 +206,10 @@ defmodule ElixirSense.Providers.Definition do
         nil
 
       {mod, fun, true} ->
-        case mods_funs_to_positions[{mod, fun, nil}] || metadata_types[{mod, fun, nil}] do
+        fn_definition = find_fn_definition(mod, fun, line, mods_funs_to_positions, calls)
+
+        case fn_definition || mods_funs_to_positions[{mod, fun, nil}] ||
+               metadata_types[{mod, fun, nil}] do
           nil ->
             Location.find_source({mod, fun}, current_module)
 
@@ -214,6 +235,24 @@ defmodule ElixirSense.Providers.Definition do
               column: column
             }
         end
+    end
+  end
+
+  defp find_fn_definition(mod, fun, line, mods_funs_to_positions, calls) do
+    mods_funs_to_positions
+    |> Enum.find(fn
+      {{^mod, ^fun, fn_arity}, %{positions: fn_positions}} when not is_nil(fn_arity) ->
+        case calls do
+          [] -> Enum.any?(fn_positions, fn {fn_line, _fn_col} -> fn_line == line end)
+          [%{arity: call_arity} | _] -> fn_arity == call_arity
+        end
+
+      _ ->
+        false
+    end)
+    |> case do
+      {_, mod_fun_info} -> mod_fun_info
+      nil -> nil
     end
   end
 end
