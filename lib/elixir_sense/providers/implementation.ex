@@ -8,8 +8,8 @@ defmodule ElixirSense.Providers.Implementation do
   alias ElixirSense.Core.Normalized
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.ModFunInfo
-  alias ElixirSense.Location
   alias ElixirSense.Core.SurroundContext
+  alias ElixirSense.Location
 
   @doc """
   Finds out where a callback, protocol or delegate was implemented.

@@ -12,8 +12,8 @@ defmodule ElixirSense.Providers.Definition do
   alias ElixirSense.Core.State.ModFunInfo
   alias ElixirSense.Core.State.TypeInfo
   alias ElixirSense.Core.State.VarInfo
-  alias ElixirSense.Location
   alias ElixirSense.Core.SurroundContext
+  alias ElixirSense.Location
 
   @doc """
   Finds out where a module, function, macro or variable was defined.
