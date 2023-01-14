@@ -157,6 +157,32 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "ElixirSenseExample.Macros.go"
   end
 
+  test "find definition for the correct arity of function - on fn call" do
+    buffer = """
+    defmodule MyModule do
+      def main, do: my_func("a", "b")
+      #               ^ 
+      def my_func, do: "not this one"
+      def my_func(a, b), do: a <> b
+    end
+    """
+
+    assert %Location{type: :function, file: nil, line: 5, column: 7} =
+             ElixirSense.definition(buffer, 2, 18)
+  end
+
+  test "find definition for the correct arity of function - on fn definition" do
+    buffer = """
+    defmodule MyModule do
+      def my_func, do: "not this one"
+      def my_func(a, b), do: a <> b
+    end
+    """
+
+    assert %Location{type: :function, file: nil, line: 3, column: 7} =
+             ElixirSense.definition(buffer, 3, 9)
+  end
+
   test "find definition of delegated functions" do
     buffer = """
     defmodule MyModule do

@@ -110,10 +110,19 @@ defmodule ElixirSense do
 
         env = Metadata.get_env(buffer_file_metadata, line)
 
+        calls =
+          buffer_file_metadata.calls[line]
+          |> List.wrap()
+          |> Enum.filter(fn %State.CallInfo{position: {_call_line, call_column}} ->
+            call_column <= column
+          end)
+
         Definition.find(
           context,
+          line,
           env,
           buffer_file_metadata.mods_funs_to_positions,
+          calls,
           buffer_file_metadata.types
         )
     end
