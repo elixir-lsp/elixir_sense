@@ -370,7 +370,7 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  @spec which_func(String.t(), nil | module) ::
+  @spec which_func(String.t(), nil | %Binding{}) ::
           nil
           | %{
               candidate: {nil | module, atom},
