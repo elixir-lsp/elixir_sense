@@ -528,6 +528,7 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    @tag :capture_log
     test "find signatures from attribute submodule" do
       code = """
       defmodule Inspect do
@@ -572,6 +573,7 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    @tag :capture_log
     test "find signatures from variable submodule - don't crash" do
       code = """
       defmodule Inspect do

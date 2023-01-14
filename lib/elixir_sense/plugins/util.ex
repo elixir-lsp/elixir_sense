@@ -1,6 +1,7 @@
 defmodule ElixirSense.Plugins.Util do
   @moduledoc false
 
+  alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Source
@@ -29,6 +30,7 @@ defmodule ElixirSense.Plugins.Util do
     end
   end
 
+  # TODO this is vscode specific. Remove?
   def command(:trigger_suggest) do
     %{
       "title" => "Trigger Parameter Hint",
@@ -51,8 +53,13 @@ defmodule ElixirSense.Plugins.Util do
   end
 
   def partial_func_call(code, env, buffer_metadata) do
-    %State.Env{module: module} = env
-    func_info = Source.which_func(code, module)
+    %State.Env{module: module, attributes: attributes, vars: vars} = env
+    binding_env = %Binding{
+      attributes: attributes,
+      variables: vars,
+      current_module: module
+    }
+    func_info = Source.which_func(code, binding_env)
 
     with %{candidate: {mod, fun}, npar: npar} <- func_info,
          mod_fun <- actual_mod_fun({mod, fun}, func_info.elixir_prefix, env, buffer_metadata),

@@ -217,8 +217,11 @@ defmodule ElixirSense.Plugins.Ecto.Query do
 
     from_matches = Regex.scan(~r/^.+\(?\s*(#{@binding_r})/, func_code)
 
+    # TODO this code is broken
+    # depends on join positions that we are unable to get from AST
+    # line and col was previously assigned to each option in Source.which_func
     join_matches =
-      for {join, {line, col, _}} when join in @joins <- func_info.options_so_far,
+      for join when join in @joins <- func_info.options_so_far,
           code = Source.text_after(prefix, line, col),
           match <- Regex.scan(~r/^#{join}\:\s*(#{@binding_r})/, code) do
         match
