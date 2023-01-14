@@ -110,6 +110,8 @@ defmodule ElixirSense.Providers.References do
 
           positions
           |> Enum.map(fn pos -> build_var_location("@#{attribute}", pos) end)
+        else
+          []
         end
 
       {mod, function} ->
@@ -215,8 +217,6 @@ defmodule ElixirSense.Providers.References do
       _ -> {nil, nil}
     end
   end
-
-  defp expand(_, _env, _module, _aliases), do: {nil, nil}
 
   defp get_corrected_arity([m]) do
     [m]
