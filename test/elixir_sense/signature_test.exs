@@ -604,6 +604,7 @@ defmodule ElixirSense.SignatureTest do
         @attribute.(par1,
       end
       """
+
       # TODO?
       assert ElixirSense.signature(code, 3, 20) == :none
     end

@@ -370,103 +370,133 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  @spec which_func(String.t(), nil | module) :: nil | %{
-          candidate: {nil | module, atom},
-          elixir_prefix: boolean,
-          npar: non_neg_integer,
-          cursor_at_option: true | false | :maybe,
-          option: atom() | nil,
-          options_so_far: [atom],
-          pos: {{non_neg_integer, non_neg_integer}, {non_neg_integer, nil | non_neg_integer}}
-        }
+  @spec which_func(String.t(), nil | module) ::
+          nil
+          | %{
+              candidate: {nil | module, atom},
+              elixir_prefix: boolean,
+              npar: non_neg_integer,
+              cursor_at_option: true | false | :maybe,
+              option: atom() | nil,
+              options_so_far: [atom],
+              pos: {{non_neg_integer, non_neg_integer}, {non_neg_integer, nil | non_neg_integer}}
+            }
   def which_func(prefix, binding_env \\ nil) do
     binding_env = binding_env || %Binding{}
+
     with {:ok, ast} <- Code.Fragment.container_cursor_to_quoted(prefix, columns: true),
-           {_, {:ok, call, npar, meta, options, cursor_at_option, option}} <- Macro.prewalk(ast, nil, &find_call_pre/2),
-           {{m, elixir_prefix}, f} <- get_mod_fun(call, binding_env) do
-            %{
-              candidate: {m, f},
-              elixir_prefix: elixir_prefix,
-              npar: npar,
-              pos: {{meta[:line], meta[:column]}, {meta[:line], nil}},
-              cursor_at_option: cursor_at_option,
-              options_so_far: options,
-              option: option
-            }
-          else
-            _ -> nil
-           end
+         {_, {:ok, call, npar, meta, options, cursor_at_option, option}} <-
+           Macro.prewalk(ast, nil, &find_call_pre/2),
+         {{m, elixir_prefix}, f} <- get_mod_fun(call, binding_env) do
+      %{
+        candidate: {m, f},
+        elixir_prefix: elixir_prefix,
+        npar: npar,
+        pos: {{meta[:line], meta[:column]}, {meta[:line], nil}},
+        cursor_at_option: cursor_at_option,
+        options_so_far: options,
+        option: option
+      }
+    else
+      _ -> nil
+    end
   end
 
-  def find_call_pre(ast, {:ok, call, npar, meta, options, cursor_at_option, option}), do: {ast, {:ok, call, npar, meta, options, cursor_at_option, option}}
+  def find_call_pre(ast, {:ok, call, npar, meta, options, cursor_at_option, option}),
+    do: {ast, {:ok, call, npar, meta, options, cursor_at_option, option}}
+
   # transform `a |> b(c)` calls into `b(a, c)`
   def find_call_pre({:|>, _, [params_1, {call, meta, params_rest}]}, state) do
     params = [params_1 | params_rest || []]
     find_call_pre({call, meta, params}, state)
   end
+
   def find_call_pre({{:., meta, call}, _, params} = ast, _state) when is_list(params) do
     {ast, find_cursor_in_params(params, call, meta)}
   end
-  def find_call_pre({atom, meta, params} = ast, _state) when is_atom(atom) and is_list(params) and atom not in [:{}, :%{}] do
+
+  def find_call_pre({atom, meta, params} = ast, _state)
+      when is_atom(atom) and is_list(params) and atom not in [:{}, :%{}] do
     {ast, find_cursor_in_params(params, atom, meta)}
   end
+
   def find_call_pre(ast, state), do: {ast, state}
 
   defp find_cursor_in_params(params, call, meta) do
     case Enum.reverse(params) do
       [{:__cursor__, _, []} | rest] ->
         {:ok, call, length(rest), meta, [], :maybe, nil}
+
       [keyword_list | rest] when is_list(keyword_list) ->
         case Enum.reverse(keyword_list) do
           [{:__cursor__, _, []} | kl_rest] ->
             if Keyword.keyword?(kl_rest) do
-              {:ok, call, length(rest), meta, Enum.reverse(kl_rest) |> Enum.map(& elem(&1, 0)), true, nil}
+              {:ok, call, length(rest), meta, Enum.reverse(kl_rest) |> Enum.map(&elem(&1, 0)),
+               true, nil}
             end
+
           [{atom, {:__cursor__, _, []}} | kl_rest] when is_atom(atom) ->
             if Keyword.keyword?(kl_rest) do
-              {:ok, call, length(rest), meta, Enum.reverse(kl_rest) |> Enum.map(& elem(&1, 0)), false, atom}
+              {:ok, call, length(rest), meta, Enum.reverse(kl_rest) |> Enum.map(&elem(&1, 0)),
+               false, atom}
             end
-          _ -> nil
+
+          _ ->
+            nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
   def get_mod_fun(atom, _binding_env) when is_atom(atom), do: {{nil, false}, atom}
+
   def get_mod_fun([{:__aliases__, _, list}, fun], binding_env) do
     mod = get_mod(list, binding_env)
+
     if mod do
       {mod, fun}
     end
   end
+
   def get_mod_fun([{:__MODULE__, _, nil}, fun], binding_env) do
     if binding_env.current_module not in [nil, Elixir] do
       {{binding_env.current_module, false}, fun}
     end
   end
+
   def get_mod_fun([{:@, _, [{name, _, nil}]}, fun], binding_env) when is_atom(name) do
     case Binding.expand(binding_env, {:attribute, name}) do
       {:atom, atom} ->
         {{atom, false}, fun}
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
+
   def get_mod_fun([{name, _, nil}, fun], binding_env) when is_atom(name) do
     case Binding.expand(binding_env, {:variable, name}) do
       {:atom, atom} ->
         {{atom, false}, fun}
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
+
   def get_mod_fun([atom, fun], _binding_env) when is_atom(atom), do: {{atom, false}, fun}
   def get_mod_fun(_, _binding_env), do: nil
 
   def get_mod([{:__MODULE__, _, nil} | rest], binding_env) do
     if binding_env.current_module not in [nil, Elixir] do
-      mod = binding_env.current_module
-      |> Module.split()
-      |> Kernel.++(rest)
-      |> Module.concat()
+      mod =
+        binding_env.current_module
+        |> Module.split()
+        |> Kernel.++(rest)
+        |> Module.concat()
+
       {mod, false}
     end
   end
@@ -474,12 +504,16 @@ defmodule ElixirSense.Core.Source do
   def get_mod([{:@, _, [{name, _, nil}]} | rest], binding_env) when is_atom(name) do
     case Binding.expand(binding_env, {:attribute, name}) do
       {:atom, atom} ->
-        mod = atom
-        |> Module.split()
-        |> Kernel.++(rest)
-        |> Module.concat()
+        mod =
+          atom
+          |> Module.split()
+          |> Kernel.++(rest)
+          |> Module.concat()
+
         {mod, false}
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 

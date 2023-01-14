@@ -20,7 +20,13 @@ defmodule ElixirSense.Providers.Signature do
   """
   @spec find(String.t(), State.Env.t(), Metadata.t()) :: signature_info | :none
   def find(prefix, env, metadata) do
-    %State.Env{imports: imports, aliases: aliases, module: module, vars: vars, attributes: attributes} = env
+    %State.Env{
+      imports: imports,
+      aliases: aliases,
+      module: module,
+      vars: vars,
+      attributes: attributes
+    } = env
 
     binding_env = %Binding{
       attributes: attributes,
@@ -28,7 +34,8 @@ defmodule ElixirSense.Providers.Signature do
       current_module: module
     }
 
-    with %{candidate: {m, f}, npar: npar, elixir_prefix: elixir_prefix} <- Source.which_func(prefix, binding_env),
+    with %{candidate: {m, f}, npar: npar, elixir_prefix: elixir_prefix} <-
+           Source.which_func(prefix, binding_env),
          {mod, fun, true} <-
            Introspection.actual_mod_fun(
              {m, f},
@@ -45,8 +52,6 @@ defmodule ElixirSense.Providers.Signature do
         :none
     end
   end
-
-  
 
   defp find_signatures({mod, fun}, npar, env, metadata) do
     signatures = find_function_signatures({mod, fun}, env, metadata)

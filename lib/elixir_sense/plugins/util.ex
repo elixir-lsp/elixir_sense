@@ -54,11 +54,13 @@ defmodule ElixirSense.Plugins.Util do
 
   def partial_func_call(code, env, buffer_metadata) do
     %State.Env{module: module, attributes: attributes, vars: vars} = env
+
     binding_env = %Binding{
       attributes: attributes,
       variables: vars,
       current_module: module
     }
+
     func_info = Source.which_func(code, binding_env)
 
     with %{candidate: {mod, fun}, npar: npar} <- func_info,

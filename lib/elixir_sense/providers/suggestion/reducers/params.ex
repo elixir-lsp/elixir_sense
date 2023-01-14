@@ -24,12 +24,20 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
   def add_options(hint, env, buffer_metadata, cursor_context, acc) do
     prefix = cursor_context.text_before
 
-    %State.Env{imports: imports, aliases: aliases, module: module, attributes: attributes, vars: vars} = env
+    %State.Env{
+      imports: imports,
+      aliases: aliases,
+      module: module,
+      attributes: attributes,
+      vars: vars
+    } = env
+
     binding_env = %Binding{
       attributes: attributes,
       variables: vars,
       current_module: module
     }
+
     %Metadata{mods_funs_to_positions: mods_funs, types: metadata_types} = buffer_metadata
 
     with %{
