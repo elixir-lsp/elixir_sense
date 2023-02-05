@@ -24,7 +24,6 @@ defmodule ElixirSense.Core.Introspection do
   A collection of functions to introspect/format docs, specs, types and callbacks.
   """
 
-  alias ElixirSense.Core.Applications
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
@@ -43,7 +42,6 @@ defmodule ElixirSense.Core.Introspection do
 
   @no_documentation "No documentation available\n"
 
-  # TODO consider removing this when EEP 48 support lands
   @wrapped_behaviours %{
     :gen_server => GenServer,
     :gen_event => GenEvent,
@@ -161,7 +159,7 @@ defmodule ElixirSense.Core.Introspection do
       docs when is_list(docs) ->
         results =
           for {{f, arity}, _, kind, args, text, metadata} <- docs, f == fun do
-            # as of otp 23 erlang modules do not return args
+            # as of otp 25 erlang modules do not return args
             # instead they return typespecs in metadata[:signature]
             fun_args =
               case metadata[:signature] do
@@ -171,8 +169,21 @@ defmodule ElixirSense.Core.Introspection do
                     |> List.wrap()
                     |> Enum.map(&format_doc_arg(&1))
                   else
-                    # as of otp 23 erlang callback implementation do not have signature metadata
-                    if arity == 0, do: [], else: Enum.map(1..arity, fn _ -> "term" end)
+                    # as of otp 25 erlang callback implementation do not have signature metadata
+                    behaviour = metadata[:implementing]
+
+                    if arity != 0 and behaviour != nil do
+                      # try to get callback spec
+                      case TypeInfo.get_callback(behaviour, f, arity) do
+                        {_, [params | _]} ->
+                          TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
+
+                        _ ->
+                          Enum.map(1..arity, fn _ -> "term" end)
+                      end
+                    else
+                      if arity == 0, do: [], else: Enum.map(1..arity, fn _ -> "term" end)
+                    end
                   end
 
                 [{:attribute, _, :spec, {{^f, ^arity}, [params | _]}}] ->
@@ -185,7 +196,7 @@ defmodule ElixirSense.Core.Introspection do
             fun_str = Atom.to_string(fun)
             doc = extract_summary_from_docs(text)
 
-            spec = get_spec_as_string(mod, fun, arity, kind)
+            spec = get_spec_as_string(mod, fun, arity, kind, metadata)
             %{name: fun_str, params: fun_args, documentation: doc, spec: spec}
           end
 
@@ -291,7 +302,7 @@ defmodule ElixirSense.Core.Introspection do
                   TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
               end
 
-            "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, kind)}#{text}"
+            "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, kind, metadata)}#{text}"
           end
 
         case results do
@@ -310,7 +321,7 @@ defmodule ElixirSense.Core.Introspection do
             TypeInfo.get_function_specs(mod, fun) do
         fun_args_text = TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
 
-        "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(%{})}#{get_spec_text(mod, fun, arity, :function)}"
+        "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(%{})}#{get_spec_text(mod, fun, arity, :function, %{})}"
       end
 
     case results do
@@ -324,6 +335,9 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp get_func_docs_md_from_module_info(mod, fun) do
+    # it is not worth doing fallback to behaviours here
+    # we'll not get much more useful info
+
     # provide dummy docs basing on module_info(:exports)
     for {f, arity} <- get_exports(mod),
         f == fun do
@@ -337,7 +351,7 @@ defmodule ElixirSense.Core.Introspection do
           %{}
         end
 
-      "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, :function)}"
+      "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, :function, metadata)}"
     end
   end
 
@@ -411,6 +425,10 @@ defmodule ElixirSense.Core.Introspection do
 
   defp get_metadata_entry_md({:builtin, true}) do
     "**Built-in**"
+  end
+
+  defp get_metadata_entry_md({:implementing, module}) do
+    "**Implementing behaviour**\n#{module}"
   end
 
   defp get_metadata_entry_md({:optional, true}) do
@@ -958,24 +976,30 @@ defmodule ElixirSense.Core.Introspection do
   def extract_fun_args({{_fun, _}, _line, _kind, args, _doc, _metadata}) do
     (args || [])
     |> Enum.map(&format_doc_arg(&1))
-
-    # |> String.replace(Regex.recompile!(~r/\s+/), " ")
   end
 
   def extract_fun_args(atom) when atom in [nil, false] do
     []
   end
 
-  def get_spec_as_string(module, function, arity, :macro) do
+  def get_spec_as_string(_module, function, arity, :macro, %{implementing: behaviour}) do
+    TypeInfo.get_callback(behaviour, :"MACRO-#{function}", arity + 1) |> spec_to_string()
+  end
+
+  def get_spec_as_string(_module, function, arity, :function, %{implementing: behaviour}) do
+    TypeInfo.get_callback(behaviour, function, arity) |> spec_to_string()
+  end
+
+  def get_spec_as_string(module, function, arity, :macro, _) do
     TypeInfo.get_spec(module, :"MACRO-#{function}", arity + 1) |> spec_to_string()
   end
 
-  def get_spec_as_string(module, function, arity, :function) do
+  def get_spec_as_string(module, function, arity, :function, _) do
     TypeInfo.get_spec(module, function, arity) |> spec_to_string()
   end
 
-  def get_spec_text(mod, fun, arity, kind) do
-    case get_spec_as_string(mod, fun, arity, kind) do
+  def get_spec_text(mod, fun, arity, kind, metadata) do
+    case get_spec_as_string(mod, fun, arity, kind, metadata) do
       "" ->
         ""
 
@@ -1373,38 +1397,4 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def is_pub(type), do: type in [:def, :defmacro, :defdelegate, :defguard]
-
-  @spec get_all_behaviour_implementations(module) :: [module]
-  def get_all_behaviour_implementations(behaviour) do
-    # this function can take a few seconds
-    # unfortunately it does not benefit from conversion to Task.async_stream
-    # at least on otp 23
-
-    # TODO consider changing this to :code.all_available when otp 23 is required
-    all_loaded =
-      :code.all_loaded()
-      |> Enum.map(&(&1 |> elem(0)))
-
-    from_apps =
-      case :code.get_mode() do
-        :interactive ->
-          Applications.get_modules_from_applications()
-
-        _ ->
-          []
-      end
-
-    (all_loaded ++ from_apps)
-    |> Enum.uniq()
-    |> Enum.filter(fn mod ->
-      Code.ensure_loaded?(mod) and
-        behaviour in Enum.flat_map(mod.module_info(:attributes), fn
-          {:behaviour, behaviours} when is_list(behaviours) ->
-            behaviours
-
-          _ ->
-            []
-        end)
-    end)
-  end
 end

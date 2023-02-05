@@ -702,7 +702,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ] = state |> get_line_vars(10)
   end
 
-  @tag requires_elixir_1_12: true
   test "struct binding understands stepped ranges" do
     state =
       """

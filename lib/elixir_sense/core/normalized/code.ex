@@ -3,6 +3,7 @@ defmodule ElixirSense.Core.Normalized.Code do
   Shims increasing portability of `Code` module
   """
 
+  alias ElixirSense.Core.Behaviours
   alias ElixirSense.Core.ErlangHtml
 
   @type doc_t :: nil | false | String.t()
@@ -108,11 +109,19 @@ defmodule ElixirSense.Core.Normalized.Code do
     Enum.map(
       docs_from_module,
       fn
-        {{kind, name, arity}, anno, signatures, docs, metadata} ->
-          {signatures, docs, metadata, mime_type} =
-            Map.get(docs_from_behaviours, {name, arity}, {signatures, docs, metadata, mime_type})
+        {{kind, name, arity}, anno, fun_signatures, docs, metadata} ->
+          # IO.inspect signatures, label: "from mod"
+          # as of elixir 1.14 behaviours do not store signature
+          # prefer signature from function
+          {_behaviour_signatures, docs, metadata, mime_type} =
+            Map.get(
+              docs_from_behaviours,
+              {name, arity},
+              {fun_signatures, docs, metadata, mime_type}
+            )
 
-          {{kind, name, arity}, anno, signatures, docs, metadata}
+          # IO.inspect signatures, label: "from beh"
+          {{kind, name, arity}, anno, fun_signatures, docs, metadata}
           |> map_doc_entry(mime_type)
       end
     )
@@ -125,7 +134,7 @@ defmodule ElixirSense.Core.Normalized.Code do
       %{}
     else
       module
-      |> behaviours()
+      |> Behaviours.get_module_behaviours()
       |> Stream.flat_map(&callback_documentation/1)
       |> Stream.filter(fn {name_arity, {_signatures, _docs, _metadata, _mime_type}} ->
         Enum.member?(funs, name_arity)
@@ -147,17 +156,12 @@ defmodule ElixirSense.Core.Normalized.Code do
           )
         )
         |> Stream.map(fn {{_kind, name, arity}, _anno, signatures, docs, metadata} ->
-          {{name, arity}, {signatures, docs, metadata, mime_type}}
+          {{name, arity},
+           {signatures, docs, metadata |> Map.put(:implementing, module), mime_type}}
         end)
 
       _ ->
         []
     end
-  end
-
-  defp behaviours(module) do
-    if function_exported?(module, :module_info, 1),
-      do: module.module_info(:attributes) |> Keyword.get_values(:behaviour) |> Enum.concat(),
-      else: []
   end
 end

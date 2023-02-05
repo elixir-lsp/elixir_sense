@@ -773,6 +773,70 @@ defmodule ElixirSense.SignatureTest do
       end
     end
 
+    test "finds signatures from metadata elixir behaviour call from outside" do
+      code = """
+      ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.bar()
+      """
+
+      assert %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "Docs for bar",
+                   name: "bar",
+                   params: ["b"],
+                   spec: "@spec bar(integer) :: Macro.t"
+                 }
+               ]
+             } = ElixirSense.signature(code, 1, 60)
+    end
+
+    test "finds signatures from metadata erlang behaviour implemented in elixir call from outside" do
+      code = """
+      ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init()
+      """
+
+      res = ElixirSense.signature(code, 1, 63)
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert %{
+                 active_param: 0,
+                 pipe_before: false,
+                 signatures: [
+                   %{
+                     documentation: "- Args = " <> _,
+                     name: "init",
+                     params: ["_"],
+                     spec: "@spec init(args :: term) :: init_result(state)"
+                   }
+                 ]
+               } = res
+      end
+    end
+
+    @tag requires_otp_25: true
+    test "finds signatures from metadata erlang behaviour call from outside" do
+      code = """
+      :file_server.init()
+      """
+
+      res = ElixirSense.signature(code, 1, 19)
+
+      assert %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "- Args = " <> _,
+                   name: "init",
+                   params: ["args"],
+                   spec: "@spec init(args :: term) ::" <> _
+                 }
+               ]
+             } = res
+    end
+
     test "returns :none when it cannot identify a function call" do
       code = """
       defmodule MyModule do
