@@ -976,11 +976,11 @@ defmodule ElixirSense.SuggestionsTest do
 
   test "suggest erlang behaviour callbacks on erlang implementation" do
     buffer = """
-    :global.ini
+    :file_server.ini
     """
 
     list =
-      ElixirSense.suggestions(buffer, 1, 12)
+      ElixirSense.suggestions(buffer, 1, 17)
       |> Enum.filter(fn s -> s.type == :function end)
 
     if ExUnitConfig.erlang_eep48_supported() do
@@ -992,7 +992,7 @@ defmodule ElixirSense.SuggestionsTest do
                  def_arity: 1,
                  metadata: %{implementing: :gen_server},
                  name: "init",
-                 origin: ":global",
+                 origin: ":file_server",
                  snippet: nil,
                  spec: "@spec init(args :: term) ::" <> _,
                  summary: "- Args = term" <> _,

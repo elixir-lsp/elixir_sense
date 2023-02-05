@@ -817,10 +817,10 @@ defmodule ElixirSense.SignatureTest do
 
     test "finds signatures from metadata erlang behaviour call from outside" do
       code = """
-      :global.init()
+      :file_server.init()
       """
 
-      res = ElixirSense.signature(code, 1, 14)
+      res = ElixirSense.signature(code, 1, 19)
 
       if ExUnitConfig.erlang_eep48_supported() do
         assert %{
