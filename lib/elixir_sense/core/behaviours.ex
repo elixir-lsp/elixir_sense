@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Behaviours do
+  @moduledoc false
   alias ElixirSense.Core.Applications
 
   @spec get_module_behaviours(module) :: [module]
