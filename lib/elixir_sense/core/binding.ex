@@ -142,16 +142,18 @@ defmodule ElixirSense.Core.Binding do
   end
 
   def do_expand(env, {:map_key, map_candidate, key_candidate}, stack) do
-    with {:atom, key} <- expand(env, key_candidate, stack) do
-      expanded_fields = expand_map_fields(env, map_candidate, stack)
+    case expand(env, key_candidate, stack) do
+      {:atom, key} ->
+        expanded_fields = expand_map_fields(env, map_candidate, stack)
 
-      if :none in expanded_fields do
-        :none
-      else
-        expanded_fields |> Keyword.get(key)
-      end
-    else
-      _ -> nil
+        if :none in expanded_fields do
+          :none
+        else
+          expanded_fields |> Keyword.get(key)
+        end
+
+      _ ->
+        nil
     end
   end
 
