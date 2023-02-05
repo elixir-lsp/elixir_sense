@@ -3,6 +3,7 @@ defmodule ElixirSense.Providers.Implementation do
   Provides a function to find out where symbols are implemented.
   """
 
+  alias ElixirSense.Core.Behaviours
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized
@@ -92,7 +93,7 @@ defmodule ElixirSense.Providers.Implementation do
   defp expand(other, _binding_env), do: other
 
   defp get_locations(behaviour, maybe_callback) do
-    Introspection.get_all_behaviour_implementations(behaviour)
+    Behaviours.get_all_behaviour_implementations(behaviour)
     |> Enum.map(fn implementation ->
       Location.find_source({implementation, maybe_callback}, nil)
     end)

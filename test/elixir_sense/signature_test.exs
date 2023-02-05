@@ -773,6 +773,63 @@ defmodule ElixirSense.SignatureTest do
       end
     end
 
+    test "finds signatures from metadata elixir behaviour call from outside" do
+      code = """
+      ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.bar()
+      """
+
+      assert %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "Docs for bar",
+                   name: "bar",
+                   params: ["b"],
+                   spec: "@spec bar(integer) :: Macro.t"
+                 }
+               ]
+             } = ElixirSense.signature(code, 1, 60)
+    end
+
+    test "finds signatures from metadata erlang behaviour implemented in elixir call from outside" do
+      code = """
+      ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init()
+      """
+
+      assert %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "- Args = " <> _,
+                   name: "init",
+                   params: ["_"],
+                   spec: "@spec init(args :: term) :: init_result(state)"
+                 }
+               ]
+             } = ElixirSense.signature(code, 1, 63)
+    end
+
+    test "finds signatures from metadata erlang behaviour call from outside" do
+      code = """
+      :global.init()
+      """
+
+      assert %{
+               active_param: 0,
+               pipe_before: false,
+               signatures: [
+                 %{
+                   documentation: "- Args = " <> _,
+                   name: "init",
+                   params: ["args"],
+                   spec: "@spec init(args :: term) ::" <> _
+                 }
+               ]
+             } = ElixirSense.signature(code, 1, 14)
+    end
+
     test "returns :none when it cannot identify a function call" do
       code = """
       defmodule MyModule do

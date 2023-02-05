@@ -38,6 +38,7 @@
 
 defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.Applications
+  alias ElixirSense.Core.Behaviours
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.BuiltinAttributes
   alias ElixirSense.Core.BuiltinFunctions
@@ -788,6 +789,14 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   def get_module_funs(mod, include_builtin) do
     docs = NormalizedCode.get_docs(mod, :docs)
     specs = TypeInfo.get_module_specs(mod)
+
+    callback_specs =
+      for behaviour <- Behaviours.get_module_behaviours(mod),
+          pair <- TypeInfo.get_module_callbacks(behaviour),
+          into: %{},
+          do: pair
+
+    specs = Map.merge(specs, callback_specs)
 
     if docs != nil and function_exported?(mod, :__info__, 1) do
       exports = mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_buildins(mod)

@@ -213,10 +213,10 @@ defmodule ElixirSenseExample.ExampleBehaviourWithDoc do
   @callback foo() :: :ok
 
   @doc "Docs for baz"
-  @callback baz() :: :ok
+  @callback baz(integer()) :: :ok
 
   @doc "Docs for bar"
-  @macrocallback bar() :: Macro.t()
+  @macrocallback bar(integer()) :: Macro.t()
 end
 
 defmodule ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl do
@@ -226,10 +226,10 @@ defmodule ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl do
   def foo(), do: :ok
 
   @impl true
-  def baz(), do: :ok
+  def baz(a), do: :ok
 
   @impl true
-  defmacro bar(), do: quote(do: :ok)
+  defmacro bar(b), do: quote(do: :ok)
 end
 
 defmodule ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl do
@@ -237,9 +237,9 @@ defmodule ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl do
 
   def foo(), do: :ok
 
-  def baz(), do: :ok
+  def baz(a), do: :ok
 
-  defmacro bar(), do: quote(do: :ok)
+  defmacro bar(b), do: quote(do: :ok)
 end
 
 defmodule ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang do

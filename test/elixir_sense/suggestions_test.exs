@@ -840,7 +840,7 @@ defmodule ElixirSense.SuggestionsTest do
                args: "_reason, _state",
                arity: 2,
                def_arity: 2,
-               metadata: %{},
+               metadata: %{implementing: GenServer},
                name: "terminate",
                origin: "MyServer",
                spec: "@spec terminate(reason, state :: term) :: term" <> _,
@@ -855,7 +855,7 @@ defmodule ElixirSense.SuggestionsTest do
   test "lists callbacks in function suggestion - erlang behaviour" do
     buffer = """
     defmodule MyServer do
-      @behaviour :gen_server
+      @behaviour :gen_event
 
       def handle_call(request, _from, state) do
         ini
@@ -876,11 +876,16 @@ defmodule ElixirSense.SuggestionsTest do
     assert [
              %{name: "is_function", origin: "Kernel", arity: 1},
              %{name: "is_function", origin: "Kernel", arity: 2},
-             %{name: "init", origin: "MyServer", arity: 1, summary: summary}
+             %{name: "init", origin: "MyServer", arity: 1} = init_res
            ] = list
 
     if ExUnitConfig.erlang_eep48_supported() do
-      assert "- Args = term" <> _ = summary
+      assert %{
+               summary: "- InitArgs = Args" <> _,
+               metadata: %{implementing: :gen_event},
+               spec: "@spec init(initArgs :: term) ::" <> _,
+               args_list: ["arg"]
+             } = init_res
     end
   end
 
@@ -910,6 +915,87 @@ defmodule ElixirSense.SuggestionsTest do
              %{name: "is_integer", origin: "Kernel", arity: 1},
              %{name: "is_list", origin: "Kernel", arity: 1},
              %{name: "init", origin: "MyServer", arity: 1}
+           ] = list
+  end
+
+  test "suggest elixir behaviour callbacks on implementation" do
+    buffer = """
+    ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.ba
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 1, 57)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    assert [
+             %{
+               args: "a",
+               args_list: ["a"],
+               arity: 1,
+               def_arity: 1,
+               metadata: %{implementing: ElixirSenseExample.ExampleBehaviourWithDoc},
+               name: "baz",
+               origin: "ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl",
+               snippet: nil,
+               spec: "@spec baz(integer) :: :ok",
+               summary: "Docs for baz",
+               type: :function,
+               visibility: :public
+             }
+           ] = list
+  end
+
+  test "suggest erlang behaviour callbacks on implementation" do
+    buffer = """
+    ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.ini
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 1, 60)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    assert [
+             %{
+               args: "_",
+               args_list: ["_"],
+               arity: 1,
+               def_arity: 1,
+               metadata: %{implementing: :gen_statem},
+               name: "init",
+               origin: "ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang",
+               snippet: nil,
+               spec: "@spec init(args :: term) :: init_result(state)",
+               summary: "- Args = term" <> _,
+               type: :function,
+               visibility: :public
+             }
+           ] = list
+  end
+
+  test "suggest erlang behaviour callbacks on erlang implementation" do
+    buffer = """
+    :global.ini
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 1, 12)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    assert [
+             %{
+               args: "args",
+               args_list: ["args"],
+               arity: 1,
+               def_arity: 1,
+               metadata: %{implementing: :gen_server},
+               name: "init",
+               origin: ":global",
+               snippet: nil,
+               spec: "@spec init(args :: term) ::" <> _,
+               summary: "- Args = term" <> _,
+               type: :function,
+               visibility: :public
+             }
            ] = list
   end
 

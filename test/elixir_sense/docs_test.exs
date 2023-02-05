@@ -952,6 +952,15 @@ defmodule ElixirSense.DocsTest do
     assert docs =~ """
            > ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.foo()
 
+           **Implementing behaviour**
+           Elixir.ElixirSenseExample.ExampleBehaviourWithDoc
+
+           ### Specs
+
+           ```
+           @spec foo :: :ok
+           ```
+
            Docs for foo
            """
   end
@@ -974,7 +983,16 @@ defmodule ElixirSense.DocsTest do
     assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.baz"
 
     assert docs =~ """
-           > ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.baz()
+           > ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.baz(a)
+
+           **Implementing behaviour**
+           Elixir.ElixirSenseExample.ExampleBehaviourWithDoc
+
+           ### Specs
+
+           ```
+           @spec baz(integer) :: :ok
+           ```
 
            Docs for baz
            """
@@ -998,7 +1016,16 @@ defmodule ElixirSense.DocsTest do
     assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.bar"
 
     assert docs =~ """
-           > ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.bar()
+           > ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.bar(b)
+
+           **Implementing behaviour**
+           Elixir.ElixirSenseExample.ExampleBehaviourWithDoc
+
+           ### Specs
+
+           ```
+           @spec bar(integer) :: Macro.t
+           ```
 
            Docs for bar
            """
@@ -1023,15 +1050,54 @@ defmodule ElixirSense.DocsTest do
 
     if ExUnitConfig.erlang_eep48_supported() do
       assert docs =~ """
-             > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(term)
+             > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(_)
 
+             **Implementing behaviour**
+             gen_statem
              **Since**
              OTP 19.0
+
+             ### Specs
+
+             ```
+             @spec init(args :: term) :: init_result(state)
+             ```
              """
     else
       assert docs =~ """
              > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(_)
              """
     end
+  end
+
+  test "retrieve callback documentation from behaviour" do
+    buffer = """
+    defmodule MyModule do
+      def func(list) do
+        List.flatten(list)
+      end
+    end
+    """
+
+    %{
+      subject: subject,
+      actual_subject: actual_subject,
+      docs: %{docs: docs}
+    } = ElixirSense.docs(buffer, 3, 12)
+
+    assert subject == "List.flatten"
+    assert actual_subject == "List.flatten"
+
+    assert docs =~ """
+           > List.flatten(list)
+
+           ### Specs
+
+           ```
+           @spec flatten(deep_list) :: list when deep_list: [any | deep_list]
+           ```
+
+           Flattens the given `list` of nested lists.
+           """
   end
 end
