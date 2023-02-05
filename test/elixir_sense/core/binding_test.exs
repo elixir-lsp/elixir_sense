@@ -287,6 +287,88 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "map key" do
+      assert {:atom, :abc} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :map, type: {:map_key, {:variable, :a}, {:atom, :x}}},
+                   %VarInfo{name: :a, type: {:map, [x: {:atom, :abc}], nil}}
+                 ]),
+                 {:variable, :map}
+               )
+
+      assert {:atom, :abc} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :struct,
+                     type: {:map_key, {:variable, :a}, {:atom, :typed_field}}
+                   },
+                   %VarInfo{
+                     name: :a,
+                     type:
+                       {:struct, [typed_field: {:atom, :abc}],
+                        {:atom, ElixirSenseExample.ModuleWithTypedStruct}, nil}
+                   }
+                 ]),
+                 {:variable, :struct}
+               )
+
+      assert nil ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :map, type: {:map_key, {:variable, :a}, {:atom, :y}}},
+                   %VarInfo{name: :a, type: {:map, [x: {:atom, :abc}], nil}}
+                 ]),
+                 {:variable, :map}
+               )
+
+      assert nil ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :map, type: {:map_key, {:variable, :a}, nil}},
+                   %VarInfo{name: :a, type: {:map, [x: {:atom, :abc}], nil}}
+                 ]),
+                 {:variable, :map}
+               )
+    end
+
+    test "for expression" do
+      assert {:atom, :abc} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:for_expression, {:variable, :a}}},
+                   %VarInfo{name: :a, type: {:list, {:atom, :abc}}}
+                 ]),
+                 {:variable, :list}
+               )
+
+      assert {:tuple, 2, [nil, {:atom, :abc}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :map, type: {:for_expression, {:variable, :a}}},
+                   %VarInfo{name: :a, type: {:map, [x: {:atom, :abc}], nil}}
+                 ]),
+                 {:variable, :map}
+               )
+
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :list, type: {:list_head, {:variable, :a}}},
+                   %VarInfo{name: :a, type: {:list, :empty}}
+                 ]),
+                 {:variable, :list}
+               )
+    end
+
     test "list head" do
       assert {:atom, :abc} ==
                Binding.expand(

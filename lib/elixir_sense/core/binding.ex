@@ -141,10 +141,46 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  def do_expand(env, {:map_key, map_candidate, key_candidate}, stack) do
+    with {:atom, key} <- expand(env, key_candidate, stack) do
+      expanded_fields = expand_map_fields(env, map_candidate, stack)
+
+      if :none in expanded_fields do
+        :none
+      else
+        expanded_fields |> Keyword.get(key)
+      end
+    else
+      _ -> nil
+    end
+  end
+
   def do_expand(env, {:tuple_nth, tuple_candidate, n}, stack) do
     case expand(env, tuple_candidate, stack) do
       {:tuple, size, fields} when size >= n ->
         fields |> Enum.at(n)
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  def do_expand(env, {:for_expression, list_candidate}, stack) do
+    case expand(env, list_candidate, stack) do
+      {:list, type} when type not in [:empty, :none] ->
+        type
+
+      {:map, fields, nil} ->
+        case fields do
+          [{_key, value} | _] ->
+            {:tuple, 2, [nil, value]}
+
+          _ ->
+            nil
+        end
 
       nil ->
         nil

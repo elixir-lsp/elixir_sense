@@ -328,16 +328,112 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert [
-             %VarInfo{name: :a, type: {:list_head, {:attribute, :myattribute}}},
+             %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
              %VarInfo{name: :b, type: {:variable, :a}}
            ] = state |> get_line_vars(5)
 
     assert [
-             %VarInfo{name: :a, type: {:list_head, {:attribute, :myattribute}}},
+             %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
              %VarInfo{name: :a1, type: {:attribute, :myattribute}},
-             %VarInfo{name: :a2, type: {:list_head, {:variable, :a1}}},
+             %VarInfo{name: :a2, type: {:for_expression, {:variable, :a1}}},
              %VarInfo{name: :b, type: {:variable, :a}}
            ] = state |> get_line_vars(10)
+  end
+
+  test "map destructuring" do
+    state =
+      """
+      defmodule MyModule do
+        @a %{}
+        @myattribute %{ok: :a, error: b, other: :c}
+        @other %{"a" => :a, "b" => b}
+        %{error: var1} = @myattribute
+        %{"a" => var2} = @other
+        IO.puts
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{
+               name: :var1,
+               type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
+             },
+             # TODO not atom keys currently not supported
+             %VarInfo{
+               name: :var2,
+               type: {:map_key, {:attribute, :other}, nil}
+             }
+           ] = state |> get_line_vars(7)
+  end
+
+  test "map destructuring for" do
+    state =
+      """
+      defmodule MyModule do
+        @myattribute %{ok: :a, error: b, other: :c}
+        for {k, v} <- @myattribute do
+          IO.puts
+        end
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{
+               name: :k,
+               type: {
+                 :tuple_nth,
+                 {
+                   :intersection,
+                   [
+                     {:for_expression, {:attribute, :myattribute}},
+                     {:tuple, 2, [nil, {:variable, :v}]}
+                   ]
+                 },
+                 0
+               }
+             },
+             %VarInfo{
+               name: :v,
+               type: {
+                 :tuple_nth,
+                 {
+                   :intersection,
+                   [
+                     {:for_expression, {:attribute, :myattribute}},
+                     {:tuple, 2, [{:variable, :k}, nil]}
+                   ]
+                 },
+                 1
+               }
+             }
+           ] = state |> get_line_vars(4)
+  end
+
+  test "struct destructuring" do
+    state =
+      """
+      defmodule MyModule do
+        @a %My{}
+        @myattribute %My{ok: :a, error: b, other: :c}
+        %{error: var1} = @myattribute
+        %My{error: other} = @myattribute
+        IO.puts
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %VarInfo{
+               name: :other,
+               type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
+             },
+             %VarInfo{
+               name: :var1,
+               type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
+             }
+           ] = state |> get_line_vars(6)
   end
 
   test "binding in with expression" do
@@ -636,18 +732,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    # FIXME formatted type should be {:call, {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}, :formatted, []}
-    # needs support for map/struct destructuring
     assert [
              %VarInfo{
                name: :formatted,
-               type:
-                 {:tuple_nth,
-                  {:intersection,
-                   [
-                     {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []},
-                     {:tuple, 2, [{:atom, :formatted}, nil]}
-                   ]}, 1}
+               type: {
+                 :map_key,
+                 {
+                   :call,
+                   {:call, {:variable, :socket}, :assigns, []},
+                   :state,
+                   []
+                 },
+                 {:atom, :formatted}
+               }
              },
              %VarInfo{
                name: :state,

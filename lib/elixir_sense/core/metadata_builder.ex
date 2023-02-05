@@ -809,7 +809,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     match_context_r =
       if atom == :<- and match?([:for | _], state.binding_context) do
-        {:list_head, match_context_r}
+        {:for_expression, match_context_r}
       else
         match_context_r
       end
@@ -1350,6 +1350,39 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # drop right side of guard expression as guards cannot define vars
   defp match_var(state, {:when, _, [left, _right]}, {vars, _match_context}) do
     match_var(state, left, {vars, nil})
+  end
+
+  defp match_var(state, {:%, _, [type_ast, {:%{}, _, ast}]}, {vars, match_context})
+       when not is_nil(match_context) do
+    {_ast, {type_vars, _match_context}} = match_var(state, type_ast, {[], nil})
+
+    destructured_vars =
+      ast
+      |> Enum.flat_map(fn {key, value_ast} ->
+        key_type = get_binding_type(state, key)
+
+        {_ast, {new_vars, _match_context}} =
+          match_var(state, value_ast, {[], {:map_key, match_context, key_type}})
+
+        new_vars
+      end)
+
+    {ast, {vars ++ destructured_vars ++ type_vars, nil}}
+  end
+
+  defp match_var(state, {:%{}, _, ast}, {vars, match_context}) when not is_nil(match_context) do
+    destructured_vars =
+      ast
+      |> Enum.flat_map(fn {key, value_ast} ->
+        key_type = get_binding_type(state, key)
+
+        {_ast, {new_vars, _match_context}} =
+          match_var(state, value_ast, {[], {:map_key, match_context, key_type}})
+
+        new_vars
+      end)
+
+    {ast, {vars ++ destructured_vars, nil}}
   end
 
   # regular tuples use {:{}, [], [field_1, field_2]} ast
