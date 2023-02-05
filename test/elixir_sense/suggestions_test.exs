@@ -974,6 +974,7 @@ defmodule ElixirSense.SuggestionsTest do
     end
   end
 
+  @tag requires_otp_25: true
   test "suggest erlang behaviour callbacks on erlang implementation" do
     buffer = """
     :file_server.ini
@@ -983,24 +984,22 @@ defmodule ElixirSense.SuggestionsTest do
       ElixirSense.suggestions(buffer, 1, 17)
       |> Enum.filter(fn s -> s.type == :function end)
 
-    if ExUnitConfig.erlang_eep48_supported() do
-      assert [
-               %{
-                 args: "args",
-                 args_list: ["args"],
-                 arity: 1,
-                 def_arity: 1,
-                 metadata: %{implementing: :gen_server},
-                 name: "init",
-                 origin: ":file_server",
-                 snippet: nil,
-                 spec: "@spec init(args :: term) ::" <> _,
-                 summary: "- Args = term" <> _,
-                 type: :function,
-                 visibility: :public
-               }
-             ] = list
-    end
+    assert [
+             %{
+               args: "args",
+               args_list: ["args"],
+               arity: 1,
+               def_arity: 1,
+               metadata: %{implementing: :gen_server},
+               name: "init",
+               origin: ":file_server",
+               snippet: nil,
+               spec: "@spec init(args :: term) ::" <> _,
+               summary: "- Args = term" <> _,
+               type: :function,
+               visibility: :public
+             }
+           ] = list
   end
 
   test "lists params and vars" do

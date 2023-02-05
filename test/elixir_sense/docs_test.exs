@@ -1031,6 +1031,7 @@ defmodule ElixirSense.DocsTest do
            """
   end
 
+  @tag requires_otp_25: true
   test "retrieve erlang behaviour implementation " do
     buffer = """
     :file_server.init(a)
@@ -1045,21 +1046,19 @@ defmodule ElixirSense.DocsTest do
     assert subject == ":file_server.init"
     assert actual_subject == ":file_server.init"
 
-    if ExUnitConfig.erlang_eep48_supported() do
-      assert docs =~ """
-             > :file_server.init(term)
+    assert docs =~ """
+           > :file_server.init(term)
 
-             **Implementing behaviour**
-             gen_server
+           **Implementing behaviour**
+           gen_server
 
-             ### Specs
+           ### Specs
 
-             ```
-             @spec init(args :: term) ::
-             """
+           ```
+           @spec init(args :: term) ::
+           """
 
-      assert docs =~ "Whenever a `gen_server` process is started"
-    end
+    assert docs =~ "Whenever a `gen_server` process is started"
   end
 
   test "do not crash for erlang behaviour callbacks" do
