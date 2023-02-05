@@ -797,18 +797,22 @@ defmodule ElixirSense.SignatureTest do
       ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init()
       """
 
-      assert %{
-               active_param: 0,
-               pipe_before: false,
-               signatures: [
-                 %{
-                   documentation: "- Args = " <> _,
-                   name: "init",
-                   params: ["_"],
-                   spec: "@spec init(args :: term) :: init_result(state)"
-                 }
-               ]
-             } = ElixirSense.signature(code, 1, 63)
+      res = ElixirSense.signature(code, 1, 63)
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert %{
+                 active_param: 0,
+                 pipe_before: false,
+                 signatures: [
+                   %{
+                     documentation: "- Args = " <> _,
+                     name: "init",
+                     params: ["_"],
+                     spec: "@spec init(args :: term) :: init_result(state)"
+                   }
+                 ]
+               } = res
+      end
     end
 
     test "finds signatures from metadata erlang behaviour call from outside" do
@@ -816,18 +820,22 @@ defmodule ElixirSense.SignatureTest do
       :global.init()
       """
 
-      assert %{
-               active_param: 0,
-               pipe_before: false,
-               signatures: [
-                 %{
-                   documentation: "- Args = " <> _,
-                   name: "init",
-                   params: ["args"],
-                   spec: "@spec init(args :: term) ::" <> _
-                 }
-               ]
-             } = ElixirSense.signature(code, 1, 14)
+      res = ElixirSense.signature(code, 1, 14)
+
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert %{
+                 active_param: 0,
+                 pipe_before: false,
+                 signatures: [
+                   %{
+                     documentation: "- Args = " <> _,
+                     name: "init",
+                     params: ["args"],
+                     spec: "@spec init(args :: term) ::" <> _
+                   }
+                 ]
+               } = res
+      end
     end
 
     test "returns :none when it cannot identify a function call" do

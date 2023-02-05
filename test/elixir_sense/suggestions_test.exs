@@ -954,22 +954,24 @@ defmodule ElixirSense.SuggestionsTest do
       ElixirSense.suggestions(buffer, 1, 60)
       |> Enum.filter(fn s -> s.type == :function end)
 
-    assert [
-             %{
-               args: "_",
-               args_list: ["_"],
-               arity: 1,
-               def_arity: 1,
-               metadata: %{implementing: :gen_statem},
-               name: "init",
-               origin: "ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang",
-               snippet: nil,
-               spec: "@spec init(args :: term) :: init_result(state)",
-               summary: "- Args = term" <> _,
-               type: :function,
-               visibility: :public
-             }
-           ] = list
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert [
+               %{
+                 args: "_",
+                 args_list: ["_"],
+                 arity: 1,
+                 def_arity: 1,
+                 metadata: %{implementing: :gen_statem},
+                 name: "init",
+                 origin: "ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang",
+                 snippet: nil,
+                 spec: "@spec init(args :: term) :: init_result(state)",
+                 summary: "- Args = term" <> _,
+                 type: :function,
+                 visibility: :public
+               }
+             ] = list
+    end
   end
 
   test "suggest erlang behaviour callbacks on erlang implementation" do
@@ -981,22 +983,24 @@ defmodule ElixirSense.SuggestionsTest do
       ElixirSense.suggestions(buffer, 1, 12)
       |> Enum.filter(fn s -> s.type == :function end)
 
-    assert [
-             %{
-               args: "args",
-               args_list: ["args"],
-               arity: 1,
-               def_arity: 1,
-               metadata: %{implementing: :gen_server},
-               name: "init",
-               origin: ":global",
-               snippet: nil,
-               spec: "@spec init(args :: term) ::" <> _,
-               summary: "- Args = term" <> _,
-               type: :function,
-               visibility: :public
-             }
-           ] = list
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert [
+               %{
+                 args: "args",
+                 args_list: ["args"],
+                 arity: 1,
+                 def_arity: 1,
+                 metadata: %{implementing: :gen_server},
+                 name: "init",
+                 origin: ":global",
+                 snippet: nil,
+                 spec: "@spec init(args :: term) ::" <> _,
+                 summary: "- Args = term" <> _,
+                 type: :function,
+                 visibility: :public
+               }
+             ] = list
+    end
   end
 
   test "lists params and vars" do
