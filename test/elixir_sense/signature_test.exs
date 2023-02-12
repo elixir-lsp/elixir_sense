@@ -917,6 +917,16 @@ defmodule ElixirSense.SignatureTest do
              } = ElixirSense.signature(code, 2, 24)
     end
 
+    test "after |> variable" do
+      code = """
+      s |> String.replace_prefix(
+      """
+
+      assert %{
+               active_param: 1
+             } = ElixirSense.signature(code, 1, 28)
+    end
+
     test "find built-in functions" do
       # module_info is defined by default for every elixir and erlang module
       # __info__ is defined for every elixir module
