@@ -303,8 +303,32 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_current_env_to_line(%__MODULE__{} = state, line) when is_integer(line) do
-    env = get_current_env(state)
+    previous_env = state.lines_to_env[line]
+    current_env = get_current_env(state)
+
+    env = merge_env_vars(current_env, previous_env)
     %__MODULE__{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
+  end
+
+  defp merge_env_vars(%Env{vars: current_vars} = current_env, previous_env) do
+    case previous_env do
+      nil ->
+        current_env
+
+      %Env{vars: previous_vars} ->
+        vars_to_preserve =
+          Enum.filter(previous_vars, fn previous_var ->
+            Enum.all?(current_vars, fn current_var ->
+              current_var_positions = MapSet.new(current_var.positions)
+
+              previous_var.positions
+              |> MapSet.new()
+              |> MapSet.disjoint?(current_var_positions)
+            end)
+          end)
+
+        %Env{current_env | vars: current_vars ++ vars_to_preserve}
+    end
   end
 
   def add_moduledoc_positions(
@@ -387,6 +411,26 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | calls: calls}
   end
 
+  def remove_calls(%__MODULE__{} = state, positions) do
+    Enum.reduce(positions, state, fn {line, _column} = position, state ->
+      case state.calls[line] do
+        nil ->
+          state
+
+        calls ->
+          updated_calls = Enum.reject(calls, fn call_info -> call_info.position == position end)
+
+          case updated_calls do
+            [] ->
+              %__MODULE__{state | calls: Map.delete(state.calls, line)}
+
+            _non_empty_list ->
+              %__MODULE__{state | calls: Map.put(state.calls, line, updated_calls)}
+          end
+      end
+    end)
+  end
+
   def add_struct(%__MODULE__{} = state, type, fields) do
     structs =
       get_current_module_variants(state)
@@ -412,7 +456,10 @@ defmodule ElixirSense.Core.State do
   end
 
   def get_current_vars(%__MODULE__{} = state) do
-    state.scope_vars |> List.flatten() |> reduce_vars() |> Map.values()
+    state.scope_vars
+    |> List.flatten()
+    |> reduce_vars()
+    |> Enum.flat_map(fn {_var, scopes} -> scopes end)
   end
 
   def get_current_vars_refs(%__MODULE__{} = state) do
@@ -691,7 +738,15 @@ defmodule ElixirSense.Core.State do
   end
 
   def new_func_vars_scope(%__MODULE__{} = state) do
-    %__MODULE__{state | vars: [[] | state.vars], scope_vars: [[]]}
+    scope_id = state.scope_id_count + 1
+
+    %__MODULE__{
+      state
+      | scope_ids: [scope_id | state.scope_ids],
+        scope_id_count: scope_id,
+        vars: [[] | state.vars],
+        scope_vars: [[]]
+    }
   end
 
   def new_attributes_scope(%__MODULE__{} = state) do
@@ -703,24 +758,89 @@ defmodule ElixirSense.Core.State do
   end
 
   def remove_vars_scope(%__MODULE__{} = state) do
-    [current_scope_vars | other_scope_vars] = state.scope_vars
-    [scope_id | other_scope_ids] = state.scope_ids
-
-    vars_info_per_scope_id =
-      state.vars_info_per_scope_id |> Map.put(scope_id, reduce_vars(current_scope_vars))
-
     %__MODULE__{
       state
-      | scope_ids: other_scope_ids,
+      | scope_ids: tl(state.scope_ids),
         vars: tl(state.vars),
-        scope_vars: other_scope_vars,
-        vars_info_per_scope_id: vars_info_per_scope_id
+        scope_vars: tl(state.scope_vars),
+        vars_info_per_scope_id: update_vars_info_per_scope_id(state)
     }
   end
 
   def remove_func_vars_scope(%__MODULE__{} = state) do
-    vars = tl(state.vars)
-    %__MODULE__{state | vars: vars, scope_vars: vars}
+    %__MODULE__{
+      state
+      | scope_ids: tl(state.scope_ids),
+        vars: tl(state.vars),
+        scope_vars: tl(state.vars),
+        vars_info_per_scope_id: update_vars_info_per_scope_id(state)
+    }
+  end
+
+  defp update_vars_info_per_scope_id(state) do
+    [scope_id | _other_scope_ids] = state.scope_ids
+
+    [current_scope_vars | other_scope_vars] = state.scope_vars
+
+    current_scope_reduced_vars = reduce_vars(current_scope_vars)
+
+    vars_info =
+      other_scope_vars
+      |> List.flatten()
+      |> reduce_vars(current_scope_reduced_vars, false)
+      |> Enum.flat_map(fn {_var, scopes} -> scopes end)
+
+    Map.put(state.vars_info_per_scope_id, scope_id, vars_info)
+  end
+
+  defp reduce_vars(vars, initial_acc \\ %{}, keep_all_same_name_vars \\ true) do
+    Enum.reduce(vars, initial_acc, fn %VarInfo{name: var, positions: positions} = el, acc ->
+      updated =
+        case acc[var] do
+          nil ->
+            [el]
+
+          [%VarInfo{is_definition: false} = var_info | same_name_vars] ->
+            type =
+              if Enum.all?(positions, fn position -> position in var_info.positions end) do
+                merge_type(el.type, var_info.type)
+              else
+                el.type
+              end
+
+            [
+              %VarInfo{
+                el
+                | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort(),
+                  type: type
+              }
+              | same_name_vars
+            ]
+
+          [%VarInfo{is_definition: true} = var_info | same_name_vars] ->
+            cond do
+              Enum.all?(positions, fn position -> position in var_info.positions end) ->
+                type = merge_type(el.type, var_info.type)
+
+                [
+                  %VarInfo{
+                    var_info
+                    | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort(),
+                      type: type
+                  }
+                  | same_name_vars
+                ]
+
+              keep_all_same_name_vars ->
+                [el, var_info | same_name_vars]
+
+              true ->
+                [var_info | same_name_vars]
+            end
+        end
+
+      Map.put(acc, var, updated)
+    end)
   end
 
   def remove_attributes_scope(%__MODULE__{} = state) do
@@ -1029,44 +1149,81 @@ defmodule ElixirSense.Core.State do
     vars |> Enum.reduce(state, fn var, state -> add_var(state, var, is_definition) end)
   end
 
-  defp reduce_vars(vars) do
-    Enum.reduce(vars, %{}, fn %VarInfo{name: var, positions: [position]} = el, acc ->
+  # Simultaneously performs two operations:
+  # - deletes variables that contain any of `remove_positions`
+  # - adds `vars` to the state, but with types merged with the corresponding removed variables
+  def merge_new_vars(%__MODULE__{} = state, vars, remove_positions) do
+    {state, vars} =
+      Enum.reduce(remove_positions, {state, vars}, fn position, {state, vars} ->
+        case pop_var(state, position) do
+          {nil, state} ->
+            {state, vars}
+
+          {removed_var, state} ->
+            vars =
+              Enum.reduce(vars, [], fn %VarInfo{positions: positions} = var, vars ->
+                if positions == removed_var.positions do
+                  type = merge_type(var.type, removed_var.type)
+
+                  [%VarInfo{var | type: type} | vars]
+                else
+                  [var | vars]
+                end
+              end)
+
+            {state, vars}
+        end
+      end)
+
+    add_vars(state, vars, true)
+  end
+
+  defp pop_var(%__MODULE__{} = state, position) do
+    [current_scope_vars | other_vars] = state.vars
+
+    var =
+      Enum.find(current_scope_vars, fn %VarInfo{positions: positions} -> position in positions end)
+
+    current_scope_vars =
+      Enum.reject(current_scope_vars, fn %VarInfo{positions: positions} ->
+        position in positions
+      end)
+
+    state = %__MODULE__{
+      state
+      | vars: [current_scope_vars | other_vars],
+        scope_vars: [current_scope_vars | tl(state.scope_vars)]
+    }
+
+    {var, state}
+  end
+
+  def merge_same_name_vars(vars) do
+    vars
+    |> Enum.reduce(%{}, fn %VarInfo{name: var, positions: positions} = el, acc ->
       updated =
         case acc[var] do
           nil ->
             el
 
-          var_info = %VarInfo{is_definition: false} ->
+          %VarInfo{} = var_info ->
             type =
-              if position in var_info.positions do
+              if Enum.all?(positions, fn position -> position in var_info.positions end) do
                 merge_type(el.type, var_info.type)
               else
                 el.type
               end
 
             %VarInfo{
-              el
-              | positions: (var_info.positions ++ [position]) |> Enum.uniq() |> Enum.sort(),
-                type: type
-            }
-
-          var_info = %VarInfo{is_definition: true} ->
-            type =
-              if position in var_info.positions do
-                merge_type(el.type, var_info.type)
-              else
-                var_info.type
-              end
-
-            %VarInfo{
               var_info
-              | positions: (var_info.positions ++ [position]) |> Enum.uniq() |> Enum.sort(),
+              | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort(),
                 type: type
             }
         end
 
       Map.put(acc, var, updated)
     end)
+    |> Enum.map(fn {_name, var_info} -> var_info end)
   end
 
   defp merge_type(nil, new), do: new
@@ -1105,5 +1262,57 @@ defmodule ElixirSense.Core.State do
   def expand_alias(%__MODULE__{} = state, module) when is_list(module) do
     current_aliases = current_aliases(state)
     Introspection.expand_alias(Module.concat(module), current_aliases)
+  end
+
+  def maybe_move_vars_to_outer_scope(%__MODULE__{} = state) do
+    scope_vars = move_references_to_outer_scope(state.scope_vars)
+    vars = move_references_to_outer_scope(state.vars)
+
+    %__MODULE__{state | vars: vars, scope_vars: scope_vars}
+  end
+
+  defp move_references_to_outer_scope(vars) do
+    {current_scope_vars, outer_scope_vars, other_scopes_vars} =
+      case vars do
+        [current_scope_vars, outer_scope_vars | other_scopes_vars] ->
+          {current_scope_vars, outer_scope_vars, other_scopes_vars}
+
+        [current_scope_vars | []] ->
+          {current_scope_vars, [], []}
+      end
+
+    vars_to_move =
+      current_scope_vars
+      |> Enum.reduce(%{}, fn
+        %VarInfo{name: var, is_definition: true}, acc ->
+          Map.delete(acc, var)
+
+        %VarInfo{name: var, positions: positions, is_definition: false} = el, acc ->
+          updated =
+            case acc[var] do
+              nil ->
+                el
+
+              var_info ->
+                type =
+                  if Enum.all?(positions, fn position -> position in var_info.positions end) do
+                    merge_type(el.type, var_info.type)
+                  else
+                    el.type
+                  end
+
+                %VarInfo{
+                  el
+                  | positions: (var_info.positions ++ positions) |> Enum.uniq() |> Enum.sort(),
+                    type: type
+                }
+            end
+
+          Map.put(acc, var, updated)
+      end)
+      |> Enum.map(fn {_name, var_info} -> var_info end)
+      |> Enum.reject(fn var_info -> is_nil(var_info) end)
+
+    [current_scope_vars, vars_to_move ++ outer_scope_vars | other_scopes_vars]
   end
 end

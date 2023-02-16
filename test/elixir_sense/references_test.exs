@@ -729,7 +729,6 @@ defmodule ElixirSense.Providers.ReferencesTest do
     references = ElixirSense.references(buffer, 6, 13, trace)
 
     assert references == [
-             %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 9}}},
              %{uri: nil, range: %{start: %{line: 5, column: 5}, end: %{line: 5, column: 9}}},
              %{uri: nil, range: %{start: %{line: 6, column: 13}, end: %{line: 6, column: 17}}}
            ]
@@ -737,9 +736,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     references = ElixirSense.references(buffer, 3, 6, trace)
 
     assert references == [
-             %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 9}}},
-             %{uri: nil, range: %{start: %{line: 5, column: 5}, end: %{line: 5, column: 9}}},
-             %{uri: nil, range: %{start: %{line: 6, column: 13}, end: %{line: 6, column: 17}}}
+             %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 9}}}
            ]
   end
 
@@ -747,7 +744,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
     buffer = """
     defmodule MyModule do
       def func do
-        var1 = 
+        var1 =
           1
         var1
       end
@@ -760,6 +757,150 @@ defmodule ElixirSense.Providers.ReferencesTest do
              %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 9}}},
              %{uri: nil, range: %{start: %{line: 5, column: 5}, end: %{line: 5, column: 9}}}
            ]
+  end
+
+  test "find references for a redefined variable", %{trace: trace} do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(var) do
+        var = 1 + var
+
+        var
+      end
+    end
+    """
+
+    # `var` defined in the function header
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 2, column: 14}, end: %{line: 2, column: 17}}},
+      %{uri: nil, range: %{start: %{line: 3, column: 15}, end: %{line: 3, column: 18}}}
+    ]
+
+    assert ElixirSense.references(buffer, 2, 14, trace) == expected_references
+    assert ElixirSense.references(buffer, 3, 15, trace) == expected_references
+
+    # `var` redefined in the function body
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 8}}},
+      %{uri: nil, range: %{start: %{line: 5, column: 5}, end: %{line: 5, column: 8}}}
+    ]
+
+    assert ElixirSense.references(buffer, 3, 5, trace) == expected_references
+    assert ElixirSense.references(buffer, 5, 5, trace) == expected_references
+  end
+
+  test "find references for a variable in a guard", %{trace: trace} do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(var) when is_atom(var) do
+        var
+      end
+    end
+    """
+
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 2, column: 14}, end: %{line: 2, column: 17}}},
+      %{uri: nil, range: %{start: %{line: 2, column: 32}, end: %{line: 2, column: 35}}},
+      %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 8}}}
+    ]
+
+    assert ElixirSense.references(buffer, 2, 14, trace) == expected_references
+    assert ElixirSense.references(buffer, 2, 32, trace) == expected_references
+    assert ElixirSense.references(buffer, 3, 5, trace) == expected_references
+  end
+
+  test "find references for variable in inner scopes", %{trace: trace} do
+    buffer = """
+    defmodule MyModule do
+      def my_fun([h | t]) do
+        sum = h + my_fun(t)
+
+        if h > sum do
+          h + sum
+        else
+          h = my_fun(t) + sum
+          h
+        end
+      end
+    end
+    """
+
+    # `h` from the function header
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 2, column: 15}, end: %{line: 2, column: 16}}},
+      %{uri: nil, range: %{start: %{line: 3, column: 11}, end: %{line: 3, column: 12}}},
+      %{uri: nil, range: %{start: %{line: 5, column: 8}, end: %{line: 5, column: 9}}},
+      %{uri: nil, range: %{start: %{line: 6, column: 7}, end: %{line: 6, column: 8}}}
+    ]
+
+    Enum.each([{2, 15}, {3, 11}, {5, 8}, {6, 7}], fn {line, column} ->
+      assert ElixirSense.references(buffer, line, column, trace) == expected_references
+    end)
+
+    # `h` from the if-else scope
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 8, column: 7}, end: %{line: 8, column: 8}}},
+      %{uri: nil, range: %{start: %{line: 9, column: 7}, end: %{line: 9, column: 8}}}
+    ]
+
+    assert ElixirSense.references(buffer, 8, 7, trace) == expected_references
+    assert ElixirSense.references(buffer, 9, 7, trace) == expected_references
+
+    # `sum`
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 8}}},
+      %{uri: nil, range: %{start: %{line: 5, column: 12}, end: %{line: 5, column: 15}}},
+      %{uri: nil, range: %{start: %{line: 6, column: 11}, end: %{line: 6, column: 14}}},
+      %{uri: nil, range: %{start: %{line: 8, column: 23}, end: %{line: 8, column: 26}}}
+    ]
+
+    Enum.each([{3, 5}, {5, 12}, {6, 11}, {8, 23}], fn {line, column} ->
+      assert ElixirSense.references(buffer, line, column, trace) == expected_references
+    end)
+  end
+
+  test "find references for variable from the scope of an anonymous function", %{trace: trace} do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(x, y) do
+        x = Enum.map(x, fn x -> x + y end)
+      end
+    end
+    """
+
+    # `x` from the `my_fun` function header
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 2, column: 14}, end: %{line: 2, column: 15}}},
+      %{uri: nil, range: %{start: %{line: 3, column: 18}, end: %{line: 3, column: 19}}}
+    ]
+
+    assert ElixirSense.references(buffer, 2, 14, trace) == expected_references
+    assert ElixirSense.references(buffer, 3, 18, trace) == expected_references
+
+    # `y` from the `my_fun` function header
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 2, column: 17}, end: %{line: 2, column: 18}}},
+      %{uri: nil, range: %{start: %{line: 3, column: 33}, end: %{line: 3, column: 34}}}
+    ]
+
+    assert ElixirSense.references(buffer, 2, 17, trace) == expected_references
+    assert ElixirSense.references(buffer, 3, 33, trace) == expected_references
+
+    # `x` from the anonymous function
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 3, column: 24}, end: %{line: 3, column: 25}}},
+      %{uri: nil, range: %{start: %{line: 3, column: 29}, end: %{line: 3, column: 30}}}
+    ]
+
+    assert ElixirSense.references(buffer, 3, 24, trace) == expected_references
+    assert ElixirSense.references(buffer, 3, 29, trace) == expected_references
+
+    # redefined `x`
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 3, column: 5}, end: %{line: 3, column: 6}}}
+    ]
+
+    assert ElixirSense.references(buffer, 3, 5, trace) == expected_references
   end
 
   test "find references of attributes", %{trace: trace} do

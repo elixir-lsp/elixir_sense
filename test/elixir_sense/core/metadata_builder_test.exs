@@ -472,8 +472,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert [
-             %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 3},
-             %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 3}
+             %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 4},
+             %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 4}
            ] = state |> get_line_vars(6)
   end
 
@@ -504,16 +504,40 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert [%VarInfo{type: {:atom, String}}] = state |> get_line_vars(4)
-    assert [%VarInfo{type: {:atom, Map}}] = state |> get_line_vars(6)
-    assert [%VarInfo{type: {:atom, Map}}] = state |> get_line_vars(8)
-    assert [%VarInfo{type: {:atom, List}}] = state |> get_line_vars(10)
-    assert [%VarInfo{type: {:atom, Enum}}] = state |> get_line_vars(12)
-    assert [%VarInfo{type: {:atom, Map}}] = state |> get_line_vars(14)
-    assert [%VarInfo{type: {:atom, Atom}}] = state |> get_line_vars(16)
+
+    assert [%VarInfo{type: {:atom, String}}, %VarInfo{type: {:atom, Map}}] =
+             state |> get_line_vars(6)
+
+    assert [%VarInfo{type: {:atom, String}}, %VarInfo{type: {:atom, Map}}] =
+             state |> get_line_vars(8)
+
+    assert [
+             %VarInfo{type: {:atom, String}, scope_id: 4},
+             %VarInfo{type: {:atom, Map}, scope_id: 4},
+             %VarInfo{type: {:atom, List}, scope_id: 5}
+           ] = state |> get_line_vars(10)
+
+    assert [
+             %VarInfo{type: {:atom, String}, scope_id: 4},
+             %VarInfo{type: {:atom, Map}, scope_id: 4},
+             %VarInfo{type: {:atom, List}, scope_id: 5},
+             %VarInfo{type: {:atom, Enum}, scope_id: 5}
+           ] = state |> get_line_vars(12)
+
+    assert [%VarInfo{type: {:atom, String}}, %VarInfo{type: {:atom, Map}}] =
+             state |> get_line_vars(14)
+
+    assert [
+             %VarInfo{type: {:atom, String}},
+             %VarInfo{type: {:atom, Map}},
+             %VarInfo{type: {:atom, Atom}}
+           ] = state |> get_line_vars(16)
 
     assert [
              %VarInfo{name: :other, type: {:variable, :var}},
-             %VarInfo{name: :var, type: {:atom, Atom}}
+             %VarInfo{type: {:atom, String}},
+             %VarInfo{type: {:atom, Map}},
+             %VarInfo{type: {:atom, Atom}}
            ] = state |> get_line_vars(18)
   end
 
@@ -579,7 +603,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ] = state |> get_line_vars(16)
 
     assert [
-             %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, []}},
+             %VarInfo{name: :var1, type: nil, scope_id: 7},
+             %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, []}, scope_id: 8},
              %VarInfo{name: :var2, type: {:call, {:attribute, :attr}, :qwe, [{:integer, 0}]}},
              %VarInfo{name: :var3, type: {:call, {:call, {:variable, :abc}, :cde, []}, :efg, []}}
            ] = state |> get_line_vars(24)
@@ -610,19 +635,31 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert [%VarInfo{type: {:map, [asd: {:integer, 5}], nil}}] = state |> get_line_vars(4)
 
-    assert [%VarInfo{type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}}] =
-             state |> get_line_vars(6)
+    assert [
+             %VarInfo{type: {:map, [asd: {:integer, 5}], nil}},
+             %VarInfo{type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}}
+           ] = state |> get_line_vars(6)
 
-    assert [%VarInfo{type: {:map, [], nil}}] = state |> get_line_vars(8)
+    assert [
+             %VarInfo{type: {:map, [asd: {:integer, 5}], nil}},
+             %VarInfo{type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}},
+             %VarInfo{type: {:map, [], nil}}
+           ] = state |> get_line_vars(8)
 
-    assert [%VarInfo{type: {:map, [asd: {:integer, 5}, zxc: {:atom, String}], nil}}] =
-             state |> get_line_vars(10)
+    assert [
+             %VarInfo{type: {:map, [asd: {:integer, 5}], nil}},
+             %VarInfo{type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}},
+             %VarInfo{type: {:map, [], nil}},
+             %VarInfo{type: {:map, [asd: {:integer, 5}, zxc: {:atom, String}], nil}}
+           ] = state |> get_line_vars(10)
 
-    assert %VarInfo{type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var}}} =
-             state |> get_line_vars(12) |> Enum.find(&(&1.name == :qwe))
+    assert [%VarInfo{type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var}}}] =
+             state |> get_line_vars(12) |> Enum.filter(&(&1.name == :qwe))
 
-    assert %VarInfo{type: {:map, [{:asd, {:integer, 2}}], {:variable, :var}}} =
-             state |> get_line_vars(14) |> Enum.find(&(&1.name == :qwe))
+    assert [
+             %VarInfo{type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var}}},
+             %VarInfo{type: {:map, [{:asd, {:integer, 2}}], {:variable, :var}}}
+           ] = state |> get_line_vars(14) |> Enum.filter(&(&1.name == :qwe))
   end
 
   test "struct binding" do
@@ -659,13 +696,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}} =
              state |> get_line_vars(9) |> Enum.find(&(&1.name == :asd))
 
-    assert %VarInfo{
-             name: :asd,
-             type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
-           } = state |> get_line_vars(11) |> Enum.find(&(&1.name == :asd))
+    assert [
+             %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}},
+             %VarInfo{
+               name: :asd,
+               type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
+             }
+           ] = state |> get_line_vars(11) |> Enum.filter(&(&1.name == :asd))
 
-    assert %VarInfo{name: :asd, type: {:map, [{:other, {:integer, 123}}], {:variable, :asd}}} =
-             state |> get_line_vars(13) |> Enum.find(&(&1.name == :asd))
+    assert [
+             %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}},
+             %VarInfo{
+               name: :asd,
+               type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
+             },
+             %VarInfo{name: :asd, type: {:map, [{:other, {:integer, 123}}], {:variable, :asd}}}
+           ] = state |> get_line_vars(13) |> Enum.filter(&(&1.name == :asd))
 
     assert [
              %VarInfo{name: :x, type: {:intersection, [{:variable, :z}, {:variable, :asd}]}},
@@ -861,14 +907,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert [
-             %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: 2},
-             %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 3},
-             %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 3}
+             %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: 3},
+             %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 4},
+             %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 4}
            ] = state |> get_line_vars(6)
 
     assert [
-             %VarInfo{name: :var_after, positions: [{8, 5}], scope_id: 4},
-             %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: 2}
+             %VarInfo{name: :var_after, positions: [{8, 5}], scope_id: 5},
+             %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: 3}
            ] = state |> get_line_vars(9)
   end
 
@@ -889,53 +935,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert [
-             %VarInfo{name: :par1, positions: [{3, 20}], scope_id: 2},
-             %VarInfo{name: :par2, positions: [{3, 33}], scope_id: 2},
-             %VarInfo{name: :par3, positions: [{3, 39}], scope_id: 2},
-             %VarInfo{name: :par4, positions: [{3, 51}], scope_id: 2},
-             %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 3},
-             %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 3}
+             %VarInfo{name: :par1, positions: [{3, 20}], scope_id: 3},
+             %VarInfo{name: :par2, positions: [{3, 33}], scope_id: 3},
+             %VarInfo{name: :par3, positions: [{3, 39}], scope_id: 3},
+             %VarInfo{name: :par4, positions: [{3, 51}], scope_id: 3},
+             %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 4},
+             %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 4}
            ] = state |> get_line_vars(6)
 
     assert [
-             %VarInfo{name: :arg, positions: [{8, 14}], scope_id: 2}
+             %VarInfo{name: :arg, positions: [{8, 14}, {8, 24}], scope_id: 5}
            ] = state |> get_line_vars(8)
-  end
-
-  test "guards do not define vars" do
-    state =
-      """
-      defmodule MyModule do
-        def func1(a) when is_integer(b) do
-          IO.puts("")
-        end
-        def func2(a) when is_integer(b) or is_list(c) do
-          IO.puts("")
-        end
-        def func3(a) when is_integer(b) when is_list(c) do
-          IO.puts("")
-        end
-
-        case x do
-          y when is_integer(z) ->
-            IO.puts("")
-        end
-
-        with x when is_integer(y) <- z do
-          IO.puts("")
-        end
-
-        def func3(a) when is_integer(b)
-      end
-      """
-      |> string_to_state
-
-    assert [%VarInfo{name: :a, positions: [{2, 13}], scope_id: 2}] = state |> get_line_vars(3)
-    assert [%VarInfo{name: :a, positions: [{5, 13}], scope_id: 2}] = state |> get_line_vars(6)
-    assert [%VarInfo{name: :a, positions: [{8, 13}], scope_id: 2}] = state |> get_line_vars(9)
-    assert [%VarInfo{name: :y, positions: [{13, 5}], scope_id: 7}] = state |> get_line_vars(14)
-    assert [%VarInfo{name: :x, positions: [{17, 8}], scope_id: 8}] = state |> get_line_vars(18)
-    assert [%VarInfo{name: :a, positions: [{21, 13}], scope_id: 2}] = state |> get_line_vars(21)
   end
 
   test "rebinding vars" do
@@ -956,7 +966,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     vars = state |> get_line_vars(6)
 
     assert [
-             %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}, {4, 5}, {5, 5}], scope_id: 3}
+             %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}], scope_id: 3},
+             %VarInfo{name: :var1, positions: [{4, 5}], scope_id: 4},
+             %VarInfo{name: :var1, positions: [{5, 5}], scope_id: 4}
            ] = vars
   end
 
@@ -1391,7 +1403,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ] = get_line_vars(state, 8)
 
     assert [
-             %VarInfo{name: :func_var, positions: [{10, 7}], scope_id: 5}
+             %VarInfo{name: :func_var, positions: [{10, 7}], scope_id: 6}
            ] = get_line_vars(state, 11)
 
     assert [
@@ -1423,9 +1435,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert [
-             %VarInfo{is_definition: true, name: :abc, positions: [{3, 6}], scope_id: 3},
-             %VarInfo{is_definition: true, name: :my_var, positions: [{2, 13}], scope_id: 2},
-             %VarInfo{is_definition: true, name: :x, positions: [{2, 43}, {3, 14}], scope_id: 2}
+             %VarInfo{is_definition: true, name: :abc, positions: [{3, 6}], scope_id: 4},
+             %VarInfo{is_definition: true, name: :my_var, positions: [{2, 13}], scope_id: 3},
+             %VarInfo{is_definition: true, name: :x, positions: [{2, 43}, {3, 14}], scope_id: 3}
            ] = state |> get_line_vars(4)
   end
 

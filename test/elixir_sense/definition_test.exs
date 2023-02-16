@@ -161,7 +161,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     buffer = """
     defmodule MyModule do
       def main, do: my_func("a", "b")
-      #               ^ 
+      #               ^
       def my_func, do: "not this one"
       def my_func(a, b), do: a <> b
     end
@@ -408,7 +408,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert ElixirSense.definition(buffer, 6, 13) == %Location{
              type: :variable,
              file: nil,
-             line: 3,
+             line: 5,
              column: 5
            }
 
@@ -424,7 +424,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     buffer = """
     defmodule MyModule do
       def func do
-        var1 = 
+        var1 =
           1
       end
     end
@@ -514,6 +514,156 @@ defmodule ElixirSense.Providers.DefinitionTest do
              type: :variable,
              file: nil,
              line: 5,
+             column: 5
+           }
+  end
+
+  test "find definition for a redefined variable" do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(var) do
+        var = 1 + var
+
+        var
+      end
+    end
+    """
+
+    # `var` defined in the function header
+    assert ElixirSense.definition(buffer, 3, 15) == %Location{
+             type: :variable,
+             file: nil,
+             line: 2,
+             column: 14
+           }
+
+    # `var` redefined in the function body
+    assert ElixirSense.definition(buffer, 5, 5) == %Location{
+             type: :variable,
+             file: nil,
+             line: 3,
+             column: 5
+           }
+  end
+
+  test "find definition of a variable in a guard" do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(var) when is_atom(var) do
+        var
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 2, 32) == %Location{
+             type: :variable,
+             file: nil,
+             line: 2,
+             column: 14
+           }
+
+    assert ElixirSense.definition(buffer, 3, 5) == %Location{
+             type: :variable,
+             file: nil,
+             line: 2,
+             column: 14
+           }
+  end
+
+  test "find definition of variables when variable is a function parameter" do
+    buffer = """
+    defmodule MyModule do
+      def my_fun([h | t]) do
+        sum = h + my_fun(t)
+
+        if h > sum do
+          h + sum
+        else
+          h = my_fun(t) + sum
+          h
+        end
+      end
+    end
+    """
+
+    # `h` from the function header
+    assert ElixirSense.definition(buffer, 3, 11) == %Location{
+             type: :variable,
+             file: nil,
+             line: 2,
+             column: 15
+           }
+
+    assert ElixirSense.definition(buffer, 6, 7) == %Location{
+             type: :variable,
+             file: nil,
+             line: 2,
+             column: 15
+           }
+
+    # `h` from the if-else scope
+    assert ElixirSense.definition(buffer, 9, 7) == %Location{
+             type: :variable,
+             file: nil,
+             line: 8,
+             column: 7
+           }
+
+    # `t`
+    assert ElixirSense.definition(buffer, 8, 18) == %Location{
+             type: :variable,
+             file: nil,
+             line: 2,
+             column: 19
+           }
+
+    # `sum`
+    assert ElixirSense.definition(buffer, 8, 23) == %Location{
+             type: :variable,
+             file: nil,
+             line: 3,
+             column: 5
+           }
+  end
+
+  test "find definition of variables from the scope of an anonymous function" do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(x, y) do
+        x = Enum.map(x, fn x -> x + y end)
+      end
+    end
+    """
+
+    # `x` from the `my_fun` function header
+    assert ElixirSense.definition(buffer, 3, 18) == %Location{
+             type: :variable,
+             file: nil,
+             line: 2,
+             column: 14
+           }
+
+    # `y` from the `my_fun` function header
+    assert ElixirSense.definition(buffer, 3, 33) == %Location{
+             type: :variable,
+             file: nil,
+             line: 2,
+             column: 17
+           }
+
+    # `x` from the anonymous function
+    assert ElixirSense.definition(buffer, 3, 29) == %Location{
+             type: :variable,
+             file: nil,
+             line: 3,
+             column: 24
+           }
+
+    # redefined `x`
+    assert ElixirSense.definition(buffer, 3, 5) == %Location{
+             type: :variable,
+             file: nil,
+             line: 3,
              column: 5
            }
   end
