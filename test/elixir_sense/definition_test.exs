@@ -550,7 +550,11 @@ defmodule ElixirSense.Providers.DefinitionTest do
     buffer = """
     defmodule MyModule do
       def my_fun(var) when is_atom(var) do
-        var
+        case var do
+          var when var > 0 -> var
+        end
+
+        Enum.map([1, 2], fn x when x > 0 -> x end)
       end
     end
     """
@@ -562,11 +566,18 @@ defmodule ElixirSense.Providers.DefinitionTest do
              column: 14
            }
 
-    assert ElixirSense.definition(buffer, 3, 5) == %Location{
+    assert ElixirSense.definition(buffer, 4, 16) == %Location{
              type: :variable,
              file: nil,
-             line: 2,
-             column: 14
+             line: 4,
+             column: 7
+           }
+
+    assert ElixirSense.definition(buffer, 7, 32) == %Location{
+             type: :variable,
+             file: nil,
+             line: 7,
+             column: 25
            }
   end
 

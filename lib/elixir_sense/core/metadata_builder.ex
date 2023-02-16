@@ -815,6 +815,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_block_keyword(ast, state)
   end
 
+  defp pre({:->, meta, [[{:when, _, [_var, guards]} = lhs], rhs]}, state) do
+    pre_clause({:->, meta, [guards, rhs]}, state, lhs)
+  end
+
   defp pre({:->, meta, [[lhs], rhs]}, state) do
     pre_clause({:->, meta, [:_, rhs]}, state, lhs)
   end
