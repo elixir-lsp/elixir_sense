@@ -101,16 +101,16 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
   defp get_fields(_, _hint, _fields_so_far), do: []
 
   defp expand_map_field_access(fields, hint, type, fields_so_far) do
+    {subtype, origin} =
+      case type do
+        {:struct, mod} -> {:struct_field, if(mod, do: inspect(mod))}
+        :map -> {:map_key, nil}
+      end
+
     for {key, _value} when is_atom(key) <- fields,
         key not in fields_so_far,
         key = Atom.to_string(key),
         Matcher.match?(key, hint) do
-      {subtype, origin} =
-        case type do
-          {:struct, mod} -> {:struct_field, if(mod, do: inspect(mod))}
-          :map -> {:map_key, nil}
-        end
-
       %{type: :field, name: key, subtype: subtype, origin: origin, call?: false}
     end
     |> Enum.sort_by(& &1.name)
