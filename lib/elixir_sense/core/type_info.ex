@@ -337,6 +337,27 @@ defmodule ElixirSense.Core.TypeInfo do
     end
   end
 
+  def get_function_spec(module, function, arity)
+      when is_atom(module) and is_atom(function) and is_integer(arity) do
+    function_spec = get_spec(module, function, arity)
+
+    if function_spec != nil do
+      function_spec
+    else
+      module
+      |> Behaviours.get_module_behaviours()
+      |> Enum.reduce_while(nil, fn behaviour, acc ->
+        callback_spec = get_callback(behaviour, function, arity)
+
+        if callback_spec != nil do
+          {:halt, callback_spec}
+        else
+          {:cont, acc}
+        end
+      end)
+    end
+  end
+
   def get_module_specs(module) do
     Typespec.get_specs(module)
     |> Map.new(fn

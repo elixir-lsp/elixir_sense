@@ -946,9 +946,8 @@ defmodule ElixirSense.Core.Binding do
           end)
       end
 
-    # TODO maybe callback from behaviour
     if arity do
-      type = TypeInfo.get_spec(mod, fun, arity)
+      type = TypeInfo.get_function_spec(mod, fun, arity)
       return_type = get_return_from_spec(env, type, mod, include_private)
       expand(env, return_type, stack) || :no_spec
     else
