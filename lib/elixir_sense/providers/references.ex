@@ -134,6 +134,7 @@ defmodule ElixirSense.Providers.References do
 
     if fun_info.params |> hd |> Enum.any?(&match?({:\\, _, _}, &1)) do
       # function has default params, we cannot use arity to filter
+      # TODO consider adding min and max bounds on arity
       [module, func]
     else
       [module, func, arity]
