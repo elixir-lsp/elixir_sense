@@ -1925,27 +1925,27 @@ defmodule ElixirSense.SuggestionsTest do
   test "suggestion for struct fields" do
     buffer = """
     defmodule Mod do
-      %IO.Stream{}
+      %ElixirSenseExample.IO.Stream{}
       %ArgumentError{}
     end
     """
 
     list =
-      ElixirSense.suggestions(buffer, 2, 14)
+      ElixirSense.suggestions(buffer, 2, 33)
       |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
              %{
                name: "__struct__",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
                subtype: :struct_field,
-               type_spec: "IO.Stream"
+               type_spec: "ElixirSenseExample.IO.Stream"
              },
              %{
                name: "device",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
                subtype: :struct_field,
@@ -1953,7 +1953,7 @@ defmodule ElixirSense.SuggestionsTest do
              },
              %{
                name: "line_or_bytes",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
                subtype: :struct_field,
@@ -1961,7 +1961,7 @@ defmodule ElixirSense.SuggestionsTest do
              },
              %{
                name: "raw",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
                subtype: :struct_field,
@@ -2004,7 +2004,7 @@ defmodule ElixirSense.SuggestionsTest do
   test "suggestion for aliased struct fields" do
     buffer = """
     defmodule Mod do
-      alias IO.Stream
+      alias ElixirSenseExample.IO.Stream
       %Stream{
     end
     """
@@ -2016,15 +2016,15 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{
                name: "__struct__",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
                subtype: :struct_field,
-               type_spec: "IO.Stream"
+               type_spec: "ElixirSenseExample.IO.Stream"
              },
              %{
                name: "device",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
                subtype: :struct_field,
@@ -2032,7 +2032,7 @@ defmodule ElixirSense.SuggestionsTest do
              },
              %{
                name: "line_or_bytes",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
                subtype: :struct_field,
@@ -2040,7 +2040,7 @@ defmodule ElixirSense.SuggestionsTest do
              },
              %{
                name: "raw",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
                subtype: :struct_field,
@@ -2091,7 +2091,7 @@ defmodule ElixirSense.SuggestionsTest do
   test "suggestion for aliased struct fields atom module" do
     buffer = """
     defmodule Mod do
-      alias IO.Stream
+      alias ElixirSenseExample.IO.Stream
       %:"Elixir.Stream"{
     end
     """
@@ -2103,15 +2103,15 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{
                name: "__struct__",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
                subtype: :struct_field,
-               type_spec: "IO.Stream"
+               type_spec: "ElixirSenseExample.IO.Stream"
              },
              %{
                name: "device",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
                subtype: :struct_field,
@@ -2119,7 +2119,7 @@ defmodule ElixirSense.SuggestionsTest do
              },
              %{
                name: "line_or_bytes",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
                subtype: :struct_field,
@@ -2127,7 +2127,7 @@ defmodule ElixirSense.SuggestionsTest do
              },
              %{
                name: "raw",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
                subtype: :struct_field,
