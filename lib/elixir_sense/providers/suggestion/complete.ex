@@ -779,9 +779,15 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             end
 
           # TODO docs and meta from metadata
-          {f, a, a, info.type, {docs, metadata}, specs,
-           info.params |> hd |> Enum.map(&Macro.to_string/1)}
+          head_params = hd(info.params)
+          args = head_params |> Enum.map(&Macro.to_string/1)
+          dafault_args = Introspection.count_defaults(head_params)
+
+          for arity <- (a - dafault_args)..a do
+            {f, arity, a, info.type, {docs, metadata}, specs, args}
+          end
         end
+        |> Enum.concat()
     end
   end
 
