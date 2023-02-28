@@ -52,6 +52,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.TypeInfo
 
   alias ElixirSense.Providers.Suggestion.Matcher
+  alias ElixirSense.Providers.Suggestion.Reducers
 
   @erlang_module_builtin_functions [{:module_info, 0}, {:module_info, 1}]
   @elixir_module_builtin_functions [{:__info__, 1}]
@@ -224,10 +225,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_require(mod, hint, exact?, env)
 
       {:ok, {:map, fields, _}} ->
-        expand_map_field_access(fields, hint, :map)
+        expand_map_field_access(fields, hint, :map, env)
 
       {:ok, {:struct, fields, type, _}} ->
-        expand_map_field_access(fields, hint, {:struct, type})
+        expand_map_field_access(fields, hint, {:struct, type}, env)
 
       _ ->
         no()
@@ -334,14 +335,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     Enum.flat_map(entries, &to_entries/1)
   end
 
-  defp expand_map_field_access(fields, hint, type) do
-    case match_map_fields(fields, hint, type) do
-      [%{kind: :field, name: ^hint, value_is_map: false}] ->
-        no()
-
-      map_fields when is_list(map_fields) ->
-        format_expansion(map_fields)
-    end
+  defp expand_map_field_access(fields, hint, type, env) do
+    # when there is only one matching field and it's exact to the hint
+    # and it's not a nested map, iex does not return completions
+    # We choose to return it normally
+    match_map_fields(fields, hint, type, env)
+    |> format_expansion()
   end
 
   defp expand_require(mod, hint, exact?, env) do
@@ -928,10 +927,26 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp ensure_loaded(Elixir), do: {:error, :nofile}
   defp ensure_loaded(mod), do: Code.ensure_compiled(mod)
 
-  defp match_map_fields(fields, hint, type) do
+  defp match_map_fields(fields, hint, type, env) do
+    {subtype, origin, types} =
+      case type do
+        {:struct, mod} ->
+          types =
+            Reducers.Struct.get_field_types(
+              env,
+              mod,
+              true
+            )
+
+          {:struct_field, if(mod, do: inspect(mod)), types}
+
+        :map ->
+          {:map_key, nil, %{}}
+      end
+
     for {key, value} when is_atom(key) <- fields,
-        key = Atom.to_string(key),
-        Matcher.match?(key, hint) do
+        key_str = Atom.to_string(key),
+        Matcher.match?(key_str, hint) do
       value_is_map =
         case value do
           {:map, _, _} -> true
@@ -939,13 +954,14 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           _ -> false
         end
 
-      {subtype, origin} =
-        case type do
-          {:struct, mod} -> {:struct_field, if(mod, do: inspect(mod))}
-          :map -> {:map_key, nil}
-        end
-
-      %{kind: :field, name: key, subtype: subtype, value_is_map: value_is_map, origin: origin}
+      %{
+        kind: :field,
+        name: key_str,
+        subtype: subtype,
+        value_is_map: value_is_map,
+        origin: origin,
+        type_spec: types[key]
+      }
     end
     |> Enum.sort_by(& &1.name)
   end
@@ -959,8 +975,23 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
             | ElixirSense.Providers.Suggestion.Reducers.Common.attribute()
           ]
-  defp to_entries(%{kind: :field, subtype: subtype, name: name, origin: origin}) do
-    [%{type: :field, name: name, subtype: subtype, origin: origin, call?: true}]
+  defp to_entries(%{
+         kind: :field,
+         subtype: subtype,
+         name: name,
+         origin: origin,
+         type_spec: type_spec
+       }) do
+    [
+      %{
+        type: :field,
+        name: name,
+        subtype: subtype,
+        origin: origin,
+        call?: true,
+        type_spec: if(type_spec, do: Macro.to_string(type_spec))
+      }
+    ]
   end
 
   defp to_entries(%{

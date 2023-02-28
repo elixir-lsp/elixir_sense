@@ -700,7 +700,7 @@ defmodule ElixirSense.Core.TypeInfo do
     end
     |> Enum.map(fn arg ->
       case arg do
-        {:"::", _, [left, right]} -> left
+        {:"::", _, [left, _right]} -> left
         other -> other
       end
       |> Macro.to_string()
