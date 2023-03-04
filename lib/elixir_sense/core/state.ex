@@ -229,7 +229,7 @@ defmodule ElixirSense.Core.State do
     defstruct params: [],
               positions: [],
               target: nil,
-              type: :def,
+              type: nil,
               overridable: false
 
     def get_arities(%ModFunInfo{params: params_variants}) do
@@ -486,16 +486,25 @@ defmodule ElixirSense.Core.State do
         type,
         options \\ []
       ) do
-    current_info = Map.get(state.mods_funs_to_positions, {module, fun, arity}, %{})
+    current_info = Map.get(state.mods_funs_to_positions, {module, fun, arity}, %ModFunInfo{})
     current_params = current_info |> Map.get(:params, [])
     current_positions = current_info |> Map.get(:positions, [])
     new_params = [params | current_params]
     new_positions = [position | current_positions]
 
+    info_type =
+      if fun != nil and arity == nil and
+           current_info.type not in [nil, :defp, :defmacrop, :defguardp] do
+        # in case there are multiple definitions for nil arity prefer public ones
+        current_info.type
+      else
+        type
+      end
+
     info = %ModFunInfo{
       positions: new_positions,
       params: new_params,
-      type: type,
+      type: info_type,
       overridable: current_info |> Map.get(:overridable, false)
     }
 
@@ -986,7 +995,9 @@ defmodule ElixirSense.Core.State do
                 ti
                 | positions: [pos | positions],
                   args: [arg_names | args],
-                  specs: [spec | specs]
+                  specs: [spec | specs],
+                  # in case there are multiple definitions for nil arity prefer public ones
+                  kind: if(ti.kind != :typep, do: ti.kind, else: type_info.kind)
               }
           end
 

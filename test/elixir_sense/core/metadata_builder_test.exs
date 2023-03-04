@@ -2914,6 +2914,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
+  test "prefers def over defp for nil arity" do
+    state =
+      """
+      defmodule OuterModule do
+        defp abc(a, b, c), do: a
+        def abc(a), do: a
+        defp abc(a, b), do: a
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert %{
+             {OuterModule, :abc, nil} => %ModFunInfo{type: :def}
+           } = state.mods_funs_to_positions
+  end
+
   test "behaviours" do
     state =
       """
@@ -4677,6 +4694,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                specs: ["@opaque with_args(a, b) :: {a, b}"]
              }
            }
+  end
+
+  test "preferes type over typep for nil arity" do
+    state =
+      """
+      defmodule My do
+        @typep abc(a, b) :: {a, b}
+        @type abc() :: integer
+        @typep abc(a) :: integer
+      end
+      IO.puts("")
+      """
+      |> string_to_state
+
+    assert %{
+             {My, :abc, nil} => %ElixirSense.Core.State.TypeInfo{kind: :type}
+           } = state.types
   end
 
   test "protocol exports type t" do
