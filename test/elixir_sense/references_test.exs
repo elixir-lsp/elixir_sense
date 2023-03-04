@@ -759,6 +759,25 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
+  test "find references of variables in arguments", %{trace: trace} do
+    buffer = """
+    defmodule MyModule do
+      def call(conn) do
+        if true do
+          conn
+        end
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 2, 13, trace)
+
+    assert references == [
+             %{range: %{end: %{column: 16, line: 2}, start: %{column: 12, line: 2}}, uri: nil},
+             %{range: %{end: %{column: 11, line: 4}, start: %{column: 7, line: 4}}, uri: nil}
+           ]
+  end
+
   test "find references for a redefined variable", %{trace: trace} do
     buffer = """
     defmodule MyModule do
