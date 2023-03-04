@@ -13,6 +13,7 @@ defmodule ElixirSense do
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
+  alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Location
   alias ElixirSense.Providers.Definition
   alias ElixirSense.Providers.Docs
@@ -93,11 +94,11 @@ defmodule ElixirSense do
   """
   @spec definition(String.t(), pos_integer, pos_integer) :: Location.t() | nil
   def definition(code, line, column) do
-    case Source.subject(code, line, column) do
+    case Source.subject_with_position(code, line, column) do
       nil ->
         nil
 
-      subject ->
+      {subject, {line, col}} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
         env = Metadata.get_env(buffer_file_metadata, line)
@@ -112,6 +113,7 @@ defmodule ElixirSense do
         Definition.find(
           subject,
           line,
+          col,
           env,
           buffer_file_metadata.mods_funs_to_positions,
           calls,
@@ -411,23 +413,34 @@ defmodule ElixirSense do
 
         env =
           %State.Env{
-            scope_id: scope_id,
-            module: module
+            module: module,
+            vars: vars
           } = Metadata.get_env(buffer_file_metadata, line)
 
         # find last env of current module
         attributes = get_attributes(buffer_file_metadata.lines_to_env, module)
 
-        # in (h|l)?eex templates vars_info_per_scope_id[scope_id] is nil
+        # one line can contain variables from many scopes
         vars =
-          if buffer_file_metadata.vars_info_per_scope_id[scope_id],
-            do: buffer_file_metadata.vars_info_per_scope_id[scope_id] |> Map.values(),
-            else: %{}
+          case Enum.find(vars, fn %VarInfo{positions: positions} -> {line, col} in positions end) do
+            %VarInfo{scope_id: scope_id} ->
+              # in (h|l)?eex templates vars_info_per_scope_id[scope_id] is nil
+              if buffer_file_metadata.vars_info_per_scope_id[scope_id] do
+                buffer_file_metadata.vars_info_per_scope_id[scope_id]
+              else
+                []
+              end
+
+            nil ->
+              []
+          end
 
         arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
 
         References.find(
           subject,
+          line,
+          col,
           arity,
           env,
           vars,

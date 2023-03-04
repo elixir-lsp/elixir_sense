@@ -21,6 +21,7 @@ defmodule ElixirSense.Providers.Definition do
   @spec find(
           String.t(),
           pos_integer,
+          pos_integer,
           State.Env.t(),
           State.mods_funs_to_positions_t(),
           list(State.CallInfo.t()),
@@ -29,6 +30,7 @@ defmodule ElixirSense.Providers.Definition do
   def find(
         subject,
         line,
+        column,
         %State.Env{
           aliases: aliases,
           module: module,
@@ -45,17 +47,27 @@ defmodule ElixirSense.Providers.Definition do
       current_module: module
     }
 
-    var_info =
-      unless subject_is_call?(subject, calls) do
-        vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
+    vars_info =
+      if subject_is_call?(subject, calls) do
+        []
+      else
+        Enum.filter(vars, fn %VarInfo{name: name} -> to_string(name) == subject end)
       end
 
     attribute_info = find_attribute(subject, attributes)
 
     cond do
-      var_info != nil ->
-        %VarInfo{positions: [{line, column} | _]} = var_info
-        %Location{type: :variable, file: nil, line: line, column: column}
+      vars_info != [] ->
+        {definition_line, definition_column} =
+          vars_info
+          |> Enum.find(vars_info, fn %VarInfo{positions: positions} ->
+            {line, column} in positions
+          end)
+          |> then(fn %VarInfo{positions: positions} -> positions end)
+          |> Enum.sort()
+          |> List.first()
+
+        %Location{type: :variable, file: nil, line: definition_line, column: definition_column}
 
       attribute_info != nil ->
         %State.AttributeInfo{positions: [{line, column} | _]} = attribute_info

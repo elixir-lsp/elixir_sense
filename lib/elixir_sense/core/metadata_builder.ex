@@ -207,6 +207,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre_func({type, _, _} = ast, state, %{line: line, col: col}, name, params, options \\ [])
        when is_atom(name) do
+    vars =
+      state
+      |> find_vars(params)
+      |> merge_same_name_vars()
+
     state
     |> new_named_func(name, length(params || []))
     |> add_func_to_index(name, params || [], {line, col}, type, options)
@@ -214,7 +219,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> new_import_scope
     |> new_require_scope
     |> new_func_vars_scope
-    |> add_vars(find_vars(state, params), true)
+    |> add_vars(vars, true)
     |> add_current_env_to_line(line)
     |> result(ast)
   end
@@ -256,6 +261,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end
 
     state
+    |> maybe_move_vars_to_outer_scope
     |> remove_vars_scope
     |> result(ast)
   end
@@ -292,17 +298,23 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> remove_alias_scope
     |> remove_import_scope
     |> remove_require_scope
+    |> maybe_move_vars_to_outer_scope
     |> remove_vars_scope
     |> result(ast)
   end
 
   defp pre_clause({_clause, [line: line, column: _column], _} = ast, state, lhs) do
+    vars =
+      state
+      |> find_vars(lhs, Enum.at(state.binding_context, 0))
+      |> merge_same_name_vars()
+
     state
     |> new_alias_scope
     |> new_import_scope
     |> new_require_scope
     |> new_vars_scope
-    |> add_vars(find_vars(state, lhs, Enum.at(state.binding_context, 0)), true)
+    |> add_vars(vars, true)
     |> add_current_env_to_line(line)
     |> result(ast)
   end
@@ -312,6 +324,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> remove_alias_scope
     |> remove_import_scope
     |> remove_require_scope
+    |> maybe_move_vars_to_outer_scope
     |> remove_vars_scope
     |> result(ast)
   end
@@ -474,8 +487,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params, options)
   end
 
-  defp pre({def_name, meta, [{:when, _, [head | _]}, body]}, state) when def_name in @defs do
-    pre({def_name, meta, [head, body]}, state)
+  # function head with guards
+  defp pre(
+         {def_name, meta,
+          [{:when, _, [{name, [line: line, column: column] = meta2, params}, guards]}, body]},
+         state
+       )
+       when def_name in @defs do
+    ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, guards, body]}
+    pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
   end
 
   defp pre(
@@ -795,6 +815,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_block_keyword(ast, state)
   end
 
+  defp pre({:->, meta, [[{:when, _, [_var, guards]} = lhs], rhs]}, state) do
+    pre_clause({:->, meta, [guards, rhs]}, state, lhs)
+  end
+
   defp pre({:->, meta, [[lhs], rhs]}, state) do
     pre_clause({:->, meta, [:_, rhs]}, state, lhs)
   end
@@ -803,55 +827,37 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_clause({:->, meta, [:_, rhs]}, state, lhs)
   end
 
-  defp pre({atom, [line: line, column: _column] = meta, [lhs, rhs]}, state)
+  defp pre({atom, [line: _line, column: _column] = meta, [lhs, rhs]}, state)
        when atom in [:=, :<-] do
-    match_context_r = get_binding_type(state, rhs)
-
-    match_context_r =
-      if atom == :<- and match?([:for | _], state.binding_context) do
-        {:for_expression, match_context_r}
-      else
-        match_context_r
-      end
-
-    vars_l = find_vars(state, lhs, match_context_r)
-
-    vars =
-      case rhs do
-        {:=, _, [nested_lhs, _nested_rhs]} ->
-          match_context_l = get_binding_type(state, lhs)
-          nested_vars = find_vars(state, nested_lhs, match_context_l)
-
-          vars_l ++ nested_vars
-
-        _ ->
-          vars_l
-      end
-
-    state
-    |> add_vars(vars, true)
-    |> add_current_env_to_line(line)
-    |> result({:=, meta, [:_, rhs]})
+    result(state, {atom, meta, [lhs, rhs]})
   end
 
   defp pre({var_or_call, [line: line, column: column], nil} = ast, state)
        when is_atom(var_or_call) and var_or_call != :__MODULE__ do
     if Enum.any?(get_current_vars(state), &(&1.name == var_or_call)) do
-      state
-      |> add_vars(find_vars(state, ast), false)
+      vars =
+        state
+        |> find_vars(ast)
+        |> merge_same_name_vars()
+
+      add_vars(state, vars, false)
     else
       # pre Elixir 1.4 local call syntax
       # TODO remove on Elixir 2.0
-      state
-      |> add_call_to_line({nil, var_or_call, 0}, {line, column})
-      |> add_current_env_to_line(line)
+      add_call_to_line(state, {nil, var_or_call, 0}, {line, column})
     end
+    |> add_current_env_to_line(line)
     |> result(ast)
   end
 
   defp pre({:when, meta, [lhs, rhs]}, state) do
+    vars =
+      state
+      |> find_vars(lhs)
+      |> merge_same_name_vars()
+
     state
-    |> add_vars(find_vars(state, lhs), true)
+    |> add_vars(vars, true)
     |> result({:when, meta, [:_, rhs]})
   end
 
@@ -1223,6 +1229,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
     post_func(ast, state)
   end
 
+  defp post(
+         {def_name, [line: _line, column: _column], [{name, _, _params}, _guards, _]} = ast,
+         state
+       )
+       when def_name in @defs and is_atom(name) do
+    post_func(ast, state)
+  end
+
   defp post({def_name, _, _} = ast, state) when def_name in @defs do
     {ast, state}
   end
@@ -1252,6 +1266,44 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp post({:->, [line: _line, column: _column], [_lhs, _rhs]} = ast, state) do
     post_clause(ast, state)
+  end
+
+  defp post({atom, [line: line, column: _column], [lhs, rhs]} = ast, state)
+       when atom in [:=, :<-] do
+    match_context_r = get_binding_type(state, rhs)
+
+    match_context_r =
+      if atom == :<- and match?([:for | _], state.binding_context) do
+        {:for_expression, match_context_r}
+      else
+        match_context_r
+      end
+
+    vars_l = find_vars(state, lhs, match_context_r)
+
+    vars =
+      case rhs do
+        {:=, _, [nested_lhs, _nested_rhs]} ->
+          match_context_l = get_binding_type(state, lhs)
+          nested_vars = find_vars(state, nested_lhs, match_context_l)
+
+          vars_l ++ nested_vars
+
+        _ ->
+          vars_l
+      end
+      |> merge_same_name_vars()
+
+    # Variables and calls were added for the left side of the assignment in `pre` call, but without
+    # the context of an assignment. Thus, they have to be removed here. On their place there will
+    # be added new variables having types merged with types of corresponding deleted variables.
+    remove_positions = Enum.flat_map(vars, fn %VarInfo{positions: positions} -> positions end)
+
+    state
+    |> remove_calls(remove_positions)
+    |> merge_new_vars(vars, remove_positions)
+    |> add_current_env_to_line(line)
+    |> result(ast)
   end
 
   # String literal

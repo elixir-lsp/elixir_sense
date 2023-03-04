@@ -27,6 +27,8 @@ defmodule ElixirSense.Providers.References do
   @spec find(
           String.t(),
           non_neg_integer,
+          non_neg_integer,
+          non_neg_integer,
           State.Env.t(),
           [VarInfo.t()],
           [AttributeInfo.t()],
@@ -35,6 +37,8 @@ defmodule ElixirSense.Providers.References do
         ) :: [ElixirSense.Providers.References.reference_info()]
   def find(
         subject,
+        line,
+        column,
         arity,
         %State.Env{
           imports: imports,
@@ -51,7 +55,10 @@ defmodule ElixirSense.Providers.References do
         },
         trace
       ) do
-    var_info = vars |> Enum.find(fn %VarInfo{name: name} -> to_string(name) == subject end)
+    var_info =
+      Enum.find(vars, fn %VarInfo{name: name, positions: positions} ->
+        to_string(name) == subject and {line, column} in positions
+      end)
 
     attribute_info =
       case subject do

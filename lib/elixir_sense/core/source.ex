@@ -395,7 +395,7 @@ defmodule ElixirSense.Core.Source do
   end
 
   defp find_subject(grapheme, rest, line, col, %{pos_found: false, line: line, col: col} = acc) do
-    find_subject(grapheme, rest, line, col, %{acc | pos_found: true})
+    find_subject(grapheme, rest, line, col, %{acc | pos: {line, col - 1}, pos_found: true})
   end
 
   defp find_subject("." = grapheme, rest, _line, _col, %{pos_found: false} = acc) do

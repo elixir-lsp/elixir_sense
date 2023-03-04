@@ -1295,10 +1295,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert_received {:result, list}
 
-    assert list == [
-             %{name: "arg", type: :variable},
-             %{name: "my", type: :variable}
-           ]
+    assert list == [%{name: "arg", type: :variable}]
   end
 
   test "lists params in fn's not finished" do
