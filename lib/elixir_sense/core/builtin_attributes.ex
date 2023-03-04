@@ -16,9 +16,9 @@ defmodule ElixirSense.Core.BuiltinAttributes do
     on_definition
     vsn
     after_compile
+    after_verify
     before_compile
     fallback_to_any
-    since
     type
     typep
     opaque
