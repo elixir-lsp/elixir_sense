@@ -4913,6 +4913,27 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
   end
 
+  test "safely skip code inside `quote do`" do
+    state =
+      """
+      defmodule My do
+        quote do
+          defmodule Some do
+          end
+        end
+        quote unquote: false do
+          defmodule Some do
+          end
+        end
+        quote(do: (defmodule Some, do: :ok))
+        quote([location: :keep], do: (defmodule Some, do: :ok))
+      end
+      """
+      |> string_to_state
+
+    refute Map.has_key?(state.mods_funs_to_positions, {My.Some, nil, nil})
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true)

@@ -487,6 +487,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_func(ast_without_params, state, %{line: line, col: column}, name, params, options)
   end
 
+  # quote do
+  # quote options do
+  defp pre({:quote, _meta, _}, state) do
+    # replace with an empty AST node
+    {[], state}
+  end
+
   # function head with guards
   defp pre(
          {def_name, meta,
