@@ -1446,10 +1446,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       defmodule OuterModule do
         alias List, as: MyList
-        IO.puts ""
+        def a1, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
         defmodule InnerModule do
           alias Enum, as: MyEnum
-          IO.puts ""
+          def a1, do: IO.puts "InnerModule " <> inspect(__ENV__.aliases)
           def func do
             alias String, as: MyString
             IO.puts ""
@@ -1461,36 +1461,59 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           end
           IO.puts ""
         end
-        IO.puts ""
+        def a2, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
         alias Code, as: MyCode
-        IO.puts ""
+        def a3, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
         defmodule AnotherInnerModule do
-          IO.puts ""
+          def a1, do: IO.puts "AnotherInnerModule " <> inspect(__ENV__.aliases)
         end
-        IO.puts ""
+        def a4, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
         defmodule SomeInnerModule.Nested do
-          IO.puts ""
+          def a1, do: IO.puts "SomeInnerModule.Nested " <> inspect(__ENV__.aliases)
         end
-        IO.puts ""
+        def a5, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
       end
       IO.puts ""
       """
       |> string_to_state
 
     assert get_line_aliases(state, 3) == [{MyList, List}]
-    assert get_line_aliases(state, 6) == [{MyList, List}, {MyEnum, Enum}]
-    assert get_line_aliases(state, 9) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
+
+    assert get_line_aliases(state, 6) == [
+             {MyList, List},
+             {InnerModule, OuterModule.InnerModule},
+             {MyEnum, Enum}
+           ]
+
+    assert get_line_aliases(state, 9) == [
+             {MyList, List},
+             {InnerModule, OuterModule.InnerModule},
+             {MyEnum, Enum},
+             {MyString, String}
+           ]
 
     assert get_line_aliases(state, 12) == [
              {MyList, List},
+             {InnerModule, OuterModule.InnerModule},
              {MyEnum, Enum},
              {MyString, String},
              {MyMacro, Macro}
            ]
 
-    assert get_line_aliases(state, 14) == [{MyList, List}, {MyEnum, Enum}, {MyString, String}]
-    assert get_line_aliases(state, 16) == [{MyList, List}, {MyEnum, Enum}]
-    # submodule defines an alias in parent module
+    assert get_line_aliases(state, 14) == [
+             {MyList, List},
+             {InnerModule, OuterModule.InnerModule},
+             {MyEnum, Enum},
+             {MyString, String}
+           ]
+
+    assert get_line_aliases(state, 16) == [
+             {MyList, List},
+             {InnerModule, OuterModule.InnerModule},
+             {MyEnum, Enum}
+           ]
+
+    # submodule defines an implicit alias in parent module
     assert get_line_aliases(state, 18) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}]
 
     assert get_line_aliases(state, 20) == [
@@ -1502,7 +1525,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 22) == [
              {MyList, List},
              {InnerModule, OuterModule.InnerModule},
-             {MyCode, Code}
+             {MyCode, Code},
+             {AnotherInnerModule, OuterModule.AnotherInnerModule}
            ]
 
     assert get_line_aliases(state, 24) == [
@@ -1517,7 +1541,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {MyList, List},
              {InnerModule, OuterModule.InnerModule},
              {MyCode, Code},
-             {AnotherInnerModule, OuterModule.AnotherInnerModule}
+             {AnotherInnerModule, OuterModule.AnotherInnerModule},
+             {SomeInnerModule, OuterModule.SomeInnerModule}
            ]
 
     # submodule Sub0.Sub1.Sub2 is equivalent to alias Sub0
@@ -1530,6 +1555,179 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
 
     assert get_line_aliases(state, 30) == []
+  end
+
+  test "nested module alias" do
+    state =
+      """
+      defmodule Parent.Nested do
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 2) == []
+  end
+
+  test "submodule alias" do
+    state =
+      """
+      defmodule Parent do
+        alias OtherParent.Child
+        IO.puts ""
+        defmodule Some do
+          IO.puts ""
+        end
+        IO.puts ""
+        defmodule Other.One do
+          IO.puts ""
+        end
+        IO.puts ""
+        defprotocol MyProt do
+          def a(t)
+        end
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
+    assert get_line_aliases(state, 5) == [{Child, OtherParent.Child}, {Some, Parent.Some}]
+    assert get_line_aliases(state, 7) == [{Child, OtherParent.Child}, {Some, Parent.Some}]
+
+    assert get_line_aliases(state, 9) == [
+             {Child, OtherParent.Child},
+             {Some, Parent.Some},
+             {Other, Parent.Other}
+           ]
+
+    assert get_line_aliases(state, 11) == [
+             {Child, OtherParent.Child},
+             {Some, Parent.Some},
+             {Other, Parent.Other}
+           ]
+
+    assert get_line_aliases(state, 15) == [
+             {Child, OtherParent.Child},
+             {Some, Parent.Some},
+             {Other, Parent.Other},
+             {MyProt, Parent.MyProt}
+           ]
+  end
+
+  test "submodule alias nested parent" do
+    state =
+      """
+      defmodule Parent.Nested do
+        alias OtherParent.Child
+        IO.puts ""
+        defmodule Some do
+          def a1, do: IO.puts "Some " <> inspect(__ENV__.aliases)
+        end
+        def a1, do: IO.puts "Some " <> inspect(__ENV__.aliases)
+        defmodule Other.One do
+          def a1, do: IO.puts "Other.One " <> inspect(__ENV__.aliases)
+        end
+        def a2, do: IO.puts "Some " <> inspect(__ENV__.aliases)
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
+    assert get_line_aliases(state, 5) == [{Child, OtherParent.Child}, {Some, Parent.Nested.Some}]
+    assert get_line_aliases(state, 7) == [{Child, OtherParent.Child}, {Some, Parent.Nested.Some}]
+
+    assert get_line_aliases(state, 9) == [
+             {Child, OtherParent.Child},
+             {Some, Parent.Nested.Some},
+             {Other, Parent.Nested.Other}
+           ]
+
+    assert get_line_aliases(state, 11) == [
+             {Child, OtherParent.Child},
+             {Some, Parent.Nested.Some},
+             {Other, Parent.Nested.Other}
+           ]
+  end
+
+  # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1459604747
+  test "submodule overwriting alias" do
+    state =
+      """
+      defmodule Parent do
+        alias OtherParent.Child
+        def a1, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
+        defmodule Child do
+          def a2, do: IO.puts "Parent.Child " <> inspect(__ENV__.aliases)
+        end
+        def a3, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
+    assert get_line_aliases(state, 5) == [{Child, Parent.Child}]
+    assert get_line_aliases(state, 7) == [{Child, Parent.Child}]
+  end
+
+  # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1459604747
+  test "nested submodule overwriting alias" do
+    state =
+      """
+      defmodule Parent do
+        alias OtherParent.Child
+        IO.puts ""
+        defmodule Child.One do
+          IO.puts ""
+        end
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
+    assert get_line_aliases(state, 5) == [{Child, Parent.Child}]
+    assert get_line_aliases(state, 7) == [{Child, Parent.Child}]
+  end
+
+  # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
+  test "external submodule overwriting alias" do
+    state =
+      """
+      defmodule Parent do
+        alias OtherParent.Child
+        def a1, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
+        defmodule Elixir.Child do
+          def a2, do: IO.puts "Elixir.Child " <> inspect(__ENV__.aliases)
+        end
+        def a3, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
+    assert get_line_aliases(state, 5) == []
+    assert get_line_aliases(state, 7) == []
+  end
+
+  # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
+  test "nested external submodule overwriting alias" do
+    state =
+      """
+      defmodule Parent do
+        alias OtherParent.Child
+        def a1, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
+        defmodule Elixir.Child.One do
+          def a2, do: IO.puts "Elixir.Child.One " <> inspect(__ENV__.aliases)
+        end
+        def a3, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
+    assert get_line_aliases(state, 5) == [{Child, OtherParent.Child}]
+    assert get_line_aliases(state, 7) == [{Child, OtherParent.Child}]
   end
 
   test "aliases with `fn`" do
@@ -1683,7 +1881,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule A do
         alias Components.{Dialog, Dialog.Footer, Button, :"Elixir.Other"}
         alias Some.{}
-        IO.puts ""
+        def a1, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
       end
       """
       |> string_to_state
@@ -1757,6 +1955,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_aliases(state, 4) == [{User, Foo.User}]
+  end
+
+  test "unalias" do
+    state =
+      """
+      defmodule MyModule do
+        alias Foo.User
+        IO.puts ""
+        alias Elixir.User
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [{User, Foo.User}]
+    assert get_line_aliases(state, 5) == []
   end
 
   test "import with options" do
@@ -2354,8 +2568,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule NiceProtoImplementations do
         defimpl NiceProto, for: String do
           def reverse(term), do: String.reverse(term)
-          IO.puts ""
+          def a3, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
         end
+        def a3, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
 
         defmodule Some do
           defstruct [a: nil]
@@ -2380,6 +2595,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     # protocol implementation module name does not inherit enclosing module, only protocol
     assert get_line_module(state, 8) == NiceProto.String
     assert get_line_protocol(state, 8) == {NiceProto, [String]}
+    assert get_line_aliases(state, 8) == []
+    assert get_line_aliases(state, 10) == []
 
     # properly gets implementation name inherited from enclosing module
     assert get_line_module(state, 16) == NiceProto.NiceProtoImplementations.Some
@@ -3716,9 +3933,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              %AttributeInfo{name: :my_attribute, positions: [{2, 3}]}
            ]
 
-    # FIXME `defdelegate` inside `__using__/1` macro is not supported
-    # FIXME only submodules defined at top level are supported in `__using__/1`
-    # FIXME submofule func and macro extraction is not supported in `__using__/1`
+    # `defdelegate` inside `__using__/1` macro is not supported
+    # only submodules defined at top level are supported in `__using__/1`
+    # submofule func and macro extraction is not supported in `__using__/1`
 
     assert %{
              {InheritMod, :handle_call, 3} => %ModFunInfo{

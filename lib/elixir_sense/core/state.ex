@@ -585,7 +585,7 @@ defmodule ElixirSense.Core.State do
     |> Enum.map(&Module.concat/1)
   end
 
-  def new_namespace(%__MODULE__{} = state, module) do
+  def add_namespace(%__MODULE__{} = state, module) do
     # TODO refactor to allow {:implementation, protocol, [implementations]} in scope
     module = escape_protocol_impementations(module)
 
@@ -621,26 +621,11 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | namespace: [namespace | state.namespace], scopes: [scopes | state.scopes]}
   end
 
-  def remove_module_from_namespace(%__MODULE__{} = state, module) do
-    namespace = state.namespace |> hd
-    module = escape_protocol_impementations(module)
+  def remove_namespace(%__MODULE__{} = state) do
     outer_mods = state.namespace |> tl
     outer_scopes = state.scopes |> tl
 
-    state = %{state | namespace: outer_mods, scopes: outer_scopes}
-
-    if length(outer_scopes) > 1 and state.protocols |> hd == [] and is_list(module) do
-      # submodule defined, create alias in outer module namespace
-
-      # take only outermost submodule part as deeply nested submodules do not create aliases
-      alias = module |> Enum.take(1) |> Module.concat()
-      expanded = namespace |> Enum.drop(length(module) - 1) |> Enum.reverse()
-
-      state
-      |> add_alias({alias, expanded})
-    else
-      state
-    end
+    %{state | namespace: outer_mods, scopes: outer_scopes}
   end
 
   def new_named_func(%__MODULE__{} = state, name, arity) do
@@ -1325,5 +1310,32 @@ defmodule ElixirSense.Core.State do
       |> Enum.reject(fn var_info -> is_nil(var_info) end)
 
     [current_scope_vars, vars_to_move ++ outer_scope_vars | other_scopes_vars]
+  end
+
+  def alias_submodule(%__MODULE__{} = state, module) do
+    module = escape_protocol_impementations(module)
+
+    if length(state.namespace) > 2 and is_list(module) and state.protocols |> hd == [] do
+      namespace = state.namespace |> hd
+
+      {alias, expanded} =
+        case module do
+          [Elixir, alias] ->
+            # an edge case with external submodule `Elixir.Some`
+            # this ends up removing unaliasing `Some`
+            # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
+            {Module.concat([alias]), [Elixir, alias]}
+
+          _ ->
+            alias = module |> Enum.take(1) |> Module.concat()
+            expanded = namespace |> Enum.slice((length(module) - 1)..-2) |> Enum.reverse()
+            {alias, expanded}
+        end
+
+      state
+      |> add_alias({alias, expanded})
+    else
+      state
+    end
   end
 end
