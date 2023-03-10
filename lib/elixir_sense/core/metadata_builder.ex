@@ -75,11 +75,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state =
       state
       |> maybe_add_protocol_implementation(module)
-      |> new_namespace(module)
+      |> add_namespace(module)
       |> add_current_module_to_index(position)
+      |> alias_submodule(module)
+      |> new_alias_scope
       |> new_attributes_scope
       |> new_behaviours_scope
-      |> new_alias_scope
       |> new_import_scope
       |> new_require_scope
       |> new_vars_scope
@@ -120,7 +121,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> remove_import_scope
     |> remove_require_scope
     |> remove_vars_scope
-    |> remove_module_from_namespace(module)
+    |> remove_namespace
     |> remove_protocol_implementation
     |> result(ast)
   end
