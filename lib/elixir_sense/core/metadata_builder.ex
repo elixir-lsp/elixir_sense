@@ -112,8 +112,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp post_module(ast, state, module) do
-    module = normalize_module(module)
-
     state
     |> remove_attributes_scope
     |> remove_behaviours_scope
