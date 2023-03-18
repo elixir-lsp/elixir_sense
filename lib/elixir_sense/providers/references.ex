@@ -177,8 +177,10 @@ defmodule ElixirSense.Providers.References do
   defp build_location(call) do
     %{callee: {_, func, _}} = call
 
+    line = call.line || 1
+
     {start_column, end_column} =
-      if call.column != nil do
+      if call.line != nil and call.column != nil do
         func_length = func |> to_string() |> String.length()
         {call.column, call.column + func_length}
       else
@@ -188,8 +190,8 @@ defmodule ElixirSense.Providers.References do
     %{
       uri: call.file,
       range: %{
-        start: %{line: call.line, column: start_column},
-        end: %{line: call.line, column: end_column}
+        start: %{line: line, column: start_column},
+        end: %{line: line, column: end_column}
       }
     }
   end

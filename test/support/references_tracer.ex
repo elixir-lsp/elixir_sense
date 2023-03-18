@@ -28,9 +28,21 @@ defmodule ElixirSense.Core.References.Tracer do
   end
 
   def trace({kind, meta, module, name, arity}, env)
-      when kind in [:imported_function, :imported_macro, :remote_function, :remote_macro] do
+      when kind in [:remote_function, :remote_macro] do
     register_call(%{
       callee: {module, name, arity},
+      file: env.file |> Path.relative_to_cwd(),
+      line: meta[:line],
+      column: meta[:column]
+    })
+
+    :ok
+  end
+
+  def trace({kind, meta, name, arity}, env)
+      when kind in [:local_function, :local_macro] do
+    register_call(%{
+      callee: {env.module, name, arity},
       file: env.file |> Path.relative_to_cwd(),
       line: meta[:line],
       column: meta[:column]
