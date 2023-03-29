@@ -1045,7 +1045,7 @@ defmodule ElixirSense.Core.State do
     var_name_as_string = Atom.to_string(var_name)
 
     vars_from_scope =
-      case {is_definition, is_var_defined, var_name_as_string} do
+      case {is_definition and var_info.is_definition, is_var_defined, var_name_as_string} do
         {_, _, "_" <> _} ->
           vars_from_scope
 

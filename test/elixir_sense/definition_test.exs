@@ -679,6 +679,56 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
+  test "find difinition of a variable when using pin operator" do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(a, b) do
+        case a do
+          ^b -> b
+          %{b: ^b} = a -> b
+        end
+      end
+    end
+    """
+
+    # `b`
+    assert ElixirSense.definition(buffer, 4, 8) == %Location{
+             type: :variable,
+             file: nil,
+             line: 2,
+             column: 17
+           }
+
+    assert ElixirSense.definition(buffer, 4, 13) == %Location{
+             type: :variable,
+             file: nil,
+             line: 2,
+             column: 17
+           }
+
+    assert ElixirSense.definition(buffer, 5, 13) == %Location{
+             type: :variable,
+             file: nil,
+             line: 2,
+             column: 17
+           }
+
+    assert ElixirSense.definition(buffer, 5, 23) == %Location{
+             type: :variable,
+             file: nil,
+             line: 2,
+             column: 17
+           }
+
+    # `a` redifined in a case clause
+    assert ElixirSense.definition(buffer, 5, 18) == %Location{
+             type: :variable,
+             file: nil,
+             line: 5,
+             column: 18
+           }
+  end
+
   test "find definition of attributes" do
     buffer = """
     defmodule MyModule do
