@@ -226,10 +226,10 @@ defmodule ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl do
   def foo(), do: :ok
 
   @impl true
-  def baz(a), do: :ok
+  def baz(_a), do: :ok
 
   @impl true
-  defmacro bar(b), do: quote(do: :ok)
+  defmacro bar(_b), do: quote(do: :ok)
 end
 
 defmodule ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl do
@@ -237,9 +237,9 @@ defmodule ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl do
 
   def foo(), do: :ok
 
-  def baz(a), do: :ok
+  def baz(_a), do: :ok
 
-  defmacro bar(b), do: quote(do: :ok)
+  defmacro bar(_b), do: quote(do: :ok)
 end
 
 defmodule ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang do

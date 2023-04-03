@@ -4006,7 +4006,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [
                  [
                    {:b, _, ElixirSenseExample.ExampleBehaviour},
-                   {:\\, [keep: {"test/support/example_behaviour.ex", 121}],
+                   {:\\, _,
                     [
                       {:a, _, ElixirSenseExample.ExampleBehaviour},
                       "def"

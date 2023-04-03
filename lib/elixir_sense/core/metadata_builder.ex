@@ -111,7 +111,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp post_module(ast, state, module) do
+  defp post_module(ast, state) do
     state
     |> remove_attributes_scope
     |> remove_behaviours_scope
@@ -131,7 +131,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_module(ast, state, position, module, @protocol_types, @protocol_functions)
   end
 
-  def post_protocol(ast, state, module) do
+  def post_protocol(ast, state) do
     # turn specs into callbacks or create dummy callbacks
     builtins = BuiltinFunctions.all() |> Keyword.keys()
 
@@ -201,7 +201,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end)
 
     state = %{state | specs: specs}
-    post_module(ast, state, module)
+    post_module(ast, state)
   end
 
   defp pre_func({type, _, _} = ast, state, %{line: line, col: col}, name, params, options \\ [])
@@ -1205,29 +1205,29 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, state}
   end
 
-  defp post({:defmodule, _, [{:__aliases__, _, module}, _]} = ast, state) do
-    post_module(ast, state, module)
+  defp post({:defmodule, _, [{:__aliases__, _, _}, _]} = ast, state) do
+    post_module(ast, state)
   end
 
   defp post({:defmodule, _, [module, _]} = ast, state) when is_atom(module) do
-    post_module(ast, state, module)
+    post_module(ast, state)
   end
 
-  defp post({:defprotocol, _, [{:__aliases__, _, module}, _]} = ast, state) do
-    post_protocol(ast, state, module)
+  defp post({:defprotocol, _, [{:__aliases__, _, _}, _]} = ast, state) do
+    post_protocol(ast, state)
   end
 
   defp post({:defprotocol, _, [module, _]} = ast, state) when is_atom(module) do
-    post_protocol(ast, state, module)
+    post_protocol(ast, state)
   end
 
-  defp post({:defimpl, _, [{:__aliases__, _, protocol}, [for: implementations], _]} = ast, state) do
-    post_protocol_implementation(ast, state, protocol, implementations)
+  defp post({:defimpl, _, [{:__aliases__, _, _}, [for: _implementations], _]} = ast, state) do
+    post_module(ast, state)
   end
 
-  defp post({:defimpl, _, [protocol, [for: implementations], _]} = ast, state)
+  defp post({:defimpl, _, [protocol, [for: _implementations], _]} = ast, state)
        when is_atom(protocol) do
-    post_protocol_implementation(ast, state, protocol, implementations)
+    post_module(ast, state)
   end
 
   defp post({def_name, [line: _line, column: _column], [{name, _, _params}, _]} = ast, state)
@@ -1690,12 +1690,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     implementations = get_implementations_from_for_expression(state, for_expression)
 
     pre_module(ast, state, position, {protocol, implementations}, [], [{:__impl__, [:atom], :def}])
-  end
-
-  defp post_protocol_implementation(ast, state, protocol, for_expression) do
-    implementations = get_implementations_from_for_expression(state, for_expression)
-
-    post_module(ast, state, {protocol, implementations})
   end
 
   defp get_implementations_from_for_expression(state, for: for_expression) do
