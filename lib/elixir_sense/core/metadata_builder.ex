@@ -1336,7 +1336,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp find_vars(_state, {var, [line: line, column: column], nil}, :rescue) when is_atom(var) do
     match_context = {:struct, [], {:atom, Exception}, nil}
-    [%VarInfo{name: var, positions: [{line, column}], type: match_context}]
+    [%VarInfo{name: var, positions: [{line, column}], type: match_context, is_definition: true}]
   end
 
   defp find_vars(state, ast, match_context) do
@@ -1397,11 +1397,27 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp match_var(
          _state,
+         {:^, _meta, [{var, [line: line, column: column], nil}]},
+         {vars, match_context} = ast
+       )
+       when is_atom(var) do
+    var_info = %VarInfo{name: var, positions: [{line, column}], type: match_context}
+    {ast, {[var_info | vars], nil}}
+  end
+
+  defp match_var(
+         _state,
          {var, [line: line, column: column], nil} = ast,
          {vars, match_context}
        )
        when is_atom(var) do
-    var_info = %VarInfo{name: var, positions: [{line, column}], type: match_context}
+    var_info = %VarInfo{
+      name: var,
+      positions: [{line, column}],
+      type: match_context,
+      is_definition: true
+    }
+
     {ast, {[var_info | vars], nil}}
   end
 

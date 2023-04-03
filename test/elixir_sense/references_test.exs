@@ -949,6 +949,41 @@ defmodule ElixirSense.Providers.ReferencesTest do
     assert ElixirSense.references(buffer, 3, 5, trace) == expected_references
   end
 
+  test "find references of a variable when using pin operator", %{trace: trace} do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(a, b) do
+        case a do
+          ^b -> b
+          %{b: ^b} = a -> b
+        end
+      end
+    end
+    """
+
+    # `b`
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 2, column: 17}, end: %{line: 2, column: 18}}},
+      %{uri: nil, range: %{start: %{line: 4, column: 8}, end: %{line: 4, column: 9}}},
+      %{uri: nil, range: %{start: %{line: 4, column: 13}, end: %{line: 4, column: 14}}},
+      %{uri: nil, range: %{start: %{line: 5, column: 13}, end: %{line: 5, column: 14}}},
+      %{uri: nil, range: %{start: %{line: 5, column: 23}, end: %{line: 5, column: 24}}}
+    ]
+
+    assert ElixirSense.references(buffer, 2, 17, trace) == expected_references
+    assert ElixirSense.references(buffer, 4, 8, trace) == expected_references
+    assert ElixirSense.references(buffer, 4, 13, trace) == expected_references
+    assert ElixirSense.references(buffer, 5, 13, trace) == expected_references
+    assert ElixirSense.references(buffer, 5, 23, trace) == expected_references
+
+    # `a` redefined in a case clause
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 5, column: 18}, end: %{line: 5, column: 19}}}
+    ]
+
+    assert ElixirSense.references(buffer, 5, 18, trace) == expected_references
+  end
+
   test "find references of attributes", %{trace: trace} do
     buffer = """
     defmodule MyModule do
