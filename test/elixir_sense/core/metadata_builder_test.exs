@@ -1813,6 +1813,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
   end
 
+  test "aliases with __MODULE__ when module has parts" do
+    state =
+      """
+      defmodule MyModule.Sub do
+        alias __MODULE__
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert get_line_aliases(state, 3) == [
+             {Sub, MyModule.Sub}
+           ]
+  end
+
   test "aliases of aliases" do
     ElixirSense.Core.Source.split_module_and_func("Elixir.Keyword", CurrentMod, [
       {Keyword, My.Mod}

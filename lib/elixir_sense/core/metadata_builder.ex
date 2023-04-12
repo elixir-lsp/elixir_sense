@@ -766,6 +766,29 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_alias(ast, state, line, alias_tuple)
   end
 
+  # alias for __MODULE__
+  defp pre(
+         {:alias, [line: line, column: column], [{:__MODULE__, _, nil}, []]} = ast,
+         state
+       ) do
+    module = get_current_module(state)
+
+    if module == Elixir do
+      {[], state}
+    else
+      case Module.split(module) |> Enum.reverse() do
+        [_] ->
+          # alias __MODULE__ is a noop when module has 1 part
+          {[], state}
+
+        [last | _] ->
+          alias_tuple = alias_tuple(module, Module.concat([last]))
+          state = add_first_alias_positions(state, line, column)
+          pre_alias(ast, state, line, alias_tuple)
+      end
+    end
+  end
+
   # alias for submodule of __MODULE__ with `as` option
   defp pre(
          {:alias, [line: line, column: column], [{:__MODULE__, _, nil}, [as: alias_expression]]} =
