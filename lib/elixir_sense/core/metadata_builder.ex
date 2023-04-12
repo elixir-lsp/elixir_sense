@@ -1125,9 +1125,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state
     |> new_named_func(name, 1)
-    |> add_func_to_index(name, [{:\\, :args, []}], {line, column}, type, options)
+    |> add_func_to_index(name, [{:\\, [], [{:args, [], nil}, []]}], {line, column}, type, options)
     |> new_named_func(name, 2)
-    |> add_func_to_index(name, [:record, :args], {line, column}, type, options)
+    |> add_func_to_index(
+      name,
+      [{:record, [], nil}, {:args, [], nil}],
+      {line, column},
+      type,
+      options
+    )
     |> add_call_to_line({Module.concat(module), call, length(params)}, {line, column + 1})
     |> add_current_env_to_line(line)
     |> result(ast)

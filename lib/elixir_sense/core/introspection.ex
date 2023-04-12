@@ -428,7 +428,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp get_metadata_entry_md({:implementing, module}) do
-    "**Implementing behaviour**\n#{module}"
+    "**Implementing behaviour**\n#{inspect(module)}"
   end
 
   defp get_metadata_entry_md({:optional, true}) do

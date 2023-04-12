@@ -953,7 +953,7 @@ defmodule ElixirSense.DocsTest do
            > ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.foo()
 
            **Implementing behaviour**
-           Elixir.ElixirSenseExample.ExampleBehaviourWithDoc
+           ElixirSenseExample.ExampleBehaviourWithDoc
 
            ### Specs
 
@@ -986,7 +986,7 @@ defmodule ElixirSense.DocsTest do
            > ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.baz(a)
 
            **Implementing behaviour**
-           Elixir.ElixirSenseExample.ExampleBehaviourWithDoc
+           ElixirSenseExample.ExampleBehaviourWithDoc
 
            ### Specs
 
@@ -1019,7 +1019,7 @@ defmodule ElixirSense.DocsTest do
            > ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.bar(b)
 
            **Implementing behaviour**
-           Elixir.ElixirSenseExample.ExampleBehaviourWithDoc
+           ElixirSenseExample.ExampleBehaviourWithDoc
 
            ### Specs
 
@@ -1050,7 +1050,7 @@ defmodule ElixirSense.DocsTest do
            > :file_server.init(term)
 
            **Implementing behaviour**
-           gen_server
+           :gen_server
 
            ### Specs
 
@@ -1083,7 +1083,7 @@ defmodule ElixirSense.DocsTest do
              > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(_)
 
              **Implementing behaviour**
-             gen_statem
+             :gen_statem
              **Since**
              OTP 19.0
 

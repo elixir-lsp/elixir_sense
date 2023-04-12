@@ -5073,12 +5073,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert %{
              {MyRecords, :user, 1} => %ModFunInfo{
-               params: [[{:\\, :args, []}]],
+               params: [[{:\\, [], [{:args, [], nil}, []]}]],
                positions: [{3, 9}],
                type: :defmacro
              },
              {MyRecords, :user, 2} => %ModFunInfo{
-               params: [[:record, :args]],
+               params: [[{:record, [], nil}, {:args, [], nil}]],
                positions: [{3, 9}],
                type: :defmacro
              },

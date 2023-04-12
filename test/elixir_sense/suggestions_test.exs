@@ -3597,6 +3597,126 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.map(& &1.name)
   end
 
+  test "records from metadata" do
+    buffer = """
+    defmodule SomeSchema do
+      require Record
+      Record.defrecord(:user, name: "john", age: 25)
+      @type user :: record(:user, name: String.t(), age: integer)
+
+      def d() do
+        w = us
+      end
+    end
+    """
+
+    suggestions = ElixirSense.suggestions(buffer, 7, 11)
+
+    assert [
+             %{
+               args: "args \\\\ []",
+               arity: 0,
+               name: "user",
+               summary: "",
+               type: :macro,
+               args_list: ["args \\\\ []"],
+               def_arity: 1,
+               metadata: %{},
+               origin: "SomeSchema",
+               snippet: nil,
+               spec: "",
+               visibility: :public
+             },
+             %{
+               args: "args \\\\ []",
+               arity: 1,
+               name: "user",
+               summary: "",
+               type: :macro,
+               args_list: ["args \\\\ []"],
+               def_arity: 1,
+               metadata: %{},
+               origin: "SomeSchema",
+               snippet: nil,
+               spec: "",
+               visibility: :public
+             },
+             %{
+               args: "record, args",
+               args_list: ["record", "args"],
+               arity: 2,
+               def_arity: 2,
+               metadata: %{},
+               name: "user",
+               origin: "SomeSchema",
+               snippet: nil,
+               spec: "",
+               summary: "",
+               type: :macro,
+               visibility: :public
+             }
+           ] = suggestions |> Enum.filter(&(&1.name == "user"))
+  end
+
+  test "records from introspection" do
+    buffer = """
+    defmodule SomeSchema do
+      require ElixirSenseExample.ModuleWithRecord, as: M
+
+      def d() do
+        w = M.us
+      end
+    end
+    """
+
+    suggestions = ElixirSense.suggestions(buffer, 5, 12)
+
+    assert [
+             %{
+               args: "args \\\\ []",
+               arity: 0,
+               name: "user",
+               summary: "",
+               type: :macro,
+               args_list: ["args \\\\ []"],
+               def_arity: 1,
+               metadata: %{},
+               origin: "ElixirSenseExample.ModuleWithRecord",
+               snippet: nil,
+               spec: "",
+               visibility: :public
+             },
+             %{
+               args: "args \\\\ []",
+               arity: 1,
+               name: "user",
+               summary: "",
+               type: :macro,
+               args_list: ["args \\\\ []"],
+               def_arity: 1,
+               metadata: %{},
+               origin: "ElixirSenseExample.ModuleWithRecord",
+               snippet: nil,
+               spec: "",
+               visibility: :public
+             },
+             %{
+               args: "record, args",
+               args_list: ["record", "args"],
+               arity: 2,
+               def_arity: 2,
+               metadata: %{},
+               name: "user",
+               origin: "ElixirSenseExample.ModuleWithRecord",
+               snippet: nil,
+               spec: "",
+               summary: "",
+               type: :macro,
+               visibility: :public
+             }
+           ] = suggestions |> Enum.filter(&(&1.name == "user"))
+  end
+
   defp suggestions_by_type(type, buffer) do
     {line, column} = get_last_line_and_column(buffer)
     suggestions_by_type(type, buffer, line, column)
