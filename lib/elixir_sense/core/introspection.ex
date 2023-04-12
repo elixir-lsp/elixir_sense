@@ -374,6 +374,7 @@ defmodule ElixirSense.Core.Introspection do
   def get_metadata_md(metadata) do
     text =
       metadata
+      |> Enum.sort()
       |> Enum.map(&get_metadata_entry_md/1)
       |> Enum.reject(&is_nil/1)
       |> Enum.join("\n")

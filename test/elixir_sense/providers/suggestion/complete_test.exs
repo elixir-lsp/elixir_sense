@@ -51,9 +51,9 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "erlang module multiple values completion" do
-    list = expand(':user')
-    assert list |> Enum.find(&(&1.name == ":user"))
-    assert list |> Enum.find(&(&1.name == ":user_drv"))
+    list = expand(':logger')
+    assert list |> Enum.find(&(&1.name == ":logger"))
+    assert list |> Enum.find(&(&1.name == ":logger_proxy"))
   end
 
   test "erlang root completion" do
