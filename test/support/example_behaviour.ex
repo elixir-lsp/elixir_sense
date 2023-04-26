@@ -101,7 +101,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       alias :ets, as: Ets
       alias MyModule.{One, Two.Three}
       alias MyModule.{Four}
-      alias :lists
+      # alias :lists
       alias Elixir.Three.OutsideOfMyModule
       require MyMacros
       require MyMacros.Nested, as: NestedMacros
