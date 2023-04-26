@@ -6,11 +6,11 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
   doctest Definition
 
-  test "dont crash on empty buffer" do
+  test "don't crash on empty buffer" do
     refute ElixirSense.definition("", 1, 1)
   end
 
-  test "dont error on __MODULE__ when no module" do
+  test "don't error on __MODULE__ when no module" do
     refute ElixirSense.definition("__MODULE__", 1, 1)
   end
 
