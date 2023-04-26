@@ -494,8 +494,10 @@ defmodule ElixirSense.Core.State do
 
     info_type =
       if fun != nil and arity == nil and
-           current_info.type not in [nil, :defp, :defmacrop, :defguardp] do
+           current_info.type not in [nil, :defp, :defmacrop, :defguardp] and
+           not match?({true, _}, current_info.overridable) do
         # in case there are multiple definitions for nil arity prefer public ones
+        # unless this is an overridable def
         current_info.type
       else
         type
@@ -694,6 +696,31 @@ defmodule ElixirSense.Core.State do
       acc
       |> add_mod_fun_to_position({variant, func, arity}, position, params, type, options)
       |> add_mod_fun_to_position({variant, func, nil}, position, params, type, options)
+    end)
+  end
+
+  def make_overridable(%__MODULE__{} = state, fa_list, overridable_module) do
+    module = get_current_module(state)
+
+    mods_funs_to_positions =
+      fa_list
+      |> Enum.reduce(state.mods_funs_to_positions, fn {f, a}, mods_funs_to_positions_acc ->
+        if Map.has_key?(mods_funs_to_positions_acc, {module, f, a}) do
+          mods_funs_to_positions_acc
+          |> make_def_overridable({module, f, a}, overridable_module)
+          |> make_def_overridable({module, f, nil}, overridable_module)
+        else
+          # Some behaviour callbacks can be not implemented by __using__ macro
+          mods_funs_to_positions_acc
+        end
+      end)
+
+    %__MODULE__{state | mods_funs_to_positions: mods_funs_to_positions}
+  end
+
+  defp make_def_overridable(mods_funs_to_positions, mfa, overridable_module) do
+    update_in(mods_funs_to_positions[mfa], fn mod_fun_info = %ModFunInfo{} ->
+      %ModFunInfo{mod_fun_info | overridable: {true, overridable_module}}
     end)
   end
 

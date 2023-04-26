@@ -6,35 +6,35 @@ defmodule ElixirSense.Providers.ImplementationTest do
 
   doctest Implementation
 
-  test "dont crash on empty buffer" do
+  test "don't crash on empty buffer" do
     assert [] == ElixirSense.implementations("", 1, 1)
   end
 
-  test "dont error on __MODULE__ when no module" do
+  test "don't error on __MODULE__ when no module" do
     assert [] == ElixirSense.implementations("__MODULE__", 1, 1)
   end
 
-  test "dont error on Elixir" do
+  test "don't error on Elixir" do
     assert [] == ElixirSense.implementations("Elixir", 1, 1)
   end
 
-  test "dont error on not existing module" do
+  test "don't error on not existing module" do
     assert [] == ElixirSense.implementations("SomeNotExistingMod", 1, 1)
   end
 
-  test "dont error on non behaviour module" do
+  test "don't error on non behaviour module" do
     assert [] == ElixirSense.implementations("ElixirSenseExample.EmptyModule", 1, 32)
   end
 
-  test "dont error on erlang function calls" do
+  test "don't error on erlang function calls" do
     assert [] == ElixirSense.implementations(":ets.new", 1, 8)
   end
 
-  test "dont return implementations for non callback functions on behaviour" do
+  test "don't return implementations for non callback functions on behaviour" do
     assert [] == ElixirSense.implementations("GenServer.start_link", 1, 12)
   end
 
-  test "dont error on non behaviour module function" do
+  test "don't error on non behaviour module function" do
     buffer = """
     defmodule ElixirSenseExample.EmptyModule do
       def abc(), do: :ok
@@ -44,7 +44,7 @@ defmodule ElixirSense.Providers.ImplementationTest do
     assert [] == ElixirSense.implementations(buffer, 2, 8)
   end
 
-  test "dont error on builtin macro" do
+  test "don't error on builtin macro" do
     buffer = """
     defmodule ElixirSenseExample.EmptyModule do
       def abc(), do: :ok

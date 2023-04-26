@@ -707,4 +707,8 @@ defmodule ElixirSense.Core.TypeInfo do
       |> String.to_atom()
     end)
   end
+
+  def typespec_to_string(kind, spec) do
+    "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
+  end
 end

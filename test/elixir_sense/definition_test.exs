@@ -6,11 +6,11 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
   doctest Definition
 
-  test "dont crash on empty buffer" do
+  test "don't crash on empty buffer" do
     refute ElixirSense.definition("", 1, 1)
   end
 
-  test "dont error on __MODULE__ when no module" do
+  test "don't error on __MODULE__ when no module" do
     refute ElixirSense.definition("__MODULE__", 1, 1)
   end
 
@@ -1176,6 +1176,34 @@ defmodule ElixirSense.Providers.DefinitionTest do
   test "find super inside overridable callback" do
     buffer = """
     defmodule MyModule do
+      use ElixirSenseExample.OverridableImplementation
+
+      def foo do
+        super()
+      end
+
+      defmacro bar(any) do
+        super(any)
+      end
+    end
+    """
+
+    assert %Location{type: :macro, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 5, 6)
+
+    assert file =~ "elixir_sense/test/support/overridable_function.ex"
+    assert read_line(file, {line, column}) =~ "__using__(_opts)"
+
+    assert %Location{type: :macro, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 9, 6)
+
+    assert file =~ "elixir_sense/test/support/overridable_function.ex"
+    assert read_line(file, {line, column}) =~ "__using__(_opts)"
+  end
+
+  test "find super inside overridable callback when module is compiled" do
+    buffer = """
+    defmodule ElixirSenseExample.OverridableImplementation.Overrider do
       use ElixirSenseExample.OverridableImplementation
 
       def foo do

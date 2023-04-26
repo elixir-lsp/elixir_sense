@@ -1009,7 +1009,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   # This function is used only for protocols so no macros
-  # and we dont expect docs to be nil
+  # and we don't expect docs to be nil
   def module_functions_info(module) do
     docs = NormalizedCode.get_docs(module, :docs) || []
     specs = TypeInfo.get_module_specs(module)
