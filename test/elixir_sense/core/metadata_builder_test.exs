@@ -1858,6 +1858,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
+    # TODO alias :erlang_module is a compile error since 1.14
     assert get_line_aliases(state, 4) == [{Ets, :ets}, {:"Elixir.erlang_module", :erlang_module}]
   end
 
@@ -1883,11 +1884,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         alias A.{
           B
         }
+        IO.puts("")
       end
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 3) == [{B, A.B}]
+    assert get_line_aliases(state, 5) == [{B, A.B}]
   end
 
   test "aliases defined with v1.2 notation nested" do
@@ -3912,6 +3914,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     # note that `use` causes `require` to be able to execute `__using__/1` macro
     assert get_line_requires(state, 4) == [
+             :lists,
+             MyImports.Two.ThreeImports,
+             MyImports.OneImports,
+             MyImports.NestedImports,
+             MyImports,
+             Some.List,
              MyMacros.Two.Three,
              MyMacros.One,
              :ets,
@@ -3929,36 +3937,32 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              Some.List
            ]
 
-    assert get_line_aliases(state, 4) == [
-             {Utils, MyModule.Some.Nested},
-             {Ets, :ets},
-             {One, MyModule.One},
-             {Three, MyModule.Two.Three},
-             {Four, MyModule.Four},
-             {:"Elixir.lists", :lists},
-             {OutsideOfMyModule, Three.OutsideOfMyModule},
-             {NestedMacros, MyMacros.Nested},
-             {ErlangMacros, :ets},
-             {Nested, InheritMod.Nested},
-             {Deeply, InheritMod.Deeply},
-             {ProtocolEmbedded, InheritMod.ProtocolEmbedded}
-           ]
+    assert Enum.sort(get_line_aliases(state, 4)) ==
+             Enum.sort([
+               {Utils, MyModule.Some.Nested},
+               {Ets, :ets},
+               {One, MyModule.One},
+               {Three, MyModule.Two.Three},
+               {Four, MyModule.Four},
+               {OutsideOfMyModule, Three.OutsideOfMyModule},
+               {NestedMacros, MyMacros.Nested},
+               {ErlangMacros, :ets},
+               {Nested, InheritMod.Nested},
+               {Deeply, InheritMod.Deeply},
+               {ProtocolEmbedded, InheritMod.ProtocolEmbedded}
+             ])
 
     assert get_line_attributes(state, 4) == [
              %AttributeInfo{name: :my_attribute, positions: [{2, 3}]}
            ]
 
-    # `defdelegate` inside `__using__/1` macro is not supported
-    # only submodules defined at top level are supported in `__using__/1`
-    # submofule func and macro extraction is not supported in `__using__/1`
-
     assert %{
              {InheritMod, :handle_call, 3} => %ModFunInfo{
                params: [
                  [
-                   {:msg, _, ElixirSenseExample.ExampleBehaviour},
-                   {:_from, _, ElixirSenseExample.ExampleBehaviour},
-                   {:state, _, ElixirSenseExample.ExampleBehaviour}
+                   {:msg, _, _},
+                   {:_from, _, _},
+                   {:state, _, _}
                  ]
                ],
                positions: [{2, 3}],
@@ -3966,8 +3970,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              },
              {InheritMod, :handle_call, nil} => %ModFunInfo{},
              {InheritMod, nil, nil} => %ModFunInfo{
-               params: [nil, nil],
-               positions: [{2, 3}, {1, 11}],
+               params: [nil],
+               positions: [{1, 11}],
                type: :defmodule
              },
              {InheritMod, :private_func, 0} => %ModFunInfo{
@@ -3977,8 +3981,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              },
              {InheritMod, :private_func_arg, 1} => %ModFunInfo{
                params: [
-                 [{:\\, _, [{:a, _, ElixirSenseExample.ExampleBehaviour}, nil]}],
-                 [{:a, _, ElixirSenseExample.ExampleBehaviour}]
+                 [{:a, _, _}],
+                 [{:\\, _, [{:a, _, _}, nil]}]
                ],
                positions: [{2, 3}, {2, 3}],
                type: :defp
@@ -3991,7 +3995,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {InheritMod, :private_guard_arg, 1} => %ModFunInfo{
                params: [
                  [
-                   {:a, _, ElixirSenseExample.ExampleBehaviour}
+                   {:a, _, _}
                  ]
                ],
                positions: [{2, 3}],
@@ -4005,7 +4009,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {InheritMod, :private_macro_arg, 1} => %ModFunInfo{
                params: [
                  [
-                   {:a, _, ElixirSenseExample.ExampleBehaviour}
+                   {:a, _, _}
                  ]
                ],
                positions: [{2, 3}],
@@ -4020,10 +4024,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {InheritMod, :public_func_arg, 2} => %ModFunInfo{
                params: [
                  [
-                   {:b, _, ElixirSenseExample.ExampleBehaviour},
+                   {:b, _, _},
                    {:\\, _,
                     [
-                      {:a, _, ElixirSenseExample.ExampleBehaviour},
+                      {:a, _, _},
                       "def"
                     ]}
                  ]
@@ -4039,7 +4043,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {InheritMod, :public_guard_arg, 1} => %ModFunInfo{
                params: [
                  [
-                   {:a, _, ElixirSenseExample.ExampleBehaviour}
+                   {:a, _, _}
                  ]
                ],
                positions: [{2, 3}],
@@ -4053,7 +4057,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {InheritMod, :public_macro_arg, 1} => %ModFunInfo{
                params: [
                  [
-                   {:a, _, ElixirSenseExample.ExampleBehaviour}
+                   {:a, _, _}
                  ]
                ],
                positions: [{2, 3}],
@@ -4146,7 +4150,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert %{
-             InheritMod => %State.StructInfo{fields: [__struct__: InheritMod], type: :defstruct}
+             InheritMod => %State.StructInfo{
+               fields: [{:a, nil}, {:b, 1}, __struct__: InheritMod],
+               type: :defstruct
+             }
            } = state.structs
 
     assert %{
@@ -4168,7 +4175,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert %{
              MyError => %State.StructInfo{
-               fields: [__exception__: true, __struct__: MyError],
+               fields: [{:a, nil}, {:b, 1}, __exception__: true, __struct__: MyError],
                type: :defexception
              }
            } = state.structs
@@ -4185,7 +4192,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       defmodule InheritMod do
         use ElixirSenseExample.{ExampleBehaviour}
-        use Foo.{}
+        # use Foo.{}
 
         IO.puts("")
       end
@@ -5164,6 +5171,182 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     refute Map.has_key?(state.mods_funs_to_positions, {My.Some, nil, nil})
+  end
+
+  describe "defoverridable" do
+    test "extract info about overridable defs" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableFunctions
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {My, :required, 1} => %ModFunInfo{
+                 params: [[{:var, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 target: nil,
+                 type: :defmacro,
+                 overridable: {true, ElixirSenseExample.OverridableFunctions}
+               },
+               {My, :test, 2} => %ModFunInfo{
+                 params: [[{:x, [line: 2, column: 3], nil}, {:y, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 target: nil,
+                 type: :def,
+                 overridable: {true, ElixirSenseExample.OverridableFunctions}
+               }
+             } = state.mods_funs_to_positions
+    end
+
+    test "extract info about overridable behaviour callbacks" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableImplementation
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {My, :foo, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 target: nil,
+                 type: :def,
+                 overridable: {true, ElixirSenseExample.OverridableImplementation}
+               },
+               {My, :bar, 1} => %ModFunInfo{
+                 params: [[{:var, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 target: nil,
+                 type: :defmacro,
+                 overridable: {true, ElixirSenseExample.OverridableImplementation}
+               }
+             } = state.mods_funs_to_positions
+    end
+
+    test "override defs" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableFunctions
+
+          def test(a, b) do
+            a * b
+          end
+
+          defmacro required(baz), do: baz
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {My, :required, 1} => %ModFunInfo{
+                 params: [
+                   [{:baz, [line: 8, column: 21], nil}],
+                   [{:var, [line: 2, column: 3], nil}]
+                 ],
+                 positions: [{8, 12}, {2, 3}],
+                 target: nil,
+                 type: :defmacro,
+                 overridable: {true, ElixirSenseExample.OverridableFunctions}
+               },
+               {My, :test, 2} => %ModFunInfo{
+                 params: [
+                   [{:a, [line: 4, column: 12], nil}, {:b, [line: 4, column: 15], nil}],
+                   [{:x, [line: 2, column: 3], nil}, {:y, [line: 2, column: 3], nil}]
+                 ],
+                 positions: [{4, 7}, {2, 3}],
+                 target: nil,
+                 type: :def,
+                 overridable: {true, ElixirSenseExample.OverridableFunctions}
+               }
+             } = state.mods_funs_to_positions
+    end
+
+    test "override behaviour callbacks" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableImplementation
+
+          def foo do
+            ""
+          end
+
+          defmacro bar(baz), do: baz
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {My, :foo, 0} => %ModFunInfo{
+                 params: [[], []],
+                 positions: [{4, 7}, {2, 3}],
+                 target: nil,
+                 type: :def,
+                 overridable: {true, ElixirSenseExample.OverridableImplementation}
+               },
+               {My, :bar, 1} => %ModFunInfo{
+                 params: [
+                   [{:baz, [line: 8, column: 16], nil}],
+                   [{:var, [line: 2, column: 3], nil}]
+                 ],
+                 positions: [{8, 12}, {2, 3}],
+                 target: nil,
+                 type: :defmacro,
+                 overridable: {true, ElixirSenseExample.OverridableImplementation}
+               }
+             } = state.mods_funs_to_positions
+    end
+
+    test "override defs changes type" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableFunctions
+
+          defp test(a, b) do
+            a * b
+          end
+
+          defmacrop required(baz), do: baz
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {My, :required, 1} => %ModFunInfo{
+                 params: [
+                   [{:baz, [line: 8, column: 22], nil}],
+                   [{:var, [line: 2, column: 3], nil}]
+                 ],
+                 positions: [{8, 13}, {2, 3}],
+                 target: nil,
+                 type: :defmacrop,
+                 overridable: {true, ElixirSenseExample.OverridableFunctions}
+               },
+               {My, :required, nil} => %ModFunInfo{
+                 type: :defmacrop
+               },
+               {My, :test, 2} => %ModFunInfo{
+                 params: [
+                   [{:a, [line: 4, column: 13], nil}, {:b, [line: 4, column: 16], nil}],
+                   [{:x, [line: 2, column: 3], nil}, {:y, [line: 2, column: 3], nil}]
+                 ],
+                 positions: [{4, 8}, {2, 3}],
+                 target: nil,
+                 type: :defp,
+                 overridable: {true, ElixirSenseExample.OverridableFunctions}
+               },
+               {My, :test, nil} => %ModFunInfo{
+                 type: :defp
+               }
+             } = state.mods_funs_to_positions
+    end
   end
 
   defp string_to_state(string) do

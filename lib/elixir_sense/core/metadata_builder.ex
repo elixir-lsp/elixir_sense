@@ -6,12 +6,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
   import ElixirSense.Core.State
   import ElixirSense.Log
 
-  alias ElixirSense.Core.Ast
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.MacroExpander
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.VarInfo
+  alias ElixirSense.Core.TypeInfo
 
   @scope_keywords [:for, :fn, :with]
   @block_keywords [:do, :else, :rescue, :catch, :after]
@@ -46,20 +47,27 @@ defmodule ElixirSense.Core.MetadataBuilder do
   """
   @spec build(Macro.t()) :: State.t()
   def build(ast) do
-    {_ast, state} = Macro.traverse(ast, %State{}, safe_call(&pre/2), safe_call(&post/2))
+    {_ast, state} =
+      Macro.traverse(ast, %State{}, safe_call(&pre/2, :pre), safe_call(&post/2, :post))
+
     state
   end
 
-  defp safe_call(fun) do
+  defp safe_call(fun, operation) do
     fn ast, state ->
       try do
+        # if operation == :pre do
+        #   dbg(ast)
+        # end
         fun.(ast, state)
       rescue
         exception ->
           warn(
             Exception.format(
               :error,
-              "#{inspect(exception.__struct__)} during metadata build: #{Exception.message(exception)}",
+              "#{inspect(exception.__struct__)} during metadata build #{operation}:\n" <>
+                "#{Exception.message(exception)}\n" <>
+                "ast node: #{inspect(ast, limit: :infinity)}",
               __STACKTRACE__
             )
           )
@@ -382,7 +390,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_type(ast, state, {line, _column} = pos, type_name, type_args, spec, kind) do
-    spec = Ast.typespec_to_string(kind, spec)
+    spec = TypeInfo.typespec_to_string(kind, spec)
 
     state
     |> add_current_env_to_line(line)
@@ -391,7 +399,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_spec(ast, state, {line, column} = pos, type_name, type_args, spec, kind) do
-    spec = Ast.typespec_to_string(kind, spec)
+    spec = TypeInfo.typespec_to_string(kind, spec)
 
     state =
       if kind in [:callback, :macrocallback] do
@@ -678,22 +686,18 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # transform 1.2 alias/require/import/use syntax ast into regular
   defp pre(
          {directive, [line: line, column: column],
-          [{{:., _, [prefix_expression, :{}]}, _, postfix_expressions} | _]} = ast,
+          [{{:., _, [prefix_expression, :{}]}, _, postfix_expressions} | _]},
          state
        )
        when directive in [:alias, :require, :import, :use] do
-    state =
+    directives =
       modules_from_12_syntax(state, postfix_expressions, prefix_expression)
-      |> Enum.reduce(state, fn module_list, state_acc ->
-        transformed_ast =
-          {directive, [line: line, column: column], [{:__aliases__, [], module_list}]}
-
-        {_ast, state_acc} = pre(transformed_ast, state_acc)
-        state_acc
+      |> Enum.map(fn module_list ->
+        {directive, [line: line, column: column], [{:__aliases__, [], module_list}]}
       end)
 
     state
-    |> result(ast)
+    |> result({:__block__, [line: line, column: column], directives})
   end
 
   # transform alias/require/import/use without options into with empty options
@@ -835,6 +839,39 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_alias(ast, state, line, alias_tuple)
   end
 
+  defp pre({:defoverridable, meta, [arg]} = ast, state) do
+    state =
+      case arg do
+        keyword when is_list(keyword) ->
+          State.make_overridable(state, keyword, meta[:context])
+
+        {:__aliases__, _meta, list} ->
+          # TODO check __MODULE__ and __MODULE__.Beh
+          behaviour_module = Module.concat(list)
+
+          if Code.ensure_loaded?(behaviour_module) and
+               function_exported?(behaviour_module, :behaviour_info, 1) do
+            keyword =
+              behaviour_module.behaviour_info(:callbacks)
+              |> Enum.map(fn {f, a} ->
+                f_str = f |> Atom.to_string()
+
+                if String.starts_with?(f_str, "MACRO-") do
+                  {f_str |> String.replace_prefix("MACRO-", "") |> String.to_atom(), a - 1}
+                else
+                  {f, a}
+                end
+              end)
+
+            State.make_overridable(state, keyword, meta[:context])
+          else
+            state
+          end
+      end
+
+    {ast, state}
+  end
+
   defp pre({atom, [line: line, column: _column], [_ | _]} = ast, state)
        when atom in @scope_keywords do
     pre_scope_keyword(ast, state, line)
@@ -890,148 +927,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result({:when, meta, [:_, rhs]})
   end
 
-  defp pre({:use, [line: line, column: column], [module_expression | _]} = ast, state) do
+  defp pre({:use, meta, _} = ast, state) do
     # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
     current_module = get_current_module(state)
 
-    current_module_length =
-      case current_module do
-        Elixir -> 0
-        other -> length(Module.split(other))
-      end
+    expanded_ast =
+      ast
+      |> MacroExpander.add_default_meta()
+      |> MacroExpander.expand_use(
+        current_module,
+        current_aliases(state),
+        meta |> Keyword.take([:line, :column])
+      )
 
-    current_module_variants = get_current_module_variants(state)
-
-    # Elixir require some meta to expand ast
-    use_ast = Ast.add_default_meta(ast)
-
-    %{
-      requires: requires,
-      imports: imports,
-      behaviours: behaviours,
-      aliases: aliases,
-      attributes: attributes,
-      mods_funs: mods_funs,
-      types: types,
-      specs: specs,
-      overridable: overridable
-    } = Ast.extract_use_info(use_ast, current_module, state)
-
-    module =
-      case module_expression do
-        {:__aliases__, _, mods} ->
-          concat_module_expression(state, mods) |> Module.concat()
-
-        atom when is_atom(atom) ->
-          atom
-
-        _other ->
-          nil
-      end
-
-    state =
-      state
-      |> add_aliases(aliases)
-      |> add_requires([module | requires])
-      |> add_imports(imports)
-      |> add_behaviours(behaviours)
-      |> add_attributes(attributes, {line, column})
-
-    state =
-      Enum.reduce(mods_funs, state, fn
-        {name, args, type}, acc ->
-          options =
-            if {name, length(args)} in overridable do
-              [overridable: {true, module}]
-            else
-              []
-            end
-
-          acc
-          |> add_func_to_index(name, args, {line, column}, type, options)
-
-        module, acc ->
-          submodule_parts = Module.split(module) |> Enum.drop(current_module_length)
-
-          Enum.reduce(current_module_variants, acc, fn variant, acc_1 ->
-            module =
-              (Module.split(variant) ++ submodule_parts)
-              |> Module.concat()
-
-            acc_1 =
-              acc_1
-              |> add_module_to_index(module, {line, column})
-
-            @module_functions
-            |> Enum.reduce(acc_1, fn {name, args, kind}, acc_2 ->
-              mapped_args = for arg <- args, do: {arg, [line: line, column: column], nil}
-
-              acc_2
-              |> add_mod_fun_to_position(
-                {module, name, length(args)},
-                {line, column},
-                mapped_args,
-                kind
-              )
-              |> add_mod_fun_to_position(
-                {module, name, nil},
-                {line, column},
-                mapped_args,
-                kind
-              )
-            end)
-          end)
-      end)
-
-    state =
-      Enum.reduce(types, state, fn
-        {type_name, type_args, spec, kind}, acc ->
-          acc
-          |> add_type(type_name, type_args, spec, kind, {line, column})
-      end)
-
-    state =
-      Enum.reduce(specs, state, fn
-        {type_name, type_args, spec, kind}, acc ->
-          acc
-          |> add_spec(type_name, type_args, spec, kind, {line, column})
-      end)
-
-    state =
-      if specs
-         |> Enum.any?(fn
-           {_type_name, _type_args, _spec, kind} -> kind in [:callback, :macrocallback]
-         end) do
-        state
-        |> add_func_to_index(
-          :behaviour_info,
-          [{:atom, [line: line, column: column], nil}],
-          {line, column},
-          :def
-        )
-      else
-        state
-      end
-
-    state =
-      cond do
-        Exception in behaviours ->
-          # assume that defexception is used but fields are not known
-          add_struct_or_exception(state, :defexception, [], {line, column})
-
-        # elixir >= 1.12 :__struct__
-        # elixir >= 1.14 {:__struct__, [], :def}
-        :__struct__ in attributes or {:__struct__, [], :def} in mods_funs ->
-          # assume that defstruct is used but fields are not known
-          add_struct_or_exception(state, :defstruct, [], {line, column})
-
-        true ->
-          state
-      end
-
-    state
-    |> add_current_env_to_line(line)
-    |> result(ast)
+    {expanded_ast, state}
   end
 
   defp pre({type, [line: line, column: column], fields} = ast, state)

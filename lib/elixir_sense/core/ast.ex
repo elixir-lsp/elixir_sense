@@ -3,21 +3,7 @@ defmodule ElixirSense.Core.Ast do
   Abstract Syntax Tree support
   """
 
-  alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.State
-  import ElixirSense.Log
-
-  @empty_env_info %{
-    requires: [],
-    imports: [],
-    behaviours: [],
-    aliases: [],
-    attributes: [],
-    mods_funs: [],
-    types: [],
-    specs: [],
-    overridable: []
-  }
+  # TODO the code in this module is broken and probably violates GPL license
 
   @partials [
     :def,
@@ -52,30 +38,7 @@ defmodule ElixirSense.Core.Ast do
     :in
   ]
 
-  @type_kinds [:type, :typep, :opaque]
-  @spec_kinds [:spec, :callback, :macrocallback]
-  @fun_kinds [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp]
-
   @max_expand_count 30_000
-
-  def extract_use_info(use_ast, module, state) do
-    current_aliases = State.current_aliases(state)
-
-    env = %Macro.Env{
-      module: module,
-      function: nil,
-      aliases: current_aliases,
-      macros: __ENV__.macros
-    }
-
-    {expanded_ast, _requires} = Macro.prewalk(use_ast, {env, 1}, &do_expand/2)
-    {_ast, env_info} = Macro.prewalk(expanded_ast, @empty_env_info, &pre_walk_expanded/2)
-    env_info
-  catch
-    {:expand_error, _} ->
-      info("ignoring recursive macro")
-      @empty_env_info
-  end
 
   def expand_partial(ast, env) do
     {expanded_ast, _} = Macro.prewalk(ast, {env, 1}, &do_expand_partial/2)
@@ -95,12 +58,6 @@ defmodule ElixirSense.Core.Ast do
     catch
       e -> e
     end
-  end
-
-  def add_default_meta(expr) do
-    Macro.update_meta(expr, fn keyword ->
-      Keyword.merge(keyword, context: Elixir, import: Kernel)
-    end)
   end
 
   def set_module_for_env(env, module) do
@@ -177,126 +134,6 @@ defmodule ElixirSense.Core.Ast do
     end
   end
 
-  defp pre_walk_expanded({:__block__, _, _} = ast, acc) do
-    {ast, acc}
-  end
-
-  defp pre_walk_expanded({:require, _, _} = ast, acc) do
-    {modules, alias_tuples} = extract_directive_modules(:require, ast)
-    {nil, %{acc | requires: acc.requires ++ modules, aliases: acc.aliases ++ alias_tuples}}
-  end
-
-  defp pre_walk_expanded({:import, _, _} = ast, acc) do
-    {modules, alias_tuples} = extract_directive_modules(:import, ast)
-    {nil, %{acc | imports: acc.imports ++ modules, aliases: acc.aliases ++ alias_tuples}}
-  end
-
-  defp pre_walk_expanded({:alias, _, ast}, acc) do
-    alias_tuples = extract_aliases(ast)
-    {nil, %{acc | aliases: acc.aliases ++ alias_tuples}}
-  end
-
-  defp pre_walk_expanded(
-         {:@, _,
-          [
-            {kind, _,
-             [
-               {:when, _,
-                [
-                  {:"::", _,
-                   [
-                     {name, _, args},
-                     _
-                   ]},
-                  _
-                ]} = spec
-             ]}
-          ]},
-         acc
-       )
-       when kind in @spec_kinds do
-    {nil,
-     %{acc | specs: [{name, get_args(args), typespec_to_string(kind, spec), kind} | acc.specs]}}
-  end
-
-  defp pre_walk_expanded({:@, _, [{kind, _meta, [{:"::", _, [{name, _, args}, _]} = spec]}]}, acc)
-       when kind in @spec_kinds do
-    {nil,
-     %{acc | specs: [{name, get_args(args), typespec_to_string(kind, spec), kind} | acc.specs]}}
-  end
-
-  defp pre_walk_expanded({:@, _, [{kind, _meta, [{:"::", _, [{name, _, args}, _]} = spec]}]}, acc)
-       when kind in @type_kinds do
-    {nil,
-     %{acc | types: [{name, get_args(args), typespec_to_string(kind, spec), kind} | acc.types]}}
-  end
-
-  # elixir 1.14
-  defp pre_walk_expanded(
-         {{:., _, [Kernel, :@]}, [], [{:behaviour, _, [behaviour]}]},
-         acc
-       ) do
-    {nil, %{acc | behaviours: [behaviour | acc.behaviours]}}
-  end
-
-  defp pre_walk_expanded(
-         {{:., _, [Module, :__put_attribute__]}, _, [_module, :behaviour, behaviour | _]},
-         acc
-       ) do
-    {nil, %{acc | behaviours: [behaviour | acc.behaviours]}}
-  end
-
-  defp pre_walk_expanded(
-         {{:., _, [Module, :__put_attribute__]}, _, [_module, attribute | _]},
-         acc
-       ) do
-    {nil, %{acc | attributes: [attribute | acc.attributes]}}
-  end
-
-  defp pre_walk_expanded(
-         {{:., _, [Module, :make_overridable]}, _, [_module, keyword]},
-         acc
-       )
-       when is_list(keyword) do
-    {nil, %{acc | overridable: acc.overridable |> Keyword.merge(keyword)}}
-  end
-
-  defp pre_walk_expanded(
-         {{:., _, [Module, :make_overridable]}, _, [_module, behaviour]},
-         acc
-       )
-       when is_atom(behaviour) do
-    keyword = Introspection.get_callbacks(behaviour)
-
-    {nil, %{acc | overridable: acc.overridable |> Keyword.merge(keyword)}}
-  end
-
-  defp pre_walk_expanded({type, _, [{:when, _, [{name, _, args}, _]} | _]}, acc)
-       when type in @fun_kinds do
-    {nil, %{acc | mods_funs: [{name, get_args(args), type} | acc.mods_funs]}}
-  end
-
-  defp pre_walk_expanded({type, _, [{name, _, args} | _]}, acc)
-       when type in @fun_kinds do
-    {nil, %{acc | mods_funs: [{name, get_args(args), type} | acc.mods_funs]}}
-  end
-
-  defp pre_walk_expanded({{:., _, [:elixir_module, :compile]}, _, [mod | _]} = ast, acc)
-       when is_atom(mod) do
-    {ast, %{acc | mods_funs: [mod | acc.mods_funs]}}
-  end
-
-  defp pre_walk_expanded({_name, _meta, _args}, acc) do
-    {nil, acc}
-  end
-
-  defp pre_walk_expanded(ast, acc) do
-    {ast, acc}
-  end
-
-  defp get_args(args) when is_list(args), do: args
-  defp get_args(_), do: []
-
   defp extract_directive_modules(directive, ast) do
     case ast do
       # v1.2 notation
@@ -335,33 +172,5 @@ defmodule ElixirSense.Core.Ast do
         list = for suffix <- suffixes, do: Module.concat(prefix, suffix)
         {list, []}
     end
-  end
-
-  defp extract_aliases([mod, opts]) when is_list(opts) do
-    case Keyword.get(opts, :as) do
-      nil -> extract_aliases([mod])
-      alias -> [{alias, mod}]
-    end
-  end
-
-  defp extract_aliases([mod]) when is_atom(mod) do
-    if Introspection.elixir_module?(mod) do
-      alias = Module.split(mod) |> Enum.take(-1) |> Module.concat()
-      [{alias, mod}]
-    else
-      [{mod, mod}]
-    end
-  end
-
-  defp extract_aliases([{{:., _, [prefix, :{}]}, _, suffixes}]) when is_list(suffixes) do
-    for suffix <- suffixes do
-      alias = Module.split(suffix) |> Enum.take(-1) |> Module.concat()
-      mod = Module.concat(prefix, suffix)
-      {alias, mod}
-    end
-  end
-
-  def typespec_to_string(kind, spec) do
-    "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
   end
 end
