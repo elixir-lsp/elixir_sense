@@ -102,14 +102,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   def do_expand(code, env, opts \\ []) do
-    # TODO remove when we require elixir 1.13
-    only_structs =
-      case code do
-        [?% | _] -> true
-        _ -> false
-      end
-
-    case NormalizedCode.CursorContext.cursor_context(code) do
+    case Code.Fragment.cursor_context(code) do
       {:alias, hint} when is_list(hint) ->
         expand_aliases(List.to_string(hint), env, false, opts)
 
@@ -120,10 +113,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_erlang_modules(List.to_string(unquoted_atom), env)
 
       {:dot, path, hint} ->
-        expand_dot(path, List.to_string(hint), false, env, only_structs, opts)
+        expand_dot(path, List.to_string(hint), false, env, false, opts)
 
       {:dot_arity, path, hint} ->
-        expand_dot(path, List.to_string(hint), true, env, only_structs, opts)
+        expand_dot(path, List.to_string(hint), true, env, false, opts)
 
       {:dot_call, _path, _hint} ->
         # no need to expand signatures here, we have signatures provider
@@ -134,8 +127,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
       :expr ->
         # IEx calls expand_local_or_var("", env)
-        # we choose to retun more and handle some special cases
-        # TODO expand_expr(env) after we require elixir 1.13
+        # we choose to return more and handle some special cases
         case code do
           [?^] -> expand_var("", env)
           [?%] -> expand_aliases("", env, true, opts)
@@ -158,7 +150,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         # to provide signatures and falls back to expand_local_or_var
         expand_expr(env, opts)
 
-      # elixir >= 1.13
       {:operator, operator} ->
         case operator do
           [?^] -> expand_var("", env)
@@ -166,25 +157,20 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           _ -> expand_local(List.to_string(operator), false, env)
         end
 
-      # elixir >= 1.13
       {:operator_arity, operator} ->
         expand_local(List.to_string(operator), true, env)
 
-      # elixir >= 1.13
       {:operator_call, _operator} ->
         expand_local_or_var("", env)
 
-      # elixir >= 1.13
       {:sigil, []} ->
         expand_sigil(env)
 
-      # elixir >= 1.13
       {:sigil, [_]} ->
         # {:yes, [], ~w|" """ ' ''' \( / < [ { \||c}
         # we choose to not provide sigil chars
         no()
 
-      # elixir >= 1.13
       {:struct, struct} when is_list(struct) ->
         expand_aliases(List.to_string(struct), env, true, opts)
 
@@ -450,7 +436,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  # TODO remove when we require elixir 1.13
   defp struct_module_filter(true, env) do
     fn module -> Struct.is_struct(module, env.structs) end
   end
