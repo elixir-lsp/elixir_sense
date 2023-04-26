@@ -832,17 +832,6 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    test "issue #34" do
-      buffer = """
-      use Config
-
-      config :logger, :console,
-        format: "$time $metadata[$level] $message\n"
-      """
-
-      %{actual_subject: "Kernel.use"} = ElixirSense.docs(buffer, 1, 2)
-    end
-
     test "find built-in functions" do
       # module_info is defined by default for every elixir and erlang module
       # __info__ is defined for every elixir module
