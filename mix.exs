@@ -1,4 +1,4 @@
-defmodule ElixirSense.Mixfile do
+defmodule ElixirSense.MixProject do
   @moduledoc false
   use Mix.Project
 
