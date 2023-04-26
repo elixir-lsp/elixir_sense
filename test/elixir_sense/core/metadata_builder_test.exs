@@ -1858,8 +1858,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    # TODO alias :erlang_module is a compile error since 1.14
-    assert get_line_aliases(state, 4) == [{Ets, :ets}, {:"Elixir.erlang_module", :erlang_module}]
+    # alias :erlang_module is a compile error since 1.14
+    assert get_line_aliases(state, 4) == [{Ets, :ets}]
   end
 
   test "aliases atom module" do
@@ -1956,8 +1956,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_aliases(state, 4) == [{:"Elixir.erlang_module", :erlang_module}]
-    assert get_line_aliases(state, 7) == [{:"Elixir.erlang_module", :erlang_module}]
+    assert get_line_aliases(state, 4) == []
+    assert get_line_aliases(state, 7) == []
   end
 
   test "aliases duplicated" do

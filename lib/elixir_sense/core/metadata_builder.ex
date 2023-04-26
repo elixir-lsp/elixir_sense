@@ -828,15 +828,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # alias atom module
   defp pre({:alias, [line: line, column: column], [mod, _opts]} = ast, state)
        when is_atom(mod) do
-    alias_tuple =
-      if Introspection.elixir_module?(mod) do
-        {Module.concat([List.last(Module.split(mod))]), mod}
-      else
-        {mod, mod}
-      end
+    if Introspection.elixir_module?(mod) do
+      alias_tuple = {Module.concat([List.last(Module.split(mod))]), mod}
 
-    state = add_first_alias_positions(state, line, column)
-    pre_alias(ast, state, line, alias_tuple)
+      state = add_first_alias_positions(state, line, column)
+      pre_alias(ast, state, line, alias_tuple)
+    else
+      # since elixir 1.14 alias :erlang_mod is a compile error
+      {ast, state}
+    end
   end
 
   defp pre({:defoverridable, meta, [arg]} = ast, state) do
