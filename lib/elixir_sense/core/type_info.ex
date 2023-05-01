@@ -1,6 +1,7 @@
 defmodule ElixirSense.Core.TypeInfo do
   @moduledoc false
 
+  alias ElixirSense.Core.Behaviours
   alias ElixirSense.Core.BuiltinTypes
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
@@ -299,11 +300,61 @@ defmodule ElixirSense.Core.TypeInfo do
     |> Map.get({function, arity})
   end
 
-  def get_function_specs(module, function) when is_atom(module) and is_atom(function) do
-    specs = module |> get_module_specs()
+  def get_callback(module, function, arity)
+      when is_atom(module) and is_atom(function) and is_integer(arity) do
+    module
+    |> get_module_callbacks()
+    |> Map.get({function, arity})
+  end
 
-    for {{f, _}, spec} <- specs, f == function do
-      spec
+  def get_function_specs(module, function) when is_atom(module) and is_atom(function) do
+    module_specs = module |> get_module_specs()
+
+    function_specs =
+      for {{f, _}, spec} <- module_specs, f == function do
+        spec
+      end
+
+    if function_specs != [] do
+      function_specs
+    else
+      module
+      |> Behaviours.get_module_behaviours()
+      |> Enum.reduce_while([], fn behaviour, acc ->
+        behaviour_specs = behaviour |> get_module_callbacks()
+
+        callback_specs =
+          for {{f, _}, spec} <- behaviour_specs, f == function do
+            spec
+          end
+
+        if callback_specs != [] do
+          {:halt, callback_specs}
+        else
+          {:cont, acc}
+        end
+      end)
+    end
+  end
+
+  def get_function_spec(module, function, arity)
+      when is_atom(module) and is_atom(function) and is_integer(arity) do
+    function_spec = get_spec(module, function, arity)
+
+    if function_spec != nil do
+      function_spec
+    else
+      module
+      |> Behaviours.get_module_behaviours()
+      |> Enum.reduce_while(nil, fn behaviour, acc ->
+        callback_spec = get_callback(behaviour, function, arity)
+
+        if callback_spec != nil do
+          {:halt, callback_spec}
+        else
+          {:cont, acc}
+        end
+      end)
     end
   end
 
@@ -648,8 +699,16 @@ defmodule ElixirSense.Core.TypeInfo do
       {:"::", _, [{:dummy, _, args}, _res]} -> args
     end
     |> Enum.map(fn arg ->
-      Macro.to_string(arg)
+      case arg do
+        {:"::", _, [left, _right]} -> left
+        other -> other
+      end
+      |> Macro.to_string()
       |> String.to_atom()
     end)
+  end
+
+  def typespec_to_string(kind, spec) do
+    "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
   end
 end

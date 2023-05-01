@@ -38,6 +38,7 @@
 
 defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.Applications
+  alias ElixirSense.Core.Behaviours
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.BuiltinAttributes
   alias ElixirSense.Core.BuiltinFunctions
@@ -51,6 +52,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   alias ElixirSense.Core.TypeInfo
 
   alias ElixirSense.Providers.Suggestion.Matcher
+  alias ElixirSense.Providers.Suggestion.Reducers
 
   @erlang_module_builtin_functions [{:module_info, 0}, {:module_info, 1}]
   @elixir_module_builtin_functions [{:__info__, 1}]
@@ -100,14 +102,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   def do_expand(code, env, opts \\ []) do
-    # TODO remove when we require elixir 1.13
-    only_structs =
-      case code do
-        [?% | _] -> true
-        _ -> false
-      end
-
-    case NormalizedCode.CursorContext.cursor_context(code) do
+    case Code.Fragment.cursor_context(code) do
       {:alias, hint} when is_list(hint) ->
         expand_aliases(List.to_string(hint), env, false, opts)
 
@@ -118,10 +113,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_erlang_modules(List.to_string(unquoted_atom), env)
 
       {:dot, path, hint} ->
-        expand_dot(path, List.to_string(hint), false, env, only_structs, opts)
+        expand_dot(path, List.to_string(hint), false, env, false, opts)
 
       {:dot_arity, path, hint} ->
-        expand_dot(path, List.to_string(hint), true, env, only_structs, opts)
+        expand_dot(path, List.to_string(hint), true, env, false, opts)
 
       {:dot_call, _path, _hint} ->
         # no need to expand signatures here, we have signatures provider
@@ -132,8 +127,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
       :expr ->
         # IEx calls expand_local_or_var("", env)
-        # we choose to retun more and handle some special cases
-        # TODO expand_expr(env) after we require elixir 1.13
+        # we choose to return more and handle some special cases
         case code do
           [?^] -> expand_var("", env)
           [?%] -> expand_aliases("", env, true, opts)
@@ -156,7 +150,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         # to provide signatures and falls back to expand_local_or_var
         expand_expr(env, opts)
 
-      # elixir >= 1.13
       {:operator, operator} ->
         case operator do
           [?^] -> expand_var("", env)
@@ -164,25 +157,20 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           _ -> expand_local(List.to_string(operator), false, env)
         end
 
-      # elixir >= 1.13
       {:operator_arity, operator} ->
         expand_local(List.to_string(operator), true, env)
 
-      # elixir >= 1.13
       {:operator_call, _operator} ->
         expand_local_or_var("", env)
 
-      # elixir >= 1.13
       {:sigil, []} ->
         expand_sigil(env)
 
-      # elixir >= 1.13
       {:sigil, [_]} ->
         # {:yes, [], ~w|" """ ' ''' \( / < [ { \||c}
         # we choose to not provide sigil chars
         no()
 
-      # elixir >= 1.13
       {:struct, struct} when is_list(struct) ->
         expand_aliases(List.to_string(struct), env, true, opts)
 
@@ -223,10 +211,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         expand_require(mod, hint, exact?, env)
 
       {:ok, {:map, fields, _}} ->
-        expand_map_field_access(fields, hint, :map)
+        expand_map_field_access(fields, hint, :map, env)
 
       {:ok, {:struct, fields, type, _}} ->
-        expand_map_field_access(fields, hint, {:struct, type})
+        expand_map_field_access(fields, hint, {:struct, type}, env)
 
       _ ->
         no()
@@ -333,14 +321,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     Enum.flat_map(entries, &to_entries/1)
   end
 
-  defp expand_map_field_access(fields, hint, type) do
-    case match_map_fields(fields, hint, type) do
-      [%{kind: :field, name: ^hint, value_is_map: false}] ->
-        no()
-
-      map_fields when is_list(map_fields) ->
-        format_expansion(map_fields)
-    end
+  defp expand_map_field_access(fields, hint, type, env) do
+    # when there is only one matching field and it's exact to the hint
+    # and it's not a nested map, iex does not return completions
+    # We choose to return it normally
+    match_map_fields(fields, hint, type, env)
+    |> format_expansion()
   end
 
   defp expand_require(mod, hint, exact?, env) do
@@ -450,7 +436,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
-  # TODO remove when we require elixir 1.13
   defp struct_module_filter(true, env) do
     fn module -> Struct.is_struct(module, env.structs) end
   end
@@ -779,15 +764,29 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             end
 
           # TODO docs and meta from metadata
-          {f, a, a, info.type, {docs, metadata}, specs,
-           info.params |> hd |> Enum.map(&Macro.to_string/1)}
+          head_params = hd(info.params)
+          args = head_params |> Enum.map(&Macro.to_string/1)
+          dafault_args = Introspection.count_defaults(head_params)
+
+          for arity <- (a - dafault_args)..a do
+            {f, arity, a, info.type, {docs, metadata}, specs, args}
+          end
         end
+        |> Enum.concat()
     end
   end
 
   def get_module_funs(mod, include_builtin) do
     docs = NormalizedCode.get_docs(mod, :docs)
     specs = TypeInfo.get_module_specs(mod)
+
+    callback_specs =
+      for behaviour <- Behaviours.get_module_behaviours(mod),
+          pair <- TypeInfo.get_module_callbacks(behaviour),
+          into: %{},
+          do: pair
+
+    specs = Map.merge(specs, callback_specs)
 
     if docs != nil and function_exported?(mod, :__info__, 1) do
       exports = mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_buildins(mod)
@@ -919,10 +918,26 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp ensure_loaded(Elixir), do: {:error, :nofile}
   defp ensure_loaded(mod), do: Code.ensure_compiled(mod)
 
-  defp match_map_fields(fields, hint, type) do
+  defp match_map_fields(fields, hint, type, env) do
+    {subtype, origin, types} =
+      case type do
+        {:struct, mod} ->
+          types =
+            Reducers.Struct.get_field_types(
+              env,
+              mod,
+              true
+            )
+
+          {:struct_field, if(mod, do: inspect(mod)), types}
+
+        :map ->
+          {:map_key, nil, %{}}
+      end
+
     for {key, value} when is_atom(key) <- fields,
-        key = Atom.to_string(key),
-        Matcher.match?(key, hint) do
+        key_str = Atom.to_string(key),
+        Matcher.match?(key_str, hint) do
       value_is_map =
         case value do
           {:map, _, _} -> true
@@ -930,13 +945,14 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           _ -> false
         end
 
-      {subtype, origin} =
-        case type do
-          {:struct, mod} -> {:struct_field, if(mod, do: inspect(mod))}
-          :map -> {:map_key, nil}
-        end
-
-      %{kind: :field, name: key, subtype: subtype, value_is_map: value_is_map, origin: origin}
+      %{
+        kind: :field,
+        name: key_str,
+        subtype: subtype,
+        value_is_map: value_is_map,
+        origin: origin,
+        type_spec: types[key]
+      }
     end
     |> Enum.sort_by(& &1.name)
   end
@@ -950,8 +966,23 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             | ElixirSense.Providers.Suggestion.Reducers.Struct.field()
             | ElixirSense.Providers.Suggestion.Reducers.Common.attribute()
           ]
-  defp to_entries(%{kind: :field, subtype: subtype, name: name, origin: origin}) do
-    [%{type: :field, name: name, subtype: subtype, origin: origin, call?: true}]
+  defp to_entries(%{
+         kind: :field,
+         subtype: subtype,
+         name: name,
+         origin: origin,
+         type_spec: type_spec
+       }) do
+    [
+      %{
+        type: :field,
+        name: name,
+        subtype: subtype,
+        origin: origin,
+        call?: true,
+        type_spec: if(type_spec, do: Macro.to_string(type_spec))
+      }
+    ]
   end
 
   defp to_entries(%{

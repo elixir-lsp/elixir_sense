@@ -8,12 +8,16 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
   alias ElixirSense.Core.State
   alias ElixirSense.Providers.Suggestion.Matcher
 
+  alias ElixirSense.Core.Normalized.Typespec
+  alias ElixirSense.Core.TypeInfo
+
   @type field :: %{
           type: :field,
           subtype: :struct_field | :map_key,
           name: String.t(),
           origin: String.t() | nil,
-          call?: boolean
+          call?: boolean,
+          type_spec: String.t() | nil
         }
 
   @doc """
@@ -76,13 +80,13 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
 
         type = Binding.expand(env, {:struct, [], type, var})
 
-        result = get_fields(type, hint, fields_so_far)
+        result = get_fields(env, type, hint, fields_so_far)
         {result, if(fields_so_far == [], do: :maybe_struct_update)}
 
       {:map, fields_so_far, var} ->
         var = Binding.expand(env, var)
 
-        result = get_fields(var, hint, fields_so_far)
+        result = get_fields(env, var, hint, fields_so_far)
         {result, if(fields_so_far == [], do: :maybe_struct_update)}
 
       _ ->
@@ -90,29 +94,106 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
     end
   end
 
-  defp get_fields({:map, fields, _}, hint, fields_so_far) do
-    expand_map_field_access(fields, hint, :map, fields_so_far)
+  defp get_fields(env, {:map, fields, _}, hint, fields_so_far) do
+    expand_map_field_access(env, fields, hint, :map, fields_so_far)
   end
 
-  defp get_fields({:struct, fields, type, _}, hint, fields_so_far) do
-    expand_map_field_access(fields, hint, {:struct, type}, fields_so_far)
+  defp get_fields(env, {:struct, fields, type, _}, hint, fields_so_far) do
+    expand_map_field_access(env, fields, hint, {:struct, type}, fields_so_far)
   end
 
-  defp get_fields(_, _hint, _fields_so_far), do: []
+  defp get_fields(_, _, _hint, _fields_so_far), do: []
 
-  defp expand_map_field_access(fields, hint, type, fields_so_far) do
+  defp expand_map_field_access(env, fields, hint, type, fields_so_far) do
+    {subtype, origin, types} =
+      case type do
+        {:struct, mod} ->
+          types = get_field_types(env, mod, true)
+
+          {:struct_field, if(mod, do: inspect(mod)), types}
+
+        :map ->
+          {:map_key, nil, %{}}
+      end
+
     for {key, _value} when is_atom(key) <- fields,
         key not in fields_so_far,
-        key = Atom.to_string(key),
-        Matcher.match?(key, hint) do
-      {subtype, origin} =
-        case type do
-          {:struct, mod} -> {:struct_field, if(mod, do: inspect(mod))}
-          :map -> {:map_key, nil}
+        key_str = Atom.to_string(key),
+        Matcher.match?(key_str, hint) do
+      spec =
+        case types[key] do
+          nil ->
+            case key do
+              :__struct__ -> origin || "atom()"
+              :__exception__ -> "true"
+              _ -> nil
+            end
+
+          some ->
+            Macro.to_string(some)
         end
 
-      %{type: :field, name: key, subtype: subtype, origin: origin, call?: false}
+      %{
+        type: :field,
+        name: key_str,
+        subtype: subtype,
+        origin: origin,
+        call?: false,
+        type_spec: spec
+      }
     end
     |> Enum.sort_by(& &1.name)
   end
+
+  def get_field_types(env, mod, include_private) do
+    case get_field_types_from_metadata(env, mod, include_private) do
+      nil -> get_field_types_from_introspection(mod, include_private)
+      res -> res
+    end
+  end
+
+  defguardp type_is_public(kind, include_private) when kind == :type or include_private
+
+  defp get_field_types_from_metadata(
+         %{types: types},
+         mod,
+         include_private
+       ) do
+    case types[{mod, :t, 0}] do
+      %State.TypeInfo{specs: [type_spec], kind: kind}
+      when type_is_public(kind, include_private) ->
+        case Code.string_to_quoted(type_spec) do
+          {:ok, {:@, _, [{_kind, _, [spec]}]}} ->
+            spec
+            |> get_fields_from_struct_spec()
+
+          _ ->
+            nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp get_field_types_from_introspection(nil, _include_private), do: %{}
+
+  defp get_field_types_from_introspection(mod, include_private) do
+    # assume struct typespec is t()
+    case TypeInfo.get_type_spec(mod, :t, 0) do
+      {kind, spec} when type_is_public(kind, include_private) ->
+        spec
+        |> Typespec.type_to_quoted()
+        |> get_fields_from_struct_spec()
+
+      _ ->
+        %{}
+    end
+  end
+
+  defp get_fields_from_struct_spec({:"::", _, [_, {:%, _meta1, [_mod, {:%{}, _meta2, fields}]}]}) do
+    Map.new(fields)
+  end
+
+  defp get_fields_from_struct_spec(_), do: %{}
 end

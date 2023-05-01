@@ -458,26 +458,145 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     }
 
     assert expand('map.f', env) ==
-             [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]
+             [
+               %{
+                 name: "foo",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               }
+             ]
 
     assert [_ | _] = expand('map.b', env)
 
     assert expand('map.bar_', env) ==
              [
-               %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
-               %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true}
+               %{
+                 name: "bar_1",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               },
+               %{
+                 name: "bar_2",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               }
              ]
 
     assert expand('map.c', env) == []
 
     assert expand('map.', env) ==
              [
-               %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
-               %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true},
-               %{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}
+               %{
+                 name: "bar_1",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               },
+               %{
+                 name: "bar_2",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               },
+               %{
+                 name: "foo",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               }
              ]
 
-    assert expand('map.foo', env) == []
+    assert expand('map.foo', env) == [
+             %{
+               call?: true,
+               name: "foo",
+               origin: nil,
+               subtype: :map_key,
+               type: :field,
+               type_spec: nil
+             }
+           ]
+  end
+
+  test "struct key completion is supported" do
+    env = %Env{
+      types: %{
+        {MyStruct, :t, 0} => %ElixirSense.Core.State.TypeInfo{
+          name: :t,
+          args: [[]],
+          specs: ["@type t :: %MyStruct{some: integer}"],
+          kind: :type
+        }
+      },
+      structs: %{
+        MyStruct => %ElixirSense.Core.State.StructInfo{type: :defstruct, fields: [some: 1]}
+      },
+      vars: [
+        %VarInfo{
+          name: :struct,
+          type: {:struct, [], {:atom, DateTime}, nil}
+        },
+        %VarInfo{
+          name: :other,
+          type: {:call, {:atom, DateTime}, :utc_now, []}
+        },
+        %VarInfo{
+          name: :from_metadata,
+          type: {:struct, [], {:atom, MyStruct}, nil}
+        }
+      ]
+    }
+
+    assert expand('struct.h', env) ==
+             [
+               %{
+                 call?: true,
+                 name: "hour",
+                 origin: "DateTime",
+                 subtype: :struct_field,
+                 type: :field,
+                 type_spec: "Calendar.hour()"
+               }
+             ]
+
+    assert expand('other.d', env) ==
+             [
+               %{
+                 call?: true,
+                 name: "day",
+                 origin: "DateTime",
+                 subtype: :struct_field,
+                 type: :field,
+                 type_spec: "Calendar.day()"
+               }
+             ]
+
+    assert expand('from_metadata.s', env) ==
+             [
+               %{
+                 call?: true,
+                 name: "some",
+                 origin: "MyStruct",
+                 subtype: :struct_field,
+                 type: :field,
+                 type_spec: "integer"
+               }
+             ]
   end
 
   test "map atom key completion is supported on attributes" do
@@ -491,26 +610,79 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     }
 
     assert expand('@map.f', env) ==
-             [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]
+             [
+               %{
+                 name: "foo",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               }
+             ]
 
     assert [_ | _] = expand('@map.b', env)
 
     assert expand('@map.bar_', env) ==
              [
-               %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
-               %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true}
+               %{
+                 name: "bar_1",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               },
+               %{
+                 name: "bar_2",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               }
              ]
 
     assert expand('@map.c', env) == []
 
     assert expand('@map.', env) ==
              [
-               %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
-               %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true},
-               %{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}
+               %{
+                 name: "bar_1",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               },
+               %{
+                 name: "bar_2",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               },
+               %{
+                 name: "foo",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               }
              ]
 
-    assert expand('@map.foo', env) == []
+    assert expand('@map.foo', env) == [
+             %{
+               call?: true,
+               name: "foo",
+               origin: nil,
+               subtype: :map_key,
+               type: :field,
+               type_spec: nil
+             }
+           ]
   end
 
   test "nested map atom key completion is supported" do
@@ -540,34 +712,119 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     }
 
     assert expand('map.nested.deeply.f', env) ==
-             [%{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true}]
+             [
+               %{
+                 name: "foo",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               }
+             ]
 
     assert [_ | _] = expand('map.nested.deeply.b', env)
 
     assert expand('map.nested.deeply.bar_', env) ==
              [
-               %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
-               %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true}
+               %{
+                 name: "bar_1",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               },
+               %{
+                 name: "bar_2",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               }
              ]
 
     assert expand('map.nested.deeply.', env) ==
              [
-               %{name: "bar_1", subtype: :map_key, type: :field, origin: nil, call?: true},
-               %{name: "bar_2", subtype: :map_key, type: :field, origin: nil, call?: true},
-               %{name: "foo", subtype: :map_key, type: :field, origin: nil, call?: true},
-               %{name: "mod", subtype: :map_key, type: :field, origin: nil, call?: true},
-               %{name: "num", subtype: :map_key, type: :field, origin: nil, call?: true}
+               %{
+                 name: "bar_1",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               },
+               %{
+                 name: "bar_2",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               },
+               %{
+                 name: "foo",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               },
+               %{
+                 name: "mod",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               },
+               %{
+                 name: "num",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               }
              ]
 
     assert [_ | _] = expand('map.nested.deeply.mod.print', env)
 
     assert expand('map.nested', env) ==
-             [%{name: "nested", subtype: :map_key, type: :field, origin: nil, call?: true}]
+             [
+               %{
+                 name: "nested",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               }
+             ]
 
     assert expand('map.nested.deeply', env) ==
-             [%{name: "deeply", subtype: :map_key, type: :field, origin: nil, call?: true}]
+             [
+               %{
+                 name: "deeply",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               }
+             ]
 
-    assert expand('map.nested.deeply.foo', env) == []
+    assert expand('map.nested.deeply.foo', env) == [
+             %{
+               call?: true,
+               name: "foo",
+               origin: nil,
+               subtype: :map_key,
+               type: :field,
+               type_spec: nil
+             }
+           ]
 
     assert expand('map.nested.deeply.c', env) == []
     assert expand('map.a.b.c.f', env) == []
@@ -1224,7 +1481,8 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                  subtype: :struct_field,
                  type: :field,
                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                 call?: true
+                 call?: true,
+                 type_spec: nil
                }
              ]
 
@@ -1235,12 +1493,22 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                  subtype: :struct_field,
                  type: :field,
                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                 call?: true
+                 call?: true,
+                 type_spec: nil
                }
              ]
 
     assert expand('struct.some_map.', env) ==
-             [%{name: "asdf", subtype: :map_key, type: :field, origin: nil, call?: true}]
+             [
+               %{
+                 name: "asdf",
+                 subtype: :map_key,
+                 type: :field,
+                 origin: nil,
+                 call?: true,
+                 type_spec: nil
+               }
+             ]
 
     assert expand('struct.str.', env) ==
              [
@@ -1249,42 +1517,48 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                  subtype: :struct_field,
                  type: :field,
                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                 call?: true
+                 call?: true,
+                 type_spec: nil
                },
                %{
                  name: "a_mod",
                  subtype: :struct_field,
                  type: :field,
                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                 call?: true
+                 call?: true,
+                 type_spec: nil
                },
                %{
                  name: "my_val",
                  subtype: :struct_field,
                  type: :field,
                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                 call?: true
+                 call?: true,
+                 type_spec: nil
                },
                %{
                  name: "some_map",
                  subtype: :struct_field,
                  type: :field,
                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                 call?: true
+                 call?: true,
+                 type_spec: nil
                },
                %{
                  name: "str",
                  subtype: :struct_field,
                  type: :field,
                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                 call?: true
+                 call?: true,
+                 type_spec: nil
                },
                %{
                  name: "unknown_str",
                  subtype: :struct_field,
                  type: :field,
                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                 call?: true
+                 call?: true,
+                 type_spec: nil
                }
              ]
 
@@ -1295,7 +1569,8 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                  subtype: :struct_field,
                  type: :field,
                  origin: "ElixirSense.Providers.Suggestion.CompleteTest.MyStruct",
-                 call?: true
+                 call?: true,
+                 type_spec: nil
                }
              ]
 
@@ -1306,9 +1581,17 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                  name: "__struct__",
                  origin: nil,
                  subtype: :struct_field,
-                 type: :field
+                 type: :field,
+                 type_spec: nil
                },
-               %{call?: true, name: "abc", origin: nil, subtype: :struct_field, type: :field}
+               %{
+                 call?: true,
+                 name: "abc",
+                 origin: nil,
+                 subtype: :struct_field,
+                 type: :field,
+                 type_spec: nil
+               }
              ]
   end
 

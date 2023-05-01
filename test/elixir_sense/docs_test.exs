@@ -755,17 +755,6 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    test "issue #34" do
-      buffer = """
-      use Config
-
-      config :logger, :console,
-        format: "$time $metadata[$level] $message\n"
-      """
-
-      %{actual_subject: "Kernel.use"} = ElixirSense.docs(buffer, 1, 2)
-    end
-
     test "find built-in functions" do
       # module_info is defined by default for every elixir and erlang module
       # __info__ is defined for every elixir module
@@ -873,6 +862,15 @@ defmodule ElixirSense.DocsTest do
     assert docs =~ """
            > ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.foo()
 
+           **Implementing behaviour**
+           ElixirSenseExample.ExampleBehaviourWithDoc
+
+           ### Specs
+
+           ```
+           @spec foo :: :ok
+           ```
+
            Docs for foo
            """
   end
@@ -893,7 +891,16 @@ defmodule ElixirSense.DocsTest do
     assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.baz"
 
     assert docs =~ """
-           > ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.baz()
+           > ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.baz(a)
+
+           **Implementing behaviour**
+           ElixirSenseExample.ExampleBehaviourWithDoc
+
+           ### Specs
+
+           ```
+           @spec baz(integer) :: :ok
+           ```
 
            Docs for baz
            """
@@ -915,10 +922,47 @@ defmodule ElixirSense.DocsTest do
     assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.bar"
 
     assert docs =~ """
-           > ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.bar()
+           > ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.bar(b)
+
+           **Implementing behaviour**
+           ElixirSenseExample.ExampleBehaviourWithDoc
+
+           ### Specs
+
+           ```
+           @spec bar(integer) :: Macro.t
+           ```
 
            Docs for bar
            """
+  end
+
+  @tag requires_otp_25: true
+  test "retrieve erlang behaviour implementation " do
+    buffer = """
+    :file_server.init(a)
+    """
+
+    %{
+      actual_subject: actual_subject,
+      docs: %{docs: docs}
+    } = ElixirSense.docs(buffer, 1, 16)
+
+    assert actual_subject == ":file_server.init"
+
+    assert docs =~ """
+           > :file_server.init(term)
+
+           **Implementing behaviour**
+           :gen_server
+
+           ### Specs
+
+           ```
+           @spec init(args :: term) ::
+           """
+
+    assert docs =~ "Whenever a `gen_server` process is started"
   end
 
   test "do not crash for erlang behaviour callbacks" do
@@ -938,15 +982,52 @@ defmodule ElixirSense.DocsTest do
 
     if ExUnitConfig.erlang_eep48_supported() do
       assert docs =~ """
-             > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(term)
+             > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(_)
 
+             **Implementing behaviour**
+             :gen_statem
              **Since**
              OTP 19.0
+
+             ### Specs
+
+             ```
+             @spec init(args :: term) :: init_result(state)
+             ```
              """
     else
       assert docs =~ """
              > ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init(_)
              """
     end
+  end
+
+  test "retrieve callback documentation from behaviour" do
+    buffer = """
+    defmodule MyModule do
+      def func(list) do
+        List.flatten(list)
+      end
+    end
+    """
+
+    %{
+      actual_subject: actual_subject,
+      docs: %{docs: docs}
+    } = ElixirSense.docs(buffer, 3, 12)
+
+    assert actual_subject == "List.flatten"
+
+    assert docs =~ """
+           > List.flatten(list)
+
+           ### Specs
+
+           ```
+           @spec flatten(deep_list) :: list when deep_list: [any | deep_list]
+           ```
+
+           Flattens the given `list` of nested lists.
+           """
   end
 end

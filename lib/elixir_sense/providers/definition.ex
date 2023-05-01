@@ -21,6 +21,7 @@ defmodule ElixirSense.Providers.Definition do
   @spec find(
           any(),
           pos_integer,
+          pos_integer,
           State.Env.t(),
           State.mods_funs_to_positions_t(),
           list(State.CallInfo.t()),
@@ -29,6 +30,7 @@ defmodule ElixirSense.Providers.Definition do
   def find(
         context,
         line,
+        column,
         %State.Env{
           module: module,
           vars: vars,
@@ -51,11 +53,19 @@ defmodule ElixirSense.Providers.Definition do
         nil
 
       {:variable, variable} ->
-        var_info = vars |> Enum.find(fn %VarInfo{name: name} -> name == variable end)
+        vars_info = vars |> Enum.filter(fn %VarInfo{name: name} -> name == variable end)
 
-        if var_info != nil do
-          %VarInfo{positions: [{line, column} | _]} = var_info
-          %Location{type: :variable, file: nil, line: line, column: column}
+        if vars_info != [] do
+          {definition_line, definition_column} =
+            vars_info
+            |> Enum.find(vars_info, fn %VarInfo{positions: positions} ->
+              {line, column} in positions
+            end)
+            |> then(fn %VarInfo{positions: positions} -> positions end)
+            |> Enum.sort()
+            |> List.first()
+
+          %Location{type: :variable, file: nil, line: definition_line, column: definition_column}
         else
           find_function_or_module(
             {nil, variable},

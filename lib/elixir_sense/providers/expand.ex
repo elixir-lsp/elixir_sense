@@ -4,6 +4,7 @@ defmodule ElixirSense.Providers.Expand do
   """
 
   alias ElixirSense.Core.Ast
+  alias ElixirSense.Core.MacroExpander
   alias ElixirSense.Core.State
 
   @type expanded_code_map :: %{
@@ -29,7 +30,7 @@ defmodule ElixirSense.Providers.Expand do
       {:ok, expr} = code |> Code.string_to_quoted()
 
       # Elixir require some meta to expand ast
-      expr = Ast.add_default_meta(expr)
+      expr = MacroExpander.add_default_meta(expr)
 
       %{
         expand_once: expr |> Macro.expand_once(env) |> Macro.to_string(),

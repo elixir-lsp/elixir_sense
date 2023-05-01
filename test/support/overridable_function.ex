@@ -19,9 +19,11 @@ defmodule ElixirSenseExample.OverridableBehaviour do
 end
 
 defmodule ElixirSenseExample.OverridableImplementation do
+  alias ElixirSenseExample.OverridableBehaviour
+
   defmacro __using__(_opts) do
     quote do
-      @behaviour ElixirSenseExample.OverridableBehaviour
+      @behaviour OverridableBehaviour
 
       def foo do
         "Override me"
@@ -29,7 +31,29 @@ defmodule ElixirSenseExample.OverridableImplementation do
 
       defmacro bar(var), do: Macro.expand(var, __CALLER__)
 
-      defoverridable ElixirSenseExample.OverridableBehaviour
+      defoverridable OverridableBehaviour
+    end
+  end
+end
+
+defmodule ElixirSenseExample.OverridableImplementation.Overrider do
+  use ElixirSenseExample.OverridableImplementation
+
+  def foo do
+    super()
+  end
+
+  defmacro bar(any) do
+    super(any)
+  end
+end
+
+defmodule ElixirSenseExample.Overridable.Using do
+  alias ElixirSenseExample.OverridableImplementation
+
+  defmacro __using__(_opts) do
+    quote do
+      use OverridableImplementation
     end
   end
 end

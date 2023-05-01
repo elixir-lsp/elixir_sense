@@ -840,7 +840,7 @@ defmodule ElixirSense.SuggestionsTest do
                args: "_reason, _state",
                arity: 2,
                def_arity: 2,
-               metadata: %{},
+               metadata: %{implementing: GenServer},
                name: "terminate",
                origin: "MyServer",
                spec: "@spec terminate(reason, state :: term) :: term" <> _,
@@ -855,7 +855,7 @@ defmodule ElixirSense.SuggestionsTest do
   test "lists callbacks in function suggestion - erlang behaviour" do
     buffer = """
     defmodule MyServer do
-      @behaviour :gen_server
+      @behaviour :gen_event
 
       def handle_call(request, _from, state) do
         ini
@@ -876,11 +876,16 @@ defmodule ElixirSense.SuggestionsTest do
     assert [
              %{name: "is_function", origin: "Kernel", arity: 1},
              %{name: "is_function", origin: "Kernel", arity: 2},
-             %{name: "init", origin: "MyServer", arity: 1, summary: summary}
+             %{name: "init", origin: "MyServer", arity: 1} = init_res
            ] = list
 
     if ExUnitConfig.erlang_eep48_supported() do
-      assert "- Args = term" <> _ = summary
+      assert %{
+               summary: "- InitArgs = Args" <> _,
+               metadata: %{implementing: :gen_event},
+               spec: "@spec init(initArgs :: term) ::" <> _,
+               args_list: ["arg"]
+             } = init_res
     end
   end
 
@@ -910,6 +915,90 @@ defmodule ElixirSense.SuggestionsTest do
              %{name: "is_integer", origin: "Kernel", arity: 1},
              %{name: "is_list", origin: "Kernel", arity: 1},
              %{name: "init", origin: "MyServer", arity: 1}
+           ] = list
+  end
+
+  test "suggest elixir behaviour callbacks on implementation" do
+    buffer = """
+    ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.ba
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 1, 57)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    assert [
+             %{
+               args: "a",
+               args_list: ["a"],
+               arity: 1,
+               def_arity: 1,
+               metadata: %{implementing: ElixirSenseExample.ExampleBehaviourWithDoc},
+               name: "baz",
+               origin: "ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl",
+               snippet: nil,
+               spec: "@spec baz(integer) :: :ok",
+               summary: "Docs for baz",
+               type: :function,
+               visibility: :public
+             }
+           ] = list
+  end
+
+  test "suggest erlang behaviour callbacks on implementation" do
+    buffer = """
+    ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.ini
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 1, 60)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert [
+               %{
+                 args: "_",
+                 args_list: ["_"],
+                 arity: 1,
+                 def_arity: 1,
+                 metadata: %{implementing: :gen_statem},
+                 name: "init",
+                 origin: "ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang",
+                 snippet: nil,
+                 spec: "@spec init(args :: term) :: init_result(state)",
+                 summary: "- Args = term" <> _,
+                 type: :function,
+                 visibility: :public
+               }
+             ] = list
+    end
+  end
+
+  @tag requires_otp_25: true
+  test "suggest erlang behaviour callbacks on erlang implementation" do
+    buffer = """
+    :file_server.ini
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 1, 17)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    assert [
+             %{
+               args: "args",
+               args_list: ["args"],
+               arity: 1,
+               def_arity: 1,
+               metadata: %{implementing: :gen_server},
+               name: "init",
+               origin: ":file_server",
+               snippet: nil,
+               spec: "@spec init(args :: term) ::" <> _,
+               summary: "- Args = term" <> _,
+               type: :function,
+               visibility: :public
+             }
            ] = list
   end
 
@@ -1206,10 +1295,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert_received {:result, list}
 
-    assert list == [
-             %{name: "arg", type: :variable},
-             %{name: "my", type: :variable}
-           ]
+    assert list == [%{name: "arg", type: :variable}]
   end
 
   test "lists params in fn's not finished" do
@@ -1836,43 +1922,47 @@ defmodule ElixirSense.SuggestionsTest do
   test "suggestion for struct fields" do
     buffer = """
     defmodule Mod do
-      %IO.Stream{}
+      %ElixirSenseExample.IO.Stream{}
       %ArgumentError{}
     end
     """
 
     list =
-      ElixirSense.suggestions(buffer, 2, 14)
+      ElixirSense.suggestions(buffer, 2, 33)
       |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
              %{
                name: "__struct__",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "ElixirSenseExample.IO.Stream"
              },
              %{
                name: "device",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "IO.device()"
              },
              %{
                name: "line_or_bytes",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: ":line | non_neg_integer()"
              },
              %{
                name: "raw",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "boolean()"
              }
            ]
 
@@ -1886,21 +1976,24 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "ArgumentError",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "true"
              },
              %{
                name: "__struct__",
                origin: "ArgumentError",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "ArgumentError"
              },
              %{
                name: "message",
                origin: "ArgumentError",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: nil
              }
            ]
   end
@@ -1908,7 +2001,7 @@ defmodule ElixirSense.SuggestionsTest do
   test "suggestion for aliased struct fields" do
     buffer = """
     defmodule Mod do
-      alias IO.Stream
+      alias ElixirSenseExample.IO.Stream
       %Stream{
     end
     """
@@ -1920,31 +2013,35 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{
                name: "__struct__",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "ElixirSenseExample.IO.Stream"
              },
              %{
                name: "device",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "IO.device()"
              },
              %{
                name: "line_or_bytes",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: ":line | non_neg_integer()"
              },
              %{
                name: "raw",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "boolean()"
              }
            ]
   end
@@ -1967,7 +2064,8 @@ defmodule ElixirSense.SuggestionsTest do
                origin: nil,
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "atom()"
              }
            ]
 
@@ -1981,7 +2079,8 @@ defmodule ElixirSense.SuggestionsTest do
                origin: nil,
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "atom()"
              }
            ]
   end
@@ -1989,7 +2088,7 @@ defmodule ElixirSense.SuggestionsTest do
   test "suggestion for aliased struct fields atom module" do
     buffer = """
     defmodule Mod do
-      alias IO.Stream
+      alias ElixirSenseExample.IO.Stream
       %:"Elixir.Stream"{
     end
     """
@@ -2001,31 +2100,35 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [
              %{
                name: "__struct__",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "ElixirSenseExample.IO.Stream"
              },
              %{
                name: "device",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "IO.device()"
              },
              %{
                name: "line_or_bytes",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: ":line | non_neg_integer()"
              },
              %{
                name: "raw",
-               origin: "IO.Stream",
+               origin: "ElixirSenseExample.IO.Stream",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "boolean()"
              }
            ]
   end
@@ -2055,21 +2158,24 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "MyServer",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "MyServer"
              },
              %{
                name: "field_1",
                origin: "MyServer",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: nil
              },
              %{
                name: "field_2",
                origin: "MyServer",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: nil
              }
            ]
 
@@ -2081,14 +2187,16 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "MyServer",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "MyServer"
              },
              %{
                name: "field_1",
                origin: "MyServer",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: nil
              }
            ]
   end
@@ -2118,21 +2226,24 @@ defmodule ElixirSense.SuggestionsTest do
                origin: ":my_server",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: ":my_server"
              },
              %{
                name: "field_1",
                origin: ":my_server",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: nil
              },
              %{
                name: "field_2",
                origin: ":my_server",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: nil
              }
            ]
 
@@ -2144,14 +2255,16 @@ defmodule ElixirSense.SuggestionsTest do
                origin: ":my_server",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: ":my_server"
              },
              %{
                name: "field_1",
                origin: ":my_server",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: nil
              }
            ]
   end
@@ -2181,14 +2294,16 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "MyServer",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "MyServer"
              },
              %{
                name: "field_1",
                origin: "MyServer",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: nil
              }
            ]
   end
@@ -2215,14 +2330,16 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "MyServer",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: "MyServer"
              },
              %{
                name: "field_1",
                origin: "MyServer",
                type: :field,
                call?: false,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: nil
              }
            ]
   end
@@ -2252,14 +2369,16 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "MyServer",
                type: :field,
                call?: true,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: nil
              },
              %{
                name: "field_2",
                origin: "MyServer",
                type: :field,
                call?: true,
-               subtype: :struct_field
+               subtype: :struct_field,
+               type_spec: nil
              }
            ]
   end
@@ -2279,8 +2398,22 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
-             %{name: "key_1", origin: nil, type: :field, call?: true, subtype: :map_key},
-             %{name: "key_2", origin: nil, type: :field, call?: true, subtype: :map_key}
+             %{
+               name: "key_1",
+               origin: nil,
+               type: :field,
+               call?: true,
+               subtype: :map_key,
+               type_spec: nil
+             },
+             %{
+               name: "key_2",
+               origin: nil,
+               type: :field,
+               call?: true,
+               subtype: :map_key,
+               type_spec: nil
+             }
            ]
   end
 
@@ -2299,8 +2432,22 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(&(&1.type in [:field]))
 
     assert list == [
-             %{name: "key_1", origin: nil, type: :field, call?: true, subtype: :map_key},
-             %{name: "key_2", origin: nil, type: :field, call?: true, subtype: :map_key}
+             %{
+               name: "key_1",
+               origin: nil,
+               type: :field,
+               call?: true,
+               subtype: :map_key,
+               type_spec: nil
+             },
+             %{
+               name: "key_2",
+               origin: nil,
+               type: :field,
+               call?: true,
+               subtype: :map_key,
+               type_spec: nil
+             }
            ]
   end
 
@@ -2376,7 +2523,8 @@ defmodule ElixirSense.SuggestionsTest do
                name: "field_1",
                origin: "MyServer",
                subtype: :struct_field,
-               type: :field
+               type: :field,
+               type_spec: nil
              }
            ]
   end
@@ -2403,7 +2551,8 @@ defmodule ElixirSense.SuggestionsTest do
                name: "field_1",
                origin: "MyServer",
                subtype: :struct_field,
-               type: :field
+               type: :field,
+               type_spec: nil
              }
            ]
   end
@@ -2430,7 +2579,8 @@ defmodule ElixirSense.SuggestionsTest do
                name: "field_1",
                origin: "MyServer",
                subtype: :struct_field,
-               type: :field
+               type: :field,
+               type_spec: nil
              }
            ]
   end
@@ -2447,7 +2597,14 @@ defmodule ElixirSense.SuggestionsTest do
     list = ElixirSense.suggestions(buffer, 3, 22)
 
     assert list == [
-             %{call?: false, name: "field_1", origin: nil, subtype: :struct_field, type: :field}
+             %{
+               call?: false,
+               name: "field_1",
+               origin: nil,
+               subtype: :struct_field,
+               type: :field,
+               type_spec: nil
+             }
            ]
   end
 
@@ -2462,7 +2619,14 @@ defmodule ElixirSense.SuggestionsTest do
     list = ElixirSense.suggestions(buffer, 3, 9)
 
     assert list == [
-             %{call?: false, name: "hour", origin: "Time", subtype: :struct_field, type: :field}
+             %{
+               call?: false,
+               name: "hour",
+               origin: "Time",
+               subtype: :struct_field,
+               type: :field,
+               type_spec: "Calendar.hour()"
+             }
            ]
   end
 
@@ -2478,7 +2642,14 @@ defmodule ElixirSense.SuggestionsTest do
     list = ElixirSense.suggestions(buffer, 3, 22)
 
     assert list == [
-             %{call?: false, name: "field_1", origin: nil, subtype: :map_key, type: :field}
+             %{
+               call?: false,
+               name: "field_1",
+               origin: nil,
+               subtype: :map_key,
+               type: :field,
+               type_spec: nil
+             }
            ]
   end
 
@@ -2494,7 +2665,14 @@ defmodule ElixirSense.SuggestionsTest do
     list = ElixirSense.suggestions(buffer, 3, 22)
 
     assert list == [
-             %{call?: false, name: "field_1", origin: nil, subtype: :map_key, type: :field}
+             %{
+               call?: false,
+               name: "field_1",
+               origin: nil,
+               subtype: :map_key,
+               type: :field,
+               type_spec: nil
+             }
            ]
   end
 
@@ -3417,6 +3595,126 @@ defmodule ElixirSense.SuggestionsTest do
       ElixirSense.suggestions(buffer, 4, 35)
       |> Enum.filter(&(&1.type == :bitstring_option))
       |> Enum.map(& &1.name)
+  end
+
+  test "records from metadata" do
+    buffer = """
+    defmodule SomeSchema do
+      require Record
+      Record.defrecord(:user, name: "john", age: 25)
+      @type user :: record(:user, name: String.t(), age: integer)
+
+      def d() do
+        w = us
+      end
+    end
+    """
+
+    suggestions = ElixirSense.suggestions(buffer, 7, 11)
+
+    assert [
+             %{
+               args: "args \\\\ []",
+               arity: 0,
+               name: "user",
+               summary: "",
+               type: :macro,
+               args_list: ["args \\\\ []"],
+               def_arity: 1,
+               metadata: %{},
+               origin: "SomeSchema",
+               snippet: nil,
+               spec: "",
+               visibility: :public
+             },
+             %{
+               args: "args \\\\ []",
+               arity: 1,
+               name: "user",
+               summary: "",
+               type: :macro,
+               args_list: ["args \\\\ []"],
+               def_arity: 1,
+               metadata: %{},
+               origin: "SomeSchema",
+               snippet: nil,
+               spec: "",
+               visibility: :public
+             },
+             %{
+               args: "record, args",
+               args_list: ["record", "args"],
+               arity: 2,
+               def_arity: 2,
+               metadata: %{},
+               name: "user",
+               origin: "SomeSchema",
+               snippet: nil,
+               spec: "",
+               summary: "",
+               type: :macro,
+               visibility: :public
+             }
+           ] = suggestions |> Enum.filter(&(&1.name == "user"))
+  end
+
+  test "records from introspection" do
+    buffer = """
+    defmodule SomeSchema do
+      require ElixirSenseExample.ModuleWithRecord, as: M
+
+      def d() do
+        w = M.us
+      end
+    end
+    """
+
+    suggestions = ElixirSense.suggestions(buffer, 5, 12)
+
+    assert [
+             %{
+               args: "args \\\\ []",
+               arity: 0,
+               name: "user",
+               summary: "",
+               type: :macro,
+               args_list: ["args \\\\ []"],
+               def_arity: 1,
+               metadata: %{},
+               origin: "ElixirSenseExample.ModuleWithRecord",
+               snippet: nil,
+               spec: "",
+               visibility: :public
+             },
+             %{
+               args: "args \\\\ []",
+               arity: 1,
+               name: "user",
+               summary: "",
+               type: :macro,
+               args_list: ["args \\\\ []"],
+               def_arity: 1,
+               metadata: %{},
+               origin: "ElixirSenseExample.ModuleWithRecord",
+               snippet: nil,
+               spec: "",
+               visibility: :public
+             },
+             %{
+               args: "record, args",
+               args_list: ["record", "args"],
+               arity: 2,
+               def_arity: 2,
+               metadata: %{},
+               name: "user",
+               origin: "ElixirSenseExample.ModuleWithRecord",
+               snippet: nil,
+               spec: "",
+               summary: "",
+               type: :macro,
+               visibility: :public
+             }
+           ] = suggestions |> Enum.filter(&(&1.name == "user"))
   end
 
   defp suggestions_by_type(type, buffer) do

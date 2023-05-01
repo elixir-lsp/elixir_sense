@@ -39,6 +39,18 @@ defmodule ElixirSense.Core.References.Tracer do
     :ok
   end
 
+  def trace({kind, meta, name, arity}, env)
+      when kind in [:local_function, :local_macro] do
+    register_call(%{
+      callee: {env.module, name, arity},
+      file: env.file |> Path.relative_to_cwd(),
+      line: meta[:line],
+      column: meta[:column]
+    })
+
+    :ok
+  end
+
   def trace(_trace, _env) do
     :ok
   end

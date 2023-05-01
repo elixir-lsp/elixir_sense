@@ -1,4 +1,4 @@
-defmodule ElixirSense.Mixfile do
+defmodule ElixirSense.MixProject do
   @moduledoc false
   use Mix.Project
 
@@ -6,7 +6,7 @@ defmodule ElixirSense.Mixfile do
     [
       app: :elixir_sense,
       version: "2.0.0",
-      elixir: "~> 1.12",
+      elixir: "~> 1.13",
       elixirc_paths: elixirc_paths(Mix.env()),
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,

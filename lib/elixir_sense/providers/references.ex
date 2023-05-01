@@ -27,6 +27,8 @@ defmodule ElixirSense.Providers.References do
   @spec find(
           any(),
           non_neg_integer,
+          non_neg_integer,
+          non_neg_integer,
           State.Env.t(),
           [VarInfo.t()],
           [AttributeInfo.t()],
@@ -35,6 +37,8 @@ defmodule ElixirSense.Providers.References do
         ) :: [ElixirSense.Providers.References.reference_info()]
   def find(
         context,
+        line,
+        column,
         arity,
         %State.Env{
           imports: imports,
@@ -89,7 +93,10 @@ defmodule ElixirSense.Providers.References do
         []
 
       {:variable, variable} ->
-        var_info = vars |> Enum.find(fn %VarInfo{name: name} -> name == variable end)
+        var_info =
+          Enum.find(vars, fn %VarInfo{name: name, positions: positions} ->
+            name == variable and {line, column} in positions
+          end)
 
         if var_info != nil do
           %VarInfo{positions: positions} = var_info
@@ -138,6 +145,7 @@ defmodule ElixirSense.Providers.References do
 
     if fun_info.params |> hd |> Enum.any?(&match?({:\\, _, _}, &1)) do
       # function has default params, we cannot use arity to filter
+      # TODO consider adding min and max bounds on arity
       [module, func]
     else
       [module, func, arity]
@@ -181,8 +189,10 @@ defmodule ElixirSense.Providers.References do
   defp build_location(call) do
     %{callee: {_, func, _}} = call
 
+    line = call.line || 1
+
     {start_column, end_column} =
-      if call.column != nil do
+      if call.line != nil and call.column != nil do
         func_length = func |> to_string() |> String.length()
         {call.column, call.column + func_length}
       else
@@ -192,8 +202,8 @@ defmodule ElixirSense.Providers.References do
     %{
       uri: call.file,
       range: %{
-        start: %{line: call.line, column: start_column},
-        end: %{line: call.line, column: end_column}
+        start: %{line: line, column: start_column},
+        end: %{line: line, column: end_column}
       }
     }
   end
