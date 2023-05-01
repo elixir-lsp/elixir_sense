@@ -113,4 +113,4 @@ jobs:
         run: IFS=$'\n'; for f in $(git ls-files); do touch -d "$(git log -n 1 --pretty='%cI' -- $f)" "$f"; done
       - run: mix format --check-formatted
       - run: mix credo --all --strict
-      - run: mix dialyzer
+      - run: mix dialyzer --format github
