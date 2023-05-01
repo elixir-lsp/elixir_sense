@@ -975,10 +975,10 @@ defmodule ElixirSense.Core.State do
     current_requires = state.requires |> :lists.reverse() |> List.flatten()
 
     requires_from_scope =
-      if module not in current_requires do
-        [module | requires_from_scope]
-      else
+      if module in current_requires do
         requires_from_scope
+      else
+        [module | requires_from_scope]
       end
 
     %__MODULE__{state | requires: [requires_from_scope | inherited_requires]}
