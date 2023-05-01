@@ -1,5 +1,5 @@
 defmodule ElixirSenseExample.Fixtures.MetadataBuilder.Alias.AliasOfAlias do
-  alias ElixirSenseExample.MacroExpanderFixtures.Macros.Aliased
+  alias ElixirSenseExample.Fixtures.MetadataBuilder.Aliased
   alias Aliased, as: Some
   alias Aliased.Child
   @env __ENV__

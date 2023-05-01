@@ -1,6 +1,6 @@
 defmodule ElixirSenseExample.Fixtures.MetadataBuilder.Alias.AliasNoLeakSubmodule do
   defmodule Submodule do
-    alias ElixirSenseExample.MacroExpanderFixtures.Macros.Aliased
+    alias ElixirSenseExample.Fixtures.MetadataBuilder.Aliased
   end
 
   @env __ENV__

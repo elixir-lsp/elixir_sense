@@ -27,6 +27,9 @@ defmodule ElixirSense.Core.MetadataBuilder.AliasTest do
         Alias.AliasInheritSubmodule,
         Alias.AliasNoLeakFunction,
         Alias.AliasNoLeakSubmodule,
+        Alias.AliasNoLeakBlock,
+        Alias.AliasNoLeakClause,
+        Alias.RealiasInScope,
         Alias.Realias,
         Alias.Unalias,
         Alias.NoUnaliasNested,
@@ -45,5 +48,39 @@ defmodule ElixirSense.Core.MetadataBuilder.AliasTest do
 
       assert metadata_env.aliases == env.aliases
     end
+  end
+
+  test "auto aliased" do
+    code = """
+    __ENV__
+    """
+
+    state =
+      code
+      |> Code.string_to_quoted(columns: true)
+      |> MetadataBuilder.build()
+
+    {env, _} = Code.eval_string(code, [])
+    assert metadata_env = state.lines_to_env[env.line]
+
+    assert Enum.sort(metadata_env.aliases) == Enum.sort(env.aliases)
+  end
+
+  test "auto aliased after last module" do
+    code = """
+    defmodule A.B.C do
+    end
+    __ENV__
+    """
+
+    state =
+      code
+      |> Code.string_to_quoted(columns: true)
+      |> MetadataBuilder.build()
+
+    {env, _} = Code.eval_string(code, [])
+    assert metadata_env = state.lines_to_env[env.line]
+
+    assert Enum.sort(metadata_env.aliases) == Enum.sort(env.aliases)
   end
 end
