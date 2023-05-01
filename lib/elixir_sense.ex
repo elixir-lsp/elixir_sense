@@ -51,29 +51,37 @@ defmodule ElixirSense do
       iex> types |> String.split("\n") |> Enum.at(4)
       "@type default :: any"
   """
-  @spec docs(String.t(), pos_integer, pos_integer) :: %{
-          subject: String.t(),
-          actual_subject: String.t(),
-          docs: Introspection.docs()
-        }
+  @spec docs(String.t(), pos_integer, pos_integer) ::
+          %{
+            actual_subject: String.t(),
+            docs: Introspection.docs(),
+            range: %{
+              begin: {pos_integer, pos_integer},
+              end: {pos_integer, pos_integer}
+            }
+          }
+          | nil
   def docs(code, line, column) do
-    case Source.subject(code, line, column) do
-      nil ->
-        %{
-          subject: "",
-          actual_subject: "",
-          docs: %{docs: "No documentation available\n", types: ""}
-        }
+    case Code.Fragment.surround_context(code, {line, column}) do
+      :none ->
+        nil
 
-      subject ->
+      %{begin: begin_pos, end: end_pos, context: context} ->
         metadata = Parser.parse_string(code, true, true, line)
 
         env = Metadata.get_env(metadata, line)
 
         {actual_subject, docs} =
-          Docs.all(subject, env, metadata.mods_funs_to_positions, metadata.types)
+          Docs.all(context, env, metadata.mods_funs_to_positions, metadata.types)
 
-        %{subject: subject, actual_subject: actual_subject, docs: docs}
+        %{
+          actual_subject: actual_subject,
+          docs: docs,
+          range: %{
+            begin: begin_pos,
+            end: end_pos
+          }
+        }
     end
   end
 
@@ -94,11 +102,11 @@ defmodule ElixirSense do
   """
   @spec definition(String.t(), pos_integer, pos_integer) :: Location.t() | nil
   def definition(code, line, column) do
-    case Source.subject_with_position(code, line, column) do
-      nil ->
+    case Code.Fragment.surround_context(code, {line, column}) do
+      :none ->
         nil
 
-      {subject, {line, col}} ->
+      %{context: context, begin: {line, col}} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
         env = Metadata.get_env(buffer_file_metadata, line)
@@ -111,7 +119,7 @@ defmodule ElixirSense do
           end)
 
         Definition.find(
-          subject,
+          context,
           line,
           col,
           env,
@@ -136,17 +144,17 @@ defmodule ElixirSense do
   """
   @spec implementations(String.t(), pos_integer, pos_integer) :: [Location.t()]
   def implementations(code, line, column) do
-    case Source.subject(code, line, column) do
-      nil ->
+    case Code.Fragment.surround_context(code, {line, column}) do
+      :none ->
         []
 
-      subject ->
+      %{context: context} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
         env = Metadata.get_env(buffer_file_metadata, line)
 
         Implementation.find(
-          subject,
+          context,
           env,
           buffer_file_metadata.mods_funs_to_positions,
           buffer_file_metadata.types
@@ -239,7 +247,6 @@ defmodule ElixirSense do
       ...> '''
       iex> ElixirSense.signature(code, 3, 22)
       %{active_param: 0,
-        pipe_before: false,
         signatures: [
           %{name: "flatten",
             params: ["list"],
@@ -407,8 +414,15 @@ defmodule ElixirSense do
           call_trace_t()
         ) :: [References.reference_info()]
   def references(code, line, column, trace) do
-    case Source.subject_with_position(code, line, column) do
-      {subject, {line, col}} ->
+    case Code.Fragment.surround_context(code, {line, column}) do
+      :none ->
+        []
+
+      %{
+        context: context,
+        begin: {begin_line, begin_col},
+        end: {line, col}
+      } ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
         env =
@@ -422,7 +436,9 @@ defmodule ElixirSense do
 
         # one line can contain variables from many scopes
         vars =
-          case Enum.find(vars, fn %VarInfo{positions: positions} -> {line, col} in positions end) do
+          case Enum.find(vars, fn %VarInfo{positions: positions} ->
+                 {begin_line, begin_col} in positions
+               end) do
             %VarInfo{scope_id: scope_id} ->
               # in (h|l)?eex templates vars_info_per_scope_id[scope_id] is nil
               if buffer_file_metadata.vars_info_per_scope_id[scope_id] do
@@ -438,9 +454,9 @@ defmodule ElixirSense do
         arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
 
         References.find(
-          subject,
-          line,
-          col,
+          context,
+          begin_line,
+          begin_col,
           arity,
           env,
           vars,
@@ -448,9 +464,6 @@ defmodule ElixirSense do
           buffer_file_metadata,
           trace
         )
-
-      _ ->
-        []
     end
   end
 

@@ -7,10 +7,10 @@ defmodule ElixirSense.Providers.References do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
-  alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.AttributeInfo
   alias ElixirSense.Core.State.VarInfo
+  alias ElixirSense.Core.SurroundContext
 
   @type position :: %{line: pos_integer, column: pos_integer}
 
@@ -25,7 +25,7 @@ defmodule ElixirSense.Providers.References do
         }
 
   @spec find(
-          String.t(),
+          any(),
           non_neg_integer,
           non_neg_integer,
           non_neg_integer,
@@ -36,7 +36,7 @@ defmodule ElixirSense.Providers.References do
           ElixirSense.call_trace_t() | nil
         ) :: [ElixirSense.Providers.References.reference_info()]
   def find(
-        subject,
+        context,
         line,
         column,
         arity,
@@ -55,63 +55,74 @@ defmodule ElixirSense.Providers.References do
         },
         trace
       ) do
-    var_info =
-      Enum.find(vars, fn %VarInfo{name: name, positions: positions} ->
-        to_string(name) == subject and {line, column} in positions
-      end)
+    binding_env = %Binding{
+      attributes: attributes,
+      variables: vars,
+      current_module: module
+    }
 
-    attribute_info =
-      case subject do
-        "@" <> attribute_name ->
-          attributes
-          |> Enum.find(fn %AttributeInfo{name: name} -> to_string(name) == attribute_name end)
+    type = SurroundContext.to_binding(context, module)
 
-        _ ->
-          nil
-      end
+    refs_for_mod_fun = fn {mod, function} ->
+      private_info =
+        Enum.any?(modules_funs, fn {{_mod, name, _args}, fun_info} ->
+          name == function && fun_info.type == :defp
+        end)
 
-    private_info =
-      Enum.find(modules_funs, fn {{_mod, name, _args}, fun_info} ->
-        to_string(name) == subject && fun_info.type == :defp
-      end)
-
-    cond do
-      var_info != nil ->
-        %VarInfo{positions: positions} = var_info
-
-        positions
-        |> Enum.map(fn pos -> build_var_location(subject, pos) end)
-
-      attribute_info != nil ->
-        %AttributeInfo{positions: positions} = attribute_info
-
-        positions
-        |> Enum.map(fn pos -> build_var_location(subject, pos) end)
-
-      private_info != nil ->
+      if private_info do
         calls
         |> Map.values()
         |> List.flatten()
-        |> Enum.filter(&(&1.mod == nil && to_string(&1.func) == subject))
-        |> Enum.map(fn %{position: pos} -> build_var_location(subject, pos) end)
-
-      true ->
-        binding_env = %Binding{
-          attributes: attributes,
-          variables: vars,
-          current_module: module
-        }
-
+        |> Enum.filter(&(&1.mod == nil && &1.func == function))
+        |> Enum.map(fn %{position: pos} -> build_var_location(to_string(function), pos) end)
+      else
         {mod, fun, _found} =
-          subject
-          |> Source.split_module_and_func(module, aliases)
-          |> expand(binding_env, aliases)
+          {mod, function}
+          |> expand(binding_env, module, aliases)
           |> Introspection.actual_mod_fun(imports, aliases, module, modules_funs, metadata_types)
 
         {mod, fun}
         |> xref_at_cursor(arity, module, scope, modules_funs, trace)
         |> Enum.map(&build_location/1)
         |> Enum.sort_by(fn %{uri: a, range: %{start: %{line: b, column: c}}} -> {a, b, c} end)
+      end
+    end
+
+    case type do
+      nil ->
+        []
+
+      {:variable, variable} ->
+        var_info =
+          Enum.find(vars, fn %VarInfo{name: name, positions: positions} ->
+            name == variable and {line, column} in positions
+          end)
+
+        if var_info != nil do
+          %VarInfo{positions: positions} = var_info
+
+          positions
+          |> Enum.map(fn pos -> build_var_location(to_string(variable), pos) end)
+        else
+          refs_for_mod_fun.({nil, variable})
+        end
+
+      {:attribute, attribute} ->
+        attribute_info =
+          attributes
+          |> Enum.find(fn %AttributeInfo{name: name} -> name == attribute end)
+
+        if attribute_info != nil do
+          %AttributeInfo{positions: positions} = attribute_info
+
+          positions
+          |> Enum.map(fn pos -> build_var_location("@#{attribute}", pos) end)
+        else
+          []
+        end
+
+      {mod, function} ->
+        refs_for_mod_fun.({mod, function})
     end
   end
 
@@ -207,15 +218,14 @@ defmodule ElixirSense.Providers.References do
     }
   end
 
-  defp expand({{:attribute, _} = type, func}, env, aliases) do
+  defp expand({nil, func}, _env, module, _aliases) when module not in [nil, Elixir],
+    do: {nil, func}
+
+  defp expand({type, func}, env, _module, aliases) do
     case Binding.expand(env, type) do
       {:atom, module} -> {Introspection.expand_alias(module, aliases), func}
       _ -> {nil, nil}
     end
-  end
-
-  defp expand({type, func}, _env, _aliases) do
-    {type, func}
   end
 
   defp get_corrected_arity([m]) do

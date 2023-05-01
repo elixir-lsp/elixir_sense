@@ -7,24 +7,23 @@ defmodule ElixirSense.Providers.Implementation do
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized
-  alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.ModFunInfo
+  alias ElixirSense.Core.SurroundContext
   alias ElixirSense.Location
 
   @doc """
   Finds out where a callback, protocol or delegate was implemented.
   """
   @spec find(
-          String.t(),
+          any(),
           State.Env.t(),
           State.mods_funs_to_positions_t(),
           State.types_t()
         ) :: [%Location{}]
   def find(
-        subject,
+        context,
         %State.Env{
-          aliases: aliases,
           module: module,
           vars: vars,
           attributes: attributes
@@ -38,22 +37,40 @@ defmodule ElixirSense.Providers.Implementation do
       current_module: module
     }
 
-    {maybe_found_module, maybe_fun} = Source.split_module_and_func(subject, module, aliases)
+    type = SurroundContext.to_binding(context, module)
 
-    behaviour_implementations =
-      find_behaviour_implementations(maybe_found_module, maybe_fun, module, env, binding_env)
+    case type do
+      nil ->
+        []
 
-    if behaviour_implementations == [] do
-      find_delegatee(
-        {maybe_found_module, maybe_fun},
-        mods_funs_to_positions,
-        env,
-        metadata_types,
-        binding_env
-      )
-      |> List.wrap()
-    else
-      behaviour_implementations
+      {kind, _} when kind in [:attribute] ->
+        []
+
+      {module_type, function} ->
+        module =
+          case Binding.expand(binding_env, module_type) do
+            {:atom, module} ->
+              Introspection.expand_alias(module, env.aliases)
+
+            _ ->
+              env.module
+          end
+
+        behaviour_implementations =
+          find_behaviour_implementations(module, function, module, env, binding_env)
+
+        if behaviour_implementations == [] do
+          find_delegatee(
+            {module, function},
+            mods_funs_to_positions,
+            env,
+            metadata_types,
+            binding_env
+          )
+          |> List.wrap()
+        else
+          behaviour_implementations
+        end
     end
   end
 

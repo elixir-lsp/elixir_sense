@@ -3,6 +3,7 @@ defmodule ElixirSense.Providers.Signature do
   Provider responsible for introspection information about function signatures.
   """
 
+  alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Source
@@ -11,7 +12,6 @@ defmodule ElixirSense.Providers.Signature do
 
   @type signature_info :: %{
           active_param: non_neg_integer,
-          pipe_before: boolean,
           signatures: [Metadata.signature_t()]
         }
 
@@ -20,34 +20,40 @@ defmodule ElixirSense.Providers.Signature do
   """
   @spec find(String.t(), State.Env.t(), Metadata.t()) :: signature_info | :none
   def find(prefix, env, metadata) do
-    %State.Env{imports: imports, aliases: aliases, module: module} = env
+    %State.Env{
+      imports: imports,
+      aliases: aliases,
+      module: module,
+      vars: vars,
+      attributes: attributes
+    } = env
 
-    with %{
-           candidate: {mod, fun},
-           elixir_prefix: elixir_prefix,
-           npar: npar,
-           unfinished_parm: unfinished_parm,
-           pipe_before: pipe_before
-         } <-
-           Source.which_func(prefix, module),
+    binding_env = %Binding{
+      attributes: attributes,
+      variables: vars,
+      current_module: module
+    }
+
+    with %{candidate: {m, f}, npar: npar, elixir_prefix: elixir_prefix} <-
+           Source.which_func(prefix, binding_env),
          {mod, fun, true} <-
            Introspection.actual_mod_fun(
-             {mod, fun},
+             {m, f},
              imports,
              if(elixir_prefix, do: [], else: aliases),
              module,
              metadata.mods_funs_to_positions,
              metadata.types
            ) do
-      signatures = find_signatures({mod, fun}, npar, unfinished_parm, env, metadata)
-      %{active_param: npar, pipe_before: pipe_before, signatures: signatures}
+      signatures = find_signatures({mod, fun}, npar, env, metadata)
+      %{active_param: npar, signatures: signatures}
     else
       _ ->
         :none
     end
   end
 
-  defp find_signatures({mod, fun}, npar, unfinished_parm, env, metadata) do
+  defp find_signatures({mod, fun}, npar, env, metadata) do
     signatures = find_function_signatures({mod, fun}, env, metadata)
 
     signatures =
@@ -62,13 +68,9 @@ defmodule ElixirSense.Providers.Signature do
       params_length = length(params)
 
       if params_length == 0 do
-        not unfinished_parm and npar == 0
+        npar == 0
       else
-        if unfinished_parm do
-          params_length >= npar + 1
-        else
-          params_length > npar
-        end
+        params_length > npar
       end
     end)
     |> Enum.sort_by(&length(&1.params))

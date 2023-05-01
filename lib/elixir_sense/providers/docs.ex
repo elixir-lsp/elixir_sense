@@ -4,13 +4,13 @@ defmodule ElixirSense.Providers.Docs do
   """
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
+  alias ElixirSense.Core.SurroundContext
 
-  @spec all(String.t(), State.Env.t(), State.mods_funs_to_positions_t(), State.types_t()) ::
+  @spec all(any, State.Env.t(), State.mods_funs_to_positions_t(), State.types_t()) ::
           {actual_mod_fun :: String.t(), docs :: Introspection.docs()}
   def all(
-        subject,
+        context,
         %State.Env{
           imports: imports,
           aliases: aliases,
@@ -28,24 +28,55 @@ defmodule ElixirSense.Providers.Docs do
       current_module: module
     }
 
-    {mod, fun, _found} =
-      subject
-      |> Source.split_module_and_func(module, aliases)
-      |> expand(binding_env, aliases)
-      |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs, metadata_types)
+    type = SurroundContext.to_binding(context, module)
 
-    {mod_fun_to_string({mod, fun}), Introspection.get_all_docs({mod, fun}, scope)}
+    mod_fun_docs(type, binding_env, imports, aliases, module, mods_funs, metadata_types, scope)
   end
 
-  defp expand({{:attribute, _} = type, func}, env, aliases) do
-    case Binding.expand(env, type) do
-      {:atom, module} -> {Introspection.expand_alias(module, aliases), func}
-      _ -> {nil, nil}
+  defp mod_fun_docs(
+         {:variable, name} = type,
+         binding_env,
+         imports,
+         aliases,
+         module,
+         mods_funs,
+         metadata_types,
+         scope
+       ) do
+    case Binding.expand(binding_env, type) do
+      # TODO
+      :none ->
+        mod_fun_docs(
+          {nil, name},
+          binding_env,
+          imports,
+          aliases,
+          module,
+          mods_funs,
+          metadata_types,
+          scope
+        )
     end
   end
 
-  defp expand({type, func}, _env, _aliases) do
-    {type, func}
+  # TODO attr
+
+  defp mod_fun_docs(
+         {mod, fun},
+         binding_env,
+         imports,
+         aliases,
+         module,
+         mods_funs,
+         metadata_types,
+         scope
+       ) do
+    {mod, fun, _found} =
+      {Binding.expand(binding_env, mod), fun}
+      |> SurroundContext.expand(aliases)
+      |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs, metadata_types)
+
+    {mod_fun_to_string({mod, fun}), Introspection.get_all_docs({mod, fun}, scope)}
   end
 
   defp mod_fun_to_string({nil, nil}), do: ""

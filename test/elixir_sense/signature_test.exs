@@ -16,7 +16,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 4, 19) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "",
@@ -45,7 +44,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 4, 25) == %{
                active_param: 1,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "",
@@ -68,7 +66,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 4, 24) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "",
@@ -97,7 +94,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 4, 30) == %{
                active_param: 1,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "",
@@ -117,7 +113,6 @@ defmodule ElixirSense.SignatureTest do
       """
 
       assert ElixirSense.signature(code, 2, 69) == %{
-               pipe_before: false,
                active_param: 0,
                signatures: [
                  %{
@@ -145,7 +140,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 2, 68) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "",
@@ -175,7 +169,6 @@ defmodule ElixirSense.SignatureTest do
       """
 
       assert %{
-               pipe_before: false,
                active_param: 0,
                signatures: [
                  %{
@@ -201,7 +194,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 2, 21) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    params: [],
@@ -225,7 +217,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 3, 15) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "some macro\n",
@@ -246,7 +237,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 2, 14) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation:
@@ -270,7 +260,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: summary1,
@@ -307,7 +296,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 3, 23) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    name: "flatten",
@@ -337,7 +325,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 3, 28) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    name: "flatten",
@@ -367,7 +354,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 3, 16) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    name: "flatten",
@@ -396,7 +382,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 2, 21) == %{
                active_param: 1,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation:
@@ -418,7 +403,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 2, 21) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation:
@@ -441,7 +425,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 2, 56) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "",
@@ -462,7 +445,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 2, 31) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    name: "flatten",
@@ -484,14 +466,13 @@ defmodule ElixirSense.SignatureTest do
 
     test "find signatures from __MODULE__" do
       code = """
-      defmodule Inspect do
-        __MODULE__.Algebra.glue(par1,
+      defmodule Inspect.Algebra do
+        __MODULE__.glue(par1,
       end
       """
 
-      assert ElixirSense.signature(code, 2, 32) == %{
+      assert ElixirSense.signature(code, 2, 24) == %{
                active_param: 1,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation:
@@ -504,6 +485,130 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    test "find signatures from __MODULE__ submodule" do
+      code = """
+      defmodule Inspect do
+        __MODULE__.Algebra.glue(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 32) == %{
+               active_param: 1,
+               signatures: [
+                 %{
+                   documentation:
+                     "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
+                   name: "glue",
+                   params: ["doc1", "break_string \\\\ \" \"", "doc2"],
+                   spec: "@spec glue(t, binary, t) :: t"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures from attribute" do
+      code = """
+      defmodule MyMod do
+        @attribute Inspect.Algebra
+        @attribute.glue(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 24) == %{
+               active_param: 1,
+               signatures: [
+                 %{
+                   documentation:
+                     "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
+                   name: "glue",
+                   params: ["doc1", "break_string \\\\ \" \"", "doc2"],
+                   spec: "@spec glue(t, binary, t) :: t"
+                 }
+               ]
+             }
+    end
+
+    @tag :capture_log
+    test "find signatures from attribute submodule" do
+      code = """
+      defmodule Inspect do
+        @attribute Inspect
+        @attribute.Algebra.glue(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 32) == %{
+               active_param: 1,
+               signatures: [
+                 %{
+                   documentation:
+                     "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
+                   name: "glue",
+                   params: ["doc1", "break_string \\\\ \" \"", "doc2"],
+                   spec: "@spec glue(t, binary, t) :: t"
+                 }
+               ]
+             }
+    end
+
+    test "find signatures from variable" do
+      code = """
+      defmodule MyMod do
+        myvariable = Inspect.Algebra
+        myvariable.glue(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 24) == %{
+               active_param: 1,
+               signatures: [
+                 %{
+                   documentation:
+                     "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
+                   name: "glue",
+                   params: ["doc1", "break_string \\\\ \" \"", "doc2"],
+                   spec: "@spec glue(t, binary, t) :: t"
+                 }
+               ]
+             }
+    end
+
+    @tag :capture_log
+    test "find signatures from variable submodule - don't crash" do
+      code = """
+      defmodule Inspect do
+        myvariable = Inspect
+        myvariable.Algebra.glue(par1,
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 32) == :none
+    end
+
+    test "find signatures from variable call" do
+      code = """
+      defmodule Inspect do
+        myvariable = &Inspect.Algebra.glue/2
+        myvariable.(par1,
+      end
+      """
+
+      # TODO?
+      assert ElixirSense.signature(code, 3, 20) == :none
+    end
+
+    test "find signatures from attribute call" do
+      code = """
+      defmodule Inspect do
+        @attribute &Inspect.Algebra.glue/2
+        @attribute.(par1,
+      end
+      """
+
+      # TODO?
+      assert ElixirSense.signature(code, 3, 20) == :none
+    end
+
     test "finds signatures from Kernel functions" do
       code = """
       defmodule MyModule do
@@ -513,7 +618,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 2, 14) == %{
                active_param: 1,
-               pipe_before: false,
                signatures: [
                  %{
                    name: "apply",
@@ -553,7 +657,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 4, 9) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    name: "sum",
@@ -591,7 +694,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 4, 12) == %{
                active_param: 1,
-               pipe_before: false,
                signatures: [
                  %{
                    name: "sum",
@@ -615,7 +717,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 4, 21) == %{
                active_param: 1,
-               pipe_before: false,
                signatures: [
                  %{documentation: "", name: "sum", spec: "", params: ["s \\\\ nil", "f"]},
                  %{documentation: "", name: "sum", spec: "", params: ["arg", "x", "y"]}
@@ -646,7 +747,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 15, 21) == %{
                active_param: 1,
-               pipe_before: false,
                signatures: [
                  %{documentation: "", name: "sum", params: ["s \\\\ nil", "f"], spec: ""},
                  %{documentation: "", name: "sum", spec: "", params: ["a", "atom"]},
@@ -695,7 +795,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(code, 8, 11) == %{
                active_param: 1,
-               pipe_before: false,
                signatures: [
                  %{
                    name: "sum",
@@ -726,7 +825,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    name: "terminate",
@@ -757,7 +855,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    name: "init",
@@ -780,7 +877,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "Docs for bar",
@@ -802,7 +898,6 @@ defmodule ElixirSense.SignatureTest do
       if ExUnitConfig.erlang_eep48_supported() do
         assert %{
                  active_param: 0,
-                 pipe_before: false,
                  signatures: [
                    %{
                      documentation: "- Args = " <> _,
@@ -825,7 +920,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "- Args = " <> _,
@@ -866,7 +960,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert %{
                active_param: 1,
-               pipe_before: true,
                signatures: [
                  %{
                    name: "inspect",
@@ -883,6 +976,16 @@ defmodule ElixirSense.SignatureTest do
                  }
                ]
              } = ElixirSense.signature(code, 2, 24)
+    end
+
+    test "after |> variable" do
+      code = """
+      s |> String.replace_prefix(
+      """
+
+      assert %{
+               active_param: 1
+             } = ElixirSense.signature(code, 1, 28)
     end
 
     test "find built-in functions" do
@@ -902,7 +1005,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(buffer, 2, 54) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "Built-in function",
@@ -928,7 +1030,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(buffer, 4, 51) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "Built-in function",
@@ -948,7 +1049,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert ElixirSense.signature(buffer, 6, 54) == %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "Built-in function",
@@ -970,19 +1070,19 @@ defmodule ElixirSense.SignatureTest do
         import GenServer
         @ callback cb() :: term
         module_info()
-        #^
+        #           ^
         __info__(:macros)
-        #^
+        #        ^
         behaviour_info(:callbacks)
-        #^
+        #              ^
       end
       """
 
-      assert :none = ElixirSense.signature(buffer, 4, 5)
+      assert :none = ElixirSense.signature(buffer, 4, 15)
 
-      assert :none = ElixirSense.signature(buffer, 6, 5)
+      assert :none = ElixirSense.signature(buffer, 6, 12)
 
-      assert :none = ElixirSense.signature(buffer, 8, 5)
+      assert :none = ElixirSense.signature(buffer, 8, 18)
     end
 
     @tag requires_otp_23: true
@@ -998,7 +1098,6 @@ defmodule ElixirSense.SignatureTest do
 
       %{
         active_param: 0,
-        pipe_before: false,
         signatures: [
           %{
             documentation: "",
@@ -1011,7 +1110,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: "",
@@ -1035,7 +1133,6 @@ defmodule ElixirSense.SignatureTest do
 
       %{
         active_param: 0,
-        pipe_before: false,
         signatures: [
           %{
             documentation: summary,
@@ -1052,7 +1149,6 @@ defmodule ElixirSense.SignatureTest do
 
       assert %{
                active_param: 0,
-               pipe_before: false,
                signatures: [
                  %{
                    documentation: summary1,

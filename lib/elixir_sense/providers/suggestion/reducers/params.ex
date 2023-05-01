@@ -1,6 +1,7 @@
 defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
   @moduledoc false
 
+  alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Source
@@ -23,16 +24,28 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
   def add_options(hint, env, buffer_metadata, cursor_context, acc) do
     prefix = cursor_context.text_before
 
-    %State.Env{imports: imports, aliases: aliases, module: module} = env
+    %State.Env{
+      imports: imports,
+      aliases: aliases,
+      module: module,
+      attributes: attributes,
+      vars: vars
+    } = env
+
+    binding_env = %Binding{
+      attributes: attributes,
+      variables: vars,
+      current_module: module
+    }
+
     %Metadata{mods_funs_to_positions: mods_funs, types: metadata_types} = buffer_metadata
 
     with %{
            candidate: {mod, fun},
            elixir_prefix: elixir_prefix,
-           npar: npar,
-           pipe_before: _pipe_before
+           npar: npar
          } <-
-           Source.which_func(prefix, module),
+           Source.which_func(prefix, binding_env),
          {mod, fun, true} <-
            Introspection.actual_mod_fun(
              {mod, fun},

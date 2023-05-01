@@ -3,37 +3,11 @@ defmodule ElixirSense.Core.Source do
   Source parsing
   """
 
+  alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Normalized.Tokenizer
 
   @line_break ["\n", "\r\n", "\r"]
   @empty_graphemes [" ", "\t"] ++ @line_break
-  @stop_graphemes [
-                    "{",
-                    "}",
-                    "(",
-                    ")",
-                    "[",
-                    "]",
-                    "<",
-                    ">",
-                    "+",
-                    "-",
-                    "*",
-                    "&",
-                    "^",
-                    ",",
-                    ";",
-                    "~",
-                    "%",
-                    "=",
-                    "\\",
-                    "\/",
-                    "$",
-                    "!",
-                    "?",
-                    "`",
-                    "#"
-                  ] ++ @empty_graphemes
 
   @spec split_module_and_hint(String.t(), module | nil, [{module, module}]) ::
           {nil | module | {:attribute, atom}, String.t()}
@@ -159,50 +133,6 @@ defmodule ElixirSense.Core.Source do
   def text_after(code, line, col) do
     {_, rest} = split_at(code, line, col)
     rest
-  end
-
-  @spec subject(String.t(), pos_integer, pos_integer) :: nil | String.t()
-  def subject(code, line, col) do
-    acc = %{line: line, col: col, pos_found: false, candidate: [], pos: nil}
-
-    code =
-      code
-      |> split_lines
-      |> Enum.map_join("\n", fn line ->
-        # this is a naive comment strip - it will not honour # in strings, chars etc
-        Regex.replace(~r/(?<!\<)\#(?!\{).*$/, line, "")
-      end)
-
-    case walk_text(code, acc, &find_subject/5) do
-      %{candidate: []} ->
-        nil
-
-      %{candidate: candidate} ->
-        candidate |> Enum.reverse() |> Enum.join()
-    end
-  end
-
-  @spec subject_with_position(String.t(), pos_integer, pos_integer) ::
-          nil | {String.t(), {pos_integer, pos_integer}}
-  def subject_with_position(code, line, col) do
-    acc = %{line: line, col: col, pos_found: false, candidate: [], pos: nil}
-
-    case walk_text(code, acc, &find_subject/5) do
-      %{candidate: []} ->
-        nil
-
-      %{candidate: candidate, pos: {line, col}} ->
-        subject = candidate |> Enum.reverse() |> Enum.join()
-
-        last_part =
-          subject
-          |> String.reverse()
-          |> String.split(".", parts: 2)
-          |> Enum.at(0)
-          |> String.reverse()
-
-        {subject, {line, col - String.length(last_part) + 1}}
-    end
   end
 
   @doc ~S"""
@@ -394,42 +324,6 @@ defmodule ElixirSense.Core.Source do
     {rest, %{acc | buffer: [grapheme | buffer]}}
   end
 
-  defp find_subject(grapheme, rest, line, col, %{pos_found: false, line: line, col: col} = acc) do
-    find_subject(grapheme, rest, line, col, %{acc | pos: {line, col - 1}, pos_found: true})
-  end
-
-  defp find_subject("." = grapheme, rest, _line, _col, %{pos_found: false} = acc) do
-    {rest, %{acc | candidate: [grapheme | acc.candidate]}}
-  end
-
-  defp find_subject(".", _rest, line, col, %{pos_found: true} = acc) do
-    {"", %{acc | pos: {line, col - 1}}}
-  end
-
-  defp find_subject(grapheme, rest, _line, _col, %{candidate: [_ | _]} = acc)
-       when grapheme in ["!", "?"] do
-    {rest, %{acc | candidate: [grapheme | acc.candidate]}}
-  end
-
-  defp find_subject(grapheme, rest, _line, _col, %{candidate: ["." | _]} = acc)
-       when grapheme in @stop_graphemes do
-    {rest, acc}
-  end
-
-  defp find_subject(grapheme, rest, _line, _col, %{pos_found: false} = acc)
-       when grapheme in @stop_graphemes do
-    {rest, %{acc | candidate: []}}
-  end
-
-  defp find_subject(grapheme, _rest, line, col, %{pos_found: true} = acc)
-       when grapheme in @stop_graphemes do
-    {"", %{acc | pos: {line, col - 1}}}
-  end
-
-  defp find_subject(grapheme, rest, _line, _col, acc) do
-    {rest, %{acc | candidate: [grapheme | acc.candidate]}}
-  end
-
   defp do_walk_text(text, func, line, col, acc) do
     case String.next_grapheme(text) do
       nil ->
@@ -476,305 +370,158 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  @spec which_func(String.t(), nil | module) :: %{
-          candidate: :none | {nil | module, atom},
-          elixir_prefix: boolean,
-          npar: non_neg_integer,
-          pipe_before: boolean,
-          unfinished_parm: boolean,
-          cursor_at_option: true | false | :maybe,
-          option: atom(),
-          options_so_far: [atom],
-          pos:
-            nil | {{non_neg_integer, non_neg_integer}, {non_neg_integer, nil | non_neg_integer}}
-        }
-  def which_func(prefix, current_module \\ nil) do
-    tokens = Tokenizer.tokenize(prefix)
-
-    pattern = %{
-      npar: [],
-      count: 0,
-      count2: 0,
-      count3: 0,
-      kw_identifiers: [],
-      candidate: [],
-      pos: nil,
-      pipe_before: false,
-      check_fun_at_cursor?: String.ends_with?(prefix, " ")
-    }
-
-    result = scan(tokens, pattern)
-
-    %{
-      candidate: candidate,
-      npar: npar,
-      pipe_before: pipe_before,
-      pos: pos,
-      kw_identifiers: kw_identifiers,
-      count3: count3
-    } = result
-
-    options_so_far =
-      for {key, pos, ^count3} <- kw_identifiers do
-        {key, pos}
-      end
-
-    cursor_at_option = check_cursor_at_option(tokens, result)
-
-    option =
-      if count3 == 0 and options_so_far != [] and cursor_at_option == false do
-        {name, _} = List.last(options_so_far)
-        name
-      end
-
-    {normalized_candidate, elixir_prefix} = normalize_candidate(candidate, current_module)
-
-    unfinished_parm =
-      case npar |> Enum.at(-1) do
-        nil ->
-          case {tokens, normalized_candidate} do
-            {_, :none} -> false
-            {[{:"(", _}, {:paren_identifier, _, _} | _], _} -> false
-            _ -> true
-          end
-
-        token ->
-          Enum.find_index(tokens, fn t -> t == token end) != 0
-      end
-
-    %{
-      candidate: normalized_candidate,
-      elixir_prefix: elixir_prefix,
-      npar: normalize_npar(length(npar), pipe_before),
-      unfinished_parm: unfinished_parm,
-      pipe_before: pipe_before,
-      cursor_at_option: cursor_at_option,
-      options_so_far: options_so_far,
-      option: option,
-      pos: pos
-    }
-  end
-
-  defp check_cursor_at_option(tokens, scan_result) do
-    comma_before_token =
-      case tokens do
-        [{:",", _} = token | _] ->
-          token
-
-        [{:identifier, _, _}, {:",", _} = token | _] ->
-          token
-
-        _ ->
+  @spec which_func(String.t(), nil | %Binding{}) ::
           nil
-      end
+          | %{
+              candidate: {nil | module, atom},
+              elixir_prefix: boolean,
+              npar: non_neg_integer,
+              cursor_at_option: true | false | :maybe,
+              option: atom() | nil,
+              options_so_far: [atom],
+              pos: {{non_neg_integer, non_neg_integer}, {non_neg_integer, nil | non_neg_integer}}
+            }
+  def which_func(prefix, binding_env \\ nil) do
+    binding_env = binding_env || %Binding{}
 
-    same_level = scan_result.count3 == 0
-    first_arg? = scan_result.npar == []
-
-    cond do
-      !same_level ->
-        false
-
-      comma_before_token in scan_result.npar ->
-        :maybe
-
-      comma_before_token ->
-        true
-
-      first_arg? ->
-        :maybe
-
-      true ->
-        false
+    with {:ok, ast} <- Code.Fragment.container_cursor_to_quoted(prefix, columns: true),
+         {_, {:ok, call, npar, meta, options, cursor_at_option, option}} <-
+           Macro.prewalk(ast, nil, &find_call_pre/2),
+         {{m, elixir_prefix}, f} <- get_mod_fun(call, binding_env) do
+      %{
+        candidate: {m, f},
+        elixir_prefix: elixir_prefix,
+        npar: npar,
+        pos: {{meta[:line], meta[:column]}, {meta[:line], nil}},
+        cursor_at_option: cursor_at_option,
+        options_so_far: options,
+        option: option
+      }
+    else
+      _ -> nil
     end
   end
 
-  defp normalize_candidate(candidate, current_module) do
-    case candidate do
-      [] ->
-        {:none, false}
+  def find_call_pre(ast, {:ok, call, npar, meta, options, cursor_at_option, option}),
+    do: {ast, {:ok, call, npar, meta, options, cursor_at_option, option}}
 
-      [func] ->
-        {{nil, func}, false}
-
-      [:__MODULE__, func] ->
-        {{current_module, func}, false}
-
-      [mod, func] ->
-        {{mod, func}, false}
-
-      list ->
-        [func | mods] = Enum.reverse(list)
-
-        module_parts =
-          case mods |> Enum.reverse() do
-            [:__MODULE__ | rest] ->
-              [current_module | rest]
-
-            rest ->
-              rest
-          end
-
-        {{Module.concat(module_parts), func}, hd(module_parts) == Elixir}
-    end
+  # transform `a |> b(c)` calls into `b(a, c)`
+  def find_call_pre({:|>, _, [params_1, {call, meta, params_rest}]}, state) do
+    params = [params_1 | params_rest || []]
+    find_call_pre({call, meta, params}, state)
   end
 
-  defp normalize_npar(npar, true), do: npar + 1
-  defp normalize_npar(npar, _pipe_before), do: npar
-
-  defp maybe_update_kw_identifiers(%{count: 0, count2: 0} = state, key_pos) do
-    %{state | kw_identifiers: [key_pos | state.kw_identifiers]}
+  def find_call_pre({{:., meta, call}, _, params} = ast, _state) when is_list(params) do
+    {ast, find_cursor_in_params(params, call, meta)}
   end
 
-  defp maybe_update_kw_identifiers(state, _key) do
-    state
+  def find_call_pre({atom, meta, params} = ast, _state)
+      when is_atom(atom) and is_list(params) and atom not in [:{}, :%{}] do
+    {ast, find_cursor_in_params(params, atom, meta)}
   end
 
-  defp scan(tokens, %{check_fun_at_cursor?: true} = state) do
-    case tokens do
-      [{:identifier, pos, value} | other_tokens] ->
-        scan(other_tokens, %{
-          state
-          | candidate: [value | state.candidate],
-            count: 1,
-            check_fun_at_cursor?: false,
-            pos: update_pos(pos, state.pos)
-        })
+  def find_call_pre(ast, state), do: {ast, state}
+
+  defp find_cursor_in_params(params, call, meta) do
+    case Enum.reverse(params) do
+      [{:__cursor__, _, []} | rest] ->
+        {:ok, call, length(rest), meta, [], :maybe, nil}
+
+      [keyword_list | rest] when is_list(keyword_list) ->
+        case Enum.reverse(keyword_list) do
+          [{:__cursor__, _, []} | kl_rest] ->
+            if Keyword.keyword?(kl_rest) do
+              {:ok, call, length(rest), meta, Enum.reverse(kl_rest) |> Enum.map(&elem(&1, 0)),
+               true, nil}
+            end
+
+          [{atom, {:__cursor__, _, []}} | kl_rest] when is_atom(atom) ->
+            if Keyword.keyword?(kl_rest) do
+              {:ok, call, length(rest), meta, Enum.reverse(kl_rest) |> Enum.map(&elem(&1, 0)),
+               false, atom}
+            end
+
+          _ ->
+            nil
+        end
 
       _ ->
-        scan(tokens, %{state | check_fun_at_cursor?: false})
+        nil
     end
   end
 
-  defp scan([{:eol, _}, token | _tokens], state)
-       when elem(token, 0) not in [:",", :"[", :"{", :"("] do
-    state
-  end
+  def get_mod_fun(atom, _binding_env) when is_atom(atom), do: {{nil, false}, atom}
 
-  defp scan([token | _], %{count: 1} = state) when elem(token, 0) in [:",", :type_op] do
-    state
-  end
+  def get_mod_fun([{:__aliases__, _, list}, fun], binding_env) do
+    mod = get_mod(list, binding_env)
 
-  defp scan([{_, {l, _, _}, _} = next, {:identifier, {l, _, _}, _} = token | tokens], state) do
-    {_, {_, c1, _} = pos, value} = token
-    {next_kind, {_, c2, _}, _} = next
-    size = value |> to_charlist() |> length()
-    next_kind_str = to_string(next_kind)
-
-    if c2 > c1 + size && !String.ends_with?(next_kind_str, "_op") do
-      scan(tokens, %{
-        state
-        | candidate: [value | state.candidate],
-          count: 1,
-          pos: update_pos(pos, state.pos)
-      })
-    else
-      scan([token | tokens], state)
+    if mod do
+      {mod, fun}
     end
   end
 
-  defp scan([{:kw_identifier, pos, key} | tokens], %{npar: [_]} = state) do
-    state = maybe_update_kw_identifiers(state, {key, pos, state.count3})
-    scan(tokens, %{state | npar: []})
+  def get_mod_fun([{:__MODULE__, _, nil}, fun], binding_env) do
+    if binding_env.current_module not in [nil, Elixir] do
+      {{binding_env.current_module, false}, fun}
+    end
   end
 
-  defp scan([{:kw_identifier, pos, key} | tokens], state) do
-    state = maybe_update_kw_identifiers(state, {key, pos, state.count3})
-    scan(tokens, state)
+  def get_mod_fun([{:@, _, [{name, _, nil}]}, fun], binding_env) when is_atom(name) do
+    case Binding.expand(binding_env, {:attribute, name}) do
+      {:atom, atom} ->
+        {{atom, false}, fun}
+
+      _ ->
+        nil
+    end
   end
 
-  defp scan([{:",", _pos} = t | tokens], %{count: 0, count2: 0} = state) do
-    scan(tokens, %{state | npar: [t | state.npar], candidate: []})
+  def get_mod_fun([{name, _, nil}, fun], binding_env) when is_atom(name) do
+    case Binding.expand(binding_env, {:variable, name}) do
+      {:atom, atom} ->
+        {{atom, false}, fun}
+
+      _ ->
+        nil
+    end
   end
 
-  defp scan([{:"(", _} | tokens], %{count: 1, candidate: []} = state), do: scan(tokens, state)
-  defp scan([{:"(", _} | _tokens], %{count: 1} = state), do: state
+  def get_mod_fun([atom, fun], _binding_env) when is_atom(atom), do: {{atom, false}, fun}
+  def get_mod_fun(_, _binding_env), do: nil
 
-  defp scan([{:"(", _} | tokens], state) do
-    scan(tokens, %{state | count: state.count + 1, candidate: []})
+  def get_mod([{:__MODULE__, _, nil} | rest], binding_env) do
+    if binding_env.current_module not in [nil, Elixir] do
+      mod =
+        binding_env.current_module
+        |> Module.split()
+        |> Kernel.++(rest)
+        |> Module.concat()
+
+      {mod, false}
+    end
   end
 
-  defp scan([{:")", _} | tokens], state) do
-    scan(tokens, %{state | count: state.count - 1, candidate: []})
+  def get_mod([{:@, _, [{name, _, nil}]} | rest], binding_env) when is_atom(name) do
+    case Binding.expand(binding_env, {:attribute, name}) do
+      {:atom, atom} ->
+        mod =
+          atom
+          |> Module.split()
+          |> Kernel.++(rest)
+          |> Module.concat()
+
+        {mod, false}
+
+      _ ->
+        nil
+    end
   end
 
-  defp scan([{token, _} | tokens], %{count2: 0} = state) when token in [:"[", :"{"] do
-    scan(tokens, %{state | npar: [], count2: 0, count3: state.count3 + 1})
+  def get_mod([head | _rest] = list, _binding_env) when is_atom(head) do
+    {Module.concat(list), head == Elixir}
   end
 
-  defp scan([{token, _} | tokens], state) when token in [:"[", :"{"] do
-    scan(tokens, %{state | count2: state.count2 + 1, count3: state.count3 + 1})
-  end
-
-  defp scan([{token, _} | tokens], state) when token in [:"]", :"}"] do
-    scan(tokens, %{state | count2: state.count2 - 1, count3: state.count3 - 1})
-  end
-
-  defp scan([{:paren_identifier, pos, value} | tokens], %{count: 1} = state) do
-    scan(tokens, %{state | candidate: [value | state.candidate], pos: update_pos(pos, state.pos)})
-  end
-
-  defp scan([{:aliases, pos, [value]} | tokens], %{count: 1} = state) do
-    updated_pos = update_pos(pos, state.pos)
-
-    scan(tokens, %{
-      state
-      | candidate: [Module.concat([value]) | state.candidate],
-        pos: updated_pos
-    })
-  end
-
-  defp scan([{:alias, pos, value} | tokens], %{count: 1} = state) do
-    updated_pos = update_pos(pos, state.pos)
-
-    scan(tokens, %{
-      state
-      | candidate: [Module.concat([value]) | state.candidate],
-        pos: updated_pos
-    })
-  end
-
-  defp scan([{:identifier, pos, :__MODULE__} | tokens], %{count: 1} = state) do
-    updated_pos = update_pos(pos, state.pos)
-
-    scan(tokens, %{
-      state
-      | candidate: [:__MODULE__ | state.candidate],
-        pos: updated_pos
-    })
-  end
-
-  defp scan([{kind, pos, value} | tokens], %{count: 1} = state)
-       when kind in [:atom, :atom_quoted] do
-    scan(tokens, %{state | candidate: [value | state.candidate], pos: update_pos(pos, state.pos)})
-  end
-
-  defp scan([{:fn, _} | tokens], %{count: 1} = state) do
-    scan(tokens, %{state | npar: [], count: 0})
-  end
-
-  defp scan([{:., _} | tokens], state), do: scan(tokens, state)
-  defp scan([{:arrow_op, _, :|>} | _], %{count: 1} = state), do: pipe_before(state)
-  defp scan([_ | _], %{count: 1} = state), do: state
-  defp scan([_token | tokens], state), do: scan(tokens, state)
-  defp scan([], state), do: state
-
-  defp normalize_end_col(list) when is_list(list), do: nil
-  defp normalize_end_col(other), do: other
-
-  defp update_pos({line, init_col, end_col}, nil) do
-    end_col = normalize_end_col(end_col)
-    {{line, init_col}, {line, end_col}}
-  end
-
-  defp update_pos({new_init_line, new_init_col, _}, {{_, _}, {end_line, end_col}}) do
-    end_col = normalize_end_col(end_col)
-    {{new_init_line, new_init_col}, {end_line, end_col}}
-  end
-
-  defp pipe_before(state) do
-    %{state | pipe_before: true}
-  end
+  def get_mod(_list, _binding_env), do: nil
 
   defp split_mod_quoted_fun_call(quoted, current_module, aliases) do
     case Macro.decompose_call(quoted) do
