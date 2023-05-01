@@ -68,7 +68,7 @@ defmodule ElixirSense.Core.MetadataBuilder.AliasTest do
 
   test "auto aliased after last module" do
     code = """
-    defmodule A.B.C do
+    defmodule Some.B.C do
     end
     __ENV__
     """
@@ -82,5 +82,8 @@ defmodule ElixirSense.Core.MetadataBuilder.AliasTest do
     assert metadata_env = state.lines_to_env[env.line]
 
     assert Enum.sort(metadata_env.aliases) == Enum.sort(env.aliases)
+  after
+    :code.delete(Some.B.C)
+    :code.purge(Some.B.C)
   end
 end

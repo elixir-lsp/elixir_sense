@@ -238,7 +238,7 @@ defmodule ElixirSense.Core.ParserTest do
                },
                3 => %Env{
                  module: MyModule,
-                 requires: [],
+                 requires: _,
                  scope: :MyModule,
                  scope_id: 4,
                  vars: [

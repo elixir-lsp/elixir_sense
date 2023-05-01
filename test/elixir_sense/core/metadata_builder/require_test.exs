@@ -55,7 +55,7 @@ defmodule ElixirSense.Core.MetadataBuilder.RequireTest do
 
   test "auto required after last module" do
     code = """
-    defmodule A.B.C do
+    defmodule Other.B.C do
     end
     __ENV__
     """
@@ -69,5 +69,8 @@ defmodule ElixirSense.Core.MetadataBuilder.RequireTest do
     assert metadata_env = state.lines_to_env[env.line]
 
     assert Enum.sort(metadata_env.requires) == Enum.sort(env.requires)
+  after
+    :code.delete(Other.B.C)
+    :code.purge(Other.B.C)
   end
 end
