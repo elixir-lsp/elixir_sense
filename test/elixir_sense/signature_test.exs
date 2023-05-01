@@ -872,6 +872,7 @@ defmodule ElixirSense.SignatureTest do
 
     test "finds signatures from metadata elixir behaviour call from outside" do
       code = """
+      require ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl
       ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.bar()
       """
 
@@ -885,7 +886,7 @@ defmodule ElixirSense.SignatureTest do
                    spec: "@spec bar(integer) :: Macro.t"
                  }
                ]
-             } = ElixirSense.signature(code, 1, 60)
+             } = ElixirSense.signature(code, 2, 60)
     end
 
     test "finds signatures from metadata erlang behaviour implemented in elixir call from outside" do

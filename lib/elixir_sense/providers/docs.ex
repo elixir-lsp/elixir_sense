@@ -13,6 +13,7 @@ defmodule ElixirSense.Providers.Docs do
         context,
         %State.Env{
           imports: imports,
+          requires: requires,
           aliases: aliases,
           module: module,
           scope: scope,
@@ -30,13 +31,24 @@ defmodule ElixirSense.Providers.Docs do
 
     type = SurroundContext.to_binding(context, module)
 
-    mod_fun_docs(type, binding_env, imports, aliases, module, mods_funs, metadata_types, scope)
+    mod_fun_docs(
+      type,
+      binding_env,
+      imports,
+      requires,
+      aliases,
+      module,
+      mods_funs,
+      metadata_types,
+      scope
+    )
   end
 
   defp mod_fun_docs(
          {:variable, name} = type,
          binding_env,
          imports,
+         requires,
          aliases,
          module,
          mods_funs,
@@ -50,6 +62,7 @@ defmodule ElixirSense.Providers.Docs do
           {nil, name},
           binding_env,
           imports,
+          requires,
           aliases,
           module,
           mods_funs,
@@ -65,6 +78,7 @@ defmodule ElixirSense.Providers.Docs do
          {mod, fun},
          binding_env,
          imports,
+         requires,
          aliases,
          module,
          mods_funs,
@@ -74,7 +88,14 @@ defmodule ElixirSense.Providers.Docs do
     {mod, fun, _found} =
       {Binding.expand(binding_env, mod), fun}
       |> SurroundContext.expand(aliases)
-      |> Introspection.actual_mod_fun(imports, aliases, module, mods_funs, metadata_types)
+      |> Introspection.actual_mod_fun(
+        imports,
+        requires,
+        aliases,
+        module,
+        mods_funs,
+        metadata_types
+      )
 
     {mod_fun_to_string({mod, fun}), Introspection.get_all_docs({mod, fun}, scope)}
   end

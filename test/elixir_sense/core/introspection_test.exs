@@ -220,23 +220,62 @@ defmodule ElixirSense.Core.IntrospectionTest do
   end
 
   test "actual_mod_fun when nil current module" do
-    assert {nil, :some_fun, false} = actual_mod_fun({nil, :some_fun}, [], [], nil, %{}, %{})
+    assert {nil, :some_fun, false} = actual_mod_fun({nil, :some_fun}, [], [], [], nil, %{}, %{})
   end
 
   test "actual_mod_fun Elixir module" do
     # Elixir is not a valid module
-    assert {Elixir, nil, false} = actual_mod_fun({Elixir, nil}, [], [], nil, %{}, %{})
+    assert {Elixir, nil, false} = actual_mod_fun({Elixir, nil}, [], [], [], nil, %{}, %{})
 
     # But defines some types: Code.Typespec.fetch_types(Elixir) returns keyword, as_boolean and other elixir builtins
     # we do not support that as such types compile fine but are marked as unknown by dialyzer
-    assert {Elixir, :keyword, false} = actual_mod_fun({Elixir, :keyword}, [], [], nil, %{}, %{})
+    assert {Elixir, :keyword, false} =
+             actual_mod_fun({Elixir, :keyword}, [], [], [], nil, %{}, %{})
+
     # not found
-    assert {Elixir, :asdf, false} = actual_mod_fun({Elixir, :asdf}, [], [], nil, %{}, %{})
+    assert {Elixir, :asdf, false} = actual_mod_fun({Elixir, :asdf}, [], [], [], nil, %{}, %{})
   end
 
   test "actual_mod_fun :erlang builtings" do
-    assert {:erlang, :andalso, true} = actual_mod_fun({:erlang, :andalso}, [], [], nil, %{}, %{})
-    assert {:erlang, :orelse, true} = actual_mod_fun({:erlang, :orelse}, [], [], nil, %{}, %{})
+    assert {:erlang, :andalso, true} =
+             actual_mod_fun({:erlang, :andalso}, [], [], [], nil, %{}, %{})
+
+    assert {:erlang, :orelse, true} =
+             actual_mod_fun({:erlang, :orelse}, [], [], [], nil, %{}, %{})
+  end
+
+  test "actual_mod_fun finds only macros from required modules" do
+    assert {Logger, :info, false} = actual_mod_fun({Logger, :info}, [], [], [], nil, %{}, %{})
+
+    assert {Logger, :info, true} =
+             actual_mod_fun({Logger, :info}, [], [Logger], [], nil, %{}, %{})
+  end
+
+  test "actual_mod_fun finds only macros from required metadata modules" do
+    macro_info = %ElixirSense.Core.State.ModFunInfo{
+      type: :defmacro
+    }
+
+    mod_fun = %{
+      {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
+      {MyModule, :info, nil} => macro_info,
+      {MyModule, :info, 1} => macro_info
+    }
+
+    assert {MyModule, :info, false} =
+             actual_mod_fun({MyModule, :info}, [], [], [], nil, mod_fun, %{})
+
+    assert {MyModule, :info, true} =
+             actual_mod_fun({MyModule, :info}, [], [MyModule], [], nil, mod_fun, %{})
+  end
+
+  test "actual_mod_fun finds macros from Kernel" do
+    assert {Kernel, :def, true} = actual_mod_fun({nil, :def}, [], [Kernel], [], nil, %{}, %{})
+  end
+
+  test "actual_mod_fun finds macros from Kernel.SpecialForms" do
+    assert {Kernel.SpecialForms, :unquote, true} =
+             actual_mod_fun({nil, :unquote}, [], [], [], nil, %{}, %{})
   end
 
   describe "get_all_docs" do

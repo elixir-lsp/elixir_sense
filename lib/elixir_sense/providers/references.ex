@@ -42,6 +42,7 @@ defmodule ElixirSense.Providers.References do
         arity,
         %State.Env{
           imports: imports,
+          requires: requires,
           aliases: aliases,
           module: module,
           scope: scope
@@ -79,7 +80,14 @@ defmodule ElixirSense.Providers.References do
         {mod, fun, _found} =
           {mod, function}
           |> expand(binding_env, module, aliases)
-          |> Introspection.actual_mod_fun(imports, aliases, module, modules_funs, metadata_types)
+          |> Introspection.actual_mod_fun(
+            imports,
+            requires,
+            aliases,
+            module,
+            modules_funs,
+            metadata_types
+          )
 
         {mod, fun}
         |> xref_at_cursor(arity, module, scope, modules_funs, trace)

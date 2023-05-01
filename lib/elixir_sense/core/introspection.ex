@@ -49,16 +49,28 @@ defmodule ElixirSense.Core.Introspection do
     :application => Application
   }
 
-  @spec get_exports(module) :: [{atom, non_neg_integer}]
+  @spec get_exports(module) :: [{atom, {non_neg_integer, :macro | :function}}]
   def get_exports(Elixir), do: []
 
   def get_exports(module) do
     case Code.ensure_loaded(module) do
       {:module, _} ->
         for {f, a} <- module.module_info(:exports) do
-          drop_macro_prefix({f, a})
+          {f_dropped, a_dropped} = drop_macro_prefix({f, a})
+
+          kind =
+            if {f_dropped, a_dropped} != {f, a} do
+              :macro
+            else
+              :function
+            end
+
+          {f_dropped, {a_dropped, kind}}
         end
-        |> Kernel.++(BuiltinFunctions.erlang_builtin_functions(module))
+        |> Kernel.++(
+          BuiltinFunctions.erlang_builtin_functions(module)
+          |> Enum.map(fn {f, a} -> {f, {a, :function}} end)
+        )
 
       _otherwise ->
         []
@@ -240,7 +252,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp get_spec_from_module_info(mod, fun) do
-    for {f, a} <- get_exports(mod),
+    for {f, {a, _kind}} <- get_exports(mod),
         f == fun do
       dummy_params = if a == 0, do: [], else: Enum.map(1..a, fn _ -> "term" end)
 
@@ -339,7 +351,7 @@ defmodule ElixirSense.Core.Introspection do
     # we'll not get much more useful info
 
     # provide dummy docs basing on module_info(:exports)
-    for {f, arity} <- get_exports(mod),
+    for {f, {arity, _kind}} <- get_exports(mod),
         f == fun do
       fun_args_text =
         if arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end)
@@ -1098,6 +1110,7 @@ defmodule ElixirSense.Core.Introspection do
       actual_mod_fun(
         {module, nil},
         [],
+        [],
         aliases,
         current_module,
         mods_funs,
@@ -1171,16 +1184,18 @@ defmodule ElixirSense.Core.Introspection do
   @spec actual_mod_fun(
           {nil | module, nil | atom},
           [module],
+          [module],
           [{module, module}],
           nil | module,
           ElixirSense.Core.State.mods_funs_to_positions_t(),
           ElixirSense.Core.State.types_t()
         ) :: {nil | module, nil | atom, boolean}
-  def actual_mod_fun({nil, nil}, _, _, _, _, _), do: {nil, nil, false}
+  def actual_mod_fun({nil, nil}, _, _, _, _, _, _), do: {nil, nil, false}
 
   def actual_mod_fun(
         {mod, fun} = mod_fun,
         imports,
+        requires,
         aliases,
         current_module,
         mods_funs,
@@ -1194,6 +1209,7 @@ defmodule ElixirSense.Core.Introspection do
              {expanded_mod, fun},
              current_module,
              imports,
+             requires,
              mods_funs,
              metadata_types,
              true
@@ -1224,6 +1240,7 @@ defmodule ElixirSense.Core.Introspection do
          {nil, fun},
          _current_module,
          _imports,
+         _requires,
          _mods_funs,
          _metadata_types,
          _include_typespecs
@@ -1235,6 +1252,7 @@ defmodule ElixirSense.Core.Introspection do
          {nil, fun},
          current_module,
          imports,
+         requires,
          mods_funs,
          metadata_types,
          include_typespecs
@@ -1251,6 +1269,7 @@ defmodule ElixirSense.Core.Introspection do
                {mod, fun},
                current_module,
                imports,
+               requires,
                mods_funs,
                metadata_types,
                include_typespecs
@@ -1262,6 +1281,7 @@ defmodule ElixirSense.Core.Introspection do
                {mod, fun},
                current_module,
                imports,
+               requires,
                mods_funs,
                metadata_types,
                false
@@ -1277,6 +1297,7 @@ defmodule ElixirSense.Core.Introspection do
          {Elixir, _},
          _current_module,
          _imports,
+         _requires,
          _mods_funs,
          _metadata_types,
          _include_typespecs
@@ -1287,6 +1308,7 @@ defmodule ElixirSense.Core.Introspection do
          {mod, nil},
          _current_module,
          _imports,
+         _requires,
          mods_funs,
          _metadata_types,
          _include_typespecs
@@ -1302,6 +1324,7 @@ defmodule ElixirSense.Core.Introspection do
          {mod, fun},
          current_module,
          _imports,
+         requires,
          mods_funs,
          metadata_types,
          include_typespecs
@@ -1313,11 +1336,21 @@ defmodule ElixirSense.Core.Introspection do
 
         _funs ->
           Enum.any?(mods_funs, fn {{m, f, _a}, info} ->
-            m == mod and f == fun and (mod == current_module or is_pub(info.type))
+            # TODO defmacrop, defguardp are available after they are defined
+            # pass cursor position and check
+            m == mod and f == fun and (mod == current_module or is_pub(info.type)) and
+              (info.type not in [:defmacro, :defguard] or mod in requires)
           end)
       end
 
-    if found_in_metadata or exported?(mod, fun) or
+    exported_and_required? =
+      case get_exports(mod) |> Keyword.get(fun) do
+        nil -> false
+        {_arity, :function} -> true
+        {_arity, :macro} -> mod in requires
+      end
+
+    if found_in_metadata or exported_and_required? or
          has_type?(mod, fun, current_module, metadata_types, include_typespecs) do
       {mod, fun}
     else

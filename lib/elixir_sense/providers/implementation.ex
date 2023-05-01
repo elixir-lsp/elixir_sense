@@ -178,12 +178,14 @@ defmodule ElixirSense.Providers.Implementation do
     %State.Env{
       module: current_module,
       imports: imports,
+      requires: requires,
       aliases: aliases
     } = env
 
     case {module, function}
          |> Introspection.actual_mod_fun(
            imports,
+           requires,
            aliases,
            current_module,
            mods_funs_to_positions,

@@ -39,12 +39,13 @@ defmodule ElixirSense.Plugins.Util do
   end
 
   def actual_mod_fun({mod, fun}, elixir_prefix, env, buffer_metadata) do
-    %State.Env{imports: imports, aliases: aliases, module: module} = env
+    %State.Env{imports: imports, requires: requires, aliases: aliases, module: module} = env
     %Metadata{mods_funs_to_positions: mods_funs, types: metadata_types} = buffer_metadata
 
     Introspection.actual_mod_fun(
       {mod, fun},
       imports,
+      requires,
       if(elixir_prefix, do: [], else: aliases),
       module,
       mods_funs,
