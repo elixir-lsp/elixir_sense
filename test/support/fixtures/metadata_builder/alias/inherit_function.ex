@@ -1,5 +1,5 @@
 defmodule ElixirSenseExample.Fixtures.MetadataBuilder.Alias.AliasInheritFunction do
-  alias ElixirSenseExample.MacroExpanderFixtures.Macros.Aliased
+  alias ElixirSenseExample.Fixtures.MetadataBuilder.Aliased
 
   def some do
     __ENV__

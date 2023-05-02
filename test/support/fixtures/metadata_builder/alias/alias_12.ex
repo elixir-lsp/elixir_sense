@@ -1,5 +1,5 @@
 defmodule ElixirSenseExample.Fixtures.MetadataBuilder.Alias.Alias12 do
-  alias ElixirSenseExample.MacroExpanderFixtures.Macros.{
+  alias ElixirSenseExample.Fixtures.MetadataBuilder.{
     Aliased,
     AliasedSibling,
     Aliased.Child

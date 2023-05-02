@@ -1,5 +1,5 @@
 defmodule ElixirSenseExample.Fixtures.MetadataBuilder.Alias.AliasInheritSubmodule do
-  alias ElixirSenseExample.MacroExpanderFixtures.Macros.Aliased
+  alias ElixirSenseExample.Fixtures.MetadataBuilder.Aliased
 
   defmodule Submodule do
     @env __ENV__

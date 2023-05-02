@@ -58,10 +58,12 @@ defmodule ElixirSense.Core.State do
           binding_context: list
         }
 
+  @auto_required [Application, Kernel, Kernel.Typespec]
+
   defstruct namespace: [[:"Elixir"]],
             scopes: [[:"Elixir"]],
             imports: [[]],
-            requires: [[]],
+            requires: [@auto_required],
             aliases: [[]],
             attributes: [[]],
             protocols: [[]],
@@ -969,8 +971,17 @@ defmodule ElixirSense.Core.State do
     module = expand_alias(state, module)
 
     [requires_from_scope | inherited_requires] = state.requires
-    requires_from_scope = requires_from_scope -- [module]
-    %__MODULE__{state | requires: [[module | requires_from_scope] | inherited_requires]}
+
+    current_requires = state.requires |> :lists.reverse() |> List.flatten()
+
+    requires_from_scope =
+      if module in current_requires do
+        requires_from_scope
+      else
+        [module | requires_from_scope]
+      end
+
+    %__MODULE__{state | requires: [requires_from_scope | inherited_requires]}
   end
 
   def add_require(%__MODULE__{} = state, _module), do: state

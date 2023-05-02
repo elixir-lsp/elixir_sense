@@ -1,6 +1,6 @@
 defmodule ElixirSenseExample.Fixtures.MetadataBuilder.Alias.AliasNoLeakFunction do
   def some do
-    alias ElixirSenseExample.MacroExpanderFixtures.Macros.Aliased
+    alias ElixirSenseExample.Fixtures.MetadataBuilder.Aliased
     :ok
   end
 

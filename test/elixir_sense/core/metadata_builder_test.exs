@@ -2063,7 +2063,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_imports(state, 3) == [List]
 
     # note that `import` causes `require` module's macros available
-    assert get_line_requires(state, 3) == [List]
+    assert get_line_requires(state, 3) == [Application, Kernel, Kernel.Typespec, List]
 
     assert get_line_imports(state, 6) == [List, Enum.List]
     assert get_line_imports(state, 9) == [List, Enum.List, String]
@@ -2131,10 +2131,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 3) == [Mod]
-    assert get_line_requires(state, 6) == [Mod, OtherMod]
-    assert get_line_requires(state, 8) == [Mod]
-    assert get_line_requires(state, 10) == []
+    assert get_line_requires(state, 3) == [Application, Kernel, Kernel.Typespec, Mod]
+    assert get_line_requires(state, 6) == [Application, Kernel, Kernel.Typespec, Mod, OtherMod]
+    assert get_line_requires(state, 8) == [Application, Kernel, Kernel.Typespec, Mod]
+    assert get_line_requires(state, 10) == [Application, Kernel, Kernel.Typespec]
   end
 
   test "requires single level" do
@@ -2147,7 +2147,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 3) == [Mod]
+    assert get_line_requires(state, 3) == [Application, Kernel, Kernel.Typespec, Mod]
   end
 
   test "requires with __MODULE__" do
@@ -2161,7 +2161,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 4) == [MyModule.A, MyModule.Sub]
+    assert get_line_requires(state, 4) == [
+             Application,
+             Kernel,
+             Kernel.Typespec,
+             MyModule.A,
+             MyModule.Sub
+           ]
+
     assert get_line_aliases(state, 4) == [{B, MyModule.A}]
   end
 
@@ -2176,7 +2183,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 4) == [Mod.Mod3, Mod.Mod2, Mod.Mo1]
+    assert get_line_requires(state, 4) == [
+             Application,
+             Kernel,
+             Kernel.Typespec,
+             Mod.Mod3,
+             Mod.Mod2,
+             Mod.Mo1
+           ]
   end
 
   test "requires with 1.2 notation with atom module" do
@@ -2190,7 +2204,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 4) == [Mod.Mod3, Mod.Mod2, Mod.Mo1]
+    assert get_line_requires(state, 4) == [
+             Application,
+             Kernel,
+             Kernel.Typespec,
+             Mod.Mod3,
+             Mod.Mod2,
+             Mod.Mo1
+           ]
   end
 
   test "requires duplicated" do
@@ -2204,7 +2225,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 4) == [Mod.Mo1]
+    assert get_line_requires(state, 4) == [Application, Kernel, Kernel.Typespec, Mod.Mo1]
   end
 
   test "requires with :as option" do
@@ -2218,7 +2239,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 4) == [:ets, Integer]
+    assert get_line_requires(state, 4) == [Application, Kernel, Kernel.Typespec, :ets, Integer]
     assert get_line_aliases(state, 4) == [{I, Integer}, {E, :ets}]
   end
 
@@ -2235,7 +2256,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 6) == [MyMod.Other1, MyMod.Other, MyMod.Some, :my_mod]
+    assert get_line_requires(state, 6) == [
+             Application,
+             Kernel,
+             Kernel.Typespec,
+             MyMod.Other1,
+             MyMod.Other,
+             MyMod.Some,
+             :my_mod
+           ]
+
     assert get_line_aliases(state, 6) == [{A, MyMod.Other}, {A1, MyMod.Other1}]
   end
 
@@ -2251,7 +2281,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 5) == [Some.Other.Module.Sub, Some.Other.Module]
+    assert get_line_requires(state, 5) == [
+             Application,
+             Kernel,
+             Kernel.Typespec,
+             Some.Other.Module.Sub,
+             Some.Other.Module
+           ]
   end
 
   test "current module" do
@@ -3914,6 +3950,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     # note that `use` causes `require` to be able to execute `__using__/1` macro
     assert get_line_requires(state, 4) == [
+             Application,
+             Kernel,
+             Kernel.Typespec,
              :lists,
              MyImports.Two.ThreeImports,
              MyImports.OneImports,
