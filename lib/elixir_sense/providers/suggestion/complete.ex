@@ -66,6 +66,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     @type t :: %ElixirSense.Providers.Suggestion.Complete.Env{
             aliases: [{module, module}],
             imports: [module],
+            requires: [module],
             scope_module: nil | module,
             mods_and_funs: ElixirSense.Core.State.mods_funs_to_positions_t(),
             specs: ElixirSense.Core.State.specs_t(),
@@ -78,6 +79,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           }
     defstruct aliases: [],
               imports: [],
+              requires: [],
               scope_module: nil,
               mods_and_funs: %{},
               specs: %{},
@@ -727,6 +729,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     for {fun, arities, def_arities, func_kind, docs, specs, args} <- list,
         name = Atom.to_string(fun),
         if(exact?, do: name == hint, else: Matcher.match?(name, hint)) do
+      needed_require =
+        if func_kind in [:macro, :defmacro, :defguard] and mod not in env.requires and
+             mod != Kernel.SpecialForms do
+          mod
+        end
+
       %{
         kind: :function,
         name: name,
@@ -736,6 +744,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         func_kind: func_kind,
         docs: docs,
         specs: specs,
+        needed_require: needed_require,
         args: args
       }
     end
@@ -789,7 +798,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     specs = Map.merge(specs, callback_specs)
 
     if docs != nil and function_exported?(mod, :__info__, 1) do
-      exports = mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_buildins(mod)
+      exports = mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_builtins(mod)
 
       default_arg_functions = default_arg_functions(docs)
 
@@ -886,7 +895,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     for _ <- 1..arity, do: "term"
   end
 
-  defp special_buildins(mod) do
+  defp special_builtins(mod) do
     mod.module_info(:exports)
     |> Enum.filter(fn {f, a} ->
       {f, a} in [{:behaviour_info, 1}]
@@ -985,39 +994,21 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     ]
   end
 
-  defp to_entries(%{
-         kind: :module,
-         name: name,
-         full_name: full_name,
-         required_alias: module,
-         desc: {desc, metadata},
-         subtype: subtype
-       }) do
+  defp to_entries(
+         %{
+           kind: :module,
+           name: name,
+           full_name: full_name,
+           desc: {desc, metadata},
+           subtype: subtype
+         } = map
+       ) do
     [
       %{
         type: :module,
         name: name,
         full_name: full_name,
-        required_alias: module,
-        subtype: subtype,
-        summary: desc,
-        metadata: metadata
-      }
-    ]
-  end
-
-  defp to_entries(%{
-         kind: :module,
-         full_name: full_name,
-         name: name,
-         desc: {desc, metadata},
-         subtype: subtype
-       }) do
-    [
-      %{
-        type: :module,
-        name: name,
-        full_name: full_name,
+        required_alias: if(map[:required_alias], do: inspect(map[:required_alias])),
         subtype: subtype,
         summary: desc,
         metadata: metadata
@@ -1038,6 +1029,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
          name: name,
          arities: arities,
          def_arities: def_arities,
+         needed_require: needed_require,
          module: mod,
          func_kind: func_kind,
          docs: docs,
@@ -1074,6 +1066,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           def_arity: def_arity,
           args: args |> Enum.join(", "),
           args_list: args,
+          needed_require: nil,
           origin: mod_name,
           summary: "Built-in function",
           metadata: %{builtin: true},
@@ -1089,6 +1082,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           def_arity: def_arity,
           args: args |> Enum.join(", "),
           args_list: args,
+          needed_require: if(needed_require, do: inspect(needed_require)),
           origin: mod_name,
           summary: doc,
           metadata: metadata,

@@ -33,7 +33,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
         @module_store
       )
 
-    assert result |> Enum.at(0) == %{
+    assert %{
              args: "atom",
              args_list: ["atom"],
              arity: 1,
@@ -47,9 +47,9 @@ defmodule ElixirSense.Providers.SuggestionTest do
              metadata: %{builtin: true},
              snippet: nil,
              visibility: :public
-           }
+           } = Enum.at(result, 0)
 
-    assert result |> Enum.at(1) == %{
+    assert %{
              args: "",
              args_list: [],
              arity: 0,
@@ -63,9 +63,9 @@ defmodule ElixirSense.Providers.SuggestionTest do
              metadata: %{builtin: true},
              snippet: nil,
              visibility: :public
-           }
+           } = Enum.at(result, 1)
 
-    assert result |> Enum.at(2) == %{
+    assert %{
              args: "key",
              args_list: ["key"],
              arity: 1,
@@ -79,7 +79,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
              metadata: %{builtin: true},
              snippet: nil,
              visibility: :public
-           }
+           } = Enum.at(result, 2)
   end
 
   test "return completion candidates for 'List.del'" do
@@ -136,29 +136,29 @@ defmodule ElixirSense.Providers.SuggestionTest do
   end
 
   test "return completion candidates for functions from import" do
-    assert Suggestion.find(
-             "say",
-             %{@env | imports: [MyModule]},
-             %Metadata{},
-             @cursor_context,
-             @module_store
-           ) ==
-             [
-               %{
-                 args: "",
-                 args_list: [],
-                 arity: 0,
-                 def_arity: 0,
-                 name: "say_hi",
-                 origin: "ElixirSense.Providers.SuggestionTest.MyModule",
-                 spec: "",
-                 summary: "",
-                 type: :function,
-                 metadata: %{},
-                 snippet: nil,
-                 visibility: :public
-               }
-             ]
+    assert [
+             %{
+               args: "",
+               args_list: [],
+               arity: 0,
+               def_arity: 0,
+               name: "say_hi",
+               origin: "ElixirSense.Providers.SuggestionTest.MyModule",
+               spec: "",
+               summary: "",
+               type: :function,
+               metadata: %{},
+               snippet: nil,
+               visibility: :public
+             }
+           ] =
+             Suggestion.find(
+               "say",
+               %{@env | imports: [MyModule]},
+               %Metadata{},
+               @cursor_context,
+               @module_store
+             )
   end
 
   test "local calls should not return built-in functions" do

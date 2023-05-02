@@ -209,7 +209,7 @@ defmodule ElixirSense do
       iex> ElixirSense.suggestions(code, 3, 12)
       [%{origin: "List", type: :function, args: "list, index, value",
         args_list: ["list", "index", "value"],
-        arity: 3, def_arity: 3,
+        arity: 3, def_arity: 3, needed_require: nil,
         name: "insert_at", metadata: %{}, snippet: nil, visibility: :public,
         spec: "@spec insert_at(list, integer, any) :: list", summary: "Returns a list with `value` inserted at the specified `index`."}]
   """

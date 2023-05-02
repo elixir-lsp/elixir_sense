@@ -21,6 +21,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
           type: :function | :macro,
           visibility: :public | :private,
           name: String.t(),
+          needed_require: String.t() | nil,
           arity: non_neg_integer,
           def_arity: non_neg_integer,
           args: String.t(),
@@ -37,7 +38,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
           name: String.t(),
           subtype: ElixirSense.Core.Introspection.module_subtype(),
           summary: String.t(),
-          metadata: map
+          metadata: map,
+          required_alias: String.t() | nil
         }
 
   @doc """
@@ -132,6 +134,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
          hint,
          %State.Env{
            imports: imports,
+           requires: requires,
            aliases: aliases,
            module: module,
            vars: vars,
@@ -154,6 +157,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
       attributes: attributes,
       scope_module: module,
       imports: imports,
+      requires: requires,
       mods_and_funs: mods_and_funs,
       specs: metadata_specs,
       structs: structs,
