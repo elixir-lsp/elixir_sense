@@ -2,9 +2,8 @@ defmodule ElixirSense.Plugins.Ecto.Query do
   @moduledoc false
 
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Source
-  alias ElixirSense.Core.State
+  alias ElixirSense.Plugins.Util
   alias ElixirSense.Providers.Suggestion.Complete
   alias ElixirSense.Providers.Suggestion.Matcher
 
@@ -196,7 +195,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
 
   defp infer_type({:__aliases__, _, mods}, _vars, env, buffer_metadata) do
     mod = Module.concat(mods)
-    {actual_mod, _, _} = actual_mod_fun({mod, nil}, false, env, buffer_metadata)
+    {actual_mod, _, _} = Util.actual_mod_fun({mod, nil}, false, env, buffer_metadata)
     actual_mod
   end
 
@@ -258,21 +257,5 @@ defmodule ElixirSense.Plugins.Ecto.Query do
       end)
 
     [{:summary, summary}, {:detail, detail}] ++ sections
-  end
-
-  # TODO: Centralize
-  defp actual_mod_fun({mod, fun}, elixir_prefix, env, buffer_metadata) do
-    %State.Env{imports: imports, requires: requires, aliases: aliases, module: module} = env
-    %Metadata{mods_funs_to_positions: mods_funs, types: metadata_types} = buffer_metadata
-
-    Introspection.actual_mod_fun(
-      {mod, fun},
-      imports,
-      requires,
-      if(elixir_prefix, do: [], else: aliases),
-      module,
-      mods_funs,
-      metadata_types
-    )
   end
 end
