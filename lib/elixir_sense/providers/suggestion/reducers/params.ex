@@ -26,6 +26,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
 
     %State.Env{
       imports: imports,
+      requires: requires,
       aliases: aliases,
       module: module,
       attributes: attributes,
@@ -50,6 +51,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
            Introspection.actual_mod_fun(
              {mod, fun},
              imports,
+             requires,
              if(elixir_prefix, do: [], else: aliases),
              module,
              mods_funs,

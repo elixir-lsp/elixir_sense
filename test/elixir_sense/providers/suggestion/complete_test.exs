@@ -300,16 +300,21 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                metadata: %{},
                name: "Chars",
                full_name: "String.Chars",
-               required_alias: String.Chars
+               required_alias: "String.Chars"
              },
-             %{metadata: %{}, name: "Chars", full_name: "List.Chars", required_alias: List.Chars},
+             %{
+               metadata: %{},
+               name: "Chars",
+               full_name: "List.Chars",
+               required_alias: "List.Chars"
+             },
              %{
                metadata: %{},
                name: "CallerWithAliasesAndImports",
                full_name:
                  "ElixirSense.Providers.ReferencesTest.Modules.CallerWithAliasesAndImports",
                required_alias:
-                 ElixirSense.Providers.ReferencesTest.Modules.CallerWithAliasesAndImports
+                 "ElixirSense.Providers.ReferencesTest.Modules.CallerWithAliasesAndImports"
              }
            ] = expand('Char', %Env{}, required_alias: true)
   end
@@ -1628,7 +1633,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
              expand('ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.de')
   end
 
-  test "complete build in functions on non local calls" do
+  test "complete built in functions on non local calls" do
     assert [] = expand('module_')
     assert [] = expand('__in')
 
@@ -1963,5 +1968,80 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
   test "complete Kernel.SpecialForms macros with fixed argument list" do
     assert [%{args_list: ["term"]}] = expand('Kernel.SpecialForms.fn')
+  end
+
+  test "macros from not required modules should add needed_require" do
+    assert [
+             %{
+               name: "info",
+               arity: 1,
+               type: :macro,
+               origin: "Logger",
+               needed_require: "Logger",
+               visibility: :public
+             },
+             _
+           ] = expand('Logger.inf')
+
+    assert [
+             %{
+               name: "info",
+               arity: 1,
+               type: :macro,
+               origin: "Logger",
+               needed_require: nil,
+               visibility: :public
+             },
+             _
+           ] = expand('Logger.inf', %Env{requires: [Logger]})
+  end
+
+  test "macros from not required metadata modules should add needed_require" do
+    macro_info = %ElixirSense.Core.State.ModFunInfo{
+      type: :defmacro,
+      params: [[:_]]
+    }
+
+    mod_fun = %{
+      {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
+      {MyModule, :info, nil} => macro_info,
+      {MyModule, :info, 1} => macro_info
+    }
+
+    assert [
+             %{
+               name: "info",
+               arity: 1,
+               type: :macro,
+               origin: "MyModule",
+               needed_require: "MyModule",
+               visibility: :public
+             }
+           ] = expand('MyModule.inf', %Env{requires: [], mods_and_funs: mod_fun})
+
+    assert [
+             %{
+               name: "info",
+               arity: 1,
+               type: :macro,
+               origin: "MyModule",
+               needed_require: nil,
+               visibility: :public
+             }
+           ] = expand('MyModule.inf', %Env{requires: [MyModule], mods_and_funs: mod_fun})
+  end
+
+  test "macros from Kernel.SpecialForms should not add needed_require" do
+    assert [
+             %{
+               name: "unquote",
+               arity: 1,
+               type: :macro,
+               origin: "Kernel.SpecialForms",
+               needed_require: nil,
+               visibility: :public
+             },
+             _
+           ] = expand('unquote', %Env{requires: []})
   end
 end

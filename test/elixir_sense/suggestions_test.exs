@@ -223,7 +223,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 3, 14)
 
-    assert list == [
+    assert [
              %{
                args: "list",
                args_list: ["list"],
@@ -254,7 +254,7 @@ defmodule ElixirSense.SuggestionsTest do
                visibility: :public,
                snippet: nil
              }
-           ]
+           ] = list
   end
 
   test "with a require" do
@@ -267,7 +267,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 3, 12)
 
-    assert list == [
+    assert [
              %{
                args: "var",
                args_list: ["var"],
@@ -282,7 +282,7 @@ defmodule ElixirSense.SuggestionsTest do
                snippet: nil,
                visibility: :public
              }
-           ]
+           ] = list
   end
 
   test "with a module hint" do
@@ -294,7 +294,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 2, 34)
 
-    assert list == [
+    assert [
              %{
                name: "ModuleWithDocFalse",
                full_name: "ElixirSenseExample.ModuleWithDocFalse",
@@ -319,7 +319,7 @@ defmodule ElixirSense.SuggestionsTest do
                summary: "",
                type: :module
              }
-           ]
+           ] = list
   end
 
   test "lists callbacks" do
@@ -1833,7 +1833,7 @@ defmodule ElixirSense.SuggestionsTest do
                snippet: nil,
                visibility: :public
              }
-           ] == ElixirSense.suggestions(buffer, 10, 9)
+           ] = ElixirSense.suggestions(buffer, 10, 9)
 
     # builtin functions not called locally
     assert [] == ElixirSense.suggestions(buffer, 11, 11)
@@ -1897,14 +1897,14 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 2, 5)
 
-    assert Enum.at(list, 0) == %{
+    assert %{
              type: :module,
              name: "Elixir",
              full_name: "Elixir.Elixir",
              subtype: nil,
              summary: "",
              metadata: %{}
-           }
+           } = Enum.at(list, 0)
   end
 
   test "suggestion for aliases modules defined by require clause" do
@@ -2695,7 +2695,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     list = ElixirSense.suggestions(buffer, 11, 18)
 
-    assert list == [
+    assert [
              %{name: "other_arg", type: :variable},
              %{
                name: "other_func",
@@ -2711,7 +2711,7 @@ defmodule ElixirSense.SuggestionsTest do
                snippet: nil,
                metadata: %{}
              }
-           ]
+           ] = list
   end
 
   test "no suggestion of fields when the module is not a struct" do
