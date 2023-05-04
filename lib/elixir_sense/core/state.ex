@@ -58,11 +58,12 @@ defmodule ElixirSense.Core.State do
           binding_context: list
         }
 
+  @auto_imported [{Kernel, []}]
   @auto_required [Application, Kernel, Kernel.Typespec]
 
   defstruct namespace: [[:"Elixir"]],
             scopes: [[:"Elixir"]],
-            imports: [[]],
+            imports: [@auto_imported],
             requires: [@auto_required],
             aliases: [[]],
             attributes: [[]],
