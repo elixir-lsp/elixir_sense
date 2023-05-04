@@ -44,7 +44,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
 
       assert metadata_env = state.lines_to_env[env.line]
 
-      {functions, macros} = Introspection.expand_imports(metadata_env.imports |> dbg)
+      {functions, macros} = Introspection.expand_imports(metadata_env.imports)
       assert deep_sort(functions) == deep_sort(env.functions)
       assert deep_sort(macros) == deep_sort(env.macros)
     end
@@ -70,28 +70,30 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
     assert metadata_env = state.lines_to_env[env.line]
 
     {functions, macros} = Introspection.expand_imports(metadata_env.imports)
-    assert functions == env.functions
-    assert macros == env.macros
+    assert deep_sort(functions) == deep_sort(env.functions)
+    assert deep_sort(macros) == deep_sort(env.macros)
   end
 
-  # test "auto imported after last module" do
-  #   code = """
-  #   defmodule Some.B.C do
-  #   end
-  #   __ENV__
-  #   """
+  test "auto imported after last module" do
+    code = """
+    defmodule Some.B.C do
+    end
+    __ENV__
+    """
 
-  #   state =
-  #     code
-  #     |> Code.string_to_quoted(columns: true)
-  #     |> MetadataBuilder.build()
+    state =
+      code
+      |> Code.string_to_quoted(columns: true)
+      |> MetadataBuilder.build()
 
-  #   {env, _} = Code.eval_string(code, [])
-  #   assert metadata_env = state.lines_to_env[env.line]
+    {env, _} = Code.eval_string(code, [])
+    assert metadata_env = state.lines_to_env[env.line]
 
-  #   assert Enum.sort(metadata_env.aliases) == Enum.sort(env.aliases)
-  # after
-  #   :code.delete(Some.B.C)
-  #   :code.purge(Some.B.C)
-  # end
+    {functions, macros} = Introspection.expand_imports(metadata_env.imports)
+    assert deep_sort(functions) == deep_sort(env.functions)
+    assert deep_sort(macros) == deep_sort(env.macros)
+  after
+    :code.delete(Some.B.C)
+    :code.purge(Some.B.C)
+  end
 end

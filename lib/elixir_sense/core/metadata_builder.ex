@@ -357,7 +357,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_import(ast, state, line, modules, opts) do
-    dbg(opts)
     modules = wrap_modules(modules)
 
     state
