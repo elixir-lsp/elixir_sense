@@ -1,4 +1,4 @@
-defmodule ElixirSenseExample.Fixtures.MetadataBuilder.Require.RequireOnePart do
+defmodule ElixirSenseExample.Fixtures.MetadataBuilder.Alias.AliasOnePart do
   alias Enum
   @env __ENV__
   def env, do: @env

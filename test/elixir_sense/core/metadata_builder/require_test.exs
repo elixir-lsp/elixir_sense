@@ -20,7 +20,9 @@ defmodule ElixirSense.Core.MetadataBuilder.RequireTest do
         Require.RequireInheritSubmodule,
         Require.RequireNoLeakBlock,
         Require.RequireNoLeakClause,
-        Require.RequireOnePart
+        Require.RequireOnePart,
+        Require.Import,
+        Require.Use
       ] do
     test "require rules properly handled in #{inspect(module)}" do
       state =
