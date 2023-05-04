@@ -1430,4 +1430,88 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def is_pub(type), do: type in [:def, :defmacro, :defdelegate, :defguard]
+
+  def expand_imports(list) do
+    {functions, macros} =
+      list
+      |> Enum.reduce([], fn {module, opts}, acc ->
+        all_exported =
+          if acc[module] != nil and Keyword.keyword?(opts[:except]) do
+            acc[module]
+          else
+            get_exports(module)
+          end
+
+        imported =
+          all_exported
+          |> Enum.reject(fn
+            {:__info__, {1, :function}} ->
+              true
+
+            {:module_info, {arity, :function}} when arity in [0, 1] ->
+              true
+
+            {:orelse, {2, :function}} ->
+              module == :erlang
+
+            {:andalso, {2, :function}} ->
+              module == :erlang
+
+            {name, {arity, kind}} ->
+              name_string = name |> Atom.to_string()
+
+              rejected_after_only? =
+                cond do
+                  opts[:only] == :sigils and not String.starts_with?(name_string, "sigil_") ->
+                    true
+
+                  opts[:only] == :macros and kind != :macro ->
+                    true
+
+                  opts[:only] == :functions and kind != :function ->
+                    true
+
+                  Keyword.keyword?(opts[:only]) ->
+                    {name, arity} not in opts[:only]
+
+                  String.starts_with?(name_string, "_") ->
+                    true
+
+                  true ->
+                    false
+                end
+
+              if rejected_after_only? do
+                true
+              else
+                cond do
+                  Keyword.keyword?(opts[:except]) ->
+                    {name, arity} in opts[:except]
+
+                  true ->
+                    false
+                end
+              end
+          end)
+
+        Keyword.put(acc, module, imported)
+      end)
+      |> Enum.reduce({[], []}, fn {module, imported}, {functions_acc, macros_acc} ->
+        {functions, macros} =
+          imported
+          |> Enum.split_with(fn {_name, {_arity, kind}} -> kind == :function end)
+
+        {append_expanded_module_imports(functions, module, functions_acc),
+         append_expanded_module_imports(macros, module, macros_acc)}
+      end)
+
+    {Enum.reverse(functions), Enum.reverse(macros)}
+  end
+
+  defp append_expanded_module_imports([], _module, acc), do: acc
+
+  defp append_expanded_module_imports(list, module, acc) do
+    list = list |> Enum.map(fn {name, {arity, _kind}} -> {name, arity} end)
+    [{module, list} | acc]
+  end
 end
