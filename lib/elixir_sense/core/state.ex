@@ -958,7 +958,7 @@ defmodule ElixirSense.Core.State do
     module = expand_alias(state, module)
     [imports_from_scope | inherited_imports] = state.imports
 
-    %__MODULE__{state | imports: [[module | imports_from_scope] | inherited_imports]}
+    %__MODULE__{state | imports: [[imports_from_scope ++ [{module, opts}]] | inherited_imports]}
   end
 
   def add_import(%__MODULE__{} = state, _module, _opts), do: state
