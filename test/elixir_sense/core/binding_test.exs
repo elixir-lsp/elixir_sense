@@ -1040,7 +1040,7 @@ defmodule ElixirSense.Core.BindingTest do
                        specs: ["@spec fun() :: %MyMod{}"]
                      }
                    },
-                   mods_and_funs: %{
+                   mods_funs: %{
                      {MyMod, :fun, nil} => %ModFunInfo{
                        params: [[]],
                        type: :defp
@@ -1073,7 +1073,7 @@ defmodule ElixirSense.Core.BindingTest do
                        specs: ["@spec fun() :: t()"]
                      }
                    },
-                   mods_and_funs: %{
+                   mods_funs: %{
                      {MyMod, :fun, nil} => %ModFunInfo{
                        params: [[]],
                        type: :def
@@ -1114,7 +1114,7 @@ defmodule ElixirSense.Core.BindingTest do
                        specs: ["@spec fun() :: t()"]
                      }
                    },
-                   mods_and_funs: %{
+                   mods_funs: %{
                      {MyMod, :fun, nil} => %ModFunInfo{
                        params: [[]],
                        type: :def
@@ -1157,7 +1157,7 @@ defmodule ElixirSense.Core.BindingTest do
                        specs: ["@spec fun() :: t()"]
                      }
                    },
-                   mods_and_funs: %{
+                   mods_funs: %{
                      {MyMod, :fun, nil} => %ModFunInfo{
                        params: [[]],
                        type: :def
@@ -1198,7 +1198,7 @@ defmodule ElixirSense.Core.BindingTest do
                        specs: ["@spec fun() :: t()"]
                      }
                    },
-                   mods_and_funs: %{
+                   mods_funs: %{
                      {MyMod, :fun, nil} => %ModFunInfo{
                        params: [[]],
                        type: :def
@@ -1241,7 +1241,7 @@ defmodule ElixirSense.Core.BindingTest do
                        specs: ["@spec fun() :: t()"]
                      }
                    },
-                   mods_and_funs: %{
+                   mods_funs: %{
                      {MyMod, :fun, nil} => %ModFunInfo{
                        params: [[]],
                        type: :defp
@@ -1278,7 +1278,7 @@ defmodule ElixirSense.Core.BindingTest do
               specs: ["@spec fun(integer(), integer(), any()) :: %MyMod{}"]
             }
           },
-          mods_and_funs: %{
+          mods_funs: %{
             {MyMod, :fun, nil} => %ModFunInfo{
               params: [
                 [

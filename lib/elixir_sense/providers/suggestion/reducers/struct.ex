@@ -63,7 +63,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
       current_module: module,
       specs: specs,
       types: metadata_types,
-      mods_and_funs: mods_funs
+      mods_funs: mods_funs
     }
 
     case Source.which_struct(text_before, module) do

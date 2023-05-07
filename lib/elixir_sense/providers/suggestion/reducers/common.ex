@@ -144,7 +144,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
          },
          %Metadata{
            structs: structs,
-           mods_funs_to_positions: mods_and_funs,
+           mods_funs_to_positions: mods_funs,
            specs: metadata_specs,
            types: metadata_types
          },
@@ -158,7 +158,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
       scope_module: module,
       imports: imports,
       requires: requires,
-      mods_and_funs: mods_and_funs,
+      mods_funs: mods_funs,
       specs: metadata_specs,
       structs: structs,
       types: metadata_types,

@@ -15,7 +15,7 @@ defmodule ElixirSense.Core.Binding do
             imports: [],
             specs: %{},
             types: %{},
-            mods_and_funs: %{}
+            mods_funs: %{}
 
   defp get_fields_from({:map, fields, _}), do: fields
   defp get_fields_from({:struct, fields, _, _}), do: fields
@@ -276,8 +276,7 @@ defmodule ElixirSense.Core.Binding do
 
   # local call
   def do_expand(
-        %Binding{imports: imports, current_module: current_module, mods_and_funs: mods_and_funs} =
-          env,
+        %Binding{imports: imports, current_module: current_module, mods_funs: mods_funs} = env,
         {:local_call, function, arguments},
         stack
       ) do
@@ -286,7 +285,7 @@ defmodule ElixirSense.Core.Binding do
     else
       combined_imports =
         imports
-        |> Introspection.expand_imports(mods_and_funs)
+        |> Introspection.expand_imports(mods_funs)
         |> Introspection.combine_imports()
 
       candidate_targets = List.wrap(current_module) ++ combined_imports ++ [Kernel.SpecialForms]
@@ -971,7 +970,7 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp expand_call_from_metadata(
-         %Binding{specs: specs, mods_and_funs: mods_and_funs} = env,
+         %Binding{specs: specs, mods_funs: mods_funs} = env,
          mod,
          fun,
          arity,
@@ -979,7 +978,7 @@ defmodule ElixirSense.Core.Binding do
          stack
        ) do
     arity =
-      case mods_and_funs[{mod, fun, nil}] do
+      case mods_funs[{mod, fun, nil}] do
         %State.ModFunInfo{type: fun_type} = info
         when (include_private and fun_type != :def) or
                fun_type in [:def, :defmacro, :defguard, :defdelegate] ->

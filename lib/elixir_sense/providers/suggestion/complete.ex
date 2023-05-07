@@ -68,7 +68,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             imports: [{module, keyword}],
             requires: [module],
             scope_module: nil | module,
-            mods_and_funs: ElixirSense.Core.State.mods_funs_to_positions_t(),
+            mods_funs: ElixirSense.Core.State.mods_funs_to_positions_t(),
             specs: ElixirSense.Core.State.specs_t(),
             vars: [ElixirSense.Core.State.VarInfo.t()],
             attributes: [ElixirSense.Core.State.AttributeInfo.t()],
@@ -81,7 +81,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               imports: [],
               requires: [],
               scope_module: nil,
-              mods_and_funs: %{},
+              mods_funs: %{},
               specs: %{},
               vars: [],
               attributes: [],
@@ -370,7 +370,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
     imported_locals =
       env.imports
-      |> Introspection.expand_imports(env.mods_and_funs)
+      |> Introspection.expand_imports(env.mods_funs)
       |> Introspection.combine_imports()
       |> Enum.flat_map(fn {scope_import, imported} ->
         match_module_funs(scope_import, hint, exact?, false, imported, env)
@@ -699,13 +699,13 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp get_modules_from_metadata(env) do
-    for {{k, nil, nil}, _} <- env.mods_and_funs, do: Atom.to_string(k)
+    for {{k, nil, nil}, _} <- env.mods_funs, do: Atom.to_string(k)
   end
 
   defp match_module_funs(mod, hint, exact?, include_builtin, imported, env) do
     falist =
       cond do
-        env.mods_and_funs |> Map.has_key?({mod, nil, nil}) ->
+        env.mods_funs |> Map.has_key?({mod, nil, nil}) ->
           get_metadata_module_funs(mod, include_builtin, env)
 
         match?({:module, _}, ensure_loaded(mod)) ->
@@ -774,14 +774,14 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp get_metadata_module_funs(mod, include_builtin, env) do
-    case env.mods_and_funs[{mod, nil, nil}] do
+    case env.mods_funs[{mod, nil, nil}] do
       nil ->
         []
 
       _funs ->
         callback_docs_specs = Metadata.get_docs_specs_from_behaviours(env)
 
-        for {{^mod, f, a}, info} <- env.mods_and_funs,
+        for {{^mod, f, a}, info} <- env.mods_funs,
             a != nil,
             (mod == env.scope_module and not include_builtin) or Introspection.is_pub(info.type),
             include_builtin || {f, a} not in @builtin_functions do
@@ -1129,7 +1129,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
              specs: env.specs,
              current_module: env.scope_module,
              types: env.types,
-             mods_and_funs: env.mods_and_funs
+             mods_funs: env.mods_funs
            },
            binding_ast
          ) do

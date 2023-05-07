@@ -1148,7 +1148,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   test "complete local funs from scope module" do
     env = %Env{
       scope_module: MyModule,
-      mods_and_funs: %{
+      mods_funs: %{
         {MyModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {MyModule, :my_fun_priv, nil} => %ModFunInfo{type: :defp},
         {MyModule, :my_fun_priv, 2} => %ModFunInfo{
@@ -1232,7 +1232,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     env = %Env{
       scope_module: MyModule,
       imports: [{OtherModule, []}, {Kernel, []}],
-      mods_and_funs: %{
+      mods_funs: %{
         {OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
         {OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
@@ -1256,7 +1256,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     env = %Env{
       scope_module: MyModule,
       imports: [{OtherModule, [only: [{:my_fun_other_pub, 1}]]}, {Kernel, []}],
-      mods_and_funs: %{
+      mods_funs: %{
         {OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
         {OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
@@ -1288,7 +1288,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   test "complete remote funs" do
     env = %Env{
       scope_module: MyModule,
-      mods_and_funs: %{
+      mods_funs: %{
         {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {Some.OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
         {Some.OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
@@ -1312,7 +1312,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     env = %Env{
       scope_module: MyModule,
       aliases: [{S, Some.OtherModule}],
-      mods_and_funs: %{
+      mods_funs: %{
         {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {Some.OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
         {Some.OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
@@ -1335,7 +1335,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   test "complete remote funs from injected module" do
     env = %Env{
       scope_module: MyModule,
-      mods_and_funs: %{
+      mods_funs: %{
         {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {Some.OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
         {Some.OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
@@ -1401,7 +1401,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     env = %Env{
       scope_module: MyModule,
       aliases: [{MyAlias, Some.OtherModule.Nested}],
-      mods_and_funs: %{
+      mods_funs: %{
         {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule}
       }
     }
@@ -1419,7 +1419,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     env = %Env{
       scope_module: MyModule,
       aliases: [{Keyword, MyKeyword}],
-      mods_and_funs: %{
+      mods_funs: %{
         {MyKeyword, nil, nil} => %ModFunInfo{type: :defmodule},
         {MyKeyword, :values1, 0} => %ModFunInfo{type: :def, params: [[]]},
         {MyKeyword, :values1, nil} => %ModFunInfo{type: :def}
@@ -1727,7 +1727,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     env = %Env{
       scope_module: MyModule,
       aliases: [{MyAlias, Some.OtherModule.Nested}],
-      mods_and_funs: %{
+      mods_funs: %{
         {MyModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {MyModule, :module_info, nil} => %ModFunInfo{type: :def},
         {MyModule, :module_info, 0} => %ModFunInfo{type: :def, params: [[]]},
@@ -2056,7 +2056,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                needed_require: "MyModule",
                visibility: :public
              }
-           ] = expand('MyModule.inf', %Env{requires: [], mods_and_funs: mod_fun})
+           ] = expand('MyModule.inf', %Env{requires: [], mods_funs: mod_fun})
 
     assert [
              %{
@@ -2067,7 +2067,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                needed_require: nil,
                visibility: :public
              }
-           ] = expand('MyModule.inf', %Env{requires: [MyModule], mods_and_funs: mod_fun})
+           ] = expand('MyModule.inf', %Env{requires: [MyModule], mods_funs: mod_fun})
   end
 
   test "macros from Kernel.SpecialForms should not add needed_require" do
