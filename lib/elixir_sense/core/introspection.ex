@@ -1234,6 +1234,12 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
+  # Elixir proxy
+  defp find_type({Elixir, _type}, _current_module, _metadata_types), do: {nil, nil}
+
+  # invalid case
+  defp find_type({_mod, nil}, _current_module, _metadata_types), do: {nil, nil}
+
   # remote type
   defp find_type({mod, type}, _current_module, metadata_types) do
     found =
