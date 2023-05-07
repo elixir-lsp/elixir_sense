@@ -1440,7 +1440,13 @@ defmodule ElixirSense.Core.Introspection do
               true
 
             {:behaviour_info, {1, :function}} ->
-              elixir_module?(module)
+              if Version.match?(System.version(), ">= 1.15.0-dev") do
+                true
+              else
+                # elixir < 1.15 imports behaviour_info from erlang behaviours
+                # https://github.com/elixir-lang/elixir/commit/4b26edd8c164b46823e1dc1ec34b639cc3563246
+                elixir_module?(module)
+              end
 
             {:orelse, {2, :function}} ->
               module == :erlang

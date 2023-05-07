@@ -612,7 +612,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     # Conversion to atom is not a problem because
     # it is only called with existing modules names.
     # credo:disable-for-lines:7
-    if Version.match?(System.version(), ">= 1.14.0-dev") do
+    if Version.match?(System.version(), ">= 1.14.0") do
       apply(Macro, :classify_atom, [String.to_atom(name)]) in [:identifier, :unquoted] and
         not String.starts_with?(name, "Elixir.")
     else
