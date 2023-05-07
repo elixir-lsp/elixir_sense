@@ -24,7 +24,13 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   alias ElixirSense.Providers.Suggestion.Complete.Env
   alias ElixirSense.Core.State.{ModFunInfo, SpecInfo, VarInfo, AttributeInfo}
 
-  def expand(expr, env \\ %Env{}, opts \\ []) do
+  def expand(
+        expr,
+        env \\ %Env{
+          imports: [{Kernel, []}]
+        },
+        opts \\ []
+      ) do
     ElixirSense.Providers.Suggestion.Complete.do_expand(expr, env, opts)
   end
 
@@ -1225,7 +1231,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   test "complete remote funs from imported module" do
     env = %Env{
       scope_module: MyModule,
-      imports: [OtherModule],
+      imports: [{OtherModule, []}, {Kernel, []}],
       mods_and_funs: %{
         {OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
@@ -1242,7 +1248,40 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     }
 
     assert [
-             %{name: "my_fun_other_pub", origin: "OtherModule"}
+             %{name: "my_fun_other_pub", origin: "OtherModule", needed_import: nil}
+           ] = expand('my_f', env)
+  end
+
+  test "complete remote funs from imported module - needed import" do
+    env = %Env{
+      scope_module: MyModule,
+      imports: [{OtherModule, [only: [{:my_fun_other_pub, 1}]]}, {Kernel, []}],
+      mods_and_funs: %{
+        {OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
+        {OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
+        {OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
+          type: :def,
+          params: [[{:some, [], nil}]]
+        },
+        {OtherModule, :my_fun_other_pub, 2} => %ModFunInfo{
+          type: :def,
+          params: [[{:some, [], nil}]]
+        },
+        {OtherModule, :my_fun_other_priv, nil} => %ModFunInfo{type: :defp},
+        {OtherModule, :my_fun_other_priv, 1} => %ModFunInfo{
+          type: :defp,
+          params: [[{:some, [], nil}]]
+        }
+      }
+    }
+
+    assert [
+             %{name: "my_fun_other_pub", origin: "OtherModule", needed_import: nil},
+             %{
+               name: "my_fun_other_pub",
+               origin: "OtherModule",
+               needed_import: {"OtherModule", {:my_fun_other_pub, 2}}
+             }
            ] = expand('my_f', env)
   end
 

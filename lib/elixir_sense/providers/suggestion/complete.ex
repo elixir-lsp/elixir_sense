@@ -65,7 +65,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
     @type t :: %ElixirSense.Providers.Suggestion.Complete.Env{
             aliases: [{module, module}],
-            imports: [module],
+            imports: [{module, keyword}],
             requires: [module],
             scope_module: nil | module,
             mods_and_funs: ElixirSense.Core.State.mods_funs_to_positions_t(),
@@ -332,7 +332,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp expand_require(mod, hint, exact?, env) do
-    format_expansion(match_module_funs(mod, hint, exact?, true, env))
+    format_expansion(match_module_funs(mod, hint, exact?, true, :all, env))
   end
 
   ## Expand local or var
@@ -363,13 +363,21 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp match_local(hint, exact?, env) do
-    match_module_funs(Kernel, hint, exact?, false, env) ++
-      match_module_funs(Kernel.SpecialForms, hint, exact?, false, env) ++
-      match_module_funs(env.scope_module, hint, exact?, false, env) ++
-      (env.imports
-       |> Enum.flat_map(fn scope_import ->
-         match_module_funs(scope_import, hint, exact?, false, env)
-       end))
+    kernel_special_forms_locals =
+      match_module_funs(Kernel.SpecialForms, hint, exact?, false, :all, env)
+
+    current_module_locals = match_module_funs(env.scope_module, hint, exact?, false, :all, env)
+
+    imported_locals =
+      env.imports
+      |> Introspection.expand_imports(env.mods_and_funs)
+      |> Introspection.combine_imports()
+      |> dbg
+      |> Enum.flat_map(fn {scope_import, imported} ->
+        match_module_funs(scope_import, hint, exact?, false, imported, env)
+      end)
+
+    kernel_special_forms_locals ++ current_module_locals ++ imported_locals
   end
 
   defp match_var(hint, %Env{vars: vars}) do
@@ -470,7 +478,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp expand_aliases(mod, hint, aliases, include_funs, env, filter, opts) do
     aliases
     |> Kernel.++(match_elixir_modules(mod, hint, env, filter, opts))
-    |> Kernel.++(if include_funs, do: match_module_funs(mod, hint, false, true, env), else: [])
+    |> Kernel.++(
+      if include_funs, do: match_module_funs(mod, hint, false, true, :all, env), else: []
+    )
     |> format_expansion()
   end
 
@@ -693,7 +703,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     for {{k, nil, nil}, _} <- env.mods_and_funs, do: Atom.to_string(k)
   end
 
-  defp match_module_funs(mod, hint, exact?, include_builtin, env) do
+  defp match_module_funs(mod, hint, exact?, include_builtin, imported, env) do
     falist =
       cond do
         env.mods_and_funs |> Map.has_key?({mod, nil, nil}) ->
@@ -735,6 +745,18 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           mod
         end
 
+      needed_imports =
+        if imported == :all do
+          arities |> Enum.map(fn _ -> nil end)
+        else
+          arities
+          |> Enum.map(fn a ->
+            if {fun, a} not in imported do
+              {mod, {fun, a}}
+            end
+          end)
+        end
+
       %{
         kind: :function,
         name: name,
@@ -745,6 +767,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         docs: docs,
         specs: specs,
         needed_require: needed_require,
+        needed_imports: needed_imports,
         args: args
       }
     end
@@ -1029,6 +1052,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
          name: name,
          arities: arities,
          def_arities: def_arities,
+         needed_imports: needed_imports,
          needed_require: needed_require,
          module: mod,
          func_kind: func_kind,
@@ -1036,8 +1060,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
          specs: specs,
          args: args
        }) do
-    for e <- Enum.zip([arities, docs, specs, args, def_arities]),
-        {a, {doc, metadata}, spec, args, def_arity} = e do
+    for e <- Enum.zip([arities, docs, specs, args, def_arities, needed_imports]),
+        {a, {doc, metadata}, spec, args, def_arity, needed_import} = e do
       kind =
         case func_kind do
           k when k in [:macro, :defmacro, :defmacrop, :defguard, :defguardp] -> :macro
@@ -1067,6 +1091,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           args: args |> Enum.join(", "),
           args_list: args,
           needed_require: nil,
+          needed_import: nil,
           origin: mod_name,
           summary: "Built-in function",
           metadata: %{builtin: true},
@@ -1083,6 +1108,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           args: args |> Enum.join(", "),
           args_list: args,
           needed_require: if(needed_require, do: inspect(needed_require)),
+          needed_import:
+            if(needed_import, do: {inspect(elem(needed_import, 0)), elem(needed_import, 1)}),
           origin: mod_name,
           summary: doc,
           metadata: metadata,
