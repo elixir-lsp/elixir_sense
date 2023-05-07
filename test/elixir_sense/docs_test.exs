@@ -456,11 +456,12 @@ defmodule ElixirSense.DocsTest do
     test "retrieve fallback callback information from erlang modules" do
       buffer = """
       defmodule MyModule do
-        use :gen_statem
+        @behaviour :gen_statem
       end
       """
 
-      %{actual_subject: actual_subject, docs: %{callbacks: docs}} = ElixirSense.docs(buffer, 2, 8)
+      %{actual_subject: actual_subject, docs: %{callbacks: docs}} =
+        ElixirSense.docs(buffer, 2, 16)
 
       assert actual_subject == ":gen_statem"
 
