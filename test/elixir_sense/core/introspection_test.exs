@@ -244,38 +244,85 @@ defmodule ElixirSense.Core.IntrospectionTest do
              actual_mod_fun({:erlang, :orelse}, [], [], [], nil, %{}, %{})
   end
 
-  test "actual_mod_fun finds only macros from required modules" do
-    assert {Logger, :info, false} = actual_mod_fun({Logger, :info}, [], [], [], nil, %{}, %{})
+  describe "actual_mod_fun and requires" do
+    test "finds only macros from required modules" do
+      assert {Logger, :info, false} = actual_mod_fun({Logger, :info}, [], [], [], nil, %{}, %{})
 
-    assert {Logger, :info, true} =
-             actual_mod_fun({Logger, :info}, [], [Logger], [], nil, %{}, %{})
+      assert {Logger, :info, true} =
+              actual_mod_fun({Logger, :info}, [], [Logger], [], nil, %{}, %{})
+    end
+
+    test "finds only macros from required metadata modules" do
+      macro_info = %ElixirSense.Core.State.ModFunInfo{
+        type: :defmacro
+      }
+
+      mod_fun = %{
+        {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
+        {MyModule, :info, nil} => macro_info,
+        {MyModule, :info, 1} => macro_info
+      }
+
+      assert {MyModule, :info, false} =
+              actual_mod_fun({MyModule, :info}, [], [], [], nil, mod_fun, %{})
+
+      assert {MyModule, :info, true} =
+              actual_mod_fun({MyModule, :info}, [], [MyModule], [], nil, mod_fun, %{})
+    end
   end
 
-  test "actual_mod_fun finds only macros from required metadata modules" do
-    macro_info = %ElixirSense.Core.State.ModFunInfo{
-      type: :defmacro
-    }
+  describe "actual_mod_fun and local calls" do
+    test "finds macros from Kernel.SpecialForms" do
+      assert {Kernel.SpecialForms, :unquote, true} =
+              actual_mod_fun({nil, :unquote}, [], [], [], nil, %{}, %{})
+    end
 
-    mod_fun = %{
-      {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
-      {MyModule, :info, nil} => macro_info,
-      {MyModule, :info, 1} => macro_info
-    }
+    test "actual_mod_fun finds functions and macros current module" do
+      for kind <- [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp, :defdelegate] do
+        def_info = %ElixirSense.Core.State.ModFunInfo{
+          type: kind
+        }
 
-    assert {MyModule, :info, false} =
-             actual_mod_fun({MyModule, :info}, [], [], [], nil, mod_fun, %{})
+        mod_fun = %{
+          {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
+          {MyModule, :info, nil} => def_info,
+          {MyModule, :info, 1} => def_info
+        }
 
-    assert {MyModule, :info, true} =
-             actual_mod_fun({MyModule, :info}, [], [MyModule], [], nil, mod_fun, %{})
+        assert {nil, :not_existing, false} =
+              actual_mod_fun({nil, :not_existing}, [], [], [], MyModule, mod_fun, %{})
+
+        assert {MyModule, :info, true} =
+              actual_mod_fun({nil, :info}, [], [], [], MyModule, mod_fun, %{})
+      end
+    end
   end
 
-  test "actual_mod_fun finds macros from Kernel" do
-    assert {Kernel, :def, true} = actual_mod_fun({nil, :def}, [], [Kernel], [], nil, %{}, %{})
-  end
+  describe "actual_mod_fun and imports" do
+    test "finds functions from imported modules" do
+      assert {nil, :at, false} = actual_mod_fun({nil, :at}, [], [], [], nil, %{}, %{})
 
-  test "actual_mod_fun finds macros from Kernel.SpecialForms" do
-    assert {Kernel.SpecialForms, :unquote, true} =
-             actual_mod_fun({nil, :unquote}, [], [], [], nil, %{}, %{})
+      assert {Enum, :at, true} =
+              actual_mod_fun({nil, :at}, [{Enum, []}], [], [], nil, %{}, %{})
+    end
+
+    test "finds macros from imported modules" do
+      assert {nil, :info, false} = actual_mod_fun({nil, :info}, [], [], [], nil, %{}, %{})
+
+      assert {Logger, :info, true} =
+              actual_mod_fun({nil, :info}, [{Logger, []}], [], [], nil, %{}, %{})
+    end
+
+    test "respects import options" do
+      assert {Enum, :at, true} =
+              actual_mod_fun({nil, :at}, [{Enum, []}], [], [], nil, %{}, %{})
+      assert {nil, :at, false} =
+              actual_mod_fun({nil, :at}, [{Enum, [only: [abc: 1]]}], [], [], nil, %{}, %{})
+      assert {nil, :at, false} =
+              actual_mod_fun({nil, :at}, [{Enum, [except: [at: 2, at: 3]]}], [], [], nil, %{}, %{})
+      assert {nil, :at, false} =
+              actual_mod_fun({nil, :at}, [{Enum, [only: :macros]}], [], [], nil, %{}, %{})
+    end
   end
 
   describe "get_all_docs" do

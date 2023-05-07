@@ -1236,6 +1236,7 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
+  # local call builtin module function
   defp find_metadata_function(
          {nil, fun},
          _current_module,
@@ -1248,6 +1249,7 @@ defmodule ElixirSense.Core.Introspection do
        when fun in [:module_info, :behaviour_info, :__info__],
        do: {nil, nil}
 
+  # local call
   defp find_metadata_function(
          {nil, fun},
          current_module,
@@ -1257,42 +1259,75 @@ defmodule ElixirSense.Core.Introspection do
          metadata_types,
          include_typespecs
        ) do
-    mods =
-      case current_module do
-        nil -> imports
-        _ -> [{current_module, :current_module} | imports]
+      found_in_metadata = Map.has_key?(mods_funs, {current_module, fun, nil})
+      if found_in_metadata do
+        {current_module, fun}
+      else
+        {functions, macros} = expand_imports(imports)
+
+        found_in_imports = Enum.find_value(functions ++ macros, fn {module, imported} ->
+          if Keyword.has_key?(imported, fun) do
+            {module, fun}
+          end
+        end)
+
+        if found_in_imports do
+          found_in_imports
+        else
+          {nil, nil}
+        end
       end
+  
+      # exported_and_required? =
+      #   case get_exports(mod) |> Keyword.get(fun) do
+      #     nil -> false
+      #     {_arity, :function} -> true
+      #     {_arity, :macro} -> mod in requires
+      #   end
+  
+      # if found_in_metadata or exported_and_required? or
+      #      has_type?(mod, fun, current_module, metadata_types, include_typespecs) do
+      #   {mod, fun}
+      # else
+      #   {nil, nil}
+      # end
+    # mods =
+    #   case current_module do
+    #     nil -> imports
+    #     _ -> [{current_module, :current_module} | imports]
+    #   end
 
-    case Enum.find(mods, fn
-           {mod, :current_module} ->
-             find_metadata_function(
-               {mod, fun},
-               current_module,
-               imports,
-               requires,
-               mods_funs,
-               metadata_types,
-               include_typespecs
-             ) != {nil, nil}
+    # case Enum.find(mods, fn
+    #        {mod, :current_module} ->
+    #          find_metadata_function(
+    #            {mod, fun},
+    #            current_module,
+    #            imports,
+    #            requires,
+    #            mods_funs,
+    #            metadata_types,
+    #            include_typespecs
+    #          ) != {nil, nil}
 
-           mod ->
-             # typespecs are not imported
-             find_metadata_function(
-               {mod, fun},
-               current_module,
-               imports,
-               requires,
-               mods_funs,
-               metadata_types,
-               false
-             ) != {nil, nil}
-         end) do
-      nil -> {nil, nil}
-      {current_module, :current_module} -> {current_module, fun}
-      mod -> {mod, fun}
-    end
+    #        mod ->
+    #          # typespecs are not imported
+    #          find_metadata_function(
+    #            {mod, fun},
+    #            current_module,
+    #            imports,
+    #            requires,
+    #            mods_funs,
+    #            metadata_types,
+    #            false
+    #          ) != {nil, nil}
+    #      end) do
+    #   nil -> {nil, nil}
+    #   {current_module, :current_module} -> {current_module, fun}
+    #   mod -> {mod, fun}
+    # end
   end
 
+  # Elixir proxy
   defp find_metadata_function(
          {Elixir, _},
          _current_module,
@@ -1304,6 +1339,7 @@ defmodule ElixirSense.Core.Introspection do
        ),
        do: {nil, nil}
 
+  # module
   defp find_metadata_function(
          {mod, nil},
          _current_module,
@@ -1320,6 +1356,7 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
+  # remote call
   defp find_metadata_function(
          {mod, fun},
          current_module,
