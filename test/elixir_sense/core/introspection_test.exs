@@ -361,7 +361,12 @@ defmodule ElixirSense.Core.IntrospectionTest do
     test "finds public functions and macros from imported metadata modules" do
       for kind <- [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp, :defdelegate] do
         def_info = %ElixirSense.Core.State.ModFunInfo{
-          type: kind
+          type: kind,
+          params: [
+            [
+              {:a, [line: 2, column: 11], nil}
+            ]
+          ]
         }
 
         mod_fun = %{
@@ -380,6 +385,106 @@ defmodule ElixirSense.Core.IntrospectionTest do
         assert {^expected_module, :info, ^findable} =
                  actual_mod_fun({nil, :info}, [{MyModule, []}], [], [], nil, mod_fun, %{})
       end
+    end
+
+    test "respects import options on metadata functions and macros" do
+      def_info = %ElixirSense.Core.State.ModFunInfo{
+        type: :def,
+        params: [
+          [
+            {:a, [line: 2, column: 11], nil}
+          ]
+        ]
+      }
+
+      defmacro_info = %ElixirSense.Core.State.ModFunInfo{
+        type: :defmacro,
+        params: [
+          [
+            {:a, [line: 2, column: 11], nil}
+          ]
+        ]
+      }
+
+      default_args = %ElixirSense.Core.State.ModFunInfo{
+        type: :def,
+        params: [
+          [
+            {:a, [line: 2, column: 11], nil},
+            {:\\, [line: 2, column: 16], [{:b, [line: 2, column: 14], nil}, nil]},
+            {:c, [line: 2, column: 24], nil},
+            {:\\, [line: 2, column: 29], [{:d, [line: 2, column: 27], nil}, [1]]}
+          ]
+        ]
+      }
+
+      mod_fun = %{
+        {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
+        {MyModule, :def_info, nil} => def_info,
+        {MyModule, :def_info, 1} => def_info,
+        {MyModule, :defmacro_info, nil} => defmacro_info,
+        {MyModule, :defmacro_info, 1} => defmacro_info,
+        {MyModule, :default_args, nil} => default_args,
+        {MyModule, :default_args, 4} => default_args
+      }
+
+      assert {MyModule, :def_info, true} =
+               actual_mod_fun({nil, :def_info}, [{MyModule, []}], [], [], nil, mod_fun, %{})
+
+      assert {nil, :def_info, false} =
+               actual_mod_fun(
+                 {nil, :def_info},
+                 [{MyModule, [only: :macros]}],
+                 [],
+                 [],
+                 nil,
+                 mod_fun,
+                 %{}
+               )
+
+      assert {nil, :def_info, false} =
+               actual_mod_fun(
+                 {nil, :def_info},
+                 [{MyModule, [except: [{:def_info, 1}]]}],
+                 [],
+                 [],
+                 nil,
+                 mod_fun,
+                 %{}
+               )
+
+      assert {MyModule, :defmacro_info, true} =
+               actual_mod_fun(
+                 {nil, :defmacro_info},
+                 [{MyModule, [only: :macros]}],
+                 [],
+                 [],
+                 nil,
+                 mod_fun,
+                 %{}
+               )
+
+      assert {MyModule, :default_args, true} =
+               actual_mod_fun(
+                 {nil, :default_args},
+                 [{MyModule, [only: [{:default_args, 2}]]}],
+                 [],
+                 [],
+                 nil,
+                 mod_fun,
+                 %{}
+               )
+
+      assert {MyModule, :default_args, true} =
+               actual_mod_fun(
+                 {nil, :default_args},
+                 [{MyModule, [except: [{:default_args, 4}]]}],
+                 [],
+                 [],
+                 nil,
+                 mod_fun,
+                 %{}
+               )
     end
 
     test "behaviour_info can be from some modules imported" do

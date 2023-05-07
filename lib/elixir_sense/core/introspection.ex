@@ -1417,8 +1417,13 @@ defmodule ElixirSense.Core.Introspection do
               |> Enum.filter(fn {{m, _f, a}, info} ->
                 m == module and a != nil and is_pub(info.type)
               end)
-              |> Enum.map(fn {{_m, f, a}, info} ->
-                {f, {a, if(is_macro_type(info.type), do: :macro, else: :function)}}
+              |> Enum.flat_map(fn {{_m, f, _a}, info} ->
+                kind = if(is_macro_type(info.type), do: :macro, else: :function)
+
+                for {arity, default_args} <- State.ModFunInfo.get_arities(info),
+                    args <- (arity - default_args)..arity do
+                  {f, {args, kind}}
+                end
               end)
             else
               get_exports(module)

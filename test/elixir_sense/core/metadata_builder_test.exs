@@ -3261,7 +3261,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  ]
                ]
              }
-           } = state.mods_funs_to_positions |> IO.inspect()
+           } = state.mods_funs_to_positions
   end
 
   test "behaviours" do
