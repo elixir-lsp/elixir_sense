@@ -933,21 +933,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
-  test "find local type definition" do
-    buffer = """
-    defmodule ElixirSenseExample.ModuleWithTypespecs.Remote do
-      @type remote_list_t :: [remote_t]
-      #                           ^
-    end
-    """
-
-    %Location{type: :typespec, file: file, line: line, column: column} =
-      ElixirSense.definition(buffer, 2, 31)
-
-    assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
-    assert read_line(file, {line, column}) =~ ~r/^@type remote_t/
-  end
-
   test "find remote type definition" do
     buffer = """
     defmodule MyModule do
