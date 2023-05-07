@@ -3230,6 +3230,40 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
+  test "functions with default args" do
+    state =
+      """
+      defmodule OuterModule do
+        def abc(a, b \\\\ nil, c, d \\\\ [1]), do: a
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert %{
+             {OuterModule, :abc, 4} => %ModFunInfo{
+               params: [
+                 [
+                   {:a, [line: 2, column: 11], nil},
+                   {:\\, [line: 2, column: 16], [{:b, [line: 2, column: 14], nil}, nil]},
+                   {:c, [line: 2, column: 24], nil},
+                   {:\\, [line: 2, column: 29], [{:d, [line: 2, column: 27], nil}, [1]]}
+                 ]
+               ]
+             },
+             {OuterModule, :abc, nil} => %ModFunInfo{
+               params: [
+                 [
+                   {:a, [line: 2, column: 11], nil},
+                   {:\\, [line: 2, column: 16], [{:b, [line: 2, column: 14], nil}, nil]},
+                   {:c, [line: 2, column: 24], nil},
+                   {:\\, [line: 2, column: 29], [{:d, [line: 2, column: 27], nil}, [1]]}
+                 ]
+               ]
+             }
+           } = state.mods_funs_to_positions |> IO.inspect()
+  end
+
   test "behaviours" do
     state =
       """
