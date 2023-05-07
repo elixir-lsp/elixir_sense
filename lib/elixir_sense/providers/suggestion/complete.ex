@@ -1098,6 +1098,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           snippet: nil
         }
       else
+        needed_import =
+          case needed_import do
+            nil -> nil
+            {mod, {fun, arity}} -> {inspect(mod), {Atom.to_string(fun), arity}}
+          end
+
         %{
           type: kind,
           visibility: visibility,
@@ -1107,8 +1113,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           args: args |> Enum.join(", "),
           args_list: args,
           needed_require: if(needed_require, do: inspect(needed_require)),
-          needed_import:
-            if(needed_import, do: {inspect(elem(needed_import, 0)), elem(needed_import, 1)}),
+          needed_import: needed_import,
           origin: mod_name,
           summary: doc,
           metadata: metadata,

@@ -1280,7 +1280,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
              %{
                name: "my_fun_other_pub",
                origin: "OtherModule",
-               needed_import: {"OtherModule", {:my_fun_other_pub, 2}}
+               needed_import: {"OtherModule", {"my_fun_other_pub", 2}}
              }
            ] = expand('my_f', env)
   end

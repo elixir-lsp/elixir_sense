@@ -22,6 +22,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
           visibility: :public | :private,
           name: String.t(),
           needed_require: String.t() | nil,
+          needed_import: {String.t(), {String.t(), integer()}} | nil,
           arity: non_neg_integer,
           def_arity: non_neg_integer,
           args: String.t(),
