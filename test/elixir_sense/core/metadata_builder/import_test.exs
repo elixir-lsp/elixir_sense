@@ -45,7 +45,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
 
       assert metadata_env = state.lines_to_env[env.line]
 
-      {functions, macros} = Introspection.expand_imports(metadata_env.imports)
+      {functions, macros} = Introspection.expand_imports(metadata_env.imports, %{})
       assert deep_sort(functions) == deep_sort(env.functions)
       assert deep_sort(macros) == deep_sort(env.macros)
     end
@@ -70,7 +70,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
     {env, _} = Code.eval_string(code, [])
     assert metadata_env = state.lines_to_env[env.line]
 
-    {functions, macros} = Introspection.expand_imports(metadata_env.imports)
+    {functions, macros} = Introspection.expand_imports(metadata_env.imports, %{})
     assert deep_sort(functions) == deep_sort(env.functions)
     assert deep_sort(macros) == deep_sort(env.macros)
   end
@@ -90,7 +90,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
     {env, _} = Code.eval_string(code, [])
     assert metadata_env = state.lines_to_env[env.line]
 
-    {functions, macros} = Introspection.expand_imports(metadata_env.imports)
+    {functions, macros} = Introspection.expand_imports(metadata_env.imports, %{})
     assert deep_sort(functions) == deep_sort(env.functions)
     assert deep_sort(macros) == deep_sort(env.macros)
   after

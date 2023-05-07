@@ -1205,7 +1205,7 @@ defmodule ElixirSense.Core.Introspection do
 
     with {nil, nil} <- find_kernel_special_forms_macro(mod_fun),
          {nil, nil} <-
-          find_function_or_module(
+           find_function_or_module(
              {expanded_mod, fun},
              current_module,
              imports,
@@ -1236,16 +1236,17 @@ defmodule ElixirSense.Core.Introspection do
 
   # remote type
   defp find_type({mod, type}, _current_module, metadata_types) do
-    found = case metadata_types[{mod, type, nil}] do
-      nil ->
-        Typespec.get_types(mod)
-        |> Enum.any?(fn {kind, {name, _def, _args}} ->
-          name == type and kind in [:type, :opaque]
-        end)
+    found =
+      case metadata_types[{mod, type, nil}] do
+        nil ->
+          Typespec.get_types(mod)
+          |> Enum.any?(fn {kind, {name, _def, _args}} ->
+            name == type and kind in [:type, :opaque]
+          end)
 
-      %State.TypeInfo{kind: kind} ->
-        kind in [:type, :opaque]
-    end
+        %State.TypeInfo{kind: kind} ->
+          kind in [:type, :opaque]
+      end
 
     if found do
       {mod, type}
@@ -1262,30 +1263,32 @@ defmodule ElixirSense.Core.Introspection do
          _requires,
          mods_funs
        ) do
-      # TODO defmacrop, defguardp are available after they are defined
-      # pass cursor position and check
-      found_in_metadata = Map.has_key?(mods_funs, {current_module, fun, nil})
-      if found_in_metadata  do
-        if fun in [:module_info, :behaviour_info, :__info__] do
-          {nil, nil}
-        else
-          {current_module, fun}
-        end
-      else
-        {functions, macros} = expand_imports(imports)
+    # TODO defmacrop, defguardp are available after they are defined
+    # pass cursor position and check
+    found_in_metadata = Map.has_key?(mods_funs, {current_module, fun, nil})
 
-        found_in_imports = Enum.find_value(functions ++ macros, fn {module, imported} ->
+    if found_in_metadata do
+      if fun in [:module_info, :behaviour_info, :__info__] do
+        {nil, nil}
+      else
+        {current_module, fun}
+      end
+    else
+      {functions, macros} = expand_imports(imports, mods_funs)
+
+      found_in_imports =
+        Enum.find_value(functions ++ macros, fn {module, imported} ->
           if Keyword.has_key?(imported, fun) do
             {module, fun}
           end
         end)
 
-        if found_in_imports do
-          found_in_imports
-        else
-          {nil, nil}
-        end
+      if found_in_imports do
+        found_in_imports
+      else
+        {nil, nil}
       end
+    end
   end
 
   # Elixir proxy
@@ -1321,7 +1324,8 @@ defmodule ElixirSense.Core.Introspection do
          requires,
          mods_funs
        ) do
-      found = case mods_funs[{mod, fun, nil}] do
+    found =
+      case mods_funs[{mod, fun, nil}] do
         nil ->
           case get_exports(mod) |> Keyword.get(fun) do
             nil -> false
@@ -1343,9 +1347,9 @@ defmodule ElixirSense.Core.Introspection do
 
   defp find_kernel_special_forms_macro({nil, fun}) when fun not in [:__info__, :module_info] do
     if exported?(Kernel.SpecialForms, fun) do
-        {Kernel.SpecialForms, fun}
+      {Kernel.SpecialForms, fun}
     else
-        {nil, nil}
+      {nil, nil}
     end
   end
 
@@ -1400,7 +1404,7 @@ defmodule ElixirSense.Core.Introspection do
   def is_function_type(type), do: type in [:def, :defp, :defdelegate]
   def is_macro_type(type), do: type in [:defmacro, :defmacrop, :defguard, :defguardp]
 
-  def expand_imports(list) do
+  def expand_imports(list, mods_funs) do
     {functions, macros} =
       list
       |> Enum.reduce([], fn {module, opts}, acc ->
@@ -1408,7 +1412,17 @@ defmodule ElixirSense.Core.Introspection do
           if acc[module] != nil and Keyword.keyword?(opts[:except]) do
             acc[module]
           else
-            get_exports(module)
+            if Map.has_key?(mods_funs, {module, nil, nil}) do
+              mods_funs
+              |> Enum.filter(fn {{m, _f, a}, info} ->
+                m == module and a != nil and is_pub(info.type)
+              end)
+              |> Enum.map(fn {{_m, f, a}, info} ->
+                {f, {a, if(is_macro_type(info.type), do: :macro, else: :function)}}
+              end)
+            else
+              get_exports(module)
+            end
           end
 
         imported =
@@ -1485,5 +1499,14 @@ defmodule ElixirSense.Core.Introspection do
   defp append_expanded_module_imports(list, module, acc) do
     list = list |> Enum.map(fn {name, {arity, _kind}} -> {name, arity} end)
     [{module, list} | acc]
+  end
+
+  def combine_imports({functions, macros}) do
+    Enum.reduce(functions, macros, fn {module, imports}, acc ->
+      case acc[module] do
+        nil -> Keyword.put(acc, module, imports)
+        acc_imports -> Keyword.put(acc, module, acc_imports ++ imports)
+      end
+    end)
   end
 end
