@@ -1481,12 +1481,10 @@ defmodule ElixirSense.Core.Introspection do
               if rejected_after_only? do
                 true
               else
-                cond do
-                  Keyword.keyword?(opts[:except]) ->
-                    {name, arity} in opts[:except]
-
-                  true ->
-                    false
+                if Keyword.keyword?(opts[:except]) do
+                  {name, arity} in opts[:except]
+                else
+                  false
                 end
               end
           end)
