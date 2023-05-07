@@ -80,7 +80,7 @@ jobs:
           mix local.hex --force
           mix local.rebar --force
           mix deps.get --only test
-      - run: mix test
+      - run: mix test --trace
 
   static_analysis:
     name: static analysis (Elixir ${{matrix.elixir}} | Erlang/OTP ${{matrix.otp}})
