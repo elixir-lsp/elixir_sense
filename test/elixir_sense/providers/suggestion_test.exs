@@ -154,7 +154,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
            ] =
              Suggestion.find(
                "say",
-               %{@env | imports: [MyModule]},
+               %{@env | imports: [{MyModule, []}]},
                %Metadata{},
                @cursor_context,
                @module_store
