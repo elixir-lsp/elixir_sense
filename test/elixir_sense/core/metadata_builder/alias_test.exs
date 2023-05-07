@@ -68,7 +68,7 @@ defmodule ElixirSense.Core.MetadataBuilder.AliasTest do
 
   test "auto aliased after last module" do
     code = """
-    defmodule Some.B.C do
+    defmodule Alias.Some.B.C do
     end
     __ENV__
     """

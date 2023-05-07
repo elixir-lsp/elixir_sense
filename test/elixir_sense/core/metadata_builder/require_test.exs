@@ -57,7 +57,7 @@ defmodule ElixirSense.Core.MetadataBuilder.RequireTest do
 
   test "auto required after last module" do
     code = """
-    defmodule Other.B.C do
+    defmodule Require.Some.B.C do
     end
     __ENV__
     """

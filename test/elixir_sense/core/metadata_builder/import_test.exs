@@ -77,7 +77,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
 
   test "auto imported after last module" do
     code = """
-    defmodule Some.B.C do
+    defmodule Import.Some.B.C do
     end
     __ENV__
     """
