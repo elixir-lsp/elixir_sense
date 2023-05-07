@@ -372,7 +372,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       env.imports
       |> Introspection.expand_imports(env.mods_and_funs)
       |> Introspection.combine_imports()
-      |> dbg
       |> Enum.flat_map(fn {scope_import, imported} ->
         match_module_funs(scope_import, hint, exact?, false, imported, env)
       end)

@@ -874,9 +874,9 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :function end)
 
     assert [
+             %{name: "init", origin: "MyServer", arity: 1} = init_res,
              %{name: "is_function", origin: "Kernel", arity: 1},
-             %{name: "is_function", origin: "Kernel", arity: 2},
-             %{name: "init", origin: "MyServer", arity: 1} = init_res
+             %{name: "is_function", origin: "Kernel", arity: 2}
            ] = list
 
     if ExUnitConfig.erlang_eep48_supported() do
@@ -911,10 +911,10 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.filter(fn s -> s.type == :function end)
 
     assert [
+             %{name: "init", origin: "MyServer", arity: 1},
              %{name: "is_bitstring", origin: "Kernel", arity: 1},
              %{name: "is_integer", origin: "Kernel", arity: 1},
-             %{name: "is_list", origin: "Kernel", arity: 1},
-             %{name: "init", origin: "MyServer", arity: 1}
+             %{name: "is_list", origin: "Kernel", arity: 1}
            ] = list
   end
 
@@ -1679,15 +1679,15 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert [
              %{
-               arity: 1,
-               name: "is_boolean",
-               origin: "Kernel",
-               type: :function
-             },
-             %{
                arity: 0,
                name: "is_boo_overlaps_kernel",
                origin: "ElixirSenseExample.ModuleA",
+               type: :function
+             },
+             %{
+               arity: 1,
+               name: "is_boolean",
+               origin: "Kernel",
                type: :function
              }
            ] = ElixirSense.suggestions(buffer, 7, 10)
