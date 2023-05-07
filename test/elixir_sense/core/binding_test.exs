@@ -8,7 +8,9 @@ defmodule ElixirSense.Core.BindingTest do
   alias ElixirSense.Core.State.StructInfo
   alias ElixirSense.Core.State.TypeInfo
 
-  @env %Binding{}
+  @env %Binding{
+    imports: [{Kernel, []}]
+  }
 
   describe "expand" do
     def build_dependency_injection_binding(fetcher \\ :get_env, default_value \\ nil)
@@ -1418,7 +1420,21 @@ defmodule ElixirSense.Core.BindingTest do
                    variables: [
                      %VarInfo{name: :ref, type: {:local_call, :f02, []}}
                    ],
-                   imports: [ElixirSenseExample.FunctionsWithReturnSpec]
+                   imports: [{ElixirSenseExample.FunctionsWithReturnSpec, []}]
+                 }),
+                 {:variable, :ref}
+               )
+    end
+
+    test "local call not imported" do
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   variables: [
+                     %VarInfo{name: :ref, type: {:local_call, :f02, []}}
+                   ],
+                   imports: [{ElixirSenseExample.FunctionsWithReturnSpec, [except: [{:f02, 0}]]}]
                  }),
                  {:variable, :ref}
                )
@@ -1432,7 +1448,7 @@ defmodule ElixirSense.Core.BindingTest do
                    variables: [
                      %VarInfo{name: :ref, type: {:variable, :f02}}
                    ],
-                   imports: [ElixirSenseExample.FunctionsWithReturnSpec]
+                   imports: [{ElixirSenseExample.FunctionsWithReturnSpec, []}]
                  }),
                  {:variable, :ref}
                )
@@ -1452,7 +1468,7 @@ defmodule ElixirSense.Core.BindingTest do
                           :abc, []}
                      }
                    ],
-                   imports: [ElixirSenseExample.FunctionsWithReturnSpec]
+                   imports: [{ElixirSenseExample.FunctionsWithReturnSpec, []}]
                  }),
                  {:variable, :ref}
                )
@@ -1472,7 +1488,7 @@ defmodule ElixirSense.Core.BindingTest do
                           :abc, []}
                      }
                    ],
-                   imports: [ElixirSenseExample.FunctionsWithReturnSpec]
+                   imports: [{ElixirSenseExample.FunctionsWithReturnSpec, []}]
                  }),
                  {:variable, :ref}
                )
@@ -1492,7 +1508,7 @@ defmodule ElixirSense.Core.BindingTest do
                           :cde, []}
                      }
                    ],
-                   imports: [ElixirSenseExample.FunctionsWithReturnSpec]
+                   imports: [{ElixirSenseExample.FunctionsWithReturnSpec, []}]
                  }),
                  {:variable, :ref}
                )

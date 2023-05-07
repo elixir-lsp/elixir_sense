@@ -2,6 +2,7 @@ defmodule ElixirSense.Core.Binding do
   @moduledoc false
 
   alias ElixirSense.Core.Binding
+  alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Struct
@@ -275,20 +276,34 @@ defmodule ElixirSense.Core.Binding do
 
   # local call
   def do_expand(
-        %Binding{imports: imports, current_module: current_module} = env,
+        %Binding{imports: imports, current_module: current_module, mods_and_funs: mods_and_funs} =
+          env,
         {:local_call, function, arguments},
         stack
       ) do
     if :none in arguments do
       :none
     else
-      candidate_targets = List.wrap(current_module) ++ imports ++ [Kernel, Kernel.SpecialForms]
+      combined_imports =
+        imports
+        |> Introspection.expand_imports(mods_and_funs)
+        |> Introspection.combine_imports()
+
+      candidate_targets = List.wrap(current_module) ++ combined_imports ++ [Kernel.SpecialForms]
 
       # take first matching
-      Enum.find_value(candidate_targets, fn candidate ->
-        # include private from current module
-        include_private = candidate == current_module
-        expand_call(env, {:atom, candidate}, function, arguments, include_private, stack)
+      Enum.find_value(candidate_targets, fn
+        {candidate, imported} ->
+          if {function, length(arguments)} in imported do
+            expand_call(env, {:atom, candidate}, function, arguments, false, stack)
+          else
+            :none
+          end
+
+        candidate ->
+          # include private from current module
+          include_private = candidate == current_module
+          expand_call(env, {:atom, candidate}, function, arguments, include_private, stack)
       end)
       |> drop_no_spec
     end
