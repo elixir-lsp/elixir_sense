@@ -75,11 +75,33 @@ defmodule ElixirSense.Core.Ast do
   defp add_directive_modules_to_env(env, directive, modules) do
     directive_string =
       modules
-      |> Enum.filter(&(&1 != Elixir and match?({:module, _}, Code.ensure_compiled(&1))))
-      |> Enum.map_join("; ", &"#{directive} #{inspect(&1)}")
+      |> Enum.map(&format_module(directive, &1))
+      |> Enum.filter(&(&1 != nil))
+      |> Enum.join("; ")
 
     {new_env, _} = Code.eval_string("#{directive_string}; __ENV__", [], env)
     new_env
+  end
+
+  defp format_module(_directive, Elixir), do: nil
+
+  defp format_module(directive, module) when is_atom(module) do
+    if match?({:module, _}, Code.ensure_compiled(module)) do
+      "#{directive} #{inspect(module)}"
+    end
+  end
+
+  defp format_module(directive, {module, options}) when is_atom(module) do
+    if match?({:module, _}, Code.ensure_compiled(module)) do
+      formatted_options =
+        if options != [] do
+          ", " <> Macro.to_string(options)
+        else
+          ""
+        end
+
+      "#{directive} #{inspect(module)}#{formatted_options}"
+    end
   end
 
   defp do_expand_all(ast, acc) do
