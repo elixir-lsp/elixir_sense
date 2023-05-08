@@ -58,11 +58,12 @@ defmodule ElixirSense.Core.State do
           binding_context: list
         }
 
+  @auto_imported [{Kernel, []}]
   @auto_required [Application, Kernel, Kernel.Typespec]
 
   defstruct namespace: [[:"Elixir"]],
             scopes: [[:"Elixir"]],
-            imports: [[]],
+            imports: [@auto_imported],
             requires: [@auto_required],
             aliases: [[]],
             attributes: [[]],
@@ -953,18 +954,17 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | requires: tl(state.requires)}
   end
 
-  def add_import(%__MODULE__{} = state, module) when is_atom(module) or is_list(module) do
+  def add_import(%__MODULE__{} = state, module, opts) when is_atom(module) or is_list(module) do
     module = expand_alias(state, module)
     [imports_from_scope | inherited_imports] = state.imports
-    imports_from_scope = imports_from_scope -- [module]
 
-    %__MODULE__{state | imports: [[module | imports_from_scope] | inherited_imports]}
+    %__MODULE__{state | imports: [[imports_from_scope ++ [{module, opts}]] | inherited_imports]}
   end
 
-  def add_import(%__MODULE__{} = state, _module), do: state
+  def add_import(%__MODULE__{} = state, _module, _opts), do: state
 
-  def add_imports(%__MODULE__{} = state, modules) do
-    Enum.reduce(modules, state, fn mod, state -> add_import(state, mod) end)
+  def add_imports(%__MODULE__{} = state, modules, opts) do
+    Enum.reduce(modules, state, fn mod, state -> add_import(state, mod, opts) end)
   end
 
   def add_require(%__MODULE__{} = state, module) when is_atom(module) or is_list(module) do

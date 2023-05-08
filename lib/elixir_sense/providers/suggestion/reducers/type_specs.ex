@@ -32,7 +32,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
       {:cont, acc}
     else
       %State.Env{aliases: aliases, module: module, attributes: attributes, vars: vars} = env
-      %Metadata{mods_funs_to_positions: mods_and_funs, types: metadata_types} = file_metadata
+      %Metadata{mods_funs_to_positions: mods_funs, types: metadata_types} = file_metadata
 
       binding_env = %Binding{
         attributes: attributes,
@@ -50,7 +50,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
           {mod, hint},
           aliases,
           module,
-          mods_and_funs,
+          mods_funs,
           metadata_types
         )
         |> Kernel.++(find_builtin_types({mod, hint}))
@@ -78,10 +78,10 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
          {mod, hint},
          aliases,
          module,
-         mods_and_funs,
+         mods_funs,
          metadata_types
        ) do
-    case Introspection.actual_module(mod, aliases, module, mods_and_funs) do
+    case Introspection.actual_module(mod, aliases, module, mods_funs) do
       {actual_mod, true} ->
         find_module_types(actual_mod, {mod, hint}, metadata_types, module)
 

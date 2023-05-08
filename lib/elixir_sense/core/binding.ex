@@ -2,6 +2,7 @@ defmodule ElixirSense.Core.Binding do
   @moduledoc false
 
   alias ElixirSense.Core.Binding
+  alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Struct
@@ -14,7 +15,7 @@ defmodule ElixirSense.Core.Binding do
             imports: [],
             specs: %{},
             types: %{},
-            mods_and_funs: %{}
+            mods_funs: %{}
 
   defp get_fields_from({:map, fields, _}), do: fields
   defp get_fields_from({:struct, fields, _, _}), do: fields
@@ -275,20 +276,33 @@ defmodule ElixirSense.Core.Binding do
 
   # local call
   def do_expand(
-        %Binding{imports: imports, current_module: current_module} = env,
+        %Binding{imports: imports, current_module: current_module, mods_funs: mods_funs} = env,
         {:local_call, function, arguments},
         stack
       ) do
     if :none in arguments do
       :none
     else
-      candidate_targets = List.wrap(current_module) ++ imports ++ [Kernel, Kernel.SpecialForms]
+      combined_imports =
+        imports
+        |> Introspection.expand_imports(mods_funs)
+        |> Introspection.combine_imports()
+
+      candidate_targets = List.wrap(current_module) ++ combined_imports ++ [Kernel.SpecialForms]
 
       # take first matching
-      Enum.find_value(candidate_targets, fn candidate ->
-        # include private from current module
-        include_private = candidate == current_module
-        expand_call(env, {:atom, candidate}, function, arguments, include_private, stack)
+      Enum.find_value(candidate_targets, fn
+        {candidate, imported} ->
+          if {function, length(arguments)} in imported do
+            expand_call(env, {:atom, candidate}, function, arguments, false, stack)
+          else
+            :none
+          end
+
+        candidate ->
+          # include private from current module
+          include_private = candidate == current_module
+          expand_call(env, {:atom, candidate}, function, arguments, include_private, stack)
       end)
       |> drop_no_spec
     end
@@ -956,7 +970,7 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp expand_call_from_metadata(
-         %Binding{specs: specs, mods_and_funs: mods_and_funs} = env,
+         %Binding{specs: specs, mods_funs: mods_funs} = env,
          mod,
          fun,
          arity,
@@ -964,7 +978,7 @@ defmodule ElixirSense.Core.Binding do
          stack
        ) do
     arity =
-      case mods_and_funs[{mod, fun, nil}] do
+      case mods_funs[{mod, fun, nil}] do
         %State.ModFunInfo{type: fun_type} = info
         when (include_private and fun_type != :def) or
                fun_type in [:def, :defmacro, :defguard, :defdelegate] ->

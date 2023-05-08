@@ -65,10 +65,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
     @type t :: %ElixirSense.Providers.Suggestion.Complete.Env{
             aliases: [{module, module}],
-            imports: [module],
+            imports: [{module, keyword}],
             requires: [module],
             scope_module: nil | module,
-            mods_and_funs: ElixirSense.Core.State.mods_funs_to_positions_t(),
+            mods_funs: ElixirSense.Core.State.mods_funs_to_positions_t(),
             specs: ElixirSense.Core.State.specs_t(),
             vars: [ElixirSense.Core.State.VarInfo.t()],
             attributes: [ElixirSense.Core.State.AttributeInfo.t()],
@@ -81,7 +81,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               imports: [],
               requires: [],
               scope_module: nil,
-              mods_and_funs: %{},
+              mods_funs: %{},
               specs: %{},
               vars: [],
               attributes: [],
@@ -332,7 +332,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp expand_require(mod, hint, exact?, env) do
-    format_expansion(match_module_funs(mod, hint, exact?, true, env))
+    format_expansion(match_module_funs(mod, hint, exact?, true, :all, env))
   end
 
   ## Expand local or var
@@ -363,13 +363,20 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp match_local(hint, exact?, env) do
-    match_module_funs(Kernel, hint, exact?, false, env) ++
-      match_module_funs(Kernel.SpecialForms, hint, exact?, false, env) ++
-      match_module_funs(env.scope_module, hint, exact?, false, env) ++
-      (env.imports
-       |> Enum.flat_map(fn scope_import ->
-         match_module_funs(scope_import, hint, exact?, false, env)
-       end))
+    kernel_special_forms_locals =
+      match_module_funs(Kernel.SpecialForms, hint, exact?, false, :all, env)
+
+    current_module_locals = match_module_funs(env.scope_module, hint, exact?, false, :all, env)
+
+    imported_locals =
+      env.imports
+      |> Introspection.expand_imports(env.mods_funs)
+      |> Introspection.combine_imports()
+      |> Enum.flat_map(fn {scope_import, imported} ->
+        match_module_funs(scope_import, hint, exact?, false, imported, env)
+      end)
+
+    kernel_special_forms_locals ++ current_module_locals ++ imported_locals
   end
 
   defp match_var(hint, %Env{vars: vars}) do
@@ -470,7 +477,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp expand_aliases(mod, hint, aliases, include_funs, env, filter, opts) do
     aliases
     |> Kernel.++(match_elixir_modules(mod, hint, env, filter, opts))
-    |> Kernel.++(if include_funs, do: match_module_funs(mod, hint, false, true, env), else: [])
+    |> Kernel.++(
+      if include_funs, do: match_module_funs(mod, hint, false, true, :all, env), else: []
+    )
     |> format_expansion()
   end
 
@@ -603,7 +612,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     # Conversion to atom is not a problem because
     # it is only called with existing modules names.
     # credo:disable-for-lines:7
-    if Version.match?(System.version(), ">= 1.14.0-dev") do
+    if Version.match?(System.version(), ">= 1.14.0") do
       apply(Macro, :classify_atom, [String.to_atom(name)]) in [:identifier, :unquoted] and
         not String.starts_with?(name, "Elixir.")
     else
@@ -690,13 +699,13 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp get_modules_from_metadata(env) do
-    for {{k, nil, nil}, _} <- env.mods_and_funs, do: Atom.to_string(k)
+    for {{k, nil, nil}, _} <- env.mods_funs, do: Atom.to_string(k)
   end
 
-  defp match_module_funs(mod, hint, exact?, include_builtin, env) do
+  defp match_module_funs(mod, hint, exact?, include_builtin, imported, env) do
     falist =
       cond do
-        env.mods_and_funs |> Map.has_key?({mod, nil, nil}) ->
+        env.mods_funs |> Map.has_key?({mod, nil, nil}) ->
           get_metadata_module_funs(mod, include_builtin, env)
 
         match?({:module, _}, ensure_loaded(mod)) ->
@@ -735,6 +744,18 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           mod
         end
 
+      needed_imports =
+        if imported == :all do
+          arities |> Enum.map(fn _ -> nil end)
+        else
+          arities
+          |> Enum.map(fn a ->
+            if {fun, a} not in imported do
+              {mod, {fun, a}}
+            end
+          end)
+        end
+
       %{
         kind: :function,
         name: name,
@@ -745,6 +766,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         docs: docs,
         specs: specs,
         needed_require: needed_require,
+        needed_imports: needed_imports,
         args: args
       }
     end
@@ -752,14 +774,14 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp get_metadata_module_funs(mod, include_builtin, env) do
-    case env.mods_and_funs[{mod, nil, nil}] do
+    case env.mods_funs[{mod, nil, nil}] do
       nil ->
         []
 
       _funs ->
         callback_docs_specs = Metadata.get_docs_specs_from_behaviours(env)
 
-        for {{^mod, f, a}, info} <- env.mods_and_funs,
+        for {{^mod, f, a}, info} <- env.mods_funs,
             a != nil,
             (mod == env.scope_module and not include_builtin) or Introspection.is_pub(info.type),
             include_builtin || {f, a} not in @builtin_functions do
@@ -1029,6 +1051,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
          name: name,
          arities: arities,
          def_arities: def_arities,
+         needed_imports: needed_imports,
          needed_require: needed_require,
          module: mod,
          func_kind: func_kind,
@@ -1036,8 +1059,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
          specs: specs,
          args: args
        }) do
-    for e <- Enum.zip([arities, docs, specs, args, def_arities]),
-        {a, {doc, metadata}, spec, args, def_arity} = e do
+    for e <- Enum.zip([arities, docs, specs, args, def_arities, needed_imports]),
+        {a, {doc, metadata}, spec, args, def_arity, needed_import} = e do
       kind =
         case func_kind do
           k when k in [:macro, :defmacro, :defmacrop, :defguard, :defguardp] -> :macro
@@ -1067,6 +1090,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           args: args |> Enum.join(", "),
           args_list: args,
           needed_require: nil,
+          needed_import: nil,
           origin: mod_name,
           summary: "Built-in function",
           metadata: %{builtin: true},
@@ -1074,6 +1098,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           snippet: nil
         }
       else
+        needed_import =
+          case needed_import do
+            nil -> nil
+            {mod, {fun, arity}} -> {inspect(mod), {Atom.to_string(fun), arity}}
+          end
+
         %{
           type: kind,
           visibility: visibility,
@@ -1083,6 +1113,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           args: args |> Enum.join(", "),
           args_list: args,
           needed_require: if(needed_require, do: inspect(needed_require)),
+          needed_import: needed_import,
           origin: mod_name,
           summary: doc,
           metadata: metadata,
@@ -1103,7 +1134,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
              specs: env.specs,
              current_module: env.scope_module,
              types: env.types,
-             mods_and_funs: env.mods_and_funs
+             mods_funs: env.mods_funs
            },
            binding_ast
          ) do

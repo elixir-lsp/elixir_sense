@@ -1203,115 +1203,117 @@ defmodule ElixirSense.Core.Introspection do
       ) do
     expanded_mod = expand_alias(mod, aliases)
 
-    with {nil, nil} <- find_kernel_function(mod_fun),
+    with {nil, nil} <- find_kernel_special_forms_macro(mod_fun),
          {nil, nil} <-
-           find_metadata_function(
+           find_function_or_module(
              {expanded_mod, fun},
              current_module,
              imports,
              requires,
-             mods_funs,
-             metadata_types,
-             true
+             mods_funs
            ),
-         {nil, nil} <- find_builtin_type(mod_fun) do
+         {nil, nil} <- find_type({expanded_mod, fun}, current_module, metadata_types) do
       {expanded_mod, fun, false}
     else
       {m, f} -> {m, f, true}
     end
   end
 
-  defp has_type?(_mod, _type, _current_module, _metadata_types, false), do: false
-
-  defp has_type?(mod, type, current_module, metadata_types, true) do
-    case metadata_types[{mod, type, nil}] do
+  # local type
+  defp find_type({nil, type}, current_module, metadata_types) do
+    case metadata_types[{current_module, type, nil}] do
       nil ->
-        Typespec.get_types(mod)
-        |> Enum.any?(fn {kind, {name, _def, _args}} ->
-          name == type and kind in [:type, :opaque]
-        end)
+        if BuiltinTypes.builtin_type?(type) do
+          {nil, type}
+        else
+          {nil, nil}
+        end
 
-      %State.TypeInfo{kind: kind} ->
-        mod == current_module or kind in [:type, :opaque]
+      %State.TypeInfo{} ->
+        {current_module, type}
     end
   end
 
-  defp find_metadata_function(
-         {nil, fun},
-         _current_module,
-         _imports,
-         _requires,
-         _mods_funs,
-         _metadata_types,
-         _include_typespecs
-       )
-       when fun in [:module_info, :behaviour_info, :__info__],
-       do: {nil, nil}
+  # Elixir proxy
+  defp find_type({Elixir, _type}, _current_module, _metadata_types), do: {nil, nil}
 
-  defp find_metadata_function(
+  # invalid case
+  defp find_type({_mod, nil}, _current_module, _metadata_types), do: {nil, nil}
+
+  # remote type
+  defp find_type({mod, type}, _current_module, metadata_types) do
+    found =
+      case metadata_types[{mod, type, nil}] do
+        nil ->
+          Typespec.get_types(mod)
+          |> Enum.any?(fn {kind, {name, _def, _args}} ->
+            name == type and kind in [:type, :opaque]
+          end)
+
+        %State.TypeInfo{kind: kind} ->
+          kind in [:type, :opaque]
+      end
+
+    if found do
+      {mod, type}
+    else
+      {nil, nil}
+    end
+  end
+
+  # local call
+  defp find_function_or_module(
          {nil, fun},
          current_module,
          imports,
-         requires,
-         mods_funs,
-         metadata_types,
-         include_typespecs
+         _requires,
+         mods_funs
        ) do
-    mods =
-      case current_module do
-        nil -> imports
-        _ -> [{current_module, :current_module} | imports]
+    # TODO defmacrop, defguardp are available after they are defined
+    # pass cursor position and check
+    found_in_metadata = Map.has_key?(mods_funs, {current_module, fun, nil})
+
+    if found_in_metadata do
+      if fun in [:module_info, :behaviour_info, :__info__] do
+        {nil, nil}
+      else
+        {current_module, fun}
       end
+    else
+      {functions, macros} = expand_imports(imports, mods_funs)
 
-    case Enum.find(mods, fn
-           {mod, :current_module} ->
-             find_metadata_function(
-               {mod, fun},
-               current_module,
-               imports,
-               requires,
-               mods_funs,
-               metadata_types,
-               include_typespecs
-             ) != {nil, nil}
+      found_in_imports =
+        Enum.find_value(functions ++ macros, fn {module, imported} ->
+          if Keyword.has_key?(imported, fun) do
+            {module, fun}
+          end
+        end)
 
-           mod ->
-             # typespecs are not imported
-             find_metadata_function(
-               {mod, fun},
-               current_module,
-               imports,
-               requires,
-               mods_funs,
-               metadata_types,
-               false
-             ) != {nil, nil}
-         end) do
-      nil -> {nil, nil}
-      {current_module, :current_module} -> {current_module, fun}
-      mod -> {mod, fun}
+      if found_in_imports do
+        found_in_imports
+      else
+        {nil, nil}
+      end
     end
   end
 
-  defp find_metadata_function(
+  # Elixir proxy
+  defp find_function_or_module(
          {Elixir, _},
          _current_module,
          _imports,
          _requires,
-         _mods_funs,
-         _metadata_types,
-         _include_typespecs
+         _mods_funs
        ),
        do: {nil, nil}
 
-  defp find_metadata_function(
+  # module
+  defp find_function_or_module(
          {mod, nil},
          _current_module,
          _imports,
          _requires,
-         mods_funs,
-         _metadata_types,
-         _include_typespecs
+         mods_funs
        ) do
     if Map.has_key?(mods_funs, {mod, nil, nil}) or match?({:module, _}, Code.ensure_loaded(mod)) do
       {mod, nil}
@@ -1320,70 +1322,44 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  defp find_metadata_function(
+  # remote call
+  defp find_function_or_module(
          {mod, fun},
-         current_module,
+         _current_module,
          _imports,
          requires,
-         mods_funs,
-         metadata_types,
-         include_typespecs
+         mods_funs
        ) do
-    found_in_metadata =
-      case mods_funs[{mod, nil, nil}] do
+    found =
+      case mods_funs[{mod, fun, nil}] do
         nil ->
-          false
+          case get_exports(mod) |> Keyword.get(fun) do
+            nil -> false
+            {_arity, :function} -> true
+            {_arity, :macro} -> mod in requires
+          end
 
-        _funs ->
-          Enum.any?(mods_funs, fn {{m, f, _a}, info} ->
-            # TODO defmacrop, defguardp are available after they are defined
-            # pass cursor position and check
-            m == mod and f == fun and (mod == current_module or is_pub(info.type)) and
-              (info.type not in [:defmacro, :defguard] or mod in requires)
-          end)
+        info ->
+          is_pub(info.type) and
+            (is_function_type(info.type) or mod in requires)
       end
 
-    exported_and_required? =
-      case get_exports(mod) |> Keyword.get(fun) do
-        nil -> false
-        {_arity, :function} -> true
-        {_arity, :macro} -> mod in requires
-      end
-
-    if found_in_metadata or exported_and_required? or
-         has_type?(mod, fun, current_module, metadata_types, include_typespecs) do
+    if found do
       {mod, fun}
     else
       {nil, nil}
     end
   end
 
-  defp find_builtin_type({nil, fun}) do
-    if BuiltinTypes.builtin_type?(fun) do
-      {nil, fun}
+  defp find_kernel_special_forms_macro({nil, fun}) when fun not in [:__info__, :module_info] do
+    if exported?(Kernel.SpecialForms, fun) do
+      {Kernel.SpecialForms, fun}
     else
       {nil, nil}
     end
   end
 
-  defp find_builtin_type({_mod, _fun}) do
-    {nil, nil}
-  end
-
-  defp find_kernel_function({nil, fun}) when fun not in [:__info__, :module_info] do
-    cond do
-      exported?(Kernel, fun) ->
-        {Kernel, fun}
-
-      exported?(Kernel.SpecialForms, fun) ->
-        {Kernel.SpecialForms, fun}
-
-      true ->
-        {nil, nil}
-    end
-  end
-
-  defp find_kernel_function({_mod, _fun}) do
+  defp find_kernel_special_forms_macro({_mod, _fun}) do
     {nil, nil}
   end
 
@@ -1430,4 +1406,122 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def is_pub(type), do: type in [:def, :defmacro, :defdelegate, :defguard]
+  def is_priv(type), do: type in [:defp, :defmacrop, :defguardp]
+  def is_function_type(type), do: type in [:def, :defp, :defdelegate]
+  def is_macro_type(type), do: type in [:defmacro, :defmacrop, :defguard, :defguardp]
+
+  def expand_imports(list, mods_funs) do
+    {functions, macros} =
+      list
+      |> Enum.reduce([], fn {module, opts}, acc ->
+        all_exported =
+          if acc[module] != nil and Keyword.keyword?(opts[:except]) do
+            acc[module]
+          else
+            if Map.has_key?(mods_funs, {module, nil, nil}) do
+              mods_funs
+              |> Enum.filter(fn {{m, _f, a}, info} ->
+                m == module and a != nil and is_pub(info.type)
+              end)
+              |> Enum.flat_map(fn {{_m, f, _a}, info} ->
+                kind = if(is_macro_type(info.type), do: :macro, else: :function)
+
+                for {arity, default_args} <- State.ModFunInfo.get_arities(info),
+                    args <- (arity - default_args)..arity do
+                  {f, {args, kind}}
+                end
+              end)
+            else
+              get_exports(module)
+            end
+          end
+
+        imported =
+          all_exported
+          |> Enum.reject(fn
+            {:__info__, {1, :function}} ->
+              true
+
+            {:module_info, {arity, :function}} when arity in [0, 1] ->
+              true
+
+            {:behaviour_info, {1, :function}} ->
+              if Version.match?(System.version(), ">= 1.15.0-dev") do
+                true
+              else
+                # elixir < 1.15 imports behaviour_info from erlang behaviours
+                # https://github.com/elixir-lang/elixir/commit/4b26edd8c164b46823e1dc1ec34b639cc3563246
+                elixir_module?(module)
+              end
+
+            {:orelse, {2, :function}} ->
+              module == :erlang
+
+            {:andalso, {2, :function}} ->
+              module == :erlang
+
+            {name, {arity, kind}} ->
+              name_string = name |> Atom.to_string()
+
+              rejected_after_only? =
+                cond do
+                  opts[:only] == :sigils and not String.starts_with?(name_string, "sigil_") ->
+                    true
+
+                  opts[:only] == :macros and kind != :macro ->
+                    true
+
+                  opts[:only] == :functions and kind != :function ->
+                    true
+
+                  Keyword.keyword?(opts[:only]) ->
+                    {name, arity} not in opts[:only]
+
+                  String.starts_with?(name_string, "_") ->
+                    true
+
+                  true ->
+                    false
+                end
+
+              if rejected_after_only? do
+                true
+              else
+                if Keyword.keyword?(opts[:except]) do
+                  {name, arity} in opts[:except]
+                else
+                  false
+                end
+              end
+          end)
+
+        Keyword.put(acc, module, imported)
+      end)
+      |> Enum.reduce({[], []}, fn {module, imported}, {functions_acc, macros_acc} ->
+        {functions, macros} =
+          imported
+          |> Enum.split_with(fn {_name, {_arity, kind}} -> kind == :function end)
+
+        {append_expanded_module_imports(functions, module, functions_acc),
+         append_expanded_module_imports(macros, module, macros_acc)}
+      end)
+
+    {Enum.reverse(functions), Enum.reverse(macros)}
+  end
+
+  defp append_expanded_module_imports([], _module, acc), do: acc
+
+  defp append_expanded_module_imports(list, module, acc) do
+    list = list |> Enum.map(fn {name, {arity, _kind}} -> {name, arity} end)
+    [{module, list} | acc]
+  end
+
+  def combine_imports({functions, macros}) do
+    Enum.reduce(functions, macros, fn {module, imports}, acc ->
+      case acc[module] do
+        nil -> Keyword.put(acc, module, imports)
+        acc_imports -> Keyword.put(acc, module, acc_imports ++ imports)
+      end
+    end)
+  end
 end

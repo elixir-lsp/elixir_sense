@@ -50,7 +50,7 @@ defmodule ElixirSense.Providers.References do
         vars,
         attributes,
         %Metadata{
-          mods_funs_to_positions: modules_funs,
+          mods_funs_to_positions: mods_funs,
           calls: calls,
           types: metadata_types
         },
@@ -66,7 +66,7 @@ defmodule ElixirSense.Providers.References do
 
     refs_for_mod_fun = fn {mod, function} ->
       private_info =
-        Enum.any?(modules_funs, fn {{_mod, name, _args}, fun_info} ->
+        Enum.any?(mods_funs, fn {{_mod, name, _args}, fun_info} ->
           name == function && fun_info.type == :defp
         end)
 
@@ -85,12 +85,12 @@ defmodule ElixirSense.Providers.References do
             requires,
             aliases,
             module,
-            modules_funs,
+            mods_funs,
             metadata_types
           )
 
         {mod, fun}
-        |> xref_at_cursor(arity, module, scope, modules_funs, trace)
+        |> xref_at_cursor(arity, module, scope, mods_funs, trace)
         |> Enum.map(&build_location/1)
         |> Enum.sort_by(fn %{uri: a, range: %{start: %{line: b, column: c}}} -> {a, b, c} end)
       end
@@ -134,22 +134,22 @@ defmodule ElixirSense.Providers.References do
     end
   end
 
-  defp xref_at_cursor(actual_mod_fun, arity, module, scope, modules_funs, trace) do
+  defp xref_at_cursor(actual_mod_fun, arity, module, scope, mods_funs, trace) do
     mfa =
       actual_mod_fun
-      |> callee_at_cursor(module, scope, arity, modules_funs)
+      |> callee_at_cursor(module, scope, arity, mods_funs)
 
     filtered_calls(mfa, trace)
   end
 
   # Cursor over a module
-  defp callee_at_cursor({module, nil}, _module, _scope, _arity, _modules_funs) do
+  defp callee_at_cursor({module, nil}, _module, _scope, _arity, _mods_funs) do
     [module]
   end
 
   # Cursor over a function definition
-  defp callee_at_cursor({module, func}, module, {func, arity}, nil, modules_funs) do
-    fun_info = modules_funs |> Map.fetch!({module, func, arity})
+  defp callee_at_cursor({module, func}, module, {func, arity}, nil, mods_funs) do
+    fun_info = mods_funs |> Map.fetch!({module, func, arity})
 
     if fun_info.params |> hd |> Enum.any?(&match?({:\\, _, _}, &1)) do
       # function has default params, we cannot use arity to filter
@@ -161,12 +161,12 @@ defmodule ElixirSense.Providers.References do
   end
 
   # Cursor over a function call but we couldn't introspect the arity
-  defp callee_at_cursor({module, func}, _module, _scope, nil, _modules_funs) do
+  defp callee_at_cursor({module, func}, _module, _scope, nil, _mods_funs) do
     [module, func]
   end
 
   # Cursor over a function call
-  defp callee_at_cursor({module, func}, _module, _scope, arity, _modules_funs) do
+  defp callee_at_cursor({module, func}, _module, _scope, arity, _mods_funs) do
     [module, func, arity]
   end
 

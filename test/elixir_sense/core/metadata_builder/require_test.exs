@@ -20,7 +20,9 @@ defmodule ElixirSense.Core.MetadataBuilder.RequireTest do
         Require.RequireInheritSubmodule,
         Require.RequireNoLeakBlock,
         Require.RequireNoLeakClause,
-        Require.RequireOnePart
+        Require.RequireOnePart,
+        Require.Import,
+        Require.Use
       ] do
     test "require rules properly handled in #{inspect(module)}" do
       state =
@@ -55,7 +57,7 @@ defmodule ElixirSense.Core.MetadataBuilder.RequireTest do
 
   test "auto required after last module" do
     code = """
-    defmodule Other.B.C do
+    defmodule Require.Some.B.C do
     end
     __ENV__
     """

@@ -356,13 +356,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     end
   end
 
-  defp pre_import(ast, state, line, modules) do
+  defp pre_import(ast, state, line, modules, opts) do
     modules = wrap_modules(modules)
 
     state
     |> add_current_env_to_line(line)
     |> add_requires(modules)
-    |> add_imports(modules)
+    |> add_imports(modules, opts)
     |> result(ast)
   end
 
@@ -709,17 +709,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # import with options
   defp pre(
          {:import, [line: line, column: _column],
-          [{:__aliases__, _, module_expression = [_ | _]}, _opts]} = ast,
+          [{:__aliases__, _, module_expression = [_ | _]}, opts]} = ast,
          state
        ) do
     module = concat_module_expression(state, module_expression)
-    pre_import(ast, state, line, module)
+    pre_import(ast, state, line, module, opts)
   end
 
   # atom module
-  defp pre({:import, [line: line, column: _column], [atom | _] = ast}, state)
+  defp pre({:import, [line: line, column: _column], [atom, opts] = ast}, state)
        when is_atom(atom) do
-    pre_import(ast, state, line, atom)
+    pre_import(ast, state, line, atom, opts)
   end
 
   # require with `as` option

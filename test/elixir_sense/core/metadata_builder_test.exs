@@ -2002,7 +2002,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 5) == [:lists, List, Enum]
+    assert get_line_imports(state, 5) == [
+             {Kernel, []},
+             {Enum, [only: []]},
+             {List, []},
+             {:lists, [only: []]}
+           ]
   end
 
   test "imports defined with v1.2 notation" do
@@ -2016,7 +2021,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 4) == [Foo.Bar.Other, Foo.Bar.Email, Foo.Bar.User]
+    assert get_line_imports(state, 4) == [
+             {Kernel, []},
+             {Foo.Bar.User, []},
+             {Foo.Bar.Email, []},
+             {Foo.Bar.Other, []}
+           ]
   end
 
   test "imports defined with v1.2 notation with atom module" do
@@ -2030,7 +2040,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 4) == [Foo.Bar.Other, Foo.Bar.Email, Foo.Bar.User]
+    assert get_line_imports(state, 4) == [
+             {Kernel, []},
+             {Foo.Bar.User, []},
+             {Foo.Bar.Email, []},
+             {Foo.Bar.Other, []}
+           ]
   end
 
   test "imports" do
@@ -2060,18 +2075,32 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 3) == [List]
+    assert get_line_imports(state, 3) == [{Kernel, []}, {List, []}]
 
     # note that `import` causes `require` module's macros available
     assert get_line_requires(state, 3) == [Application, Kernel, Kernel.Typespec, List]
 
-    assert get_line_imports(state, 6) == [List, Enum.List]
-    assert get_line_imports(state, 9) == [List, Enum.List, String]
-    assert get_line_imports(state, 12) == [List, Enum.List, String, Macro]
-    assert get_line_imports(state, 14) == [List, Enum.List, String]
-    assert get_line_imports(state, 16) == [List, Enum.List]
-    assert get_line_imports(state, 19) == [Code, List]
-    assert get_line_imports(state, 21) == []
+    assert get_line_imports(state, 6) == [{Kernel, []}, {List, []}, {Enum.List, []}]
+    assert get_line_imports(state, 9) == [{Kernel, []}, {List, []}, {Enum.List, []}, {String, []}]
+
+    assert get_line_imports(state, 12) == [
+             {Kernel, []},
+             {List, []},
+             {Enum.List, []},
+             {String, []},
+             {Macro, []}
+           ]
+
+    assert get_line_imports(state, 14) == [
+             {Kernel, []},
+             {List, []},
+             {Enum.List, []},
+             {String, []}
+           ]
+
+    assert get_line_imports(state, 16) == [{Kernel, []}, {List, []}, {Enum.List, []}]
+    assert get_line_imports(state, 19) == [{Kernel, []}, {List, []}, {Code, []}]
+    assert get_line_imports(state, 21) == [{Kernel, []}]
   end
 
   test "imports duplicated" do
@@ -2085,7 +2114,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 4) == [List]
+    assert get_line_imports(state, 4) == [{Kernel, []}, {List, []}, {List, []}]
   end
 
   test "imports with __MODULE__" do
@@ -2098,7 +2127,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 3) == [OuterModule.Sub]
+    assert get_line_imports(state, 3) == [{Kernel, []}, {OuterModule.Sub, []}]
   end
 
   test "imports aliased module" do
@@ -2112,7 +2141,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 4) == [Some.Other.Module]
+    assert get_line_imports(state, 4) == [{Kernel, []}, {Some.Other.Module, []}]
   end
 
   test "requires" do
@@ -3201,6 +3230,40 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
+  test "functions with default args" do
+    state =
+      """
+      defmodule OuterModule do
+        def abc(a, b \\\\ nil, c, d \\\\ [1]), do: a
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert %{
+             {OuterModule, :abc, 4} => %ModFunInfo{
+               params: [
+                 [
+                   {:a, [line: 2, column: 11], nil},
+                   {:\\, [line: 2, column: 16], [{:b, [line: 2, column: 14], nil}, nil]},
+                   {:c, [line: 2, column: 24], nil},
+                   {:\\, [line: 2, column: 29], [{:d, [line: 2, column: 27], nil}, [1]]}
+                 ]
+               ]
+             },
+             {OuterModule, :abc, nil} => %ModFunInfo{
+               params: [
+                 [
+                   {:a, [line: 2, column: 11], nil},
+                   {:\\, [line: 2, column: 16], [{:b, [line: 2, column: 14], nil}, nil]},
+                   {:c, [line: 2, column: 24], nil},
+                   {:\\, [line: 2, column: 29], [{:d, [line: 2, column: 27], nil}, [1]]}
+                 ]
+               ]
+             }
+           } = state.mods_funs_to_positions
+  end
+
   test "behaviours" do
     state =
       """
@@ -3968,12 +4031,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
 
     assert get_line_imports(state, 4) == [
-             :lists,
-             MyImports.Two.ThreeImports,
-             MyImports.OneImports,
-             MyImports.NestedImports,
-             MyImports,
-             Some.List
+             {Kernel, []},
+             {Some.List, []},
+             {MyImports, []},
+             {MyImports.NestedImports, []},
+             {MyImports.OneImports, []},
+             {MyImports.Two.ThreeImports, []},
+             {:lists, [only: []]}
            ]
 
     assert Enum.sort(get_line_aliases(state, 4)) ==
@@ -5166,10 +5230,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_imports(state, 3) == [
-             ExUnit.DocTest,
-             ExUnit.Case,
-             ExUnit.Assertions,
-             ExUnit.Callbacks
+             {Kernel, []},
+             {ExUnit.Callbacks, []},
+             {ExUnit.Assertions, []},
+             {ExUnit.Case, [only: [describe: 2, test: 1, test: 2, test: 3]]},
+             {ExUnit.DocTest, []}
            ]
   end
 
@@ -5184,10 +5249,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_imports(state, 3) == [
-             ExUnit.DocTest,
-             ExUnit.Case,
-             ExUnit.Assertions,
-             ExUnit.Callbacks
+             {Kernel, []},
+             {ExUnit.Callbacks, []},
+             {ExUnit.Assertions, []},
+             {ExUnit.Case, [only: [describe: 2, test: 1, test: 2, test: 3]]},
+             {ExUnit.DocTest, []}
            ]
   end
 
