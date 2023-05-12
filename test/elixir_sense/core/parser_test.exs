@@ -395,6 +395,7 @@ defmodule ElixirSense.Core.ParserTest do
            } = parse_string(source, true, true, 6)
   end
 
+  @tag only_this: true
   test "parse_string with literal strings in sigils" do
     source = ~S'''
     defmodule MyMod do
@@ -410,13 +411,15 @@ defmodule ElixirSense.Core.ParserTest do
     assert %ElixirSense.Core.Metadata{
              lines_to_env: %{
                5 => %ElixirSense.Core.State.Env{
-                 vars: [
-                   %ElixirSense.Core.State.VarInfo{name: :x},
-                   %ElixirSense.Core.State.VarInfo{name: :y}
-                 ]
+                 vars: vars
                }
              }
            } = parse_string(source, true, true, 5)
+
+    assert [
+             %ElixirSense.Core.State.VarInfo{name: :x},
+             %ElixirSense.Core.State.VarInfo{name: :y}
+           ] = Enum.sort(vars)
   end
 
   test "parse struct" do

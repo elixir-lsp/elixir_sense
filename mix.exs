@@ -10,6 +10,7 @@ defmodule ElixirSense.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
+      prune_code_paths: Mix.env() == :prod,
       test_coverage: [tool: ExCoveralls],
       preferred_cli_env: [coveralls: :test, "coveralls.detail": :test, "coveralls.html": :test],
       dialyzer: [
@@ -38,6 +39,8 @@ defmodule ElixirSense.MixProject do
 
   defp deps do
     [
+      # TODO: Remove when excoveralls depends on fixed ssl_verify_fun
+      {:ssl_verify_fun, "~> 1.1", manager: :rebar3, only: :test, override: true},
       {:excoveralls, "~> 0.10", only: :test},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:credo, "~> 1.0", only: [:dev], runtime: false},
