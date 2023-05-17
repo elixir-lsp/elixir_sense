@@ -195,7 +195,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
 
   defp infer_type({:__aliases__, _, mods}, _vars, env, buffer_metadata) do
     mod = Module.concat(mods)
-    {actual_mod, _, _} = Util.actual_mod_fun({mod, nil}, false, env, buffer_metadata)
+    {actual_mod, _, _, _} = Util.actual_mod_fun({mod, nil}, false, env, buffer_metadata)
     actual_mod
   end
 

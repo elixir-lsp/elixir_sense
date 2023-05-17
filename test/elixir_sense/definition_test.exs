@@ -1210,11 +1210,9 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %Location{type: :macro, file: nil, line: 2} =
-             ElixirSense.definition(buffer, 6, 20)
+    assert %Location{type: :typespec, file: nil, line: 2} = ElixirSense.definition(buffer, 6, 20)
 
-    assert %Location{type: :macro, file: nil, line: 4} =
-             ElixirSense.definition(buffer, 9, 9)
+    assert %Location{type: :function, file: nil, line: 4} = ElixirSense.definition(buffer, 9, 9)
   end
 
   defp read_line(file, {line, column}) do

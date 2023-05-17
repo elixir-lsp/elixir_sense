@@ -45,6 +45,7 @@ defmodule ElixirSense.Providers.Definition do
       variables: vars,
       current_module: module
     }
+
     type = SurroundContext.to_binding(context, module)
 
     case type do
@@ -227,14 +228,30 @@ defmodule ElixirSense.Providers.Definition do
            mods_funs_to_positions,
            metadata_types
          ) do
-      {_, _, false} ->
+      {_, _, false, _} ->
         nil
 
-      {mod, fun, true} ->
+      {mod, fun, true, :mod_fun} ->
         fn_definition = find_fn_definition(mod, fun, line, mods_funs_to_positions, calls)
 
-        case fn_definition || mods_funs_to_positions[{mod, fun, nil}] ||
-               metadata_types[{mod, fun, nil}] do
+        case fn_definition || mods_funs_to_positions[{mod, fun, nil}] do
+          nil ->
+            Location.find_source({mod, fun}, current_module)
+
+          %ModFunInfo{positions: positions} = mi ->
+            # for simplicity take last position here as positions are reversed
+            {line, column} = positions |> Enum.at(-1)
+
+            %Location{
+              file: nil,
+              type: ModFunInfo.get_category(mi),
+              line: line,
+              column: column
+            }
+        end
+
+      {mod, fun, true, :type} ->
+        case metadata_types[{mod, fun, nil}] do
           nil ->
             Location.find_source({mod, fun}, current_module)
 
@@ -245,17 +262,6 @@ defmodule ElixirSense.Providers.Definition do
             %Location{
               file: nil,
               type: :typespec,
-              line: line,
-              column: column
-            }
-
-          %ModFunInfo{positions: positions} = mi ->
-            # for simplicity take last position here as positions are reversed
-            {line, column} = positions |> Enum.at(-1)
-
-            %Location{
-              file: nil,
-              type: ModFunInfo.get_category(mi),
               line: line,
               column: column
             }

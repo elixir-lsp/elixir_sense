@@ -48,7 +48,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
            npar: npar
          } <-
            Source.which_func(prefix, binding_env),
-         {mod, fun, true} <-
+         {mod, fun, true, :mod_fun} <-
            Introspection.actual_mod_fun(
              {mod, fun},
              imports,

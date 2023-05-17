@@ -193,7 +193,7 @@ defmodule ElixirSense.Providers.Implementation do
            mods_funs_to_positions,
            metadata_types
          ) do
-      {mod, fun, true} when not is_nil(fun) ->
+      {mod, fun, true, :mod_fun} when not is_nil(fun) ->
         case mods_funs_to_positions[{mod, fun, nil}] do
           nil ->
             find_delegatee_location(mod, fun, current_module, visited)

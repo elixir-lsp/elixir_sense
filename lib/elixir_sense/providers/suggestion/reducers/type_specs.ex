@@ -31,7 +31,14 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
       # We don't list typespecs when the hint is most likely an attribute without call operator
       {:cont, acc}
     else
-      %State.Env{aliases: aliases, module: module, attributes: attributes, vars: vars, scope: scope} = env
+      %State.Env{
+        aliases: aliases,
+        module: module,
+        attributes: attributes,
+        vars: vars,
+        scope: scope
+      } = env
+
       %Metadata{mods_funs_to_positions: mods_funs, types: metadata_types} = file_metadata
 
       binding_env = %Binding{

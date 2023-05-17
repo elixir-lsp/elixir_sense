@@ -38,7 +38,7 @@ defmodule ElixirSense.Providers.Signature do
 
     with %{candidate: {m, f}, npar: npar, elixir_prefix: elixir_prefix} <-
            Source.which_func(prefix, binding_env),
-         {mod, fun, true} <-
+         {mod, fun, true, kind} <-
            Introspection.actual_mod_fun(
              {m, f},
              imports,

@@ -99,8 +99,8 @@ defmodule ElixirSense.Providers.Docs do
       )
 
     case actual do
-      {mod, fun, true} ->
-        {mod_fun_to_string({mod, fun}), Introspection.get_all_docs({mod, fun}, scope)}
+      {mod, fun, true, kind} ->
+        {mod_fun_to_string({mod, fun}), Introspection.get_all_docs({mod, fun}, kind, scope)}
 
       _ ->
         nil

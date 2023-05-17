@@ -39,7 +39,14 @@ defmodule ElixirSense.Plugins.Util do
   end
 
   def actual_mod_fun({mod, fun}, elixir_prefix, env, buffer_metadata) do
-    %State.Env{imports: imports, requires: requires, aliases: aliases, module: module, scope: scope} = env
+    %State.Env{
+      imports: imports,
+      requires: requires,
+      aliases: aliases,
+      module: module,
+      scope: scope
+    } = env
+
     %Metadata{mods_funs_to_positions: mods_funs, types: metadata_types} = buffer_metadata
 
     Introspection.actual_mod_fun(
@@ -67,7 +74,7 @@ defmodule ElixirSense.Plugins.Util do
 
     with %{candidate: {mod, fun}, npar: npar} <- func_info,
          mod_fun <- actual_mod_fun({mod, fun}, func_info.elixir_prefix, env, buffer_metadata),
-         {actual_mod, actual_fun, _} <- mod_fun do
+         {actual_mod, actual_fun, _, _} <- mod_fun do
       {actual_mod, actual_fun, npar, func_info}
     else
       _ ->

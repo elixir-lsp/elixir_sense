@@ -1194,9 +1194,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when kind in [:type, :typep, :opaque] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
+    state =
+      state
+      |> remove_last_scope_from_scopes
 
-    state = state
-    |> remove_last_scope_from_scopes
     {ast, state}
   end
 
