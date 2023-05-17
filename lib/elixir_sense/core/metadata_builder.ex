@@ -393,8 +393,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
     spec = TypeInfo.typespec_to_string(kind, spec)
 
     state
-    |> add_current_env_to_line(line)
     |> add_type(type_name, type_args, spec, kind, pos)
+    |> add_typespec_namespace(type_name, length(type_args))
+    |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -1182,6 +1183,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp post({def_name, _, _} = ast, state) when def_name in @defs do
+    {ast, state}
+  end
+
+  defp post(
+         {:@, _meta_attr,
+          [{kind, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]} = _spec]}]} =
+           ast,
+         state
+       )
+       when kind in [:type, :typep, :opaque] and is_atom(name) and
+              (is_nil(type_args) or is_list(type_args)) do
+
+    state = state
+    |> remove_last_scope_from_scopes
     {ast, state}
   end
 
