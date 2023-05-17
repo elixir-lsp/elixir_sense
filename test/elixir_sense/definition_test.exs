@@ -1195,6 +1195,28 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "__using__(_opts)"
   end
 
+  test "find local type in typespec local def elsewhere" do
+    buffer = """
+    defmodule ElixirSenseExample.Some do
+      @type some_local :: integer
+
+      def some_local(), do: :ok
+
+      @type user :: {some_local, integer}
+
+      def foo do
+        some_local
+      end
+    end
+    """
+
+    assert %Location{type: :macro, file: nil, line: 2} =
+             ElixirSense.definition(buffer, 6, 20)
+
+    assert %Location{type: :macro, file: nil, line: 4} =
+             ElixirSense.definition(buffer, 9, 9)
+  end
+
   defp read_line(file, {line, column}) do
     file
     |> File.read!()
