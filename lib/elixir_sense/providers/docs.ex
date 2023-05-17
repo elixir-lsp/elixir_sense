@@ -85,7 +85,7 @@ defmodule ElixirSense.Providers.Docs do
          metadata_types,
          scope
        ) do
-    {mod, fun, _found} =
+    actual =
       {Binding.expand(binding_env, mod), fun}
       |> SurroundContext.expand(aliases)
       |> Introspection.actual_mod_fun(
@@ -97,7 +97,13 @@ defmodule ElixirSense.Providers.Docs do
         metadata_types
       )
 
-    {mod_fun_to_string({mod, fun}), Introspection.get_all_docs({mod, fun}, scope)}
+    case actual do
+      {mod, fun, true} ->
+        {mod_fun_to_string({mod, fun}), Introspection.get_all_docs({mod, fun}, scope)}
+
+      _ ->
+        nil
+    end
   end
 
   defp mod_fun_to_string({nil, nil}), do: ""

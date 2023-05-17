@@ -71,17 +71,20 @@ defmodule ElixirSense do
 
         env = Metadata.get_env(metadata, line)
 
-        {actual_subject, docs} =
-          Docs.all(context, env, metadata.mods_funs_to_positions, metadata.types)
+        case Docs.all(context, env, metadata.mods_funs_to_positions, metadata.types) do
+          {actual_subject, docs} ->
+            %{
+              actual_subject: actual_subject,
+              docs: docs,
+              range: %{
+                begin: begin_pos,
+                end: end_pos
+              }
+            }
 
-        %{
-          actual_subject: actual_subject,
-          docs: docs,
-          range: %{
-            begin: begin_pos,
-            end: end_pos
-          }
-        }
+          nil ->
+            nil
+        end
     end
   end
 

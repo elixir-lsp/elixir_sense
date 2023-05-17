@@ -40,8 +40,6 @@ defmodule ElixirSense.Core.Introspection do
   @type module_subtype ::
           :exception | :protocol | :implementation | :behaviour | :struct | :task | nil
 
-  @no_documentation "No documentation available\n"
-
   @wrapped_behaviours %{
     :gen_server => GenServer,
     :gen_event => GenEvent,
@@ -137,7 +135,7 @@ defmodule ElixirSense.Core.Introspection do
         [] <- get_func_docs_md(mod, fun),
         [] <- get_type_docs_md(mod, fun, scope)
       ) do
-        @no_documentation
+        nil
       else
         docs ->
           Enum.join(docs, "\n\n---\n\n") <> "\n"
@@ -279,7 +277,7 @@ defmodule ElixirSense.Core.Introspection do
       spec_text = "### Specs\n\n```\n#{spec |> Enum.join("\n")}\n```\n\n"
       metadata = %{builtin: true}
 
-      "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{spec_text}#{@no_documentation}"
+      "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{spec_text}"
     end
   end
 
@@ -376,9 +374,7 @@ defmodule ElixirSense.Core.Introspection do
 
       _ ->
         if Code.ensure_loaded?(mod) do
-          "> #{mod_str}\n\n" <> @no_documentation
-        else
-          @no_documentation
+          "> #{mod_str}\n\n"
         end
     end
   end

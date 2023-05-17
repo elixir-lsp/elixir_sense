@@ -7,14 +7,7 @@ defmodule ElixirSense.DocsTest do
       hkjnjknjk
       """
 
-      %{
-        actual_subject: actual_subject,
-        docs: %{docs: docs}
-      } = ElixirSense.docs(buffer, 1, 2)
-
-      assert actual_subject == "hkjnjknjk"
-
-      assert docs == "No documentation available\n"
+      refute ElixirSense.docs(buffer, 1, 2)
     end
 
     test "when empty buffer" do
@@ -29,7 +22,7 @@ defmodule ElixirSense.DocsTest do
 
       assert actual_subject == "ElixirSenseExample.ModuleWithDocFalse"
 
-      assert docs == "> ElixirSenseExample.ModuleWithDocFalse\n\nNo documentation available\n"
+      assert docs == "> ElixirSenseExample.ModuleWithDocFalse\n\n"
     end
 
     test "retrieve documentation" do
@@ -508,7 +501,7 @@ defmodule ElixirSense.DocsTest do
       %{actual_subject: actual_subject, docs: %{docs: docs}} = ElixirSense.docs(buffer, 2, 11)
 
       assert actual_subject == "ArgumentError"
-      assert docs == "> ArgumentError\n\nNo documentation available\n"
+      assert docs == "> ArgumentError\n\n"
     end
 
     test "not existing module docs" do
@@ -518,10 +511,7 @@ defmodule ElixirSense.DocsTest do
       end
       """
 
-      %{actual_subject: actual_subject, docs: %{docs: docs}} = ElixirSense.docs(buffer, 2, 11)
-
-      assert actual_subject == "NotExistingError"
-      assert docs == "No documentation available\n"
+      refute ElixirSense.docs(buffer, 2, 11)
     end
 
     test "retrieve type documentation" do
@@ -785,7 +775,6 @@ defmodule ElixirSense.DocsTest do
                  @spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]
                  ```
 
-                 No documentation available
 
 
                  ---
@@ -804,7 +793,6 @@ defmodule ElixirSense.DocsTest do
                  @spec module_info(:native) :: boolean
                  ```
 
-                 No documentation available
 
                  """
                }
@@ -834,14 +822,11 @@ defmodule ElixirSense.DocsTest do
       end
       """
 
-      assert %{actual_subject: "module_info", docs: %{docs: "No documentation available\n"}} =
-               ElixirSense.docs(buffer, 4, 5)
+      refute ElixirSense.docs(buffer, 4, 5)
 
-      assert %{actual_subject: "__info__", docs: %{docs: "No documentation available\n"}} =
-               ElixirSense.docs(buffer, 6, 5)
+      refute ElixirSense.docs(buffer, 6, 5)
 
-      assert %{actual_subject: "behaviour_info", docs: %{docs: "No documentation available\n"}} =
-               ElixirSense.docs(buffer, 8, 5)
+      refute ElixirSense.docs(buffer, 8, 5)
     end
   end
 
