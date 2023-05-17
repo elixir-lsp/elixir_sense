@@ -85,6 +85,7 @@ defmodule ElixirSense.Providers.References do
             requires,
             aliases,
             module,
+            scope,
             mods_funs,
             metadata_types
           )

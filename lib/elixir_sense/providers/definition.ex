@@ -45,7 +45,6 @@ defmodule ElixirSense.Providers.Definition do
       variables: vars,
       current_module: module
     }
-
     type = SurroundContext.to_binding(context, module)
 
     case type do
@@ -197,7 +196,8 @@ defmodule ElixirSense.Providers.Definition do
       module: current_module,
       imports: imports,
       requires: requires,
-      aliases: aliases
+      aliases: aliases,
+      scope: scope
     } = env
 
     m =
@@ -223,6 +223,7 @@ defmodule ElixirSense.Providers.Definition do
            requires,
            aliases,
            current_module,
+           scope,
            mods_funs_to_positions,
            metadata_types
          ) do

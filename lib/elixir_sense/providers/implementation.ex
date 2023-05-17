@@ -179,7 +179,8 @@ defmodule ElixirSense.Providers.Implementation do
       module: current_module,
       imports: imports,
       requires: requires,
-      aliases: aliases
+      aliases: aliases,
+      scope: scope
     } = env
 
     case {module, function}
@@ -188,6 +189,7 @@ defmodule ElixirSense.Providers.Implementation do
            requires,
            aliases,
            current_module,
+           scope,
            mods_funs_to_positions,
            metadata_types
          ) do

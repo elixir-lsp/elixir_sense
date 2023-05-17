@@ -26,7 +26,8 @@ defmodule ElixirSense.Providers.Signature do
       aliases: aliases,
       module: module,
       vars: vars,
-      attributes: attributes
+      attributes: attributes,
+      scope: scope
     } = env
 
     binding_env = %Binding{
@@ -44,6 +45,7 @@ defmodule ElixirSense.Providers.Signature do
              requires,
              if(elixir_prefix, do: [], else: aliases),
              module,
+             scope,
              metadata.mods_funs_to_positions,
              metadata.types
            ) do

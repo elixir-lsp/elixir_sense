@@ -93,6 +93,7 @@ defmodule ElixirSense.Providers.Docs do
         requires,
         aliases,
         module,
+        scope,
         mods_funs,
         metadata_types
       )

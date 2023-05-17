@@ -937,13 +937,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
     buffer = """
     defmodule MyModule do
       alias ElixirSenseExample.ModuleWithTypespecs.Remote
-      Remote.remote_t
-      #         ^
+      @type a :: Remote.remote_t
+      #                    ^
     end
     """
 
     %Location{type: :typespec, file: file, line: line, column: column} =
-      ElixirSense.definition(buffer, 3, 13)
+      ElixirSense.definition(buffer, 3, 24)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
     assert read_line(file, {line, column}) =~ ~r/^@type remote_t/
@@ -953,13 +953,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
     buffer = """
     defmodule MyModule do
       alias ElixirSenseExample.ModuleWithTypespecs.Remote
-      Remote.remote_option_t
-      #         ^
+      @type a :: Remote.remote_option_t
+      #                    ^
     end
     """
 
     %Location{type: :typespec, file: file, line: line, column: column} =
-      ElixirSense.definition(buffer, 3, 13)
+      ElixirSense.definition(buffer, 3, 24)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
     assert read_line(file, {line, column}) =~ ~r/@type remote_option_t ::/
@@ -969,13 +969,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
     buffer = """
     defmodule MyModule do
       alias ElixirSenseExample.ModuleWithTypespecs.Local
-      Local.opaque_t
-      #        ^
+      @type a :: Local.opaque_t
+      #                   ^
     end
     """
 
     %Location{type: :typespec, file: file, line: line, column: column} =
-      ElixirSense.definition(buffer, 3, 12)
+      ElixirSense.definition(buffer, 3, 23)
 
     assert file =~ "elixir_sense/test/support/module_with_typespecs.ex"
     assert read_line(file, {line, column}) =~ ~r/@opaque opaque_t/
@@ -985,13 +985,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
     buffer = """
     defmodule MyModule do
       alias ElixirSenseExample.MacroGenerated, as: Local
-      Local.my_type
-      #        ^
+      @type a :: Local.my_type
+      #                   ^
     end
     """
 
     %Location{type: :typespec, file: file, line: line, column: column} =
-      ElixirSense.definition(buffer, 3, 12)
+      ElixirSense.definition(buffer, 3, 23)
 
     assert file =~ "elixir_sense/test/support/macro_generated.ex"
     assert read_line(file, {line, column}) =~ "ElixirSenseExample.Macros.go"
@@ -1000,13 +1000,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
   test "find erlang type definition" do
     buffer = """
     defmodule MyModule do
-      :ets.tab
-      #     ^
+      @type a :: :ets.tab
+      #                ^
     end
     """
 
     %Location{type: :typespec, file: file, line: line, column: column} =
-      ElixirSense.definition(buffer, 2, 9)
+      ElixirSense.definition(buffer, 2, 20)
 
     assert file =~ "/src/ets.erl"
     assert read_line(file, {line, column}) =~ "-type tab()"
@@ -1015,27 +1015,27 @@ defmodule ElixirSense.Providers.DefinitionTest do
   test "find erlang type definition from preloaded module" do
     buffer = """
     defmodule MyModule do
-      :erlang.time_unit
-      #        ^
+      @type a :: :erlang.time_unit
+      #                   ^
     end
     """
 
     %Location{type: :typespec, file: file, line: line, column: column} =
-      ElixirSense.definition(buffer, 2, 12)
+      ElixirSense.definition(buffer, 2, 23)
 
     assert file =~ "/src/erlang.erl"
     assert read_line(file, {line, column}) =~ "-type time_unit()"
   end
 
-  test "do not find erlang ptivate type" do
+  test "do not find erlang private type" do
     buffer = """
     defmodule MyModule do
-      :erlang.memory_type
-      #        ^
+      @type a :: :erlang.memory_type
+      #                   ^
     end
     """
 
-    refute ElixirSense.definition(buffer, 2, 12)
+    refute ElixirSense.definition(buffer, 2, 23)
   end
 
   test "builtin types cannot be found" do
