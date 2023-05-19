@@ -25,10 +25,10 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
   A reducer that adds suggestions of type specs.
   """
 
-  # We only list type specs when inside the parent modules's body
+  # We only list type specs when inside typespec scope
   def add_types(hint, env, file_metadata, %{at_module_body?: true}, acc) do
-    if String.starts_with?(hint, "@") and not String.contains?(hint, ".") do
-      # We don't list typespecs when the hint is most likely an attribute without call operator
+    dbg(env.scope)
+    if not match?({:typespec, _, _}, env.scope) do
       {:cont, acc}
     else
       %State.Env{
