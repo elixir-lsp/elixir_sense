@@ -65,7 +65,7 @@ defmodule ElixirSense.Plugins.Ecto do
   def suggestions(
         hint,
         _,
-        [{nil, :assoc, 1, assoc_info}, {Ecto.Query, :from, 1, from_info} | _],
+        [{nil, :assoc, 1, assoc_info} | rest],
         opts
       ) do
     text_before = opts.cursor_context.text_before
@@ -73,6 +73,11 @@ defmodule ElixirSense.Plugins.Ecto do
     meta = opts.buffer_metadata
 
     with %{pos: {{line, col}, _}} <- assoc_info,
+         from_info when not is_nil(from_info) <-
+           Enum.find_value(rest, fn
+             {Ecto.Query, :from, 1, from_info} -> from_info
+             _ -> nil
+           end),
          assoc_code <- Source.text_after(text_before, line, col),
          [_, var] <- Regex.run(~r/^assoc\(\s*([a-z][a-zA-Z0-9_]*)\s*,/, assoc_code),
          %{^var => %{type: type}} <- Query.extract_bindings(text_before, from_info, env, meta),

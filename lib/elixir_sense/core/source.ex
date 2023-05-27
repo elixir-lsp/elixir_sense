@@ -370,6 +370,11 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
+  # since elixir 1.15 previous lines are kept in blocks
+  # https://github.com/elixir-lang/elixir/commit/faf81cd92c7d6668d2e8115744cc8d06f9bfecba
+  # skip as __block__ is not a call we are interested in 
+  @excluded_funs [:__block__]
+
   @spec which_func(String.t(), nil | %Binding{}) ::
           nil
           | %{
@@ -384,10 +389,11 @@ defmodule ElixirSense.Core.Source do
   def which_func(prefix, binding_env \\ nil) do
     binding_env = binding_env || %Binding{}
 
+    # TODO refactor to use Macro.path on elixir 1.14
     with {:ok, ast} <- Code.Fragment.container_cursor_to_quoted(prefix, columns: true),
          {_, {:ok, call, npar, meta, options, cursor_at_option, option}} <-
            Macro.prewalk(ast, nil, &find_call_pre/2),
-         {{m, elixir_prefix}, f} <- get_mod_fun(call, binding_env) do
+         {{m, elixir_prefix}, f} when f not in @excluded_funs <- get_mod_fun(call, binding_env) do
       %{
         candidate: {m, f},
         elixir_prefix: elixir_prefix,

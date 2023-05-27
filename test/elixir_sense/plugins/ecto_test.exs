@@ -455,7 +455,7 @@ defmodule ElixirSense.Plugins.EctoTest do
       assert detail == "(Ecto association) ElixirSense.Plugins.Ecto.FakeSchemas.User"
     end
 
-    # test "list avaiable schemas after `in`" do
+    # test "list available schemas after `in`" do
     #   Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Comment)
     #   Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.Post)
     #   Code.ensure_loaded(ElixirSense.Plugins.Ecto.FakeSchemas.User)

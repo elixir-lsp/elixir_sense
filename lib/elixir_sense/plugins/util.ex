@@ -78,6 +78,8 @@ defmodule ElixirSense.Plugins.Util do
     func_call_chain(code, env, buffer_metadata, [])
   end
 
+  # TODO reimplement this on elixir 1.14 with
+  # Code.Fragment.container_cursor_to_quoted and Macro.path
   defp func_call_chain(code, env, buffer_metadata, chain) do
     case partial_func_call(code, env, buffer_metadata) do
       :none ->

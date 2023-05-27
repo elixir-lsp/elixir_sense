@@ -487,12 +487,18 @@ defmodule ElixirSense.Core.IntrospectionTest do
                )
     end
 
-    test "behaviour_info can be from some modules imported" do
+    test "behaviour_info can be imported from from erlang behaviours on elixir < 1.15" do
       assert {nil, :behaviour_info, false} =
                actual_mod_fun({nil, :behaviour_info}, [{Application, []}], [], [], nil, %{}, %{})
 
-      assert {:gen_server, :behaviour_info, true} =
-               actual_mod_fun({nil, :behaviour_info}, [{:gen_server, []}], [], [], nil, %{}, %{})
+      erl_behaviour_result =
+        actual_mod_fun({nil, :behaviour_info}, [{:gen_server, []}], [], [], nil, %{}, %{})
+
+      if Version.match?(System.version(), ">= 1.15.0-dev") do
+        assert {nil, :behaviour_info, false} = erl_behaviour_result
+      else
+        assert {:gen_server, :behaviour_info, true} = erl_behaviour_result
+      end
     end
 
     test "types are not imported" do

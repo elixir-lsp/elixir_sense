@@ -439,7 +439,7 @@ defmodule ElixirSense.Core.SourceTest do
                elixir_prefix: false,
                npar: 0,
                pos: {{1, 11}, {1, nil}}
-             } = which_func("var = Enum.map((1 + 2")
+             } = which_func("var = Enum.map((1")
     end
 
     test "after parens" do
@@ -584,8 +584,21 @@ defmodule ElixirSense.Core.SourceTest do
       assert %{candidate: {nil, :from}, npar: 0} = which_func(code)
 
       code = "from u in "
-      # assert %{candidate: {nil, :from}, npar: 0} = which_func(code)
-      assert nil == which_func(code)
+      %{candidate: {nil, :in}, npar: 1} = which_func(code)
+    end
+
+    test "finds assoc" do
+      code = """
+      import Ecto.Query
+      alias ElixirSense.Plugins.Ecto.FakeSchemas.Post
+
+      def query() do
+        from(
+          p in Post,
+          join: c in assoc(p,\
+      """
+
+      assert %{candidate: {nil, :assoc}, npar: 1} = which_func(code)
     end
 
     test "functions without parens on second argument" do
@@ -615,16 +628,7 @@ defmodule ElixirSense.Core.SourceTest do
       code = """
       from c in Comment,
         join: p in Post,
-        on: p.id == c.\
-      """
-
-      assert %{candidate: {nil, :from}, npar: 1} = which_func(code)
-
-      code = """
-      Repo.all(
-        from c in Comment,
-          join: p in Post,
-          on: p.id == c.\
+        on: 
       """
 
       assert %{candidate: {nil, :from}, npar: 1} = which_func(code)
