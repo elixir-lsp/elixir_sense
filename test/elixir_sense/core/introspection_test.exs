@@ -537,16 +537,16 @@ defmodule ElixirSense.Core.IntrospectionTest do
     end
 
     test "behaviour_info can be imported from from erlang behaviours on elixir < 1.15" do
-      assert {nil, :behaviour_info, false} =
+      assert {nil, :behaviour_info, false, nil} =
                actual_mod_fun({nil, :behaviour_info}, [{Application, []}], [], [], nil, Elixir, %{}, %{})
 
       erl_behaviour_result =
-        actual_mod_fun({nil, :behaviour_info}, [{:gen_server, []}], [], [], nil, %{}, %{})
+        actual_mod_fun({nil, :behaviour_info}, [{:gen_server, []}], [], [], nil, Elixir, %{}, %{})
 
       if Version.match?(System.version(), ">= 1.15.0-dev") do
-        assert {nil, :behaviour_info, false} = erl_behaviour_result
+        assert {nil, :behaviour_info, false, nil} = erl_behaviour_result
       else
-        assert {:gen_server, :behaviour_info, true} = erl_behaviour_result
+        assert {:gen_server, :behaviour_info, true, :mod_fun} = erl_behaviour_result
       end
     end
 

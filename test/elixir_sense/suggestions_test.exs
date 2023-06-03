@@ -3158,26 +3158,45 @@ defmodule ElixirSense.SuggestionsTest do
 
       buffer = """
       defmodule My do
-        @spec a(Remote.\
+        @spec a(Remote.) :: integer
+      end
       """
 
-      assert [_] = suggestion_by_name("remote_list_t", buffer)
+      assert %{name: "remote_list_t"} = suggestion_by_name("remote_list_t", buffer, 2, 18)
+
+      buffer = """
+      defmodule My do
+        @spec a(Remote.)
+      end
+      """
+
+      assert %{name: "remote_list_t"} = suggestion_by_name("remote_list_t", buffer, 2, 18)
     end
 
     test "on callbacks" do
       buffer = """
       defmodule My do
         @callback a() :: none
+      end
       """
 
-      assert [_] = suggestion_by_name("nonempty_list", buffer)
+      assert [_, _] = suggestions_by_name("nonempty_list", buffer, 2, 24)
 
       buffer = """
       defmodule My do
-        @callback a(none
+        @callback a(none) :: integer
+      end
       """
 
-      assert [_] = suggestion_by_name("nonempty_list", buffer)
+      assert [_, _] = suggestions_by_name("nonempty_list", buffer, 2, 19)
+
+      buffer = """
+      defmodule My do
+        @callback a(none)
+      end
+      """
+
+      assert [_, _] = suggestions_by_name("nonempty_list", buffer, 2, 19)
     end
 
     test "remote types - by attribute" do

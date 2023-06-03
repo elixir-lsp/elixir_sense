@@ -27,7 +27,6 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
 
   # We only list type specs when inside typespec scope
   def add_types(hint, env, file_metadata, %{at_module_body?: true}, acc) do
-    dbg(env.scope)
     if not match?({:typespec, _, _}, env.scope) do
       {:cont, acc}
     else

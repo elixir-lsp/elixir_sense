@@ -668,6 +668,27 @@ defmodule ElixirSense.Core.MetadataBuilder do
     )
   end
 
+  # incomplete spec
+  # @callback my(integer)
+  defp pre(
+         {:@, [line: line, column: column] = _meta_attr,
+          [{kind, _, [{name, _, type_args}]} = spec]} =
+           ast,
+         state
+       )
+       when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
+              (is_nil(type_args) or is_list(type_args)) do
+    pre_spec(
+      ast,
+      state,
+      {line, column},
+      name,
+      expand_aliases_in_ast(state, List.wrap(type_args)),
+      expand_aliases_in_ast(state, spec),
+      kind
+    )
+  end
+
   defp pre({:@, [line: line, column: column] = meta_attr, [{name, meta, params}]}, state) do
     {type, is_definition} =
       case List.wrap(params) do

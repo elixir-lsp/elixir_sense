@@ -49,7 +49,7 @@ defmodule ElixirSense.Providers.Signature do
              metadata.mods_funs_to_positions,
              metadata.types
            ) do
-      signatures = find_signatures({mod, fun}, npar, env, metadata)
+      signatures = find_signatures({mod, fun}, npar, kind, env, metadata)
       %{active_param: npar, signatures: signatures}
     else
       _ ->
@@ -57,15 +57,11 @@ defmodule ElixirSense.Providers.Signature do
     end
   end
 
-  defp find_signatures({mod, fun}, npar, env, metadata) do
-    signatures = find_function_signatures({mod, fun}, env, metadata)
-
-    signatures =
-      if Metadata.at_module_body?(metadata, env) do
-        signatures ++ find_type_signatures({mod, fun}, metadata)
-      else
-        signatures
-      end
+  defp find_signatures({mod, fun}, npar, kind, env, metadata) do
+    signatures = case kind do
+      :mod_fun -> find_function_signatures({mod, fun}, env, metadata)
+      :type -> find_type_signatures({mod, fun}, metadata)
+    end
 
     signatures
     |> Enum.filter(fn %{params: params} ->
