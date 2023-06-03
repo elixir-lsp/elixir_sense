@@ -58,7 +58,7 @@ defmodule ElixirSense.Providers.Definition do
         if vars_info != [] do
           {definition_line, definition_column} =
             vars_info
-            |> Enum.find(vars_info, fn %VarInfo{positions: positions} ->
+            |> Enum.find(hd(vars_info), fn %VarInfo{positions: positions} ->
               {line, column} in positions
             end)
             |> then(fn %VarInfo{positions: positions} -> positions end)
