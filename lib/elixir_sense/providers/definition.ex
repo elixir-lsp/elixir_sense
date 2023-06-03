@@ -53,17 +53,13 @@ defmodule ElixirSense.Providers.Definition do
         nil
 
       {:variable, variable} ->
-        vars_info = vars |> Enum.filter(fn %VarInfo{name: name} -> name == variable end)
+        var_info = vars |> Enum.find(fn
+          %VarInfo{name: name, positions: positions} ->
+          name == variable and {line, column} in positions
+        end)
 
-        if vars_info != [] do
-          {definition_line, definition_column} =
-            vars_info
-            |> Enum.find(hd(vars_info), fn %VarInfo{positions: positions} ->
-              {line, column} in positions
-            end)
-            |> then(fn %VarInfo{positions: positions} -> positions end)
-            |> Enum.sort()
-            |> List.first()
+        if var_info != nil do
+          {definition_line, definition_column} = Enum.min(var_info.positions)
 
           %Location{type: :variable, file: nil, line: definition_line, column: definition_column}
         else
