@@ -453,6 +453,7 @@ defmodule ElixirSense.Core.State do
 
   def get_current_scope_name(%__MODULE__{} = state) do
     case hd(hd(state.scopes)) do
+      {:typespec, fun, _} -> fun |> Atom.to_string()
       {fun, _} -> fun |> Atom.to_string()
       mod -> mod |> Atom.to_string()
     end
