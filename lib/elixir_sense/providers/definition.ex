@@ -53,10 +53,12 @@ defmodule ElixirSense.Providers.Definition do
         nil
 
       {:variable, variable} ->
-        var_info = vars |> Enum.find(fn
-          %VarInfo{name: name, positions: positions} ->
-          name == variable and {line, column} in positions
-        end)
+        var_info =
+          vars
+          |> Enum.find(fn
+            %VarInfo{name: name, positions: positions} ->
+              name == variable and {line, column} in positions
+          end)
 
         if var_info != nil do
           {definition_line, definition_column} = Enum.min(var_info.positions)

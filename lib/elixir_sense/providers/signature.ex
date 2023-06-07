@@ -58,10 +58,11 @@ defmodule ElixirSense.Providers.Signature do
   end
 
   defp find_signatures({mod, fun}, npar, kind, env, metadata) do
-    signatures = case kind do
-      :mod_fun -> find_function_signatures({mod, fun}, env, metadata)
-      :type -> find_type_signatures({mod, fun}, metadata)
-    end
+    signatures =
+      case kind do
+        :mod_fun -> find_function_signatures({mod, fun}, env, metadata)
+        :type -> find_type_signatures({mod, fun}, metadata)
+      end
 
     signatures
     |> Enum.filter(fn %{params: params} ->

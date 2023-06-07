@@ -672,8 +672,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # @callback my(integer)
   defp pre(
          {:@, [line: line, column: column] = _meta_attr,
-          [{kind, _, [{name, _, type_args}]} = spec]} =
-           ast,
+          [{kind, _, [{name, _, type_args}]} = spec]} = ast,
          state
        )
        when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
@@ -1227,7 +1226,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
          {:@, _meta_attr,
           [
             {kind, _,
-             [{:when, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]}, _]} = _spec]}
+             [
+               {:when, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]}, _]} =
+                 _spec
+             ]}
           ]} = ast,
          state
        )

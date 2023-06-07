@@ -538,7 +538,16 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
     test "behaviour_info can be imported from from erlang behaviours on elixir < 1.15" do
       assert {nil, :behaviour_info, false, nil} =
-               actual_mod_fun({nil, :behaviour_info}, [{Application, []}], [], [], nil, Elixir, %{}, %{})
+               actual_mod_fun(
+                 {nil, :behaviour_info},
+                 [{Application, []}],
+                 [],
+                 [],
+                 nil,
+                 Elixir,
+                 %{},
+                 %{}
+               )
 
       erl_behaviour_result =
         actual_mod_fun({nil, :behaviour_info}, [{:gen_server, []}], [], [], nil, Elixir, %{}, %{})
