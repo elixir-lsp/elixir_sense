@@ -8,7 +8,7 @@ defmodule ElixirSense.Providers.Docs do
   alias ElixirSense.Core.SurroundContext
 
   @spec all(any, State.Env.t(), State.mods_funs_to_positions_t(), State.types_t()) ::
-          {actual_mod_fun :: String.t(), docs :: Introspection.docs()}
+          {actual_mod_fun :: String.t(), docs :: Introspection.docs()} | nil
   def all(
         context,
         %State.Env{
