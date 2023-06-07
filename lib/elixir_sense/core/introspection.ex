@@ -130,9 +130,10 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_all_docs({mod, fun}, :mod_fun, _scope) do
     docs =
-      with([] <- get_func_docs_md(mod, fun)) do
-        nil
-      else
+      case get_func_docs_md(mod, fun) do
+        [] ->
+          nil
+
         docs ->
           Enum.join(docs, "\n\n---\n\n") <> "\n"
       end
@@ -142,9 +143,10 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_all_docs({mod, fun}, :type, scope) do
     docs =
-      with([] <- get_type_docs_md(mod, fun, scope)) do
-        nil
-      else
+      case get_type_docs_md(mod, fun, scope) do
+        [] ->
+          nil
+
         docs ->
           Enum.join(docs, "\n\n---\n\n") <> "\n"
       end

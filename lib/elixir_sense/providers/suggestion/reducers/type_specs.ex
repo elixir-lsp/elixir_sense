@@ -27,9 +27,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
 
   # We only list type specs when inside typespec scope
   def add_types(hint, env, file_metadata, %{at_module_body?: true}, acc) do
-    if not match?({:typespec, _, _}, env.scope) do
-      {:cont, acc}
-    else
+    if match?({:typespec, _, _}, env.scope) do
       %State.Env{
         aliases: aliases,
         module: module,
@@ -63,6 +61,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
         |> Kernel.++(find_builtin_types({mod, hint}))
 
       {:cont, %{acc | result: acc.result ++ list}}
+    else
+      {:cont, acc}
     end
   end
 
