@@ -689,20 +689,23 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre({:@, [line: line, column: column] = meta_attr, [{name, meta, params}]}, state) do
-    {type, is_definition} =
-      case List.wrap(params) do
+    with {type, is_definition} <- (case List.wrap(params) do
         [] ->
           {nil, false}
 
         [param] ->
           {get_binding_type(state, param), true}
+        _ -> :error
+      end)
+      do
+      state =
+        add_moduledoc_positions(state, [line: line, column: column], [{name, meta, params}], line)
+
+      new_ast = {:@, meta_attr, [{name, add_no_call(meta), params}]}
+      pre_module_attribute(new_ast, state, {line, column}, name, type, is_definition)
+      else
+        _ -> {[], state}
       end
-
-    state =
-      add_moduledoc_positions(state, [line: line, column: column], [{name, meta, params}], line)
-
-    new_ast = {:@, meta_attr, [{name, add_no_call(meta), params}]}
-    pre_module_attribute(new_ast, state, {line, column}, name, type, is_definition)
   end
 
   # transform 1.2 alias/require/import/use syntax ast into regular
