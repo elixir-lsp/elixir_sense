@@ -5497,7 +5497,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   defp string_to_state(string) do
     string
-    |> Code.string_to_quoted(columns: true)
+    |> Code.string_to_quoted(columns: true, token_metadata: true)
     |> (fn {:ok, ast} -> ast end).()
     |> MetadataBuilder.build()
   end

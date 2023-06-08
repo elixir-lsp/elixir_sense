@@ -107,7 +107,7 @@ defmodule ElixirSense.Core.Parser do
         original_error \\ nil,
         opts \\ []
       ) do
-    case Code.string_to_quoted(source, opts |> Keyword.put(:columns, true)) do
+    case Code.string_to_quoted(source, opts |> Keyword.merge(columns: true, token_metadata: true)) do
       {:ok, ast} ->
         {:ok, ast, source}
 
