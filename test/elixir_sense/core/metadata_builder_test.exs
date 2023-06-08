@@ -5454,6 +5454,47 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
+  test "scopes" do
+    state =
+      """
+      IO.puts ""
+      defmodule My do
+        @attr "asd"
+
+        @type a :: integer
+
+        @attr1 "cc"
+
+        defmodule B do
+          IO.puts ""
+        end
+
+        IO.puts ""
+
+        @spec test(integer, integer) :: integer
+        defp test(a, b) do
+          a * b
+        end
+
+        @attr2 "gd"
+      end
+      IO.puts ""
+      """
+      |> string_to_state
+
+    assert Elixir == get_line_scope(state, 1)
+    assert :My == get_line_scope(state, 2)
+    assert {:typespec, :a, 0} == get_line_scope(state, 5)
+    assert :My == get_line_scope(state, 7)
+    assert :B == get_line_scope(state, 9)
+    assert :My == get_line_scope(state, 13)
+    assert {:typespec, :test, 2} == get_line_scope(state, 15)
+    assert {:test, 2} == get_line_scope(state, 16)
+    assert {:test, 2} == get_line_scope(state, 17)
+    assert :My == get_line_scope(state, 20)
+    assert Elixir == get_line_scope(state, 22)
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true)
@@ -5512,6 +5553,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         [single] -> single
         other -> other
       end
+    end
+  end
+
+  defp get_line_scope(state, line) do
+    case state.lines_to_env[line] do
+      nil -> []
+      env -> env.scope
     end
   end
 
