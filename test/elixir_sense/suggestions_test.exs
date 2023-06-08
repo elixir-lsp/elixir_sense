@@ -1562,6 +1562,44 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  test "lists builtin module attributes on incomplete code" do
+    buffer = """
+    defmodule My do
+      def start_link(id) do
+        GenServer.start_link(__MODULE__, id, name: via_tuple(id))
+      end
+    
+      @
+      def init(id) do
+        {:ok,
+          %Some.Mod{
+            id: id,
+            events: [],
+            version: 0
+          }}
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 6, 4)
+      |> Enum.filter(fn s -> s.type == :attribute end)
+
+    assert list == [
+             %{name: "@macrocallback", type: :attribute},
+             %{name: "@moduledoc", type: :attribute},
+             %{name: "@myattr", type: :attribute}
+           ]
+
+    list =
+      ElixirSense.suggestions(buffer, 5, 7)
+      |> Enum.filter(fn s -> s.type == :attribute end)
+
+    assert list == [
+             %{name: "@myattr", type: :attribute}
+           ]
+  end
+
   test "lists doc snippets in module body" do
     buffer = """
     defmodule MyModule do
