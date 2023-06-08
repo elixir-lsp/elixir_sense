@@ -25,13 +25,17 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
   A reducer that adds suggestions of type specs.
   """
 
-  # We only list type specs when inside the parent modules's body
+  # We only list type specs when inside typespec scope
   def add_types(hint, env, file_metadata, %{at_module_body?: true}, acc) do
-    if String.starts_with?(hint, "@") and not String.contains?(hint, ".") do
-      # We don't list typespecs when the hint is most likely an attribute without call operator
-      {:cont, acc}
-    else
-      %State.Env{aliases: aliases, module: module, attributes: attributes, vars: vars} = env
+    if match?({:typespec, _, _}, env.scope) do
+      %State.Env{
+        aliases: aliases,
+        module: module,
+        attributes: attributes,
+        vars: vars,
+        scope: scope
+      } = env
+
       %Metadata{mods_funs_to_positions: mods_funs, types: metadata_types} = file_metadata
 
       binding_env = %Binding{
@@ -50,12 +54,15 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
           {mod, hint},
           aliases,
           module,
+          scope,
           mods_funs,
           metadata_types
         )
         |> Kernel.++(find_builtin_types({mod, hint}))
 
       {:cont, %{acc | result: acc.result ++ list}}
+    else
+      {:cont, acc}
     end
   end
 
@@ -78,10 +85,11 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
          {mod, hint},
          aliases,
          module,
+         scope,
          mods_funs,
          metadata_types
        ) do
-    case Introspection.actual_module(mod, aliases, module, mods_funs) do
+    case Introspection.actual_module(mod, aliases, module, scope, mods_funs) do
       {actual_mod, true} ->
         find_module_types(actual_mod, {mod, hint}, metadata_types, module)
 

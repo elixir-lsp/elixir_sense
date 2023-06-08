@@ -372,7 +372,7 @@ defmodule ElixirSense.Core.Source do
 
   # since elixir 1.15 previous lines are kept in blocks
   # https://github.com/elixir-lang/elixir/commit/faf81cd92c7d6668d2e8115744cc8d06f9bfecba
-  # skip as __block__ is not a call we are interested in 
+  # skip as __block__ is not a call we are interested in
   @excluded_funs [:__block__]
 
   @spec which_func(String.t(), nil | %Binding{}) ::

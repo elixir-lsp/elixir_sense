@@ -3121,7 +3121,7 @@ defmodule ElixirSense.SuggestionsTest do
     test "remote types - filter list of typespecs" do
       buffer = """
       defmodule My do
-        Remote.remote_t\
+        @type a :: Remote.remote_t\
       """
 
       list = suggestions_by_type(:type_spec, buffer)
@@ -3131,7 +3131,7 @@ defmodule ElixirSense.SuggestionsTest do
     test "remote types - retrieve info from typespecs" do
       buffer = """
       defmodule My do
-        Remote.\
+        @type a :: Remote.\
       """
 
       suggestion = suggestion_by_name("remote_list_t", buffer)
@@ -3146,6 +3146,57 @@ defmodule ElixirSense.SuggestionsTest do
       assert suggestion.arity == 0
       assert suggestion.doc == "Remote list type"
       assert suggestion.origin == "ElixirSenseExample.ModuleWithTypespecs.Remote"
+    end
+
+    test "on specs" do
+      buffer = """
+      defmodule My do
+        @spec a() :: Remote.\
+      """
+
+      assert %{name: "remote_list_t"} = suggestion_by_name("remote_list_t", buffer)
+
+      buffer = """
+      defmodule My do
+        @spec a(Remote.) :: integer
+      end
+      """
+
+      assert %{name: "remote_list_t"} = suggestion_by_name("remote_list_t", buffer, 2, 18)
+
+      buffer = """
+      defmodule My do
+        @spec a(Remote.)
+      end
+      """
+
+      assert %{name: "remote_list_t"} = suggestion_by_name("remote_list_t", buffer, 2, 18)
+    end
+
+    test "on callbacks" do
+      buffer = """
+      defmodule My do
+        @callback a() :: none
+      end
+      """
+
+      assert [_, _] = suggestions_by_name("nonempty_list", buffer, 2, 24)
+
+      buffer = """
+      defmodule My do
+        @callback a(none) :: integer
+      end
+      """
+
+      assert [_, _] = suggestions_by_name("nonempty_list", buffer, 2, 19)
+
+      buffer = """
+      defmodule My do
+        @callback a(none)
+      end
+      """
+
+      assert [_, _] = suggestions_by_name("nonempty_list", buffer, 2, 19)
     end
 
     test "remote types - by attribute" do
@@ -3176,7 +3227,7 @@ defmodule ElixirSense.SuggestionsTest do
     test "remote types - retrieve info from typespecs with params" do
       buffer = """
       defmodule My do
-        Remote.\
+        @type a :: Remote.\
       """
 
       [suggestion_1, suggestion_2] = suggestions_by_name("remote_t", buffer)

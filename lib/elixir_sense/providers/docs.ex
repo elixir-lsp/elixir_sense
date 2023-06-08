@@ -8,7 +8,7 @@ defmodule ElixirSense.Providers.Docs do
   alias ElixirSense.Core.SurroundContext
 
   @spec all(any, State.Env.t(), State.mods_funs_to_positions_t(), State.types_t()) ::
-          {actual_mod_fun :: String.t(), docs :: Introspection.docs()}
+          {actual_mod_fun :: String.t(), docs :: Introspection.docs()} | nil
   def all(
         context,
         %State.Env{
@@ -93,13 +93,14 @@ defmodule ElixirSense.Providers.Docs do
         requires,
         aliases,
         module,
+        scope,
         mods_funs,
         metadata_types
       )
 
     case actual do
-      {mod, fun, true} ->
-        {mod_fun_to_string({mod, fun}), Introspection.get_all_docs({mod, fun}, scope)}
+      {mod, fun, true, kind} ->
+        {mod_fun_to_string({mod, fun}), Introspection.get_all_docs({mod, fun}, kind, scope)}
 
       _ ->
         nil

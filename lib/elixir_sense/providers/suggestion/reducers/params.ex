@@ -30,7 +30,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
       aliases: aliases,
       module: module,
       attributes: attributes,
-      vars: vars
+      vars: vars,
+      scope: scope
     } = env
 
     binding_env = %Binding{
@@ -47,13 +48,14 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
            npar: npar
          } <-
            Source.which_func(prefix, binding_env),
-         {mod, fun, true} <-
+         {mod, fun, true, :mod_fun} <-
            Introspection.actual_mod_fun(
              {mod, fun},
              imports,
              requires,
              if(elixir_prefix, do: [], else: aliases),
              module,
+             scope,
              mods_funs,
              metadata_types
            ) do

@@ -77,7 +77,7 @@ defmodule ElixirSense.Providers.References do
         |> Enum.filter(&(&1.mod == nil && &1.func == function))
         |> Enum.map(fn %{position: pos} -> build_var_location(to_string(function), pos) end)
       else
-        {mod, fun, _found} =
+        actual =
           {mod, function}
           |> expand(binding_env, module, aliases)
           |> Introspection.actual_mod_fun(
@@ -85,14 +85,22 @@ defmodule ElixirSense.Providers.References do
             requires,
             aliases,
             module,
+            scope,
             mods_funs,
             metadata_types
           )
 
-        {mod, fun}
-        |> xref_at_cursor(arity, module, scope, mods_funs, trace)
-        |> Enum.map(&build_location/1)
-        |> Enum.sort_by(fn %{uri: a, range: %{start: %{line: b, column: c}}} -> {a, b, c} end)
+        case actual do
+          {mod, fun, true, :mod_fun} ->
+            {mod, fun}
+            |> xref_at_cursor(arity, module, scope, mods_funs, trace)
+            |> Enum.map(&build_location/1)
+            |> Enum.sort_by(fn %{uri: a, range: %{start: %{line: b, column: c}}} -> {a, b, c} end)
+
+          _ ->
+            # no results for types or not found
+            []
+        end
       end
     end
 

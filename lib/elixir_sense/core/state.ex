@@ -6,7 +6,7 @@ defmodule ElixirSense.Core.State do
   alias ElixirSense.Core.Introspection
 
   @type fun_arity :: {atom, non_neg_integer}
-  @type scope :: atom | fun_arity
+  @type scope :: atom | fun_arity | {:typespec, atom, non_neg_integer}
 
   @type alias_t :: {module, module}
   @type scope_id_t :: non_neg_integer
@@ -453,6 +453,7 @@ defmodule ElixirSense.Core.State do
 
   def get_current_scope_name(%__MODULE__{} = state) do
     case hd(hd(state.scopes)) do
+      {:typespec, fun, _} -> fun |> Atom.to_string()
       {fun, _} -> fun |> Atom.to_string()
       mod -> mod |> Atom.to_string()
     end
@@ -632,6 +633,16 @@ defmodule ElixirSense.Core.State do
 
     %{state | namespace: outer_mods, scopes: outer_scopes}
   end
+
+  def add_typespec_namespace(%__MODULE__{} = state, name, arity) do
+    %{state | scopes: [[{:typespec, name, arity} | hd(state.scopes)] | state.scopes]}
+  end
+
+  # def remove_typespec_namespace(%__MODULE__{} = state) do
+  #   outer_scopes = state.scopes |> tl
+
+  #   %{state | scopes: outer_scopes}
+  # end
 
   def new_named_func(%__MODULE__{} = state, name, arity) do
     %{state | scopes: [[{name, arity} | hd(state.scopes)] | state.scopes]}

@@ -53,17 +53,15 @@ defmodule ElixirSense.Providers.Definition do
         nil
 
       {:variable, variable} ->
-        vars_info = vars |> Enum.filter(fn %VarInfo{name: name} -> name == variable end)
+        var_info =
+          vars
+          |> Enum.find(fn
+            %VarInfo{name: name, positions: positions} ->
+              name == variable and {line, column} in positions
+          end)
 
-        if vars_info != [] do
-          {definition_line, definition_column} =
-            vars_info
-            |> Enum.find(vars_info, fn %VarInfo{positions: positions} ->
-              {line, column} in positions
-            end)
-            |> then(fn %VarInfo{positions: positions} -> positions end)
-            |> Enum.sort()
-            |> List.first()
+        if var_info != nil do
+          {definition_line, definition_column} = Enum.min(var_info.positions)
 
           %Location{type: :variable, file: nil, line: definition_line, column: definition_column}
         else
@@ -197,7 +195,8 @@ defmodule ElixirSense.Providers.Definition do
       module: current_module,
       imports: imports,
       requires: requires,
-      aliases: aliases
+      aliases: aliases,
+      scope: scope
     } = env
 
     m =
@@ -223,17 +222,34 @@ defmodule ElixirSense.Providers.Definition do
            requires,
            aliases,
            current_module,
+           scope,
            mods_funs_to_positions,
            metadata_types
          ) do
-      {_, _, false} ->
+      {_, _, false, _} ->
         nil
 
-      {mod, fun, true} ->
+      {mod, fun, true, :mod_fun} ->
         fn_definition = find_fn_definition(mod, fun, line, mods_funs_to_positions, calls)
 
-        case fn_definition || mods_funs_to_positions[{mod, fun, nil}] ||
-               metadata_types[{mod, fun, nil}] do
+        case fn_definition || mods_funs_to_positions[{mod, fun, nil}] do
+          nil ->
+            Location.find_source({mod, fun}, current_module)
+
+          %ModFunInfo{positions: positions} = mi ->
+            # for simplicity take last position here as positions are reversed
+            {line, column} = positions |> Enum.at(-1)
+
+            %Location{
+              file: nil,
+              type: ModFunInfo.get_category(mi),
+              line: line,
+              column: column
+            }
+        end
+
+      {mod, fun, true, :type} ->
+        case metadata_types[{mod, fun, nil}] do
           nil ->
             Location.find_source({mod, fun}, current_module)
 
@@ -244,17 +260,6 @@ defmodule ElixirSense.Providers.Definition do
             %Location{
               file: nil,
               type: :typespec,
-              line: line,
-              column: column
-            }
-
-          %ModFunInfo{positions: positions} = mi ->
-            # for simplicity take last position here as positions are reversed
-            {line, column} = positions |> Enum.at(-1)
-
-            %Location{
-              file: nil,
-              type: ModFunInfo.get_category(mi),
               line: line,
               column: column
             }

@@ -124,19 +124,29 @@ defmodule ElixirSense.Core.Introspection do
     Keyword.has_key?(get_exports(module), fun)
   end
 
-  @spec get_all_docs(mod_fun, ElixirSense.Core.State.scope()) :: docs
-  def get_all_docs({mod, nil}, _) do
+  def get_all_docs({mod, nil}, :mod_fun, _) do
     %{docs: get_docs_md(mod), types: get_types_md(mod), callbacks: get_callbacks_md(mod)}
   end
 
-  def get_all_docs({mod, fun}, scope) do
+  def get_all_docs({mod, fun}, :mod_fun, _scope) do
     docs =
-      with(
-        [] <- get_func_docs_md(mod, fun),
-        [] <- get_type_docs_md(mod, fun, scope)
-      ) do
-        nil
-      else
+      case get_func_docs_md(mod, fun) do
+        [] ->
+          nil
+
+        docs ->
+          Enum.join(docs, "\n\n---\n\n") <> "\n"
+      end
+
+    %{docs: docs, types: get_types_md(mod)}
+  end
+
+  def get_all_docs({mod, fun}, :type, scope) do
+    docs =
+      case get_type_docs_md(mod, fun, scope) do
+        [] ->
+          nil
+
         docs ->
           Enum.join(docs, "\n\n---\n\n") <> "\n"
       end
@@ -1100,16 +1110,19 @@ defmodule ElixirSense.Core.Introspection do
           nil | module,
           [{module, module}],
           nil | module,
+          # TODO
+          any,
           ElixirSense.Core.State.mods_funs_to_positions_t()
         ) :: {nil | module, boolean}
-  def actual_module(module, aliases, current_module, mods_funs) do
-    {m, nil, res} =
+  def actual_module(module, aliases, current_module, scope, mods_funs) do
+    {m, nil, res, _} =
       actual_mod_fun(
         {module, nil},
         [],
         [],
         aliases,
         current_module,
+        scope,
         mods_funs,
         %{}
       )
@@ -1184,10 +1197,12 @@ defmodule ElixirSense.Core.Introspection do
           [module],
           [{module, module}],
           nil | module,
+          # TODO
+          any(),
           ElixirSense.Core.State.mods_funs_to_positions_t(),
           ElixirSense.Core.State.types_t()
-        ) :: {nil | module, nil | atom, boolean}
-  def actual_mod_fun({nil, nil}, _, _, _, _, _, _), do: {nil, nil, false}
+        ) :: {nil | module, nil | atom, boolean, nil | :mod_fun | :type}
+  def actual_mod_fun({nil, nil}, _, _, _, _, _, _, _), do: {nil, nil, false, nil}
 
   def actual_mod_fun(
         {mod, fun} = mod_fun,
@@ -1195,29 +1210,33 @@ defmodule ElixirSense.Core.Introspection do
         requires,
         aliases,
         current_module,
+        scope,
         mods_funs,
         metadata_types
       ) do
     expanded_mod = expand_alias(mod, aliases)
 
-    with {nil, nil} <- find_kernel_special_forms_macro(mod_fun),
-         {nil, nil} <-
-           find_function_or_module(
-             {expanded_mod, fun},
-             current_module,
-             imports,
-             requires,
-             mods_funs
-           ),
-         {nil, nil} <- find_type({expanded_mod, fun}, current_module, metadata_types) do
-      {expanded_mod, fun, false}
+    with {:mod_fun, {nil, nil}} <- {:mod_fun, find_kernel_special_forms_macro(mod_fun)},
+         {:mod_fun, {nil, nil}} <-
+           {:mod_fun,
+            find_function_or_module(
+              {expanded_mod, fun},
+              current_module,
+              scope,
+              imports,
+              requires,
+              mods_funs
+            )},
+         {:type, {nil, nil}} <-
+           {:type, find_type({expanded_mod, fun}, current_module, scope, metadata_types)} do
+      {expanded_mod, fun, false, nil}
     else
-      {m, f} -> {m, f, true}
+      {kind, {m, f}} -> {m, f, true, kind}
     end
   end
 
   # local type
-  defp find_type({nil, type}, current_module, metadata_types) do
+  defp find_type({nil, type}, current_module, {:typespec, _, _}, metadata_types) do
     case metadata_types[{current_module, type, nil}] do
       nil ->
         if BuiltinTypes.builtin_type?(type) do
@@ -1232,13 +1251,13 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   # Elixir proxy
-  defp find_type({Elixir, _type}, _current_module, _metadata_types), do: {nil, nil}
+  defp find_type({Elixir, _type}, _current_module, _scope, _metadata_types), do: {nil, nil}
 
   # invalid case
-  defp find_type({_mod, nil}, _current_module, _metadata_types), do: {nil, nil}
+  defp find_type({_mod, nil}, _current_module, _scope, _metadata_types), do: {nil, nil}
 
   # remote type
-  defp find_type({mod, type}, _current_module, metadata_types) do
+  defp find_type({mod, type}, _current_module, {:typespec, _, _}, metadata_types) do
     found =
       case metadata_types[{mod, type, nil}] do
         nil ->
@@ -1258,10 +1277,24 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
+  defp find_type({_mod, _type}, _current_module, _scope, _metadata_types), do: {nil, nil}
+
+  defp find_function_or_module(
+         {_mod, fun},
+         _current_module,
+         {:typespec, _, _},
+         _imports,
+         _requires,
+         _mods_funs
+       )
+       when fun != nil,
+       do: {nil, nil}
+
   # local call
   defp find_function_or_module(
          {nil, fun},
          current_module,
+         _scope,
          imports,
          _requires,
          mods_funs
@@ -1298,6 +1331,7 @@ defmodule ElixirSense.Core.Introspection do
   defp find_function_or_module(
          {Elixir, _},
          _current_module,
+         _scope,
          _imports,
          _requires,
          _mods_funs
@@ -1308,6 +1342,7 @@ defmodule ElixirSense.Core.Introspection do
   defp find_function_or_module(
          {mod, nil},
          _current_module,
+         _scope,
          _imports,
          _requires,
          mods_funs
@@ -1324,6 +1359,7 @@ defmodule ElixirSense.Core.Introspection do
          {mod, fun},
          _current_module,
          _imports,
+         _scope,
          requires,
          mods_funs
        ) do

@@ -26,7 +26,8 @@ defmodule ElixirSense.Providers.Signature do
       aliases: aliases,
       module: module,
       vars: vars,
-      attributes: attributes
+      attributes: attributes,
+      scope: scope
     } = env
 
     binding_env = %Binding{
@@ -37,17 +38,18 @@ defmodule ElixirSense.Providers.Signature do
 
     with %{candidate: {m, f}, npar: npar, elixir_prefix: elixir_prefix} <-
            Source.which_func(prefix, binding_env),
-         {mod, fun, true} <-
+         {mod, fun, true, kind} <-
            Introspection.actual_mod_fun(
              {m, f},
              imports,
              requires,
              if(elixir_prefix, do: [], else: aliases),
              module,
+             scope,
              metadata.mods_funs_to_positions,
              metadata.types
            ) do
-      signatures = find_signatures({mod, fun}, npar, env, metadata)
+      signatures = find_signatures({mod, fun}, npar, kind, env, metadata)
       %{active_param: npar, signatures: signatures}
     else
       _ ->
@@ -55,14 +57,11 @@ defmodule ElixirSense.Providers.Signature do
     end
   end
 
-  defp find_signatures({mod, fun}, npar, env, metadata) do
-    signatures = find_function_signatures({mod, fun}, env, metadata)
-
+  defp find_signatures({mod, fun}, npar, kind, env, metadata) do
     signatures =
-      if Metadata.at_module_body?(metadata, env) do
-        signatures ++ find_type_signatures({mod, fun}, metadata)
-      else
-        signatures
+      case kind do
+        :mod_fun -> find_function_signatures({mod, fun}, env, metadata)
+        :type -> find_type_signatures({mod, fun}, metadata)
       end
 
     signatures
