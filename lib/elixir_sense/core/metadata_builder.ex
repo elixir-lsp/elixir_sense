@@ -32,7 +32,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defguardp is_call(call, params)
             when is_atom(call) and is_list(params) and
-                   call not in [:., :__aliases__, :"::", :{}, :|>]
+                   call not in [:., :__aliases__, :"::", :{}, :|>, :%, :%{}]
 
   defguard is_call_meta_simple(list)
            when elem(hd(list), 0) == :line and elem(hd(tl(list)), 0) == :column

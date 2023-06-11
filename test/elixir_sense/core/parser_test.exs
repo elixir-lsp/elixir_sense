@@ -427,7 +427,7 @@ defmodule ElixirSense.Core.ParserTest do
     defmodule MyModule do
       def func() do
         %{
-          data: "foo"
+          data: foo()
         }
       end
     end
@@ -435,7 +435,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %ElixirSense.Core.Metadata{
              calls: %{
-               3 => [%{func: :%{}}]
+               4 => [%{func: :foo}]
              }
            } = parse_string(source, true, true, 4)
   end
@@ -445,7 +445,7 @@ defmodule ElixirSense.Core.ParserTest do
     defmodule MyModule do
       def func() do
         %{
-          data: "foo"
+          data: foo()
 
       end
     end
@@ -453,7 +453,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %ElixirSense.Core.Metadata{
              calls: %{
-               3 => [%{func: :%{}}]
+               4 => [%{func: :foo}]
              }
            } = parse_string(source, true, true, 4)
   end
