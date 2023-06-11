@@ -15,7 +15,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: nil,
-             mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 11}]}},
+             mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 1}]}},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
@@ -352,7 +352,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: nil,
-             mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 11}]}},
+             mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 1}]}},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}

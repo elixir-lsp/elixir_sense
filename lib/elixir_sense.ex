@@ -492,7 +492,7 @@ defmodule ElixirSense do
       ...> end
       ...> '''
       iex> ElixirSense.string_to_quoted(code, 1)
-      {:ok, {:defmodule, [line: 1, column: 1], [[do: {:__block__, [], []}]]}}
+      {:ok, {:defmodule, [do: [line: 1, column: 11], end: [line: 2, column: 1], line: 1, column: 1], [[do: {:__block__, [], []}]]}}
   """
   @spec string_to_quoted(String.t(), pos_integer | nil, non_neg_integer, keyword) ::
           {:ok, Macro.t()} | {:error, {line :: pos_integer(), term(), term()}}

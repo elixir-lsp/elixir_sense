@@ -910,7 +910,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
              type: :module,
              file: nil,
              line: 2,
-             column: 13
+             column: 3
            }
   end
 

@@ -80,7 +80,7 @@ defmodule ElixirSense.Core.Metadata do
           %State.ModFunInfo{positions: [{line, column}]} ->
             # Hacky :shrug
             line_offset = 1
-            column_offset = -8
+            column_offset = 2
             {line + line_offset, column + column_offset}
 
           _ ->

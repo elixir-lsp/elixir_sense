@@ -1568,7 +1568,7 @@ defmodule ElixirSense.SuggestionsTest do
       def start_link(id) do
         GenServer.start_link(__MODULE__, id, name: via_tuple(id))
       end
-    
+
       @
       def init(id) do
         {:ok,

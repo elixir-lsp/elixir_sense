@@ -489,7 +489,8 @@ defmodule ElixirSense.Core.State do
         params,
         type,
         options \\ []
-      ) do
+      )
+      when is_tuple(position) do
     current_info = Map.get(state.mods_funs_to_positions, {module, fun, arity}, %ModFunInfo{})
     current_params = current_info |> Map.get(:params, [])
     current_positions = current_info |> Map.get(:positions, [])
@@ -686,7 +687,7 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | scopes: tl(state.scopes)}
   end
 
-  def add_current_module_to_index(%__MODULE__{} = state, position) do
+  def add_current_module_to_index(%__MODULE__{} = state, position) when is_tuple(position) do
     current_module_variants = get_current_module_variants(state)
 
     current_module_variants
@@ -696,7 +697,7 @@ defmodule ElixirSense.Core.State do
     end)
   end
 
-  def add_module_to_index(%__MODULE__{} = state, module, position) do
+  def add_module_to_index(%__MODULE__{} = state, module, position) when is_tuple(position) do
     # TODO :defprotocol, :defimpl?
     add_mod_fun_to_position(state, {module, nil, nil}, position, nil, :defmodule)
   end
