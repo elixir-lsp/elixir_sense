@@ -87,17 +87,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp pre_module(ast, state, meta, module, types \\ [], functions \\ []) do
     module = normalize_module(module)
 
-    position =
-      {line, column} = {
-        Keyword.fetch!(meta, :line),
-        Keyword.fetch!(meta, :column)
-      }
+    {position = {line, column}, end_position} = extract_range(meta)
 
     state =
       state
       |> maybe_add_protocol_implementation(module)
       |> add_namespace(module)
-      |> add_current_module_to_index(position)
+      |> add_current_module_to_index(position, end_position)
       |> alias_submodule(module)
       |> new_alias_scope
       |> new_attributes_scope
@@ -124,6 +120,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
           name,
           mapped_args,
           position,
+          nil,
           kind
         )
       end)
@@ -225,23 +222,55 @@ defmodule ElixirSense.Core.MetadataBuilder do
     post_module(ast, state)
   end
 
-  defp pre_func({type, _, _} = ast, state, %{line: line, col: col}, name, params, options \\ [])
+  defp pre_func({type, _, _} = ast, state, meta, name, params, options \\ [])
        when is_atom(name) do
     vars =
       state
       |> find_vars(params)
       |> merge_same_name_vars()
 
+    {position, end_position} = extract_range(meta)
+
     state
     |> new_named_func(name, length(params || []))
-    |> add_func_to_index(name, params || [], {line, col}, type, options)
+    |> add_func_to_index(name, params || [], position, end_position, type, options)
     |> new_alias_scope
     |> new_import_scope
     |> new_require_scope
     |> new_func_vars_scope
     |> add_vars(vars, true)
-    |> add_current_env_to_line(line)
+    |> add_current_env_to_line(Keyword.fetch!(meta, :line))
     |> result(ast)
+  end
+
+  defp extract_range(meta) do
+    position = {
+      Keyword.fetch!(meta, :line),
+      Keyword.fetch!(meta, :column)
+    }
+
+    end_position =
+      case meta[:end] do
+        nil ->
+          case meta[:end_of_expression] do
+            nil ->
+              nil
+
+            end_of_expression_meta ->
+              {
+                Keyword.fetch!(end_of_expression_meta, :line),
+                Keyword.fetch!(end_of_expression_meta, :column)
+              }
+          end
+
+        end_meta ->
+          {
+            Keyword.fetch!(end_meta, :line),
+            Keyword.fetch!(end_meta, :column) + 3
+          }
+      end
+
+    {position, end_position}
   end
 
   defp post_func(ast, state) do
@@ -424,6 +453,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
           :behaviour_info,
           [{:atom, [line: line, column: column], nil}],
           pos,
+          nil,
           :def
         )
       else
@@ -489,8 +519,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
          state
        )
        when is_atom(name) do
-    line = Keyword.fetch!(meta2, :line)
-    column = Keyword.fetch!(meta2, :column)
     ast_without_params = {:defdelegate, meta, [{name, add_no_call(meta2), []}, body]}
     target_module = body |> Keyword.get(:to)
 
@@ -509,7 +537,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         _ -> []
       end
 
-    pre_func(ast_without_params, state, %{line: line, col: column}, name, params, options)
+    pre_func(ast_without_params, state, meta, name, params, options)
   end
 
   # quote do
@@ -525,10 +553,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
          state
        )
        when def_name in @defs do
-    line = Keyword.fetch!(meta2, :line)
-    column = Keyword.fetch!(meta2, :column)
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, guards, body]}
-    pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
+    pre_func(ast_without_params, state, meta, name, params)
   end
 
   defp pre(
@@ -536,10 +562,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
          state
        )
        when def_name in @defs and is_atom(name) do
-    line = Keyword.fetch!(meta2, :line)
-    column = Keyword.fetch!(meta2, :column)
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, body]}
-    pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
+    pre_func(ast_without_params, state, meta, name, params)
   end
 
   # defguard and defguardp
@@ -551,19 +575,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
          state
        )
        when def_name in @defs do
-    line = Keyword.fetch!(meta2, :line)
-    column = Keyword.fetch!(meta2, :column)
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, body]}
-    pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
+    pre_func(ast_without_params, state, meta, name, params)
   end
 
   # function head
   defp pre({def_name, meta, [{name, meta2, params}]}, state)
        when def_name in @defs and is_atom(name) do
-    line = Keyword.fetch!(meta2, :line)
-    column = Keyword.fetch!(meta2, :column)
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, nil]}
-    pre_func(ast_without_params, state, %{line: line, col: column}, name, params)
+    pre_func(ast_without_params, state, meta, name, params)
   end
 
   defp pre(
@@ -609,7 +629,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
               nil ->
                 # implementation for: Any not detected (is in other file etc.)
                 acc_1
-                |> add_module_to_index(mod, {line, column})
+                |> add_module_to_index(mod, {line, column}, nil)
 
               _any_mods_funs ->
                 # copy implementation for: Any
@@ -1146,12 +1166,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state
     |> new_named_func(name, 1)
-    |> add_func_to_index(name, [{:\\, [], [{:args, [], nil}, []]}], {line, column}, type, options)
+    |> add_func_to_index(
+      name,
+      [{:\\, [], [{:args, [], nil}, []]}],
+      {line, column},
+      nil,
+      type,
+      options
+    )
     |> new_named_func(name, 2)
     |> add_func_to_index(
       name,
       [{:record, [], nil}, {:args, [], nil}],
       {line, column},
+      nil,
       type,
       options
     )
@@ -1262,14 +1290,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     post_module(ast, state)
   end
 
-  defp post({def_name, meta, [{name, _, _params}, _]} = ast, state)
+  defp post({def_name, _meta, [{name, _, _params}, _]} = ast, state)
        when def_name in @defs and is_atom(name) do
-    line = Keyword.fetch!(meta, :line)
     post_func(ast, state)
   end
 
   defp post(
-         {def_name, meta, [{name, _, _params}, _guards, _]} = ast,
+         {def_name, _meta, [{name, _, _params}, _guards, _]} = ast,
          state
        )
        when def_name in @defs and is_atom(name) do
@@ -1903,12 +1930,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
             :exception,
             [{:msg, [line: line, column: column], nil}],
             {line, column},
+            nil,
             :def
           )
           |> add_func_to_index(
             :message,
             [{:exception, [line: line, column: column], nil}],
             {line, column},
+            nil,
             :def
           )
         else
@@ -1918,16 +1947,18 @@ defmodule ElixirSense.Core.MetadataBuilder do
           :exception,
           [{:args, [line: line, column: column], nil}],
           {line, column},
+          nil,
           :def
         )
       else
         state
       end
-      |> add_func_to_index(:__struct__, [], {line, column}, :def)
+      |> add_func_to_index(:__struct__, [], {line, column}, nil, :def)
       |> add_func_to_index(
         :__struct__,
         [{:kv, [line: line, column: column], nil}],
         {line, column},
+        nil,
         :def
       )
 

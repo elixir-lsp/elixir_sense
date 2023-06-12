@@ -215,6 +215,7 @@ defmodule ElixirSense.Core.State do
     @type t :: %ModFunInfo{
             params: list(list(term)),
             positions: list(ElixirSense.Core.State.position_t()),
+            end_positions: list(ElixirSense.Core.State.position_t() | nil),
             target: nil | {module, atom},
             overridable: false | {true, module},
             # TODO defmodule defprotocol defimpl?
@@ -231,6 +232,7 @@ defmodule ElixirSense.Core.State do
 
     defstruct params: [],
               positions: [],
+              end_positions: [],
               target: nil,
               type: nil,
               overridable: false
@@ -486,6 +488,7 @@ defmodule ElixirSense.Core.State do
         %__MODULE__{} = state,
         {module, fun, arity},
         position,
+        end_position,
         params,
         type,
         options \\ []
@@ -494,8 +497,10 @@ defmodule ElixirSense.Core.State do
     current_info = Map.get(state.mods_funs_to_positions, {module, fun, arity}, %ModFunInfo{})
     current_params = current_info |> Map.get(:params, [])
     current_positions = current_info |> Map.get(:positions, [])
+    current_end_positions = current_info |> Map.get(:end_positions, [])
     new_params = [params | current_params]
     new_positions = [position | current_positions]
+    new_end_positions = [end_position | current_end_positions]
 
     info_type =
       if fun != nil and arity == nil and
@@ -510,6 +515,7 @@ defmodule ElixirSense.Core.State do
 
     info = %ModFunInfo{
       positions: new_positions,
+      end_positions: new_end_positions,
       params: new_params,
       type: info_type,
       overridable: current_info |> Map.get(:overridable, false)
@@ -687,30 +693,58 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | scopes: tl(state.scopes)}
   end
 
-  def add_current_module_to_index(%__MODULE__{} = state, position) when is_tuple(position) do
+  def add_current_module_to_index(%__MODULE__{} = state, position, end_position)
+      when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
     current_module_variants = get_current_module_variants(state)
 
     current_module_variants
     |> Enum.reduce(state, fn variant, acc ->
       acc
-      |> add_module_to_index(variant, position)
+      |> add_module_to_index(variant, position, end_position)
     end)
   end
 
-  def add_module_to_index(%__MODULE__{} = state, module, position) when is_tuple(position) do
+  def add_module_to_index(%__MODULE__{} = state, module, position, end_position)
+      when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
     # TODO :defprotocol, :defimpl?
-    add_mod_fun_to_position(state, {module, nil, nil}, position, nil, :defmodule)
+    add_mod_fun_to_position(state, {module, nil, nil}, position, end_position, nil, :defmodule)
   end
 
-  def add_func_to_index(%__MODULE__{} = state, func, params, position, type, options \\ []) do
+  # TODO require end position
+  def add_func_to_index(state, func, params, position, end_position \\ nil, type, options \\ [])
+
+  def add_func_to_index(
+        %__MODULE__{} = state,
+        func,
+        params,
+        position,
+        end_position,
+        type,
+        options
+      )
+      when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
     current_module_variants = get_current_module_variants(state)
     arity = length(params)
 
     current_module_variants
     |> Enum.reduce(state, fn variant, acc ->
       acc
-      |> add_mod_fun_to_position({variant, func, arity}, position, params, type, options)
-      |> add_mod_fun_to_position({variant, func, nil}, position, params, type, options)
+      |> add_mod_fun_to_position(
+        {variant, func, arity},
+        position,
+        end_position,
+        params,
+        type,
+        options
+      )
+      |> add_mod_fun_to_position(
+        {variant, func, nil},
+        position,
+        end_position,
+        params,
+        type,
+        options
+      )
     end)
   end
 

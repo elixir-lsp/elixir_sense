@@ -167,7 +167,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %Location{type: :function, file: nil, line: 5, column: 7} =
+    assert %Location{type: :function, file: nil, line: 5, column: 3} =
              ElixirSense.definition(buffer, 2, 18)
   end
 
@@ -179,7 +179,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     end
     """
 
-    assert %Location{type: :function, file: nil, line: 3, column: 7} =
+    assert %Location{type: :function, file: nil, line: 3, column: 3} =
              ElixirSense.definition(buffer, 3, 9)
   end
 
@@ -454,7 +454,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
              type: :function,
              file: nil,
              line: 2,
-             column: 7
+             column: 3
            }
   end
 
@@ -474,7 +474,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
              type: :function,
              file: nil,
              line: 2,
-             column: 7
+             column: 3
            }
   end
 
@@ -771,7 +771,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
              type: :function,
              file: nil,
              line: 2,
-             column: 7
+             column: 3
            }
   end
 
@@ -791,7 +791,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
              type: :function,
              file: nil,
              line: 2,
-             column: 7
+             column: 3
            }
   end
 
@@ -812,7 +812,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
              type: :function,
              file: nil,
              line: 2,
-             column: 7
+             column: 3
            }
   end
 
@@ -832,7 +832,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
              type: :function,
              file: nil,
              line: 2,
-             column: 7
+             column: 3
            }
   end
 
@@ -851,7 +851,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
              type: :macro,
              file: nil,
              line: 2,
-             column: 13
+             column: 3
            }
   end
 
@@ -873,7 +873,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
              type: :function,
              file: nil,
              line: 3,
-             column: 7
+             column: 3
            }
   end
 

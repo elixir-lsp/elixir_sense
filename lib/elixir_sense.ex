@@ -101,7 +101,7 @@ defmodule ElixirSense do
       ...> '''
       iex>  %{file: path, line: line, column: column} = ElixirSense.definition(code, 3, 11)
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
-      "module_with_functions.ex:6:7"
+      "module_with_functions.ex:6:3"
   """
   @spec definition(String.t(), pos_integer, pos_integer) :: Location.t() | nil
   def definition(code, line, column) do
@@ -143,7 +143,7 @@ defmodule ElixirSense do
       ...> '''
       iex>  [%{file: path, line: line, column: column}, _] = ElixirSense.implementations(code, 1, 37) |> Enum.sort
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
-      "example_protocol.ex:7:7"
+      "example_protocol.ex:7:3"
   """
   @spec implementations(String.t(), pos_integer, pos_integer) :: [Location.t()]
   def implementations(code, line, column) do
