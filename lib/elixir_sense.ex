@@ -225,13 +225,13 @@ defmodule ElixirSense do
     buffer_file_metadata =
       maybe_fix_autocomple_on_cursor(buffer_file_metadata, text_before, text_after, line)
 
-    env = Metadata.get_env(buffer_file_metadata, line)
+    env = Metadata.get_env(buffer_file_metadata, {line, column})
     module_store = ModuleStore.build()
 
     cursor_context = %{
       text_before: text_before,
       text_after: text_after,
-      at_module_body?: Metadata.at_module_body?(buffer_file_metadata, env)
+      at_module_body?: Metadata.at_module_body?(buffer_file_metadata, env, {line, column})
     }
 
     Suggestion.find(hint, env, buffer_file_metadata, cursor_context, module_store, opts)

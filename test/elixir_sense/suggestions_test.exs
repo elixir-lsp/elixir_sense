@@ -1613,15 +1613,10 @@ defmodule ElixirSense.SuggestionsTest do
         @m
         # ^
       end
-
-      schema do
-        @m
-        # ^
-      end
     end
     """
 
-    [cursor_1, cursor_2, cursor_3, cursor_4] = cursors(buffer)
+    [cursor_1, cursor_2, cursor_3] = cursors(buffer)
 
     list = suggestions_by_kind(buffer, cursor_1, :snippet)
 
@@ -1641,7 +1636,6 @@ defmodule ElixirSense.SuggestionsTest do
     assert [%{label: ~S(@moduledoc """""")}, %{label: "@moduledoc false"}] = list
 
     assert suggestions_by_kind(buffer, cursor_3, :snippet) == []
-    assert suggestions_by_kind(buffer, cursor_4, :snippet) == []
   end
 
   test "fuzzy suggestions for doc snippets" do

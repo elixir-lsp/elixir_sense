@@ -41,25 +41,31 @@ defmodule ElixirSense.Core.Metadata do
           documentation: String.t()
         }
 
-  @spec get_env(__MODULE__.t(), pos_integer) :: State.Env.t()
-  def get_env(%__MODULE__{} = metadata, line) do
-    case Map.get(metadata.lines_to_env, line) do
+  @spec get_env(__MODULE__.t(), {pos_integer, pos_integer}) :: State.Env.t()
+  def get_env(%__MODULE__{} = metadata, {line, column}) do
+    case Map.get(metadata.lines_to_env, line) |> dbg do
       nil -> State.default_env()
       ctx -> ctx
     end
   end
 
-  @spec at_module_body?(__MODULE__.t(), State.Env.t()) :: boolean()
-  def at_module_body?(%__MODULE__{} = metadata, env) do
-    mod_info = Map.get(metadata.mods_funs_to_positions, {env.module, nil, nil})
+  @spec at_module_body?(__MODULE__.t(), State.Env.t(), {pos_integer, pos_integer}) :: boolean()
+  def at_module_body?(%__MODULE__{} = metadata, env, {line, column}) do
+    modules = metadata.mods_funs_to_positions
+    |> Enum.filter(&match?({{module, nil, nil}, _} when is_atom(module), &1))
 
-    with %State.ModFunInfo{positions: [{line, _}]} <- mod_info,
-         %State.Env{scope_id: mod_scope_id} <- metadata.lines_to_env[line] do
-      env.scope_id in mod_scope_id..(mod_scope_id + 1) and not match?({_, _}, env.scope)
-    else
-      _ ->
-        false
-    end
+    found_module_with_end_position = modules
+    |> Enum.any?(fn {_, %State.ModFunInfo{positions: positions, end_positions: end_positions}} ->
+      Enum.zip(positions, end_positions)
+      |> Enum.any?(fn
+        {{begin_line, begin_column}, {end_line, end_column}} ->
+          (line > begin_line or line == begin_line and column > begin_column) and
+          (line < end_line or line == end_line and column < end_column)
+        {_, nil} -> false
+      end)
+    end)
+
+    found_module_with_end_position and match?(atom when is_atom(atom), env.scope)
   end
 
   def get_position_to_insert_alias(%__MODULE__{} = metadata, line) do

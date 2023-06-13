@@ -586,9 +586,9 @@ defmodule ElixirSense.Core.SourceTest do
       code = "from u in "
 
       if Version.match?(System.version(), ">= 1.15.0-dev") do
-        %{candidate: {nil, :in}, npar: 1} = which_func(code)
+        assert %{candidate: {nil, :in}, npar: 1} = which_func(code)
       else
-        nil == which_func(code)
+        assert nil == which_func(code)
       end
     end
 

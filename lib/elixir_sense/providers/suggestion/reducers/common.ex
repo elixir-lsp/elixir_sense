@@ -64,7 +64,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
   def populate(hint, env, buffer_metadata, context, acc, opts \\ []) do
     text_before = context.text_before
 
-    suggestions = find_mods_funcs(hint, env, buffer_metadata, text_before, opts)
+    suggestions = find_mods_funcs(hint, env, buffer_metadata, text_before, opts) |> dbg
 
     suggestions_by_type = Enum.group_by(suggestions, & &1.type)
 
@@ -113,6 +113,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
   Note: requires populate/5.
   """
   def add_attributes(_hint, _env, _file_metadata, _context, acc) do
+    IO.puts "adding attrs"
     add_suggestions(:attribute, acc)
   end
 
@@ -127,7 +128,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
 
   defp add_suggestions(type, acc) do
     suggestions_by_type = Reducer.get_context(acc, :common_suggestions_by_type)
-    list = Map.get(suggestions_by_type, type, [])
+    list = Map.get(suggestions_by_type, type, []) |> dbg
     {:cont, %{acc | result: acc.result ++ list}}
   end
 
@@ -185,7 +186,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
       else
         hint
       end
-
+    dbg({hint, env, opts})
     Complete.complete(hint, env, opts)
   end
 end
