@@ -526,7 +526,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         name: name,
         full_name: inspect(mod),
         desc: {"", %{}},
-        subtype: nil
+        subtype: Introspection.get_module_subtype(mod)
       }
     end
   end
