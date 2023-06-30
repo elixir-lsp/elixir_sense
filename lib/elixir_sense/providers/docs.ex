@@ -3,6 +3,7 @@ defmodule ElixirSense.Providers.Docs do
   Doc Provider
   """
   alias ElixirSense.Core.Binding
+  alias ElixirSense.Core.BuiltinAttributes
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State
   alias ElixirSense.Core.SurroundContext
@@ -31,17 +32,24 @@ defmodule ElixirSense.Providers.Docs do
 
     type = SurroundContext.to_binding(context, module)
 
-    mod_fun_docs(
-      type,
-      binding_env,
-      imports,
-      requires,
-      aliases,
-      module,
-      mods_funs,
-      metadata_types,
-      scope
-    )
+    case type do
+      {:attribute, attribute} ->
+        docs = BuiltinAttributes.docs(attribute)
+        if docs, do: {"@" <> Atom.to_string(attribute), %{docs: docs}}
+
+      _ ->
+        mod_fun_docs(
+          type,
+          binding_env,
+          imports,
+          requires,
+          aliases,
+          module,
+          mods_funs,
+          metadata_types,
+          scope
+        )
+    end
   end
 
   defp mod_fun_docs(
@@ -71,8 +79,6 @@ defmodule ElixirSense.Providers.Docs do
         )
     end
   end
-
-  # TODO attr
 
   defp mod_fun_docs(
          {mod, fun},

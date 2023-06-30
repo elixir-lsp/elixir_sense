@@ -1034,16 +1034,19 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       scope: {:some, 0}
     }
 
-    assert expand('@numb', env) == [%{type: :attribute, name: "@number"}]
+    assert expand('@numb', env) == [%{type: :attribute, name: "@number", summary: nil}]
 
     assert expand('@num', env) ==
-             [%{type: :attribute, name: "@number"}, %{type: :attribute, name: "@numeral"}]
+             [
+               %{type: :attribute, name: "@number", summary: nil},
+               %{type: :attribute, name: "@numeral", summary: nil}
+             ]
 
     assert expand('@', env) ==
              [
-               %{name: "@nothing", type: :attribute},
-               %{type: :attribute, name: "@number"},
-               %{type: :attribute, name: "@numeral"}
+               %{name: "@nothing", type: :attribute, summary: nil},
+               %{type: :attribute, name: "@number", summary: nil},
+               %{type: :attribute, name: "@numeral", summary: nil}
              ]
   end
 
@@ -1067,7 +1070,13 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert expand('@befo', env_outside_module) == []
 
     assert expand('@befo', env_module) ==
-             [%{type: :attribute, name: "@before_compile"}]
+             [
+               %{
+                 type: :attribute,
+                 name: "@before_compile",
+                 summary: "A hook that will be invoked before the module is compiled."
+               }
+             ]
   end
 
   test "kernel special form completion" do
