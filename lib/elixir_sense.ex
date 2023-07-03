@@ -69,7 +69,7 @@ defmodule ElixirSense do
       %{begin: begin_pos, end: end_pos, context: context} ->
         metadata = Parser.parse_string(code, true, true, line)
 
-        env = Metadata.get_env(metadata, line)
+        env = Metadata.get_env(metadata, {line, column})
 
         case Docs.all(context, env, metadata.mods_funs_to_positions, metadata.types) do
           {actual_subject, docs} ->
@@ -112,7 +112,7 @@ defmodule ElixirSense do
       %{context: context, begin: {line, col}} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-        env = Metadata.get_env(buffer_file_metadata, line)
+        env = Metadata.get_env(buffer_file_metadata, {line, column})
 
         calls =
           buffer_file_metadata.calls[line]
@@ -154,7 +154,7 @@ defmodule ElixirSense do
       %{context: context} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-        env = Metadata.get_env(buffer_file_metadata, line)
+        env = Metadata.get_env(buffer_file_metadata, {line, column})
 
         Implementation.find(
           context,
@@ -267,7 +267,7 @@ defmodule ElixirSense do
     prefix = Source.text_before(code, line, column)
     buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-    env = Metadata.get_env(buffer_file_metadata, line)
+    env = Metadata.get_env(buffer_file_metadata, {line, column})
 
     Signature.find(prefix, env, buffer_file_metadata)
   end
@@ -350,7 +350,7 @@ defmodule ElixirSense do
   def expand_full(buffer, code, line) do
     buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
 
-    env = Metadata.get_env(buffer_file_metadata, line)
+    env = Metadata.get_env(buffer_file_metadata, {line, 1})
 
     Expand.expand_full(code, env)
   end
@@ -432,7 +432,7 @@ defmodule ElixirSense do
           %State.Env{
             module: module,
             vars: vars
-          } = Metadata.get_env(buffer_file_metadata, line)
+          } = Metadata.get_env(buffer_file_metadata, {line, column})
 
         # find last env of current module
         attributes = get_attributes(buffer_file_metadata.lines_to_env, module)

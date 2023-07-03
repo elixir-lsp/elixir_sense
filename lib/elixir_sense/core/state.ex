@@ -308,9 +308,6 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_current_env_to_line(%__MODULE__{} = state, line) when is_integer(line) do
-    if line == 6 do
-      dbg
-    end
     previous_env = state.lines_to_env[line]
     current_env = get_current_env(state)
 
@@ -1315,7 +1312,6 @@ defmodule ElixirSense.Core.State do
   defp merge_type(old, new), do: {:intersection, [old, new]}
 
   def get_closest_previous_env(%__MODULE__{} = metadata, line) do
-    dbg()
     metadata.lines_to_env
     |> Enum.max_by(
       fn

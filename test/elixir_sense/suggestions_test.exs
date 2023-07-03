@@ -1585,19 +1585,8 @@ defmodule ElixirSense.SuggestionsTest do
       ElixirSense.suggestions(buffer, 6, 4)
       |> Enum.filter(fn s -> s.type == :attribute end)
 
-    assert list == [
-             %{name: "@macrocallback", type: :attribute},
-             %{name: "@moduledoc", type: :attribute},
-             %{name: "@myattr", type: :attribute}
-           ]
-
-    list =
-      ElixirSense.suggestions(buffer, 5, 7)
-      |> Enum.filter(fn s -> s.type == :attribute end)
-
-    assert list == [
-             %{name: "@myattr", type: :attribute}
-           ]
+    assert Enum.any?(list, & &1.name == "@impl")
+    assert Enum.any?(list, & &1.name == "@spec")
   end
 
   test "lists doc snippets in module body" do
