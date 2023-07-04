@@ -57,10 +57,16 @@ defmodule ElixirSense.Core.Metadata do
         {{begin_line, begin_column}, {end_line, end_column}, _} when
           ((line > begin_line or line == begin_line and column > begin_column) and
           (line < end_line or line == end_line and column < end_column)) ->
-            {begin_line, begin_column}
+            {{begin_line, begin_column}, {end_line, end_column}}
         {{begin_line, begin_column}, nil, _} when
           (line > begin_line or line == begin_line and column > begin_column) ->
-            {begin_line, begin_column}
+            case find_closest_ending(all_scopes, {begin_line, begin_column}) do
+              nil -> {{begin_line, begin_column}, nil}
+              {end_line, end_column} ->
+                if (line < end_line or line == end_line and column < end_column) do
+                  {{begin_line, begin_column}, {end_line, end_column}}
+                end
+            end
         _ -> nil
       end)
       |> Enum.filter(& &1 != nil)
@@ -71,13 +77,13 @@ defmodule ElixirSense.Core.Metadata do
       end
     end)
     |> Enum.filter(& &1 != nil)
-    |> Enum.max_by(fn {_key, _type, begin_position} ->
+    |> Enum.max_by(fn {_key, _type, {begin_position, _end_position}} ->
       begin_position
     end, fn -> nil end)
     # |> dbg()
 
     case closest_scope do
-      {key, type, {begin_line, _begin_column}} ->
+      {key, type, {{begin_line, _begin_column}, _}} ->
         metadata.lines_to_env
         |> Enum.filter(fn
         {metadata_line, env} when metadata_line >= begin_line and metadata_line <= line ->
@@ -98,27 +104,41 @@ defmodule ElixirSense.Core.Metadata do
     |> elem(1)
   end
 
-  @spec at_module_body?(__MODULE__.t(), State.Env.t(), {pos_integer, pos_integer}) :: boolean()
-  def at_module_body?(%__MODULE__{} = metadata, env, {line, column}) do
-    modules = metadata.mods_funs_to_positions
-    |> Enum.filter(&match?({{module, nil, nil}, _} when is_atom(module), &1))
-
-    found_module_with_end_position = modules
-    |> Enum.any?(fn {_, %State.ModFunInfo{positions: positions, end_positions: end_positions}} ->
-      Enum.zip(positions, end_positions)
-      |> Enum.any?(fn
-        {{begin_line, begin_column}, {end_line, end_column}} ->
-          (line > begin_line or line == begin_line and column > begin_column) and
-          (line < end_line or line == end_line and column < end_column)
-        {_, nil} -> false
-      end)
+  defp find_closest_ending(all_scopes, {line, column}) do
+    all_scopes
+    |> Enum.map(fn
+    {{_, fun, nil}, _} when fun != nil -> nil
+    {key, %type{positions: positions, end_positions: end_positions, generated: generated}} ->
+      Enum.zip([positions, end_positions, generated])
+      |> Enum.map(fn
+        {_, _, true} -> nil
+        {{begin_line, begin_column}, {end_line, end_column}, _} ->
+          if {begin_line, begin_column} > {line, column} do
+            {begin_line, begin_column}
+          else
+            if {end_line, end_column} > {line, column} do
+              {end_line, end_column}
+            end
+          end
+        {{begin_line, begin_column}, nil, _} ->
+          if {begin_line, begin_column} > {line, column} do
+            {begin_line, begin_column}
+          end
+        end)
+      |> Enum.filter(& &1 != nil)
+      |> Enum.min(fn -> nil end)
     end)
-
-    found_module_with_end_position and match?(atom when is_atom(atom), env.scope)
+    |> Enum.filter(& &1 != nil)
+      |> Enum.min(fn -> nil end)
   end
 
-  def get_position_to_insert_alias(%__MODULE__{} = metadata, line) do
-    env = get_env(metadata, line)
+  @spec at_module_body?(__MODULE__.t(), State.Env.t()) :: boolean()
+  def at_module_body?(%__MODULE__{} = metadata, env) do
+    is_atom(env.scope)
+  end
+
+  def get_position_to_insert_alias(%__MODULE__{} = metadata, {line, column}) do
+    env = get_env(metadata, {line, column})
     module = env.module
 
     cond do

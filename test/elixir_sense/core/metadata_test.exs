@@ -114,28 +114,28 @@ defmodule ElixirSense.Core.MetadataTest do
 
     metadata = Parser.parse_string(code, true, true, 1)
 
-    env = Metadata.get_env(metadata, 1)
+    env = Metadata.get_env(metadata, {1, 22})
     assert Metadata.at_module_body?(metadata, env)
 
-    env = Metadata.get_env(metadata, 2)
+    env = Metadata.get_env(metadata, {2, 20})
+    refute Metadata.at_module_body?(metadata, env)
+
+    env = Metadata.get_env(metadata, {8, 13})
     assert Metadata.at_module_body?(metadata, env)
 
-    env = Metadata.get_env(metadata, 8)
+    env = Metadata.get_env(metadata, {5, 5})
+    refute Metadata.at_module_body?(metadata, env)
+
+    env = Metadata.get_env(metadata, {11, 5})
     assert Metadata.at_module_body?(metadata, env)
 
-    env = Metadata.get_env(metadata, 5)
+    env = Metadata.get_env(metadata, {14, 18})
     refute Metadata.at_module_body?(metadata, env)
 
-    env = Metadata.get_env(metadata, 11)
+    env = Metadata.get_env(metadata, {16, 10})
     refute Metadata.at_module_body?(metadata, env)
 
-    env = Metadata.get_env(metadata, 14)
-    refute Metadata.at_module_body?(metadata, env)
-
-    env = Metadata.get_env(metadata, 16)
-    refute Metadata.at_module_body?(metadata, env)
-
-    env = Metadata.get_env(metadata, 17)
+    env = Metadata.get_env(metadata, {17, 12})
     refute Metadata.at_module_body?(metadata, env)
   end
 
@@ -159,13 +159,13 @@ defmodule ElixirSense.Core.MetadataTest do
 
     line_number = 5
     metadata = Parser.parse_string(code, true, true, line_number)
-    position = Metadata.get_position_to_insert_alias(metadata, line_number)
+    position = Metadata.get_position_to_insert_alias(metadata, {line_number, 6})
 
     assert {2, 3} == position
 
     line_number = 11
     metadata = Parser.parse_string(code, true, true, line_number)
-    position = Metadata.get_position_to_insert_alias(metadata, line_number)
+    position = Metadata.get_position_to_insert_alias(metadata, {line_number, 8})
 
     assert {9, 5} == position
   end
@@ -185,7 +185,7 @@ defmodule ElixirSense.Core.MetadataTest do
 
     line_number = 7
     metadata = Parser.parse_string(code, true, true, line_number)
-    position = Metadata.get_position_to_insert_alias(metadata, line_number)
+    position = Metadata.get_position_to_insert_alias(metadata, {line_number, 6})
 
     assert {5, 3} == position
   end
@@ -201,7 +201,7 @@ defmodule ElixirSense.Core.MetadataTest do
 
     line_number = 3
     metadata = Parser.parse_string(code, true, true, line_number)
-    position = Metadata.get_position_to_insert_alias(metadata, line_number)
+    position = Metadata.get_position_to_insert_alias(metadata, {line_number, 6})
 
     assert {2, 3} == position
   end
