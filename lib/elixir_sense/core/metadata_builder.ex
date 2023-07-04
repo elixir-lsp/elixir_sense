@@ -197,7 +197,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
                           args: args,
                           specs: specs,
                           kind: :callback,
-                          positions: positions
+                          positions: positions,
+                          end_positions: Enum.map(positions, fn _ -> nil end),
+                          generated: Enum.map(positions, fn _ -> true end),
                         }
 
                       spec = %State.SpecInfo{specs: specs} ->
