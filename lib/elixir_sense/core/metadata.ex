@@ -43,18 +43,20 @@ defmodule ElixirSense.Core.Metadata do
 
   @spec get_env(__MODULE__.t(), {pos_integer, pos_integer}) :: State.Env.t()
   def get_env(%__MODULE__{} = metadata, {line, column}) do
-    # TODO this should handle spec scope
     closest_scope = metadata.mods_funs_to_positions
     |> Enum.map(fn
     {{_, fun, nil}, _} when fun != nil -> nil
-    {key, %State.ModFunInfo{positions: positions, end_positions: end_positions}} ->
-      closest_scope = Enum.zip(positions, end_positions)
+    {key, %State.ModFunInfo{positions: positions, end_positions: end_positions, generated: generated}} ->
+      closest_scope = Enum.zip([positions, end_positions, generated])
       |> Enum.map(fn
-        {{begin_line, begin_column}, {end_line, end_column}} when
+        {_, _, true} -> nil
+        {{begin_line, begin_column}, {end_line, end_column}, _} when
           ((line > begin_line or line == begin_line and column > begin_column) and
           (line < end_line or line == end_line and column < end_column)) ->
             {begin_line, begin_column}
-
+        {{begin_line, begin_column}, nil, _} when
+          (line > begin_line or line == begin_line and column > begin_column) ->
+            {begin_line, begin_column}
         _ -> nil
       end)
       |> Enum.filter(& &1 != nil)
@@ -68,6 +70,7 @@ defmodule ElixirSense.Core.Metadata do
     |> Enum.max_by(fn {_key, begin_position} ->
       begin_position
     end, fn -> nil end)
+    # |> dbg()
 
     case closest_scope do
       {key, {begin_line, _begin_column}} ->
@@ -76,21 +79,17 @@ defmodule ElixirSense.Core.Metadata do
         {metadata_line, env} when metadata_line >= begin_line and metadata_line <= line ->
           case key do
             {module, nil, nil} ->
-              env.module == module and is_atom(env.scope)
+              module in env.module_variants and (is_atom(env.scope) or match?({:typespec, _, _}, env.scope))
             {module, fun, arity} ->
-              env.module == module and env.scope == {fun, arity}
+              module in env.module_variants and env.scope == {fun, arity}
           end
         _ -> false
         end)
+        # |> dbg()
       nil -> metadata.lines_to_env
     end
     |> Enum.max_by(fn {metadata_line, _env} -> metadata_line end, fn -> {line, State.default_env()} end)
     |> elem(1)
-
-    # case Map.get(metadata.lines_to_env, line) |> dbg do
-    #   nil -> State.default_env()
-    #   ctx -> ctx
-    # end
   end
 
   @spec at_module_body?(__MODULE__.t(), State.Env.t(), {pos_integer, pos_integer}) :: boolean()

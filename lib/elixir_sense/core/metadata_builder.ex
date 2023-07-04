@@ -54,6 +54,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   """
   @spec build(Macro.t()) :: State.t()
   def build(ast) do
+    # dbg(ast)
     {_ast, state} =
       Macro.traverse(ast, %State{}, safe_call(&pre/2, :pre), safe_call(&post/2, :post))
 
@@ -93,7 +94,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       state
       |> maybe_add_protocol_implementation(module)
       |> add_namespace(module)
-      |> add_current_module_to_index(position, end_position)
+      |> add_current_module_to_index(position, end_position, [generated: state.generated])
       |> alias_submodule(module)
       |> new_alias_scope
       |> new_attributes_scope
@@ -107,7 +108,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       types
       |> Enum.reduce(state, fn {type_name, type_args, spec, kind}, acc ->
         acc
-        |> add_type(type_name, type_args, kind, spec, position)
+        |> add_type(type_name, type_args, kind, spec, position, generated: true)
       end)
 
     state =
@@ -121,7 +122,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
           mapped_args,
           position,
           nil,
-          kind
+          kind,
+          [generated: true]
         )
       end)
 
@@ -230,6 +232,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> merge_same_name_vars()
 
     {position, end_position} = extract_range(meta)
+
+    options = Keyword.put(options, :generated, state.generated)
 
     state
     |> new_named_func(name, length(params || []))
@@ -454,7 +458,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
           [{:atom, [line: line, column: column], nil}],
           pos,
           nil,
-          :def
+          :def,
+          generated: true
         )
       else
         state
@@ -629,7 +634,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
               nil ->
                 # implementation for: Any not detected (is in other file etc.)
                 acc_1
-                |> add_module_to_index(mod, {line, column}, nil)
+                |> add_module_to_index(mod, {line, column}, nil, generated: true)
 
               _any_mods_funs ->
                 # copy implementation for: Any
@@ -1046,7 +1051,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         meta |> Keyword.take([:line, :column])
       )
 
-    {expanded_ast, state}
+    {{:__generated__, [], [expanded_ast]}, %{state | generated: true}}
   end
 
   defp pre({type, meta, fields} = ast, state)
@@ -1162,7 +1167,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         :defrecordp -> :defmacrop
       end
 
-    options = []
+    options = [generated: true]
 
     state
     |> new_named_func(name, 1)
@@ -1382,6 +1387,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp post({:->, _meta, [_lhs, _rhs]} = ast, state) do
     post_clause(ast, state)
+  end
+
+  defp post({:__generated__, _meta, inner}, state) do
+    {inner, %{state | generated: false}}
   end
 
   defp post({atom, meta, [lhs, rhs]} = ast, state)
@@ -1918,6 +1927,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
           []
         end
 
+    options = [generated: true]
+
     state =
       if type == :defexception do
         state =
@@ -1931,14 +1942,16 @@ defmodule ElixirSense.Core.MetadataBuilder do
             [{:msg, [line: line, column: column], nil}],
             {line, column},
             nil,
-            :def
+            :def,
+            options
           )
           |> add_func_to_index(
             :message,
             [{:exception, [line: line, column: column], nil}],
             {line, column},
             nil,
-            :def
+            :def,
+            options
           )
         else
           state
@@ -1948,18 +1961,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
           [{:args, [line: line, column: column], nil}],
           {line, column},
           nil,
-          :def
+          :def,
+          options
         )
       else
         state
       end
-      |> add_func_to_index(:__struct__, [], {line, column}, nil, :def)
+      |> add_func_to_index(:__struct__, [], {line, column}, nil, :def, options)
       |> add_func_to_index(
         :__struct__,
         [{:kv, [line: line, column: column], nil}],
         {line, column},
         nil,
-        :def
+        :def,
+        options
       )
 
     state

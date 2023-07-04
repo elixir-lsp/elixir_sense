@@ -52,6 +52,7 @@ defmodule ElixirSense.Core.State do
           calls: calls_t,
           structs: structs_t,
           types: types_t,
+          generated: boolean,
           first_alias_positions: map(),
           moduledoc_positions: map(),
           # TODO
@@ -81,6 +82,7 @@ defmodule ElixirSense.Core.State do
             calls: %{},
             structs: %{},
             types: %{},
+            generated: false,
             binding_context: [],
             first_alias_positions: %{},
             moduledoc_positions: %{}
@@ -148,9 +150,10 @@ defmodule ElixirSense.Core.State do
             args: list(list(String.t())),
             specs: [String.t()],
             kind: :type | :typep | :opaque,
+            generated: boolean,
             positions: [ElixirSense.Core.State.position_t()]
           }
-    defstruct name: nil, args: [], specs: [], kind: :type, positions: []
+    defstruct name: nil, args: [], specs: [], kind: :type, positions: [], generated: false
   end
 
   defmodule SpecInfo do
@@ -218,6 +221,7 @@ defmodule ElixirSense.Core.State do
             end_positions: list(ElixirSense.Core.State.position_t() | nil),
             target: nil | {module, atom},
             overridable: false | {true, module},
+            generated: list(boolean),
             # TODO defmodule defprotocol defimpl?
             type:
               :def
@@ -235,6 +239,7 @@ defmodule ElixirSense.Core.State do
               end_positions: [],
               target: nil,
               type: nil,
+              generated: [],
               overridable: false
 
     def get_arities(%ModFunInfo{params: params_variants}) do
@@ -518,6 +523,7 @@ defmodule ElixirSense.Core.State do
       end_positions: new_end_positions,
       params: new_params,
       type: info_type,
+      generated: [Keyword.get(options, :generated, false) | current_info.generated],
       overridable: current_info |> Map.get(:overridable, false)
     }
 
@@ -693,21 +699,21 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | scopes: tl(state.scopes)}
   end
 
-  def add_current_module_to_index(%__MODULE__{} = state, position, end_position)
+  def add_current_module_to_index(%__MODULE__{} = state, position, end_position, options)
       when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
     current_module_variants = get_current_module_variants(state)
 
     current_module_variants
     |> Enum.reduce(state, fn variant, acc ->
       acc
-      |> add_module_to_index(variant, position, end_position)
+      |> add_module_to_index(variant, position, end_position, options)
     end)
   end
 
-  def add_module_to_index(%__MODULE__{} = state, module, position, end_position)
+  def add_module_to_index(%__MODULE__{} = state, module, position, end_position, options)
       when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
     # TODO :defprotocol, :defimpl?
-    add_mod_fun_to_position(state, {module, nil, nil}, position, end_position, nil, :defmodule)
+    add_mod_fun_to_position(state, {module, nil, nil}, position, end_position, nil, :defmodule, options)
   end
 
   # TODO require end position
@@ -1036,7 +1042,7 @@ defmodule ElixirSense.Core.State do
     Enum.reduce(modules, state, fn mod, state -> add_require(state, mod) end)
   end
 
-  def add_type(%__MODULE__{} = state, type_name, type_args, spec, kind, pos) do
+  def add_type(%__MODULE__{} = state, type_name, type_args, spec, kind, pos, options \\ []) do
     arg_names =
       type_args
       |> Enum.map(&Macro.to_string/1)
@@ -1046,6 +1052,7 @@ defmodule ElixirSense.Core.State do
       args: [arg_names],
       kind: kind,
       specs: [spec],
+      generated: Keyword.get(options, :generated, false),
       positions: [pos]
     }
 
