@@ -144,7 +144,7 @@ defmodule ElixirSense.SignatureTest do
                  %{
                    documentation: "",
                    name: "some_type_doc_false",
-                   params: '',
+                   params: ~c"",
                    spec: "@type some_type_doc_false :: integer"
                  }
                ]

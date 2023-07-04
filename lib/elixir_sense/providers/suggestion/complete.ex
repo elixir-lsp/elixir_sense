@@ -224,7 +224,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   # elixir >= 1.14
-  defp expand_dot_path({:var, '__MODULE__'}, env) do
+  defp expand_dot_path({:var, ~c"__MODULE__"}, env) do
     if env.scope_module != nil and Introspection.elixir_module?(env.scope_module) do
       {:ok, {:atom, env.scope_module}}
     else
@@ -252,7 +252,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   # elixir >= 1.14
   defp expand_dot_path({:alias, {:local_or_var, var}, hint}, env) do
     case var do
-      '__MODULE__' ->
+      ~c"__MODULE__" ->
         alias_suffix = hint |> List.to_string() |> String.split(".")
         alias = [{:__MODULE__, [], nil} | alias_suffix] |> value_from_alias(env)
 
@@ -483,7 +483,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     |> format_expansion()
   end
 
-  defp expand_prefixed_aliases({:local_or_var, '__MODULE__'}, hint, env, only_structs) do
+  defp expand_prefixed_aliases({:local_or_var, ~c"__MODULE__"}, hint, env, only_structs) do
     if env.scope_module != nil and Introspection.elixir_module?(env.scope_module) do
       expand_aliases("#{env.scope_module}.#{hint}", env, only_structs, [])
     else

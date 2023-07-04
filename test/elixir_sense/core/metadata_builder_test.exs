@@ -2832,7 +2832,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :with_spec,
                positions: [{3, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                specs: [
                  "@callback with_spec(t, boolean) :: number",
                  "@spec with_spec(t, boolean) :: number"
@@ -2844,7 +2844,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :with_spec,
                positions: [{3, 3}, {2, 3}],
                end_positions: [nil, nil],
-                generated: [false, false],
+               generated: [false, false],
                specs: [
                  "@callback with_spec(t, boolean) :: number",
                  "@callback with_spec(t, integer) :: String.t",
@@ -2858,7 +2858,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :without_spec,
                positions: [{6, 3}],
                end_positions: [nil],
-                generated: [true],
+               generated: [true],
                specs: ["@callback without_spec(t, integer) :: term"]
              },
              {Proto, :without_spec, 2} => %ElixirSense.Core.State.SpecInfo{
@@ -2867,7 +2867,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :without_spec,
                positions: [{6, 3}],
                end_positions: [nil],
-                generated: [true],
+               generated: [true],
                specs: ["@callback without_spec(t, integer) :: term"]
              }
            }
@@ -4467,7 +4467,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :no_arg_no_parens,
                positions: [{2, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                specs: ["@type no_arg_no_parens :: integer"]
              },
              {My, :no_arg_no_parens, nil} => %ElixirSense.Core.State.TypeInfo{
@@ -4476,7 +4476,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :no_arg_no_parens,
                positions: [{2, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                specs: ["@type no_arg_no_parens :: integer"]
              },
              {My, :no_args, 0} => %ElixirSense.Core.State.TypeInfo{
@@ -4485,7 +4485,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :no_args,
                positions: [{3, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                specs: ["@typep no_args :: integer"]
              },
              {My, :no_args, nil} => %ElixirSense.Core.State.TypeInfo{
@@ -4494,7 +4494,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :no_args,
                positions: [{3, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                specs: ["@typep no_args :: integer"]
              },
              {My, :overloaded, 0} => %ElixirSense.Core.State.TypeInfo{
@@ -4503,7 +4503,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :overloaded,
                positions: [{5, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                specs: ["@type overloaded :: {}"]
              },
              {My, :overloaded, 1} => %ElixirSense.Core.State.TypeInfo{
@@ -4511,7 +4511,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :overloaded,
                positions: [{6, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                args: [["a"]],
                specs: ["@type overloaded(a) :: {a}"]
              },
@@ -4520,7 +4520,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :overloaded,
                positions: [{6, 3}, {5, 3}],
                end_positions: [nil, nil],
-                generated: [false, false],
+               generated: [false, false],
                args: [["a"], []],
                specs: ["@type overloaded(a) :: {a}", "@type overloaded :: {}"]
              },
@@ -4529,7 +4529,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :with_args,
                positions: [{4, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                args: [["a", "b"]],
                specs: ["@opaque with_args(a, b) :: {a, b}"]
              },
@@ -4538,7 +4538,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :with_args,
                positions: [{4, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                args: [["a", "b"]],
                specs: ["@opaque with_args(a, b) :: {a, b}"]
              }
@@ -4578,7 +4578,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :t,
                positions: [{1, 1}],
                end_positions: [nil],
-              generated: [true],
+               generated: [true],
                specs: ["@type t :: term"]
              },
              {Proto, :t, 0} => %ElixirSense.Core.State.TypeInfo{
@@ -4587,7 +4587,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :t,
                positions: [{1, 1}],
                end_positions: [nil],
-                generated: [true],
+               generated: [true],
                specs: ["@type t :: term"]
              }
            }
@@ -4615,7 +4615,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :abc,
                positions: [{3, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                specs: ["@spec abc :: reference"]
              },
              {Proto, :abc, nil} => %ElixirSense.Core.State.SpecInfo{
@@ -4624,7 +4624,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                args: [[], []],
                positions: [{3, 3}, {2, 3}],
                end_positions: [nil, nil],
-                generated: [false, false],
+               generated: [false, false],
                specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
              },
              {Proto, :my, 1} => %ElixirSense.Core.State.SpecInfo{
@@ -4633,7 +4633,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                args: [["a :: integer"]],
                positions: [{4, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                specs: ["@callback my(a :: integer) :: atom"]
              },
              {Proto, :my, nil} => %ElixirSense.Core.State.SpecInfo{
@@ -4642,7 +4642,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                args: [["a :: integer"]],
                positions: [{4, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                specs: ["@callback my(a :: integer) :: atom"]
              },
              {Proto, :other, 1} => %ElixirSense.Core.State.SpecInfo{
@@ -4651,7 +4651,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                args: [["x"]],
                positions: [{5, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                specs: ["@macrocallback other(x) :: Macro.t when x: integer"]
              },
              {Proto, :other, nil} => %ElixirSense.Core.State.SpecInfo{
@@ -4660,7 +4660,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                args: [["x"]],
                positions: [{5, 3}],
                end_positions: [nil],
-                generated: [false],
+               generated: [false],
                specs: ["@macrocallback other(x) :: Macro.t when x: integer"]
              }
            }

@@ -185,6 +185,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
       else
         hint
       end
+
     Complete.complete(hint, env, opts)
   end
 end

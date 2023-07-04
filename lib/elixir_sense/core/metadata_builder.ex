@@ -94,7 +94,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       state
       |> maybe_add_protocol_implementation(module)
       |> add_namespace(module)
-      |> add_current_module_to_index(position, end_position, [generated: state.generated])
+      |> add_current_module_to_index(position, end_position, generated: state.generated)
       |> alias_submodule(module)
       |> new_alias_scope
       |> new_attributes_scope
@@ -123,7 +123,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
           position,
           nil,
           kind,
-          [generated: true]
+          generated: true
         )
       end)
 
@@ -199,7 +199,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
                           kind: :callback,
                           positions: positions,
                           end_positions: Enum.map(positions, fn _ -> nil end),
-                          generated: Enum.map(positions, fn _ -> true end),
+                          generated: Enum.map(positions, fn _ -> true end)
                         }
 
                       spec = %State.SpecInfo{specs: specs} ->

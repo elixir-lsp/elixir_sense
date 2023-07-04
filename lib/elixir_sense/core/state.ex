@@ -154,7 +154,13 @@ defmodule ElixirSense.Core.State do
             end_positions: [ElixirSense.Core.State.position_t() | nil],
             generated: list(boolean)
           }
-    defstruct name: nil, args: [], specs: [], kind: :type, positions: [], end_positions: [], generated: []
+    defstruct name: nil,
+              args: [],
+              specs: [],
+              kind: :type,
+              positions: [],
+              end_positions: [],
+              generated: []
   end
 
   defmodule SpecInfo do
@@ -170,7 +176,13 @@ defmodule ElixirSense.Core.State do
             end_positions: [ElixirSense.Core.State.position_t() | nil],
             generated: list(boolean)
           }
-    defstruct name: nil, args: [], specs: [], kind: :spec, positions: [], end_positions: [], generated: []
+    defstruct name: nil,
+              args: [],
+              specs: [],
+              kind: :spec,
+              positions: [],
+              end_positions: [],
+              generated: []
   end
 
   defmodule StructInfo do
@@ -716,7 +728,15 @@ defmodule ElixirSense.Core.State do
   def add_module_to_index(%__MODULE__{} = state, module, position, end_position, options)
       when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
     # TODO :defprotocol, :defimpl?
-    add_mod_fun_to_position(state, {module, nil, nil}, position, end_position, nil, :defmodule, options)
+    add_mod_fun_to_position(
+      state,
+      {module, nil, nil},
+      position,
+      end_position,
+      nil,
+      :defmodule,
+      options
+    )
   end
 
   # TODO require end position

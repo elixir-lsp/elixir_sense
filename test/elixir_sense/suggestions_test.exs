@@ -1585,8 +1585,8 @@ defmodule ElixirSense.SuggestionsTest do
       ElixirSense.suggestions(buffer, 6, 4)
       |> Enum.filter(fn s -> s.type == :attribute end)
 
-    assert Enum.any?(list, & &1.name == "@impl")
-    assert Enum.any?(list, & &1.name == "@spec")
+    assert Enum.any?(list, &(&1.name == "@impl"))
+    assert Enum.any?(list, &(&1.name == "@spec"))
   end
 
   test "lists doc snippets in module body" do
