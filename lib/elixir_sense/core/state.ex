@@ -150,10 +150,11 @@ defmodule ElixirSense.Core.State do
             args: list(list(String.t())),
             specs: [String.t()],
             kind: :type | :typep | :opaque,
-            generated: boolean,
-            positions: [ElixirSense.Core.State.position_t()]
+            positions: [ElixirSense.Core.State.position_t()],
+            end_positions: [ElixirSense.Core.State.position_t() | nil],
+            generated: list(boolean)
           }
-    defstruct name: nil, args: [], specs: [], kind: :type, positions: [], generated: false
+    defstruct name: nil, args: [], specs: [], kind: :type, positions: [], end_positions: [], generated: []
   end
 
   defmodule SpecInfo do
@@ -165,9 +166,11 @@ defmodule ElixirSense.Core.State do
             args: list(list(String.t())),
             specs: [String.t()],
             kind: :spec | :callback | :macrocallback,
-            positions: [ElixirSense.Core.State.position_t()]
+            positions: [ElixirSense.Core.State.position_t()],
+            end_positions: [ElixirSense.Core.State.position_t() | nil],
+            generated: list(boolean)
           }
-    defstruct name: nil, args: [], specs: [], kind: :spec, positions: []
+    defstruct name: nil, args: [], specs: [], kind: :spec, positions: [], end_positions: [], generated: []
   end
 
   defmodule StructInfo do
@@ -1052,8 +1055,10 @@ defmodule ElixirSense.Core.State do
       args: [arg_names],
       kind: kind,
       specs: [spec],
-      generated: Keyword.get(options, :generated, false),
-      positions: [pos]
+      generated: [Keyword.get(options, :generated, false)],
+      positions: [pos],
+      # no end pos info in AST as of elixir 1.15
+      end_positions: [nil]
     }
 
     current_module_variants = get_current_module_variants(state)
@@ -1070,6 +1075,8 @@ defmodule ElixirSense.Core.State do
               %TypeInfo{
                 ti
                 | positions: [pos | positions],
+                  end_positions: [nil | ti.end_positions],
+                  generated: [Keyword.get(options, :generated, false) | ti.generated],
                   args: [arg_names | args],
                   specs: [spec | specs],
                   # in case there are multiple definitions for nil arity prefer public ones
@@ -1085,7 +1092,7 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | types: types}
   end
 
-  def add_spec(%__MODULE__{} = state, type_name, type_args, spec, kind, pos) do
+  def add_spec(%__MODULE__{} = state, type_name, type_args, spec, kind, pos, options) do
     arg_names =
       type_args
       |> Enum.map(&Macro.to_string/1)
@@ -1095,7 +1102,10 @@ defmodule ElixirSense.Core.State do
       args: [arg_names],
       specs: [spec],
       kind: kind,
-      positions: [pos]
+      generated: [Keyword.get(options, :generated, false)],
+      positions: [pos],
+      # no end pos info in AST as of elixir 1.15
+      end_positions: [nil]
     }
 
     current_module_variants = get_current_module_variants(state)
@@ -1112,6 +1122,8 @@ defmodule ElixirSense.Core.State do
               %SpecInfo{
                 ti
                 | positions: [pos | positions],
+                  end_positions: [nil | ti.end_positions],
+                  generated: [Keyword.get(options, :generated, false) | ti.generated],
                   args: [arg_names | args],
                   specs: [spec | specs]
               }

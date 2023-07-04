@@ -43,10 +43,14 @@ defmodule ElixirSense.Core.Metadata do
 
   @spec get_env(__MODULE__.t(), {pos_integer, pos_integer}) :: State.Env.t()
   def get_env(%__MODULE__{} = metadata, {line, column}) do
-    closest_scope = metadata.mods_funs_to_positions
+    all_scopes = Enum.to_list(metadata.types) ++
+      Enum.to_list(metadata.specs) ++
+      Enum.to_list(metadata.mods_funs_to_positions)
+
+    closest_scope = all_scopes
     |> Enum.map(fn
     {{_, fun, nil}, _} when fun != nil -> nil
-    {key, %State.ModFunInfo{positions: positions, end_positions: end_positions, generated: generated}} ->
+    {key, %type{positions: positions, end_positions: end_positions, generated: generated}} ->
       closest_scope = Enum.zip([positions, end_positions, generated])
       |> Enum.map(fn
         {_, _, true} -> nil
@@ -63,25 +67,27 @@ defmodule ElixirSense.Core.Metadata do
       |> Enum.max(fn -> nil end)
 
       if closest_scope do
-        {key, closest_scope}
+        {key, type, closest_scope}
       end
     end)
     |> Enum.filter(& &1 != nil)
-    |> Enum.max_by(fn {_key, begin_position} ->
+    |> Enum.max_by(fn {_key, _type, begin_position} ->
       begin_position
     end, fn -> nil end)
     # |> dbg()
 
     case closest_scope do
-      {key, {begin_line, _begin_column}} ->
+      {key, type, {begin_line, _begin_column}} ->
         metadata.lines_to_env
         |> Enum.filter(fn
         {metadata_line, env} when metadata_line >= begin_line and metadata_line <= line ->
-          case key do
-            {module, nil, nil} ->
-              module in env.module_variants and (is_atom(env.scope) or match?({:typespec, _, _}, env.scope))
-            {module, fun, arity} ->
+          case {key, type} do
+            {{module, nil, nil}, _} ->
+              module in env.module_variants and (is_atom(env.scope))
+            {{module, fun, arity}, State.ModFunInfo} ->
               module in env.module_variants and env.scope == {fun, arity}
+            {{module, fun, arity}, type} when type in [State.TypeInfo, State.SpecInfo] ->
+              module in env.module_variants and env.scope == {:typespec, fun, arity}
           end
         _ -> false
         end)

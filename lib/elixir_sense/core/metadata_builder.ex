@@ -441,7 +441,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     spec = TypeInfo.typespec_to_string(kind, spec)
 
     state
-    |> add_type(type_name, type_args, spec, kind, pos)
+    |> add_type(type_name, type_args, spec, kind, pos, generated: state.generated)
     |> add_typespec_namespace(type_name, length(type_args))
     |> add_current_env_to_line(line)
     |> result(ast)
@@ -466,7 +466,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end
 
     state
-    |> add_spec(type_name, type_args, spec, kind, pos)
+    |> add_spec(type_name, type_args, spec, kind, pos, generated: state.generated)
     |> add_typespec_namespace(type_name, length(type_args))
     |> add_current_env_to_line(line)
     |> result(ast)
