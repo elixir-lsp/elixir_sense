@@ -1456,6 +1456,13 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert entries |> Enum.any?(&(&1.name == "URI"))
 
     assert [%{name: "MyStruct"}] = expand(~c"%ElixirSense.Providers.Suggestion.CompleteTest.")
+
+    env = %Env{
+      aliases: [{MyDate, Date}]
+    }
+
+    entries = expand(~c"%My", env, required_alias: true)
+    assert Enum.any?(entries, &(&1.name == "MyDate" and &1.subtype == :struct))
   end
 
   @tag requires_elixir_1_14: true

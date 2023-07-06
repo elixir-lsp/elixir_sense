@@ -633,7 +633,7 @@ defmodule ElixirSense.Core.SourceTest do
       code = """
       from c in Comment,
         join: p in Post,
-        on: 
+        on:
       """
 
       assert %{candidate: {nil, :from}, npar: 1} = which_func(code)

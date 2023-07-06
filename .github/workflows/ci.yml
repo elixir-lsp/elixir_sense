@@ -28,6 +28,14 @@ jobs:
             otp: 24.x
           - elixir: 1.14.x
             otp: 25.x
+          - elixir: 1.14.x
+            otp: 26.x
+          - elixir: 1.15.x
+            otp: 24.x
+          - elixir: 1.15.x
+            otp: 25.x
+          - elixir: 1.15.x
+            otp: 26.x
     env:
       MIX_ENV: test
     steps:
@@ -64,6 +72,14 @@ jobs:
             otp: 24.x
           - elixir: 1.14.x
             otp: 25.x
+          - elixir: 1.14.x
+            otp: 26.x
+          - elixir: 1.15.x
+            otp: 24.x
+          - elixir: 1.15.x
+            otp: 25.x
+          - elixir: 1.15.x
+            otp: 26.x
     env:
       MIX_ENV: test
     steps:
@@ -88,8 +104,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - elixir: 1.14.x
-            otp: 25.x
+          - elixir: 1.15.x
+            otp: 26.x
     steps:
       - uses: actions/checkout@v3
       - uses: erlef/setup-beam@v1
