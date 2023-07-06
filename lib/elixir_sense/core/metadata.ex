@@ -106,7 +106,7 @@ defmodule ElixirSense.Core.Metadata do
             if metadata_line >= begin_line do
               case {key, type} do
                 {{module, nil, nil}, _} ->
-                  module in env.module_variants and is_atom(env.scope)
+                  module in env.module_variants and is_atom(env.scope) and env.scope != Elixir
 
                 {{module, fun, arity}, State.ModFunInfo} ->
                   module in env.module_variants and env.scope == {fun, arity}

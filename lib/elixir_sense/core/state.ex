@@ -399,7 +399,7 @@ defmodule ElixirSense.Core.State do
       when is_integer(line) and is_integer(column) do
     current_scope = hd(hd(state.scopes))
 
-    is_module? = is_atom(current_scope)
+    is_module? = is_atom(current_scope) and current_scope != Elixir
 
     if is_module? do
       module_name = module_name(state)
