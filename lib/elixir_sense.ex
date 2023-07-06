@@ -69,7 +69,7 @@ defmodule ElixirSense do
       %{begin: begin_pos, end: end_pos, context: context} ->
         metadata = Parser.parse_string(code, true, true, line)
 
-        env = Metadata.get_env(metadata, line)
+        env = Metadata.get_env(metadata, {line, column})
 
         case Docs.all(context, env, metadata.mods_funs_to_positions, metadata.types) do
           {actual_subject, docs} ->
@@ -101,7 +101,7 @@ defmodule ElixirSense do
       ...> '''
       iex>  %{file: path, line: line, column: column} = ElixirSense.definition(code, 3, 11)
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
-      "module_with_functions.ex:6:7"
+      "module_with_functions.ex:6:3"
   """
   @spec definition(String.t(), pos_integer, pos_integer) :: Location.t() | nil
   def definition(code, line, column) do
@@ -112,7 +112,7 @@ defmodule ElixirSense do
       %{context: context, begin: {line, col}} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-        env = Metadata.get_env(buffer_file_metadata, line)
+        env = Metadata.get_env(buffer_file_metadata, {line, column})
 
         calls =
           buffer_file_metadata.calls[line]
@@ -143,7 +143,7 @@ defmodule ElixirSense do
       ...> '''
       iex>  [%{file: path, line: line, column: column}, _] = ElixirSense.implementations(code, 1, 37) |> Enum.sort
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
-      "example_protocol.ex:7:7"
+      "example_protocol.ex:7:3"
   """
   @spec implementations(String.t(), pos_integer, pos_integer) :: [Location.t()]
   def implementations(code, line, column) do
@@ -154,7 +154,7 @@ defmodule ElixirSense do
       %{context: context} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-        env = Metadata.get_env(buffer_file_metadata, line)
+        env = Metadata.get_env(buffer_file_metadata, {line, column})
 
         Implementation.find(
           context,
@@ -225,13 +225,13 @@ defmodule ElixirSense do
     buffer_file_metadata =
       maybe_fix_autocomple_on_cursor(buffer_file_metadata, text_before, text_after, line)
 
-    env = Metadata.get_env(buffer_file_metadata, line)
+    env = Metadata.get_env(buffer_file_metadata, {line, column})
     module_store = ModuleStore.build()
 
     cursor_context = %{
       text_before: text_before,
       text_after: text_after,
-      at_module_body?: Metadata.at_module_body?(buffer_file_metadata, env)
+      at_module_body?: Metadata.at_module_body?(env)
     }
 
     Suggestion.find(hint, env, buffer_file_metadata, cursor_context, module_store, opts)
@@ -267,7 +267,7 @@ defmodule ElixirSense do
     prefix = Source.text_before(code, line, column)
     buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-    env = Metadata.get_env(buffer_file_metadata, line)
+    env = Metadata.get_env(buffer_file_metadata, {line, column})
 
     Signature.find(prefix, env, buffer_file_metadata)
   end
@@ -350,7 +350,7 @@ defmodule ElixirSense do
   def expand_full(buffer, code, line) do
     buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
 
-    env = Metadata.get_env(buffer_file_metadata, line)
+    env = Metadata.get_env(buffer_file_metadata, {line, 1})
 
     Expand.expand_full(code, env)
   end
@@ -432,7 +432,7 @@ defmodule ElixirSense do
           %State.Env{
             module: module,
             vars: vars
-          } = Metadata.get_env(buffer_file_metadata, line)
+          } = Metadata.get_env(buffer_file_metadata, {line, column})
 
         # find last env of current module
         attributes = get_attributes(buffer_file_metadata.lines_to_env, module)
@@ -492,7 +492,7 @@ defmodule ElixirSense do
       ...> end
       ...> '''
       iex> ElixirSense.string_to_quoted(code, 1)
-      {:ok, {:defmodule, [line: 1, column: 1], [[do: {:__block__, [], []}]]}}
+      {:ok, {:defmodule, [do: [line: 1, column: 11], end: [line: 2, column: 1], line: 1, column: 1], [[do: {:__block__, [], []}]]}}
   """
   @spec string_to_quoted(String.t(), pos_integer | nil, non_neg_integer, keyword) ::
           {:ok, Macro.t()} | {:error, {line :: pos_integer(), term(), term()}}

@@ -41,29 +41,139 @@ defmodule ElixirSense.Core.Metadata do
           documentation: String.t()
         }
 
-  @spec get_env(__MODULE__.t(), pos_integer) :: State.Env.t()
-  def get_env(%__MODULE__{} = metadata, line) do
-    case Map.get(metadata.lines_to_env, line) do
-      nil -> State.default_env()
-      ctx -> ctx
+  @spec get_env(__MODULE__.t(), {pos_integer, pos_integer}) :: State.Env.t()
+  def get_env(%__MODULE__{} = metadata, {line, column}) do
+    all_scopes =
+      Enum.to_list(metadata.types) ++
+        Enum.to_list(metadata.specs) ++
+        Enum.to_list(metadata.mods_funs_to_positions)
+
+    closest_scopes =
+      all_scopes
+      |> Enum.map(fn
+        {{_, fun, nil}, _} when fun != nil ->
+          nil
+
+        {key, %type{positions: positions, end_positions: end_positions, generated: generated}} ->
+          closest_scope =
+            Enum.zip([positions, end_positions, generated])
+            |> Enum.map(fn
+              {_, _, true} ->
+                nil
+
+              {{begin_line, begin_column}, {end_line, end_column}, _}
+              when (line > begin_line or (line == begin_line and column >= begin_column)) and
+                     (line < end_line or (line == end_line and column <= end_column)) ->
+                {{begin_line, begin_column}, {end_line, end_column}}
+
+              {{begin_line, begin_column}, nil, _}
+              when line > begin_line or (line == begin_line and column >= begin_column) ->
+                case find_closest_ending(all_scopes, {begin_line, begin_column}) do
+                  nil ->
+                    {{begin_line, begin_column}, nil}
+
+                  {end_line, end_column} ->
+                    if line < end_line or (line == end_line and column < end_column) do
+                      {{begin_line, begin_column}, {end_line, end_column}}
+                    end
+                end
+
+              _ ->
+                nil
+            end)
+            |> Enum.filter(&(&1 != nil))
+            |> Enum.max(fn -> nil end)
+
+          if closest_scope do
+            {key, type, closest_scope}
+          end
+      end)
+      |> Enum.filter(&(&1 != nil))
+      |> Enum.sort_by(
+        fn {_key, _type, {begin_position, _end_position}} ->
+          begin_position
+        end,
+        :desc
+      )
+
+    # |> dbg()
+
+    case closest_scopes do
+      [_ | _] = scopes ->
+        metadata.lines_to_env
+        |> Enum.filter(fn {metadata_line, env} ->
+          Enum.any?(scopes, fn {key, type, {{begin_line, _begin_column}, _}} ->
+            if metadata_line >= begin_line do
+              case {key, type} do
+                {{module, nil, nil}, _} ->
+                  module in env.module_variants and is_atom(env.scope) and env.scope != Elixir
+
+                {{module, fun, arity}, State.ModFunInfo} ->
+                  module in env.module_variants and env.scope == {fun, arity}
+
+                {{module, fun, arity}, type} when type in [State.TypeInfo, State.SpecInfo] ->
+                  module in env.module_variants and env.scope == {:typespec, fun, arity}
+              end
+            end
+          end)
+        end)
+
+      # |> dbg()
+      [] ->
+        metadata.lines_to_env
     end
+    |> Enum.max_by(
+      fn
+        {metadata_line, _env} when metadata_line <= line -> metadata_line
+        _ -> 0
+      end,
+      fn ->
+        {line, State.default_env()}
+      end
+    )
+    |> elem(1)
   end
 
-  @spec at_module_body?(__MODULE__.t(), State.Env.t()) :: boolean()
-  def at_module_body?(%__MODULE__{} = metadata, env) do
-    mod_info = Map.get(metadata.mods_funs_to_positions, {env.module, nil, nil})
+  defp find_closest_ending(all_scopes, {line, column}) do
+    all_scopes
+    |> Enum.map(fn
+      {{_, fun, nil}, _} when fun != nil ->
+        nil
 
-    with %State.ModFunInfo{positions: [{line, _}]} <- mod_info,
-         %State.Env{scope_id: mod_scope_id} <- metadata.lines_to_env[line] do
-      env.scope_id in mod_scope_id..(mod_scope_id + 1) and not match?({_, _}, env.scope)
-    else
-      _ ->
-        false
-    end
+      {_key, %{positions: positions, end_positions: end_positions, generated: generated}} ->
+        Enum.zip([positions, end_positions, generated])
+        |> Enum.map(fn
+          {_, _, true} ->
+            nil
+
+          {{begin_line, begin_column}, {end_line, end_column}, _} ->
+            if {begin_line, begin_column} > {line, column} do
+              {begin_line, begin_column}
+            else
+              if {end_line, end_column} > {line, column} do
+                {end_line, end_column}
+              end
+            end
+
+          {{begin_line, begin_column}, nil, _} ->
+            if {begin_line, begin_column} > {line, column} do
+              {begin_line, begin_column}
+            end
+        end)
+        |> Enum.filter(&(&1 != nil))
+        |> Enum.min(fn -> nil end)
+    end)
+    |> Enum.filter(&(&1 != nil))
+    |> Enum.min(fn -> nil end)
   end
 
-  def get_position_to_insert_alias(%__MODULE__{} = metadata, line) do
-    env = get_env(metadata, line)
+  @spec at_module_body?(State.Env.t()) :: boolean()
+  def at_module_body?(env) do
+    is_atom(env.scope) and env.scope != Elixir
+  end
+
+  def get_position_to_insert_alias(%__MODULE__{} = metadata, {line, column}) do
+    env = get_env(metadata, {line, column})
     module = env.module
 
     cond do
@@ -80,7 +190,7 @@ defmodule ElixirSense.Core.Metadata do
           %State.ModFunInfo{positions: [{line, column}]} ->
             # Hacky :shrug
             line_offset = 1
-            column_offset = -8
+            column_offset = 2
             {line + line_offset, column + column_offset}
 
           _ ->

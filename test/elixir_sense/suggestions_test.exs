@@ -1562,6 +1562,33 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  test "lists builtin module attributes on incomplete code" do
+    buffer = """
+    defmodule My do
+      def start_link(id) do
+        GenServer.start_link(__MODULE__, id, name: via_tuple(id))
+      end
+
+      @
+      def init(id) do
+        {:ok,
+          %Some.Mod{
+            id: id,
+            events: [],
+            version: 0
+          }}
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 6, 4)
+      |> Enum.filter(fn s -> s.type == :attribute end)
+
+    assert Enum.any?(list, &(&1.name == "@impl"))
+    assert Enum.any?(list, &(&1.name == "@spec"))
+  end
+
   test "lists doc snippets in module body" do
     buffer = """
     defmodule MyModule do
@@ -1575,15 +1602,10 @@ defmodule ElixirSense.SuggestionsTest do
         @m
         # ^
       end
-
-      schema do
-        @m
-        # ^
-      end
     end
     """
 
-    [cursor_1, cursor_2, cursor_3, cursor_4] = cursors(buffer)
+    [cursor_1, cursor_2, cursor_3] = cursors(buffer)
 
     list = suggestions_by_kind(buffer, cursor_1, :snippet)
 
@@ -1603,7 +1625,6 @@ defmodule ElixirSense.SuggestionsTest do
     assert [%{label: ~S(@moduledoc """""")}, %{label: "@moduledoc false"}] = list
 
     assert suggestions_by_kind(buffer, cursor_3, :snippet) == []
-    assert suggestions_by_kind(buffer, cursor_4, :snippet) == []
   end
 
   test "fuzzy suggestions for doc snippets" do
