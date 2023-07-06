@@ -755,24 +755,33 @@ defmodule ElixirSense.Core.MetadataBuilder do
     line = Keyword.fetch!(meta_attr, :line)
     column = Keyword.fetch!(meta_attr, :column)
 
-    with {type, is_definition} <-
-           (case List.wrap(params) do
-              [] ->
-                {nil, false}
+    binding =
+      case List.wrap(params) do
+        [] ->
+          {nil, false}
 
-              [param] ->
-                {get_binding_type(state, param), true}
+        [param] ->
+          {get_binding_type(state, param), true}
 
-              _ ->
-                :error
-            end) do
-      state =
-        add_moduledoc_positions(state, [line: line, column: column], [{name, meta, params}], line)
+        _ ->
+          :error
+      end
 
-      new_ast = {:@, meta_attr, [{name, add_no_call(meta), params}]}
-      pre_module_attribute(new_ast, state, {line, column}, name, type, is_definition)
-    else
-      _ -> {[], state}
+    case binding do
+      {type, is_definition} ->
+        state =
+          add_moduledoc_positions(
+            state,
+            [line: line, column: column],
+            [{name, meta, params}],
+            line
+          )
+
+        new_ast = {:@, meta_attr, [{name, add_no_call(meta), params}]}
+        pre_module_attribute(new_ast, state, {line, column}, name, type, is_definition)
+
+      _ ->
+        {[], state}
     end
   end
 
