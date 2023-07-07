@@ -52,6 +52,7 @@ defmodule ElixirSense.Core.State do
           calls: calls_t,
           structs: structs_t,
           types: types_t,
+          generated: boolean,
           first_alias_positions: map(),
           moduledoc_positions: map(),
           # TODO
@@ -81,6 +82,7 @@ defmodule ElixirSense.Core.State do
             calls: %{},
             structs: %{},
             types: %{},
+            generated: false,
             binding_context: [],
             first_alias_positions: %{},
             moduledoc_positions: %{}
@@ -148,9 +150,17 @@ defmodule ElixirSense.Core.State do
             args: list(list(String.t())),
             specs: [String.t()],
             kind: :type | :typep | :opaque,
-            positions: [ElixirSense.Core.State.position_t()]
+            positions: [ElixirSense.Core.State.position_t()],
+            end_positions: [ElixirSense.Core.State.position_t() | nil],
+            generated: list(boolean)
           }
-    defstruct name: nil, args: [], specs: [], kind: :type, positions: []
+    defstruct name: nil,
+              args: [],
+              specs: [],
+              kind: :type,
+              positions: [],
+              end_positions: [],
+              generated: []
   end
 
   defmodule SpecInfo do
@@ -162,9 +172,17 @@ defmodule ElixirSense.Core.State do
             args: list(list(String.t())),
             specs: [String.t()],
             kind: :spec | :callback | :macrocallback,
-            positions: [ElixirSense.Core.State.position_t()]
+            positions: [ElixirSense.Core.State.position_t()],
+            end_positions: [ElixirSense.Core.State.position_t() | nil],
+            generated: list(boolean)
           }
-    defstruct name: nil, args: [], specs: [], kind: :spec, positions: []
+    defstruct name: nil,
+              args: [],
+              specs: [],
+              kind: :spec,
+              positions: [],
+              end_positions: [],
+              generated: []
   end
 
   defmodule StructInfo do
@@ -215,8 +233,10 @@ defmodule ElixirSense.Core.State do
     @type t :: %ModFunInfo{
             params: list(list(term)),
             positions: list(ElixirSense.Core.State.position_t()),
+            end_positions: list(ElixirSense.Core.State.position_t() | nil),
             target: nil | {module, atom},
             overridable: false | {true, module},
+            generated: list(boolean),
             # TODO defmodule defprotocol defimpl?
             type:
               :def
@@ -231,8 +251,10 @@ defmodule ElixirSense.Core.State do
 
     defstruct params: [],
               positions: [],
+              end_positions: [],
               target: nil,
               type: nil,
+              generated: [],
               overridable: false
 
     def get_arities(%ModFunInfo{params: params_variants}) do
@@ -377,7 +399,7 @@ defmodule ElixirSense.Core.State do
       when is_integer(line) and is_integer(column) do
     current_scope = hd(hd(state.scopes))
 
-    is_module? = is_atom(current_scope)
+    is_module? = is_atom(current_scope) and current_scope != Elixir
 
     if is_module? do
       module_name = module_name(state)
@@ -402,6 +424,8 @@ defmodule ElixirSense.Core.State do
 
   defp after_elixir_prefix([Elixir | rest]), do: rest
   defp after_elixir_prefix(rest), do: rest
+
+  def add_call_to_line(%__MODULE__{} = state, {nil, :__block__, _}, _position), do: state
 
   def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, {line, _column} = position) do
     call = %CallInfo{mod: mod, func: func, arity: arity, position: position}
@@ -486,15 +510,19 @@ defmodule ElixirSense.Core.State do
         %__MODULE__{} = state,
         {module, fun, arity},
         position,
+        end_position,
         params,
         type,
         options \\ []
-      ) do
+      )
+      when is_tuple(position) do
     current_info = Map.get(state.mods_funs_to_positions, {module, fun, arity}, %ModFunInfo{})
     current_params = current_info |> Map.get(:params, [])
     current_positions = current_info |> Map.get(:positions, [])
+    current_end_positions = current_info |> Map.get(:end_positions, [])
     new_params = [params | current_params]
     new_positions = [position | current_positions]
+    new_end_positions = [end_position | current_end_positions]
 
     info_type =
       if fun != nil and arity == nil and
@@ -509,8 +537,10 @@ defmodule ElixirSense.Core.State do
 
     info = %ModFunInfo{
       positions: new_positions,
+      end_positions: new_end_positions,
       params: new_params,
       type: info_type,
+      generated: [Keyword.get(options, :generated, false) | current_info.generated],
       overridable: current_info |> Map.get(:overridable, false)
     }
 
@@ -686,30 +716,66 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | scopes: tl(state.scopes)}
   end
 
-  def add_current_module_to_index(%__MODULE__{} = state, position) do
+  def add_current_module_to_index(%__MODULE__{} = state, position, end_position, options)
+      when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
     current_module_variants = get_current_module_variants(state)
 
     current_module_variants
     |> Enum.reduce(state, fn variant, acc ->
       acc
-      |> add_module_to_index(variant, position)
+      |> add_module_to_index(variant, position, end_position, options)
     end)
   end
 
-  def add_module_to_index(%__MODULE__{} = state, module, position) do
+  def add_module_to_index(%__MODULE__{} = state, module, position, end_position, options)
+      when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
     # TODO :defprotocol, :defimpl?
-    add_mod_fun_to_position(state, {module, nil, nil}, position, nil, :defmodule)
+    add_mod_fun_to_position(
+      state,
+      {module, nil, nil},
+      position,
+      end_position,
+      nil,
+      :defmodule,
+      options
+    )
   end
 
-  def add_func_to_index(%__MODULE__{} = state, func, params, position, type, options \\ []) do
+  # TODO require end position
+  def add_func_to_index(state, func, params, position, end_position \\ nil, type, options \\ [])
+
+  def add_func_to_index(
+        %__MODULE__{} = state,
+        func,
+        params,
+        position,
+        end_position,
+        type,
+        options
+      )
+      when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
     current_module_variants = get_current_module_variants(state)
     arity = length(params)
 
     current_module_variants
     |> Enum.reduce(state, fn variant, acc ->
       acc
-      |> add_mod_fun_to_position({variant, func, arity}, position, params, type, options)
-      |> add_mod_fun_to_position({variant, func, nil}, position, params, type, options)
+      |> add_mod_fun_to_position(
+        {variant, func, arity},
+        position,
+        end_position,
+        params,
+        type,
+        options
+      )
+      |> add_mod_fun_to_position(
+        {variant, func, nil},
+        position,
+        end_position,
+        params,
+        type,
+        options
+      )
     end)
   end
 
@@ -1001,7 +1067,16 @@ defmodule ElixirSense.Core.State do
     Enum.reduce(modules, state, fn mod, state -> add_require(state, mod) end)
   end
 
-  def add_type(%__MODULE__{} = state, type_name, type_args, spec, kind, pos) do
+  def add_type(
+        %__MODULE__{} = state,
+        type_name,
+        type_args,
+        spec,
+        kind,
+        pos,
+        end_pos,
+        options \\ []
+      ) do
     arg_names =
       type_args
       |> Enum.map(&Macro.to_string/1)
@@ -1011,7 +1086,9 @@ defmodule ElixirSense.Core.State do
       args: [arg_names],
       kind: kind,
       specs: [spec],
-      positions: [pos]
+      generated: [Keyword.get(options, :generated, false)],
+      positions: [pos],
+      end_positions: [end_pos]
     }
 
     current_module_variants = get_current_module_variants(state)
@@ -1028,6 +1105,8 @@ defmodule ElixirSense.Core.State do
               %TypeInfo{
                 ti
                 | positions: [pos | positions],
+                  end_positions: [end_pos | ti.end_positions],
+                  generated: [Keyword.get(options, :generated, false) | ti.generated],
                   args: [arg_names | args],
                   specs: [spec | specs],
                   # in case there are multiple definitions for nil arity prefer public ones
@@ -1043,7 +1122,7 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | types: types}
   end
 
-  def add_spec(%__MODULE__{} = state, type_name, type_args, spec, kind, pos) do
+  def add_spec(%__MODULE__{} = state, type_name, type_args, spec, kind, pos, end_pos, options) do
     arg_names =
       type_args
       |> Enum.map(&Macro.to_string/1)
@@ -1053,7 +1132,9 @@ defmodule ElixirSense.Core.State do
       args: [arg_names],
       specs: [spec],
       kind: kind,
-      positions: [pos]
+      generated: [Keyword.get(options, :generated, false)],
+      positions: [pos],
+      end_positions: [end_pos]
     }
 
     current_module_variants = get_current_module_variants(state)
@@ -1070,6 +1151,8 @@ defmodule ElixirSense.Core.State do
               %SpecInfo{
                 ti
                 | positions: [pos | positions],
+                  end_positions: [end_pos | ti.end_positions],
+                  generated: [Keyword.get(options, :generated, false) | ti.generated],
                   args: [arg_names | args],
                   specs: [spec | specs]
               }

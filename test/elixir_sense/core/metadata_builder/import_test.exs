@@ -38,7 +38,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
       state =
         unquote(module).module_info()[:compile][:source]
         |> File.read!()
-        |> Code.string_to_quoted(columns: true)
+        |> Code.string_to_quoted(columns: true, token_metadata: true)
         |> MetadataBuilder.build()
 
       env = unquote(module).env()
@@ -64,7 +64,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
 
     state =
       code
-      |> Code.string_to_quoted(columns: true)
+      |> Code.string_to_quoted(columns: true, token_metadata: true)
       |> MetadataBuilder.build()
 
     {env, _} = Code.eval_string(code, [])
@@ -84,7 +84,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
 
     state =
       code
-      |> Code.string_to_quoted(columns: true)
+      |> Code.string_to_quoted(columns: true, token_metadata: true)
       |> MetadataBuilder.build()
 
     {env, _} = Code.eval_string(code, [])
