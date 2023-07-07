@@ -34,20 +34,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
             when is_atom(call) and is_list(params) and
                    call not in [:., :__aliases__, :"::", :{}, :|>, :%, :%{}]
 
-  defguard is_call_meta_simple(list)
-           when elem(hd(list), 0) == :line and elem(hd(tl(list)), 0) == :column
-
-  defguard is_call_meta(list)
-           when is_call_meta_simple(list) or
-                  (elem(hd(list), 0) == :no_parens and is_call_meta_simple(tl(list))) or
-                  (elem(hd(list), 0) == :closing and is_call_meta_simple(tl(list))) or
-                  (elem(hd(list), 0) == :end_of_expression and elem(hd(tl(list)), 0) == :closing and
-                     is_call_meta_simple(tl(tl(list)))) or
-                  (elem(hd(list), 0) == :end_of_expression and elem(hd(tl(list)), 0) == :no_parens and
-                     is_call_meta_simple(tl(tl(list))))
-
-  # defguard is_call_meta(list) when is_list(list)
-
   @doc """
   Traverses the AST building/retrieving the environment information.
   It returns a `ElixirSense.Core.State` struct containing the information.
@@ -1024,7 +1010,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     else
       # pre Elixir 1.4 local call syntax
       # TODO remove on Elixir 2.0
-      if is_call_meta(meta) do
+      if not Keyword.get(meta, :no_call, false) do
         add_call_to_line(state, {nil, var_or_call, 0}, {line, column})
       else
         state
@@ -1139,11 +1125,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre(
-         {{:., meta1, [{:__aliases__, _, module_expression = [:Record]}, call]}, meta,
+         {{:., meta1, [{:__aliases__, _, module_expression = [:Record]}, call]}, _meta,
           params = [name, _]} = ast,
          state
        )
-       when is_call(call, params) and is_call_meta(meta) and call in [:defrecord, :defrecordp] and
+       when is_call(call, params) and call in [:defrecord, :defrecordp] and
               is_atom(name) do
     {position = {line, column}, end_position} = extract_range(meta1)
 
@@ -1156,6 +1142,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end
 
     options = [generated: true]
+
+    shift = if state.generated, do: 0, else: 1
 
     state
     |> new_named_func(name, 1)
@@ -1176,67 +1164,75 @@ defmodule ElixirSense.Core.MetadataBuilder do
       type,
       options
     )
-    |> add_call_to_line({Module.concat(module), call, length(params)}, {line, column + 1})
+    |> add_call_to_line({Module.concat(module), call, length(params)}, {line, column + shift})
     |> add_current_env_to_line(line)
     |> result(ast)
   end
 
   defp pre(
-         {{:., meta1, [{:__aliases__, _, module_expression = [_ | _]}, call]}, meta, params} =
+         {{:., meta1, [{:__aliases__, _, module_expression = [_ | _]}, call]}, _meta, params} =
            ast,
          state
        )
-       when is_call(call, params) and is_call_meta(meta) do
+       when is_call(call, params) do
     line = Keyword.fetch!(meta1, :line)
     column = Keyword.fetch!(meta1, :column)
 
     module = concat_module_expression(state, module_expression)
 
+    shift = if state.generated, do: 0, else: 1
+
     state
-    |> add_call_to_line({Module.concat(module), call, length(params)}, {line, column + 1})
+    |> add_call_to_line({Module.concat(module), call, length(params)}, {line, column + shift})
     |> add_current_env_to_line(line)
     |> result(ast)
   end
 
   defp pre(
-         {{:., meta1, [{:__MODULE__, _, nil}, call]}, meta, params} = ast,
+         {{:., meta1, [{:__MODULE__, _, nil}, call]}, _meta, params} = ast,
          state
        )
-       when is_call(call, params) and is_call_meta(meta) do
+       when is_call(call, params) do
     line = Keyword.fetch!(meta1, :line)
     column = Keyword.fetch!(meta1, :column)
     module = get_current_module(state)
 
+    shift = if state.generated, do: 0, else: 1
+
     state
-    |> add_call_to_line({module, call, length(params)}, {line, column + 1})
+    |> add_call_to_line({module, call, length(params)}, {line, column + shift})
     |> add_current_env_to_line(line)
     |> result(ast)
   end
 
   defp pre(
-         {{:., meta1, [{:@, _, [{attribute, _, nil}]}, call]}, meta, params} = ast,
+         {{:., meta1, [{:@, _, [{attribute, _, nil}]}, call]}, _meta, params} = ast,
          state
        )
-       when is_call(call, params) and is_call_meta(meta) and is_atom(attribute) do
+       when is_call(call, params) and is_atom(attribute) do
     line = Keyword.fetch!(meta1, :line)
     column = Keyword.fetch!(meta1, :column)
 
+    shift = if state.generated, do: 0, else: 1
+
     state
-    |> add_call_to_line({{:attribute, attribute}, call, length(params)}, {line, column + 1})
+    |> add_call_to_line({{:attribute, attribute}, call, length(params)}, {line, column + shift})
     |> add_current_env_to_line(line)
     |> result(ast)
   end
 
   defp pre(
-         {{:., meta1, [module, call]}, meta, params} = ast,
+         {{:., meta1, [module, call]}, _meta, params} = ast,
          state
        )
-       when is_atom(module) and is_call(call, params) and is_call_meta(meta) do
+       when is_atom(module) and is_call(call, params) do
     line = Keyword.fetch!(meta1, :line)
     column = Keyword.fetch!(meta1, :column)
 
+    shift = if state.generated, do: 0, else: 1
+
     state
-    |> add_call_to_line({module, call, length(params)}, {line, column + 1})
+    |> add_call_to_line({module, call, length(params)}, {line, column + shift})
     |> add_current_env_to_line(line)
     |> result(ast)
   end

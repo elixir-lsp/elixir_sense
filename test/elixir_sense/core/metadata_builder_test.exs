@@ -4464,7 +4464,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert state.calls == %{
-             2 => [%CallInfo{arity: 2, position: {2, 3}, func: :unless, mod: nil}],
+             2 => [
+               %CallInfo{arity: 2, position: {2, 3}, func: :__register__, mod: ExUnit.Case},
+               %CallInfo{arity: 2, position: {2, 3}, func: :unless, mod: nil}
+             ],
              4 => [%CallInfo{arity: 2, position: {4, 3}, func: :describe, mod: nil}],
              5 => [%CallInfo{arity: 2, position: {5, 5}, func: :test, mod: nil}],
              9 => [%CallInfo{arity: 2, position: {9, 3}, func: :test, mod: nil}]
