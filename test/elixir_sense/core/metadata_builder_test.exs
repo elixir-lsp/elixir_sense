@@ -2831,7 +2831,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :callback,
                name: :with_spec,
                positions: [{3, 3}],
-               end_positions: [nil],
+               end_positions: [{3, 40}],
                generated: [false],
                specs: [
                  "@callback with_spec(t, boolean) :: number",
@@ -2843,7 +2843,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :callback,
                name: :with_spec,
                positions: [{3, 3}, {2, 3}],
-               end_positions: [nil, nil],
+               end_positions: [{3, 40}, {2, 42}],
                generated: [false, false],
                specs: [
                  "@callback with_spec(t, boolean) :: number",
@@ -4466,7 +4466,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :type,
                name: :no_arg_no_parens,
                positions: [{2, 3}],
-               end_positions: [nil],
+               end_positions: [{2, 36}],
                generated: [false],
                specs: ["@type no_arg_no_parens :: integer"]
              },
@@ -4475,7 +4475,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :type,
                name: :no_arg_no_parens,
                positions: [{2, 3}],
-               end_positions: [nil],
+               end_positions: [{2, 36}],
                generated: [false],
                specs: ["@type no_arg_no_parens :: integer"]
              },
@@ -4484,7 +4484,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :typep,
                name: :no_args,
                positions: [{3, 3}],
-               end_positions: [nil],
+               end_positions: [{3, 30}],
                generated: [false],
                specs: ["@typep no_args :: integer"]
              },
@@ -4493,7 +4493,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :typep,
                name: :no_args,
                positions: [{3, 3}],
-               end_positions: [nil],
+               end_positions: [{3, 30}],
                generated: [false],
                specs: ["@typep no_args :: integer"]
              },
@@ -4502,7 +4502,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :type,
                name: :overloaded,
                positions: [{5, 3}],
-               end_positions: [nil],
+               end_positions: [{5, 25}],
                generated: [false],
                specs: ["@type overloaded :: {}"]
              },
@@ -4519,7 +4519,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :type,
                name: :overloaded,
                positions: [{6, 3}, {5, 3}],
-               end_positions: [nil, nil],
+               end_positions: [nil, {5, 25}],
                generated: [false, false],
                args: [["a"], []],
                specs: ["@type overloaded(a) :: {a}", "@type overloaded :: {}"]
@@ -4528,7 +4528,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :opaque,
                name: :with_args,
                positions: [{4, 3}],
-               end_positions: [nil],
+               end_positions: [{4, 36}],
                generated: [false],
                args: [["a", "b"]],
                specs: ["@opaque with_args(a, b) :: {a, b}"]
@@ -4537,7 +4537,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :opaque,
                name: :with_args,
                positions: [{4, 3}],
-               end_positions: [nil],
+               end_positions: [{4, 36}],
                generated: [false],
                args: [["a", "b"]],
                specs: ["@opaque with_args(a, b) :: {a, b}"]
@@ -4577,7 +4577,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :type,
                name: :t,
                positions: [{1, 1}],
-               end_positions: [nil],
+               end_positions: [{3, 4}],
                generated: [true],
                specs: ["@type t :: term"]
              },
@@ -4586,7 +4586,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :type,
                name: :t,
                positions: [{1, 1}],
-               end_positions: [nil],
+               end_positions: [{3, 4}],
                generated: [true],
                specs: ["@type t :: term"]
              }
@@ -4614,7 +4614,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :spec,
                name: :abc,
                positions: [{3, 3}],
-               end_positions: [nil],
+               end_positions: [{3, 25}],
                generated: [false],
                specs: ["@spec abc :: reference"]
              },
@@ -4623,7 +4623,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :abc,
                args: [[], []],
                positions: [{3, 3}, {2, 3}],
-               end_positions: [nil, nil],
+               end_positions: [{3, 25}, {2, 30}],
                generated: [false, false],
                specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
              },
@@ -4632,7 +4632,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :my,
                args: [["a :: integer"]],
                positions: [{4, 3}],
-               end_positions: [nil],
+               end_positions: [{4, 37}],
                generated: [false],
                specs: ["@callback my(a :: integer) :: atom"]
              },
@@ -4641,7 +4641,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :my,
                args: [["a :: integer"]],
                positions: [{4, 3}],
-               end_positions: [nil],
+               end_positions: [{4, 37}],
                generated: [false],
                specs: ["@callback my(a :: integer) :: atom"]
              },

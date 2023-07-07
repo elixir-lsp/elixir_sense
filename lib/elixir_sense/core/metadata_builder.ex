@@ -108,7 +108,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       types
       |> Enum.reduce(state, fn {type_name, type_args, spec, kind}, acc ->
         acc
-        |> add_type(type_name, type_args, kind, spec, position, generated: true)
+        |> add_type(type_name, type_args, kind, spec, position, end_position, generated: true)
       end)
 
     state =
@@ -121,7 +121,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
           name,
           mapped_args,
           position,
-          nil,
+          end_position,
           kind,
           generated: true
         )
@@ -439,27 +439,33 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_type(ast, state, {line, _column} = pos, type_name, type_args, spec, kind) do
+  defp pre_type(ast, state, meta, type_name, type_args, spec, kind) do
     spec = TypeInfo.typespec_to_string(kind, spec)
 
+    {position = {line, _column}, end_position} = extract_range(meta)
+
     state
-    |> add_type(type_name, type_args, spec, kind, pos, generated: state.generated)
+    |> add_type(type_name, type_args, spec, kind, position, end_position,
+      generated: state.generated
+    )
     |> add_typespec_namespace(type_name, length(type_args))
     |> add_current_env_to_line(line)
     |> result(ast)
   end
 
-  defp pre_spec(ast, state, {line, column} = pos, type_name, type_args, spec, kind) do
+  defp pre_spec(ast, state, meta, type_name, type_args, spec, kind) do
     spec = TypeInfo.typespec_to_string(kind, spec)
+
+    {position = {line, _column}, end_position} = extract_range(meta)
 
     state =
       if kind in [:callback, :macrocallback] do
         state
         |> add_func_to_index(
           :behaviour_info,
-          [{:atom, [line: line, column: column], nil}],
-          pos,
-          nil,
+          [{:atom, meta, nil}],
+          position,
+          end_position,
           :def,
           generated: true
         )
@@ -468,7 +474,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end
 
     state
-    |> add_spec(type_name, type_args, spec, kind, pos, generated: state.generated)
+    |> add_spec(type_name, type_args, spec, kind, position, end_position,
+      generated: state.generated
+    )
     |> add_typespec_namespace(type_name, length(type_args))
     |> add_current_env_to_line(line)
     |> result(ast)
@@ -669,13 +677,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when kind in [:type, :typep, :opaque] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
-    line = Keyword.fetch!(meta_attr, :line)
-    column = Keyword.fetch!(meta_attr, :column)
-
     pre_type(
       ast,
       state,
-      {line, column},
+      meta_attr,
       name,
       List.wrap(type_args),
       expand_aliases_in_ast(state, spec),
@@ -693,13 +698,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
-    line = Keyword.fetch!(meta_attr, :line)
-    column = Keyword.fetch!(meta_attr, :column)
-
     pre_spec(
       ast,
       state,
-      {line, column},
+      meta_attr,
       name,
       expand_aliases_in_ast(state, List.wrap(type_args)),
       expand_aliases_in_ast(state, spec),
@@ -715,13 +717,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
-    line = Keyword.fetch!(meta_attr, :line)
-    column = Keyword.fetch!(meta_attr, :column)
-
     pre_spec(
       ast,
       state,
-      {line, column},
+      meta_attr,
       name,
       expand_aliases_in_ast(state, List.wrap(type_args)),
       expand_aliases_in_ast(state, spec),
@@ -737,13 +736,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
-    line = Keyword.fetch!(meta_attr, :line)
-    column = Keyword.fetch!(meta_attr, :column)
-
     pre_spec(
       ast,
       state,
-      {line, column},
+      meta_attr,
       name,
       expand_aliases_in_ast(state, List.wrap(type_args)),
       expand_aliases_in_ast(state, spec),
@@ -1067,8 +1063,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre({type, meta, fields} = ast, state)
        when type in [:defstruct, :defexception] do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
+    {position, end_position} = extract_range(meta)
 
     fields =
       case fields do
@@ -1089,7 +1084,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end
 
     state
-    |> add_struct_or_exception(type, fields, {line, column})
+    |> add_struct_or_exception(type, fields, position, end_position)
     |> result(ast)
   end
 
@@ -1167,8 +1162,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when is_call(call, params) and is_call_meta(meta) and call in [:defrecord, :defrecordp] and
               is_atom(name) do
-    line = Keyword.fetch!(meta1, :line)
-    column = Keyword.fetch!(meta1, :column)
+    {position = {line, column}, end_position} = extract_range(meta1)
 
     module = concat_module_expression(state, module_expression)
 
@@ -1185,8 +1179,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> add_func_to_index(
       name,
       [{:\\, [], [{:args, [], nil}, []]}],
-      {line, column},
-      nil,
+      position,
+      end_position,
       type,
       options
     )
@@ -1194,8 +1188,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> add_func_to_index(
       name,
       [{:record, [], nil}, {:args, [], nil}],
-      {line, column},
-      nil,
+      position,
+      end_position,
       type,
       options
     )
@@ -1929,7 +1923,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp maybe_add_protocol_behaviour(state, _), do: state
 
-  defp add_struct_or_exception(state, type, fields, {line, column}) do
+  defp add_struct_or_exception(state, type, fields, {line, column} = position, end_position) do
     fields =
       fields ++
         if type == :defexception do
@@ -1951,16 +1945,16 @@ defmodule ElixirSense.Core.MetadataBuilder do
           |> add_func_to_index(
             :exception,
             [{:msg, [line: line, column: column], nil}],
-            {line, column},
-            nil,
+            position,
+            end_position,
             :def,
             options
           )
           |> add_func_to_index(
             :message,
             [{:exception, [line: line, column: column], nil}],
-            {line, column},
-            nil,
+            position,
+            end_position,
             :def,
             options
           )
@@ -1970,20 +1964,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
         |> add_func_to_index(
           :exception,
           [{:args, [line: line, column: column], nil}],
-          {line, column},
-          nil,
+          position,
+          end_position,
           :def,
           options
         )
       else
         state
       end
-      |> add_func_to_index(:__struct__, [], {line, column}, nil, :def, options)
+      |> add_func_to_index(:__struct__, [], position, end_position, :def, options)
       |> add_func_to_index(
         :__struct__,
         [{:kv, [line: line, column: column], nil}],
-        {line, column},
-        nil,
+        position,
+        end_position,
         :def,
         options
       )

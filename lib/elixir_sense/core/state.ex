@@ -1065,7 +1065,16 @@ defmodule ElixirSense.Core.State do
     Enum.reduce(modules, state, fn mod, state -> add_require(state, mod) end)
   end
 
-  def add_type(%__MODULE__{} = state, type_name, type_args, spec, kind, pos, options \\ []) do
+  def add_type(
+        %__MODULE__{} = state,
+        type_name,
+        type_args,
+        spec,
+        kind,
+        pos,
+        end_pos,
+        options \\ []
+      ) do
     arg_names =
       type_args
       |> Enum.map(&Macro.to_string/1)
@@ -1077,8 +1086,7 @@ defmodule ElixirSense.Core.State do
       specs: [spec],
       generated: [Keyword.get(options, :generated, false)],
       positions: [pos],
-      # no end pos info in AST as of elixir 1.15
-      end_positions: [nil]
+      end_positions: [end_pos]
     }
 
     current_module_variants = get_current_module_variants(state)
@@ -1095,7 +1103,7 @@ defmodule ElixirSense.Core.State do
               %TypeInfo{
                 ti
                 | positions: [pos | positions],
-                  end_positions: [nil | ti.end_positions],
+                  end_positions: [end_pos | ti.end_positions],
                   generated: [Keyword.get(options, :generated, false) | ti.generated],
                   args: [arg_names | args],
                   specs: [spec | specs],
@@ -1112,7 +1120,7 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | types: types}
   end
 
-  def add_spec(%__MODULE__{} = state, type_name, type_args, spec, kind, pos, options) do
+  def add_spec(%__MODULE__{} = state, type_name, type_args, spec, kind, pos, end_pos, options) do
     arg_names =
       type_args
       |> Enum.map(&Macro.to_string/1)
@@ -1124,8 +1132,7 @@ defmodule ElixirSense.Core.State do
       kind: kind,
       generated: [Keyword.get(options, :generated, false)],
       positions: [pos],
-      # no end pos info in AST as of elixir 1.15
-      end_positions: [nil]
+      end_positions: [end_pos]
     }
 
     current_module_variants = get_current_module_variants(state)
@@ -1142,7 +1149,7 @@ defmodule ElixirSense.Core.State do
               %SpecInfo{
                 ti
                 | positions: [pos | positions],
-                  end_positions: [nil | ti.end_positions],
+                  end_positions: [end_pos | ti.end_positions],
                   generated: [Keyword.get(options, :generated, false) | ti.generated],
                   args: [arg_names | args],
                   specs: [spec | specs]

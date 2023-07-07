@@ -18,7 +18,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.DocsSnippets do
   @doc """
   A reducer that adds suggestions for @doc, @moduledoc and @typedoc.
   """
-  def add_snippets(hint, env, _metadata, %{at_module_body?: true}, acc) do
+  def add_snippets(hint, _env, _metadata, %{at_module_body?: true}, acc) do
     list =
       for {label, snippet, doc, priority} <- @module_attr_snippets,
           Matcher.match?(label, hint) do
