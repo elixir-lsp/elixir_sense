@@ -1010,6 +1010,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     else
       # pre Elixir 1.4 local call syntax
       # TODO remove on Elixir 2.0
+      # credo:disable-for-next-line
       if not Keyword.get(meta, :no_call, false) do
         add_call_to_line(state, {nil, var_or_call, 0}, {line, column})
       else
@@ -1246,6 +1247,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       _ ->
         line = Keyword.fetch!(meta, :line)
 
+        # credo:disable-for-next-line
         if not Keyword.get(meta, :no_call, false) do
           column = Keyword.fetch!(meta, :column)
 
