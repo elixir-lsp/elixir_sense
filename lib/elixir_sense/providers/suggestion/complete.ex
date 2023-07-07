@@ -412,10 +412,16 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       attribute_name when is_atom(attribute_name) <- attribute_names,
       name = Atom.to_string(attribute_name),
       Matcher.match?(name, hint),
-      do: name
+      do: attribute_name
     )
     |> Enum.sort()
-    |> Enum.map(&%{kind: :attribute, name: &1})
+    |> Enum.map(
+      &%{
+        kind: :attribute,
+        name: Atom.to_string(&1),
+        summary: BuiltinAttributes.docs(&1)
+      }
+    )
     |> format_expansion()
   end
 
@@ -1042,8 +1048,8 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     [%{type: :variable, name: name}]
   end
 
-  defp to_entries(%{kind: :attribute, name: name}) do
-    [%{type: :attribute, name: "@" <> name}]
+  defp to_entries(%{kind: :attribute, name: name, summary: summary}) do
+    [%{type: :attribute, name: "@" <> name, summary: summary}]
   end
 
   defp to_entries(%{

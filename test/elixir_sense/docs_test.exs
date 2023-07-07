@@ -1016,4 +1016,29 @@ defmodule ElixirSense.DocsTest do
            Flattens the given `list` of nested lists.
            """
   end
+
+  test "retrieve reserved module attributes documentation" do
+    buffer = """
+    defmodule MyModule do
+      @on_load :on_load
+
+      def on_load(), do: :ok
+    end
+    """
+
+    assert %{
+             actual_subject: "@on_load",
+             docs: %{docs: "A hook that will be invoked whenever the module is loaded."}
+           } = ElixirSense.docs(buffer, 2, 6)
+  end
+
+  test "retrieve unreserved module attributes documentation" do
+    buffer = """
+    defmodule MyModule do
+      @my_attribute nil
+    end
+    """
+
+    refute ElixirSense.docs(buffer, 2, 6)
+  end
 end

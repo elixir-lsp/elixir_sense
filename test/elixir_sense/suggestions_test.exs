@@ -1513,53 +1513,92 @@ defmodule ElixirSense.SuggestionsTest do
            ] = ElixirSense.suggestions(buffer, 5, 9)
   end
 
-  test "lists attributes" do
-    buffer = """
-    defmodule MyModule do
-      @my_attribute1 true
-      @my_attribute2 false
-      @
-    end
-    """
-
-    list =
-      ElixirSense.suggestions(buffer, 4, 4)
-      |> Enum.filter(fn s -> s.type == :attribute and s.name |> String.starts_with?("@my") end)
-
-    assert list == [
-             %{name: "@my_attribute1", type: :attribute},
-             %{name: "@my_attribute2", type: :attribute}
-           ]
-  end
-
-  test "lists module attributes in module scope" do
-    buffer = """
-    defmodule MyModule do
-      @myattr "asd"
-      @moduledoc "asdf"
-      def some do
-        @m
+  describe "suggestions for module attributes" do
+    test "lists attributes" do
+      buffer = """
+      defmodule MyModule do
+        @my_attribute1 true
+        @my_attribute2 false
+        @
       end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 4, 4)
+        |> Enum.filter(fn s -> s.type == :attribute and s.name |> String.starts_with?("@my") end)
+        |> Enum.map(fn %{name: name} -> name end)
+
+      assert list == ["@my_attribute1", "@my_attribute2"]
     end
-    """
 
-    list =
-      ElixirSense.suggestions(buffer, 2, 5)
-      |> Enum.filter(fn s -> s.type == :attribute end)
+    test "lists module attributes in module scope" do
+      buffer = """
+      defmodule MyModule do
+        @myattr "asd"
+        @moduledoc "asdf"
+        def some do
+          @m
+        end
+      end
+      """
 
-    assert list == [
-             %{name: "@macrocallback", type: :attribute},
-             %{name: "@moduledoc", type: :attribute},
-             %{name: "@myattr", type: :attribute}
-           ]
+      list =
+        ElixirSense.suggestions(buffer, 2, 5)
+        |> Enum.filter(fn s -> s.type == :attribute end)
+        |> Enum.map(fn %{name: name} -> name end)
 
-    list =
-      ElixirSense.suggestions(buffer, 5, 7)
-      |> Enum.filter(fn s -> s.type == :attribute end)
+      assert list == ["@macrocallback", "@moduledoc", "@myattr"]
 
-    assert list == [
-             %{name: "@myattr", type: :attribute}
-           ]
+      list =
+        ElixirSense.suggestions(buffer, 5, 7)
+        |> Enum.filter(fn s -> s.type == :attribute end)
+        |> Enum.map(fn %{name: name} -> name end)
+
+      assert list == ["@myattr"]
+    end
+
+    test "built-in attributes should include documentation" do
+      buffer = """
+      defmodule MyModule do
+        @call
+        @enfor
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 2, 7)
+        |> Enum.filter(fn s -> s.type == :attribute end)
+
+      assert [%{summary: "Provides a specification for a behaviour callback."}] = list
+
+      list =
+        ElixirSense.suggestions(buffer, 3, 8)
+        |> Enum.filter(fn s -> s.type == :attribute end)
+
+      assert [
+               %{
+                 summary:
+                   "Ensures the given keys are always set when building the struct defined in the current module."
+               }
+             ] = list
+    end
+
+    test "non built-in attributes should not include documentation" do
+      buffer = """
+      defmodule MyModule do
+        @myattr "asd"
+        def some do
+          @m
+        end
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 4, 6)
+        |> Enum.filter(fn s -> s.type == :attribute end)
+
+      assert [%{summary: nil}] = list
+    end
   end
 
   test "lists builtin module attributes on incomplete code" do
