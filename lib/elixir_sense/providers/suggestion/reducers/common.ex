@@ -10,7 +10,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
   @type attribute :: %{
           type: :attribute,
           name: String.t(),
-          summary: String.t()
+          summary: String.t() | nil
         }
 
   @type variable :: %{
