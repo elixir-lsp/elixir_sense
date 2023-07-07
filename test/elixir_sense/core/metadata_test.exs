@@ -323,6 +323,17 @@ defmodule ElixirSense.Core.MetadataTest do
     assert env.scope == {:x, 1}
   end
 
+  test "env is correct in module with do:" do
+    code = """
+    defmodule A, do: x
+    """
+
+    metadata = Parser.parse_string(code, true, true, 1)
+
+    env = Metadata.get_env(metadata, {1, 19})
+    assert env.scope == :A
+  end
+
   test "get_position_to_insert_alias when aliases exist" do
     code = """
     defmodule MyModule do
