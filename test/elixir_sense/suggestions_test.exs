@@ -1628,6 +1628,22 @@ defmodule ElixirSense.SuggestionsTest do
     assert Enum.any?(list, &(&1.name == "@spec"))
   end
 
+  test "do not suggest @@" do
+    buffer = """
+    defmodule MyModule do
+      @
+      @my_attribute1 true
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 2, 4)
+      |> Enum.filter(fn s -> s.type == :attribute end)
+      |> Enum.map(fn %{name: name} -> name end)
+
+    refute "@@" in list
+  end
+
   test "lists doc snippets in module body" do
     buffer = """
     defmodule MyModule do
