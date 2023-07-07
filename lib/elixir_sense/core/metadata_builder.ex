@@ -1138,23 +1138,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre({call, meta, params} = ast, state)
-       when is_call(call, params) and is_call_meta(meta) do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-
-    state =
-      if String.starts_with?(to_string(call), "__atom_elixir_marker_") do
-        state
-      else
-        add_call_to_line(state, {nil, call, length(params)}, {line, column})
-      end
-
-    state
-    |> add_current_env_to_line(line)
-    |> result(ast)
-  end
-
   defp pre(
          {{:., meta1, [{:__aliases__, _, module_expression = [:Record]}, call]}, meta,
           params = [name, _]} = ast,
@@ -1256,6 +1239,36 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> add_call_to_line({module, call, length(params)}, {line, column + 1})
     |> add_current_env_to_line(line)
     |> result(ast)
+  end
+
+  defp pre({call, meta, params} = ast, state)
+       when is_call(call, params) do
+    case Keyword.get(meta, :line) do
+      nil ->
+        {ast, state}
+
+      _ ->
+        line = Keyword.fetch!(meta, :line)
+
+        if not Keyword.get(meta, :no_call, false) do
+          column = Keyword.fetch!(meta, :column)
+
+          state =
+            if String.starts_with?(to_string(call), "__atom_elixir_marker_") do
+              state
+            else
+              add_call_to_line(state, {nil, call, length(params)}, {line, column})
+            end
+
+          state
+          |> add_current_env_to_line(line)
+          |> result(ast)
+        else
+          state
+          |> add_current_env_to_line(line)
+          |> result(ast)
+        end
+    end
   end
 
   # Any other tuple with a line

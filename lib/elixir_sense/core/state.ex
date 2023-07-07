@@ -425,6 +425,8 @@ defmodule ElixirSense.Core.State do
   defp after_elixir_prefix([Elixir | rest]), do: rest
   defp after_elixir_prefix(rest), do: rest
 
+  def add_call_to_line(%__MODULE__{} = state, {nil, :__block__, _}, _position), do: state
+
   def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, {line, _column} = position) do
     call = %CallInfo{mod: mod, func: func, arity: arity, position: position}
 

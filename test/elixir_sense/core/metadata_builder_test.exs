@@ -4446,6 +4446,31 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert state.calls == %{3 => [%CallInfo{arity: 1, func: :func, position: {3, 6}, mod: nil}]}
   end
 
+  test "registers calls on ex_unit DSL" do
+    state =
+      """
+      defmodule MyModuleTest do
+        use ExUnit.Case
+
+        describe "describe1" do
+          test "test1" do
+          end
+        end
+
+        test "test2" do
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{
+             2 => [%CallInfo{arity: 2, position: {2, 3}, func: :unless, mod: nil}],
+             4 => [%CallInfo{arity: 2, position: {4, 3}, func: :describe, mod: nil}],
+             5 => [%CallInfo{arity: 2, position: {5, 5}, func: :test, mod: nil}],
+             9 => [%CallInfo{arity: 2, position: {9, 3}, func: :test, mod: nil}]
+           }
+  end
+
   test "registers types" do
     state =
       """
