@@ -130,7 +130,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
             end
 
           some ->
-            Macro.to_string(some)
+            Introspection.to_string_with_parens(some)
         end
 
       %{

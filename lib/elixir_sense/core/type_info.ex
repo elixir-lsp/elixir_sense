@@ -456,7 +456,7 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   def type_str(type) do
-    typespec_to_quoted(type) |> Macro.to_string()
+    typespec_to_quoted(type) |> Introspection.to_string_with_parens()
   end
 
   defp extract_list_type_spec_options(list_type_specs) do

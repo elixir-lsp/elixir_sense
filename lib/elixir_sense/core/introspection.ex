@@ -813,15 +813,36 @@ defmodule ElixirSense.Core.Introspection do
   defp drop_macro_env(other), do: other
 
   defp get_typespec_signature({:when, _, [{:"::", _, [{name, meta, args}, _]}, _]}, arity) do
-    Macro.to_string({name, meta, strip_types(args, arity)})
+    to_string_with_parens({name, meta, strip_types(args, arity)})
   end
 
   defp get_typespec_signature({:"::", _, [{name, meta, args}, _]}, arity) do
-    Macro.to_string({name, meta, strip_types(args, arity)})
+    to_string_with_parens({name, meta, strip_types(args, arity)})
   end
 
   defp get_typespec_signature({name, meta, args}, arity) do
-    Macro.to_string({name, meta, strip_types(args, arity)})
+    to_string_with_parens({name, meta, strip_types(args, arity)})
+  end
+
+  def to_string_with_parens({name, meta, args}) when is_atom(name) do
+    if Code.Formatter.local_without_parens?(
+         name,
+         length(args),
+         Code.Formatter.locals_without_parens()
+       ) do
+      # Macro.to_string formats some locals without parens
+      # notable case is Phoenix.Endpoint.config/2 callback
+      replacement = :__elixir_sense_replace_me__
+
+      Macro.to_string({replacement, meta, args})
+      |> String.replace(Atom.to_string(replacement), Atom.to_string(name))
+    else
+      Macro.to_string({name, meta, args})
+    end
+  end
+
+  def to_string_with_parens(ast) do
+    Macro.to_string(ast)
   end
 
   defp strip_types(args, arity) do
