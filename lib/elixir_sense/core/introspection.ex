@@ -38,7 +38,7 @@ defmodule ElixirSense.Core.Introspection do
   @type docs :: mod_docs | fun_docs
 
   @type module_subtype ::
-          :exception | :protocol | :implementation | :behaviour | :struct | :task | nil
+          :exception | :protocol | :implementation | :behaviour | :struct | :task | :alias | nil
 
   @wrapped_behaviours %{
     :gen_server => GenServer,
@@ -998,6 +998,9 @@ defmodule ElixirSense.Core.Introspection do
         if has_func.(:run, 1) do
           :task
         end
+
+      not has_func.(:module_info, 1) ->
+        :alias
 
       true ->
         nil
