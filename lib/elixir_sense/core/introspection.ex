@@ -995,7 +995,9 @@ defmodule ElixirSense.Core.Introspection do
         :behaviour
 
       match?("Elixir.Mix.Tasks." <> _, Atom.to_string(module)) ->
-        :task
+        if has_func.(:run, 1) do
+          :task
+        end
 
       true ->
         nil
