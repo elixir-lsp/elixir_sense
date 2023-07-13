@@ -542,6 +542,11 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     depth = length(String.split(name, ".")) + 1
     base = name <> "." <> hint
 
+    concat_module = fn
+      ["Elixir", "Elixir" | _] = parts -> parts |> tl() |> Module.concat()
+      parts -> Module.concat(parts)
+    end
+
     for mod <- match_modules(base, module === Elixir, env),
         mod_as_atom = mod |> String.to_atom(),
         filter.(mod_as_atom),
@@ -549,7 +554,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         depth <= length(parts),
         name = Enum.at(parts, depth - 1),
         valid_alias_piece?("." <> name),
-        concatted = parts |> Enum.take(depth) |> Module.concat(),
+        concatted = parts |> Enum.take(depth) |> concat_module.(),
         filter.(concatted) do
       {name, concatted, false}
     end
