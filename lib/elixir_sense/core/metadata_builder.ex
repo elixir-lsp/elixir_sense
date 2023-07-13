@@ -1820,6 +1820,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {:list, list |> Enum.map(&get_binding_type(state, &1))}
   end
 
+  # pinned variable
+  def get_binding_type(state, {:^, _, [pinned]}), do: get_binding_type(state, pinned)
+
   # local call
   def get_binding_type(state, {var, _, args}) when is_atom(var) and is_list(args) do
     {:local_call, var, Enum.map(args, &get_binding_type(state, &1))}

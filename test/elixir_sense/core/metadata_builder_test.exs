@@ -948,6 +948,42 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ] = state |> get_line_vars(8)
   end
 
+  test "vars binding by pattern matching with pin operators" do
+    state =
+      """
+      defmodule MyModule do
+        def func(a) do
+          b = 1
+          case a do
+            %{b: ^2} = a1 -> 2
+            %{b: ^b} = a2 -> b
+          end
+        end
+      end
+      """
+      |> string_to_state
+
+    vars = state |> get_line_vars(5)
+
+    assert %VarInfo{
+             name: :a1,
+             positions: [{5, 18}],
+             scope_id: 6,
+             is_definition: true,
+             type: {:map, [b: {:integer, 2}], nil}
+           } = Enum.find(vars, &(&1.name == :a1))
+
+    vars = state |> get_line_vars(6)
+
+    assert %VarInfo{
+             name: :a2,
+             positions: [{6, 18}],
+             scope_id: 7,
+             is_definition: true,
+             type: {:map, [b: {:variable, :b}], nil}
+           } = Enum.find(vars, &(&1.name == :a2))
+  end
+
   test "rebinding vars" do
     state =
       """
