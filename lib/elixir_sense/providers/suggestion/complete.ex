@@ -583,14 +583,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         result
       end
     end)
-    |> Enum.reject(fn
-      %{required_alias: _, subtype: :implementation} ->
-        # reject protocol implementations, there is rarely a reason to alias them
-        true
-
-      _ ->
-        false
-    end)
   end
 
   defp valid_alias_piece?(<<?., char, rest::binary>>) when char in ?A..?Z,
@@ -647,25 +639,49 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     get_modules(true, env)
     |> Enum.sort()
     |> Enum.dedup()
-    |> Enum.reduce([], fn module, acc ->
-      module_parts = module |> String.split(".")
+    |> Enum.reduce([], fn
+      "Elixir." <> module = full_module, acc ->
+        subtype = Introspection.get_module_subtype(String.to_atom(full_module))
+        # skip mix tasks and protocol implementations as it's not common to need to alias those
+        if subtype not in [:implementation, :task] do
+          # do not search for a match in Elixir. prefix - no need to alias it
+          module_parts = module |> String.split(".")
 
-      maybe_index =
-        Enum.find_index(module_parts, fn module_part -> Matcher.match?(module_part, hint) end)
+          case module_parts do
+            [_] ->
+              # no need to alias if module is 1 part
+              acc
 
-      case maybe_index do
-        nil ->
+            [_root | rest] ->
+              maybe_index =
+                Enum.find_index(rest, fn module_part -> Matcher.match?(module_part, hint) end)
+
+              case maybe_index do
+                nil ->
+                  acc
+
+                index ->
+                  required_alias = Enum.slice(module_parts, 0..(index + 1))
+                  suggestion = Enum.at(required_alias, -1)
+                  required_alias = required_alias |> Module.concat() |> Atom.to_string()
+
+                  prepend_if_different(acc, {suggestion, required_alias})
+              end
+          end
+        else
           acc
+        end
 
-        index ->
-          required_alias = Enum.slice(module_parts, 0..index)
-          [suggestion | _] = Enum.reverse(required_alias)
-          required_alias = required_alias |> Module.concat() |> Atom.to_string()
-          [{suggestion, required_alias} | acc]
-      end
+      _erlang_module, acc ->
+        # skip erlang modules
+        acc
     end)
     |> Enum.filter(fn {suggestion, _required_alias} -> valid_alias_piece?("." <> suggestion) end)
   end
+
+  defp prepend_if_different([], new), do: [new]
+  defp prepend_if_different([new | _rest] = list, new), do: list
+  defp prepend_if_different(list, new), do: [new | list]
 
   defp match_modules(hint, root, env) do
     hint_parts = hint |> String.split(".")

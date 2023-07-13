@@ -335,6 +335,16 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     refute Enum.find(results, fn expansion -> expansion[:required_alias] == String.Chars end)
   end
 
+  test "does not suggest required_alias for Elixir proxy" do
+    env = %Env{
+      aliases: []
+    }
+
+    results = expand(~c"Elixi", env, required_alias: true)
+
+    refute Enum.find(results, fn expansion -> expansion[:required_alias] == Elixir end)
+  end
+
   test "elixir submodule no completion" do
     assert expand(~c"IEx.Xyz") == []
   end
