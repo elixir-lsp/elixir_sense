@@ -658,20 +658,17 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               acc
 
             [_root | rest] ->
-              maybe_index =
-                Enum.find_index(rest, fn module_part -> Matcher.match?(module_part, hint) end)
-
-              case maybe_index do
-                nil ->
-                  acc
-
-                index ->
-                  required_alias = Enum.slice(module_parts, 0..(index + 1))
-                  suggestion = Enum.at(required_alias, -1)
+              rest
+              |> Enum.with_index(1)
+              |> Enum.filter(fn {module_part, _index} ->
+                Matcher.match?(module_part, hint)
+              end)
+              |> Enum.reduce(acc, fn {module_part, index}, acc1 ->
+                  required_alias = Enum.slice(module_parts, 0..index)
                   required_alias = required_alias |> Module.concat() |> Atom.to_string()
 
-                  prepend_if_different(acc, {suggestion, required_alias})
-              end
+                  [{module_part, required_alias} | acc1]
+              end)
           end
         else
           acc
@@ -681,12 +678,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         # skip erlang modules
         acc
     end)
+    |> Enum.sort()
+    |> Enum.dedup()
     |> Enum.filter(fn {suggestion, _required_alias} -> valid_alias_piece?("." <> suggestion) end)
   end
-
-  defp prepend_if_different([], new), do: [new]
-  defp prepend_if_different([new | _rest] = list, new), do: list
-  defp prepend_if_different(list, new), do: [new | list]
 
   defp match_modules(hint, root, env) do
     hint_parts = hint |> String.split(".")
