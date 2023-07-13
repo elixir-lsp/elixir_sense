@@ -1976,7 +1976,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert %{
              type: :module,
              name: "Elixir",
-             full_name: "Elixir.Elixir",
+             full_name: "Elixir",
              subtype: nil,
              summary: "",
              metadata: %{}

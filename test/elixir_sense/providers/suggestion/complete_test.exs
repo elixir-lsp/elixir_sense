@@ -71,7 +71,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
   test "elixir proxy" do
     list = expand(~c"E")
-    assert list |> Enum.find(&(&1.name == "Elixir" and &1.full_name == "Elixir.Elixir"))
+    assert list |> Enum.find(&(&1.name == "Elixir" and &1.full_name == "Elixir"))
   end
 
   test "elixir completion" do
