@@ -1977,7 +1977,7 @@ defmodule ElixirSense.SuggestionsTest do
              type: :module,
              name: "Elixir",
              full_name: "Elixir",
-             subtype: nil,
+             subtype: :alias,
              summary: "",
              metadata: %{}
            } = Enum.at(list, 0)

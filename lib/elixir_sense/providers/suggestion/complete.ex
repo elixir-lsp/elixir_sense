@@ -474,8 +474,19 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         list = Enum.take(parts, length(parts) - 1)
 
         case value_from_alias(list, env) do
-          {:ok, alias} -> expand_aliases(alias, hint, [], false, env, filter, opts)
-          :error -> no()
+          {:ok, alias} ->
+            expand_aliases(
+              alias,
+              hint,
+              [],
+              false,
+              env,
+              filter,
+              Keyword.put(opts, :required_alias, false)
+            )
+
+          :error ->
+            no()
         end
     end
   end
@@ -528,7 +539,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         Matcher.match?(name, hint) do
       %{
         kind: :module,
-        type: :alias,
+        type: :elixir,
         name: name,
         full_name: inspect(mod),
         desc: {"", %{}},
@@ -664,10 +675,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
                 Matcher.match?(module_part, hint)
               end)
               |> Enum.reduce(acc, fn {module_part, index}, acc1 ->
-                  required_alias = Enum.slice(module_parts, 0..index)
-                  required_alias = required_alias |> Module.concat() |> Atom.to_string()
+                required_alias = Enum.slice(module_parts, 0..index)
+                required_alias = required_alias |> Module.concat() |> Atom.to_string()
 
-                  [{module_part, required_alias} | acc1]
+                [{module_part, required_alias} | acc1]
               end)
           end
         else

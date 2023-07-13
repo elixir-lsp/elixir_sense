@@ -969,9 +969,9 @@ defmodule ElixirSense.Core.Introspection do
       iex> ElixirSense.Core.Introspection.get_module_subtype(Mix.Tasks.Run)
       :task
       iex> ElixirSense.Core.Introspection.get_module_subtype(NotExistingModule)
-      nil
+      :alias
       iex> ElixirSense.Core.Introspection.get_module_subtype(Elixir)
-      nil
+      :alias
   """
   @spec get_module_subtype(module()) :: module_subtype()
   def get_module_subtype(module) do
@@ -999,7 +999,10 @@ defmodule ElixirSense.Core.Introspection do
           :task
         end
 
-      not has_func.(:module_info, 1) ->
+      module == Elixir ->
+        :alias
+
+      not has_func.(:module_info, 1) and match?("Elixir." <> _, Atom.to_string(module)) ->
         :alias
 
       true ->

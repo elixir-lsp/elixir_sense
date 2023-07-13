@@ -304,9 +304,11 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [
              %{
                metadata: %{},
-               name: "Chars",
-               full_name: "String.Chars",
-               required_alias: "String.Chars"
+               name: "CallerWithAliasesAndImports",
+               full_name:
+                 "ElixirSense.Providers.ReferencesTest.Modules.CallerWithAliasesAndImports",
+               required_alias:
+                 "ElixirSense.Providers.ReferencesTest.Modules.CallerWithAliasesAndImports"
              },
              %{
                metadata: %{},
@@ -316,11 +318,9 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
              },
              %{
                metadata: %{},
-               name: "CallerWithAliasesAndImports",
-               full_name:
-                 "ElixirSense.Providers.ReferencesTest.Modules.CallerWithAliasesAndImports",
-               required_alias:
-                 "ElixirSense.Providers.ReferencesTest.Modules.CallerWithAliasesAndImports"
+               name: "Chars",
+               full_name: "String.Chars",
+               required_alias: "String.Chars"
              }
            ] = expand(~c"Char", %Env{}, required_alias: true)
   end
@@ -343,6 +343,18 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     results = expand(~c"Elixi", env, required_alias: true)
 
     refute Enum.find(results, fn expansion -> expansion[:required_alias] == Elixir end)
+  end
+
+  test "does not suggest required_alias for when hint has more than one part" do
+    results = expand(~c"Elixir.Char", %Env{}, required_alias: true)
+
+    refute Enum.find(results, fn expansion -> expansion[:required_alias] == String.Chars end)
+
+    results = expand(~c"String.", %Env{}, required_alias: true)
+
+    refute Enum.find(results, fn expansion ->
+             expansion[:required_alias] == String.Tokenizer.Security
+           end)
   end
 
   test "elixir submodule no completion" do
