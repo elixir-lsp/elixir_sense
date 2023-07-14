@@ -1291,28 +1291,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, state}
   end
 
-  defp post({:defmodule, _, [{:__aliases__, _, _}, _]} = ast, state) do
+  defp post({:defmodule, _, [_module | _]} = ast, state) do
     post_module(ast, state)
   end
 
-  defp post({:defmodule, _, [module, _]} = ast, state) when is_atom(module) do
-    post_module(ast, state)
-  end
-
-  defp post({:defprotocol, _, [{:__aliases__, _, _}, _]} = ast, state) do
+  defp post({:defprotocol, _, [_protocol | _]} = ast, state) do
     post_protocol(ast, state)
   end
 
-  defp post({:defprotocol, _, [module, _]} = ast, state) when is_atom(module) do
-    post_protocol(ast, state)
-  end
-
-  defp post({:defimpl, _, [{:__aliases__, _, _}, [for: _implementations], _]} = ast, state) do
-    post_module(ast, state)
-  end
-
-  defp post({:defimpl, _, [protocol, [for: _implementations], _]} = ast, state)
-       when is_atom(protocol) do
+  defp post({:defimpl, _, [_protocol | _]} = ast, state) do
     post_module(ast, state)
   end
 

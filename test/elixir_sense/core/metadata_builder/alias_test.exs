@@ -33,7 +33,8 @@ defmodule ElixirSense.Core.MetadataBuilder.AliasTest do
         Alias.Realias,
         Alias.Unalias,
         Alias.NoUnaliasNested,
-        Alias.RequireWithAs
+        Alias.RequireWithAs,
+        Alias.AfterStructWithImplementation
       ] do
     test "alias rules properly handled in #{inspect(module)}" do
       state =
