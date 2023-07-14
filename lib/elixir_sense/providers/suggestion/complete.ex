@@ -659,6 +659,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       "Elixir." <> module = full_module, acc ->
         subtype = Introspection.get_module_subtype(String.to_atom(full_module))
         # skip mix tasks and protocol implementations as it's not common to need to alias those
+        # credo:disable-for-next-line
         if subtype not in [:implementation, :task] do
           # do not search for a match in Elixir. prefix - no need to alias it
           module_parts = module |> String.split(".")
