@@ -219,6 +219,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> find_vars(params)
       |> merge_same_name_vars()
 
+    vars =
+      if options[:guards],
+        do: infer_type_from_guards(options[:guards], vars, state),
+        else: vars
+
     {position, end_position} = extract_range(meta)
 
     options = Keyword.put(options, :generated, state.generated)
@@ -555,7 +560,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when def_name in @defs do
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, guards, body]}
-    pre_func(ast_without_params, state, meta, name, params)
+    pre_func(ast_without_params, state, meta, name, params, guards: guards)
   end
 
   defp pre(
@@ -1662,6 +1667,98 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp match_var(_state, ast, {vars, match_context}) do
     {ast, {vars, match_context}}
   end
+
+  def infer_type_from_guards(guard_ast, vars, state) do
+    type_info = type_information_from_guards(guard_ast, state)
+
+    Enum.reduce(type_info, vars, fn {var, type}, acc ->
+      index = Enum.find_index(acc, &(&1.name == var))
+
+      if index,
+        do: List.update_at(acc, index, &Map.put(&1, :type, type)),
+        else: acc
+    end)
+  end
+
+  # A guard expression can be in either these form:
+  #        :and                          :or
+  #      /     \            or          /   \              or      guard_expr
+  # guard_expr  guard_expr        guard_expr  guard_expr
+  #
+  # type information from :and subtrees are mergeable
+  # type information from :or subtrees are discarded
+  defp type_information_from_guards({:and, _, [guard_l, guard_r]}, state) do
+    left = type_information_from_guards(guard_l, state)
+    right = type_information_from_guards(guard_r, state)
+
+    Keyword.merge(left, right, fn _k, v1, v2 ->
+      case {v1, v2} do
+        # func my_func(x) when is_map_key(x, :a) and is_map_key(x, :b)
+        {{:map, fields1, _}, {:map, fields2, _}} ->
+          {:map, Enum.uniq_by(fields1 ++ fields2, &elem(&1, 0)), nil}
+
+        # In case we can't merge, just pick one
+        _ ->
+          v1
+      end
+    end)
+  end
+
+  defp type_information_from_guards({:or, _, [_guard_l, _guard_r]}, _state), do: []
+
+  defp type_information_from_guards(guard_ast, state) do
+    {_, acc} =
+      Macro.prewalk(guard_ast, [], fn
+        # Standalone variable: func my_func(x) when x
+        {var, _, nil} = node, acc ->
+          {node, [{var, :boolean} | acc]}
+
+        {guard_predicate, _, params} = node, acc ->
+          if type = guard_predicate_type(guard_predicate, params, state) do
+            [{var, _, nil} | _] = params
+            # If we found the predicate type, we can prematurely exit traversing the subtree
+            {[], [{var, type} | acc]}
+          else
+            {node, acc}
+          end
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    acc
+  end
+
+  defp guard_predicate_type(p, _, _)
+       when p in [:is_number, :is_float, :is_integer, :round, :trunc, :div, :rem, :abs],
+       do: :number
+
+  defp guard_predicate_type(p, _, _) when p in [:is_binary, :binary_part], do: :binary
+
+  defp guard_predicate_type(p, _, _) when p in [:is_bitstring, :bit_size, :byte_size],
+    do: :bitstring
+
+  defp guard_predicate_type(p, _, _) when p in [:is_list, :hd, :tl, :length], do: :list
+  defp guard_predicate_type(p, _, _) when p in [:is_tuple, :tuple_size, :elem], do: :tuple
+  defp guard_predicate_type(:is_map, _, _), do: {:map, [], nil}
+
+  defp guard_predicate_type(:is_map_key, [_, key], state) do
+    case get_binding_type(state, key) do
+      {:atom, key} -> {:map, [{key, nil}], nil}
+      nil when is_binary(key) -> {:map, [{key, nil}], nil}
+      _ -> {:map, [], nil}
+    end
+  end
+
+  defp guard_predicate_type(:is_atom, _, _), do: :atom
+  defp guard_predicate_type(:is_boolean, _, _), do: :boolean
+
+  defp guard_predicate_type(:is_struct, [_, {:__aliases__, _, list}], state) do
+    {:struct, [], {:atom, expand_alias(state, list)}, nil}
+  end
+
+  defp guard_predicate_type(:is_struct, _, _), do: :struct
+  defp guard_predicate_type(_, _, _), do: nil
 
   # struct or struct update
   def get_binding_type(
