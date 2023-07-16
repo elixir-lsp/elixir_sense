@@ -108,6 +108,9 @@ defmodule ElixirSense.Providers.References do
       nil ->
         []
 
+      {:keyword, _} ->
+        []
+
       {:variable, variable} ->
         var_info =
           Enum.find(vars, fn %VarInfo{name: name, positions: positions} ->

@@ -43,7 +43,7 @@ defmodule ElixirSense.Providers.Implementation do
       nil ->
         []
 
-      {kind, _} when kind in [:attribute] ->
+      {kind, _} when kind in [:attribute, :keyword] ->
         []
 
       {module_type, function} ->

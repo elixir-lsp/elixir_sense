@@ -52,6 +52,9 @@ defmodule ElixirSense.Providers.Definition do
       nil ->
         nil
 
+      {:keyword, _} ->
+        nil
+
       {:variable, variable} ->
         var_info =
           vars
