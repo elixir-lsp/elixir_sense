@@ -49,8 +49,8 @@ defmodule ElixirSense.Core.SurroundContext do
     {{:atom, :"Elixir.#{charlist}"}, nil}
   end
 
-  def to_binding({:keyword, _charlist}, _current_module) do
-    {nil, nil}
+  def to_binding({:keyword, charlist}, _current_module) do
+    {:keyword, :"#{charlist}"}
   end
 
   defp inside_dot_to_binding({:module_attribute, inside_charlist}, _current_module) do

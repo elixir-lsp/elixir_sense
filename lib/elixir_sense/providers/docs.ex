@@ -5,6 +5,7 @@ defmodule ElixirSense.Providers.Docs do
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.BuiltinAttributes
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.ReservedWords
   alias ElixirSense.Core.State
   alias ElixirSense.Core.SurroundContext
 
@@ -33,6 +34,13 @@ defmodule ElixirSense.Providers.Docs do
     type = SurroundContext.to_binding(context, module)
 
     case type do
+      nil ->
+        nil
+
+      {:keyword, keyword} ->
+        docs = ReservedWords.docs(keyword)
+        {Atom.to_string(keyword), %{docs: docs}}
+
       {:attribute, attribute} ->
         docs = BuiltinAttributes.docs(attribute)
         if docs, do: {"@" <> Atom.to_string(attribute), %{docs: docs}}

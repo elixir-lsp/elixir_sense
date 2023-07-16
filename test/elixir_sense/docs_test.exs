@@ -1041,4 +1041,16 @@ defmodule ElixirSense.DocsTest do
 
     refute ElixirSense.docs(buffer, 2, 6)
   end
+
+  test "retrieve docs on reserved words" do
+    buffer = """
+    defmodule MyModule do
+    end
+    """
+
+    assert %{
+             actual_subject: "do",
+             docs: %{docs: "do-end block control keyword"}
+           } = ElixirSense.docs(buffer, 1, 21)
+  end
 end
