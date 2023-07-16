@@ -1444,6 +1444,25 @@ defmodule ElixirSense.SuggestionsTest do
     assert list == [%{name: "my_var", type: :variable}]
   end
 
+  test "list vars in multiline struct" do
+    buffer = """
+    defmodule MyServer do
+      def go do
+        %Some{
+          filed: my_var,
+          other: my
+        } = abc()
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 5, 16)
+      |> Enum.filter(fn s -> s.type in [:variable] end)
+
+    assert list == [%{name: "my_var", type: :variable}]
+  end
+
   test "tuple destructuring" do
     buffer = """
     defmodule MyServer do

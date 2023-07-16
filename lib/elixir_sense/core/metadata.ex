@@ -167,6 +167,25 @@ defmodule ElixirSense.Core.Metadata do
     |> Enum.min(fn -> nil end)
   end
 
+  def add_scope_vars(
+        %State.Env{} = env,
+        %__MODULE__{vars_info_per_scope_id: vars_info_per_scope_id},
+        {line, column},
+        predicate \\ fn _ -> true end
+      ) do
+    scope_vars = vars_info_per_scope_id[env.scope_id] || []
+    env_vars_names = env.vars |> Enum.map(& &1.name)
+
+    scope_vars_missing_in_env =
+      scope_vars
+      |> Enum.filter(fn var ->
+        var.name not in env_vars_names and Enum.min(var.positions) <= {line, column} and
+          predicate.(var)
+      end)
+
+    %{env | vars: env.vars ++ scope_vars_missing_in_env}
+  end
+
   @spec at_module_body?(State.Env.t()) :: boolean()
   def at_module_body?(env) do
     is_atom(env.scope) and env.scope != Elixir

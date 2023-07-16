@@ -904,6 +904,32 @@ defmodule ElixirSense.Providers.ReferencesTest do
     assert ElixirSense.references(buffer, 5, 18, trace) == expected_references
   end
 
+  test "find references of a variable in multiline struct", %{trace: trace} do
+    buffer = """
+    defmodule MyServer do
+      def go do
+        %Some{
+          filed: my_var,
+          other: some,
+          other: my_var
+        } = abc()
+        fun(my_var, some)
+      end
+    end
+    """
+
+    # `my_var`
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 4, column: 14}, end: %{line: 4, column: 20}}},
+      %{uri: nil, range: %{start: %{line: 6, column: 14}, end: %{line: 6, column: 20}}},
+      %{uri: nil, range: %{start: %{line: 8, column: 9}, end: %{line: 8, column: 15}}}
+    ]
+
+    assert ElixirSense.references(buffer, 4, 15, trace) == expected_references
+    assert ElixirSense.references(buffer, 6, 15, trace) == expected_references
+    assert ElixirSense.references(buffer, 8, 10, trace) == expected_references
+  end
+
   test "find references of attributes", %{trace: trace} do
     buffer = """
     defmodule MyModule do

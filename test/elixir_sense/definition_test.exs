@@ -679,7 +679,26 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
-  test "find difinition of a variable when using pin operator" do
+  test "find definition of variables inside multiline struct" do
+    buffer = """
+    defmodule MyModule do
+      def go do
+        %Some{
+          filed: var
+        } = abc()
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 4, 15) == %Location{
+             type: :variable,
+             file: nil,
+             line: 4,
+             column: 14
+           }
+  end
+
+  test "find definition of a variable when using pin operator" do
     buffer = """
     defmodule MyModule do
       def my_fun(a, b) do
@@ -720,7 +739,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
              column: 17
            }
 
-    # `a` redifined in a case clause
+    # `a` redefined in a case clause
     assert ElixirSense.definition(buffer, 5, 18) == %Location{
              type: :variable,
              file: nil,

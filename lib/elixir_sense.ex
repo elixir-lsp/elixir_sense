@@ -112,7 +112,9 @@ defmodule ElixirSense do
       %{context: context, begin: {line, col}} ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
-        env = Metadata.get_env(buffer_file_metadata, {line, column})
+        env =
+          Metadata.get_env(buffer_file_metadata, {line, column})
+          |> Metadata.add_scope_vars(buffer_file_metadata, {line, column})
 
         calls =
           buffer_file_metadata.calls[line]
@@ -225,7 +227,14 @@ defmodule ElixirSense do
     buffer_file_metadata =
       maybe_fix_autocomple_on_cursor(buffer_file_metadata, text_before, text_after, line)
 
-    env = Metadata.get_env(buffer_file_metadata, {line, column})
+    env =
+      Metadata.get_env(buffer_file_metadata, {line, column})
+      |> Metadata.add_scope_vars(
+        buffer_file_metadata,
+        {line, column},
+        &(to_string(&1.name) != hint)
+      )
+
     module_store = ModuleStore.build()
 
     cursor_context = %{
@@ -430,16 +439,17 @@ defmodule ElixirSense do
 
         env =
           %State.Env{
-            module: module,
-            vars: vars
-          } = Metadata.get_env(buffer_file_metadata, {line, column})
+            module: module
+          } =
+          Metadata.get_env(buffer_file_metadata, {line, column})
+          |> Metadata.add_scope_vars(buffer_file_metadata, {line, column})
 
         # find last env of current module
         attributes = get_attributes(buffer_file_metadata.lines_to_env, module)
 
         # one line can contain variables from many scopes
         vars =
-          case Enum.find(vars, fn %VarInfo{positions: positions} ->
+          case Enum.find(env.vars, fn %VarInfo{positions: positions} ->
                  {begin_line, begin_col} in positions
                end) do
             %VarInfo{scope_id: scope_id} ->
