@@ -1063,7 +1063,7 @@ defmodule ElixirSense.DocsTest do
 
       assert docs =~ "do-end block control keyword"
     else
-      assert nil = ElixirSense.docs(buffer, 1, 21)
+      assert nil == ElixirSense.docs(buffer, 1, 21)
     end
   end
 
