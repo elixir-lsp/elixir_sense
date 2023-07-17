@@ -7,12 +7,22 @@ defmodule ElixirSense.Providers.Docs do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.ReservedWords
   alias ElixirSense.Core.State
+  alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.SurroundContext
 
-  @spec all(any, State.Env.t(), State.mods_funs_to_positions_t(), State.types_t()) ::
+  @spec all(
+          any,
+          pos_integer,
+          pos_integer,
+          State.Env.t(),
+          State.mods_funs_to_positions_t(),
+          State.types_t()
+        ) ::
           {actual_mod_fun :: String.t(), docs :: Introspection.docs()} | nil
   def all(
         context,
+        line,
+        column,
         %State.Env{
           imports: imports,
           requires: requires,
@@ -39,11 +49,62 @@ defmodule ElixirSense.Providers.Docs do
 
       {:keyword, keyword} ->
         docs = ReservedWords.docs(keyword)
-        {Atom.to_string(keyword), %{docs: docs}}
+
+        {Atom.to_string(keyword),
+         %{
+           docs: """
+           > #{keyword}
+
+           reserved word
+
+           #{docs}
+           """
+         }}
 
       {:attribute, attribute} ->
-        docs = BuiltinAttributes.docs(attribute)
-        if docs, do: {"@" <> Atom.to_string(attribute), %{docs: docs}}
+        docs = BuiltinAttributes.docs(attribute) || ""
+
+        {"@" <> Atom.to_string(attribute),
+         %{
+           docs: """
+           > @#{attribute}
+
+           module attribute
+
+           #{docs}
+           """
+         }}
+
+      {:variable, variable} ->
+        var_info =
+          vars
+          |> Enum.find(fn
+            %VarInfo{name: name, positions: positions} ->
+              name == variable and {line, column} in positions
+          end)
+
+        if var_info != nil do
+          {Atom.to_string(variable),
+           %{
+             docs: """
+             > #{variable}
+
+             variable
+             """
+           }}
+        else
+          mod_fun_docs(
+            type,
+            binding_env,
+            imports,
+            requires,
+            aliases,
+            module,
+            mods_funs,
+            metadata_types,
+            scope
+          )
+        end
 
       _ ->
         mod_fun_docs(
@@ -72,7 +133,6 @@ defmodule ElixirSense.Providers.Docs do
          scope
        ) do
     case Binding.expand(binding_env, type) do
-      # TODO
       :none ->
         mod_fun_docs(
           {nil, name},
@@ -85,6 +145,9 @@ defmodule ElixirSense.Providers.Docs do
           metadata_types,
           scope
         )
+
+      _ ->
+        nil
     end
   end
 

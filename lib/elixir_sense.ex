@@ -67,11 +67,12 @@ defmodule ElixirSense do
         nil
 
       %{begin: begin_pos, end: end_pos, context: context} ->
+        {line, col} = begin_pos
         metadata = Parser.parse_string(code, true, true, line)
 
         env = Metadata.get_env(metadata, {line, column})
 
-        case Docs.all(context, env, metadata.mods_funs_to_positions, metadata.types) do
+        case Docs.all(context, line, col, env, metadata.mods_funs_to_positions, metadata.types) do
           {actual_subject, docs} ->
             %{
               actual_subject: actual_subject,

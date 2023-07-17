@@ -930,6 +930,31 @@ defmodule ElixirSense.Providers.ReferencesTest do
     assert ElixirSense.references(buffer, 8, 10, trace) == expected_references
   end
 
+  test "find references of a variable shadowing function", %{trace: trace} do
+    buffer = """
+    defmodule Vector do
+      @spec magnitude(Vec2.t()) :: number()
+      def magnitude(%Vec2{} = v), do: :math.sqrt(:math.pow(v.x, 2) + :math.pow(v.y, 2))
+
+      @spec normalize(Vec2.t()) :: Vec2.t()
+      def normalize(%Vec2{} = v) do
+        length = magnitude(v)
+        %{v | x: v.x / length, y: v.y / length}
+      end
+    end
+    """
+
+    # `my_var`
+    expected_references = [
+      %{uri: nil, range: %{start: %{line: 7, column: 5}, end: %{line: 7, column: 11}}},
+      %{uri: nil, range: %{start: %{line: 8, column: 20}, end: %{line: 8, column: 26}}},
+      %{uri: nil, range: %{start: %{line: 8, column: 37}, end: %{line: 8, column: 43}}}
+    ]
+
+    assert ElixirSense.references(buffer, 7, 6, trace) == expected_references
+    assert ElixirSense.references(buffer, 8, 21, trace) == expected_references
+  end
+
   test "find references of attributes", %{trace: trace} do
     buffer = """
     defmodule MyModule do

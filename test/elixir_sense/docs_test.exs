@@ -1028,8 +1028,10 @@ defmodule ElixirSense.DocsTest do
 
     assert %{
              actual_subject: "@on_load",
-             docs: %{docs: "A hook that will be invoked whenever the module is loaded."}
+             docs: %{docs: docs}
            } = ElixirSense.docs(buffer, 2, 6)
+
+    assert docs =~ "A hook that will be invoked whenever the module is loaded."
   end
 
   test "retrieve unreserved module attributes documentation" do
@@ -1039,7 +1041,12 @@ defmodule ElixirSense.DocsTest do
     end
     """
 
-    refute ElixirSense.docs(buffer, 2, 6)
+    assert %{
+             actual_subject: "@my_attribute",
+             docs: %{docs: docs}
+           } = ElixirSense.docs(buffer, 2, 6)
+
+    assert docs =~ "attribute"
   end
 
   test "retrieve docs on reserved words" do
@@ -1050,7 +1057,88 @@ defmodule ElixirSense.DocsTest do
 
     assert %{
              actual_subject: "do",
-             docs: %{docs: "do-end block control keyword"}
+             docs: %{docs: docs}
            } = ElixirSense.docs(buffer, 1, 21)
+
+    assert docs =~ "do-end block control keyword"
+  end
+
+  test "retrieve docs on variables" do
+    buffer = """
+    defmodule MyModule do
+      def fun(my_var) do
+        other_var = 5
+        abc(my_var, other_var)
+      end
+    end
+    """
+
+    assert %{
+             actual_subject: "my_var",
+             docs: %{docs: docs}
+           } = ElixirSense.docs(buffer, 2, 12)
+
+    assert docs =~ "variable"
+
+    assert %{
+             actual_subject: "other_var",
+             docs: %{docs: docs}
+           } = ElixirSense.docs(buffer, 3, 6)
+
+    assert docs =~ "variable"
+  end
+
+  test "variables shadow builtin functions" do
+    buffer = """
+    defmodule Vector do
+      @spec magnitude(Vec2.t()) :: number()
+      def magnitude(%Vec2{} = v), do: :math.sqrt(:math.pow(v.x, 2) + :math.pow(v.y, 2))
+
+      @spec normalize(Vec2.t()) :: Vec2.t()
+      def normalize(%Vec2{} = v) do
+        length = magnitude(v)
+        %{v | x: v.x / length, y: v.y / length}
+      end
+    end
+    """
+
+    assert %{
+             actual_subject: "length",
+             docs: %{docs: docs}
+           } = ElixirSense.docs(buffer, 7, 6)
+
+    assert docs =~ "variable"
+
+    assert %{
+             actual_subject: "length",
+             docs: %{docs: docs}
+           } = ElixirSense.docs(buffer, 8, 21)
+
+    assert docs =~ "variable"
+  end
+
+  test "find local type in typespec local def elsewhere" do
+    buffer = """
+    defmodule ElixirSenseExample.Some do
+      @type some_local :: integer
+
+      def some_local(), do: :ok
+
+      @type user :: {some_local, integer}
+
+      def foo do
+        some_local
+      end
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.Some.some_local"} =
+             ElixirSense.docs(buffer, 6, 20)
+
+    # TODO assert type
+    assert %{actual_subject: "ElixirSenseExample.Some.some_local"} =
+             ElixirSense.docs(buffer, 9, 9)
+
+    # TODO assert function
   end
 end
