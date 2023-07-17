@@ -1055,12 +1055,16 @@ defmodule ElixirSense.DocsTest do
     end
     """
 
-    assert %{
-             actual_subject: "do",
-             docs: %{docs: docs}
-           } = ElixirSense.docs(buffer, 1, 21)
+    if Version.match?(System.version(), ">= 1.14.0") do
+      assert %{
+               actual_subject: "do",
+               docs: %{docs: docs}
+             } = ElixirSense.docs(buffer, 1, 21)
 
-    assert docs =~ "do-end block control keyword"
+      assert docs =~ "do-end block control keyword"
+    else
+      assert nil = ElixirSense.docs(buffer, 1, 21)
+    end
   end
 
   test "retrieve docs on variables" do
