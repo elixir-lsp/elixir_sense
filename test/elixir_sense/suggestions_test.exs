@@ -3743,6 +3743,27 @@ defmodule ElixirSense.SuggestionsTest do
       |> Enum.map(& &1.name)
   end
 
+  test "function with default args from metadata" do
+    buffer = """
+    defmodule SomeSchema do
+      def my_func(a, b \\\\ "")
+      def my_func(1, b), do: :ok
+      def my_func(2, b), do: :ok
+
+      def d() do
+        my_
+      end
+    end
+    """
+
+    suggestions = ElixirSense.suggestions(buffer, 7, 8)
+
+    assert [
+             %{args: "a, b \\\\ \"\"", arity: 1, def_arity: 2},
+             %{args: "a, b \\\\ \"\"", arity: 2, def_arity: 2}
+           ] = suggestions
+  end
+
   test "records from metadata" do
     buffer = """
     defmodule SomeSchema do

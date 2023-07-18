@@ -829,11 +829,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             end
 
           # TODO docs and meta from metadata
-          head_params = hd(info.params)
+          # assume function head is first in code and last in metadata
+          head_params = Enum.at(info.params, -1)
           args = head_params |> Enum.map(&Macro.to_string/1)
-          dafault_args = Introspection.count_defaults(head_params)
+          default_args = Introspection.count_defaults(head_params)
 
-          for arity <- (a - dafault_args)..a do
+          for arity <- (a - default_args)..a do
             {f, arity, a, info.type, {docs, metadata}, specs, args}
           end
         end

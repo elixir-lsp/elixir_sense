@@ -233,7 +233,8 @@ defmodule ElixirSense.Providers.Definition do
         nil
 
       {mod, fun, true, :mod_fun} ->
-        fn_definition = find_fn_definition(mod, fun, line, mods_funs_to_positions, calls)
+        call_arity = get_call_arity(fun, calls)
+        fn_definition = find_fn_definition(mod, fun, call_arity, line, mods_funs_to_positions)
 
         case fn_definition || mods_funs_to_positions[{mod, fun, nil}] do
           nil ->
@@ -270,13 +271,20 @@ defmodule ElixirSense.Providers.Definition do
     end
   end
 
-  defp find_fn_definition(mod, fun, line, mods_funs_to_positions, calls) do
+  defp find_fn_definition(_mod, nil, nil, _line, _mods_funs_to_positions, _call_arity) do
+    nil
+  end
+
+  defp find_fn_definition(mod, fun, call_arity, line, mods_funs_to_positions) do
     mods_funs_to_positions
     |> Enum.find(fn
-      {{^mod, ^fun, fn_arity}, %{positions: fn_positions}} when not is_nil(fn_arity) ->
-        case calls do
-          [] -> Enum.any?(fn_positions, fn {fn_line, _fn_col} -> fn_line == line end)
-          [%{arity: call_arity} | _] -> fn_arity == call_arity
+      {{^mod, ^fun, fn_arity}, %{positions: fn_positions} = fun_info} when not is_nil(fn_arity) ->
+        # assume function head is first in code and last in metadata
+        default_args = fun_info.params |> Enum.at(-1) |> Introspection.count_defaults()
+
+        case call_arity do
+          nil -> Enum.any?(fn_positions, fn {fn_line, _fn_col} -> fn_line == line end)
+          _ -> call_arity in (fn_arity - default_args)..fn_arity
         end
 
       _ ->
@@ -286,5 +294,17 @@ defmodule ElixirSense.Providers.Definition do
       {_, mod_fun_info} -> mod_fun_info
       nil -> nil
     end
+  end
+
+  defp get_call_arity(nil, _calls), do: nil
+
+  defp get_call_arity(fun, calls) do
+    calls
+    |> Enum.reverse()
+    |> Enum.find_value(fn call ->
+      if call.func == fun do
+        call.arity
+      end
+    end)
   end
 end
