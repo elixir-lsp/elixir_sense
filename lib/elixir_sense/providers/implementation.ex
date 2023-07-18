@@ -112,7 +112,7 @@ defmodule ElixirSense.Providers.Implementation do
   defp get_locations(behaviour, maybe_callback) do
     Behaviours.get_all_behaviour_implementations(behaviour)
     |> Enum.map(fn implementation ->
-      Location.find_source({implementation, maybe_callback}, nil)
+      Location.find_mod_fun_source(implementation, maybe_callback)
     end)
   end
 
@@ -196,7 +196,7 @@ defmodule ElixirSense.Providers.Implementation do
       {mod, fun, true, :mod_fun} when not is_nil(fun) ->
         case mods_funs_to_positions[{mod, fun, nil}] do
           nil ->
-            find_delegatee_location(mod, fun, current_module, visited)
+            find_delegatee_location(mod, fun, visited)
 
           %ModFunInfo{type: :defdelegate, target: target} when not is_nil(target) ->
             find_delegatee(
@@ -218,21 +218,21 @@ defmodule ElixirSense.Providers.Implementation do
     end
   end
 
-  defp find_delegatee_location(mod, fun, current_module, visited) do
+  defp find_delegatee_location(mod, fun, visited) do
     case Normalized.Code.get_docs(mod, :docs)
          |> List.wrap()
          |> Enum.find(&match?({{^fun, _}, _, :function, _, _, %{delegate_to: _}}, &1)) do
       nil ->
         # ensure we are expanding a delegate
         if length(visited) > 1 do
-          Location.find_source({mod, fun}, current_module)
+          Location.find_mod_fun_source(mod, fun)
         end
 
       {_, _, _, _, _,
        %{
          delegate_to: {delegate_mod, delegate_fun, _}
        }} ->
-        Location.find_source({delegate_mod, delegate_fun}, current_module)
+        Location.find_mod_fun_source(delegate_mod, delegate_fun)
     end
   end
 end

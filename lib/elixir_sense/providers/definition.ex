@@ -237,7 +237,7 @@ defmodule ElixirSense.Providers.Definition do
 
         case fn_definition || mods_funs_to_positions[{mod, fun, nil}] do
           nil ->
-            Location.find_source({mod, fun}, current_module)
+            Location.find_mod_fun_source(mod, fun)
 
           %ModFunInfo{positions: positions} = mi ->
             # for simplicity take last position here as positions are reversed
@@ -254,7 +254,7 @@ defmodule ElixirSense.Providers.Definition do
       {mod, fun, true, :type} ->
         case metadata_types[{mod, fun, nil}] do
           nil ->
-            Location.find_source({mod, fun}, current_module)
+            Location.find_type_source(mod, fun)
 
           %TypeInfo{positions: positions} ->
             # for simplicity take last position here as positions are reversed

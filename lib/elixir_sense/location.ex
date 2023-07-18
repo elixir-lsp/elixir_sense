@@ -17,18 +17,24 @@ defmodule ElixirSense.Location do
         }
   defstruct [:type, :file, :line, :column]
 
-  @spec find_source({module, atom}, atom) :: Location.t() | nil
-  def find_source({mod, fun}, current_module) do
-    with(
-      {mod, file} when file not in ["non_existing", nil, ""] <- find_mod_file(mod),
-      nil <- find_fun_position({mod, file}, fun),
-      nil <- find_type_position({mod, file}, fun),
-      nil <- find_type_position({current_module, file}, fun)
-    ) do
-      nil
-    else
-      %Location{} = location ->
-        location
+  defguardp file_exists(file) when file not in ["non_existing", nil, ""]
+
+  @spec find_mod_fun_source(module, atom) :: Location.t() | nil
+  def find_mod_fun_source(mod, fun) do
+    case find_mod_file(mod) do
+      {mod, file} when file_exists(file) ->
+        find_fun_position({mod, file}, fun)
+
+      _ ->
+        nil
+    end
+  end
+
+  @spec find_type_source(module, atom) :: Location.t() | nil
+  def find_type_source(mod, fun) do
+    case find_mod_file(mod) do
+      {mod, file} when file_exists(file) ->
+        find_type_position({mod, file}, fun)
 
       _ ->
         nil
@@ -55,7 +61,7 @@ defmodule ElixirSense.Location do
                beam_filename
                |> to_string
                |> String.replace(
-                 Regex.recompile!(~r/(.+)\/ebin\/([^\s]+)\.beam$/),
+                 ~r/(.+)\/ebin\/([^\s]+)\.beam$/,
                  "\\1/src/\\2.erl"
                ),
              true <- File.exists?(erl_file, [:raw]) do
@@ -105,7 +111,7 @@ defmodule ElixirSense.Location do
   defp fun_to_type(_), do: :function
 
   defp find_fun_position_in_erl_file(file, nil) do
-    find_line_by_regex(file, Regex.recompile!(~r/^-module/))
+    find_line_by_regex(file, ~r/^-module/)
   end
 
   defp find_fun_position_in_erl_file(file, name) do
@@ -114,7 +120,7 @@ defmodule ElixirSense.Location do
       |> Atom.to_string()
       |> Regex.escape()
 
-    find_line_by_regex(file, Regex.recompile!(~r/^#{escaped}\b/))
+    find_line_by_regex(file, ~r/^#{escaped}\b/)
   end
 
   defp find_type_position_in_erl_file(file, name) do
@@ -123,7 +129,7 @@ defmodule ElixirSense.Location do
       |> Atom.to_string()
       |> Regex.escape()
 
-    find_line_by_regex(file, Regex.recompile!(~r/^-(typep?|opaque)\s#{escaped}\b/))
+    find_line_by_regex(file, ~r/^-(typep?|opaque)\s#{escaped}\b/)
   end
 
   defp find_line_by_regex(file, regex) do

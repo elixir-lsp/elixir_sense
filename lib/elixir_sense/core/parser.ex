@@ -162,7 +162,7 @@ defmodule ElixirSense.Core.Parser do
        when is_integer(cursor_line_number) and
               message in ["unexpected token: ", "unexpected reserved word: "] do
     terminator =
-      case Regex.run(Regex.recompile!(~r/terminator\s\"([^\s\"]+)/), text) do
+      case Regex.run(~r/terminator\s\"([^\s\"]+)/, text) do
         [_, terminator] -> terminator
         nil -> nil
       end
@@ -272,12 +272,12 @@ defmodule ElixirSense.Core.Parser do
        )
        when is_integer(cursor_line_number) do
     terminator =
-      case Regex.run(Regex.recompile!(~r/terminator:\s([^\s]+)/), text) do
+      case Regex.run(~r/terminator:\s([^\s]+)/, text) do
         [_, terminator] -> terminator
       end
 
     line_start =
-      case Regex.run(Regex.recompile!(~r/line\s(\d+)/), text) do
+      case Regex.run(~r/line\s(\d+)/, text) do
         [_, line] -> line |> String.to_integer()
       end
 
@@ -356,7 +356,7 @@ defmodule ElixirSense.Core.Parser do
        )
        when is_integer(cursor_line_number) do
     line_start =
-      case Regex.run(Regex.recompile!(~r/line\s(\d+)/), text) do
+      case Regex.run(~r/line\s(\d+)/, text) do
         [_, line] -> line |> String.to_integer()
       end
 
