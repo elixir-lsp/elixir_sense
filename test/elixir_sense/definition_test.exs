@@ -171,6 +171,50 @@ defmodule ElixirSense.Providers.DefinitionTest do
              ElixirSense.definition(buffer, 2, 18)
   end
 
+  test "find definition for the correct arity of function - on fn call with default arg" do
+    buffer = """
+    defmodule MyModule do
+      def main, do: my_func("a")
+      #               ^
+      def my_func, do: "not this one"
+      def my_func(a, b \\\\ ""), do: a <> b
+    end
+    """
+
+    assert %Location{type: :function, file: nil, line: 5, column: 3} =
+             ElixirSense.definition(buffer, 2, 18)
+  end
+
+  test "find function head for the correct arity of function - on fn call with default arg" do
+    buffer = """
+    defmodule MyModule do
+      def main, do: my_func("a")
+      #               ^
+      def my_func, do: "not this one"
+      def my_func(a, b \\\\ ""), do: a <> b
+      def my_func(1, b), do: "1" <> b
+      def my_func(2, b), do: "2" <> b
+    end
+    """
+
+    assert %Location{type: :function, file: nil, line: 5, column: 3} =
+             ElixirSense.definition(buffer, 2, 18)
+  end
+
+  test "find definition for the correct arity of function - on fn call with pipe" do
+    buffer = """
+    defmodule MyModule do
+      def main, do: "a" |> my_func("b")
+      #                     ^
+      def my_func, do: "not this one"
+      def my_func(a, b), do: a <> b
+    end
+    """
+
+    assert %Location{type: :function, file: nil, line: 5, column: 3} =
+             ElixirSense.definition(buffer, 2, 24)
+  end
+
   test "find definition for the correct arity of function - on fn definition" do
     buffer = """
     defmodule MyModule do
