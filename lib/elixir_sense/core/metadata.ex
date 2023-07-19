@@ -236,23 +236,6 @@ defmodule ElixirSense.Core.Metadata do
     end
   end
 
-  def get_function_position(%__MODULE__{} = metadata, module, function) do
-    case Map.get(metadata.mods_funs_to_positions, {module, function, nil}) do
-      nil -> get_function_position_using_docs(module, function)
-      %{positions: positions} -> List.last(positions)
-    end
-  end
-
-  def get_type_position(%__MODULE__{} = metadata, module, type, file) do
-    case Map.get(metadata.types, {module, type, nil}) do
-      nil ->
-        TypeInfo.get_type_position_using_docs(module, type, file)
-
-      %ElixirSense.Core.State.TypeInfo{positions: [h | _t]} ->
-        h
-    end
-  end
-
   def get_function_info(%__MODULE__{} = metadata, module, function) do
     case Map.get(metadata.mods_funs_to_positions, {module, function, nil}) do
       nil -> %{positions: [], params: []}
@@ -324,29 +307,6 @@ defmodule ElixirSense.Core.Metadata do
             spec: spec
           }
         end
-    end
-  end
-
-  defp get_function_position_using_docs(module, nil) do
-    case NormalizedCode.get_docs(module, :moduledoc) do
-      nil ->
-        nil
-
-      {line, _, _} ->
-        {line, 1}
-    end
-  end
-
-  defp get_function_position_using_docs(module, function) do
-    case NormalizedCode.get_docs(module, :docs) do
-      nil ->
-        nil
-
-      docs ->
-        Enum.find_value(docs, fn
-          {{^function, _arity}, line, _, _, _, _} -> {line, 1}
-          _ -> nil
-        end)
     end
   end
 

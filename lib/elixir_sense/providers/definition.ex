@@ -238,7 +238,8 @@ defmodule ElixirSense.Providers.Definition do
 
         case fn_definition || mods_funs_to_positions[{mod, fun, nil}] do
           nil ->
-            Location.find_mod_fun_source(mod, fun)
+            # TODO fallback to other arities?
+            Location.find_mod_fun_source(mod, fun, call_arity)
 
           %ModFunInfo{positions: positions} = mi ->
             # for simplicity take last position here as positions are reversed
@@ -253,9 +254,12 @@ defmodule ElixirSense.Providers.Definition do
         end
 
       {mod, fun, true, :type} ->
-        case metadata_types[{mod, fun, nil}] do
+        call_arity = get_call_arity(fun, calls)
+
+        case metadata_types[{mod, fun, call_arity}] || metadata_types[{mod, fun, nil}] do
           nil ->
-            Location.find_type_source(mod, fun)
+            # TODO fallback to other arities?
+            Location.find_type_source(mod, fun, call_arity)
 
           %TypeInfo{positions: positions} ->
             # for simplicity take last position here as positions are reversed
