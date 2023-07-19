@@ -150,33 +150,6 @@ defmodule ElixirSense.Core.TypeInfo do
     end)
   end
 
-  def get_type_position_using_docs(module, type_name, file) do
-    docs = NormalizedCode.get_docs(module, :type_docs)
-
-    case get_type_doc(docs, type_name, :any) do
-      {_, doc_line, _, _, _} ->
-        {kind, _} = get_type_spec(module, type_name)
-        kind_str = "@#{kind}"
-
-        case File.read!(file)
-             |> Source.text_after(doc_line, 1)
-             |> Source.split_lines()
-             |> Enum.with_index()
-             |> Enum.find(fn {str, _} -> starts_with_type_def?(str, kind_str) end) do
-          {str, index} ->
-            kind_col = String.split(str, kind_str) |> Enum.at(0) |> String.length()
-            col = kind_col + String.length(kind_str) + 2
-            {doc_line + index, col}
-
-          nil ->
-            {doc_line, 1}
-        end
-
-      _ ->
-        nil
-    end
-  end
-
   def get_type_ast(module, type_name) do
     {_kind, type} = get_type_spec(module, type_name)
     Typespec.type_to_quoted(type)

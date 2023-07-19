@@ -112,7 +112,8 @@ defmodule ElixirSense.Providers.Implementation do
   defp get_locations(behaviour, maybe_callback) do
     Behaviours.get_all_behaviour_implementations(behaviour)
     |> Enum.map(fn implementation ->
-      Location.find_mod_fun_source(implementation, maybe_callback)
+      # TODO arity
+      Location.find_mod_fun_source(implementation, maybe_callback, nil)
     end)
   end
 
@@ -225,14 +226,16 @@ defmodule ElixirSense.Providers.Implementation do
       nil ->
         # ensure we are expanding a delegate
         if length(visited) > 1 do
-          Location.find_mod_fun_source(mod, fun)
+          # TODO arity
+          Location.find_mod_fun_source(mod, fun, nil)
         end
 
       {_, _, _, _, _,
        %{
          delegate_to: {delegate_mod, delegate_fun, _}
        }} ->
-        Location.find_mod_fun_source(delegate_mod, delegate_fun)
+        # TODO arity
+        Location.find_mod_fun_source(delegate_mod, delegate_fun, nil)
     end
   end
 end

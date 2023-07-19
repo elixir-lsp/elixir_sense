@@ -97,7 +97,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     buffer = """
     defmodule MyModule do
       require ElixirSenseExample.BehaviourWithMacrocallback.Impl, as: Macros
-        Macros.some(
+        Macros.some(1)
       #          ^
     end
     """
@@ -185,13 +185,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
              ElixirSense.definition(buffer, 2, 18)
   end
 
-  test "find function head for the correct arity of function - on fn call with default arg" do
+  test "find metadata function head for the correct arity of function - on fn call with default arg" do
     buffer = """
     defmodule MyModule do
       def main, do: my_func("a")
       #               ^
       def my_func, do: "not this one"
-      def my_func(a, b \\\\ ""), do: a <> b
+      def my_func(a, b \\\\ "")
       def my_func(1, b), do: "1" <> b
       def my_func(2, b), do: "2" <> b
     end
@@ -199,6 +199,21 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
     assert %Location{type: :function, file: nil, line: 5, column: 3} =
              ElixirSense.definition(buffer, 2, 18)
+  end
+
+  test "find remote function head for the correct arity of function - on fn call with default arg" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: F.my_func("a")
+    end
+    """
+
+    assert %Location{type: :function, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 19)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+    assert read_line(file, {line, column}) =~ "my_func(a, b \\\\ \"\")"
   end
 
   test "find definition for the correct arity of function - on fn call with pipe" do
@@ -1172,6 +1187,35 @@ defmodule ElixirSense.Providers.DefinitionTest do
     """
 
     refute ElixirSense.definition(buffer, 9, 35)
+  end
+
+  test "find metadata type for the correct arity" do
+    buffer = """
+    defmodule MyModule do
+      @type my_type :: integer
+      @type my_type(a) :: {integer, a}
+      @type my_type(a, b) :: {integer, a, b}
+      @type some :: my_type(boolean)
+    end
+    """
+
+    assert %Location{type: :typespec, file: nil, line: 3, column: 3} =
+             ElixirSense.definition(buffer, 5, 20)
+  end
+
+  test "find remote type for the correct arity" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity, as: T
+      @type some :: T.my_type(boolean)
+    end
+    """
+
+    assert %Location{type: :typespec, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/types_with_multiple_arity.ex"
+    assert read_line(file, {line, column}) =~ "my_type(a)"
   end
 
   test "find super inside overridable function" do
