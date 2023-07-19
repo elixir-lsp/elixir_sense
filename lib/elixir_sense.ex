@@ -108,28 +108,17 @@ defmodule ElixirSense do
       :none ->
         nil
 
-      %{context: context, begin: {line, col}} ->
+      %{begin: {line, _col}} = context ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
-
+        # TODO line from cursor or begin?
         env =
           Metadata.get_env(buffer_file_metadata, {line, column})
           |> Metadata.add_scope_vars(buffer_file_metadata, {line, column})
 
-        calls =
-          buffer_file_metadata.calls[line]
-          |> List.wrap()
-          |> Enum.filter(fn %State.CallInfo{position: {_call_line, call_column}} ->
-            call_column <= column
-          end)
-
         Definition.find(
           context,
-          line,
-          col,
           env,
-          buffer_file_metadata.mods_funs_to_positions,
-          calls,
-          buffer_file_metadata.types
+          buffer_file_metadata
         )
     end
   end
