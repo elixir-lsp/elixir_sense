@@ -12,6 +12,7 @@ defmodule ElixirSense.Providers.Definition do
   alias ElixirSense.Core.State.ModFunInfo
   alias ElixirSense.Core.State.TypeInfo
   alias ElixirSense.Core.State.VarInfo
+  alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.SurroundContext
   alias ElixirSense.Location
 
@@ -20,25 +21,17 @@ defmodule ElixirSense.Providers.Definition do
   """
   @spec find(
           any(),
-          pos_integer,
-          pos_integer,
           State.Env.t(),
-          State.mods_funs_to_positions_t(),
-          list(State.CallInfo.t()),
-          State.types_t()
+          Metadata.t()
         ) :: %Location{} | nil
   def find(
         context,
-        line,
-        column,
         %State.Env{
           module: module,
           vars: vars,
           attributes: attributes
         } = env,
-        mods_funs_to_positions,
-        calls,
-        metadata_types
+        metadata
       ) do
     binding_env = %Binding{
       attributes: attributes,
@@ -46,7 +39,7 @@ defmodule ElixirSense.Providers.Definition do
       current_module: module
     }
 
-    type = SurroundContext.to_binding(context, module)
+    type = SurroundContext.to_binding(context.context, module)
 
     case type do
       nil ->
@@ -60,7 +53,7 @@ defmodule ElixirSense.Providers.Definition do
           vars
           |> Enum.find(fn
             %VarInfo{name: name, positions: positions} ->
-              name == variable and {line, column} in positions
+              name == variable and context.begin in positions
           end)
 
         if var_info != nil do
@@ -70,11 +63,9 @@ defmodule ElixirSense.Providers.Definition do
         else
           find_function_or_module(
             {nil, variable},
-            line,
-            calls,
-            mods_funs_to_positions,
+            context,
             env,
-            metadata_types,
+            metadata,
             binding_env
           )
         end
@@ -93,47 +84,39 @@ defmodule ElixirSense.Providers.Definition do
       {module, function} ->
         find_function_or_module(
           {module, function},
-          line,
-          calls,
-          mods_funs_to_positions,
+          context,
           env,
-          metadata_types,
+          metadata,
           binding_env
         )
     end
   end
 
   defp find_function_or_module(
-         {module, function},
-         line,
-         calls,
-         mods_funs_to_positions,
+         target,
+         context,
          env,
-         metadata_types,
+         metadata,
          binding_env,
          visited \\ []
        ) do
-    unless {module, function} in visited do
+    unless target in visited do
       do_find_function_or_module(
-        {module, function},
-        line,
-        calls,
-        mods_funs_to_positions,
+        target,
+        context,
         env,
-        metadata_types,
+        metadata,
         binding_env,
-        [{module, function} | visited]
+        [target | visited]
       )
     end
   end
 
   defp do_find_function_or_module(
          {{:attribute, _attr} = type, function},
-         line,
-         calls,
-         mods_funs_to_positions,
+         context,
          env,
-         metadata_types,
+         metadata,
          binding_env,
          visited
        ) do
@@ -141,11 +124,9 @@ defmodule ElixirSense.Providers.Definition do
       {:atom, module} ->
         do_find_function_or_module(
           {{:atom, Introspection.expand_alias(module, env.aliases)}, function},
-          line,
-          calls,
-          mods_funs_to_positions,
+          context,
           env,
-          metadata_types,
+          metadata,
           binding_env,
           visited
         )
@@ -157,24 +138,20 @@ defmodule ElixirSense.Providers.Definition do
 
   defp do_find_function_or_module(
          {nil, :super},
-         line,
-         calls,
-         mods_funs_to_positions,
+         context,
          %State.Env{scope: {function, arity}, module: module} = env,
-         metadata_types,
+         metadata,
          binding_env,
          visited
        ) do
-    case mods_funs_to_positions[{module, function, arity}] do
+    case metadata.mods_funs_to_positions[{module, function, arity}] do
       %ModFunInfo{overridable: {true, origin}} ->
         # overridable function is most likely defined by __using__ macro
         do_find_function_or_module(
           {{:atom, origin}, :__using__},
-          line,
-          calls,
-          mods_funs_to_positions,
+          context,
           env,
-          metadata_types,
+          metadata,
           binding_env,
           visited
         )
@@ -186,11 +163,9 @@ defmodule ElixirSense.Providers.Definition do
 
   defp do_find_function_or_module(
          {module, function},
-         line,
-         calls,
-         mods_funs_to_positions,
+         context,
          env,
-         metadata_types,
+         metadata,
          _binding_env,
          _visited
        ) do
@@ -226,17 +201,22 @@ defmodule ElixirSense.Providers.Definition do
            aliases,
            current_module,
            scope,
-           mods_funs_to_positions,
-           metadata_types
+           metadata.mods_funs_to_positions,
+           metadata.types
          ) do
       {_, _, false, _} ->
         nil
 
       {mod, fun, true, :mod_fun} ->
-        call_arity = get_call_arity(fun, calls)
-        fn_definition = find_fn_definition(mod, fun, call_arity, line, mods_funs_to_positions)
+        {line, column} = context.end
+        call_arity = Metadata.get_call_arity(metadata, mod, fun, line, column)
+        other = Metadata.get_call_arity(metadata, line, column)
+        if other != call_arity do
+          IO.puts "with fun #{call_arity} old #{other}"
+        end
+        fn_definition = find_fn_definition(mod, fun, call_arity, line, metadata.mods_funs_to_positions)
 
-        case fn_definition || mods_funs_to_positions[{mod, fun, nil}] do
+        case fn_definition || metadata.mods_funs_to_positions[{mod, fun, nil}] do
           nil ->
             # TODO fallback to other arities?
             Location.find_mod_fun_source(mod, fun, call_arity)
@@ -254,9 +234,14 @@ defmodule ElixirSense.Providers.Definition do
         end
 
       {mod, fun, true, :type} ->
-        call_arity = get_call_arity(fun, calls)
+        {line, column} = context.end
+        call_arity = Metadata.get_call_arity(metadata, mod, fun, line, column)
+        other = Metadata.get_call_arity(metadata, line, column)
+        if other != call_arity do
+          IO.puts "with fun #{call_arity} old #{other}"
+        end
 
-        case metadata_types[{mod, fun, call_arity}] || metadata_types[{mod, fun, nil}] do
+        case metadata.types[{mod, fun, call_arity}] || metadata.types[{mod, fun, nil}] do
           nil ->
             # TODO fallback to other arities?
             Location.find_type_source(mod, fun, call_arity)
@@ -275,7 +260,7 @@ defmodule ElixirSense.Providers.Definition do
     end
   end
 
-  defp find_fn_definition(_mod, nil, nil, _line, _mods_funs_to_positions, _call_arity) do
+  defp find_fn_definition(_mod, nil, nil, _line, _mods_funs_to_positions) do
     nil
   end
 
@@ -298,17 +283,5 @@ defmodule ElixirSense.Providers.Definition do
       {_, mod_fun_info} -> mod_fun_info
       nil -> nil
     end
-  end
-
-  defp get_call_arity(nil, _calls), do: nil
-
-  defp get_call_arity(fun, calls) do
-    calls
-    |> Enum.reverse()
-    |> Enum.find_value(fn call ->
-      if call.func == fun do
-        call.arity
-      end
-    end)
   end
 end

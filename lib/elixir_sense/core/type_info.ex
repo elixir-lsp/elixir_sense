@@ -659,13 +659,6 @@ defmodule ElixirSense.Core.TypeInfo do
     type
   end
 
-  defp starts_with_type_def?(str, kind) do
-    str
-    |> String.trim_leading()
-    |> String.split("#{kind} ")
-    |> (&match?([_, _ | _], &1)).()
-  end
-
   def extract_params(type) do
     case Typespec.spec_to_quoted(:dummy, type) do
       {:when, _, [{:"::", _, [{:dummy, _, args}, _res]}, _var_args]} -> args

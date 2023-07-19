@@ -127,6 +127,7 @@ defmodule ElixirSense.Core.Metadata do
         {metadata_line, _env} when metadata_line <= line -> metadata_line
         _ -> 0
       end,
+      &>=/2,
       fn ->
         {line, State.default_env()}
       end
@@ -233,6 +234,27 @@ defmodule ElixirSense.Core.Metadata do
          end) do
       %{arity: arity} -> arity
       _ -> nil
+    end
+  end
+
+  # TODO check which version is better
+
+  def get_call_arity(%__MODULE__{}, _module, nil, _line, _column), do: nil
+
+  def get_call_arity(%__MODULE__{calls: calls}, _module, fun, line, column) do
+    case calls[line] do
+      nil -> nil
+      line_calls ->
+        line_calls
+        |> Enum.filter(fn %State.CallInfo{position: {_call_line, call_column}} ->
+          call_column <= column
+        end)
+        |> Enum.find_value(fn call ->
+          # call.mod in not expanded
+          if call.func == fun do
+            call.arity
+          end
+        end)
     end
   end
 
