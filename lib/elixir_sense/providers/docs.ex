@@ -15,8 +15,7 @@ defmodule ElixirSense.Providers.Docs do
           pos_integer,
           pos_integer,
           State.Env.t(),
-          State.mods_funs_to_positions_t(),
-          State.types_t()
+          Metadata.t()
         ) ::
           {actual_mod_fun :: String.t(), docs :: Introspection.docs()} | nil
   def all(
@@ -32,8 +31,7 @@ defmodule ElixirSense.Providers.Docs do
           attributes: attributes,
           vars: vars
         },
-        mods_funs,
-        metadata_types
+        metadata
       ) do
     binding_env = %Binding{
       attributes: attributes,
@@ -41,7 +39,7 @@ defmodule ElixirSense.Providers.Docs do
       current_module: module
     }
 
-    type = SurroundContext.to_binding(context, module)
+    type = SurroundContext.to_binding(context.context, module)
 
     case type do
       nil ->
@@ -100,8 +98,7 @@ defmodule ElixirSense.Providers.Docs do
             requires,
             aliases,
             module,
-            mods_funs,
-            metadata_types,
+            metadata,
             scope
           )
         end
@@ -114,8 +111,7 @@ defmodule ElixirSense.Providers.Docs do
           requires,
           aliases,
           module,
-          mods_funs,
-          metadata_types,
+          metadata,
           scope
         )
     end
@@ -128,8 +124,7 @@ defmodule ElixirSense.Providers.Docs do
          requires,
          aliases,
          module,
-         mods_funs,
-         metadata_types,
+         metadata,
          scope
        ) do
     case Binding.expand(binding_env, type) do
@@ -141,8 +136,7 @@ defmodule ElixirSense.Providers.Docs do
           requires,
           aliases,
           module,
-          mods_funs,
-          metadata_types,
+          metadata,
           scope
         )
 
@@ -158,8 +152,7 @@ defmodule ElixirSense.Providers.Docs do
          requires,
          aliases,
          module,
-         mods_funs,
-         metadata_types,
+         metadata,
          scope
        ) do
     actual =
@@ -171,8 +164,8 @@ defmodule ElixirSense.Providers.Docs do
         aliases,
         module,
         scope,
-        mods_funs,
-        metadata_types
+        metadata.mods_funs_to_positions,
+        metadata.types
       )
 
     case actual do
