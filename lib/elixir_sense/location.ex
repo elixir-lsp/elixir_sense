@@ -246,7 +246,7 @@ defmodule ElixirSense.Location do
   defp get_function_position_using_metadata(mod, nil, _call_arity, mods_funs_to_positions) do
     mods_funs_to_positions
     |> Enum.find_value(fn
-      {{^mod, nil, nil}, %{positions: fn_positions} = fun_info} ->
+      {{^mod, nil, nil}, fun_info} ->
         fun_info
 
       _ ->
@@ -257,7 +257,7 @@ defmodule ElixirSense.Location do
   defp get_function_position_using_metadata(mod, fun, call_arity, mods_funs_to_positions) do
     mods_funs_to_positions
     |> Enum.find_value(fn
-      {{^mod, ^fun, fn_arity}, %{positions: fn_positions} = fun_info} when not is_nil(fn_arity) ->
+      {{^mod, ^fun, fn_arity}, fun_info} when not is_nil(fn_arity) ->
         # assume function head is first in code and last in metadata
         default_args = fun_info.params |> Enum.at(-1) |> Introspection.count_defaults()
 
