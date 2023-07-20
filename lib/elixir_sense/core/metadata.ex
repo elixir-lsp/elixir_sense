@@ -243,7 +243,9 @@ defmodule ElixirSense.Core.Metadata do
 
   def get_call_arity(%__MODULE__{calls: calls}, _module, fun, line, column) do
     case calls[line] do
-      nil -> nil
+      nil ->
+        nil
+
       line_calls ->
         line_calls
         |> Enum.filter(fn %State.CallInfo{position: {_call_line, call_column}} ->

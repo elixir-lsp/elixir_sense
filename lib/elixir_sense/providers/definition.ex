@@ -211,10 +211,13 @@ defmodule ElixirSense.Providers.Definition do
         {line, column} = context.end
         call_arity = Metadata.get_call_arity(metadata, mod, fun, line, column)
         other = Metadata.get_call_arity(metadata, line, column)
+
         if other != call_arity do
-          IO.puts "with fun #{call_arity} old #{other}"
+          IO.puts("with fun #{call_arity} old #{other}")
         end
-        fn_definition = find_fn_definition(mod, fun, call_arity, line, metadata.mods_funs_to_positions)
+
+        fn_definition =
+          find_fn_definition(mod, fun, call_arity, line, metadata.mods_funs_to_positions)
 
         case fn_definition || metadata.mods_funs_to_positions[{mod, fun, nil}] do
           nil ->
@@ -237,8 +240,9 @@ defmodule ElixirSense.Providers.Definition do
         {line, column} = context.end
         call_arity = Metadata.get_call_arity(metadata, mod, fun, line, column)
         other = Metadata.get_call_arity(metadata, line, column)
+
         if other != call_arity do
-          IO.puts "with fun #{call_arity} old #{other}"
+          IO.puts("with fun #{call_arity} old #{other}")
         end
 
         case metadata.types[{mod, fun, call_arity}] || metadata.types[{mod, fun, nil}] do
@@ -260,6 +264,7 @@ defmodule ElixirSense.Providers.Definition do
     end
   end
 
+  # TODO what to do with that
   defp find_fn_definition(_mod, nil, nil, _line, _mods_funs_to_positions) do
     nil
   end
