@@ -12,16 +12,12 @@ defmodule ElixirSense.Providers.Docs do
 
   @spec all(
           any,
-          pos_integer,
-          pos_integer,
           State.Env.t(),
           Metadata.t()
         ) ::
           {actual_mod_fun :: String.t(), docs :: Introspection.docs()} | nil
   def all(
         context,
-        line,
-        column,
         %State.Env{
           imports: imports,
           requires: requires,
@@ -74,6 +70,8 @@ defmodule ElixirSense.Providers.Docs do
          }}
 
       {:variable, variable} ->
+        {line, column} = context.begin
+
         var_info =
           vars
           |> Enum.find(fn
