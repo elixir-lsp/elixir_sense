@@ -33,9 +33,7 @@ defmodule ElixirSense.Core.Introspection do
 
   @type mod_fun :: {module | nil, atom | nil}
   @type markdown :: String.t()
-  @type mod_docs :: %{docs: markdown, types: markdown, callbacks: markdown}
-  @type fun_docs :: %{docs: markdown, types: markdown}
-  @type docs :: mod_docs | fun_docs
+  @type docs :: %{docs: markdown}
 
   @type module_subtype ::
           :exception | :protocol | :implementation | :behaviour | :struct | :task | :alias | nil
@@ -125,7 +123,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_all_docs({mod, nil}, :mod_fun, _) do
-    %{docs: get_docs_md(mod), types: get_types_md(mod), callbacks: get_callbacks_md(mod)}
+    %{docs: get_docs_md(mod)}
   end
 
   def get_all_docs({mod, fun}, :mod_fun, _scope) do
@@ -138,7 +136,7 @@ defmodule ElixirSense.Core.Introspection do
           Enum.join(docs, "\n\n---\n\n") <> "\n"
       end
 
-    %{docs: docs, types: get_types_md(mod)}
+    %{docs: docs}
   end
 
   def get_all_docs({mod, fun}, :type, scope) do
@@ -151,7 +149,7 @@ defmodule ElixirSense.Core.Introspection do
           Enum.join(docs, "\n\n---\n\n") <> "\n"
       end
 
-    %{docs: docs, types: get_types_md(mod)}
+    %{docs: docs}
   end
 
   def count_defaults(nil), do: 0
@@ -530,41 +528,6 @@ defmodule ElixirSense.Core.Introspection do
           )
         end
     end
-  end
-
-  def get_types_md(mod) when is_atom(mod) do
-    for %{type_name: type_name, type_args: type_args, type: type, doc: doc, metadata: metadata} <-
-          get_types_with_docs(mod) do
-      """
-      > #{inspect(mod)}.#{type_name}(#{type_args})
-
-      #{get_metadata_md(metadata)}### Specs
-      ```
-      #{type}
-      ```
-
-      #{doc}
-      """
-    end
-    |> Enum.join("\n\n---\n\n")
-  end
-
-  def get_callbacks_md(mod) when is_atom(mod) do
-    for %{callback: callback, signature: signature, doc: doc, metadata: metadata} <-
-          get_callbacks_with_docs(mod) do
-      """
-      > #{signature}
-
-      #{get_metadata_md(metadata)}### Specs
-
-      ```
-      #{callback}
-      ```
-
-      #{doc}
-      """
-    end
-    |> Enum.join("\n\n---\n\n")
   end
 
   def get_callbacks_with_docs(mod) when is_atom(mod) do

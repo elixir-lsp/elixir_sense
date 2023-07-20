@@ -343,43 +343,6 @@ defmodule ElixirSense.DocsTest do
       end
     end
 
-    test "retrieve type information from modules" do
-      buffer = """
-      defmodule MyModule do
-        use GenServer
-      end
-      """
-
-      %{actual_subject: actual_subject, docs: %{types: docs}} = ElixirSense.docs(buffer, 2, 8)
-
-      assert actual_subject == "GenServer"
-
-      assert docs =~ """
-             ```
-             @type from :: {pid, tag :: term}
-             ```
-
-             Tuple describing the client of a call request.
-             """
-    end
-
-    test "retrieve fallback type information from erlang modules" do
-      buffer = """
-      defmodule MyModule do
-        alias :erlang, as: Erl
-      end
-      """
-
-      %{actual_subject: actual_subject, docs: %{types: docs}} = ElixirSense.docs(buffer, 2, 11)
-
-      assert actual_subject == ":erlang"
-
-      assert docs =~ """
-             ```
-             @type time_unit ::\
-             """
-    end
-
     test "retrieve documentation from modules in 1.2 alias syntax" do
       buffer = """
       defmodule MyModule do
@@ -400,95 +363,6 @@ defmodule ElixirSense.DocsTest do
 
       assert actual_subject_1 == actual_subject_2
       assert docs_1 == docs_2
-    end
-
-    test "does not reveal opaque types" do
-      buffer = """
-      defmodule MyModule do
-        @behaviour ElixirSenseExample.CallbackOpaque
-      end
-      """
-
-      %{actual_subject: actual_subject, docs: %{types: docs}} = ElixirSense.docs(buffer, 2, 40)
-
-      assert actual_subject == "ElixirSenseExample.CallbackOpaque"
-
-      assert docs =~ """
-             ```
-             @opaque t(x)
-             ```
-             """
-    end
-
-    test "retrieve callback information from modules" do
-      buffer = """
-      defmodule MyModule do
-        use Application
-      end
-      """
-
-      %{actual_subject: actual_subject, docs: %{callbacks: docs}} = ElixirSense.docs(buffer, 2, 8)
-
-      assert actual_subject == "Application"
-
-      assert docs =~ """
-             > config_change(changed, new, removed)
-
-             **Optional**
-
-             ### Specs
-
-             ```
-             @callback config_change(changed, new, removed) :: :ok when changed: keyword, new: keyword, removed: [atom]
-             ```
-
-             Callback invoked after code upgrade\
-             """
-    end
-
-    test "retrieve fallback callback information from erlang modules" do
-      buffer = """
-      defmodule MyModule do
-        @behaviour :gen_statem
-      end
-      """
-
-      %{actual_subject: actual_subject, docs: %{callbacks: docs}} =
-        ElixirSense.docs(buffer, 2, 16)
-
-      assert actual_subject == ":gen_statem"
-
-      assert docs =~ """
-             ```
-             @callback state_name\
-             """
-    end
-
-    test "retrieve macrocallback information from modules" do
-      buffer = """
-      defmodule MyModule do
-        @behaviour ElixirSenseExample.BehaviourWithMacrocallback
-      end
-      """
-
-      %{actual_subject: actual_subject, docs: %{callbacks: docs}} =
-        ElixirSense.docs(buffer, 2, 40)
-
-      assert actual_subject == "ElixirSenseExample.BehaviourWithMacrocallback"
-
-      assert docs =~ """
-             > optional(a)
-
-             **Optional**
-
-             ### Specs
-
-             ```
-             @macrocallback optional(a) :: Macro.t when a: atom
-             ```
-
-             An optional macrocallback
-             """
     end
 
     test "existing module with no docs" do
