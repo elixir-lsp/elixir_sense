@@ -157,6 +157,56 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "ElixirSenseExample.Macros.go"
   end
 
+  test "find metadata module" do
+    buffer = """
+    defmodule Some do
+      def my_func, do: "not this one"
+    end
+
+    defmodule MyModule do
+      def main, do: Some.my_func()
+      #               ^
+    end
+    """
+
+    assert %Location{type: :module, file: nil, line: 1, column: 1} =
+             ElixirSense.definition(buffer, 6, 19)
+  end
+
+  test "find remote module" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: MyMod
+      def main, do: MyMod.my_func()
+      #               ^
+    end
+    """
+
+    assert %Location{type: :module, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 19)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+
+    assert read_line(file, {line, column}) =~
+             "defmodule ElixirSenseExample.FunctionsWithDefaultArgs do"
+  end
+
+  test "find remote module - fallback to docs" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs1, as: MyMod
+      def main, do: MyMod.my_func()
+      #               ^
+    end
+    """
+
+    assert %Location{type: :module, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 19)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+    assert read_line(file, {line, column}) =~ "@moduledoc \"example module\""
+  end
+
   test "find definition for the correct arity of function - on fn call" do
     buffer = """
     defmodule MyModule do
@@ -215,6 +265,21 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
     assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
     assert read_line(file, {line, column}) =~ "my_func(a, b \\\\ \"\")"
+  end
+
+  test "find remote function head for the correct arity of function - on fn call with default arg - fallback to docs" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs1, as: F
+      def main, do: {F.my_func(), F.my_func("a"), F.my_func(1, 2, 3)}
+    end
+    """
+
+    assert %Location{type: :function, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 34)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+    assert read_line(file, {line, column}) =~ "@doc \"2 params version\""
   end
 
   test "find definition for the correct arity of function - on fn call with pipe" do
@@ -1217,6 +1282,21 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
     assert file =~ "elixir_sense/test/support/types_with_multiple_arity.ex"
     assert read_line(file, {line, column}) =~ "my_type(a)"
+  end
+
+  test "find remote type for the correct arity - fallback to docs" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity1, as: T
+      @type some :: {T.my_type, T.my_type(boolean), T.my_type(1, 2)}
+    end
+    """
+
+    assert %Location{type: :typespec, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 32)
+
+    assert file =~ "elixir_sense/test/support/types_with_multiple_arity.ex"
+    assert read_line(file, {line, column}) =~ "@typedoc \"one param version\""
   end
 
   test "find super inside overridable function" do

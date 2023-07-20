@@ -7,6 +7,7 @@ defmodule ElixirSense.Location do
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State.ModFunInfo
+  alias ElixirSense.Core.Introspection
   alias ElixirSense.Location
 
   @type t :: %Location{
@@ -86,7 +87,7 @@ defmodule ElixirSense.Location do
         %Metadata{mods_funs_to_positions: mods_funs_to_positions} =
           Parser.parse_file(file, false, false, nil)
 
-        case mods_funs_to_positions[{mod, fun, arity}] do
+        case get_function_position_using_metadata(mod, fun, arity, mods_funs_to_positions) do
           %ModFunInfo{} = mi ->
             # assume function head or first clause is last in metadata
             {List.last(mi.positions), ModFunInfo.get_category(mi)}
@@ -240,5 +241,42 @@ defmodule ElixirSense.Location do
         end)
         |> Enum.min_by(fn {line, 1} -> line end, &<=/2, fn -> nil end)
     end
+  end
+
+  defp get_function_position_using_metadata(mod, nil, _call_arity, mods_funs_to_positions) do
+    mods_funs_to_positions
+    |> Enum.find_value(fn
+      {{^mod, nil, nil}, %{positions: fn_positions} = fun_info} ->
+        fun_info
+
+      _ ->
+        false
+    end)
+  end
+
+  defp get_function_position_using_metadata(mod, fun, call_arity, mods_funs_to_positions) do
+    mods_funs_to_positions
+    |> Enum.find_value(fn
+      {{^mod, ^fun, fn_arity}, %{positions: fn_positions} = fun_info} when not is_nil(fn_arity) ->
+        # assume function head is first in code and last in metadata
+        default_args = fun_info.params |> Enum.at(-1) |> Introspection.count_defaults()
+
+        arity_matching =
+          case call_arity do
+            nil ->
+              # TODO arity fallback
+              false
+
+            _ ->
+              call_arity in (fn_arity - default_args)..fn_arity
+          end
+
+        if arity_matching do
+          fun_info
+        end
+
+      _ ->
+        false
+    end)
   end
 end
