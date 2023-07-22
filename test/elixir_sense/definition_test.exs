@@ -282,6 +282,21 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "@doc \"2 params version\""
   end
 
+  test "find remote function head for the correct arity of function - on function capture" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: &F.my_func/1
+    end
+    """
+
+    assert %Location{type: :function, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 21)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+    assert read_line(file, {line, column}) =~ "my_func(a, b \\\\ \"\")"
+  end
+
   test "find definition for the correct arity of function - on fn call with pipe" do
     buffer = """
     defmodule MyModule do

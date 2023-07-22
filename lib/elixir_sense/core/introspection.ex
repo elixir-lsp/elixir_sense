@@ -122,34 +122,31 @@ defmodule ElixirSense.Core.Introspection do
     Keyword.has_key?(get_exports(module), fun)
   end
 
-  def get_all_docs({mod, nil}, :mod_fun, _) do
-    %{docs: get_docs_md(mod)}
+  def get_all_docs({mod, nil, _}, :mod_fun) do
+    get_docs_md(mod)
   end
 
-  def get_all_docs({mod, fun}, :mod_fun, _scope) do
-    docs =
-      case get_func_docs_md(mod, fun) do
-        [] ->
-          nil
-
-        docs ->
-          Enum.join(docs, "\n\n---\n\n") <> "\n"
-      end
-
-    %{docs: docs}
+  def get_all_docs({mod, fun, arity}, :mod_fun) do
+    with_arity_fallback(&get_func_docs_md/3, mod, fun, arity)
   end
 
-  def get_all_docs({mod, fun}, :type, scope) do
-    docs =
-      case get_type_docs_md(mod, fun, scope) do
-        [] ->
-          nil
+  def get_all_docs({mod, fun, arity}, :type) do
+    with_arity_fallback(&get_type_docs_md/3, mod, fun, arity)
+  end
 
-        docs ->
-          Enum.join(docs, "\n\n---\n\n") <> "\n"
+  defp with_arity_fallback(callback, mod, fun, arity) do
+    docs = callback.(mod, fun, arity)
+
+    docs =
+      if docs == [] and is_integer(arity) do
+        callback.(mod, fun, :any)
+      else
+        docs
       end
 
-    %{docs: docs}
+    if docs != [] do
+      Enum.join(docs, "\n\n---\n\n") <> "\n"
+    end
   end
 
   def count_defaults(nil), do: 0
@@ -235,7 +232,7 @@ defmodule ElixirSense.Core.Introspection do
   defp get_spec_from_typespec(mod, fun) do
     results =
       for {{_name, _arity}, [params | _]} = spec <-
-            TypeInfo.get_function_specs(mod, fun) do
+            TypeInfo.get_function_specs(mod, fun, :any) do
         params = TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
 
         %{
@@ -271,9 +268,11 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  def get_func_docs_md(mod, fun)
+  @spec get_func_docs_md(nil | module, atom, non_neg_integer | :any) :: list(markdown)
+  def get_func_docs_md(mod, fun, arity)
       when mod != nil and fun in [:module_info, :behaviour_info, :__info__] do
-    for {f, a} <- BuiltinFunctions.all(), f == fun do
+    # TODO arity fallback?
+    for {f, a} <- BuiltinFunctions.all(), f == fun, arity == :any or a == arity do
       spec = BuiltinFunctions.get_specs({f, a})
       args = BuiltinFunctions.get_args({f, a})
 
@@ -289,15 +288,18 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  def get_func_docs_md(mod, fun) do
+  def get_func_docs_md(mod, fun, call_arity) do
     case NormalizedCode.get_docs(mod, :docs) do
       nil ->
         # no docs, fallback to typespecs
-        get_func_docs_md_from_typespec(mod, fun)
+        get_func_docs_md_from_typespec(mod, fun, call_arity)
 
       docs ->
+        # TODO arity fallback
         results =
-          for {{f, arity}, _, kind, args, text, metadata} <- docs, f == fun do
+          for {{f, arity}, _, kind, args, text, metadata} <- docs,
+              f == fun,
+              call_arity == :any or call_arity in (arity - Map.get(metadata, :defaults, 0))..arity do
             # as of otp 23 erlang modules do not return args
             # instead they return typespecs in metadata[:signature]
             fun_args_text =
@@ -325,7 +327,7 @@ defmodule ElixirSense.Core.Introspection do
 
         case results do
           [] ->
-            get_func_docs_md_from_typespec(mod, fun)
+            get_func_docs_md_from_typespec(mod, fun, call_arity)
 
           other ->
             other
@@ -333,10 +335,11 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  defp get_func_docs_md_from_typespec(mod, fun) do
+  defp get_func_docs_md_from_typespec(mod, fun, call_arity) do
+    # TODO arity fallback?
     results =
       for {{_name, arity}, [params | _]} <-
-            TypeInfo.get_function_specs(mod, fun) do
+            TypeInfo.get_function_specs(mod, fun, call_arity) do
         fun_args_text = TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
 
         "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(%{})}#{get_spec_text(mod, fun, arity, :function, %{})}"
@@ -345,20 +348,22 @@ defmodule ElixirSense.Core.Introspection do
     case results do
       [] ->
         # no docs and no typespecs
-        get_func_docs_md_from_module_info(mod, fun)
+        get_func_docs_md_from_module_info(mod, fun, call_arity)
 
       other ->
         other
     end
   end
 
-  defp get_func_docs_md_from_module_info(mod, fun) do
+  defp get_func_docs_md_from_module_info(mod, fun, call_arity) do
     # it is not worth doing fallback to behaviours here
     # we'll not get much more useful info
 
     # provide dummy docs basing on module_info(:exports)
+    # TODO arity fallback?
     for {f, {arity, _kind}} <- get_exports(mod),
-        f == fun do
+        f == fun,
+        call_arity == :any or arity == call_arity do
       fun_args_text =
         if arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end)
 
@@ -468,18 +473,11 @@ defmodule ElixirSense.Core.Introspection do
     "**#{key}**\n#{value}"
   end
 
-  # no types inside a function
-  def get_type_docs_md(_, _, {_f, _a}) do
-    []
-  end
-
-  # no types outside a module
-  def get_type_docs_md(_, _, scope) when scope in [Elixir, nil] do
-    []
-  end
-
-  def get_type_docs_md(nil, fun, _scope) do
-    for info <- BuiltinTypes.get_builtin_type_info(fun) do
+  @spec get_type_docs_md(nil | module, atom, non_neg_integer | :any) :: list(markdown)
+  defp get_type_docs_md(nil, fun, arity) do
+    # TODO arity fallback?
+    for info <- BuiltinTypes.get_builtin_type_info(fun),
+        arity == :any or length(info.params) == arity do
       {spec, args} =
         case info do
           %{signature: sig, params: params} ->
@@ -497,11 +495,13 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  def get_type_docs_md(mod, fun, _scope) do
-    case TypeInfo.get_type_docs(mod, fun) do
+  defp get_type_docs_md(mod, fun, arity) do
+    case TypeInfo.get_type_docs(mod, fun, arity) do
       [] ->
+        # TODO arity fallback?
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(mod),
             name == fun,
+            arity == :all or length(args) == arity,
             kind in [:type, :opaque] do
           spec = TypeInfo.format_type_spec(typedef)
 
@@ -993,6 +993,7 @@ defmodule ElixirSense.Core.Introspection do
     []
   end
 
+  # TODO return a list here if default args in metadata?
   def get_spec_as_string(_module, function, arity, :macro, %{implementing: behaviour}) do
     TypeInfo.get_callback(behaviour, :"MACRO-#{function}", arity + 1) |> spec_to_string()
   end
@@ -1010,12 +1011,17 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_spec_text(mod, fun, arity, kind, metadata) do
-    case get_spec_as_string(mod, fun, arity, kind, metadata) do
-      "" ->
-        ""
+    specs =
+      for arity <- (arity - Map.get(metadata, :defaults, 0))..arity,
+          spec = get_spec_as_string(mod, fun, arity, kind, metadata),
+          spec != "",
+          do: spec
 
-      spec ->
-        "### Specs\n\n```\n#{spec}\n```\n\n"
+    if specs != [] do
+      joined = Enum.join(specs, "\n")
+      "### Specs\n\n```\n#{joined}\n```\n\n"
+    else
+      ""
     end
   end
 

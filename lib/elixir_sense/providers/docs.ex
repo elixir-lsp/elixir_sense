@@ -5,6 +5,7 @@ defmodule ElixirSense.Providers.Docs do
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.BuiltinAttributes
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.ReservedWords
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.VarInfo
@@ -15,18 +16,14 @@ defmodule ElixirSense.Providers.Docs do
           State.Env.t(),
           Metadata.t()
         ) ::
-          {actual_mod_fun :: String.t(), docs :: Introspection.docs()} | nil
+          {actual_mod_fun :: String.t(), String.t() | nil} | nil
   def all(
         context,
         %State.Env{
-          imports: imports,
-          requires: requires,
-          aliases: aliases,
           module: module,
-          scope: scope,
           attributes: attributes,
           vars: vars
-        },
+        } = env,
         metadata
       ) do
     binding_env = %Binding{
@@ -44,30 +41,28 @@ defmodule ElixirSense.Providers.Docs do
       {:keyword, keyword} ->
         docs = ReservedWords.docs(keyword)
 
-        {Atom.to_string(keyword),
-         %{
-           docs: """
-           > #{keyword}
+        markdown = """
+        > #{keyword}
 
-           reserved word
+        reserved word
 
-           #{docs}
-           """
-         }}
+        #{docs}
+        """
+
+        {Atom.to_string(keyword), markdown}
 
       {:attribute, attribute} ->
         docs = BuiltinAttributes.docs(attribute) || ""
 
-        {"@" <> Atom.to_string(attribute),
-         %{
-           docs: """
-           > @#{attribute}
+        markdown = """
+        > @#{attribute}
 
-           module attribute
+        module attribute
 
-           #{docs}
-           """
-         }}
+        #{docs}
+        """
+
+        {"@" <> Atom.to_string(attribute), markdown}
 
       {:variable, variable} ->
         {line, column} = context.begin
@@ -80,62 +75,49 @@ defmodule ElixirSense.Providers.Docs do
           end)
 
         if var_info != nil do
-          {Atom.to_string(variable),
-           %{
-             docs: """
-             > #{variable}
+          markdown = """
+          > #{variable}
 
-             variable
-             """
-           }}
+          variable
+          """
+
+          {Atom.to_string(variable), markdown}
         else
           mod_fun_docs(
             type,
+            context,
             binding_env,
-            imports,
-            requires,
-            aliases,
-            module,
-            metadata,
-            scope
+            env,
+            metadata
           )
         end
 
       _ ->
         mod_fun_docs(
           type,
+          context,
           binding_env,
-          imports,
-          requires,
-          aliases,
-          module,
-          metadata,
-          scope
+          env,
+          metadata
         )
     end
   end
 
   defp mod_fun_docs(
          {:variable, name} = type,
+         context,
          binding_env,
-         imports,
-         requires,
-         aliases,
-         module,
-         metadata,
-         scope
+         env,
+         metadata
        ) do
     case Binding.expand(binding_env, type) do
       :none ->
         mod_fun_docs(
           {nil, name},
+          context,
           binding_env,
-          imports,
-          requires,
-          aliases,
-          module,
-          metadata,
-          scope
+          env,
+          metadata
         )
 
       _ ->
@@ -145,30 +127,34 @@ defmodule ElixirSense.Providers.Docs do
 
   defp mod_fun_docs(
          {mod, fun},
+         context,
          binding_env,
-         imports,
-         requires,
-         aliases,
-         module,
-         metadata,
-         scope
+         env,
+         metadata
        ) do
     actual =
       {Binding.expand(binding_env, mod), fun}
-      |> SurroundContext.expand(aliases)
+      |> SurroundContext.expand(env.aliases)
       |> Introspection.actual_mod_fun(
-        imports,
-        requires,
-        aliases,
-        module,
-        scope,
+        env.imports,
+        env.requires,
+        env.aliases,
+        env.module,
+        env.scope,
         metadata.mods_funs_to_positions,
         metadata.types
       )
 
     case actual do
       {mod, fun, true, kind} ->
-        {mod_fun_to_string({mod, fun}), Introspection.get_all_docs({mod, fun}, kind, scope)}
+        {line, column} = context.end
+        call_arity = Metadata.get_call_arity(metadata, mod, fun, line, column) || :any
+
+        markdown = Introspection.get_all_docs({mod, fun, call_arity}, kind)
+
+        if markdown do
+          {mod_fun_to_string({mod, fun}), markdown}
+        end
 
       _ ->
         nil

@@ -17,7 +17,7 @@ defmodule ElixirSense.DocsTest do
     test "module with @moduledoc false" do
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs("ElixirSenseExample.ModuleWithDocFalse", 1, 22)
 
       assert actual_subject == "ElixirSenseExample.ModuleWithDocFalse"
@@ -34,7 +34,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 1, 2)
 
       assert actual_subject == "Kernel.defmodule"
@@ -55,7 +55,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 3, 12)
 
       assert actual_subject == "List.flatten"
@@ -83,7 +83,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 3, 12)
 
       assert actual_subject == "List.flatten"
@@ -112,7 +112,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 3, 12)
 
       assert actual_subject == ":lists.flatten"
@@ -147,7 +147,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 3, 14)
 
       assert actual_subject == ":erlang.or"
@@ -164,7 +164,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 4, 14)
 
       assert actual_subject == ":erlang.orelse"
@@ -186,7 +186,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 3, 12)
 
       assert actual_subject == "ElixirSenseExample.BehaviourWithMacrocallback.Impl.some"
@@ -217,7 +217,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 3, 26)
 
       assert actual_subject == "Inspect.Algebra.string"
@@ -231,13 +231,13 @@ defmodule ElixirSense.DocsTest do
       buffer = """
       defmodule MyModule do
         alias List, as: MyList
-        MyList.flatten
+        MyList.flatten([])
       end
       """
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 3, 12)
 
       assert actual_subject == "List.flatten"
@@ -255,17 +255,17 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    test "retrive function documentation from imported modules" do
+    test "retrieve function documentation from imported modules" do
       buffer = """
       defmodule MyModule do
         import Mix.Generator
-        create_file(
+        create_file("a", "b")
       end
       """
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 3, 5)
 
       assert actual_subject == "Mix.Generator.create_file"
@@ -283,7 +283,7 @@ defmodule ElixirSense.DocsTest do
       end
       """
 
-      %{actual_subject: actual_subject, docs: %{docs: docs}} = ElixirSense.docs(buffer, 2, 5)
+      %{actual_subject: actual_subject, docs: docs} = ElixirSense.docs(buffer, 2, 5)
 
       assert actual_subject == "Kernel.defmacro"
 
@@ -300,7 +300,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 2, 8)
 
       assert actual_subject == "GenServer"
@@ -327,7 +327,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 2, 13)
 
       assert actual_subject == ":erlang"
@@ -353,12 +353,12 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject_1,
-        docs: %{docs: docs_1}
+        docs: docs_1
       } = ElixirSense.docs(buffer, 2, 30)
 
       %{
         actual_subject: actual_subject_2,
-        docs: %{docs: docs_2}
+        docs: docs_2
       } = ElixirSense.docs(buffer, 2, 38)
 
       assert actual_subject_1 == actual_subject_2
@@ -372,7 +372,7 @@ defmodule ElixirSense.DocsTest do
       end
       """
 
-      %{actual_subject: actual_subject, docs: %{docs: docs}} = ElixirSense.docs(buffer, 2, 11)
+      %{actual_subject: actual_subject, docs: docs} = ElixirSense.docs(buffer, 2, 11)
 
       assert actual_subject == "ArgumentError"
       assert docs == "> ArgumentError\n\n"
@@ -399,7 +399,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 3, 31)
 
       assert actual_subject == "ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t"
@@ -414,18 +414,6 @@ defmodule ElixirSense.DocsTest do
              ```
 
              Remote type
-
-             ---
-
-             > ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t(a, b)
-
-             ### Specs
-
-             ```
-             @type remote_t(a, b) :: {a, b}
-             ```
-
-             Remote type with params
              """
     end
 
@@ -440,7 +428,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 3, 35)
 
       assert actual_subject == "ElixirSenseExample.CallbackOpaque.t"
@@ -472,7 +460,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 3, 31)
 
       assert actual_subject == ":erlang.time_unit"
@@ -507,12 +495,14 @@ defmodule ElixirSense.DocsTest do
       defmodule MyModule do
         @type options :: keyword
         #                   ^
+        @type options1 :: keyword(integer)
+        #                   ^
       end
       """
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 2, 23)
 
       assert actual_subject == "keyword"
@@ -529,9 +519,16 @@ defmodule ElixirSense.DocsTest do
              ```
 
              A keyword list
+             """
 
-             ---
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 4, 23)
 
+      assert actual_subject == "keyword"
+
+      assert docs == """
              > keyword(t)
 
              **Built-in**
@@ -556,7 +553,7 @@ defmodule ElixirSense.DocsTest do
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 2, 19)
 
       assert actual_subject == "integer"
@@ -579,14 +576,16 @@ defmodule ElixirSense.DocsTest do
     test "retrieve basic and builtin type documentation" do
       buffer = """
       defmodule MyModule do
-        @type num :: list(atom)
+        @type num :: list()
+        #              ^
+        @type num1 :: list(atom)
         #              ^
       end
       """
 
       %{
         actual_subject: actual_subject,
-        docs: %{docs: docs}
+        docs: docs
       } = ElixirSense.docs(buffer, 2, 18)
 
       assert actual_subject == "list"
@@ -603,9 +602,16 @@ defmodule ElixirSense.DocsTest do
              ```
 
              A list
+             """
 
-             ---
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 4, 18)
 
+      assert actual_subject == "list"
+
+      assert docs == """
              > list(t)
 
              **Built-in**
@@ -628,6 +634,8 @@ defmodule ElixirSense.DocsTest do
       defmodule MyModule do
         ElixirSenseExample.ModuleWithFunctions.module_info()
         #                                      ^
+        ElixirSenseExample.ModuleWithFunctions.module_info(:exports)
+        #                                      ^
         ElixirSenseExample.ModuleWithFunctions.__info__(:macros)
         #                                      ^
         ElixirSenseExample.ExampleBehaviour.behaviour_info(:callbacks)
@@ -637,46 +645,47 @@ defmodule ElixirSense.DocsTest do
 
       assert %{
                actual_subject: "ElixirSenseExample.ModuleWithFunctions.module_info",
-               docs: %{
-                 docs: """
-                 > ElixirSenseExample.ModuleWithFunctions.module_info()
+               docs: """
+               > ElixirSenseExample.ModuleWithFunctions.module_info()
 
-                 **Built-in**
+               **Built-in**
 
-                 ### Specs
+               ### Specs
 
-                 ```
-                 @spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]
-                 ```
-
+               ```
+               @spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]
+               ```
 
 
-                 ---
-
-                 > ElixirSenseExample.ModuleWithFunctions.module_info(key)
-
-                 **Built-in**
-
-                 ### Specs
-
-                 ```
-                 @spec module_info(:module) :: atom
-                 @spec module_info(:attributes | :compile) :: [{atom, term}]
-                 @spec module_info(:md5) :: binary
-                 @spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]
-                 @spec module_info(:native) :: boolean
-                 ```
-
-
-                 """
-               }
+               """
              } = ElixirSense.docs(buffer, 2, 42)
 
+      assert %{
+               actual_subject: "ElixirSenseExample.ModuleWithFunctions.module_info",
+               docs: """
+               > ElixirSenseExample.ModuleWithFunctions.module_info(key)
+
+               **Built-in**
+
+               ### Specs
+
+               ```
+               @spec module_info(:module) :: atom
+               @spec module_info(:attributes | :compile) :: [{atom, term}]
+               @spec module_info(:md5) :: binary
+               @spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]
+               @spec module_info(:native) :: boolean
+               ```
+
+
+               """
+             } = ElixirSense.docs(buffer, 4, 42)
+
       assert %{actual_subject: "ElixirSenseExample.ModuleWithFunctions.__info__"} =
-               ElixirSense.docs(buffer, 4, 42)
+               ElixirSense.docs(buffer, 6, 42)
 
       assert %{actual_subject: "ElixirSenseExample.ExampleBehaviour.behaviour_info"} =
-               ElixirSense.docs(buffer, 6, 42)
+               ElixirSense.docs(buffer, 8, 42)
     end
 
     test "built-in functions cannot be called locally" do
@@ -714,7 +723,7 @@ defmodule ElixirSense.DocsTest do
 
     %{
       actual_subject: actual_subject,
-      docs: %{docs: docs}
+      docs: docs
     } = ElixirSense.docs(buffer, 3, 5)
 
     assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.foo"
@@ -739,13 +748,13 @@ defmodule ElixirSense.DocsTest do
     buffer = """
     defmodule MyModule do
       import ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl
-      baz()
+      baz(1)
     end
     """
 
     %{
       actual_subject: actual_subject,
-      docs: %{docs: docs}
+      docs: docs
     } = ElixirSense.docs(buffer, 3, 5)
 
     assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl.baz"
@@ -770,13 +779,13 @@ defmodule ElixirSense.DocsTest do
     buffer = """
     defmodule MyModule do
       import ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl
-      bar()
+      bar(1)
     end
     """
 
     %{
       actual_subject: actual_subject,
-      docs: %{docs: docs}
+      docs: docs
     } = ElixirSense.docs(buffer, 3, 5)
 
     assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl.bar"
@@ -805,7 +814,7 @@ defmodule ElixirSense.DocsTest do
 
     %{
       actual_subject: actual_subject,
-      docs: %{docs: docs}
+      docs: docs
     } = ElixirSense.docs(buffer, 1, 16)
 
     assert actual_subject == ":file_server.init"
@@ -835,7 +844,7 @@ defmodule ElixirSense.DocsTest do
 
     %{
       actual_subject: actual_subject,
-      docs: %{docs: docs}
+      docs: docs
     } = ElixirSense.docs(buffer, 3, 5)
 
     assert actual_subject == "ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang.init"
@@ -873,7 +882,7 @@ defmodule ElixirSense.DocsTest do
 
     %{
       actual_subject: actual_subject,
-      docs: %{docs: docs}
+      docs: docs
     } = ElixirSense.docs(buffer, 3, 12)
 
     assert actual_subject == "List.flatten"
@@ -902,7 +911,7 @@ defmodule ElixirSense.DocsTest do
 
     assert %{
              actual_subject: "@on_load",
-             docs: %{docs: docs}
+             docs: docs
            } = ElixirSense.docs(buffer, 2, 6)
 
     assert docs =~ "A hook that will be invoked whenever the module is loaded."
@@ -917,7 +926,7 @@ defmodule ElixirSense.DocsTest do
 
     assert %{
              actual_subject: "@my_attribute",
-             docs: %{docs: docs}
+             docs: docs
            } = ElixirSense.docs(buffer, 2, 6)
 
     assert docs =~ "attribute"
@@ -932,7 +941,7 @@ defmodule ElixirSense.DocsTest do
     if Version.match?(System.version(), ">= 1.14.0") do
       assert %{
                actual_subject: "do",
-               docs: %{docs: docs}
+               docs: docs
              } = ElixirSense.docs(buffer, 1, 21)
 
       assert docs =~ "do-end block control keyword"
@@ -953,14 +962,14 @@ defmodule ElixirSense.DocsTest do
 
     assert %{
              actual_subject: "my_var",
-             docs: %{docs: docs}
+             docs: docs
            } = ElixirSense.docs(buffer, 2, 12)
 
     assert docs =~ "variable"
 
     assert %{
              actual_subject: "other_var",
-             docs: %{docs: docs}
+             docs: docs
            } = ElixirSense.docs(buffer, 3, 6)
 
     assert docs =~ "variable"
@@ -982,14 +991,14 @@ defmodule ElixirSense.DocsTest do
 
     assert %{
              actual_subject: "length",
-             docs: %{docs: docs}
+             docs: docs
            } = ElixirSense.docs(buffer, 7, 6)
 
     assert docs =~ "variable"
 
     assert %{
              actual_subject: "length",
-             docs: %{docs: docs}
+             docs: docs
            } = ElixirSense.docs(buffer, 8, 21)
 
     assert docs =~ "variable"
@@ -1018,5 +1027,69 @@ defmodule ElixirSense.DocsTest do
              ElixirSense.docs(buffer, 9, 9)
 
     # TODO assert function
+  end
+
+  test "retrieves documentation for correct arity function" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: {F.my_func(), F.my_func("a"), F.my_func(1, 2, 3)}
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.FunctionsWithDefaultArgs.my_func", docs: docs} =
+             ElixirSense.docs(buffer, 3, 34)
+
+    assert docs =~ "2 params version"
+    assert docs =~ "@spec my_func(1 | 2) :: binary"
+    assert docs =~ "@spec my_func(1 | 2, binary) :: binary"
+
+    refute docs =~ "no params version"
+    refute docs =~ "@spec my_func :: binary"
+    refute docs =~ "3 params version"
+    refute docs =~ "@spec my_func(1, 2, 3) :: :ok"
+    refute docs =~ "@spec my_func(2, 2, 3) :: :error"
+  end
+
+  test "retrieves documentation for correct arity function capture" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def go, do: &F.my_func/1
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.FunctionsWithDefaultArgs.my_func", docs: docs} =
+             ElixirSense.docs(buffer, 3, 19)
+
+    assert docs =~ "2 params version"
+    assert docs =~ "@spec my_func(1 | 2) :: binary"
+    assert docs =~ "@spec my_func(1 | 2, binary) :: binary"
+
+    refute docs =~ "no params version"
+    refute docs =~ "@spec my_func :: binary"
+    refute docs =~ "3 params version"
+    refute docs =~ "@spec my_func(1, 2, 3) :: :ok"
+    refute docs =~ "@spec my_func(2, 2, 3) :: :error"
+  end
+
+  test "retrieves documentation for correct arity type" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity, as: T
+      @type some :: {T.my_type, T.my_type(boolean), T.my_type(1, 2)}
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.TypesWithMultipleArity.my_type", docs: docs} =
+             ElixirSense.docs(buffer, 3, 32)
+
+    assert docs =~ "one param version"
+    assert docs =~ "@type my_type(a)"
+
+    refute docs =~ "no params version"
+    refute docs =~ "@type my_type()"
+    refute docs =~ "two params version"
+    refute docs =~ "@type my_type(a, b)"
   end
 end
