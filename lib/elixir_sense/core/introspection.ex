@@ -138,7 +138,7 @@ defmodule ElixirSense.Core.Introspection do
     docs = callback.(mod, fun, arity)
 
     docs =
-      if docs == [] and is_integer(arity) do
+      if docs == [] and arity != :any do
         callback.(mod, fun, :any)
       else
         docs
