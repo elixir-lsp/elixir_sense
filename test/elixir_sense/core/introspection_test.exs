@@ -4,7 +4,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
   alias ElixirSense.Core.TypeInfo
   import ElixirSense.Core.Introspection
 
-  test "format_spec_ast with one return option does not aplit the returns" do
+  test "format_spec_ast with one return option does not split the returns" do
     type_ast = TypeInfo.get_type_ast(GenServer, :debug)
 
     assert format_spec_ast(type_ast) == """
@@ -12,7 +12,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
            """
   end
 
-  test "format_spec_ast with more than one return option aplits the returns" do
+  test "format_spec_ast with more than one return option splits the returns" do
     type_ast = TypeInfo.get_type_ast(GenServer, :on_start)
 
     assert format_spec_ast(type_ast) == """
@@ -759,12 +759,11 @@ defmodule ElixirSense.Core.IntrospectionTest do
   end
 
   describe "get_all_docs" do
-    test "returns delageted metadata on functions" do
-      assert %{docs: docs} =
+    test "returns delegated metadata on functions" do
+      assert docs =
                get_all_docs(
-                 {ElixirSenseExample.ModuleWithDelegates, :delegated_fun},
-                 :mod_fun,
-                 SomeModule
+                 {ElixirSenseExample.ModuleWithDelegates, :delegated_fun, 2},
+                 :mod_fun
                )
 
       assert docs == """
@@ -779,8 +778,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
     end
 
     test "returns since metadata on functions" do
-      assert %{docs: docs} =
-               get_all_docs({ElixirSenseExample.ModuleWithDocs, :some_fun}, :mod_fun, SomeModule)
+      assert docs = get_all_docs({ElixirSenseExample.ModuleWithDocs, :some_fun, 2}, :mod_fun)
 
       assert docs == """
              > ElixirSenseExample.ModuleWithDocs.some_fun(a, b \\\\\\\\ nil)
@@ -794,11 +792,10 @@ defmodule ElixirSense.Core.IntrospectionTest do
     end
 
     test "returns deprecated metadata on functions" do
-      assert %{docs: docs} =
+      assert docs =
                get_all_docs(
-                 {ElixirSenseExample.ModuleWithDocs, :soft_deprecated_fun},
-                 :mod_fun,
-                 SomeModule
+                 {ElixirSenseExample.ModuleWithDocs, :soft_deprecated_fun, 1},
+                 :mod_fun
                )
 
       assert docs == """
@@ -813,8 +810,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
     end
 
     test "returns since metadata on types" do
-      assert %{docs: docs} =
-               get_all_docs({ElixirSenseExample.ModuleWithDocs, :some_type}, :type, SomeModule)
+      assert docs = get_all_docs({ElixirSenseExample.ModuleWithDocs, :some_type, 0}, :type)
 
       assert docs == """
              > ElixirSenseExample.ModuleWithDocs.some_type()
@@ -834,8 +830,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
     end
 
     test "returns since metadata on modules" do
-      assert %{docs: docs} =
-               get_all_docs({ElixirSenseExample.ModuleWithDocs, nil}, :mod_fun, SomeModule)
+      assert docs = get_all_docs({ElixirSenseExample.ModuleWithDocs, nil, :any}, :mod_fun)
 
       assert docs == """
              > ElixirSenseExample.ModuleWithDocs

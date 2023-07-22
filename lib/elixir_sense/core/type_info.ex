@@ -226,12 +226,17 @@ defmodule ElixirSense.Core.TypeInfo do
     {{:__replace_me__, meta, args}, type}
   end
 
-  @spec get_type_docs(module, atom) :: [ElixirSense.Core.Normalized.Code.doc_entry_t()]
-  def get_type_docs(module, type_name) do
+  @spec get_type_docs(module, atom, non_neg_integer | nil) :: [
+          ElixirSense.Core.Normalized.Code.doc_entry_t()
+        ]
+  def get_type_docs(module, type_name, arity) do
     docs = NormalizedCode.get_docs(module, :type_docs) || []
 
+    # TODO arity fallback?
     docs
-    |> Enum.filter(fn {{name, _}, _, _, _, _} -> name == type_name end)
+    |> Enum.filter(fn {{name, n_args}, _, _, _, _} ->
+      name == type_name and (arity == :any or n_args == arity)
+    end)
     |> Enum.sort_by(fn {{_, n_args}, _, _, _, _} -> n_args end)
   end
 
@@ -280,11 +285,11 @@ defmodule ElixirSense.Core.TypeInfo do
     |> Map.get({function, arity})
   end
 
-  def get_function_specs(module, function) when is_atom(module) and is_atom(function) do
+  def get_function_specs(module, function, arity) when is_atom(module) and is_atom(function) do
     module_specs = module |> get_module_specs()
 
     function_specs =
-      for {{f, _}, spec} <- module_specs, f == function do
+      for {{f, a}, spec} <- module_specs, f == function, arity == :any or a == arity do
         spec
       end
 
@@ -297,7 +302,7 @@ defmodule ElixirSense.Core.TypeInfo do
         behaviour_specs = behaviour |> get_module_callbacks()
 
         callback_specs =
-          for {{f, _}, spec} <- behaviour_specs, f == function do
+          for {{f, a}, spec} <- behaviour_specs, f == function, arity == :any or a == arity do
             spec
           end
 
@@ -362,7 +367,7 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   def extract_param_options(mod, fun, npar) do
-    get_function_specs(mod, fun)
+    get_function_specs(mod, fun, :any)
     |> get_param_type_specs(npar)
     |> expand_type_specs(mod)
     |> Enum.filter(&list_type_spec?/1)

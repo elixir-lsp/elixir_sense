@@ -45,7 +45,7 @@ defmodule ElixirSense do
       ...>   MyEnum.to_list(1..3)
       ...> end
       ...> '''
-      iex> %{docs: %{docs: docs}} = ElixirSense.docs(code, 3, 11)
+      iex> %{docs: docs} = ElixirSense.docs(code, 3, 11)
       iex> docs |> String.split("\n") |> Enum.at(8)
       "Converts `enumerable` to a list."
   """
