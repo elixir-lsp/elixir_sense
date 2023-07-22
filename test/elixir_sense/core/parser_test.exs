@@ -14,7 +14,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :env_not_found},
              mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 1}]}},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
@@ -33,7 +33,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}], module: MyModule},
                2 => %Env{imports: [{Kernel, []}, {List, []}], module: MyModule},
@@ -51,7 +51,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
@@ -68,7 +68,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
@@ -85,7 +85,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
@@ -102,7 +102,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
@@ -119,7 +119,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
@@ -136,7 +136,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
@@ -153,7 +153,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
@@ -170,7 +170,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
@@ -187,7 +187,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
@@ -204,7 +204,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
@@ -230,7 +230,7 @@ defmodule ElixirSense.Core.ParserTest do
     assert_received {:result, result}
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{
                  module: MyModule,
@@ -249,14 +249,14 @@ defmodule ElixirSense.Core.ParserTest do
            } = result
   end
 
-  test "parse_string with missing terminator \"end\" attemtps to insert `end` at correct intendation" do
+  test "parse_string with missing terminator \"end\" attempts to insert `end` at correct indentation" do
     source = """
     defmodule MyModule do
 
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{module: MyModule},
                2 => %Env{module: MyModule}
@@ -271,7 +271,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{module: MyModule},
                3 => %Env{module: MyModule1}
@@ -279,7 +279,7 @@ defmodule ElixirSense.Core.ParserTest do
            } = parse_string(source, true, true, 3)
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{module: MyModule},
                2 => %Env{module: MyModule}
@@ -294,7 +294,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{module: MyModule},
                2 => %Env{module: MyModule},
@@ -303,7 +303,7 @@ defmodule ElixirSense.Core.ParserTest do
            } = parse_string(source, true, true, 2)
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{module: MyModule},
                3 => %Env{module: MyModule.MyModule1}
@@ -323,7 +323,8 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     capture_io(:stderr, fn ->
-      assert %Metadata{error: nil} = parse_string(source, true, true, 5)
+      assert %Metadata{error: {:error, :parse_error}, lines_to_env: %{5 => _}} =
+               parse_string(source, true, true, 5)
     end)
   end
 
@@ -338,7 +339,8 @@ defmodule ElixirSense.Core.ParserTest do
     end
     """
 
-    %Metadata{error: nil} = parse_string(source, true, true, 5)
+    %Metadata{error: {:error, :parse_error}, lines_to_env: %{5 => _}} =
+      parse_string(source, true, true, 5)
   end
 
   test "parse_string ignores non existing modules in `use`" do
@@ -351,7 +353,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: nil,
+             error: {:error, :env_not_found},
              mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 1}]}},
              lines_to_env: %{
                1 => %Env{imports: [{Kernel, []}]},
@@ -367,7 +369,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %ElixirSense.Core.Metadata{
-             error: nil,
+             error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{module: MyModule}
              }
