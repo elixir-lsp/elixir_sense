@@ -3,7 +3,7 @@ defmodule ElixirSense.Core.TypeInfo do
 
   alias ElixirSense.Core.Behaviours
   alias ElixirSense.Core.BuiltinTypes
-  alias ElixirSense.Core.Introspection
+  require ElixirSense.Core.Introspection, as: Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.Source
@@ -226,16 +226,15 @@ defmodule ElixirSense.Core.TypeInfo do
     {{:__replace_me__, meta, args}, type}
   end
 
-  @spec get_type_docs(module, atom, non_neg_integer | nil) :: [
+  @spec get_type_docs(module, atom, non_neg_integer | {:gte, non_neg_integer} | :any) :: [
           ElixirSense.Core.Normalized.Code.doc_entry_t()
         ]
   def get_type_docs(module, type_name, arity) do
     docs = NormalizedCode.get_docs(module, :type_docs) || []
 
-    # TODO arity fallback?
     docs
     |> Enum.filter(fn {{name, n_args}, _, _, _, _} ->
-      name == type_name and (arity == :any or n_args == arity)
+      name == type_name and Introspection.matches_arity?(n_args, arity)
     end)
     |> Enum.sort_by(fn {{_, n_args}, _, _, _, _} -> n_args end)
   end
@@ -289,7 +288,7 @@ defmodule ElixirSense.Core.TypeInfo do
     module_specs = module |> get_module_specs()
 
     function_specs =
-      for {{f, a}, spec} <- module_specs, f == function, arity == :any or a == arity do
+      for {{f, a}, spec} <- module_specs, f == function, Introspection.matches_arity?(a, arity) do
         spec
       end
 

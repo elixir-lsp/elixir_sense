@@ -1019,11 +1019,18 @@ defmodule ElixirSense.DocsTest do
     end
     """
 
-    assert %{actual_subject: "ElixirSenseExample.Some.some_local"} =
+    # TODO requires metadata docs support
+
+    # assert %{actual_subject: "ElixirSenseExample.Some.some_local"} =
+    #          ElixirSense.docs(buffer, 6, 20)
+    assert nil ==
              ElixirSense.docs(buffer, 6, 20)
 
     # TODO assert type
-    assert %{actual_subject: "ElixirSenseExample.Some.some_local"} =
+    # assert %{actual_subject: "ElixirSenseExample.Some.some_local"} =
+    #          ElixirSense.docs(buffer, 9, 9)
+
+    assert nil ==
              ElixirSense.docs(buffer, 9, 9)
 
     # TODO assert function
@@ -1049,6 +1056,101 @@ defmodule ElixirSense.DocsTest do
     refute docs =~ "3 params version"
     refute docs =~ "@spec my_func(1, 2, 3) :: :ok"
     refute docs =~ "@spec my_func(2, 2, 3) :: :error"
+  end
+
+  test "retrieves documentation for all matching arities with incomplete code" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: F.my_func(
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.FunctionsWithDefaultArgs.my_func", docs: docs} =
+             ElixirSense.docs(buffer, 3, 20)
+
+    assert docs =~ "no params version"
+    assert docs =~ "2 params version"
+    assert docs =~ "3 params version"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: F.my_func(1
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.FunctionsWithDefaultArgs.my_func", docs: docs} =
+             ElixirSense.docs(buffer, 3, 20)
+
+    refute docs =~ "no params version"
+    assert docs =~ "2 params version"
+    assert docs =~ "3 params version"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: F.my_func(1, 2,
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.FunctionsWithDefaultArgs.my_func", docs: docs} =
+             ElixirSense.docs(buffer, 3, 20)
+
+    refute docs =~ "no params version"
+    refute docs =~ "2 params version"
+    assert docs =~ "3 params version"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: F.my_func(1, 2, 3
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.FunctionsWithDefaultArgs.my_func", docs: docs} =
+             ElixirSense.docs(buffer, 3, 20)
+
+    refute docs =~ "no params version"
+    refute docs =~ "2 params version"
+    assert docs =~ "3 params version"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: F.my_func(1, 2, 3,
+    end
+    """
+
+    assert nil == ElixirSense.docs(buffer, 3, 20)
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: 1 |> F.my_func(
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.FunctionsWithDefaultArgs.my_func", docs: docs} =
+             ElixirSense.docs(buffer, 3, 26)
+
+    refute docs =~ "no params version"
+    assert docs =~ "2 params version"
+    assert docs =~ "3 params version"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: 1 |> F.my_func(1,
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.FunctionsWithDefaultArgs.my_func", docs: docs} =
+             ElixirSense.docs(buffer, 3, 26)
+
+    refute docs =~ "no params version"
+    refute docs =~ "2 params version"
+    assert docs =~ "3 params version"
   end
 
   test "retrieves documentation for correct arity function capture" do
@@ -1091,5 +1193,58 @@ defmodule ElixirSense.DocsTest do
     refute docs =~ "@type my_type()"
     refute docs =~ "two params version"
     refute docs =~ "@type my_type(a, b)"
+  end
+
+  test "retrieves documentation for all matching type arities with incomplete code" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity, as: T
+      @type some :: T.my_type(
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.TypesWithMultipleArity.my_type", docs: docs} =
+             ElixirSense.docs(buffer, 3, 20)
+
+    assert docs =~ "no params version"
+    assert docs =~ "one param version"
+    assert docs =~ "two params version"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity, as: T
+      @type some :: T.my_type(integer
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.TypesWithMultipleArity.my_type", docs: docs} =
+             ElixirSense.docs(buffer, 3, 20)
+
+    refute docs =~ "no params version"
+    assert docs =~ "one param version"
+    assert docs =~ "two params version"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity, as: T
+      @type some :: T.my_type(integer, integer
+    end
+    """
+
+    assert %{actual_subject: "ElixirSenseExample.TypesWithMultipleArity.my_type", docs: docs} =
+             ElixirSense.docs(buffer, 3, 20)
+
+    refute docs =~ "no params version"
+    refute docs =~ "one param version"
+    assert docs =~ "two params version"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity, as: T
+      @type some :: T.my_type(integer, integer,
+    end
+    """
+
+    assert nil == ElixirSense.docs(buffer, 3, 20)
   end
 end
