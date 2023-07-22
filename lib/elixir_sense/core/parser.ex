@@ -8,6 +8,7 @@ defmodule ElixirSense.Core.Parser do
   alias ElixirSense.Core.Normalized.Tokenizer
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
+  require Logger
 
   @dialyzer {:nowarn_function, normalize_error: 1}
 
@@ -23,33 +24,31 @@ defmodule ElixirSense.Core.Parser do
         )
 
       error ->
-        create_metadata("", error)
+        Logger.warning("Unable to read file #{file}: #{inspect(error)}")
+        create_metadata("", {:error, :io_error})
     end
   end
 
   @spec parse_string(String.t(), boolean, boolean, pos_integer | nil) :: Metadata.t()
   def parse_string(source, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
     case string_to_ast(source, if(try_to_fix_parse_error, do: 6, else: 0), cursor_line_number) do
-      {:ok, ast, modified_source} ->
+      {:ok, ast, modified_source, error} ->
         acc = MetadataBuilder.build(ast)
 
         if cursor_line_number == nil or Map.has_key?(acc.lines_to_env, cursor_line_number) or
              !try_to_fix_line_not_found do
-          create_metadata(source, {:ok, acc})
+          create_metadata(source, {:ok, acc, error})
         else
-          # IO.puts :stderr, "LINE NOT FOUND"
           result =
             case try_fix_line_not_found_by_inserting_marker(modified_source, cursor_line_number) do
               {:ok, acc} -> acc
               _ -> fix_line_not_found_by_taking_previous_line(acc, cursor_line_number)
             end
 
-          create_metadata(source, {:ok, result})
+          create_metadata(source, {:ok, result, error || {:error, :env_not_found}})
         end
 
       {:error, _reason} = error ->
-        # IO.puts :stderr, "CAN'T FIX IT"
-        # IO.inspect :stderr, reason, []
         create_metadata(source, error)
     end
   end
@@ -64,7 +63,7 @@ defmodule ElixirSense.Core.Parser do
 
   defp try_fix_line_not_found_by_inserting_marker(modified_source, cursor_line_number)
        when is_integer(cursor_line_number) do
-    with {:ok, ast, _modified_source} <-
+    with {:ok, ast, _modified_source, _error} <-
            modified_source
            |> fix_line_not_found(cursor_line_number)
            |> string_to_ast(0, cursor_line_number) do
@@ -85,9 +84,10 @@ defmodule ElixirSense.Core.Parser do
     }
   end
 
-  defp create_metadata(source, {:ok, acc}) do
+  defp create_metadata(source, {:ok, acc, error}) do
     %Metadata{
       source: source,
+      error: error,
       types: acc.types,
       specs: acc.specs,
       structs: acc.structs,
@@ -109,18 +109,20 @@ defmodule ElixirSense.Core.Parser do
       ) do
     case Code.string_to_quoted(source, opts |> Keyword.merge(columns: true, token_metadata: true)) do
       {:ok, ast} ->
-        {:ok, ast, source}
+        {:ok, ast, source, original_error}
 
       error ->
-        # IO.puts :stderr, "PARSE ERROR"
-        # IO.inspect :stderr, error, []
-
         if errors_threshold > 0 do
           source
           |> fix_parse_error(cursor_line_number, normalize_error(error))
-          |> string_to_ast(errors_threshold - 1, cursor_line_number, original_error, opts)
+          |> string_to_ast(
+            errors_threshold - 1,
+            cursor_line_number,
+            original_error || {:error, :parse_error},
+            opts
+          )
         else
-          original_error || error
+          original_error || {:error, :parse_error}
         end
     end
   end
