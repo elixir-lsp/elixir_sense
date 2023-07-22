@@ -241,7 +241,7 @@ defmodule ElixirSense.Core.Metadata do
 
   def get_call_arity(%__MODULE__{}, _module, nil, _line, _column), do: nil
 
-  def get_call_arity(%__MODULE__{calls: calls}, _module, fun, line, column) do
+  def get_call_arity(%__MODULE__{calls: calls, error: error}, _module, fun, line, column) do
     case calls[line] do
       nil ->
         nil
@@ -254,7 +254,11 @@ defmodule ElixirSense.Core.Metadata do
         |> Enum.find_value(fn call ->
           # call.mod in not expanded
           if call.func == fun do
-            call.arity
+            if error == {:error, :parse_error} do
+              {:gte, call.arity}
+            else
+              call.arity
+            end
           end
         end)
     end
