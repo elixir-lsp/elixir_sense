@@ -267,6 +267,62 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "my_func(a, b \\\\ \"\")"
   end
 
+  test "find remote function head for the lowest matching arity of function in incomplete code" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: F.my_func(
+    end
+    """
+
+    assert %Location{type: :function, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+    assert read_line(file, {line, column}) =~ "def my_func,"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: F.my_func(1
+    end
+    """
+
+    assert %Location{type: :function, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+    assert read_line(file, {line, column}) =~ "def my_func(a, b \\\\ \"\")"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: F.my_func(1, 2,
+    end
+    """
+
+    assert %Location{type: :function, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+    assert read_line(file, {line, column}) =~ "def my_func(1, 2, 3)"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+      def main, do: F.my_func(1, 2, 3,
+    end
+    """
+
+    # return any arity if too many arguments
+
+    assert %Location{type: :function, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+    assert read_line(file, {line, column}) =~ "def my_func,"
+  end
+
   test "find remote function head for the correct arity of function - on fn call with default arg - fallback to docs" do
     buffer = """
     defmodule MyModule do
@@ -280,6 +336,62 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
     assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
     assert read_line(file, {line, column}) =~ "@doc \"2 params version\""
+  end
+
+  test "find remote function head for the lowest matching arity of function in incomplete code - fallback to docs" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs1, as: F
+      def main, do: F.my_func(
+    end
+    """
+
+    assert %Location{type: :function, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+    assert read_line(file, {line, column}) =~ "@doc \"no params version\""
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs1, as: F
+      def main, do: F.my_func(1
+    end
+    """
+
+    assert %Location{type: :function, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+    assert read_line(file, {line, column}) =~ "@doc \"2 params version\""
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs1, as: F
+      def main, do: F.my_func(1, 2,
+    end
+    """
+
+    assert %Location{type: :function, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+    assert read_line(file, {line, column}) =~ "@doc \"3 params version\""
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.FunctionsWithDefaultArgs1, as: F
+      def main, do: F.my_func(1, 2, 3,
+    end
+    """
+
+    # return any arity if too many arguments
+
+    assert %Location{type: :function, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/functions_with_default_args.ex"
+    assert read_line(file, {line, column}) =~ "@doc \"no params version\""
   end
 
   test "find remote function head for the correct arity of function - on function capture" do
@@ -315,12 +427,13 @@ defmodule ElixirSense.Providers.DefinitionTest do
     buffer = """
     defmodule MyModule do
       def my_func, do: "not this one"
+      def my_func(a, b \\\\ nil)
       def my_func(a, b), do: a <> b
     end
     """
 
     assert %Location{type: :function, file: nil, line: 3, column: 3} =
-             ElixirSense.definition(buffer, 3, 9)
+             ElixirSense.definition(buffer, 4, 9)
   end
 
   test "find definition of delegated functions" do
@@ -1276,12 +1389,25 @@ defmodule ElixirSense.Providers.DefinitionTest do
       @type my_type :: integer
       @type my_type(a) :: {integer, a}
       @type my_type(a, b) :: {integer, a, b}
-      @type some :: {my_type, my_type(boolean), my_type(integer, integer)
+      @type some :: {my_type, my_type(boolean), my_type(integer, integer)}
     end
     """
 
     assert %Location{type: :typespec, file: nil, line: 3, column: 3} =
              ElixirSense.definition(buffer, 5, 28)
+  end
+
+  test "find metadata type for the correct arity - on type definition" do
+    buffer = """
+    defmodule MyModule do
+      @type my_type :: integer
+      @type my_type(a) :: {integer, a}
+      @type my_type(a, b) :: {integer, a, b}
+    end
+    """
+
+    assert %Location{type: :typespec, file: nil, line: 3, column: 3} =
+             ElixirSense.definition(buffer, 3, 10)
   end
 
   test "find remote type for the correct arity" do
@@ -1299,6 +1425,62 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "my_type(a)"
   end
 
+  test "find remote type for lowest matching arity in incomplete code" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity, as: T
+      @type some :: T.my_type(
+    end
+    """
+
+    assert %Location{type: :typespec, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/types_with_multiple_arity.ex"
+    assert read_line(file, {line, column}) =~ "@type my_type :: integer"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity, as: T
+      @type some :: T.my_type(integer
+    end
+    """
+
+    assert %Location{type: :typespec, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/types_with_multiple_arity.ex"
+    assert read_line(file, {line, column}) =~ "@type my_type(a) :: {integer, a}"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity, as: T
+      @type some :: T.my_type(integer,
+    end
+    """
+
+    assert %Location{type: :typespec, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/types_with_multiple_arity.ex"
+    assert read_line(file, {line, column}) =~ "@type my_type(a, b) :: {integer, a, b}"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity, as: T
+      @type some :: T.my_type(integer, integer,
+    end
+    """
+
+    # return any when too many arguments
+
+    assert %Location{type: :typespec, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/types_with_multiple_arity.ex"
+    assert read_line(file, {line, column}) =~ "@type my_type :: integer"
+  end
+
   test "find remote type for the correct arity - fallback to docs" do
     buffer = """
     defmodule MyModule do
@@ -1312,6 +1494,62 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
     assert file =~ "elixir_sense/test/support/types_with_multiple_arity.ex"
     assert read_line(file, {line, column}) =~ "@typedoc \"one param version\""
+  end
+
+  test "find remote type for lowest matching arity in incomplete code - fallback to docs" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity1, as: T
+      @type some :: T.my_type(
+    end
+    """
+
+    assert %Location{type: :typespec, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/types_with_multiple_arity.ex"
+    assert read_line(file, {line, column}) =~ "@typedoc \"no params version\""
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity1, as: T
+      @type some :: T.my_type(integer
+    end
+    """
+
+    assert %Location{type: :typespec, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/types_with_multiple_arity.ex"
+    assert read_line(file, {line, column}) =~ "@typedoc \"one param version\""
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity1, as: T
+      @type some :: T.my_type(integer,
+    end
+    """
+
+    assert %Location{type: :typespec, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/types_with_multiple_arity.ex"
+    assert read_line(file, {line, column}) =~ "@typedoc \"two params version\""
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.TypesWithMultipleArity1, as: T
+      @type some :: T.my_type(integer, integer,
+    end
+    """
+
+    # return any when too many arguments
+
+    assert %Location{type: :typespec, file: file, line: line, column: column} =
+             ElixirSense.definition(buffer, 3, 20)
+
+    assert file =~ "elixir_sense/test/support/types_with_multiple_arity.ex"
+    assert read_line(file, {line, column}) =~ "@typedoc \"no params version\""
   end
 
   test "find super inside overridable function" do

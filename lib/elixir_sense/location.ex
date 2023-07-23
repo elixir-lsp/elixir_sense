@@ -7,7 +7,7 @@ defmodule ElixirSense.Location do
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State.ModFunInfo
-  alias ElixirSense.Core.Introspection
+  require ElixirSense.Core.Introspection, as: Introspection
   alias ElixirSense.Location
 
   @type t :: %Location{
@@ -20,7 +20,8 @@ defmodule ElixirSense.Location do
 
   defguardp file_exists(file) when file not in ["non_existing", nil, ""]
 
-  @spec find_mod_fun_source(module, atom, non_neg_integer | nil) :: Location.t() | nil
+  @spec find_mod_fun_source(module, atom, non_neg_integer | {:gte, non_neg_integer} | :any) ::
+          Location.t() | nil
   def find_mod_fun_source(mod, fun, arity) do
     case find_mod_file(mod) do
       {mod, file} when file_exists(file) ->
@@ -31,7 +32,8 @@ defmodule ElixirSense.Location do
     end
   end
 
-  @spec find_type_source(module, atom, non_neg_integer | nil) :: Location.t() | nil
+  @spec find_type_source(module, atom, non_neg_integer | {:gte, non_neg_integer} | :any) ::
+          Location.t() | nil
   def find_type_source(mod, fun, arity) do
     case find_mod_file(mod) do
       {mod, file} when file_exists(file) ->
@@ -192,7 +194,7 @@ defmodule ElixirSense.Location do
           {{category, ^function, doc_arity}, _line, _, _, meta}
           when category in [:function, :macro] ->
             default_args = Map.get(meta, :defaults, 0)
-            arity in (doc_arity - default_args)..doc_arity
+            Introspection.matches_arity_with_defaults?(doc_arity, default_args, arity)
 
           _ ->
             false
@@ -209,7 +211,7 @@ defmodule ElixirSense.Location do
   end
 
   def get_type_position(metadata, module, type, arity) do
-    case Map.get(metadata.types, {module, type, arity}) do
+    case get_type_position_using_metadata(module, type, arity, metadata.types) do
       nil ->
         get_type_position_using_docs(module, type, arity)
 
@@ -226,8 +228,8 @@ defmodule ElixirSense.Location do
       {_, _, _, _, _, _, docs} ->
         docs
         |> Enum.filter(fn
-          {{:type, ^type_name, ^arity}, _line, _, _, _meta} ->
-            true
+          {{:type, ^type_name, doc_arity}, _line, _, _, _meta} ->
+            Introspection.matches_arity?(doc_arity, arity)
 
           _ ->
             false
@@ -243,40 +245,82 @@ defmodule ElixirSense.Location do
     end
   end
 
-  defp get_function_position_using_metadata(mod, nil, _call_arity, mods_funs_to_positions) do
+  def get_function_position_using_metadata(
+        mod,
+        fun,
+        call_arity,
+        mods_funs_to_positions,
+        predicate \\ fn _ -> true end
+      )
+
+  def get_function_position_using_metadata(
+        mod,
+        nil,
+        _call_arity,
+        mods_funs_to_positions,
+        predicate
+      ) do
     mods_funs_to_positions
     |> Enum.find_value(fn
       {{^mod, nil, nil}, fun_info} ->
-        fun_info
-
-      _ ->
-        false
-    end)
-  end
-
-  defp get_function_position_using_metadata(mod, fun, call_arity, mods_funs_to_positions) do
-    mods_funs_to_positions
-    |> Enum.find_value(fn
-      {{^mod, ^fun, fn_arity}, fun_info} when not is_nil(fn_arity) ->
-        # assume function head is first in code and last in metadata
-        default_args = fun_info.params |> Enum.at(-1) |> Introspection.count_defaults()
-
-        arity_matching =
-          case call_arity do
-            nil ->
-              # TODO arity fallback
-              false
-
-            _ ->
-              call_arity in (fn_arity - default_args)..fn_arity
-          end
-
-        if arity_matching do
+        if predicate.(fun_info) do
           fun_info
         end
 
       _ ->
         false
     end)
+  end
+
+  def get_function_position_using_metadata(
+        mod,
+        fun,
+        call_arity,
+        mods_funs_to_positions,
+        predicate
+      ) do
+    mods_funs_to_positions
+    |> Enum.filter(fn
+      {{^mod, ^fun, fn_arity}, fun_info} when not is_nil(fn_arity) ->
+        # assume function head is first in code and last in metadata
+        default_args = fun_info.params |> Enum.at(-1) |> Introspection.count_defaults()
+
+        Introspection.matches_arity_with_defaults?(fn_arity, default_args, call_arity) and
+          predicate.(fun_info)
+
+      _ ->
+        false
+    end)
+    |> min_by_line
+  end
+
+  def get_type_position_using_metadata(mod, fun, call_arity, types, predicate \\ fn _ -> true end) do
+    types
+    |> Enum.filter(fn
+      {{^mod, ^fun, type_arity}, type_info}
+      when not is_nil(type_arity) and Introspection.matches_arity?(type_arity, call_arity) ->
+        predicate.(type_info)
+
+      _ ->
+        false
+    end)
+    |> min_by_line
+  end
+
+  defp min_by_line(list) do
+    result =
+      list
+      |> Enum.min_by(
+        fn {_, %{positions: positions}} ->
+          positions |> List.last() |> elem(0)
+        end,
+        &<=/2,
+        fn -> nil end
+      )
+
+    case result do
+      {_, info} -> info
+      nil -> nil
+    end
   end
 end
