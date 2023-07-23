@@ -209,20 +209,20 @@ defmodule ElixirSense.Providers.Definition do
 
       {mod, fun, true, :mod_fun} ->
         {line, column} = context.end
-        call_arity = Metadata.get_call_arity(metadata, mod, fun, line, column)
-        other = Metadata.get_call_arity(metadata, line, column)
-
-        if other != call_arity do
-          IO.puts("with fun #{call_arity} old #{other}")
-        end
+        call_arity = Metadata.get_call_arity(metadata, mod, fun, line, column) || :any
 
         fn_definition =
-          find_fn_definition(mod, fun, call_arity, line, metadata.mods_funs_to_positions)
+          Location.get_function_position_using_metadata(
+            mod,
+            fun,
+            call_arity,
+            metadata.mods_funs_to_positions,
+            definition_line_matching?(fun, call_arity, line)
+          )
 
-        case fn_definition || metadata.mods_funs_to_positions[{mod, fun, nil}] do
+        case fn_definition do
           nil ->
-            # TODO fallback to other arities?
-            Location.find_mod_fun_source(mod, fun, call_arity)
+            with_fallback(mod, fun, call_arity, &Location.find_mod_fun_source/3)
 
           %ModFunInfo{positions: positions} = mi ->
             # for simplicity take last position here as positions are reversed
@@ -238,17 +238,14 @@ defmodule ElixirSense.Providers.Definition do
 
       {mod, fun, true, :type} ->
         {line, column} = context.end
-        call_arity = Metadata.get_call_arity(metadata, mod, fun, line, column)
-        other = Metadata.get_call_arity(metadata, line, column)
+        call_arity = Metadata.get_call_arity(metadata, mod, fun, line, column) || :any
 
-        if other != call_arity do
-          IO.puts("with fun #{call_arity} old #{other}")
-        end
+        type_definition =
+          Location.get_type_position_using_metadata(mod, fun, call_arity, metadata.types)
 
-        case metadata.types[{mod, fun, call_arity}] || metadata.types[{mod, fun, nil}] do
+        case type_definition do
           nil ->
-            # TODO fallback to other arities?
-            Location.find_type_source(mod, fun, call_arity)
+            with_fallback(mod, fun, call_arity, &Location.find_type_source/3)
 
           %TypeInfo{positions: positions} ->
             # for simplicity take last position here as positions are reversed
@@ -264,29 +261,23 @@ defmodule ElixirSense.Providers.Definition do
     end
   end
 
-  # TODO what to do with that
-  defp find_fn_definition(_mod, nil, nil, _line, _mods_funs_to_positions) do
-    nil
+  defp definition_line_matching?(fun, call_arity, line) do
+    fn %{positions: positions} ->
+      if call_arity == :any and fun != nil do
+        Enum.any?(positions, fn {fn_line, _fn_col} -> fn_line == line end)
+      else
+        true
+      end
+    end
   end
 
-  defp find_fn_definition(mod, fun, call_arity, line, mods_funs_to_positions) do
-    mods_funs_to_positions
-    |> Enum.find(fn
-      {{^mod, ^fun, fn_arity}, %{positions: fn_positions} = fun_info} when not is_nil(fn_arity) ->
-        # assume function head is first in code and last in metadata
-        default_args = fun_info.params |> Enum.at(-1) |> Introspection.count_defaults()
+  defp with_fallback(mod, fun, call_arity, callback) do
+    result = callback.(mod, fun, call_arity)
 
-        case call_arity do
-          nil -> Enum.any?(fn_positions, fn {fn_line, _fn_col} -> fn_line == line end)
-          _ -> call_arity in (fn_arity - default_args)..fn_arity
-        end
-
-      _ ->
-        false
-    end)
-    |> case do
-      {_, mod_fun_info} -> mod_fun_info
-      nil -> nil
+    if result == nil and call_arity != :any do
+      callback.(mod, fun, :any)
+    else
+      result
     end
   end
 end
