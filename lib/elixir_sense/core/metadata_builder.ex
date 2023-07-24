@@ -954,15 +954,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
                function_exported?(behaviour_module, :behaviour_info, 1) do
             keyword =
               behaviour_module.behaviour_info(:callbacks)
-              |> Enum.map(fn {f, a} ->
-                f_str = f |> Atom.to_string()
-
-                if String.starts_with?(f_str, "MACRO-") do
-                  {f_str |> String.replace_prefix("MACRO-", "") |> String.to_atom(), a - 1}
-                else
-                  {f, a}
-                end
-              end)
+              |> Enum.map(&Introspection.drop_macro_prefix/1)
 
             State.make_overridable(state, keyword, meta[:context])
           else
