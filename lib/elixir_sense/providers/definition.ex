@@ -216,8 +216,7 @@ defmodule ElixirSense.Providers.Definition do
             mod,
             fun,
             call_arity,
-            metadata.mods_funs_to_positions,
-            definition_line_matching?(fun, call_arity, line)
+            metadata.mods_funs_to_positions
           )
 
         case fn_definition do
@@ -258,16 +257,6 @@ defmodule ElixirSense.Providers.Definition do
               column: column
             }
         end
-    end
-  end
-
-  defp definition_line_matching?(fun, call_arity, line) do
-    fn %{positions: positions} ->
-      if call_arity == :any and fun != nil do
-        Enum.any?(positions, fn {fn_line, _fn_col} -> fn_line == line end)
-      else
-        true
-      end
     end
   end
 

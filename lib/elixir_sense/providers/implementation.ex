@@ -5,8 +5,9 @@ defmodule ElixirSense.Providers.Implementation do
 
   alias ElixirSense.Core.Behaviours
   alias ElixirSense.Core.Binding
-  alias ElixirSense.Core.Introspection
+  require ElixirSense.Core.Introspection, as: Introspection
   alias ElixirSense.Core.Normalized
+  alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.ModFunInfo
   alias ElixirSense.Core.SurroundContext
@@ -18,8 +19,7 @@ defmodule ElixirSense.Providers.Implementation do
   @spec find(
           any(),
           State.Env.t(),
-          State.mods_funs_to_positions_t(),
-          State.types_t()
+          Metadata.t()
         ) :: [%Location{}]
   def find(
         context,
@@ -28,8 +28,7 @@ defmodule ElixirSense.Providers.Implementation do
           vars: vars,
           attributes: attributes
         } = env,
-        mods_funs_to_positions,
-        metadata_types
+        metadata
       ) do
     binding_env = %Binding{
       attributes: attributes,
@@ -37,7 +36,7 @@ defmodule ElixirSense.Providers.Implementation do
       current_module: module
     }
 
-    type = SurroundContext.to_binding(context, module)
+    type = SurroundContext.to_binding(context.context, module)
 
     case type do
       nil ->
@@ -56,15 +55,26 @@ defmodule ElixirSense.Providers.Implementation do
               env.module
           end
 
+        {line, column} = context.end
+        call_arity = Metadata.get_call_arity(metadata, module, function, line, column) || :any
+
         behaviour_implementations =
-          find_behaviour_implementations(module, function, module, env, binding_env)
+          find_behaviour_implementations(
+            module,
+            function,
+            call_arity,
+            module,
+            env,
+            metadata,
+            binding_env
+          )
 
         if behaviour_implementations == [] do
           find_delegatee(
             {module, function},
-            mods_funs_to_positions,
+            call_arity,
             env,
-            metadata_types,
+            metadata,
             binding_env
           )
           |> List.wrap()
@@ -74,7 +84,15 @@ defmodule ElixirSense.Providers.Implementation do
     end
   end
 
-  def find_behaviour_implementations(maybe_found_module, maybe_fun, module, env, binding_env) do
+  def find_behaviour_implementations(
+        maybe_found_module,
+        maybe_fun,
+        arity,
+        module,
+        env,
+        metadata,
+        binding_env
+      ) do
     case maybe_found_module || module do
       nil ->
         []
@@ -83,15 +101,60 @@ defmodule ElixirSense.Providers.Implementation do
         found_module = expand(found_module, binding_env)
 
         cond do
-          maybe_fun == nil or is_callback(found_module, maybe_fun) ->
-            get_locations(found_module, maybe_fun)
+          maybe_fun == nil or is_callback(found_module, maybe_fun, arity, metadata) ->
+            # protocol function call
+            get_locations(found_module, maybe_fun, arity, metadata)
+
+          arity != :any and
+              (maybe_fun == nil or is_callback(found_module, maybe_fun, :any, metadata)) ->
+            # protocol function call incomplete code
+            get_locations(found_module, maybe_fun, :any, metadata)
 
           maybe_fun != nil ->
-            for behaviour <- env.behaviours,
-                is_callback(behaviour, maybe_fun) do
-              get_locations(behaviour, maybe_fun)
+            # try to get behaviours from the target module - metadata
+            behaviours =
+              case metadata.mods_funs_to_positions[{module, maybe_fun, nil}] do
+                %{positions: [{l, c} | _]} ->
+                  def_env = Metadata.get_env(metadata, {l, c})
+                  def_env.behaviours
+
+                _ ->
+                  []
+              end
+
+            # try to get behaviours from the target module - introspection
+            behaviours =
+              if behaviours == [] do
+                Behaviours.get_module_behaviours(module)
+              else
+                behaviours
+              end
+
+            # get behaviours from current env
+            behaviours =
+              if behaviours == [] do
+                env.behaviours
+              else
+                behaviours
+              end
+
+            # callback/protocol implementation def
+            list =
+              for behaviour <- behaviours,
+                  is_callback(behaviour, maybe_fun, arity, metadata) do
+                get_locations(behaviour, maybe_fun, arity, metadata)
+              end
+              |> List.flatten()
+
+            if list == [] and arity != :any do
+              for behaviour <- behaviours,
+                  is_callback(behaviour, maybe_fun, :any, metadata) do
+                get_locations(behaviour, maybe_fun, :any, metadata)
+              end
+              |> List.flatten()
+            else
+              list
             end
-            |> List.flatten()
 
           true ->
             []
@@ -109,46 +172,96 @@ defmodule ElixirSense.Providers.Implementation do
 
   defp expand(other, _binding_env), do: other
 
-  defp get_locations(behaviour, maybe_callback) do
-    Behaviours.get_all_behaviour_implementations(behaviour)
-    |> Enum.map(fn implementation ->
-      # TODO arity
-      Location.find_mod_fun_source(implementation, maybe_callback, nil)
-    end)
+  defp get_locations(behaviour, maybe_callback, arity, metadata) do
+    metadata_implementations =
+      for {_, env} <- metadata.lines_to_env,
+          behaviour in env.behaviours,
+          module <- env.module_variants,
+          uniq: true,
+          do: module
+
+    metadata_implementations_locations =
+      metadata_implementations
+      |> Enum.map(fn module ->
+        {{line, column}, type} =
+          metadata.mods_funs_to_positions
+          |> Enum.find_value(fn
+            {{^module, ^maybe_callback, a}, info} ->
+              # TODO with defaults?
+              if Introspection.matches_arity?(a, arity) do
+                {List.last(info.positions), info.type}
+              end
+
+            _ ->
+              nil
+          end)
+
+        kind =
+          case type do
+            :defmodule -> :module
+            :def -> :function
+            :defmacro -> :macro
+          end
+
+        {module, %Location{type: kind, file: nil, line: line, column: column}}
+      end)
+
+    introspection_implementations_locations =
+      Behaviours.get_all_behaviour_implementations(behaviour)
+      |> Enum.map(fn implementation ->
+        {implementation, Location.find_mod_fun_source(implementation, maybe_callback, arity)}
+      end)
+
+    Keyword.merge(introspection_implementations_locations, metadata_implementations_locations)
+    |> Keyword.values()
   end
 
-  defp is_callback(behaviour, fun) when is_atom(behaviour) do
-    Code.ensure_loaded?(behaviour) and
-      function_exported?(behaviour, :behaviour_info, 1) and
-      behaviour.behaviour_info(:callbacks)
-      |> Enum.any?(&match?({^fun, _}, &1))
+  defp is_callback(behaviour, fun, arity, metadata) when is_atom(behaviour) do
+    metadata_callback =
+      metadata.specs
+      |> Enum.any?(
+        &match?(
+          {{^behaviour, ^fun, cb_arity}, %{kind: kind}}
+          when kind in [:callback, :macrocallback] and
+                 Introspection.matches_arity?(cb_arity, arity),
+          &1
+        )
+      )
+
+    metadata_callback or
+      (Code.ensure_loaded?(behaviour) and
+         function_exported?(behaviour, :behaviour_info, 1) and
+         behaviour.behaviour_info(:callbacks)
+         |> Enum.any?(
+           &match?({^fun, cb_arity} when Introspection.matches_arity?(cb_arity, arity), &1)
+         ))
   end
 
   defp find_delegatee(
-         {module, function},
-         mods_funs_to_positions,
+         mf,
+         arity,
          env,
-         metadata_types,
+         metadata,
          binding_env,
          visited \\ []
        ) do
-    unless {module, function} in visited do
+    unless mf in visited do
       do_find_delegatee(
-        {module, function},
-        mods_funs_to_positions,
+        mf,
+        arity,
         env,
-        metadata_types,
+        metadata,
         binding_env,
-        [{module, function} | visited]
+        [mf | visited]
       )
     end
   end
 
   defp do_find_delegatee(
          {{:attribute, _attr} = type, function},
-         mods_funs_to_positions,
+         arity,
          env,
-         metadata_types,
+         metadata,
          binding_env,
          visited
        ) do
@@ -156,9 +269,9 @@ defmodule ElixirSense.Providers.Implementation do
       {:atom, module} ->
         do_find_delegatee(
           {Introspection.expand_alias(module, env.aliases), function},
-          mods_funs_to_positions,
+          arity,
           env,
-          metadata_types,
+          metadata,
           binding_env,
           visited
         )
@@ -170,9 +283,9 @@ defmodule ElixirSense.Providers.Implementation do
 
   defp do_find_delegatee(
          {module, function},
-         mods_funs_to_positions,
+         arity,
          env,
-         metadata_types,
+         metadata,
          binding_env,
          visited
        ) do
@@ -191,26 +304,41 @@ defmodule ElixirSense.Providers.Implementation do
            aliases,
            current_module,
            scope,
-           mods_funs_to_positions,
-           metadata_types
+           metadata.mods_funs_to_positions,
+           metadata.types
          ) do
       {mod, fun, true, :mod_fun} when not is_nil(fun) ->
-        case mods_funs_to_positions[{mod, fun, nil}] do
+        # on defdelegate - no need for arity fallback here
+        info =
+          Location.get_function_position_using_metadata(
+            mod,
+            fun,
+            arity,
+            metadata.mods_funs_to_positions
+          )
+
+        case info do
           nil ->
-            find_delegatee_location(mod, fun, visited)
+            find_delegatee_location(mod, fun, arity, visited)
 
           %ModFunInfo{type: :defdelegate, target: target} when not is_nil(target) ->
             find_delegatee(
               target,
-              mods_funs_to_positions,
+              arity,
               env,
-              metadata_types,
+              metadata,
               binding_env,
               visited
             )
 
+          %ModFunInfo{positions: positions, type: :def} ->
+            # find_delegatee_location(mod, fun, arity, visited)
+            if length(visited) > 1 do
+              {line, column} = List.last(positions)
+              %Location{type: :function, file: nil, line: line, column: column}
+            end
+
           _ ->
-            # not a delegate
             nil
         end
 
@@ -219,23 +347,61 @@ defmodule ElixirSense.Providers.Implementation do
     end
   end
 
-  defp find_delegatee_location(mod, fun, visited) do
-    case Normalized.Code.get_docs(mod, :docs)
-         |> List.wrap()
-         |> Enum.find(&match?({{^fun, _}, _, :function, _, _, %{delegate_to: _}}, &1)) do
+  defp find_delegatee_location(mod, fun, arity, visited) do
+    defdelegate_from_docs = with_fallback(mod, fun, arity, &get_defdelegate_by_docs/3)
+
+    case defdelegate_from_docs do
       nil ->
         # ensure we are expanding a delegate
         if length(visited) > 1 do
-          # TODO arity
-          Location.find_mod_fun_source(mod, fun, nil)
+          # on defdelegate - no need for arity fallback
+          Location.find_mod_fun_source(mod, fun, arity)
         end
 
       {_, _, _, _, _,
        %{
-         delegate_to: {delegate_mod, delegate_fun, _}
+         delegate_to: {delegate_mod, delegate_fun, delegate_arity}
        }} ->
-        # TODO arity
-        Location.find_mod_fun_source(delegate_mod, delegate_fun, nil)
+        # on call of delegated function - arity fallback already done
+        Location.find_mod_fun_source(delegate_mod, delegate_fun, delegate_arity)
+    end
+  end
+
+  defp get_defdelegate_by_docs(mod, fun, arity) do
+    Normalized.Code.get_docs(mod, :docs)
+    |> List.wrap()
+    |> Enum.filter(fn
+      {{^fun, a}, _, :function, _, _, %{delegate_to: _} = meta} ->
+        default_args = Map.get(meta, :defaults, 0)
+        Introspection.matches_arity_with_defaults?(a, default_args, arity)
+
+      _ ->
+        false
+    end)
+    |> Enum.min_by(
+      fn {{_, a}, _, _, _, _, _} -> a end,
+      &<=/2,
+      fn -> nil end
+    )
+  end
+
+  defp with_fallback(mod, fun, arity, callback) do
+    result = callback.(mod, fun, arity)
+
+    if result == nil and arity != :any do
+      callback.(mod, fun, :any)
+    else
+      result
+    end
+  end
+
+  defp with_fallback(mod, fun, arity, mods_funs, callback) do
+    result = callback.(mod, fun, arity, mods_funs)
+
+    if result == nil and arity != :any do
+      callback.(mod, fun, :any, mods_funs)
+    else
+      result
     end
   end
 end
