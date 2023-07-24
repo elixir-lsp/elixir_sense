@@ -8,10 +8,20 @@ defmodule ElixirSenseExample.ModuleWithFunctions do
   end
 
   defdelegate delegated_function, to: ElixirSenseExample.ModuleWithFunctions.DelegatedModule
+  defdelegate delegated_function(a), to: ElixirSenseExample.ModuleWithFunctions.DelegatedModule
+  defdelegate delegated_function(a, b), to: ElixirSenseExample.ModuleWithFunctions.DelegatedModule
 
   defmodule DelegatedModule do
     def delegated_function do
       nil
+    end
+
+    def delegated_function(a) do
+      a
+    end
+
+    def delegated_function(a, b) do
+      {a, b}
     end
   end
 end

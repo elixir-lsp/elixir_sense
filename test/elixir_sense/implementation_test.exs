@@ -117,6 +117,29 @@ defmodule ElixirSense.Providers.ImplementationTest do
              "foo(), do: :ok"
   end
 
+  test "find implementations of behaviour module macrocallback" do
+    buffer = """
+    defmodule ElixirSenseExample.ExampleBehaviourWithDoc do
+      @macrocallback bar(integer()) :: Macro.t()
+    end
+    """
+
+    [
+      %Location{type: :macro, file: file1, line: line1, column: column1},
+      %Location{type: :macro, file: file2, line: line2, column: column2}
+    ] = ElixirSense.implementations(buffer, 2, 19)
+
+    assert file1 =~ "elixir_sense/test/support/example_behaviour.ex"
+
+    assert read_line(file1, {line1, column1}) =~
+             "defmacro bar(_b)"
+
+    assert file2 =~ "elixir_sense/test/support/example_behaviour.ex"
+
+    assert read_line(file2, {line2, column2}) =~
+             "defmacro bar(_b)"
+  end
+
   test "find implementations of behaviour module on callback in implementation" do
     buffer = """
     defmodule Some do
@@ -127,7 +150,8 @@ defmodule ElixirSense.Providers.ImplementationTest do
 
     [
       %Location{type: :function, file: file1, line: line1, column: column1},
-      %Location{type: :function, file: file2, line: line2, column: column2}
+      %Location{type: :function, file: file2, line: line2, column: column2},
+      %Location{type: :function, file: nil, line: 3, column: 3}
     ] = ElixirSense.implementations(buffer, 3, 8)
 
     assert file1 =~ "elixir_sense/test/support/example_behaviour.ex"
@@ -139,6 +163,57 @@ defmodule ElixirSense.Providers.ImplementationTest do
 
     assert read_line(file2, {line2, column2}) =~
              "foo(), do: :ok"
+  end
+
+  test "find implementations of metadata behaviour module callback" do
+    buffer = """
+    defmodule MetadataBehaviour do
+      @callback foo() :: :ok
+    end
+
+    defmodule Some do
+      @behaviour MetadataBehaviour
+      def foo(), do: :ok
+    end
+    """
+
+    [
+      %Location{type: :function, file: nil, line: 7, column: 3}
+    ] = ElixirSense.implementations(buffer, 2, 14)
+  end
+
+  test "find implementations of metadata behaviour module macrocallback" do
+    buffer = """
+    defmodule MetadataBehaviour do
+      @macrocallback foo(arg :: any) :: Macro.t
+    end
+
+    defmodule Some do
+      @behaviour MetadataBehaviour
+      defmacro foo(arg), do: :ok
+    end
+    """
+
+    [
+      %Location{type: :macro, file: nil, line: 7, column: 3}
+    ] = ElixirSense.implementations(buffer, 2, 19)
+  end
+
+  test "find implementations of metadata behaviour" do
+    buffer = """
+    defmodule MetadataBehaviour do
+      @callback foo() :: :ok
+    end
+
+    defmodule Some do
+      @behaviour MetadataBehaviour
+      def foo(), do: :ok
+    end
+    """
+
+    [
+      %Location{type: :module, file: nil, line: 5, column: 1}
+    ] = ElixirSense.implementations(buffer, 1, 14)
   end
 
   test "find protocol implementation functions" do
@@ -161,6 +236,43 @@ defmodule ElixirSense.Providers.ImplementationTest do
     assert read_line(file2, {line2, column2}) =~ "some(t), do: t"
   end
 
+  test "find protocol implementation functions on spec" do
+    buffer = """
+    defprotocol ElixirSenseExample.ExampleProtocol do
+      @spec some(t) :: any
+      def some(t)
+    end
+    """
+
+    [
+      %Location{type: :function, file: file1, line: line1, column: column1},
+      %Location{type: :function, file: file2, line: line2, column: column2}
+    ] = ElixirSense.implementations(buffer, 2, 10)
+
+    assert file1 =~ "elixir_sense/test/support/example_protocol.ex"
+    assert read_line(file1, {line1, column1}) =~ "some(t), do: t"
+
+    assert file2 =~ "elixir_sense/test/support/example_protocol.ex"
+    assert read_line(file2, {line2, column2}) =~ "some(t), do: t"
+  end
+
+  test "find metadata protocol implementation functions on spec" do
+    buffer = """
+    defprotocol MetadataProtocol do
+      @spec some(t) :: any
+      def some(t)
+    end
+
+    defimpl MetadataProtocol, for: String do
+      def some(t), do: :ok
+    end
+    """
+
+    [
+      %Location{type: :function, file: nil, line: 7, column: 3}
+    ] = ElixirSense.implementations(buffer, 2, 10)
+  end
+
   test "find protocol implementation functions on implementation function" do
     buffer = """
     defimpl ElixirSenseExample.ExampleProtocol, for: String do
@@ -170,7 +282,82 @@ defmodule ElixirSense.Providers.ImplementationTest do
 
     [
       %Location{type: :function, file: file1, line: line1, column: column1},
-      %Location{type: :function, file: file2, line: line2, column: column2}
+      %Location{type: :function, file: file2, line: line2, column: column2},
+      %Location{type: :function, file: nil, line: 2, column: 3}
+    ] = ElixirSense.implementations(buffer, 2, 8)
+
+    assert file1 =~ "elixir_sense/test/support/example_protocol.ex"
+    assert read_line(file1, {line1, column1}) =~ "some(t), do: t"
+
+    assert file2 =~ "elixir_sense/test/support/example_protocol.ex"
+    assert read_line(file2, {line2, column2}) =~ "some(t), do: t"
+  end
+
+  test "find metadata protocol implementation functions on function" do
+    buffer = """
+    defprotocol MetadataProtocol do
+      @spec some(t) :: any
+      def some(t)
+    end
+
+    defimpl MetadataProtocol, for: String do
+      def some(t), do: :ok
+    end
+    """
+
+    [
+      %Location{type: :function, file: nil, line: 7, column: 3}
+    ] = ElixirSense.implementations(buffer, 3, 8)
+  end
+
+  test "find metadata protocol implementation" do
+    buffer = """
+    defprotocol MetadataProtocol do
+      @spec some(t) :: any
+      def some(t)
+    end
+
+    defimpl MetadataProtocol, for: String do
+      def some(t), do: :ok
+    end
+    """
+
+    [
+      %Location{type: :module, file: nil, line: 6, column: 1}
+    ] = ElixirSense.implementations(buffer, 1, 14)
+  end
+
+  test "find protocol implementation functions on implementation function - incomplete code" do
+    buffer = """
+    defimpl ElixirSenseExample.ExampleProtocol, for: String do
+      def some(t
+    end
+    """
+
+    [
+      %Location{type: :function, file: file1, line: line1, column: column1},
+      %Location{type: :function, file: file2, line: line2, column: column2},
+      %Location{type: :function, file: nil, line: 2, column: 3}
+    ] = ElixirSense.implementations(buffer, 2, 8)
+
+    assert file1 =~ "elixir_sense/test/support/example_protocol.ex"
+    assert read_line(file1, {line1, column1}) =~ "some(t), do: t"
+
+    assert file2 =~ "elixir_sense/test/support/example_protocol.ex"
+    assert read_line(file2, {line2, column2}) =~ "some(t), do: t"
+
+    buffer = """
+    defimpl ElixirSenseExample.ExampleProtocol, for: String do
+      def some(t, 1,
+    end
+    """
+
+    # return any with too many arguments
+
+    [
+      %Location{type: :function, file: file1, line: line1, column: column1},
+      %Location{type: :function, file: file2, line: line2, column: column2},
+      %Location{type: :function, file: nil, line: 2, column: 3}
     ] = ElixirSense.implementations(buffer, 2, 8)
 
     assert file1 =~ "elixir_sense/test/support/example_protocol.ex"
@@ -182,7 +369,39 @@ defmodule ElixirSense.Providers.ImplementationTest do
 
   test "find protocol implementation functions on call" do
     buffer = """
-    ElixirSenseExample.ExampleProtocol.some()
+    ElixirSenseExample.ExampleProtocol.some(1)
+    """
+
+    [
+      %Location{type: :function, file: file1, line: line1, column: column1},
+      %Location{type: :function, file: file2, line: line2, column: column2}
+    ] = ElixirSense.implementations(buffer, 1, 37)
+
+    assert file1 =~ "elixir_sense/test/support/example_protocol.ex"
+    assert read_line(file1, {line1, column1}) =~ "some(t), do: t"
+
+    assert file2 =~ "elixir_sense/test/support/example_protocol.ex"
+    assert read_line(file2, {line2, column2}) =~ "some(t), do: t"
+  end
+
+  test "find protocol implementation functions on call with incomplete code" do
+    buffer = """
+    ElixirSenseExample.ExampleProtocol.some(
+    """
+
+    [
+      %Location{type: :function, file: file1, line: line1, column: column1},
+      %Location{type: :function, file: file2, line: line2, column: column2}
+    ] = ElixirSense.implementations(buffer, 1, 37)
+
+    assert file1 =~ "elixir_sense/test/support/example_protocol.ex"
+    assert read_line(file1, {line1, column1}) =~ "some(t), do: t"
+
+    assert file2 =~ "elixir_sense/test/support/example_protocol.ex"
+    assert read_line(file2, {line2, column2}) =~ "some(t), do: t"
+
+    buffer = """
+    ElixirSenseExample.ExampleProtocol.some(a,
     """
 
     [
@@ -201,7 +420,7 @@ defmodule ElixirSense.Providers.ImplementationTest do
     buffer = """
     defmodule Some do
       alias ElixirSenseExample.ExampleProtocol, as: A
-      A.some()
+      A.some(1)
     end
     """
 
@@ -221,7 +440,7 @@ defmodule ElixirSense.Providers.ImplementationTest do
     buffer = """
     defmodule Some do
       @attr ElixirSenseExample.ExampleProtocol
-      @attr.some()
+      @attr.some(1)
     end
     """
 
@@ -237,6 +456,42 @@ defmodule ElixirSense.Providers.ImplementationTest do
     assert read_line(file2, {line2, column2}) =~ "some(t), do: t"
   end
 
+  test "find behaviour implementation functions on call" do
+    buffer = """
+    ElixirSenseExample.DummyBehaviourImplementation.foo()
+    """
+
+    [
+      %Location{type: :function, file: file1, line: line1, column: column1}
+    ] = ElixirSense.implementations(buffer, 1, 49)
+
+    assert file1 =~ "elixir_sense/test/support/behaviour_implementations.ex"
+    assert read_line(file1, {line1, column1}) =~ "def foo(), do: :ok"
+  end
+
+  test "find behaviour implementation functions on call metadata" do
+    buffer = """
+    defmodule Some do
+      @behaviour ElixirSenseExample.ExampleBehaviourWithDoc
+      def foo(), do: :ok
+    end
+
+    Some.foo()
+    """
+
+    [
+      %Location{type: :function, file: file1, line: line1, column: column1},
+      %Location{type: :function, file: file2, line: line2, column: column2},
+      %Location{type: :function, file: nil, line: 3, column: 3}
+    ] = ElixirSense.implementations(buffer, 6, 7)
+
+    assert file1 =~ "elixir_sense/test/support/example_behaviour.ex"
+    assert read_line(file1, {line1, column1}) =~ "def foo(), do: :ok"
+
+    assert file2 =~ "elixir_sense/test/support/example_behaviour.ex"
+    assert read_line(file2, {line2, column2}) =~ "def foo(), do: :ok"
+  end
+
   test "find implementation of delegated functions" do
     buffer = """
     defmodule MyModule do
@@ -245,6 +500,66 @@ defmodule ElixirSense.Providers.ImplementationTest do
       #        ^
     end
     """
+
+    [%Location{type: :function, file: file, line: line, column: column}] =
+      ElixirSense.implementations(buffer, 3, 11)
+
+    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
+    assert read_line(file, {line, column}) =~ "delegated_function do"
+  end
+
+  test "find implementation of delegated functions in incomplete code" do
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.ModuleWithFunctions, as: MyMod
+      MyMod.delegated_function(
+      #        ^
+    end
+    """
+
+    [%Location{type: :function, file: file, line: line, column: column}] =
+      ElixirSense.implementations(buffer, 3, 11)
+
+    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
+    assert read_line(file, {line, column}) =~ "delegated_function do"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.ModuleWithFunctions, as: MyMod
+      MyMod.delegated_function(1
+      #        ^
+    end
+    """
+
+    [%Location{type: :function, file: file, line: line, column: column}] =
+      ElixirSense.implementations(buffer, 3, 11)
+
+    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
+    assert read_line(file, {line, column}) =~ "delegated_function(a) do"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.ModuleWithFunctions, as: MyMod
+      MyMod.delegated_function(1,
+      #        ^
+    end
+    """
+
+    [%Location{type: :function, file: file, line: line, column: column}] =
+      ElixirSense.implementations(buffer, 3, 11)
+
+    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
+    assert read_line(file, {line, column}) =~ "delegated_function(a, b) do"
+
+    buffer = """
+    defmodule MyModule do
+      alias ElixirSenseExample.ModuleWithFunctions, as: MyMod
+      MyMod.delegated_function(1, 2,
+      #        ^
+    end
+    """
+
+    # return first matching if too many arguments
 
     [%Location{type: :function, file: file, line: line, column: column}] =
       ElixirSense.implementations(buffer, 3, 11)
@@ -282,7 +597,37 @@ defmodule ElixirSense.Providers.ImplementationTest do
       ElixirSense.implementations(buffer, 2, 15)
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
-    assert read_line(file, {line, column}) =~ "delegated_function"
+    assert read_line(file, {line, column}) =~ "def delegated_function do"
+  end
+
+  test "handle defdelegate - navigate to correct arity" do
+    buffer = """
+    defmodule MyModule do
+      defdelegate delegated_function(a), to: ElixirSenseExample.ModuleWithFunctions.DelegatedModule
+      #            ^
+    end
+    """
+
+    [%Location{type: :function, file: file, line: line, column: column}] =
+      ElixirSense.implementations(buffer, 2, 15)
+
+    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
+    assert read_line(file, {line, column}) =~ "def delegated_function(a) do"
+  end
+
+  test "handle defdelegate - navigate to correct arity on default args" do
+    buffer = """
+    defmodule MyModule do
+      defdelegate delegated_function(a \\\\ nil), to: ElixirSenseExample.ModuleWithFunctions.DelegatedModule
+      #            ^
+    end
+    """
+
+    [%Location{type: :function, file: file, line: line, column: column}] =
+      ElixirSense.implementations(buffer, 2, 15)
+
+    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
+    assert read_line(file, {line, column}) =~ "def delegated_function(a) do"
   end
 
   test "handle defdelegate with `as`" do
@@ -298,6 +643,22 @@ defmodule ElixirSense.Providers.ImplementationTest do
 
     assert file =~ "elixir_sense/test/support/module_with_functions.ex"
     assert read_line(file, {line, column}) =~ "delegated_function"
+  end
+
+  test "defdelegate to metadata module" do
+    buffer = """
+    defmodule SomeModWithDelegatee do
+      def delegated_function, do: :ok
+    end
+
+    defmodule MyModule do
+      defdelegate delegated_function, to: SomeModWithDelegatee
+      #            ^
+    end
+    """
+
+    assert [%Location{type: :function, file: nil, line: 2, column: 3}] ==
+             ElixirSense.implementations(buffer, 6, 15)
   end
 
   test "handle recursion in defdelegate" do

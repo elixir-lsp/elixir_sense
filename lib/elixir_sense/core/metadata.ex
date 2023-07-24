@@ -241,26 +241,48 @@ defmodule ElixirSense.Core.Metadata do
 
   def get_call_arity(%__MODULE__{}, _module, nil, _line, _column), do: nil
 
-  def get_call_arity(%__MODULE__{calls: calls, error: error}, _module, fun, line, column) do
-    case calls[line] do
-      nil ->
-        nil
+  def get_call_arity(
+        %__MODULE__{calls: calls, error: error, mods_funs_to_positions: mods_funs_to_positions},
+        module,
+        fun,
+        line,
+        column
+      ) do
+    result =
+      case calls[line] do
+        nil ->
+          nil
 
-      line_calls ->
-        line_calls
-        |> Enum.filter(fn %State.CallInfo{position: {_call_line, call_column}} ->
-          call_column <= column
-        end)
-        |> Enum.find_value(fn call ->
-          # call.mod in not expanded
-          if call.func == fun do
-            if error == {:error, :parse_error} do
-              {:gte, call.arity}
-            else
-              call.arity
+        line_calls ->
+          line_calls
+          |> Enum.filter(fn %State.CallInfo{position: {_call_line, call_column}} ->
+            call_column <= column
+          end)
+          |> Enum.find_value(fn call ->
+            # call.mod in not expanded
+            if call.func == fun do
+              if error == {:error, :parse_error} do
+                {:gte, call.arity}
+              else
+                call.arity
+              end
             end
+          end)
+      end
+
+    if result == nil do
+      mods_funs_to_positions
+      |> Enum.find_value(fn
+        {{^module, ^fun, arity}, %{positions: positions}} when not is_nil(arity) ->
+          if Enum.any?(positions, &match?({^line, _}, &1)) do
+            arity
           end
-        end)
+
+        _ ->
+          nil
+      end)
+    else
+      result
     end
   end
 

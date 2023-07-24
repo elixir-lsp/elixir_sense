@@ -140,7 +140,7 @@ defmodule ElixirSense do
       :none ->
         []
 
-      %{context: context} ->
+      context ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
         env = Metadata.get_env(buffer_file_metadata, {line, column})
@@ -148,8 +148,7 @@ defmodule ElixirSense do
         Implementation.find(
           context,
           env,
-          buffer_file_metadata.mods_funs_to_positions,
-          buffer_file_metadata.types
+          buffer_file_metadata
         )
     end
   end
