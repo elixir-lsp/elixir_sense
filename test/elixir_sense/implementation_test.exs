@@ -492,6 +492,29 @@ defmodule ElixirSense.Providers.ImplementationTest do
     assert read_line(file2, {line2, column2}) =~ "def foo(), do: :ok"
   end
 
+  test "find behaviour macrocallback implementation functions on call metadata" do
+    buffer = """
+    defmodule Some do
+      @behaviour ElixirSenseExample.ExampleBehaviourWithDoc
+      defmacro bar(a), do: :ok
+    end
+
+    Some.bar()
+    """
+
+    [
+      %Location{type: :macro, file: file1, line: line1, column: column1},
+      %Location{type: :macro, file: file2, line: line2, column: column2},
+      %Location{type: :macro, file: nil, line: 3, column: 3}
+    ] = ElixirSense.implementations(buffer, 6, 7)
+
+    assert file1 =~ "elixir_sense/test/support/example_behaviour.ex"
+    assert read_line(file1, {line1, column1}) =~ "defmacro bar(_b)"
+
+    assert file2 =~ "elixir_sense/test/support/example_behaviour.ex"
+    assert read_line(file2, {line2, column2}) =~ "defmacro bar(_b)"
+  end
+
   test "find implementation of delegated functions" do
     buffer = """
     defmodule MyModule do

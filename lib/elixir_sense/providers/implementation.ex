@@ -187,8 +187,9 @@ defmodule ElixirSense.Providers.Implementation do
           metadata.mods_funs_to_positions
           |> Enum.find_value(fn
             {{^module, ^maybe_callback, a}, info} ->
-              # TODO with defaults?
-              if Introspection.matches_arity?(a, arity) do
+              defaults = info.params |> List.last() |> Introspection.count_defaults()
+
+              if Introspection.matches_arity_with_defaults?(a, defaults, arity) do
                 {List.last(info.positions), info.type}
               end
 
@@ -232,6 +233,7 @@ defmodule ElixirSense.Providers.Implementation do
       (Code.ensure_loaded?(behaviour) and
          function_exported?(behaviour, :behaviour_info, 1) and
          behaviour.behaviour_info(:callbacks)
+         |> Enum.map(&Introspection.drop_macro_prefix/1)
          |> Enum.any?(
            &match?({^fun, cb_arity} when Introspection.matches_arity?(cb_arity, arity), &1)
          ))
