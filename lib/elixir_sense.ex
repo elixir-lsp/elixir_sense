@@ -417,10 +417,9 @@ defmodule ElixirSense do
         []
 
       %{
-        context: context,
         begin: {begin_line, begin_col},
         end: {line, col}
-      } ->
+      } = context ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 
         env =
@@ -450,13 +449,8 @@ defmodule ElixirSense do
               []
           end
 
-        arity = Metadata.get_call_arity(buffer_file_metadata, line, col)
-
         References.find(
           context,
-          begin_line,
-          begin_col,
-          arity,
           env,
           vars,
           attributes,
