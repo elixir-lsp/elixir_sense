@@ -396,14 +396,4 @@ defmodule ElixirSense.Providers.Implementation do
       result
     end
   end
-
-  defp with_fallback(mod, fun, arity, mods_funs, callback) do
-    result = callback.(mod, fun, arity, mods_funs)
-
-    if result == nil and arity != :any do
-      callback.(mod, fun, :any, mods_funs)
-    else
-      result
-    end
-  end
 end

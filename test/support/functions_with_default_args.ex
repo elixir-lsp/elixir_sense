@@ -41,3 +41,14 @@ for i <- 1..1 do
     def my_func(2, 2, 3), do: :error
   end
 end
+
+defmodule ElixirSenseExample.FunctionsWithDefaultArgsCaller do
+  alias ElixirSenseExample.FunctionsWithDefaultArgs, as: F
+
+  def go() do
+    F.my_func()
+    F.my_func(1)
+    F.my_func(1, "a")
+    F.my_func(1, 2, 3)
+  end
+end

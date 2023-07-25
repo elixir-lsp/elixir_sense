@@ -1067,6 +1067,28 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
+  test "find definition of local functions with __MODULE__ submodule" do
+    buffer = """
+    defmodule MyModule do
+      defmodule Sub do
+        def my_fun(), do: :ok
+      end
+
+      def a do
+        my_fun1 = 1
+        __MODULE__.Sub.my_fun()
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 8, 22) == %Location{
+             type: :function,
+             file: nil,
+             line: 3,
+             column: 5
+           }
+  end
+
   @tag requires_elixir_1_14: true
   test "find definition of local functions with @attr" do
     buffer = """
