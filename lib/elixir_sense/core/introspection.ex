@@ -269,12 +269,14 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defguard matches_arity?(is, expected)
-           when expected == :any or is == expected or
-                  (is_tuple(expected) and elem(expected, 0) == :gte and is >= elem(expected, 1))
+           when is != nil and
+                  (expected == :any or is == expected or
+                     (is_tuple(expected) and elem(expected, 0) == :gte and is >= elem(expected, 1)))
 
   defguard matches_arity_with_defaults?(is, defaults, expected)
-           when expected == :any or (is_integer(expected) and expected in (is - defaults)..is) or
-                  (is_tuple(expected) and elem(expected, 0) == :gte and is >= elem(expected, 1))
+           when is != nil and
+                  (expected == :any or (is_integer(expected) and expected in (is - defaults)..is) or
+                     (is_tuple(expected) and elem(expected, 0) == :gte and is >= elem(expected, 1)))
 
   @spec get_func_docs_md(nil | module, atom, non_neg_integer | :any) :: list(markdown)
   def get_func_docs_md(mod, fun, arity)

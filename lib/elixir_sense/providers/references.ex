@@ -59,20 +59,6 @@ defmodule ElixirSense.Providers.References do
     type = SurroundContext.to_binding(context.context, module)
 
     refs_for_mod_fun = fn {mod, function} ->
-      # private_info =
-      #   Enum.any?(mods_funs, fn {{_mod, name, _args}, fun_info} ->
-      #     name == function && fun_info.type == :defp
-      #   end)
-
-      # if metadata_call_references != [] do
-      # metadata_call_references
-      # calls
-      # |> Map.values()
-      # |> List.flatten()
-      # |> Enum.filter(&(&1.mod == nil && &1.func == function))
-      # |> Enum.map(fn %{position: pos} -> build_var_location(to_string(function), pos) end)
-      # |> dbg
-      # else
       actual =
         {mod, function}
         |> expand(binding_env, module, aliases)
@@ -126,7 +112,10 @@ defmodule ElixirSense.Providers.References do
 
                   dbg({arities, corrected_arity})
 
-                  if corrected_arity in arities do
+                  if Enum.any?(
+                       arities,
+                       &(Introspection.matches_arity?(corrected_arity, &1) |> dbg)
+                     ) do
                     build_var_location(to_string(function), call.position)
                   end
 
@@ -204,24 +193,6 @@ defmodule ElixirSense.Providers.References do
     [module]
   end
 
-  # Cursor over a function definition
-  defp callee_at_cursor({module, func}, module, {func, arity}, nil, mods_funs) do
-    fun_info = mods_funs |> Map.fetch!({module, func, arity})
-
-    if fun_info.params |> hd |> Enum.any?(&match?({:\\, _, _}, &1)) do
-      # function has default params, we cannot use arity to filter
-      # TODO consider adding min and max bounds on arity
-      [module, func]
-    else
-      [module, func, arity]
-    end
-  end
-
-  # Cursor over a function call but we couldn't introspect the arity
-  # defp callee_at_cursor({module, func}, _module, _scope, nil, _mods_funs) do
-  #   [module, func]
-  # end
-
   # Cursor over a function call
   defp callee_at_cursor({module, func}, _module, _scope, arity, _mods_funs) do
     [module, func, arity]
@@ -241,7 +212,7 @@ defmodule ElixirSense.Providers.References do
     fn
       %{callee: {^module, ^func, callee_arity} = callee} ->
         corrected_arity = get_corrected_arity([module, func, callee_arity], mods_funs)
-        corrected_arity in filter_arities
+        Enum.any?(filter_arities, &Introspection.matches_arity?(corrected_arity, &1))
 
       _ ->
         false
@@ -299,28 +270,12 @@ defmodule ElixirSense.Providers.References do
     [m]
   end
 
-  # TODO is that needed?
-  defp get_corrected_arity([m, f], _mods_funs) do
-    case NormalizedCode.get_docs(m, :docs) do
-      nil ->
-        [m, f]
-
-      docs ->
-        docs
-        |> Enum.find_value([m, f], fn {{name, arity}, _, _, _, _, _meta} ->
-          if name == f do
-            [m, f, arity]
-          end
-        end)
-    end
-  end
-
   defp get_corrected_arity([m, f, a], mods_funs) do
     arity =
       mods_funs
       |> Enum.find_value(fn
         {{^m, ^f, arity}, info} when not is_nil(arity) ->
-          # TODO filter priv?
+          # no need to filter public only here
           defaults = info.params |> List.last() |> Introspection.count_defaults()
 
           if Introspection.matches_arity_with_defaults?(arity, defaults, a) do
@@ -331,29 +286,39 @@ defmodule ElixirSense.Providers.References do
           false
       end)
 
-    if arity != nil do
-      arity
-    else
-      case NormalizedCode.get_docs(m, :docs) do
-        nil ->
-          # most likely erlang - no need to correct arity
-          a
+    arity =
+      if arity != nil do
+        arity
+      else
+        case NormalizedCode.get_docs(m, :docs) do
+          nil ->
+            nil
 
-        docs ->
-          docs
-          |> Enum.find_value(a, fn
-            {{^f, arity}, _, _, _, _, meta} ->
-              defaults = Map.get(meta, :defaults, 0)
+          docs ->
+            docs
+            |> Enum.find_value(fn
+              {{^f, arity}, _, _, _, _, meta} ->
+                defaults = Map.get(meta, :defaults, 0)
 
-              if Introspection.matches_arity_with_defaults?(arity, defaults, a) do
-                arity
-              end
+                if Introspection.matches_arity_with_defaults?(arity, defaults, a) do
+                  arity
+                end
 
-            _ ->
-              false
-          end)
+              _ ->
+                false
+            end)
+        end
       end
-    end
+
+    arity =
+      if arity != nil do
+        arity
+      else
+        # no need to drop macro prefix and correct arity - macros handled by docs
+        if Code.ensure_loaded?(m) and {f, a} in m.module_info(:exports) do
+          a
+        end
+      end
   end
 
   defp get_matching_arities([m, f, a], mods_funs) do
@@ -361,7 +326,7 @@ defmodule ElixirSense.Providers.References do
       mods_funs
       |> Enum.filter(fn
         {{^m, ^f, arity}, info} when not is_nil(arity) ->
-          # TODO filter priv?
+          # no need to filter public only here
           defaults = info.params |> List.last() |> Introspection.count_defaults()
 
           if Introspection.matches_arity_with_defaults?(arity, defaults, a) do
@@ -405,7 +370,18 @@ defmodule ElixirSense.Providers.References do
 
     arities =
       if arities == [] do
-        [a]
+        if Code.ensure_loaded?(m) do
+          m.module_info(:exports)
+          |> Enum.filter(fn {fun, arity} ->
+            # no need to drop macro prefix and correct arity - macros handled by docs
+            fun == f and Introspection.matches_arity?(arity, a)
+          end)
+          |> Enum.map(fn {_fun, arity} ->
+            arity
+          end)
+        else
+          []
+        end
       else
         arities
       end
