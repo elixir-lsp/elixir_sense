@@ -186,7 +186,10 @@ defmodule ElixirSense.Providers.Implementation do
         {{line, column}, type} =
           metadata.mods_funs_to_positions
           |> Enum.find_value(fn
-            {{^module, ^maybe_callback, a}, info} ->
+            {{^module, ^maybe_callback, a}, info} when is_nil(maybe_callback) ->
+              {List.last(info.positions), info.type}
+
+            {{^module, ^maybe_callback, a}, info} when not is_nil(a) ->
               defaults = info.params |> List.last() |> Introspection.count_defaults()
 
               if Introspection.matches_arity_with_defaults?(a, defaults, arity) do
