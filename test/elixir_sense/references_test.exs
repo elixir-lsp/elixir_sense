@@ -712,6 +712,34 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ] = references
   end
 
+  test "does not find references for private remote calls in metadata", %{trace: trace} do
+    buffer = """
+    defmodule SomeCallee do
+      defp my_func(), do: :ok
+      defp my_func(a, b \\\\ ""), do: :ok
+      defp my_func(1, 2, 3), do: :ok
+    end
+
+    defmodule Caller do
+      alias SomeCallee, as: F
+      def func() do
+        F.my_func(1)
+        F.my_func(1, "")
+        F.my_func()
+        F.my_func(1, 2, 3)
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 3, 9, trace)
+
+    assert [] == references
+
+    references = ElixirSense.references(buffer, 10, 8, trace)
+
+    assert [] == references
+  end
+
   test "find references with cursor over a module with 1.2 alias syntax", %{trace: trace} do
     buffer = """
     defmodule Caller do
@@ -1529,6 +1557,32 @@ defmodule ElixirSense.Providers.ReferencesTest do
     defmodule Caller do
       def func() do
         ElixirSense.Providers.ReferencesTest.Modules.Callee6.module_info()
+        #                                                      ^
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 3, 60, trace)
+
+    assert [
+             %{
+               range: %{end: %{column: 69, line: 3}, start: %{column: 58, line: 3}},
+               uri: nil
+             },
+             %{
+               range: range_1,
+               uri: "test/support/modules_with_references.ex"
+             }
+           ] = references
+
+    assert range_1 == %{start: %{column: 60, line: 101}, end: %{column: 71, line: 101}}
+  end
+
+  test "find references with cursor over builtin function call incomplete code", %{trace: trace} do
+    buffer = """
+    defmodule Caller do
+      def func() do
+        ElixirSense.Providers.ReferencesTest.Modules.Callee6.module_info(
         #                                                      ^
       end
     end
