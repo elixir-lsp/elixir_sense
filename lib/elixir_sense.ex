@@ -396,6 +396,7 @@ defmodule ElixirSense do
       ...> }
       iex> ElixirSense.references(code, 3, 6, trace)
       [
+        %{range: %{end: %{column: 9, line: 3}, start: %{column: 5, line: 3}}, uri: nil},
         %{
           uri: "test/support/modules_with_references.ex",
           range: %{

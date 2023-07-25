@@ -81,7 +81,7 @@ defmodule ElixirSense.Providers.References do
             calls
             |> Map.values()
             |> List.flatten()
-            |> Enum.filter(fn call -> call.func == function end)
+            |> Enum.filter(fn call -> function == nil or call.func == function end)
             |> Enum.map(fn call ->
               env = Metadata.get_env(metadata, call.position)
 
@@ -106,15 +106,16 @@ defmodule ElixirSense.Providers.References do
                 )
 
               case found do
+                {^mod, ^function, true, :mod_fun} when is_nil(function) ->
+                  build_var_location(to_string(call.func), call.position)
+
                 {^mod, ^function, true, :mod_fun} ->
                   [_, _, arities] = get_matching_arities([mod, function, call_arity], mods_funs)
                   corrected_arity = get_corrected_arity([mod, function, call.arity], mods_funs)
 
-                  dbg({arities, corrected_arity})
-
                   if Enum.any?(
                        arities,
-                       &(Introspection.matches_arity?(corrected_arity, &1) |> dbg)
+                       &Introspection.matches_arity?(corrected_arity, &1)
                      ) do
                     build_var_location(to_string(function), call.position)
                   end
@@ -189,7 +190,7 @@ defmodule ElixirSense.Providers.References do
   end
 
   # Cursor over a module
-  defp callee_at_cursor({module, nil}, _module, _scope, arity, _mods_funs) do
+  defp callee_at_cursor({module, nil}, _module, _scope, _arity, _mods_funs) do
     [module]
   end
 
@@ -210,7 +211,7 @@ defmodule ElixirSense.Providers.References do
 
   defp caller_filter([module, func, filter_arities], mods_funs) do
     fn
-      %{callee: {^module, ^func, callee_arity} = callee} ->
+      %{callee: {^module, ^func, callee_arity}} ->
         corrected_arity = get_corrected_arity([module, func, callee_arity], mods_funs)
         Enum.any?(filter_arities, &Introspection.matches_arity?(corrected_arity, &1))
 
@@ -310,15 +311,14 @@ defmodule ElixirSense.Providers.References do
         end
       end
 
-    arity =
-      if arity != nil do
-        arity
-      else
-        # no need to drop macro prefix and correct arity - macros handled by docs
-        if Code.ensure_loaded?(m) and {f, a} in m.module_info(:exports) do
-          a
-        end
+    if arity != nil do
+      arity
+    else
+      # no need to drop macro prefix and correct arity - macros handled by docs
+      if Code.ensure_loaded?(m) and {f, a} in m.module_info(:exports) do
+        a
       end
+    end
   end
 
   defp get_matching_arities([m, f, a], mods_funs) do
@@ -347,22 +347,21 @@ defmodule ElixirSense.Providers.References do
             []
 
           docs ->
-            doc_results =
-              docs
-              |> Enum.filter(fn
-                {{^f, arity}, _, _, _, _, meta} ->
-                  defaults = Map.get(meta, :defaults, 0)
+            docs
+            |> Enum.filter(fn
+              {{^f, arity}, _, _, _, _, meta} ->
+                defaults = Map.get(meta, :defaults, 0)
 
-                  if Introspection.matches_arity_with_defaults?(arity, defaults, a) do
-                    arity
-                  end
+                if Introspection.matches_arity_with_defaults?(arity, defaults, a) do
+                  arity
+                end
 
-                _ ->
-                  false
-              end)
-              |> Enum.map(fn
-                {{^f, arity}, _, _, _, _, _meta} -> arity
-              end)
+              _ ->
+                false
+            end)
+            |> Enum.map(fn
+              {{^f, arity}, _, _, _, _, _meta} -> arity
+            end)
         end
       else
         arities
