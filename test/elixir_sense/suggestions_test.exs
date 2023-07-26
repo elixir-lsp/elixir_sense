@@ -598,7 +598,7 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
-  test "fuzzy match overridible functions" do
+  test "fuzzy match overridable functions" do
     buffer = """
     defmodule MyServer do
       use ElixirSenseExample.OverridableFunctions
