@@ -30,6 +30,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Overridable do
           []
       end)
 
+    # no need to care of default args here
+    # only the max arity version can be overridden
     list =
       for {{^module, name, arity}, %State.ModFunInfo{overridable: {true, origin}} = info}
           when is_integer(arity) <- metadata.mods_funs_to_positions,
