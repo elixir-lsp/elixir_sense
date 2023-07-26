@@ -343,6 +343,7 @@ defmodule ElixirSense.Core.ParserTest do
       parse_string(source, true, true, 5)
   end
 
+  @tag capture_log: true
   test "parse_string ignores non existing modules in `use`" do
     source = """
     defmodule MyModule do

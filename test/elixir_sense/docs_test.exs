@@ -1057,13 +1057,8 @@ defmodule ElixirSense.DocsTest do
     refute docs =~ "@spec my_func(1, 2, 3) :: :ok"
     refute docs =~ "@spec my_func(2, 2, 3) :: :error"
 
-    # no such arity - return all
-    assert %{actual_subject: "ElixirSenseExample.FunctionsWithDefaultArgs.my_func", docs: docs} =
-             ElixirSense.docs(buffer, 3, 70)
-
-    assert docs =~ "no params version"
-    assert docs =~ "2 params version"
-    assert docs =~ "3 params version"
+    # too many arguments
+    assert nil == ElixirSense.docs(buffer, 3, 70)
   end
 
   test "retrieves documentation for all matching arities with incomplete code" do
@@ -1130,13 +1125,8 @@ defmodule ElixirSense.DocsTest do
     end
     """
 
-    # no such arity - return all
-    assert %{actual_subject: "ElixirSenseExample.FunctionsWithDefaultArgs.my_func", docs: docs} =
-             ElixirSense.docs(buffer, 3, 20)
-
-    assert docs =~ "no params version"
-    assert docs =~ "2 params version"
-    assert docs =~ "3 params version"
+    # too many arguments
+    assert nil == ElixirSense.docs(buffer, 3, 20)
 
     buffer = """
     defmodule MyModule do
@@ -1208,13 +1198,8 @@ defmodule ElixirSense.DocsTest do
     refute docs =~ "two params version"
     refute docs =~ "@type my_type(a, b)"
 
-    # no such arity - return all
-    assert %{actual_subject: "ElixirSenseExample.TypesWithMultipleArity.my_type", docs: docs} =
-             ElixirSense.docs(buffer, 3, 68)
-
-    assert docs =~ "no params version"
-    assert docs =~ "one param version"
-    assert docs =~ "two params version"
+    # too many arguments
+    assert nil == ElixirSense.docs(buffer, 3, 68)
   end
 
   test "retrieves documentation for all matching type arities with incomplete code" do
@@ -1267,12 +1252,7 @@ defmodule ElixirSense.DocsTest do
     end
     """
 
-    # no such arity - return all
-    assert %{actual_subject: "ElixirSenseExample.TypesWithMultipleArity.my_type", docs: docs} =
-             ElixirSense.docs(buffer, 3, 20)
-
-    assert docs =~ "no params version"
-    assert docs =~ "one param version"
-    assert docs =~ "two params version"
+    # too many arguments
+    assert nil == ElixirSense.docs(buffer, 3, 20)
   end
 end

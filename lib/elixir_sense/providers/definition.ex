@@ -221,7 +221,7 @@ defmodule ElixirSense.Providers.Definition do
 
         case fn_definition do
           nil ->
-            with_fallback(mod, fun, call_arity, &Location.find_mod_fun_source/3)
+            Location.find_mod_fun_source(mod, fun, call_arity)
 
           %ModFunInfo{positions: positions} = mi ->
             # for simplicity take last position here as positions are reversed
@@ -244,7 +244,7 @@ defmodule ElixirSense.Providers.Definition do
 
         case type_definition do
           nil ->
-            with_fallback(mod, fun, call_arity, &Location.find_type_source/3)
+            Location.find_type_source(mod, fun, call_arity)
 
           %TypeInfo{positions: positions} ->
             # for simplicity take last position here as positions are reversed
@@ -257,16 +257,6 @@ defmodule ElixirSense.Providers.Definition do
               column: column
             }
         end
-    end
-  end
-
-  defp with_fallback(mod, fun, call_arity, callback) do
-    result = callback.(mod, fun, call_arity)
-
-    if result == nil and call_arity != :any do
-      callback.(mod, fun, :any)
-    else
-      result
     end
   end
 end
