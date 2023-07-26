@@ -52,7 +52,7 @@ defmodule ElixirSense do
   @spec docs(String.t(), pos_integer, pos_integer) ::
           %{
             actual_subject: String.t(),
-            docs: Introspection.docs(),
+            docs: nil | String.t(),
             range: %{
               begin: {pos_integer, pos_integer},
               end: {pos_integer, pos_integer}

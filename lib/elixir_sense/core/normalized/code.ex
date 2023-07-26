@@ -29,7 +29,7 @@ defmodule ElixirSense.Core.Normalized.Code do
           :moduledoc ->
             moduledoc_en = extract_docs(moduledoc, mime_type)
 
-            {:erl_anno.line(moduledoc_anno), moduledoc_en, metadata}
+            {max(:erl_anno.line(moduledoc_anno), 1), moduledoc_en, metadata}
 
           :docs ->
             get_fun_docs(module, docs, mime_type)
