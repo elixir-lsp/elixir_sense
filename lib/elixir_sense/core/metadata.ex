@@ -226,19 +226,6 @@ defmodule ElixirSense.Core.Metadata do
     end
   end
 
-  def get_call_arity(%__MODULE__{} = metadata, line, col) do
-    calls = get_calls(metadata, line)
-
-    case Enum.find(calls, fn %State.CallInfo{position: {_line, column}, func: func} ->
-           column + String.length(Atom.to_string(func)) == col
-         end) do
-      %{arity: arity} -> arity
-      _ -> nil
-    end
-  end
-
-  # TODO check which version is better
-
   def get_call_arity(%__MODULE__{}, _module, nil, _line, _column), do: nil
 
   def get_call_arity(

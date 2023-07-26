@@ -7,7 +7,6 @@ defmodule ElixirSense do
   """
 
   alias ElixirSense.Core.Applications
-  alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.ModuleStore
   alias ElixirSense.Core.Parser
@@ -107,9 +106,9 @@ defmodule ElixirSense do
       :none ->
         nil
 
-      %{begin: {line, _col}} = context ->
+      context ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
-        # TODO line from cursor or begin?
+
         env =
           Metadata.get_env(buffer_file_metadata, {line, column})
           |> Metadata.add_scope_vars(buffer_file_metadata, {line, column})
@@ -418,8 +417,7 @@ defmodule ElixirSense do
         []
 
       %{
-        begin: {begin_line, begin_col},
-        end: {line, col}
+        begin: {begin_line, begin_col}
       } = context ->
         buffer_file_metadata = Parser.parse_string(code, true, true, line)
 

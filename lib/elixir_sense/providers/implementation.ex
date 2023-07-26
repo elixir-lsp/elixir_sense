@@ -171,7 +171,7 @@ defmodule ElixirSense.Providers.Implementation do
         {{line, column}, type} =
           metadata.mods_funs_to_positions
           |> Enum.find_value(fn
-            {{^module, ^maybe_callback, a}, info} when is_nil(maybe_callback) ->
+            {{^module, ^maybe_callback, _}, info} when is_nil(maybe_callback) ->
               {List.last(info.positions), info.type}
 
             {{^module, ^maybe_callback, a}, info} when not is_nil(a) ->
