@@ -172,20 +172,35 @@ defmodule ElixirSense.Location do
 
   defp get_function_position_using_docs(module, nil, _) do
     case Code.fetch_docs(module) do
-      nil ->
+      {:error, _} ->
         nil
 
-      {_, line, _, _, _, _, _} when is_integer(line) ->
-        {{line, 1}, :module}
+      {_, anno, _, _, _, _, _} ->
+        line = :erl_anno.line(anno)
 
-      {_, keyword, _, _, _, _, _} when is_list(keyword) ->
-        {{Keyword.get(keyword, :location, 1), 1}, :module}
+        line =
+          if line == 0 do
+            1
+          else
+            line
+          end
+
+        column = :erl_anno.column(anno)
+
+        column =
+          if column == :undefined do
+            1
+          else
+            column
+          end
+
+        {{line, column}, :module}
     end
   end
 
   defp get_function_position_using_docs(module, function, arity) do
     case Code.fetch_docs(module) do
-      nil ->
+      {:error, _} ->
         nil
 
       {_, _, _, _, _, _, docs} ->
@@ -222,7 +237,7 @@ defmodule ElixirSense.Location do
 
   def get_type_position_using_docs(module, type_name, arity) do
     case Code.fetch_docs(module) do
-      nil ->
+      {:error, _} ->
         nil
 
       {_, _, _, _, _, _, docs} ->
