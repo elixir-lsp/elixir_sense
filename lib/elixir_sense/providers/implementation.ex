@@ -105,11 +105,6 @@ defmodule ElixirSense.Providers.Implementation do
             # protocol function call
             get_locations(found_module, maybe_fun, arity, metadata)
 
-          arity != :any and
-              (maybe_fun == nil or is_callback(found_module, maybe_fun, :any, metadata)) ->
-            # protocol function call incomplete code
-            get_locations(found_module, maybe_fun, :any, metadata)
-
           maybe_fun != nil ->
             # try to get behaviours from the target module - metadata
             behaviours =
@@ -139,22 +134,11 @@ defmodule ElixirSense.Providers.Implementation do
               end
 
             # callback/protocol implementation def
-            list =
-              for behaviour <- behaviours,
-                  is_callback(behaviour, maybe_fun, arity, metadata) do
-                get_locations(behaviour, maybe_fun, arity, metadata)
-              end
-              |> List.flatten()
-
-            if list == [] and arity != :any do
-              for behaviour <- behaviours,
-                  is_callback(behaviour, maybe_fun, :any, metadata) do
-                get_locations(behaviour, maybe_fun, :any, metadata)
-              end
-              |> List.flatten()
-            else
-              list
+            for behaviour <- behaviours,
+                is_callback(behaviour, maybe_fun, arity, metadata) do
+              get_locations(behaviour, maybe_fun, arity, metadata)
             end
+            |> List.flatten()
 
           true ->
             []
@@ -353,7 +337,7 @@ defmodule ElixirSense.Providers.Implementation do
   end
 
   defp find_delegatee_location(mod, fun, arity, visited) do
-    defdelegate_from_docs = with_fallback(mod, fun, arity, &get_defdelegate_by_docs/3)
+    defdelegate_from_docs = get_defdelegate_by_docs(mod, fun, arity)
 
     case defdelegate_from_docs do
       nil ->
@@ -388,15 +372,5 @@ defmodule ElixirSense.Providers.Implementation do
       &<=/2,
       fn -> nil end
     )
-  end
-
-  defp with_fallback(mod, fun, arity, callback) do
-    result = callback.(mod, fun, arity)
-
-    if result == nil and arity != :any do
-      callback.(mod, fun, :any)
-    else
-      result
-    end
   end
 end

@@ -352,19 +352,9 @@ defmodule ElixirSense.Providers.ImplementationTest do
     end
     """
 
-    # return any with too many arguments
+    # too many arguments
 
-    [
-      %Location{type: :function, file: file1, line: line1, column: column1},
-      %Location{type: :function, file: file2, line: line2, column: column2},
-      %Location{type: :function, file: nil, line: 2, column: 3}
-    ] = ElixirSense.implementations(buffer, 2, 8)
-
-    assert file1 =~ "elixir_sense/test/support/example_protocol.ex"
-    assert read_line(file1, {line1, column1}) =~ "some(t), do: t"
-
-    assert file2 =~ "elixir_sense/test/support/example_protocol.ex"
-    assert read_line(file2, {line2, column2}) =~ "some(t), do: t"
+    assert [] = ElixirSense.implementations(buffer, 2, 8)
   end
 
   test "find protocol implementation functions on call" do
@@ -404,16 +394,9 @@ defmodule ElixirSense.Providers.ImplementationTest do
     ElixirSenseExample.ExampleProtocol.some(a,
     """
 
-    [
-      %Location{type: :function, file: file1, line: line1, column: column1},
-      %Location{type: :function, file: file2, line: line2, column: column2}
-    ] = ElixirSense.implementations(buffer, 1, 37)
+    # too many arguments
 
-    assert file1 =~ "elixir_sense/test/support/example_protocol.ex"
-    assert read_line(file1, {line1, column1}) =~ "some(t), do: t"
-
-    assert file2 =~ "elixir_sense/test/support/example_protocol.ex"
-    assert read_line(file2, {line2, column2}) =~ "some(t), do: t"
+    assert [] = ElixirSense.implementations(buffer, 1, 37)
   end
 
   test "find protocol implementation functions on call with alias" do
@@ -500,19 +483,29 @@ defmodule ElixirSense.Providers.ImplementationTest do
     end
 
     Some.bar()
+    Some.bar(1)
+    Some.bar(1, 2)
     """
 
     [
       %Location{type: :macro, file: file1, line: line1, column: column1},
       %Location{type: :macro, file: file2, line: line2, column: column2},
       %Location{type: :macro, file: nil, line: 3, column: 3}
-    ] = ElixirSense.implementations(buffer, 6, 7)
+    ] = ElixirSense.implementations(buffer, 7, 7)
 
     assert file1 =~ "elixir_sense/test/support/example_behaviour.ex"
     assert read_line(file1, {line1, column1}) =~ "defmacro bar(_b)"
 
     assert file2 =~ "elixir_sense/test/support/example_behaviour.ex"
     assert read_line(file2, {line2, column2}) =~ "defmacro bar(_b)"
+
+    # too little arguments
+
+    [] = ElixirSense.implementations(buffer, 6, 7)
+
+    # too many arguments
+
+    [] = ElixirSense.implementations(buffer, 8, 7)
   end
 
   test "find implementation of delegated functions" do
@@ -582,13 +575,9 @@ defmodule ElixirSense.Providers.ImplementationTest do
     end
     """
 
-    # return first matching if too many arguments
+    # too many arguments
 
-    [%Location{type: :function, file: file, line: line, column: column}] =
-      ElixirSense.implementations(buffer, 3, 11)
-
-    assert file =~ "elixir_sense/test/support/module_with_functions.ex"
-    assert read_line(file, {line, column}) =~ "delegated_function do"
+    assert [] = ElixirSense.implementations(buffer, 3, 11)
   end
 
   test "find implementation of delegated functions via @attr" do

@@ -127,26 +127,19 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_all_docs({mod, fun, arity}, :mod_fun) do
-    with_arity_fallback(&get_func_docs_md/3, mod, fun, arity)
+    get_func_docs_md(mod, fun, arity)
+    |> join_docs
   end
 
   def get_all_docs({mod, fun, arity}, :type) do
-    with_arity_fallback(&get_type_docs_md/3, mod, fun, arity)
+    get_type_docs_md(mod, fun, arity)
+    |> join_docs
   end
 
-  defp with_arity_fallback(callback, mod, fun, arity) do
-    docs = callback.(mod, fun, arity)
+  defp join_docs([]), do: nil
 
-    docs =
-      if docs == [] and arity != :any do
-        callback.(mod, fun, :any)
-      else
-        docs
-      end
-
-    if docs != [] do
-      Enum.join(docs, "\n\n---\n\n") <> "\n"
-    end
+  defp join_docs(docs) do
+    Enum.join(docs, "\n\n---\n\n") <> "\n"
   end
 
   def count_defaults(nil), do: 0
