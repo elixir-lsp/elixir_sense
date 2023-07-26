@@ -8,11 +8,11 @@ defmodule ElixirSense.Providers.Definition do
 
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.ModFunInfo
   alias ElixirSense.Core.State.TypeInfo
   alias ElixirSense.Core.State.VarInfo
-  alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.SurroundContext
   alias ElixirSense.Location
 

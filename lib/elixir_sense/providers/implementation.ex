@@ -5,13 +5,14 @@ defmodule ElixirSense.Providers.Implementation do
 
   alias ElixirSense.Core.Behaviours
   alias ElixirSense.Core.Binding
-  require ElixirSense.Core.Introspection, as: Introspection
-  alias ElixirSense.Core.Normalized
   alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.Normalized
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.ModFunInfo
   alias ElixirSense.Core.SurroundContext
   alias ElixirSense.Location
+
+  require ElixirSense.Core.Introspection, as: Introspection
 
   @doc """
   Finds out where a callback, protocol or delegate was implemented.
