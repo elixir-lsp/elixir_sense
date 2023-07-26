@@ -990,7 +990,6 @@ defmodule ElixirSense.Core.Introspection do
     []
   end
 
-  # TODO return a list here if default args in metadata?
   def get_spec_as_string(_module, function, arity, :macro, %{implementing: behaviour}) do
     TypeInfo.get_callback(behaviour, :"MACRO-#{function}", arity + 1) |> spec_to_string()
   end
