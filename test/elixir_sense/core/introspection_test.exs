@@ -818,7 +818,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
              **Since**
              1.1.0
 
-             ### Specs
+             ### Definition
 
              ```
              @type some_type() :: integer()

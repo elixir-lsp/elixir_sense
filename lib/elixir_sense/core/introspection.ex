@@ -478,15 +478,15 @@ defmodule ElixirSense.Core.Introspection do
         matches_arity?(length(info.params), arity) do
       {spec, args} =
         case info do
-          %{signature: sig, params: params} ->
-            {sig, Enum.map_join(params, ", ", &(&1 |> Atom.to_string()))}
+          %{signature: signature, params: params} ->
+            {"@type #{signature}", Enum.map_join(params, ", ", &(&1 |> Atom.to_string()))}
 
           %{spec: spec_ast, params: params} ->
             {TypeInfo.format_type_spec_ast(spec_ast, :type),
              Enum.map_join(params, ", ", &(&1 |> Atom.to_string()))}
 
           _ ->
-            {"#{fun}()", ""}
+            {"@type #{fun}()", ""}
         end
 
       format_type_doc_md({nil, fun}, args, info[:doc], spec, %{builtin: true})
@@ -1429,7 +1429,7 @@ defmodule ElixirSense.Core.Introspection do
         atom -> inspect(atom) <> "."
       end
 
-    "> #{mod_formatted}#{fun}(#{type_args})\n\n#{get_metadata_md(metadata)}### Specs\n\n#{formatted_spec}\n\n#{doc}"
+    "> #{mod_formatted}#{fun}(#{type_args})\n\n#{get_metadata_md(metadata)}### Definition\n\n#{formatted_spec}\n\n#{doc}"
   end
 
   def is_pub(type), do: type in [:def, :defmacro, :defdelegate, :defguard]

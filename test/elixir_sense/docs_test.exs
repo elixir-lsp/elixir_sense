@@ -407,7 +407,7 @@ defmodule ElixirSense.DocsTest do
       assert docs == """
              > ElixirSenseExample.ModuleWithTypespecs.Remote.remote_t()
 
-             ### Specs
+             ### Definition
 
              ```
              @type remote_t() :: atom()
@@ -438,7 +438,7 @@ defmodule ElixirSense.DocsTest do
 
              **Opaque**
 
-             ### Specs
+             ### Definition
 
              ```
              @opaque t(x)
@@ -468,7 +468,7 @@ defmodule ElixirSense.DocsTest do
       assert docs =~ """
              > :erlang.time_unit()
 
-             ### Specs
+             ### Definition
 
              ```
              @type time_unit() ::
@@ -512,7 +512,7 @@ defmodule ElixirSense.DocsTest do
 
              **Built-in**
 
-             ### Specs
+             ### Definition
 
              ```
              @type keyword() :: [{atom(), any()}]
@@ -533,7 +533,7 @@ defmodule ElixirSense.DocsTest do
 
              **Built-in**
 
-             ### Specs
+             ### Definition
 
              ```
              @type keyword(t) :: [{atom(), t}]
@@ -563,10 +563,10 @@ defmodule ElixirSense.DocsTest do
 
              **Built-in**
 
-             ### Specs
+             ### Definition
 
              ```
-             integer()
+             @type integer()
              ```
 
              An integer number
@@ -595,7 +595,7 @@ defmodule ElixirSense.DocsTest do
 
              **Built-in**
 
-             ### Specs
+             ### Definition
 
              ```
              @type list() :: [any()]
@@ -616,10 +616,10 @@ defmodule ElixirSense.DocsTest do
 
              **Built-in**
 
-             ### Specs
+             ### Definition
 
              ```
-             list(t)
+             @type list(t)
              ```
 
              Proper list ([]-terminated)
