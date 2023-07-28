@@ -1029,6 +1029,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result({:when, meta, [:_, rhs]})
   end
 
+  defp pre({:use, _meta, []} = ast, state) do
+    # defmacro use in Kernel
+    {ast, state}
+  end
+
   defp pre({:use, meta, _} = ast, state) do
     # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
     current_module = get_current_module(state)
