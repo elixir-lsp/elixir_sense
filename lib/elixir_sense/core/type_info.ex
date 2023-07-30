@@ -113,7 +113,6 @@ defmodule ElixirSense.Core.TypeInfo do
 
     for(
       {key, value} <- BuiltinTypes.all(),
-      # TODO is this line_length needed?
       spec =
         case value do
           %{spec: spec} ->

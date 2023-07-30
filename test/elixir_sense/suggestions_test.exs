@@ -3424,10 +3424,22 @@ defmodule ElixirSense.SuggestionsTest do
 
       [_, suggestion | _] = suggestions_by_type(:type_spec, buffer)
 
-      assert suggestion.spec == ""
+      assert suggestion.spec == "@type list(t)"
       assert suggestion.signature == "list(t)"
       assert suggestion.arity == 1
       assert suggestion.doc == "Proper list ([]-terminated)"
+      assert suggestion.origin == nil
+    end
+
+    test "builtin types - retrieve info from basic types" do
+      buffer = "defmodule My, do: @type my_type :: int"
+
+      [_, suggestion | _] = suggestions_by_type(:type_spec, buffer)
+
+      assert suggestion.spec == "@type integer()"
+      assert suggestion.signature == "integer()"
+      assert suggestion.arity == 0
+      assert suggestion.doc == "An integer number"
       assert suggestion.origin == nil
     end
 
