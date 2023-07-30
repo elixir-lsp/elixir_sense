@@ -13,7 +13,13 @@ defmodule ElixirSense.Core.SurroundContext do
 
   def to_binding({:local_or_var, ~c"__MODULE__"}, current_module) do
     if current_module not in [nil, Elixir] do
-      {:atom, current_module}
+      {{:atom, current_module}, nil}
+    end
+  end
+
+  def to_binding({:alias, {:local_or_var, ~c"__MODULE__"}, charlist}, current_module) do
+    if current_module not in [nil, Elixir] do
+      {{:atom, :"#{current_module}.#{charlist}"}, nil}
     end
   end
 

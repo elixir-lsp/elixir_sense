@@ -1036,7 +1036,9 @@ defmodule ElixirSense.Providers.ReferencesTest do
   end
 
   @tag requires_elixir_1_14: true
-  test "find references when module with __MODULE__ special form submodule", %{trace: trace} do
+  test "find references when module with __MODULE__ special form submodule function", %{
+    trace: trace
+  } do
     buffer = """
     defmodule ElixirSense.Providers.ReferencesTest.Modules do
       def func() do
@@ -1061,8 +1063,27 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
+  test "find references when module with __MODULE__ special form submodule", %{trace: trace} do
+    buffer = """
+    defmodule MyLocalModule do
+      defmodule Some do
+        def func() do
+          :ok
+        end
+      end
+      __MODULE__.Some.func()
+    end
+    """
+
+    references = ElixirSense.references(buffer, 7, 15, trace)
+
+    assert references == [
+             %{range: %{start: %{column: 19, line: 7}, end: %{column: 23, line: 7}}, uri: nil}
+           ]
+  end
+
   @tag requires_elixir_1_14: true
-  test "find references when module with __MODULE__ special form", %{trace: trace} do
+  test "find references when module with __MODULE__ special form function", %{trace: trace} do
     buffer = """
     defmodule ElixirSense.Providers.ReferencesTest.Modules do
       def func() do
@@ -1073,6 +1094,29 @@ defmodule ElixirSense.Providers.ReferencesTest do
     """
 
     references = ElixirSense.references(buffer, 3, 18, trace)
+
+    assert references == [
+             %{
+               uri: nil,
+               range: %{
+                 end: %{column: 20, line: 3},
+                 start: %{column: 16, line: 3}
+               }
+             }
+           ]
+  end
+
+  test "find references when module with __MODULE__ special form", %{trace: trace} do
+    buffer = """
+    defmodule MyLocalModule do
+      def func() do
+        __MODULE__.func()
+        #    ^
+      end
+    end
+    """
+
+    references = ElixirSense.references(buffer, 3, 10, trace)
 
     assert references == [
              %{
