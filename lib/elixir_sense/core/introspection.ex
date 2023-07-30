@@ -128,6 +128,7 @@ defmodule ElixirSense.Core.Introspection do
 
   def get_all_docs({mod, fun, arity}, :mod_fun) do
     get_func_docs_md(mod, fun, arity)
+    |> Enum.map(&format_func_docs/1)
     |> join_docs
   end
 
@@ -271,6 +272,22 @@ defmodule ElixirSense.Core.Introspection do
                   (expected == :any or (is_integer(expected) and expected in (is - defaults)..is) or
                      (is_tuple(expected) and elem(expected, 0) == :gte and is >= elem(expected, 1)))
 
+  defp format_func_docs(info) do
+    mod_str = inspect(info.module)
+    fun_str = Atom.to_string(info.function)
+    # fun_args_text = Enum.join(info.args, ", ")
+    # spec_text = "### Specs\n\n```\n#{info.specs |> Enum.join("\n")}\n```\n\n"
+
+    spec_text = if info.specs != [] do
+      joined = Enum.join(info.specs, "\n")
+      "### Specs\n\n```\n#{joined}\n```\n\n"
+    else
+      ""
+    end
+
+    "> #{mod_str}.#{fun_str}(#{info.fun_args_text})\n\n#{get_metadata_md(info.metadata)}#{spec_text}#{info.docs || ""}"
+  end
+
   @spec get_func_docs_md(nil | module, atom, non_neg_integer | :any) :: list(markdown)
   def get_func_docs_md(mod, fun, arity)
       when mod != nil and fun in [:module_info, :behaviour_info, :__info__] do
@@ -286,7 +303,16 @@ defmodule ElixirSense.Core.Introspection do
       spec_text = "### Specs\n\n```\n#{spec |> Enum.join("\n")}\n```\n\n"
       metadata = %{builtin: true}
 
-      "> #{mod_str}.#{fun_str}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{spec_text}"
+      %{
+        module: mod,
+        function: fun,
+        metadata: metadata,
+        specs: spec,
+        # args: args
+        fun_args_text: fun_args_text,
+        # TODO provide docs
+        docs: nil
+      }
     end
   end
 
@@ -313,6 +339,7 @@ defmodule ElixirSense.Core.Introspection do
                     |> String.replace("\\\\", "\\\\\\\\")
                   else
                     # as of otp 23 erlang callback implementation do not have signature metadata
+                    # TODO get that from behaviour typespec?
                     if arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end)
                   end
 
@@ -323,7 +350,15 @@ defmodule ElixirSense.Core.Introspection do
                   TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
               end
 
-            "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, kind, metadata)}#{text}"
+              %{
+                module: mod,
+                function: fun,
+                metadata: metadata,
+                # args: args,
+                specs: get_specs_text(mod, fun, arity, kind, metadata),
+                fun_args_text: fun_args_text,
+                docs: text
+              }
           end
 
         case results do
@@ -342,7 +377,15 @@ defmodule ElixirSense.Core.Introspection do
             TypeInfo.get_function_specs(mod, fun, call_arity) do
         fun_args_text = TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
 
-        "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(%{})}#{get_spec_text(mod, fun, arity, :function, %{})}"
+        %{
+          module: mod,
+          function: fun,
+          metadata: %{},
+          # args: args,
+          specs: get_specs_text(mod, fun, arity, :function, %{}),
+          fun_args_text: fun_args_text,
+          docs: nil
+        }
       end
 
     case results do
@@ -373,7 +416,15 @@ defmodule ElixirSense.Core.Introspection do
           %{}
         end
 
-      "> #{inspect(mod)}.#{fun}(#{fun_args_text})\n\n#{get_metadata_md(metadata)}#{get_spec_text(mod, fun, arity, :function, metadata)}"
+        %{
+          module: mod,
+          function: fun,
+          metadata: metadata,
+          # args: args,
+          specs: get_specs_text(mod, fun, arity, :function, metadata),
+          fun_args_text: fun_args_text,
+          docs: nil
+        }
     end
   end
 
@@ -1006,19 +1057,11 @@ defmodule ElixirSense.Core.Introspection do
     TypeInfo.get_spec(module, function, arity) |> spec_to_string()
   end
 
-  def get_spec_text(mod, fun, arity, kind, metadata) do
-    specs =
+  def get_specs_text(mod, fun, arity, kind, metadata) do
       for arity <- (arity - Map.get(metadata, :defaults, 0))..arity,
           spec = get_spec_as_string(mod, fun, arity, kind, metadata),
           spec != "",
           do: spec
-
-    if specs != [] do
-      joined = Enum.join(specs, "\n")
-      "### Specs\n\n```\n#{joined}\n```\n\n"
-    else
-      ""
-    end
   end
 
   # This function is used only for protocols so no macros
