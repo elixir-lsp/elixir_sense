@@ -104,28 +104,6 @@ defmodule ElixirSense.Providers.Docs do
   end
 
   defp mod_fun_docs(
-         {:variable, name} = type,
-         context,
-         binding_env,
-         env,
-         metadata
-       ) do
-    case Binding.expand(binding_env, type) do
-      :none ->
-        mod_fun_docs(
-          {nil, name},
-          context,
-          binding_env,
-          env,
-          metadata
-        )
-
-      _ ->
-        nil
-    end
-  end
-
-  defp mod_fun_docs(
          {mod, fun},
          context,
          binding_env,
