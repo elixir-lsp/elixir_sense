@@ -1046,6 +1046,26 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
+  test "find definition of local __MODULE__" do
+    buffer = """
+    defmodule MyModule do
+      def my_fun(), do: :ok
+
+      def a do
+        my_fun1 = 1
+        __MODULE__.my_fun()
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 6, 6) == %Location{
+             type: :module,
+             file: nil,
+             line: 1,
+             column: 1
+           }
+  end
+
   test "find definition of local functions with __MODULE__" do
     buffer = """
     defmodule MyModule do
@@ -1086,6 +1106,28 @@ defmodule ElixirSense.Providers.DefinitionTest do
              file: nil,
              line: 3,
              column: 5
+           }
+  end
+
+  test "find definition of local __MODULE__ submodule" do
+    buffer = """
+    defmodule MyModule do
+      defmodule Sub do
+        def my_fun(), do: :ok
+      end
+
+      def a do
+        my_fun1 = 1
+        __MODULE__.Sub.my_fun()
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 8, 17) == %Location{
+             type: :module,
+             file: nil,
+             line: 2,
+             column: 3
            }
   end
 
