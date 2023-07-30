@@ -104,6 +104,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
   defp find_builtin_types({nil, hint}) do
     TypeInfo.find_all_builtin(&Matcher.match?("#{&1.name}", hint))
     |> Enum.map(&type_info_to_suggestion(&1, nil))
+    |> Enum.sort_by(fn %{name: name, arity: arity} -> {name, arity} end)
   end
 
   defp find_builtin_types({_mod, _hint}), do: []
@@ -113,6 +114,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
     |> Kernel.++(TypeInfo.find_all(actual_mod, &Matcher.match?("#{&1.name}", hint)))
     |> Enum.map(&type_info_to_suggestion(&1, actual_mod))
     |> Enum.uniq_by(fn %{name: name, arity: arity} -> {name, arity} end)
+    |> Enum.sort_by(fn %{name: name, arity: arity} -> {name, arity} end)
   end
 
   defp find_metadata_types(actual_mod, {mod, hint}, metadata_types, module) do

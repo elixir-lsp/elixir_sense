@@ -113,10 +113,20 @@ defmodule ElixirSense.Core.TypeInfo do
 
     for(
       {key, value} <- BuiltinTypes.all(),
-      type_ast <- [value[:spec]],
-      spec <- [format_type_spec_ast(type_ast, :type, line_length: @param_option_spec_line_length)],
+      # TODO is this line_length needed?
+      spec =
+        case value do
+          %{spec: spec} ->
+            format_type_spec_ast(spec, :type, line_length: @param_option_spec_line_length)
+
+          %{signature: signature} ->
+            "@type #{signature}"
+
+          _ ->
+            "@type #{key}()"
+        end,
       signature <- [
-        value[:signature] || TypeAst.extract_signature(type_ast) || "#{key}()"
+        value[:signature] || TypeAst.extract_signature(value[:spec]) || "#{key}()"
       ],
       {name, arity} = extract_name_and_arity.(key),
       doc = value[:doc] || "",
