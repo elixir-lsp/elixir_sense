@@ -25,7 +25,7 @@ defmodule ElixirSense.DocsTest do
       assert docs == "> ElixirSenseExample.ModuleWithDocFalse\n\n"
     end
 
-    test "retrieve documentation" do
+    test "retrieve documentation from Kernel macro" do
       buffer = """
       defmodule MyModule do
 
@@ -41,6 +41,26 @@ defmodule ElixirSense.DocsTest do
 
       assert docs =~ """
              Defines a module given by name with the given contents.
+             """
+    end
+
+    test "retrieve documentation from Kernel.SpecialForm macro" do
+      buffer = """
+      defmodule MyModule do
+        import List
+         ^
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 2, 4)
+
+      assert actual_subject == "Kernel.SpecialForms.import"
+
+      assert docs =~ """
+             Imports functions and macros\
              """
     end
 
@@ -71,6 +91,138 @@ defmodule ElixirSense.DocsTest do
 
              Flattens the given `list` of nested lists.
              """
+    end
+
+    test "retrieve metadata function documentation" do
+      buffer = """
+      defmodule MyLocalModule do
+        @doc "Sample doc"
+        @doc since: "1.2.3"
+        @spec flatten(list()) :: list()
+        def flatten(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        def func(list) do
+          MyLocalModule.flatten(list)
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 12, 20)
+
+      assert actual_subject == "MyLocalModule.flatten"
+
+      assert docs =~ """
+             > MyLocalModule.flatten(list)
+
+             ### Specs
+
+             ```
+             @spec flatten(list) :: list
+             ```
+             """
+
+      #  TODO docs and metadata
+    end
+
+    test "retrieve local private metadata function documentation" do
+      buffer = """
+      defmodule MyLocalModule do
+        @doc "Sample doc"
+        @doc since: "1.2.3"
+        @spec flatten(list()) :: list()
+        defp flatten(list) do
+          []
+        end
+
+        def func(list) do
+          flatten(list)
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 10, 7)
+
+      assert actual_subject == "MyLocalModule.flatten"
+
+      assert docs =~ """
+             > MyLocalModule.flatten(list)
+
+             ### Specs
+
+             ```
+             @spec flatten(list) :: list
+             ```
+             """
+
+      #  TODO docs and metadata
+    end
+
+    test "does not retrieve remote private metadata function documentation" do
+      buffer = """
+      defmodule MyLocalModule do
+        @doc "Sample doc"
+        @doc since: "1.2.3"
+        @spec flatten(list()) :: list()
+        defp flatten(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        def func(list) do
+          MyLocalModule.flatten(list)
+        end
+      end
+      """
+
+      assert nil == ElixirSense.docs(buffer, 12, 20)
+    end
+
+    test "retrieve metadata function documentation with @doc false" do
+      buffer = """
+      defmodule MyLocalModule do
+        @doc false
+        @spec flatten(list()) :: list()
+        def flatten(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        def func(list) do
+          MyLocalModule.flatten(list)
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 11, 20)
+
+      assert actual_subject == "MyLocalModule.flatten"
+
+      assert docs =~ """
+             > MyLocalModule.flatten(list)
+
+             ### Specs
+
+             ```
+             @spec flatten(list) :: list
+             ```
+             """
+
+      #  TODO mark as hidden in metadata
     end
 
     test "retrieve function documentation on @attr call" do
@@ -206,7 +358,7 @@ defmodule ElixirSense.DocsTest do
     end
 
     @tag requires_elixir_1_14: true
-    test "retrieve function documentation with __MODULE__" do
+    test "retrieve function documentation with __MODULE__ submodule call" do
       buffer = """
       defmodule Inspect do
         def func(list) do
@@ -275,22 +427,6 @@ defmodule ElixirSense.DocsTest do
              """
     end
 
-    test "request for defmacro" do
-      buffer = """
-      defmodule MyModule do
-        defmacro my_macro do
-        end
-      end
-      """
-
-      %{actual_subject: actual_subject, docs: docs} = ElixirSense.docs(buffer, 2, 5)
-
-      assert actual_subject == "Kernel.defmacro"
-
-      assert docs =~ "Kernel.defmacro("
-      assert docs =~ "macro with the given name and body."
-    end
-
     test "retrieve documentation from modules" do
       buffer = """
       defmodule MyModule do
@@ -316,6 +452,61 @@ defmodule ElixirSense.DocsTest do
              will have a standard set of interface functions and include functionality for
              tracing and error reporting. It will also fit into a supervision tree.
              """
+    end
+
+    test "retrieve documentation from metadata modules" do
+      buffer = """
+      defmodule MyLocalModule do
+        @moduledoc "Some example doc"
+        @moduledoc since: "1.2.3"
+
+        @callback some() :: :ok
+      end
+
+      defmodule MyModule do
+        @behaviour MyLocalModule
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 9, 15)
+
+      assert actual_subject == "MyLocalModule"
+
+      assert docs =~ """
+             > MyLocalModule
+             """
+
+      # TODO doc and metadata
+    end
+
+    test "retrieve documentation from metadata modules with @moduledoc false" do
+      buffer = """
+      defmodule MyLocalModule do
+        @moduledoc false
+
+        @callback some() :: :ok
+      end
+
+      defmodule MyModule do
+        @behaviour MyLocalModule
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 8, 15)
+
+      assert actual_subject == "MyLocalModule"
+
+      assert docs =~ """
+             > MyLocalModule
+             """
+
+      # TODO mark as hidden
     end
 
     test "retrieve documentation from erlang modules" do
@@ -415,6 +606,164 @@ defmodule ElixirSense.DocsTest do
 
              Remote type
              """
+    end
+
+    test "retrieve metadata type documentation" do
+      buffer = """
+      defmodule MyLocalModule do
+        @typedoc "My example type"
+        @typedoc since: "1.2.3"
+        @type some(a) :: {a}
+      end
+
+      defmodule MyModule do
+        @type my_list :: MyLocalModule.some(:a)
+        #                               ^
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 8, 35)
+
+      assert actual_subject == "MyLocalModule.some"
+
+      assert docs == """
+             > MyLocalModule.some(a)
+
+             ### Definition
+
+             ```
+             @type some(a) :: {a}
+             ```
+
+
+             """
+
+      # TODO docs and metadata
+    end
+
+    test "retrieve local private metadata type documentation" do
+      buffer = """
+      defmodule MyLocalModule do
+        @typedoc "My example type"
+        @typedoc since: "1.2.3"
+        @typep some(a) :: {a}
+
+        @type my_list :: some(:a)
+        #                  ^
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 6, 22)
+
+      assert actual_subject == "MyLocalModule.some"
+
+      assert docs == """
+             > MyLocalModule.some(a)
+
+             ### Definition
+
+             ```
+             @typep some(a) :: {a}
+             ```
+
+
+             """
+
+      # TODO docs and metadata
+    end
+
+    test "does not retrieve remote private metadata type documentation" do
+      buffer = """
+      defmodule MyLocalModule do
+        @typedoc "My example type"
+        @typedoc since: "1.2.3"
+        @typep some(a) :: {a}
+      end
+
+      defmodule MyModule do
+        @type my_list :: MyLocalModule.some(:a)
+        #                               ^
+      end
+      """
+
+      assert nil == ElixirSense.docs(buffer, 8, 35)
+    end
+
+    test "does not reveal details for opaque metadata type" do
+      buffer = """
+      defmodule MyLocalModule do
+        @typedoc "My example type"
+        @typedoc since: "1.2.3"
+        @opaque some(a) :: {a}
+      end
+
+      defmodule MyModule do
+        @type my_list :: MyLocalModule.some(:a)
+        #                               ^
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 8, 35)
+
+      assert actual_subject == "MyLocalModule.some"
+
+      assert docs == """
+             > MyLocalModule.some(a)
+
+             ### Definition
+
+             ```
+             @opaque some(a)
+             ```
+
+
+             """
+
+      # TODO docs and metadata
+    end
+
+    test "retrieve metadata type documentation with @typedoc false" do
+      buffer = """
+      defmodule MyLocalModule do
+        @typedoc false
+        @type some(a) :: {a}
+      end
+
+      defmodule MyModule do
+        @type my_list :: MyLocalModule.some(:a)
+        #                               ^
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 7, 35)
+
+      assert actual_subject == "MyLocalModule.some"
+
+      assert docs == """
+             > MyLocalModule.some(a)
+
+             ### Definition
+
+             ```
+             @type some(a) :: {a}
+             ```
+
+
+             """
+
+      # TODO mark as hidden
     end
 
     test "does not reveal opaque type details" do
@@ -1019,21 +1368,11 @@ defmodule ElixirSense.DocsTest do
     end
     """
 
-    # TODO requires metadata docs support
-
-    # assert %{actual_subject: "ElixirSenseExample.Some.some_local"} =
-    #          ElixirSense.docs(buffer, 6, 20)
-    assert nil ==
+    assert %{actual_subject: "ElixirSenseExample.Some.some_local"} =
              ElixirSense.docs(buffer, 6, 20)
 
-    # TODO assert type
-    # assert %{actual_subject: "ElixirSenseExample.Some.some_local"} =
-    #          ElixirSense.docs(buffer, 9, 9)
-
-    assert nil ==
+    assert %{actual_subject: "ElixirSenseExample.Some.some_local"} =
              ElixirSense.docs(buffer, 9, 9)
-
-    # TODO assert function
   end
 
   test "retrieves documentation for correct arity function" do

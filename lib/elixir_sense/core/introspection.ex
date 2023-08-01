@@ -45,6 +45,16 @@ defmodule ElixirSense.Core.Introspection do
     :application => Application
   }
 
+  defguard matches_arity?(is, expected)
+           when is != nil and
+                  (expected == :any or is == expected or
+                     (is_tuple(expected) and elem(expected, 0) == :gte and is >= elem(expected, 1)))
+
+  defguard matches_arity_with_defaults?(is, defaults, expected)
+           when is != nil and
+                  (expected == :any or (is_integer(expected) and expected in (is - defaults)..is) or
+                     (is_tuple(expected) and elem(expected, 0) == :gte and is >= elem(expected, 1)))
+
   @spec get_exports(module) :: [{atom, {non_neg_integer, :macro | :function}}]
   def get_exports(Elixir), do: []
 
@@ -122,18 +132,122 @@ defmodule ElixirSense.Core.Introspection do
     Keyword.has_key?(get_exports(module), fun)
   end
 
-  def get_all_docs({mod, nil, _}, :mod_fun) do
-    get_docs_md(mod)
+  def get_all_docs({mod, nil, _}, metadata, :mod_fun) do
+    doc_info =
+      metadata.mods_funs_to_positions
+      |> Enum.find_value(fn
+        {{^mod, nil, nil}, _fun_info} ->
+          %{
+            module: mod,
+            # TODO
+            metadata: %{},
+            doc: nil
+          }
+
+        _ ->
+          false
+      end)
+
+    if doc_info == nil do
+      get_docs_md(mod)
+    else
+      doc_info
+    end
+    |> format_module_doc
   end
 
-  def get_all_docs({mod, fun, arity}, :mod_fun) do
-    get_func_docs_md(mod, fun, arity)
+  def get_all_docs({mod, fun, arity}, metadata, :mod_fun) do
+    doc_infos =
+      metadata.mods_funs_to_positions
+      |> Enum.filter(fn
+        {{^mod, ^fun, a}, fun_info} when not is_nil(a) ->
+          default_args = fun_info.params |> Enum.at(-1) |> count_defaults()
+
+          matches_arity_with_defaults?(a, default_args, arity)
+
+        _ ->
+          false
+      end)
+      |> Enum.sort_by(fn {{^mod, ^fun, a}, _fun_info} -> a end)
+      |> Enum.map(fn {{^mod, ^fun, a}, fun_info} ->
+        fun_args_text =
+          fun_info.params |> List.last() |> Enum.with_index() |> Enum.map(&param_to_var/1)
+
+        specs =
+          case metadata.specs[{mod, fun, a}] do
+            nil ->
+              []
+
+            %State.SpecInfo{specs: specs} ->
+              specs |> Enum.reverse()
+          end
+
+        %{
+          module: mod,
+          function: fun,
+          # TODO
+          metadata: %{},
+          specs: specs,
+          # args: args
+          fun_args_text: fun_args_text,
+          # TODO provide docs
+          docs: nil
+        }
+      end)
+
+    doc_infos =
+      if doc_infos == [] do
+        get_func_docs_md(mod, fun, arity)
+      else
+        doc_infos
+      end
+
+    doc_infos
     |> Enum.map(&format_func_docs/1)
     |> join_docs
   end
 
-  def get_all_docs({mod, fun, arity}, :type) do
-    get_type_docs_md(mod, fun, arity)
+  def get_all_docs({mod, fun, arity}, metadata, :type) do
+    doc_infos =
+      metadata.types
+      |> Enum.filter(fn
+        {{^mod, ^fun, a}, _type_info} when not is_nil(a) ->
+          matches_arity?(a, arity)
+
+        _ ->
+          false
+      end)
+      |> Enum.sort_by(fn {{^mod, ^fun, a}, _fun_info} -> a end)
+      |> Enum.map(fn {{^mod, ^fun, a}, type_info} ->
+        args = type_info.args |> List.last() |> Enum.join(", ")
+
+        spec =
+          case type_info.kind do
+            :opaque -> "@opaque #{fun}(#{args})"
+            _ -> List.last(type_info.specs)
+          end
+
+        %{
+          module: mod,
+          type: fun,
+          # TODO
+          metadata: %{},
+          spec: spec,
+          args: args,
+          # TODO provide docs
+          docs: nil
+        }
+      end)
+
+    doc_infos =
+      if doc_infos == [] do
+        get_type_docs_md(mod, fun, arity)
+      else
+        doc_infos
+      end
+
+    doc_infos
+    |> Enum.map(&format_type_docs/1)
     |> join_docs
   end
 
@@ -262,28 +376,19 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  defguard matches_arity?(is, expected)
-           when is != nil and
-                  (expected == :any or is == expected or
-                     (is_tuple(expected) and elem(expected, 0) == :gte and is >= elem(expected, 1)))
-
-  defguard matches_arity_with_defaults?(is, defaults, expected)
-           when is != nil and
-                  (expected == :any or (is_integer(expected) and expected in (is - defaults)..is) or
-                     (is_tuple(expected) and elem(expected, 0) == :gte and is >= elem(expected, 1)))
-
   defp format_func_docs(info) do
     mod_str = inspect(info.module)
     fun_str = Atom.to_string(info.function)
     # fun_args_text = Enum.join(info.args, ", ")
     # spec_text = "### Specs\n\n```\n#{info.specs |> Enum.join("\n")}\n```\n\n"
 
-    spec_text = if info.specs != [] do
-      joined = Enum.join(info.specs, "\n")
-      "### Specs\n\n```\n#{joined}\n```\n\n"
-    else
-      ""
-    end
+    spec_text =
+      if info.specs != [] do
+        joined = Enum.join(info.specs, "\n")
+        "### Specs\n\n```\n#{joined}\n```\n\n"
+      else
+        ""
+      end
 
     "> #{mod_str}.#{fun_str}(#{info.fun_args_text})\n\n#{get_metadata_md(info.metadata)}#{spec_text}#{info.docs || ""}"
   end
@@ -296,11 +401,6 @@ defmodule ElixirSense.Core.Introspection do
       args = BuiltinFunctions.get_args({f, a})
 
       fun_args_text = Enum.join(args, ", ")
-
-      mod_str = inspect(mod)
-      fun_str = Atom.to_string(fun)
-
-      spec_text = "### Specs\n\n```\n#{spec |> Enum.join("\n")}\n```\n\n"
       metadata = %{builtin: true}
 
       %{
@@ -350,15 +450,15 @@ defmodule ElixirSense.Core.Introspection do
                   TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
               end
 
-              %{
-                module: mod,
-                function: fun,
-                metadata: metadata,
-                # args: args,
-                specs: get_specs_text(mod, fun, arity, kind, metadata),
-                fun_args_text: fun_args_text,
-                docs: text
-              }
+            %{
+              module: mod,
+              function: fun,
+              metadata: metadata,
+              # args: args,
+              specs: get_specs_text(mod, fun, arity, kind, metadata),
+              fun_args_text: fun_args_text,
+              docs: text
+            }
           end
 
         case results do
@@ -416,16 +516,24 @@ defmodule ElixirSense.Core.Introspection do
           %{}
         end
 
-        %{
-          module: mod,
-          function: fun,
-          metadata: metadata,
-          # args: args,
-          specs: get_specs_text(mod, fun, arity, :function, metadata),
-          fun_args_text: fun_args_text,
-          docs: nil
-        }
+      %{
+        module: mod,
+        function: fun,
+        metadata: metadata,
+        # args: args,
+        specs: get_specs_text(mod, fun, arity, :function, metadata),
+        fun_args_text: fun_args_text,
+        docs: nil
+      }
     end
+  end
+
+  defp format_module_doc(nil), do: nil
+
+  defp format_module_doc(info) do
+    mod_str = inspect(info.module)
+    doc = info.doc || ""
+    "> #{mod_str}\n\n" <> get_metadata_md(info.metadata) <> doc
   end
 
   def get_docs_md(mod) when is_atom(mod) do
@@ -433,11 +541,19 @@ defmodule ElixirSense.Core.Introspection do
 
     case NormalizedCode.get_docs(mod, :moduledoc) do
       {_line, doc, metadata} when is_binary(doc) ->
-        "> #{mod_str}\n\n" <> get_metadata_md(metadata) <> doc
+        %{
+          module: mod,
+          metadata: metadata,
+          doc: doc
+        }
 
       _ ->
         if Code.ensure_loaded?(mod) do
-          "> #{mod_str}\n\n"
+          %{
+            module: mod,
+            metadata: %{},
+            doc: nil
+          }
         end
     end
   end
@@ -523,6 +639,20 @@ defmodule ElixirSense.Core.Introspection do
     "**#{key}**\n#{value}"
   end
 
+  defp format_type_docs(info) do
+    formatted_spec = "```\n#{info.spec}\n```"
+
+    mod_formatted =
+      case info.module do
+        nil -> ""
+        atom -> inspect(atom) <> "."
+      end
+
+    docs = info.docs || ""
+
+    "> #{mod_formatted}#{info.type}(#{info.args})\n\n#{get_metadata_md(info.metadata)}### Definition\n\n#{formatted_spec}\n\n#{docs}"
+  end
+
   @spec get_type_docs_md(nil | module, atom, non_neg_integer | :any) :: list(markdown)
   defp get_type_docs_md(nil, fun, arity) do
     for info <- BuiltinTypes.get_builtin_type_info(fun),
@@ -540,7 +670,14 @@ defmodule ElixirSense.Core.Introspection do
             {"@type #{fun}()", ""}
         end
 
-      format_type_doc_md({nil, fun}, args, info[:doc], spec, %{builtin: true})
+      %{
+        module: nil,
+        type: fun,
+        args: args,
+        metadata: %{builtin: true},
+        spec: spec,
+        docs: info[:doc]
+      }
     end
   end
 
@@ -555,7 +692,14 @@ defmodule ElixirSense.Core.Introspection do
 
           type_args = Enum.map_join(args, ", ", &(&1 |> elem(2) |> Atom.to_string()))
 
-          format_type_doc_md({mod, fun}, type_args, "", spec, %{})
+          %{
+            module: mod,
+            type: fun,
+            args: type_args,
+            metadata: %{},
+            spec: spec,
+            docs: nil
+          }
         end
 
       docs ->
@@ -567,13 +711,14 @@ defmodule ElixirSense.Core.Introspection do
           {_kind, {_name, _def, args}} = spec
           type_args = Enum.map_join(args, ", ", &(&1 |> elem(2) |> Atom.to_string()))
 
-          format_type_doc_md(
-            {mod, fun},
-            type_args,
-            text,
-            TypeInfo.format_type_spec(spec),
-            metadata
-          )
+          %{
+            module: mod,
+            type: fun,
+            args: type_args,
+            metadata: metadata,
+            spec: TypeInfo.format_type_spec(spec),
+            docs: text
+          }
         end
     end
   end
@@ -1058,10 +1203,10 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_specs_text(mod, fun, arity, kind, metadata) do
-      for arity <- (arity - Map.get(metadata, :defaults, 0))..arity,
-          spec = get_spec_as_string(mod, fun, arity, kind, metadata),
-          spec != "",
-          do: spec
+    for arity <- (arity - Map.get(metadata, :defaults, 0))..arity,
+        spec = get_spec_as_string(mod, fun, arity, kind, metadata),
+        spec != "",
+        do: spec
   end
 
   # This function is used only for protocols so no macros
@@ -1461,18 +1606,6 @@ defmodule ElixirSense.Core.Introspection do
 
   def elixir_module?(_) do
     false
-  end
-
-  defp format_type_doc_md({mod, fun}, type_args, doc, spec, metadata) when is_binary(type_args) do
-    formatted_spec = "```\n#{spec}\n```"
-
-    mod_formatted =
-      case mod do
-        nil -> ""
-        atom -> inspect(atom) <> "."
-      end
-
-    "> #{mod_formatted}#{fun}(#{type_args})\n\n#{get_metadata_md(metadata)}### Definition\n\n#{formatted_spec}\n\n#{doc}"
   end
 
   def is_pub(type), do: type in [:def, :defmacro, :defdelegate, :defguard]
