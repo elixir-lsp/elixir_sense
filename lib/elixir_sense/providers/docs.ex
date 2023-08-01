@@ -127,7 +127,7 @@ defmodule ElixirSense.Providers.Docs do
       {mod, fun, true, kind} ->
         {line, column} = context.end
         call_arity = Metadata.get_call_arity(metadata, mod, fun, line, column) || :any
-        markdown = Introspection.get_all_docs({mod, fun, call_arity}, kind)
+        markdown = Introspection.get_all_docs({mod, fun, call_arity}, metadata, kind)
 
         if markdown do
           {mod_fun_to_string({mod, fun}), markdown}
