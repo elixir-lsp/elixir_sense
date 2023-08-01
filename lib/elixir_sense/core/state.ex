@@ -1142,7 +1142,7 @@ defmodule ElixirSense.Core.State do
     specs =
       current_module_variants
       |> Enum.reduce(state.specs, fn current_module, acc ->
-        info =
+        nil_info =
           case acc[{current_module, type_name, nil}] do
             nil ->
               type_info
@@ -1158,9 +1158,25 @@ defmodule ElixirSense.Core.State do
               }
           end
 
+        arity_info =
+          case acc[{current_module, type_name, length(arg_names)}] do
+            nil ->
+              type_info
+
+            %SpecInfo{positions: positions, args: args, specs: specs} = ti ->
+              %SpecInfo{
+                ti
+                | positions: [pos | positions],
+                  end_positions: [end_pos | ti.end_positions],
+                  generated: [Keyword.get(options, :generated, false) | ti.generated],
+                  args: [arg_names | args],
+                  specs: [spec | specs]
+              }
+          end
+
         acc
-        |> Map.put({current_module, type_name, nil}, info)
-        |> Map.put({current_module, type_name, length(arg_names)}, type_info)
+        |> Map.put({current_module, type_name, nil}, nil_info)
+        |> Map.put({current_module, type_name, length(arg_names)}, arity_info)
       end)
 
     %__MODULE__{state | specs: specs}
