@@ -217,8 +217,8 @@ defmodule ElixirSense.Core.Introspection do
         _ ->
           false
       end)
-      |> Enum.sort_by(fn {{^mod, ^fun, a}, _fun_info} -> a end)
-      |> Enum.map(fn {{^mod, ^fun, a}, type_info} ->
+      |> Enum.sort_by(fn {{_mod, _fun, a}, _fun_info} -> a end)
+      |> Enum.map(fn {_, type_info} ->
         args = type_info.args |> List.last() |> Enum.join(", ")
 
         spec =
@@ -537,8 +537,6 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_docs_md(mod) when is_atom(mod) do
-    mod_str = inspect(mod)
-
     case NormalizedCode.get_docs(mod, :moduledoc) do
       {_line, doc, metadata} when is_binary(doc) ->
         %{

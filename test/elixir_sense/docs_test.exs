@@ -167,6 +167,80 @@ defmodule ElixirSense.DocsTest do
       #  TODO docs and metadata
     end
 
+    test "retrieve local private metadata function documentation on __MODULE__ call" do
+      buffer = """
+      defmodule MyLocalModule do
+        @doc "Sample doc"
+        @doc since: "1.2.3"
+        @spec flatten(list()) :: list()
+        def flatten(list) do
+          []
+        end
+
+        def func(list) do
+          __MODULE__.flatten(list)
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 10, 17)
+
+      assert actual_subject == "MyLocalModule.flatten"
+
+      assert docs =~ """
+             > MyLocalModule.flatten(list)
+
+             ### Specs
+
+             ```
+             @spec flatten(list) :: list
+             ```
+             """
+
+      #  TODO docs and metadata
+    end
+
+    test "retrieve local private metadata function documentation on __MODULE__ submodule call" do
+      buffer = """
+      defmodule MyLocalModule do
+        defmodule Sub do
+          @doc "Sample doc"
+          @doc since: "1.2.3"
+          @spec flatten(list()) :: list()
+          def flatten(list) do
+            []
+          end
+        end
+
+        def func(list) do
+          __MODULE__.Sub.flatten(list)
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 12, 20)
+
+      assert actual_subject == "MyLocalModule.Sub.flatten"
+
+      assert docs =~ """
+             > MyLocalModule.Sub.flatten(list)
+
+             ### Specs
+
+             ```
+             @spec flatten(list) :: list
+             ```
+             """
+
+      #  TODO docs and metadata
+    end
+
     test "does not retrieve remote private metadata function documentation" do
       buffer = """
       defmodule MyLocalModule do
@@ -477,6 +551,60 @@ defmodule ElixirSense.DocsTest do
 
       assert docs =~ """
              > MyLocalModule
+             """
+
+      # TODO doc and metadata
+    end
+
+    test "retrieve documentation from metadata modules on __MODULE__" do
+      buffer = """
+      defmodule MyLocalModule do
+        @moduledoc "Some example doc"
+        @moduledoc since: "1.2.3"
+
+        def self() do
+          __MODULE__
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 6, 6)
+
+      assert actual_subject == "MyLocalModule"
+
+      assert docs =~ """
+             > MyLocalModule
+             """
+
+      # TODO doc and metadata
+    end
+
+    test "retrieve documentation from metadata modules on __MODULE__ submodule" do
+      buffer = """
+      defmodule MyLocalModule do
+        defmodule Sub do
+          @moduledoc "Some example doc"
+          @moduledoc since: "1.2.3"
+        end
+
+        def self() do
+          __MODULE__.Sub
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 8, 17)
+
+      assert actual_subject == "MyLocalModule.Sub"
+
+      assert docs =~ """
+             > MyLocalModule.Sub
              """
 
       # TODO doc and metadata
