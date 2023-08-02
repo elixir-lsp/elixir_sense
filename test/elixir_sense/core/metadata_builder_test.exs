@@ -2863,15 +2863,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert state.specs == %{
              {Proto, :with_spec, 2} => %ElixirSense.Core.State.SpecInfo{
-               args: [["t", "boolean"]],
+               args: [["t", "boolean"], ["t", "integer"]],
                kind: :callback,
                name: :with_spec,
-               positions: [{3, 3}],
-               end_positions: [{3, 40}],
-               generated: [false],
+               positions: [{3, 3}, {2, 3}],
+               end_positions: [{3, 40}, {2, 42}],
+               generated: [false, false],
                specs: [
                  "@callback with_spec(t, boolean) :: number",
-                 "@spec with_spec(t, boolean) :: number"
+                 "@callback with_spec(t, integer) :: String.t",
+                 "@spec with_spec(t, boolean) :: number",
+                 "@spec with_spec(t, integer) :: String.t"
                ]
              },
              {Proto, :with_spec, nil} => %ElixirSense.Core.State.SpecInfo{
@@ -4674,13 +4676,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert state.specs == %{
              {Proto, :abc, 0} => %ElixirSense.Core.State.SpecInfo{
-               args: [[]],
+               args: [[], []],
                kind: :spec,
                name: :abc,
-               positions: [{3, 3}],
-               end_positions: [{3, 25}],
-               generated: [false],
-               specs: ["@spec abc :: reference"]
+               positions: [{3, 3}, {2, 3}],
+               end_positions: [{3, 25}, {2, 30}],
+               generated: [false, false],
+               specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
              },
              {Proto, :abc, nil} => %ElixirSense.Core.State.SpecInfo{
                kind: :spec,

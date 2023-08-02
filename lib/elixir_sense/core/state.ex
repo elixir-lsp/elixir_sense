@@ -1122,6 +1122,19 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | types: types}
   end
 
+  defp combine_specs(nil, new), do: new
+
+  defp combine_specs(%SpecInfo{} = existing, %SpecInfo{} = new) do
+    %SpecInfo{
+      existing
+      | positions: [hd(new.positions) | existing.positions],
+        end_positions: [hd(new.end_positions) | existing.end_positions],
+        generated: [hd(new.generated) | existing.generated],
+        args: [hd(new.args) | existing.args],
+        specs: [hd(new.specs) | existing.specs]
+    }
+  end
+
   def add_spec(%__MODULE__{} = state, type_name, type_args, spec, kind, pos, end_pos, options) do
     arg_names =
       type_args
@@ -1142,37 +1155,8 @@ defmodule ElixirSense.Core.State do
     specs =
       current_module_variants
       |> Enum.reduce(state.specs, fn current_module, acc ->
-        nil_info =
-          case acc[{current_module, type_name, nil}] do
-            nil ->
-              type_info
-
-            %SpecInfo{positions: positions, args: args, specs: specs} = ti ->
-              %SpecInfo{
-                ti
-                | positions: [pos | positions],
-                  end_positions: [end_pos | ti.end_positions],
-                  generated: [Keyword.get(options, :generated, false) | ti.generated],
-                  args: [arg_names | args],
-                  specs: [spec | specs]
-              }
-          end
-
-        arity_info =
-          case acc[{current_module, type_name, length(arg_names)}] do
-            nil ->
-              type_info
-
-            %SpecInfo{positions: positions, args: args, specs: specs} = ti ->
-              %SpecInfo{
-                ti
-                | positions: [pos | positions],
-                  end_positions: [end_pos | ti.end_positions],
-                  generated: [Keyword.get(options, :generated, false) | ti.generated],
-                  args: [arg_names | args],
-                  specs: [spec | specs]
-              }
-          end
+        nil_info = combine_specs(acc[{current_module, type_name, nil}], type_info)
+        arity_info = combine_specs(acc[{current_module, type_name, length(arg_names)}], type_info)
 
         acc
         |> Map.put({current_module, type_name, nil}, nil_info)
