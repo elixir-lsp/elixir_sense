@@ -1063,6 +1063,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
+  @tag requires_elixir_1_14: true
   test "find references when module with __MODULE__ special form submodule", %{trace: trace} do
     buffer = """
     defmodule MyLocalModule do

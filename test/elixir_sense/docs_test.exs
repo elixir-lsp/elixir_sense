@@ -203,6 +203,7 @@ defmodule ElixirSense.DocsTest do
       #  TODO docs and metadata
     end
 
+    @tag requires_elixir_1_14: true
     test "retrieve local private metadata function documentation on __MODULE__ submodule call" do
       buffer = """
       defmodule MyLocalModule do
@@ -582,6 +583,7 @@ defmodule ElixirSense.DocsTest do
       # TODO doc and metadata
     end
 
+    @tag requires_elixir_1_14: true
     test "retrieve documentation from metadata modules on __MODULE__ submodule" do
       buffer = """
       defmodule MyLocalModule do
