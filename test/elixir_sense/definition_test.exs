@@ -1109,6 +1109,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
+  @tag requires_elixir_1_14: true
   test "find definition of local __MODULE__ submodule" do
     buffer = """
     defmodule MyModule do
