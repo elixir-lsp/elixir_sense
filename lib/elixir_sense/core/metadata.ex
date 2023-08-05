@@ -327,24 +327,28 @@ defmodule ElixirSense.Core.Metadata do
   @spec get_type_signatures(__MODULE__.t(), module, atom) :: [signature_t]
   def get_type_signatures(%__MODULE__{} = metadata, module, type)
       when not is_nil(module) and not is_nil(type) do
-    case Map.get(metadata.types, {module, type, nil}) do
-      nil ->
-        []
+    metadata.types
+    |> Enum.filter(fn
+      {{^module, ^type, arity}, _type_info} when not is_nil(arity) -> true
+      _ -> false
+    end)
+    |> Enum.map(fn {_, %State.TypeInfo{} = type_info} ->
+      args = type_info.args |> List.last() |> Enum.join(", ")
 
-      %State.TypeInfo{args: args_variants} ->
-        for args <- args_variants do
-          arity = length(args)
-
-          spec = metadata.types[{module, type, arity}].specs |> Enum.join("\n")
-
-          %{
-            name: Atom.to_string(type),
-            params: args,
-            documentation: "",
-            spec: spec
-          }
+      spec =
+        case type_info.kind do
+          :opaque -> "@opaque #{type}(#{args})"
+          _ -> List.last(type_info.specs)
         end
-    end
+
+      %{
+        name: Atom.to_string(type),
+        params: type_info.args |> List.last(),
+        # TODO extract docs
+        documentation: "",
+        spec: spec
+      }
+    end)
   end
 
   def get_docs_specs_from_behaviours(env) do

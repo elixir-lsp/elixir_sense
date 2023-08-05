@@ -119,13 +119,56 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "Remote type",
                    name: "remote_t",
                    params: [],
-                   spec: "@type remote_t :: atom"
+                   spec: "@type remote_t() :: atom()"
                  },
                  %{
                    documentation: "Remote type with params",
                    name: "remote_t",
                    params: ["a", "b"],
-                   spec: "@type remote_t(a, b) :: {a, b}"
+                   spec: "@type remote_t(a, b) ::\n  {a, b}"
+                 }
+               ]
+             }
+    end
+
+    test "does not reveal opaque type details" do
+      code = """
+      defmodule MyModule do
+        @type a :: ElixirSenseExample.ModuleWithTypespecs.Remote.some_opaque_options_t(
+      end
+      """
+
+      assert ElixirSense.signature(code, 2, 82) == %{
+               active_param: 0,
+               signatures: [
+                 %{
+                   documentation: "",
+                   name: "some_opaque_options_t",
+                   params: [],
+                   spec: "@opaque some_opaque_options_t()"
+                 }
+               ]
+             }
+    end
+
+    test "does not reveal local opaque type details" do
+      code = """
+      defmodule Some do
+        @opaque my(a, b) :: {a, b}
+      end
+      defmodule MyModule do
+        @type a :: Some.my(
+      end
+      """
+
+      assert ElixirSense.signature(code, 5, 22) == %{
+               active_param: 0,
+               signatures: [
+                 %{
+                   documentation: "",
+                   name: "my",
+                   params: ["a", "b"],
+                   spec: "@opaque my(a, b)"
                  }
                ]
              }
@@ -145,7 +188,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "",
                    name: "some_type_doc_false",
                    params: ~c"",
-                   spec: "@type some_type_doc_false :: integer"
+                   spec: "@type some_type_doc_false() :: integer()"
                  }
                ]
              }
@@ -175,7 +218,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: summary,
                    name: "time_unit",
                    params: [],
-                   spec: "@type time_unit ::" <> _
+                   spec: "@type time_unit() ::" <> _
                  }
                ]
              } = ElixirSense.signature(code, 2, 32)
@@ -593,7 +636,8 @@ defmodule ElixirSense.SignatureTest do
       end
       """
 
-      # TODO?
+      # TODO https://github.com/elixir-lsp/elixir_sense/issues/255
+      # Type system needs to handle function captures
       assert ElixirSense.signature(code, 3, 20) == :none
     end
 
@@ -605,7 +649,8 @@ defmodule ElixirSense.SignatureTest do
       end
       """
 
-      # TODO?
+      # TODO https://github.com/elixir-lsp/elixir_sense/issues/255
+      # Type system needs to handle function captures
       assert ElixirSense.signature(code, 3, 20) == :none
     end
 

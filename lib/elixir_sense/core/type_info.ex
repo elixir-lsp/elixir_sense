@@ -67,7 +67,8 @@ defmodule ElixirSense.Core.TypeInfo do
           type_args = Enum.map(args, &(&1 |> elem(2) |> Atom.to_string()))
           type_str = Atom.to_string(type)
           doc = Introspection.extract_summary_from_docs(text)
-          spec = get_type_spec_as_string(mod, type, arity)
+          typedef = get_type_spec(mod, type, arity)
+          spec = format_type_spec(typedef, line_length: @param_option_spec_line_length)
           %{name: type_str, params: type_args, documentation: doc, spec: spec}
         end
 
@@ -81,7 +82,7 @@ defmodule ElixirSense.Core.TypeInfo do
             name: Atom.to_string(name),
             params: type_args,
             documentation: "",
-            spec: type_spec_to_string(typedef)
+            spec: format_type_spec(typedef)
           }
         end
     end
