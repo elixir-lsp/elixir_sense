@@ -171,7 +171,10 @@ defmodule ElixirSense.Core.Introspection do
       |> Enum.sort_by(fn {{^mod, ^fun, a}, _fun_info} -> a end)
       |> Enum.map(fn {{^mod, ^fun, a}, fun_info} ->
         fun_args_text =
-          fun_info.params |> List.last() |> Enum.with_index() |> Enum.map(&param_to_var/1)
+          fun_info.params
+          |> List.last()
+          |> Enum.with_index()
+          |> Enum.map(&(&1 |> param_to_var |> String.replace("\\\\", "\\\\\\\\")))
 
         specs =
           case metadata.specs[{mod, fun, a}] do
