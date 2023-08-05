@@ -311,7 +311,7 @@ defmodule ElixirSense.Core.Metadata do
             nil
 
           %State.SpecInfo{specs: specs} ->
-            Enum.join(specs, "\n")
+            specs |> Enum.reverse() |> Enum.join("\n")
         end
 
       # TODO fallback to callback spec

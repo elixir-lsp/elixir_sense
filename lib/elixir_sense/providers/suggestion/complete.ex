@@ -825,7 +825,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
                 Metadata.get_doc_spec_from_behaviours(callback_docs_specs, f, a)
 
               %ElixirSense.Core.State.SpecInfo{specs: specs} ->
-                {specs |> Enum.join("\n"), "", %{}}
+                {specs |> Enum.reverse() |> Enum.join("\n"), "", %{}}
             end
 
           # TODO docs and meta from metadata
