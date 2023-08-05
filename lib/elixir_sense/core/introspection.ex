@@ -1189,6 +1189,12 @@ defmodule ElixirSense.Core.Introspection do
     []
   end
 
+  # erlang docs have signature included in metadata
+  def get_spec_as_string(_module, _function, _arity, :function, %{signature: signature}) do
+    [{:attribute, _, :spec, spec}] = signature
+    spec |> spec_to_string()
+  end
+
   def get_spec_as_string(_module, function, arity, :macro, %{implementing: behaviour}) do
     TypeInfo.get_callback(behaviour, :"MACRO-#{function}", arity + 1) |> spec_to_string()
   end
@@ -1289,6 +1295,11 @@ defmodule ElixirSense.Core.Introspection do
       binary = Macro.to_string(quoted)
       "@spec #{binary}" |> String.replace("()", "")
     end)
+  end
+
+  def spec_to_string({{_module, name, arity}, specs}) when is_atom(name) and is_integer(arity) do
+    # spec with module - transform it to moduleless form
+    spec_to_string({{name, arity}, specs})
   end
 
   @spec actual_module(
