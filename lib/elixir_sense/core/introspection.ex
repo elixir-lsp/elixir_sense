@@ -185,6 +185,8 @@ defmodule ElixirSense.Core.Introspection do
               specs |> Enum.reverse()
           end
 
+        # TODO fallback to callback spec
+
         %{
           module: mod,
           function: fun,

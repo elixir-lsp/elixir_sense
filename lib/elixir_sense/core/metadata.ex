@@ -297,14 +297,13 @@ defmodule ElixirSense.Core.Metadata do
   @spec get_function_signatures(__MODULE__.t(), module, atom) :: [signature_t]
   def get_function_signatures(%__MODULE__{} = metadata, module, function)
       when not is_nil(module) and not is_nil(function) do
-    params_list =
-      metadata
-      |> get_function_info(module, function)
-      |> Map.get(:params)
-      |> Enum.reverse()
-
-    Enum.map(params_list, fn params ->
-      arity = length(params)
+    metadata.mods_funs_to_positions
+    |> Enum.filter(fn
+      {{^module, ^function, arity}, _function_info} when not is_nil(arity) -> true
+      _ -> false
+    end)
+    |> Enum.map(fn {{_, _, arity}, %State.ModFunInfo{} = function_info} ->
+      params = function_info.params |> List.last()
 
       spec =
         case metadata.specs[{module, function, arity}] do
@@ -315,9 +314,12 @@ defmodule ElixirSense.Core.Metadata do
             Enum.join(specs, "\n")
         end
 
+      # TODO fallback to callback spec
+
       %{
         name: Atom.to_string(function),
         params: params |> Enum.with_index() |> Enum.map(&Introspection.param_to_var/1),
+        # TODO
         documentation: nil,
         spec: spec
       }

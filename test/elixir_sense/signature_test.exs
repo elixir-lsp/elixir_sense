@@ -794,8 +794,6 @@ defmodule ElixirSense.SignatureTest do
                active_param: 1,
                signatures: [
                  %{documentation: "", name: "sum", params: ["s \\\\ nil", "f"], spec: ""},
-                 %{documentation: "", name: "sum", spec: "", params: ["a", "atom"]},
-                 %{documentation: "", name: "sum", params: ["a", "b"], spec: ""},
                  %{documentation: "", name: "sum", params: ["tuple", "x", "y"], spec: ""}
                ]
              }

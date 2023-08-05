@@ -48,6 +48,8 @@ defmodule ElixirSense.Core.MetadataTest do
         IO.inspect my_list
       end
 
+      defp func({_, _, _}, optional \\\\ true)
+
       defp func(par1 = {a, _}, {_b, _c} = par2) do
         IO.inspect {a, par2}
       end
@@ -63,10 +65,6 @@ defmodule ElixirSense.Core.MetadataTest do
       defp func("a_string", par2) do
         IO.inspect par2
       end
-
-      defp func({_, _, _}, optional \\\\ true) do
-        IO.inspect optional
-      end
     end
     """
 
@@ -76,11 +74,6 @@ defmodule ElixirSense.Core.MetadataTest do
 
     assert signatures == [
              %{name: "func", params: ["par"], documentation: nil, spec: nil},
-             %{name: "func", params: ["my_list"], documentation: nil, spec: nil},
-             %{name: "func", params: ["par1", "par2"], documentation: nil, spec: nil},
-             %{name: "func", params: ["list", "par2"], documentation: nil, spec: nil},
-             %{name: "func", params: ["par1", "list"], documentation: nil, spec: nil},
-             %{name: "func", params: ["arg1", "par2"], documentation: nil, spec: nil},
              %{
                name: "func",
                params: ["tuple", "optional \\\\ true"],
