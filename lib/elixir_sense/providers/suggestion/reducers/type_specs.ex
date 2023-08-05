@@ -120,8 +120,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
   defp find_metadata_types(actual_mod, {mod, hint}, metadata_types, module) do
     include_private = mod == nil and actual_mod == module
 
-    for {{mod, type, arity}, type_info} when is_integer(arity) <- metadata_types,
-        mod == actual_mod,
+    for {{^actual_mod, type, arity}, type_info} when is_integer(arity) <- metadata_types,
         type |> Atom.to_string() |> Matcher.match?(hint),
         include_private or type_info.kind != :typep,
         do: type_info
@@ -134,6 +133,12 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
       %ElixirSense.Core.State.TypeInfo{args: [args]} ->
         args_stringified = Enum.join(args, ", ")
 
+        spec =
+          case type_info.kind do
+            :opaque -> "@opaque #{type_info.name}(#{args_stringified})"
+            _ -> List.last(type_info.specs)
+          end
+
         %{
           type: :type_spec,
           name: type_info.name |> Atom.to_string(),
@@ -142,7 +147,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
           signature: "#{type_info.name}(#{args_stringified})",
           origin: origin,
           doc: "",
-          spec: "",
+          spec: spec,
           # TODO extract doc and meta
           metadata: %{}
         }

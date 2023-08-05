@@ -3518,7 +3518,7 @@ defmodule ElixirSense.SuggestionsTest do
                signature: "my_local_t()",
                args_list: [],
                doc: "",
-               spec: "",
+               spec: "@typep my_local_t :: integer",
                metadata: %{}
              } == suggestion2
 
@@ -3530,7 +3530,7 @@ defmodule ElixirSense.SuggestionsTest do
                signature: "my_local_arg_t(a, b)",
                args_list: ["a", "b"],
                doc: "",
-               spec: "",
+               spec: "@typep my_local_arg_t(a, b) :: {a, b}",
                metadata: %{}
              } == suggestion1
     end
@@ -3559,7 +3559,7 @@ defmodule ElixirSense.SuggestionsTest do
                signature: "my_local_t()",
                args_list: [],
                doc: "",
-               spec: "",
+               spec: "@type my_local_t :: integer",
                metadata: %{}
              } == suggestion1
     end
@@ -3593,7 +3593,7 @@ defmodule ElixirSense.SuggestionsTest do
                signature: "my_local_pub_t(a, b)",
                args_list: ["a", "b"],
                doc: "",
-               spec: "",
+               spec: "@type my_local_pub_t(a, b) :: {a, b}",
                metadata: %{}
              } == suggestion2
 
@@ -3605,7 +3605,7 @@ defmodule ElixirSense.SuggestionsTest do
                signature: "my_local_op_t()",
                args_list: [],
                doc: "",
-               spec: "",
+               spec: "@opaque my_local_op_t()",
                metadata: %{}
              } == suggestion1
     end
