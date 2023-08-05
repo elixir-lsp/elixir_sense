@@ -13,10 +13,10 @@ defmodule ElixirSense.Core.SurroundContext do
     end
   end
 
-  def to_binding({:alias, {:local_or_var, _charlist1}, _charlist}), do: nil
+  def to_binding({:alias, {:local_or_var, _charlist1}, _charlist}, _current_module), do: nil
 
   # TODO handle this case?
-  def to_binding({:alias, {:module_attribute, _charlist1}, _charlist}), do: nil
+  def to_binding({:alias, {:module_attribute, _charlist1}, _charlist}, _current_module), do: nil
 
   def to_binding({:dot, inside_dot, charlist}, current_module) do
     {inside_dot_to_binding(inside_dot, current_module), :"#{charlist}"}
