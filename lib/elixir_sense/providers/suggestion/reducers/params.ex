@@ -59,6 +59,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
              mods_funs,
              metadata_types
            ) do
+      # TODO drop/add MACRO- prefix
       list =
         mod
         |> TypeInfo.extract_param_options(fun, npar)

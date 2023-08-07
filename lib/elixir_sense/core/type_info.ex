@@ -282,7 +282,7 @@ defmodule ElixirSense.Core.TypeInfo do
 
   def get_spec(module, function, arity)
       when is_atom(module) and is_atom(function) and is_integer(arity) do
-    # TODO check usages - does not drop MACRO- prefix
+    # does not drop MACRO- prefix
     module
     |> get_module_specs()
     |> Map.get({function, arity})
@@ -290,28 +290,18 @@ defmodule ElixirSense.Core.TypeInfo do
 
   def get_callback(module, function, arity)
       when is_atom(module) and is_atom(function) and is_integer(arity) do
-    # TODO check usages - does not drop MACRO- prefix
+    # does not drop MACRO- prefix
     module
     |> get_module_callbacks()
     |> Map.get({function, arity})
   end
 
+  # does not drop MACRO- prefix
   def get_function_specs(module, function, arity) when is_atom(module) and is_atom(function) do
-    # TODO check usages - does not drop MACRO- prefix
-    module_specs = module |> get_module_specs()
-
-    function_specs =
-      for {{f, a}, spec} <- module_specs, f == function, Introspection.matches_arity?(a, arity) do
-        spec
-      end
-
-    if function_specs != [] do
-      function_specs
-    else
+    callback_specs =
       module
       |> Behaviours.get_module_behaviours()
-      |> Enum.reduce_while([], fn behaviour, acc ->
-        # TODO check usages - does not drop MACRO- prefix
+      |> Enum.reduce_while(nil, fn behaviour, acc ->
         behaviour_specs = behaviour |> get_module_callbacks()
 
         callback_specs =
@@ -320,11 +310,25 @@ defmodule ElixirSense.Core.TypeInfo do
           end
 
         if callback_specs != [] do
-          {:halt, callback_specs}
+          {:halt, {behaviour, callback_specs}}
         else
           {:cont, acc}
         end
       end)
+
+    if callback_specs == nil do
+      module_specs = module |> get_module_specs()
+
+      function_specs =
+        for {{f, a}, spec} <- module_specs,
+            f == function,
+            Introspection.matches_arity?(a, arity) do
+          spec
+        end
+
+      {nil, function_specs}
+    else
+      callback_specs
     end
   end
 
@@ -380,7 +384,10 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   def extract_param_options(mod, fun, npar) do
-    get_function_specs(mod, fun, :any)
+    # does not drop MACRO- prefix
+    {_behaviour, specs} = get_function_specs(mod, fun, :any)
+
+    specs
     |> get_param_type_specs(npar)
     |> expand_type_specs(mod)
     |> Enum.filter(&list_type_spec?/1)

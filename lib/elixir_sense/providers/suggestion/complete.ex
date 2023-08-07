@@ -767,6 +767,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     # TODO consider changing this to :code.all_available when otp 23 is required
     modules = Enum.map(:code.all_loaded(), &Atom.to_string(elem(&1, 0)))
 
+    # TODO it seems we only run in interactive mode - remove the check?
     case :code.get_mode() do
       :interactive ->
         modules ++ get_modules_from_applications() ++ get_modules_from_metadata(env, metadata)
@@ -932,23 +933,20 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end
   end
 
+  # TODO filter by hint here?
   def get_module_funs(mod, include_builtin) do
     docs = NormalizedCode.get_docs(mod, :docs)
-    # TODO check usages - does not drop MACRO- prefix
-    specs = TypeInfo.get_module_specs(mod)
+    module_specs = TypeInfo.get_module_specs(mod)
 
     callback_specs =
       for behaviour <- Behaviours.get_module_behaviours(mod),
-          # TODO check usages - does not drop MACRO- prefix
-          pair <- TypeInfo.get_module_callbacks(behaviour),
+          {fa, spec} <- TypeInfo.get_module_callbacks(behaviour),
           into: %{},
-          do: pair
-
-    specs = Map.merge(specs, callback_specs)
+          do: {fa, {behaviour, spec}}
 
     if docs != nil and function_exported?(mod, :__info__, 1) do
       exports = mod.__info__(:macros) ++ mod.__info__(:functions) ++ special_builtins(mod)
-
+      # TODO this is useless - we should only return max arity variant
       default_arg_functions = default_arg_functions(docs)
 
       for {f, a} <- exports do
@@ -959,22 +957,35 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           end
 
         {func_kind, func_doc} = find_doc({f, new_arity}, docs)
-
-        spec =
-          case func_kind do
-            :macro -> Map.get(specs, {:"MACRO-#{f}", new_arity + 1})
-            :function -> Map.get(specs, {f, new_arity})
-            nil -> nil
-          end
+        func_kind = func_kind || :function
 
         doc =
           case func_doc do
             nil ->
+              # TODO set builtin meta
+              # provide docs
               {"", %{}}
 
             {{_fun, _}, _line, _kind, _args, doc, metadata} ->
               {doc, metadata}
           end
+
+        spec_key =
+          case func_kind do
+            :macro -> {:"MACRO-#{f}", new_arity + 1}
+            :function -> {f, new_arity}
+          end
+
+        {_behaviour, fun_spec, spec_kind} =
+          case callback_specs[spec_key] do
+            nil ->
+              {nil, module_specs[spec_key], :spec}
+
+            {behaviour, fun_spec} ->
+              {behaviour, fun_spec, if(func_kind == :macro, do: :macrocallback, else: :callback)}
+          end
+
+        spec = Introspection.spec_to_string(fun_spec, spec_kind)
 
         fun_args = Introspection.extract_fun_args(func_doc)
 
@@ -989,7 +1000,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
             fun_args
           end
 
-        {f, a, new_arity, func_kind, doc, Introspection.spec_to_string(spec), fun_args}
+        {f, a, new_arity, func_kind, doc, spec, fun_args}
       end
       |> Kernel.++(
         for {f, a} <- @builtin_functions,
@@ -1003,8 +1014,14 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         |> Kernel.++(BuiltinFunctions.erlang_builtin_functions(mod))
 
       for {f, a} <- funs do
-        spec = specs[{f, a}]
-        spec_str = Introspection.spec_to_string(spec)
+        # we don't expect macros here
+        {behaviour, fun_spec} =
+          case callback_specs[{f, a}] do
+            nil -> {nil, module_specs[{f, a}]}
+            callback -> callback
+          end
+
+        # we load typespec anyway, no big win reading erlang spec from meta[:signature]
 
         doc_result =
           if docs != nil do
@@ -1012,24 +1029,27 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
             case func_doc do
               nil ->
-                nil
+                if behaviour do
+                  {"", %{implementing: behaviour}}
+                else
+                  {"", %{}}
+                end
 
               {{_fun, _}, _line, _kind, _args, doc, metadata} ->
                 {doc, metadata}
             end
+          else
+            if behaviour do
+              {"", %{implementing: behaviour}}
+            else
+              {"", %{}}
+            end
           end
 
-        case f |> Atom.to_string() do
-          "MACRO-" <> name ->
-            arity = a - 1
-            params = format_params(spec, arity)
-            {String.to_atom(name), arity, arity, :macro, {"", %{}}, spec_str, params}
+        params = format_params(fun_spec, a)
+        spec = Introspection.spec_to_string(fun_spec, if(behaviour, do: :callback, else: :spec))
 
-          _name ->
-            params = format_params(spec, a)
-
-            {f, a, a, :function, doc_result || {"", %{}}, spec_str, params}
-        end
+        {f, a, a, :function, doc_result, spec, params}
       end
     end
   end

@@ -1187,7 +1187,7 @@ defmodule ElixirSense.SuggestionsTest do
                name: "baz",
                origin: "ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl",
                snippet: nil,
-               spec: "@spec baz(integer) :: :ok",
+               spec: "@callback baz(integer) :: :ok",
                summary: "Docs for baz",
                type: :function,
                visibility: :public
@@ -1215,7 +1215,7 @@ defmodule ElixirSense.SuggestionsTest do
                  name: "init",
                  origin: "ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang",
                  snippet: nil,
-                 spec: "@spec init(args :: term) :: init_result(state)",
+                 spec: "@callback init(args :: term) :: init_result(state)",
                  summary: "- Args = term" <> _,
                  type: :function,
                  visibility: :public
@@ -1244,7 +1244,7 @@ defmodule ElixirSense.SuggestionsTest do
                name: "init",
                origin: ":file_server",
                snippet: nil,
-               spec: "@spec init(args :: term) ::" <> _,
+               spec: "@callback init(args :: term) ::" <> _,
                summary: "- Args = term" <> _,
                type: :function,
                visibility: :public

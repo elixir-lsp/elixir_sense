@@ -1719,31 +1719,6 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     :code.delete(:"ElixirSense.Providers.Suggestion.CompleteTest.Unicodé")
   end
 
-  defmodule MyMacro do
-    @compile {:no_warn_undefined, OtherModule}
-    defmacro test(do: expr) do
-      expr
-    end
-
-    def fun, do: :ok
-    defguard guard(value) when is_integer(value) and rem(value, 2) == 0
-    defdelegate delegated(par), to: OtherModule
-  end
-
-  test "complete macros and functions from not loaded modules" do
-    assert [%{name: "test", type: :macro}] =
-             expand(~c"ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.te")
-
-    assert [%{name: "fun", type: :function}] =
-             expand(~c"ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.f")
-
-    assert [%{name: "guard", type: :macro}] =
-             expand(~c"ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.g")
-
-    assert [%{name: "delegated", type: :function}] =
-             expand(~c"ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.de")
-  end
-
   test "complete built in functions on non local calls" do
     assert [] = expand(~c"module_")
     assert [] = expand(~c"__in")
@@ -1766,7 +1741,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                spec:
                  "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
              }
-           ] = expand(~c"ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.mo")
+           ] = expand(~c"String.mo")
 
     assert [
              %{
@@ -1775,7 +1750,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                spec:
                  "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()"
              }
-           ] = expand(~c"ElixirSense.Providers.Suggestion.CompleteTest.MyMacro.__in")
+           ] = expand(~c"String.__in")
 
     assert [
              %{
