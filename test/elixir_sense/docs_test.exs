@@ -167,6 +167,271 @@ defmodule ElixirSense.DocsTest do
       #  TODO docs and metadata
     end
 
+    test "retrieve metadata function documentation - fallback to callback in metadata" do
+      buffer = """
+      defmodule MyBehaviour do
+        @doc "Sample doc"
+        @doc since: "1.2.3"
+        @callback flatten(list()) :: list()
+      end
+
+      defmodule MyLocalModule do
+        @behaviour MyBehaviour
+        
+        @impl true
+        def flatten(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        def func(list) do
+          MyLocalModule.flatten(list)
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 18, 20)
+
+      assert actual_subject == "MyLocalModule.flatten"
+
+      assert docs =~ """
+             > MyLocalModule.flatten(list)
+
+             **Implementing behaviour**
+             MyBehaviour
+
+             ### Specs
+
+             ```
+             @callback flatten(list) :: list
+             ```
+             """
+
+      #  TODO docs and metadata
+    end
+
+    test "retrieve metadata function documentation - fallback to protocol function in metadata" do
+      buffer = """
+      defprotocol BB do
+        @doc "asdf"
+        @spec go(t) :: integer()
+        def go(t)
+      end
+
+      defimpl BB, for: String do
+        def go(t), do: ""
+      end
+
+      defmodule MyModule do
+        def func(list) do
+          BB.String.go(list)
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 13, 16)
+
+      assert actual_subject == "BB.String.go"
+
+      assert docs =~ """
+             > BB.String.go(t)
+
+             **Implementing behaviour**
+             BB
+
+             ### Specs
+
+             ```
+             @callback go(t) :: integer
+             ```
+             """
+
+      #  TODO docs and metadata
+    end
+
+    test "retrieve metadata macro documentation - fallback to macrocallback in metadata" do
+      buffer = """
+      defmodule MyBehaviour do
+        @doc "Sample doc"
+        @doc since: "1.2.3"
+        @macrocallback flatten(list()) :: list()
+      end
+
+      defmodule MyLocalModule do
+        @behaviour MyBehaviour
+        
+        @impl true
+        defmacro flatten(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        require MyLocalModule
+        def func(list) do
+          MyLocalModule.flatten(list)
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 19, 20)
+
+      assert actual_subject == "MyLocalModule.flatten"
+
+      assert docs =~ """
+             > MyLocalModule.flatten(list)
+
+             **Implementing behaviour**
+             MyBehaviour
+
+             ### Specs
+
+             ```
+             @macrocallback flatten(list) :: list
+             ```
+             """
+
+      #  TODO docs and metadata
+    end
+
+    test "retrieve metadata function documentation - fallback to callback" do
+      buffer = """
+      defmodule MyLocalModule do
+        @behaviour ElixirSenseExample.BehaviourWithMeta
+        
+        @impl true
+        def flatten(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        def func(list) do
+          MyLocalModule.flatten(list)
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 12, 20)
+
+      assert actual_subject == "MyLocalModule.flatten"
+
+      assert docs =~ """
+             > MyLocalModule.flatten(list)
+
+             **Implementing behaviour**
+             ElixirSenseExample.BehaviourWithMeta
+             **Since**
+             1.2.3
+
+             ### Specs
+
+             ```
+             @callback flatten(list) :: list
+             ```
+             """
+    end
+
+    test "retrieve metadata function documentation - fallback to erlang callback" do
+      buffer = """
+      defmodule MyLocalModule do
+        @behaviour :gen_statem
+        
+        @impl true
+        def init(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        def func(list) do
+          MyLocalModule.init(list)
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 12, 20)
+
+      assert actual_subject == "MyLocalModule.init"
+
+      assert docs =~ """
+             > MyLocalModule.init(list)
+
+             **Implementing behaviour**
+             :gen_statem
+             **Since**
+             OTP 19.0
+
+             ### Specs
+
+             ```
+             @callback init(args :: term) ::\
+             """
+
+      assert docs =~
+               "this function is called by the new process to initialize the implementation state and server data"
+    end
+
+    test "retrieve metadata macro documentation - fallback to macrocallback" do
+      buffer = """
+      defmodule MyLocalModule do
+        @behaviour ElixirSenseExample.BehaviourWithMeta
+        
+        @impl true
+        defmacro bar(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        require MyLocalModule
+        def func(list) do
+          MyLocalModule.bar(list)
+        end
+      end
+      """
+
+      %{
+        actual_subject: actual_subject,
+        docs: docs
+      } = ElixirSense.docs(buffer, 13, 20)
+
+      assert actual_subject == "MyLocalModule.bar"
+
+      assert docs =~ """
+             > MyLocalModule.bar(list)
+
+             **Implementing behaviour**
+             ElixirSenseExample.BehaviourWithMeta
+             **Since**
+             1.2.3
+
+             ### Specs
+
+             ```
+             @macrocallback bar(integer) :: Macro.t
+             ```
+
+             Docs for bar
+             """
+    end
+
     test "retrieve local private metadata function documentation on __MODULE__ call" do
       buffer = """
       defmodule MyLocalModule do
@@ -1216,7 +1481,7 @@ defmodule ElixirSense.DocsTest do
            ### Specs
 
            ```
-           @spec foo :: :ok
+           @callback foo :: :ok
            ```
 
            Docs for foo
@@ -1247,7 +1512,7 @@ defmodule ElixirSense.DocsTest do
            ### Specs
 
            ```
-           @spec baz(integer) :: :ok
+           @callback baz(integer) :: :ok
            ```
 
            Docs for baz
@@ -1278,7 +1543,7 @@ defmodule ElixirSense.DocsTest do
            ### Specs
 
            ```
-           @spec bar(integer) :: Macro.t
+           @macrocallback bar(integer) :: Macro.t
            ```
 
            Docs for bar
@@ -1299,7 +1564,7 @@ defmodule ElixirSense.DocsTest do
     assert actual_subject == ":file_server.init"
 
     assert docs =~ """
-           > :file_server.init(term)
+           > :file_server.init(args)
 
            **Implementing behaviour**
            :gen_server
@@ -1307,7 +1572,7 @@ defmodule ElixirSense.DocsTest do
            ### Specs
 
            ```
-           @spec init(args :: term) ::
+           @callback init(args :: term) ::
            """
 
     assert docs =~ "Whenever a `gen_server` process is started"
@@ -1340,7 +1605,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @spec init(args :: term) :: init_result(state)
+             @callback init(args :: term) :: init_result(state)
              ```
              """
     else

@@ -86,22 +86,53 @@ defmodule ElixirSense.Providers.Signature do
           Introspection.get_signatures(mod, fun)
 
         signatures ->
-          callback_docs_specs = Metadata.get_docs_specs_from_behaviours(env)
-
           for signature <- signatures do
-            if signature.documentation == nil or signature.spec == nil do
-              arity = length(signature.params)
+            arity = length(signature.params)
 
-              {spec, doc, _} =
-                Metadata.get_doc_spec_from_behaviours(callback_docs_specs, fun, arity)
+            behaviour_implementation =
+              Metadata.get_module_behaviours(metadata, env, mod)
+              |> Enum.find_value(fn behaviour ->
+                if Introspection.is_callback(behaviour, fun, arity, metadata) do
+                  behaviour
+                end
+              end)
 
-              %{
+            case behaviour_implementation do
+              nil ->
                 signature
-                | documentation: signature.documentation || doc,
-                  spec: signature.spec || spec
-              }
-            else
-              signature
+
+              behaviour ->
+                case metadata.specs[{behaviour, fun, arity}] do
+                  %State.SpecInfo{} = spec_info ->
+                    specs =
+                      spec_info.specs
+                      |> Enum.reject(&String.starts_with?(&1, "@spec"))
+                      |> Enum.reverse()
+
+                    # TODO provide docs
+                    %{
+                      signature
+                      | spec: specs |> Enum.join("\n"),
+                        documentation: ""
+                    }
+
+                  nil ->
+                    fun_info = Map.fetch!(metadata.mods_funs_to_positions, {mod, fun, arity})
+
+                    {spec, doc, _} =
+                      Metadata.get_doc_spec_from_behaviour(
+                        behaviour,
+                        fun,
+                        arity,
+                        State.ModFunInfo.get_category(fun_info)
+                      )
+
+                    %{
+                      signature
+                      | documentation: doc,
+                        spec: spec
+                    }
+                end
             end
           end
       end

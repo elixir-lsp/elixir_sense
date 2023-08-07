@@ -643,7 +643,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 3,
                name: "reduce",
                origin: "Enumerable",
-               spec: "@spec reduce(t, acc, reducer) :: result",
+               spec: "@callback reduce(t, acc, reducer) :: result",
                summary: "Reduces the `enumerable` into an element.",
                type: :protocol_function,
                metadata: %{}
@@ -668,7 +668,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 3,
                name: "reduce",
                origin: "Enumerable",
-               spec: "@spec reduce(t, acc, reducer) :: result",
+               spec: "@callback reduce(t, acc, reducer) :: result",
                summary: "Reduces the `enumerable` into an element.",
                type: :protocol_function,
                metadata: %{}
@@ -814,6 +814,254 @@ defmodule ElixirSense.SuggestionsTest do
            ] == list
   end
 
+  test "list metadata function - fallback to callback in metadata" do
+    buffer = """
+    defmodule MyBehaviour do
+      @doc "Sample doc"
+      @doc since: "1.2.3"
+      @callback flatten(list()) :: list()
+    end
+
+    defmodule MyLocalModule do
+      @behaviour MyBehaviour
+      
+      @impl true
+      def flatten(list) do
+        []
+      end
+    end
+
+    defmodule MyModule do
+      def func(list) do
+        MyLocalModule.flat
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 18, 23)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    assert [
+             %{
+               args: "list",
+               arity: 1,
+               def_arity: 1,
+               metadata: %{implementing: MyBehaviour},
+               name: "flatten",
+               origin: "MyLocalModule",
+               spec: "@callback flatten(list) :: list",
+               #  TODO docs
+               summary: "",
+               type: :function,
+               visibility: :public
+             }
+           ] = list
+  end
+
+  test "retrieve metadata function documentation - fallback to protocol function in metadata" do
+    buffer = """
+    defprotocol BB do
+      @doc "asdf"
+      @spec go(t) :: integer()
+      def go(t)
+    end
+
+    defimpl BB, for: String do
+      def go(t), do: ""
+    end
+
+    defmodule MyModule do
+      def func(list) do
+        BB.String.go(list)
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 13, 16)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    assert [
+             %{
+               args: "t",
+               arity: 1,
+               def_arity: 1,
+               metadata: %{implementing: BB},
+               name: "go",
+               origin: "BB.String",
+               spec: "@callback go(t) :: integer",
+               #  TODO docs
+               summary: "",
+               type: :function,
+               visibility: :public
+             }
+           ] = list
+
+    #  TODO docs and metadata
+  end
+
+  test "list metadata macro - fallback to macrocallback in metadata" do
+    buffer = """
+    defmodule MyBehaviour do
+      @doc "Sample doc"
+      @doc since: "1.2.3"
+      @macrocallback flatten(list()) :: list()
+    end
+
+    defmodule MyLocalModule do
+      @behaviour MyBehaviour
+      
+      @impl true
+      defmacro flatten(list) do
+        []
+      end
+    end
+
+    defmodule MyModule do
+      require MyLocalModule
+      def func(list) do
+        MyLocalModule.flatten(list)
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 19, 23)
+      |> Enum.filter(fn s -> s.type == :macro end)
+
+    assert [
+             %{
+               args: "list",
+               arity: 1,
+               def_arity: 1,
+               metadata: %{implementing: MyBehaviour},
+               name: "flatten",
+               origin: "MyLocalModule",
+               spec: "@macrocallback flatten(list) :: list",
+               #  TODO docs
+               summary: "",
+               type: :macro,
+               visibility: :public
+             }
+           ] = list
+  end
+
+  test "list metadata function - fallback to callback" do
+    buffer = """
+    defmodule MyLocalModule do
+      @behaviour ElixirSenseExample.BehaviourWithMeta
+      
+      @impl true
+      def flatten(list) do
+        []
+      end
+    end
+
+    defmodule MyModule do
+      def func(list) do
+        MyLocalModule.flat
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 12, 23)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    assert [
+             %{
+               args: "list",
+               arity: 1,
+               def_arity: 1,
+               metadata: %{implementing: ElixirSenseExample.BehaviourWithMeta},
+               name: "flatten",
+               origin: "MyLocalModule",
+               spec: "@callback flatten(list) :: list",
+               summary: "Sample doc",
+               type: :function,
+               visibility: :public
+             }
+           ] = list
+  end
+
+  test "list metadata function - fallback to erlang callback" do
+    buffer = """
+    defmodule MyLocalModule do
+      @behaviour :gen_statem
+      
+      @impl true
+      def init(list) do
+        []
+      end
+    end
+
+    defmodule MyModule do
+      def func(list) do
+        MyLocalModule.ini
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 12, 22)
+      |> Enum.filter(fn s -> s.type == :function end)
+
+    assert [
+             %{
+               args: "list",
+               arity: 1,
+               def_arity: 1,
+               metadata: %{implementing: :gen_statem, since: "OTP 19.0"},
+               name: "init",
+               origin: "MyLocalModule",
+               spec: "@callback init(args :: term) ::" <> _,
+               summary: "- Args = term" <> _,
+               type: :function,
+               visibility: :public
+             }
+           ] = list
+  end
+
+  test "list metadata macro - fallback to macrocallback" do
+    buffer = """
+    defmodule MyLocalModule do
+      @behaviour ElixirSenseExample.BehaviourWithMeta
+      
+      @impl true
+      defmacro bar(list) do
+        []
+      end
+    end
+
+    defmodule MyModule do
+      require MyLocalModule
+      def func(list) do
+        MyLocalModule.ba
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 13, 21)
+      |> Enum.filter(fn s -> s.type == :macro end)
+
+    assert [
+             %{
+               args: "list",
+               arity: 1,
+               def_arity: 1,
+               metadata: %{implementing: ElixirSenseExample.BehaviourWithMeta},
+               name: "bar",
+               origin: "MyLocalModule",
+               spec: "@macrocallback bar(integer) :: Macro.t",
+               summary: "Docs for bar",
+               type: :macro,
+               visibility: :public
+             }
+           ] = list
+  end
+
   test "lists callbacks in function suggestion - elixir behaviour" do
     buffer = """
     defmodule MyServer do
@@ -843,7 +1091,7 @@ defmodule ElixirSense.SuggestionsTest do
                metadata: %{implementing: GenServer},
                name: "terminate",
                origin: "MyServer",
-               spec: "@spec terminate(reason, state :: term) :: term" <> _,
+               spec: "@callback terminate(reason, state :: term) :: term" <> _,
                summary:
                  "Invoked when the server is about to exit. It should do any cleanup required.",
                type: :function,
@@ -883,7 +1131,7 @@ defmodule ElixirSense.SuggestionsTest do
       assert %{
                summary: "- InitArgs = Args" <> _,
                metadata: %{implementing: :gen_event},
-               spec: "@spec init(initArgs :: term) ::" <> _,
+               spec: "@callback init(initArgs :: term) ::" <> _,
                args_list: ["arg"]
              } = init_res
     end

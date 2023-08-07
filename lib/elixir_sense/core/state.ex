@@ -109,10 +109,10 @@ defmodule ElixirSense.Core.State do
     defstruct imports: [],
               requires: [],
               aliases: [],
-              # NOTE for protocol impementation this will be the first variant
+              # NOTE for protocol implementation this will be the first variant
               module: nil,
               module_variants: [],
-              # NOTE for protocol impementation this will be the first variant
+              # NOTE for protocol implementation this will be the first variant
               protocol: nil,
               protocol_variants: nil,
               vars: [],

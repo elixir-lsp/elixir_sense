@@ -102,41 +102,16 @@ defmodule ElixirSense.Providers.Implementation do
         found_module = expand(found_module, binding_env)
 
         cond do
-          maybe_fun == nil or is_callback(found_module, maybe_fun, arity, metadata) ->
+          maybe_fun == nil or Introspection.is_callback(found_module, maybe_fun, arity, metadata) ->
             # protocol function call
             get_locations(found_module, maybe_fun, arity, metadata)
 
           maybe_fun != nil ->
-            # try to get behaviours from the target module - metadata
-            behaviours =
-              case metadata.mods_funs_to_positions[{module, maybe_fun, nil}] do
-                %{positions: [{l, c} | _]} ->
-                  def_env = Metadata.get_env(metadata, {l, c})
-                  def_env.behaviours
-
-                _ ->
-                  []
-              end
-
-            # try to get behaviours from the target module - introspection
-            behaviours =
-              if behaviours == [] do
-                Behaviours.get_module_behaviours(module)
-              else
-                behaviours
-              end
-
-            # get behaviours from current env
-            behaviours =
-              if behaviours == [] do
-                env.behaviours
-              else
-                behaviours
-              end
+            behaviours = Metadata.get_module_behaviours(metadata, env, module)
 
             # callback/protocol implementation def
             for behaviour <- behaviours,
-                is_callback(behaviour, maybe_fun, arity, metadata) do
+                Introspection.is_callback(behaviour, maybe_fun, arity, metadata) do
               get_locations(behaviour, maybe_fun, arity, metadata)
             end
             |> List.flatten()
@@ -203,28 +178,6 @@ defmodule ElixirSense.Providers.Implementation do
 
     Keyword.merge(introspection_implementations_locations, metadata_implementations_locations)
     |> Keyword.values()
-  end
-
-  defp is_callback(behaviour, fun, arity, metadata) when is_atom(behaviour) do
-    metadata_callback =
-      metadata.specs
-      |> Enum.any?(
-        &match?(
-          {{^behaviour, ^fun, cb_arity}, %{kind: kind}}
-          when kind in [:callback, :macrocallback] and
-                 Introspection.matches_arity?(cb_arity, arity),
-          &1
-        )
-      )
-
-    metadata_callback or
-      (Code.ensure_loaded?(behaviour) and
-         function_exported?(behaviour, :behaviour_info, 1) and
-         behaviour.behaviour_info(:callbacks)
-         |> Enum.map(&Introspection.drop_macro_prefix/1)
-         |> Enum.any?(
-           &match?({^fun, cb_arity} when Introspection.matches_arity?(cb_arity, arity), &1)
-         ))
   end
 
   defp find_delegatee(

@@ -73,12 +73,12 @@ defmodule ElixirSense.Core.MetadataTest do
       |> Metadata.get_function_signatures(MyModule, :func)
 
     assert signatures == [
-             %{name: "func", params: ["par"], documentation: nil, spec: nil},
+             %{name: "func", params: ["par"], documentation: "", spec: ""},
              %{
                name: "func",
                params: ["tuple", "optional \\\\ true"],
-               documentation: nil,
-               spec: nil
+               documentation: "",
+               spec: ""
              }
            ]
   end

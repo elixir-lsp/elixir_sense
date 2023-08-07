@@ -21,7 +21,9 @@
 defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   use ExUnit.Case, async: true
 
-  alias ElixirSense.Providers.Suggestion.Complete.Env
+  alias ElixirSense.Providers.Suggestion.Complete
+  alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.State.Env
   alias ElixirSense.Core.State.{ModFunInfo, SpecInfo, VarInfo, AttributeInfo}
 
   def expand(
@@ -29,9 +31,10 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
         env \\ %Env{
           imports: [{Kernel, []}]
         },
+        metadata \\ %Metadata{},
         opts \\ []
       ) do
-    ElixirSense.Providers.Suggestion.Complete.do_expand(expr, env, opts)
+    Complete.do_expand(expr, env, metadata, opts)
   end
 
   test "erlang module completion" do
@@ -276,7 +279,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                summary:
                  "The `String.Chars` protocol is responsible for\nconverting a structure to a binary (only if applicable)."
              }
-           ] = expand(~c"__MODULE__.Cha", %Env{scope_module: String})
+           ] = expand(~c"__MODULE__.Cha", %Env{module: String})
   end
 
   @tag requires_elixir_1_14: true
@@ -322,7 +325,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                full_name: "String.Chars",
                required_alias: "String.Chars"
              }
-           ] = expand(~c"Char", %Env{}, required_alias: true)
+           ] = expand(~c"Char", %Env{}, %Metadata{}, required_alias: true)
   end
 
   test "does not suggest required_alias when alias already exists" do
@@ -330,7 +333,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       aliases: [{MyChars, String.Chars}]
     }
 
-    results = expand(~c"Char", env, required_alias: true)
+    results = expand(~c"Char", env, %Metadata{}, required_alias: true)
 
     refute Enum.find(results, fn expansion -> expansion[:required_alias] == String.Chars end)
   end
@@ -340,17 +343,17 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       aliases: []
     }
 
-    results = expand(~c"Elixi", env, required_alias: true)
+    results = expand(~c"Elixi", env, %Metadata{}, required_alias: true)
 
     refute Enum.find(results, fn expansion -> expansion[:required_alias] == Elixir end)
   end
 
   test "does not suggest required_alias for when hint has more than one part" do
-    results = expand(~c"Elixir.Char", %Env{}, required_alias: true)
+    results = expand(~c"Elixir.Char", %Env{}, %Metadata{}, required_alias: true)
 
     refute Enum.find(results, fn expansion -> expansion[:required_alias] == String.Chars end)
 
-    results = expand(~c"String.", %Env{}, required_alias: true)
+    results = expand(~c"String.", %Env{}, %Metadata{}, required_alias: true)
 
     refute Enum.find(results, fn expansion ->
              expansion[:required_alias] == String.Tokenizer.Security
@@ -369,13 +372,13 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   @tag requires_elixir_1_14: true
   test "function completion on __MODULE__" do
     assert [%{name: "version", origin: "System"}] =
-             expand(~c"__MODULE__.ve", %Env{scope_module: System})
+             expand(~c"__MODULE__.ve", %Env{module: System})
   end
 
   @tag requires_elixir_1_14: true
   test "function completion on __MODULE__ submodules" do
     assert [%{name: "to_string", origin: "String.Chars"}] =
-             expand(~c"__MODULE__.Chars.to", %Env{scope_module: String})
+             expand(~c"__MODULE__.Chars.to", %Env{module: String})
   end
 
   @tag requires_elixir_1_14: true
@@ -570,17 +573,6 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
   test "struct key completion is supported" do
     env = %Env{
-      types: %{
-        {MyStruct, :t, 0} => %ElixirSense.Core.State.TypeInfo{
-          name: :t,
-          args: [[]],
-          specs: ["@type t :: %MyStruct{some: integer}"],
-          kind: :type
-        }
-      },
-      structs: %{
-        MyStruct => %ElixirSense.Core.State.StructInfo{type: :defstruct, fields: [some: 1]}
-      },
       vars: [
         %VarInfo{
           name: :struct,
@@ -597,7 +589,21 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       ]
     }
 
-    assert expand(~c"struct.h", env) ==
+    metadata = %Metadata{
+      types: %{
+        {MyStruct, :t, 0} => %ElixirSense.Core.State.TypeInfo{
+          name: :t,
+          args: [[]],
+          specs: ["@type t :: %MyStruct{some: integer}"],
+          kind: :type
+        }
+      },
+      structs: %{
+        MyStruct => %ElixirSense.Core.State.StructInfo{type: :defstruct, fields: [some: 1]}
+      }
+    }
+
+    assert expand(~c"struct.h", env, metadata) ==
              [
                %{
                  call?: true,
@@ -609,7 +615,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                }
              ]
 
-    assert expand(~c"other.d", env) ==
+    assert expand(~c"other.d", env, metadata) ==
              [
                %{
                  call?: true,
@@ -621,7 +627,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                }
              ]
 
-    assert expand(~c"from_metadata.s", env) ==
+    assert expand(~c"from_metadata.s", env, metadata) ==
              [
                %{
                  call?: true,
@@ -1180,8 +1186,11 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
   test "complete local funs from scope module" do
     env = %Env{
-      scope_module: MyModule,
-      mods_funs: %{
+      module: MyModule
+    }
+
+    metadata = %Metadata{
+      mods_funs_to_positions: %{
         {MyModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {MyModule, :my_fun_priv, nil} => %ModFunInfo{type: :defp},
         {MyModule, :my_fun_priv, 2} => %ModFunInfo{
@@ -1224,7 +1233,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       }
     }
 
-    assert [_ | _] = expand(~c"my_f", env)
+    assert [_ | _] = expand(~c"my_f", env, metadata)
 
     assert [
              %{
@@ -1234,38 +1243,41 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                type: :function,
                spec: "@spec my_fun_priv(atom, integer) :: boolean"
              }
-           ] = expand(~c"my_fun_pr", env)
+           ] = expand(~c"my_fun_pr", env, metadata)
 
     assert [
              %{name: "my_fun_pub", origin: "MyModule", type: :function}
-           ] = expand(~c"my_fun_pu", env)
+           ] = expand(~c"my_fun_pu", env, metadata)
 
     assert [
              %{name: "my_macro_priv", origin: "MyModule", type: :macro}
-           ] = expand(~c"my_macro_pr", env)
+           ] = expand(~c"my_macro_pr", env, metadata)
 
     assert [
              %{name: "my_macro_pub", origin: "MyModule", type: :macro}
-           ] = expand(~c"my_macro_pu", env)
+           ] = expand(~c"my_macro_pu", env, metadata)
 
     assert [
              %{name: "my_guard_priv", origin: "MyModule", type: :macro}
-           ] = expand(~c"my_guard_pr", env)
+           ] = expand(~c"my_guard_pr", env, metadata)
 
     assert [
              %{name: "my_guard_pub", origin: "MyModule", type: :macro}
-           ] = expand(~c"my_guard_pu", env)
+           ] = expand(~c"my_guard_pu", env, metadata)
 
     assert [
              %{name: "my_delegated", origin: "MyModule", type: :function}
-           ] = expand(~c"my_de", env)
+           ] = expand(~c"my_de", env, metadata)
   end
 
   test "complete remote funs from imported module" do
     env = %Env{
-      scope_module: MyModule,
-      imports: [{OtherModule, []}, {Kernel, []}],
-      mods_funs: %{
+      module: MyModule,
+      imports: [{OtherModule, []}, {Kernel, []}]
+    }
+
+    metadata = %Metadata{
+      mods_funs_to_positions: %{
         {OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
         {OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
@@ -1282,14 +1294,17 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
     assert [
              %{name: "my_fun_other_pub", origin: "OtherModule", needed_import: nil}
-           ] = expand(~c"my_f", env)
+           ] = expand(~c"my_f", env, metadata)
   end
 
   test "complete remote funs from imported module - needed import" do
     env = %Env{
-      scope_module: MyModule,
-      imports: [{OtherModule, [only: [{:my_fun_other_pub, 1}]]}, {Kernel, []}],
-      mods_funs: %{
+      module: MyModule,
+      imports: [{OtherModule, [only: [{:my_fun_other_pub, 1}]]}, {Kernel, []}]
+    }
+
+    metadata = %Metadata{
+      mods_funs_to_positions: %{
         {OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
         {OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
@@ -1315,13 +1330,16 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                origin: "OtherModule",
                needed_import: {"OtherModule", {"my_fun_other_pub", 2}}
              }
-           ] = expand(~c"my_f", env)
+           ] = expand(~c"my_f", env, metadata)
   end
 
   test "complete remote funs" do
     env = %Env{
-      scope_module: MyModule,
-      mods_funs: %{
+      module: MyModule
+    }
+
+    metadata = %Metadata{
+      mods_funs_to_positions: %{
         {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {Some.OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
         {Some.OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
@@ -1338,14 +1356,17 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
     assert [
              %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
-           ] = expand(~c"Some.OtherModule.my_f", env)
+           ] = expand(~c"Some.OtherModule.my_f", env, metadata)
   end
 
   test "complete remote funs from aliased module" do
     env = %Env{
-      scope_module: MyModule,
-      aliases: [{S, Some.OtherModule}],
-      mods_funs: %{
+      module: MyModule,
+      aliases: [{S, Some.OtherModule}]
+    }
+
+    metadata = %Metadata{
+      mods_funs_to_positions: %{
         {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {Some.OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
         {Some.OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
@@ -1362,25 +1383,12 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
     assert [
              %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
-           ] = expand(~c"S.my_f", env)
+           ] = expand(~c"S.my_f", env, metadata)
   end
 
   test "complete remote funs from injected module" do
     env = %Env{
-      scope_module: MyModule,
-      mods_funs: %{
-        {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
-        {Some.OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
-        {Some.OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
-          type: :def,
-          params: [[{:some, [], nil}]]
-        },
-        {Some.OtherModule, :my_fun_other_priv, nil} => %ModFunInfo{type: :defp},
-        {Some.OtherModule, :my_fun_other_priv, 1} => %ModFunInfo{
-          type: :defp,
-          params: [[{:some, [], nil}]]
-        }
-      },
+      module: MyModule,
       attributes: [
         %AttributeInfo{
           name: :get_module,
@@ -1409,50 +1417,72 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       ]
     }
 
-    assert [
-             %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
-           ] = expand(~c"@get_module.my_f", env)
+    metadata = %Metadata{
+      mods_funs_to_positions: %{
+        {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule},
+        {Some.OtherModule, :my_fun_other_pub, nil} => %ModFunInfo{type: :def},
+        {Some.OtherModule, :my_fun_other_pub, 1} => %ModFunInfo{
+          type: :def,
+          params: [[{:some, [], nil}]]
+        },
+        {Some.OtherModule, :my_fun_other_priv, nil} => %ModFunInfo{type: :defp},
+        {Some.OtherModule, :my_fun_other_priv, 1} => %ModFunInfo{
+          type: :defp,
+          params: [[{:some, [], nil}]]
+        }
+      }
+    }
 
     assert [
              %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
-           ] = expand(~c"@compile_module.my_f", env)
+           ] = expand(~c"@get_module.my_f", env, metadata)
+
+    assert [
+             %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
+           ] = expand(~c"@compile_module.my_f", env, metadata)
 
     Application.put_env(:elixir_sense, :other_attribute, Some.OtherModule)
 
     assert [
              %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
-           ] = expand(~c"@fetch_module.my_f", env)
+           ] = expand(~c"@fetch_module.my_f", env, metadata)
 
     assert [
              %{name: "my_fun_other_pub", origin: "Some.OtherModule"}
-           ] = expand(~c"@compile_bang_module.my_f", env)
+           ] = expand(~c"@compile_bang_module.my_f", env, metadata)
   after
     Application.delete_env(:elixir_sense, :other_attribute)
   end
 
   test "complete modules" do
     env = %Env{
-      scope_module: MyModule,
-      aliases: [{MyAlias, Some.OtherModule.Nested}],
-      mods_funs: %{
+      module: MyModule,
+      aliases: [{MyAlias, Some.OtherModule.Nested}]
+    }
+
+    metadata = %Metadata{
+      mods_funs_to_positions: %{
         {Some.OtherModule, nil, nil} => %ModFunInfo{type: :defmodule}
       }
     }
 
-    assert [%{name: "Some", full_name: "Some", type: :module}] = expand(~c"Som", env)
+    assert [%{name: "Some", full_name: "Some", type: :module}] = expand(~c"Som", env, metadata)
 
     assert [%{name: "OtherModule", full_name: "Some.OtherModule", type: :module}] =
-             expand(~c"Some.", env)
+             expand(~c"Some.", env, metadata)
 
     assert [%{name: "MyAlias", full_name: "Some.OtherModule.Nested", type: :module}] =
-             expand(~c"MyA", env)
+             expand(~c"MyA", env, metadata)
   end
 
   test "alias rules" do
     env = %Env{
-      scope_module: MyModule,
-      aliases: [{Keyword, MyKeyword}],
-      mods_funs: %{
+      module: MyModule,
+      aliases: [{Keyword, MyKeyword}]
+    }
+
+    metadata = %Metadata{
+      mods_funs_to_positions: %{
         {MyKeyword, nil, nil} => %ModFunInfo{type: :defmodule},
         {MyKeyword, :values1, 0} => %ModFunInfo{type: :def, params: [[]]},
         {MyKeyword, :values1, nil} => %ModFunInfo{type: :def}
@@ -1469,10 +1499,10 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                spec: "",
                summary: ""
              }
-           ] = expand(~c"Keyword.valu", env)
+           ] = expand(~c"Keyword.valu", env, metadata)
 
     assert [%{name: "values", type: :function, arity: 1, origin: "Keyword"}] =
-             expand(~c"Elixir.Keyword.valu", env)
+             expand(~c"Elixir.Keyword.valu", env, metadata)
   end
 
   defmodule MyStruct do
@@ -1492,14 +1522,14 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       aliases: [{MyDate, Date}]
     }
 
-    entries = expand(~c"%My", env, required_alias: true)
+    entries = expand(~c"%My", env, %Metadata{}, required_alias: true)
     assert Enum.any?(entries, &(&1.name == "MyDate" and &1.subtype == :struct))
   end
 
   @tag requires_elixir_1_14: true
   test "completion for struct names with __MODULE__" do
-    assert [%{name: "__MODULE__"}] = expand(~c"%__MODU", %Env{scope_module: Date.Range})
-    assert [%{name: "Range"}] = expand(~c"%__MODULE__.Ra", %Env{scope_module: Date})
+    assert [%{name: "__MODULE__"}] = expand(~c"%__MODU", %Env{module: Date.Range})
+    assert [%{name: "Range"}] = expand(~c"%__MODULE__.Ra", %Env{module: Date})
   end
 
   @tag requires_elixir_1_14: true
@@ -1767,9 +1797,12 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     assert [] = expand(~c":ets.__in")
 
     env = %Env{
-      scope_module: MyModule,
-      aliases: [{MyAlias, Some.OtherModule.Nested}],
-      mods_funs: %{
+      module: MyModule,
+      aliases: [{MyAlias, Some.OtherModule.Nested}]
+    }
+
+    metadata = %Metadata{
+      mods_funs_to_positions: %{
         {MyModule, nil, nil} => %ModFunInfo{type: :defmodule},
         {MyModule, :module_info, nil} => %ModFunInfo{type: :def},
         {MyModule, :module_info, 0} => %ModFunInfo{type: :def, params: [[]]},
@@ -1779,8 +1812,8 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       }
     }
 
-    assert [] = expand(~c"module_", env)
-    assert [] = expand(~c"__in", env)
+    assert [] = expand(~c"module_", env, metadata)
+    assert [] = expand(~c"__in", env, metadata)
 
     assert [
              %{
@@ -1797,7 +1830,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                spec:
                  "@spec module_info(:module) :: atom\n@spec module_info(:attributes | :compile) :: [{atom, term}]\n@spec module_info(:md5) :: binary\n@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]\n@spec module_info(:native) :: boolean"
              }
-           ] = expand(~c"MyModule.mo", env)
+           ] = expand(~c"MyModule.mo", env, metadata)
 
     assert [
              %{
@@ -1806,7 +1839,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                spec:
                  "@spec __info__(:attributes) :: keyword()\n@spec __info__(:compile) :: [term()]\n@spec __info__(:functions) :: [{atom, non_neg_integer}]\n@spec __info__(:macros) :: [{atom, non_neg_integer}]\n@spec __info__(:md5) :: binary()\n@spec __info__(:module) :: module()"
              }
-           ] = expand(~c"MyModule.__in", env)
+           ] = expand(~c"MyModule.__in", env, metadata)
   end
 
   test "complete build in behaviour functions" do
@@ -2083,10 +2116,12 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       params: [[:_]]
     }
 
-    mod_fun = %{
-      {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
-      {MyModule, :info, nil} => macro_info,
-      {MyModule, :info, 1} => macro_info
+    metadata = %Metadata{
+      mods_funs_to_positions: %{
+        {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
+        {MyModule, :info, nil} => macro_info,
+        {MyModule, :info, 1} => macro_info
+      }
     }
 
     assert [
@@ -2098,7 +2133,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                needed_require: "MyModule",
                visibility: :public
              }
-           ] = expand(~c"MyModule.inf", %Env{requires: [], mods_funs: mod_fun})
+           ] = expand(~c"MyModule.inf", %Env{requires: []}, metadata)
 
     assert [
              %{
@@ -2109,7 +2144,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                needed_require: nil,
                visibility: :public
              }
-           ] = expand(~c"MyModule.inf", %Env{requires: [MyModule], mods_funs: mod_fun})
+           ] = expand(~c"MyModule.inf", %Env{requires: [MyModule]}, metadata)
   end
 
   test "macros from Kernel.SpecialForms should not add needed_require" do

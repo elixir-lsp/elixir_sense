@@ -265,3 +265,13 @@ defmodule ElixirSenseExample.ExampleBehaviourWithException do
     end
   end
 end
+
+defmodule ElixirSenseExample.BehaviourWithMeta do
+  @doc "Sample doc"
+  @doc since: "1.2.3"
+  @callback flatten(list()) :: list()
+
+  @doc "Docs for bar"
+  @doc since: "1.2.3"
+  @macrocallback bar(integer()) :: Macro.t()
+end

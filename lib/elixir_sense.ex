@@ -423,13 +423,13 @@ defmodule ElixirSense do
 
         env =
           %State.Env{
-            module: module
+            module_variants: module_variants
           } =
           Metadata.get_env(buffer_file_metadata, {line, column})
           |> Metadata.add_scope_vars(buffer_file_metadata, {line, column})
 
         # find last env of current module
-        attributes = get_attributes(buffer_file_metadata.lines_to_env, module)
+        attributes = get_attributes(buffer_file_metadata, module_variants)
 
         # one line can contain variables from many scopes
         vars =
@@ -459,14 +459,10 @@ defmodule ElixirSense do
     end
   end
 
-  defp get_attributes(_lines_to_env, module) when module in [nil, Elixir], do: []
+  defp get_attributes(_metadata, []), do: []
 
-  defp get_attributes(lines_to_env, module) do
-    %State.Env{attributes: attributes} =
-      lines_to_env
-      |> Enum.filter(fn {_k, v} -> v.module == module end)
-      |> Enum.max_by(fn {k, _v} -> k end)
-      |> elem(1)
+  defp get_attributes(metadata, [module | _]) do
+    %State.Env{attributes: attributes} = Metadata.get_last_module_env(metadata, module)
 
     attributes
   end
