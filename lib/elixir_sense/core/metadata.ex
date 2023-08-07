@@ -314,12 +314,12 @@ defmodule ElixirSense.Core.Metadata do
             specs |> Enum.reverse() |> Enum.join("\n")
         end
 
-      # TODO fallback to callback spec
+      # fallback to callback spec done in signature provider
 
       %{
         name: Atom.to_string(function),
         params: params |> Enum.with_index() |> Enum.map(&Introspection.param_to_var/1),
-        # TODO
+        # TODO provide doc
         documentation: "",
         spec: spec
       }

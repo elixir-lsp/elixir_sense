@@ -401,16 +401,18 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp get_spec_from_typespec(mod, fun) do
+    # TypeInfo.get_function_specs does fallback to behaviours
+    {behaviour, specs} = TypeInfo.get_function_specs(mod, fun, :any)
+
     results =
-      for {{_name, _arity}, [params | _]} = spec <-
-            TypeInfo.get_function_specs(mod, fun, :any) do
+      for {{_name, _arity}, [params | _]} = spec <- specs do
         params = TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
 
         %{
           name: Atom.to_string(fun),
           params: params,
           documentation: "",
-          spec: spec |> spec_to_string
+          spec: spec |> spec_to_string(if(behaviour, do: :callback, else: :spec))
         }
       end
 
@@ -426,6 +428,8 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp get_spec_from_module_info(mod, fun) do
+    # no fallback to behaviours here - we assume that behaviours have typespecs
+    # and were already handled
     for {f, {a, _kind}} <- get_exports(mod),
         f == fun do
       dummy_params = if a == 0, do: [], else: Enum.map(1..a, fn _ -> "term" end)
@@ -511,16 +515,25 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp get_func_docs_md_from_typespec(mod, fun, call_arity) do
+    # TypeInfo.get_function_specs does fallback to behaviours
+    {behaviour, specs} = TypeInfo.get_function_specs(mod, fun, call_arity)
+
+    meta =
+      if behaviour do
+        %{implementing: behaviour}
+      else
+        %{}
+      end
+
     results =
-      for {{_name, arity}, [params | _]} <-
-            TypeInfo.get_function_specs(mod, fun, call_arity) do
+      for {{_name, arity}, [params | _]} <- specs do
         fun_args_text = TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
 
         %{
           module: mod,
           function: fun,
-          metadata: %{},
-          specs: get_specs_text(mod, fun, arity, :function, %{}),
+          metadata: meta,
+          specs: get_specs_text(mod, fun, arity, :function, meta),
           fun_args_text: fun_args_text,
           docs: nil
         }
@@ -1815,6 +1828,7 @@ defmodule ElixirSense.Core.Introspection do
 
           if arity != 0 and behaviour != nil do
             # try to get callback spec
+            # we don't expect macros here
             case TypeInfo.get_callback(behaviour, f, arity) do
               {_, [params | _]} ->
                 TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
