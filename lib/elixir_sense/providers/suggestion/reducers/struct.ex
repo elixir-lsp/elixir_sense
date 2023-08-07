@@ -80,13 +80,13 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
 
         type = Binding.expand(env, {:struct, [], type, var})
 
-        result = get_fields(env, type, hint, fields_so_far)
+        result = get_fields(buffer_metadata, type, hint, fields_so_far)
         {result, if(fields_so_far == [], do: :maybe_struct_update)}
 
       {:map, fields_so_far, var} ->
         var = Binding.expand(env, var)
 
-        result = get_fields(env, var, hint, fields_so_far)
+        result = get_fields(buffer_metadata, var, hint, fields_so_far)
         {result, if(fields_so_far == [], do: :maybe_struct_update)}
 
       _ ->
@@ -94,21 +94,21 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
     end
   end
 
-  defp get_fields(env, {:map, fields, _}, hint, fields_so_far) do
-    expand_map_field_access(env, fields, hint, :map, fields_so_far)
+  defp get_fields(metadata, {:map, fields, _}, hint, fields_so_far) do
+    expand_map_field_access(metadata, fields, hint, :map, fields_so_far)
   end
 
-  defp get_fields(env, {:struct, fields, type, _}, hint, fields_so_far) do
-    expand_map_field_access(env, fields, hint, {:struct, type}, fields_so_far)
+  defp get_fields(metadata, {:struct, fields, type, _}, hint, fields_so_far) do
+    expand_map_field_access(metadata, fields, hint, {:struct, type}, fields_so_far)
   end
 
   defp get_fields(_, _, _hint, _fields_so_far), do: []
 
-  defp expand_map_field_access(env, fields, hint, type, fields_so_far) do
+  defp expand_map_field_access(metadata, fields, hint, type, fields_so_far) do
     {subtype, origin, types} =
       case type do
         {:struct, mod} ->
-          types = get_field_types(env, mod, true)
+          types = get_field_types(metadata, mod, true)
 
           {:struct_field, if(mod, do: inspect(mod)), types}
 
@@ -145,8 +145,8 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
     |> Enum.sort_by(& &1.name)
   end
 
-  def get_field_types(env, mod, include_private) do
-    case get_field_types_from_metadata(env, mod, include_private) do
+  def get_field_types(%Metadata{} = metadata, mod, include_private) do
+    case get_field_types_from_metadata(metadata, mod, include_private) do
       nil -> get_field_types_from_introspection(mod, include_private)
       res -> res
     end
@@ -155,7 +155,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
   defguardp type_is_public(kind, include_private) when kind == :type or include_private
 
   defp get_field_types_from_metadata(
-         %{types: types},
+         %Metadata{types: types},
          mod,
          include_private
        ) do

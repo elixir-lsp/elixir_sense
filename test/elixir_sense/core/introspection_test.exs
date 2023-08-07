@@ -4,6 +4,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.TypeInfo
   import ElixirSense.Core.Introspection
+  alias ElixirSense.Core.State
 
   test "format_spec_ast with one return option does not split the returns" do
     type_ast = TypeInfo.get_type_ast(GenServer, :debug)
@@ -765,6 +766,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
                get_all_docs(
                  {ElixirSenseExample.ModuleWithDelegates, :delegated_fun, 2},
                  %Metadata{},
+                 %State.Env{},
                  :mod_fun
                )
 
@@ -784,6 +786,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
                get_all_docs(
                  {ElixirSenseExample.ModuleWithDocs, :some_fun, 2},
                  %Metadata{},
+                 %State.Env{},
                  :mod_fun
                )
 
@@ -803,6 +806,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
                get_all_docs(
                  {ElixirSenseExample.ModuleWithDocs, :soft_deprecated_fun, 1},
                  %Metadata{},
+                 %State.Env{},
                  :mod_fun
                )
 
@@ -822,6 +826,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
                get_all_docs(
                  {ElixirSenseExample.ModuleWithDocs, :some_type, 0},
                  %Metadata{},
+                 %State.Env{},
                  :type
                )
 
@@ -844,7 +849,12 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
     test "returns since metadata on modules" do
       assert docs =
-               get_all_docs({ElixirSenseExample.ModuleWithDocs, nil, :any}, %Metadata{}, :mod_fun)
+               get_all_docs(
+                 {ElixirSenseExample.ModuleWithDocs, nil, :any},
+                 %Metadata{},
+                 %State.Env{},
+                 :mod_fun
+               )
 
       assert docs == """
              > ElixirSenseExample.ModuleWithDocs

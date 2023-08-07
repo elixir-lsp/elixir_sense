@@ -873,7 +873,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "terminate",
                    params: ["_reason", "_state"],
                    documentation: "Invoked when the server is about to exit" <> _,
-                   spec: "@spec terminate(reason, state :: term) :: term" <> _
+                   spec: "@callback terminate(reason, state :: term) :: term" <> _
                  }
                ]
              } = ElixirSense.signature(code, 5, 15)
@@ -903,7 +903,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "init",
                    params: ["arg"],
                    documentation: summary,
-                   spec: "@spec init(args :: term) ::" <> _
+                   spec: "@callback init(args :: term) ::" <> _
                  }
                ]
              } = ElixirSense.signature(code, 5, 10)
@@ -926,7 +926,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "Docs for bar",
                    name: "bar",
                    params: ["b"],
-                   spec: "@spec bar(integer) :: Macro.t"
+                   spec: "@macrocallback bar(integer) :: Macro.t"
                  }
                ]
              } = ElixirSense.signature(code, 2, 60)
@@ -947,7 +947,7 @@ defmodule ElixirSense.SignatureTest do
                      documentation: "- Args = " <> _,
                      name: "init",
                      params: ["_"],
-                     spec: "@spec init(args :: term) :: init_result(state)"
+                     spec: "@callback init(args :: term) :: init_result(state)"
                    }
                  ]
                } = res
@@ -969,7 +969,223 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "- Args = " <> _,
                    name: "init",
                    params: ["args"],
-                   spec: "@spec init(args :: term) ::" <> _
+                   spec: "@callback init(args :: term) ::" <> _
+                 }
+               ]
+             } = res
+    end
+
+    test "retrieve metadata function signature - fallback to callback in metadata" do
+      code = """
+      defmodule MyBehaviour do
+        @doc "Sample doc"
+        @doc since: "1.2.3"
+        @callback flatten(list()) :: list()
+      end
+
+      defmodule MyLocalModule do
+        @behaviour MyBehaviour
+        
+        @impl true
+        def flatten(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        def func(list) do
+          MyLocalModule.flatten(list)
+        end
+      end
+      """
+
+      res = ElixirSense.signature(code, 18, 27)
+
+      assert %{
+               active_param: 0,
+               signatures: [
+                 %{
+                   # TODO provide docs
+                   documentation: "",
+                   name: "flatten",
+                   params: ["list"],
+                   spec: "@callback flatten(list) :: list"
+                 }
+               ]
+             } = res
+    end
+
+    test "retrieve metadata function signature - fallback to protocol function in metadata" do
+      code = """
+      defprotocol BB do
+        @doc "asdf"
+        @spec go(t) :: integer()
+        def go(t)
+      end
+
+      defimpl BB, for: String do
+        def go(t), do: ""
+      end
+
+      defmodule MyModule do
+        def func(list) do
+          BB.String.go(list)
+        end
+      end
+      """
+
+      res = ElixirSense.signature(code, 13, 18)
+
+      assert %{
+               active_param: 0,
+               signatures: [
+                 %{
+                   # TODO provide docs
+                   documentation: "",
+                   name: "go",
+                   params: ["t"],
+                   spec: "@callback go(t) :: integer"
+                 }
+               ]
+             } = res
+    end
+
+    test "retrieve metadata macro signature - fallback to macrocallback in metadata" do
+      code = """
+      defmodule MyBehaviour do
+        @doc "Sample doc"
+        @doc since: "1.2.3"
+        @macrocallback flatten(list()) :: list()
+      end
+
+      defmodule MyLocalModule do
+        @behaviour MyBehaviour
+        
+        @impl true
+        defmacro flatten(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        require MyLocalModule
+        def func(list) do
+          MyLocalModule.flatten(list)
+        end
+      end
+      """
+
+      res = ElixirSense.signature(code, 19, 27)
+
+      assert %{
+               active_param: 0,
+               signatures: [
+                 %{
+                   # TODO provide docs
+                   documentation: "",
+                   name: "flatten",
+                   params: ["list"],
+                   spec: "@macrocallback flatten(list) :: list"
+                 }
+               ]
+             } = res
+    end
+
+    test "retrieve metadata function signature - fallback to callback" do
+      code = """
+      defmodule MyLocalModule do
+        @behaviour ElixirSenseExample.BehaviourWithMeta
+        
+        @impl true
+        def flatten(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        def func(list) do
+          MyLocalModule.flatten(list)
+        end
+      end
+      """
+
+      res = ElixirSense.signature(code, 12, 27)
+
+      assert %{
+               active_param: 0,
+               signatures: [
+                 %{
+                   documentation: "Sample doc",
+                   name: "flatten",
+                   params: ["list"],
+                   spec: "@callback flatten(list) :: list"
+                 }
+               ]
+             } = res
+    end
+
+    test "retrieve metadata function signature - fallback to erlang callback" do
+      code = """
+      defmodule MyLocalModule do
+        @behaviour :gen_statem
+        
+        @impl true
+        def init(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        def func(list) do
+          MyLocalModule.init(list)
+        end
+      end
+      """
+
+      res = ElixirSense.signature(code, 12, 27)
+
+      assert %{
+               active_param: 0,
+               signatures: [
+                 %{
+                   documentation: "- Args = term" <> _,
+                   name: "init",
+                   params: ["list"],
+                   spec: "@callback init(args :: term) :: init_result(state)"
+                 }
+               ]
+             } = res
+    end
+
+    test "retrieve metadata macro signature - fallback to macrocallback" do
+      code = """
+      defmodule MyLocalModule do
+        @behaviour ElixirSenseExample.BehaviourWithMeta
+        
+        @impl true
+        defmacro bar(list) do
+          []
+        end
+      end
+
+      defmodule MyModule do
+        require MyLocalModule
+        def func(list) do
+          MyLocalModule.bar(list)
+        end
+      end
+      """
+
+      res = ElixirSense.signature(code, 13, 27)
+
+      assert %{
+               active_param: 0,
+               signatures: [
+                 %{
+                   documentation: "Docs for bar",
+                   name: "bar",
+                   params: ["list"],
+                   spec: "@macrocallback bar(integer) :: Macro.t"
                  }
                ]
              } = res

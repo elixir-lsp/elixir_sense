@@ -135,39 +135,12 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
   defp find_mods_funcs(
          hint,
          %State.Env{
-           imports: imports,
-           requires: requires,
-           aliases: aliases,
-           module: module,
-           vars: vars,
-           attributes: attributes,
-           scope: scope,
-           behaviours: behaviours
-         },
-         %Metadata{
-           structs: structs,
-           mods_funs_to_positions: mods_funs,
-           specs: metadata_specs,
-           types: metadata_types
-         },
+           module: module
+         } = env,
+         %Metadata{} = metadata,
          text_before,
          opts
        ) do
-    env = %Complete.Env{
-      aliases: aliases,
-      vars: vars,
-      attributes: attributes,
-      scope_module: module,
-      imports: imports,
-      requires: requires,
-      mods_funs: mods_funs,
-      specs: metadata_specs,
-      structs: structs,
-      types: metadata_types,
-      scope: scope,
-      behaviours: behaviours
-    }
-
     hint =
       case Source.get_v12_module_prefix(text_before, module) do
         nil ->
@@ -187,6 +160,6 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
         hint
       end
 
-    Complete.complete(hint, env, opts)
+    Complete.complete(hint, env, metadata, opts)
   end
 end

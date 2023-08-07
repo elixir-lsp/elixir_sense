@@ -3,10 +3,10 @@ defmodule ElixirSense.Core.Metadata do
   Core Metadata
   """
 
+  alias ElixirSense.Core.Behaviours
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.State
-  alias ElixirSense.Core.TypeInfo
 
   @type t :: %ElixirSense.Core.Metadata{
           source: String.t(),
@@ -308,7 +308,7 @@ defmodule ElixirSense.Core.Metadata do
       spec =
         case metadata.specs[{module, function, arity}] do
           nil ->
-            nil
+            ""
 
           %State.SpecInfo{specs: specs} ->
             specs |> Enum.reverse() |> Enum.join("\n")
@@ -320,7 +320,7 @@ defmodule ElixirSense.Core.Metadata do
         name: Atom.to_string(function),
         params: params |> Enum.with_index() |> Enum.map(&Introspection.param_to_var/1),
         # TODO
-        documentation: nil,
+        documentation: "",
         spec: spec
       }
     end)
@@ -353,34 +353,59 @@ defmodule ElixirSense.Core.Metadata do
     end)
   end
 
-  def get_docs_specs_from_behaviours(env) do
-    for behaviour <- env.behaviours, into: %{} do
-      docs =
-        NormalizedCode.callback_documentation(behaviour)
-        |> Map.new()
+  def get_doc_spec_from_behaviour(behaviour, f, a, kind) do
+    docs =
+      NormalizedCode.callback_documentation(behaviour)
+      |> Map.new()
 
-      specs = TypeInfo.get_module_callbacks(behaviour) |> Map.new()
-      {behaviour, {docs, specs}}
+    meta = %{implementing: behaviour}
+    spec = Introspection.get_spec_as_string(nil, f, a, kind, meta)
+
+    case docs[{f, a}] do
+      nil ->
+        {spec, "", meta}
+
+      {_signatures, docs, callback_meta, mime_type} ->
+        {spec, docs |> NormalizedCode.extract_docs(mime_type), callback_meta |> Map.merge(meta)}
     end
   end
 
-  def get_doc_spec_from_behaviours(callback_docs_specs, f, a) do
-    callback_docs_specs
-    |> Enum.find_value(fn {_behaviour, {docs, specs}} ->
-      case docs[{f, a}] do
+  def get_last_module_env(_metadata, nil), do: nil
+
+  def get_last_module_env(metadata, module) do
+    metadata.lines_to_env
+    |> Enum.filter(fn {_k, v} -> module in v.module_variants end)
+    |> Enum.max_by(fn {k, _v} -> k end, fn -> {nil, nil} end)
+    |> elem(1)
+  end
+
+  def get_module_behaviours(metadata, env, module) do
+    # try to get behaviours from the target module - metadata
+    behaviours =
+      case get_last_module_env(metadata, module) do
         nil ->
-          case specs[{f, a}] do
-            nil -> nil
-            spec -> {spec |> Introspection.spec_to_string(), "", %{}}
-          end
+          []
 
-        {_signatures, docs, metadata, mime_type} ->
-          spec =
-            specs[{f, a}]
-            |> Introspection.spec_to_string()
-
-          {spec, docs |> NormalizedCode.extract_docs(mime_type), metadata}
+        module_env ->
+          module_env.behaviours
       end
-    end) || {"", "", %{}}
+
+    # try to get behaviours from the target module - introspection
+    behaviours =
+      if behaviours == [] do
+        Behaviours.get_module_behaviours(module)
+      else
+        behaviours
+      end
+
+    # get behaviours from current env
+    behaviours =
+      if behaviours == [] do
+        env.behaviours
+      else
+        behaviours
+      end
+
+    behaviours
   end
 end

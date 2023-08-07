@@ -282,6 +282,7 @@ defmodule ElixirSense.Core.TypeInfo do
 
   def get_spec(module, function, arity)
       when is_atom(module) and is_atom(function) and is_integer(arity) do
+    # TODO check usages - does not drop MACRO- prefix
     module
     |> get_module_specs()
     |> Map.get({function, arity})
@@ -289,12 +290,14 @@ defmodule ElixirSense.Core.TypeInfo do
 
   def get_callback(module, function, arity)
       when is_atom(module) and is_atom(function) and is_integer(arity) do
+    # TODO check usages - does not drop MACRO- prefix
     module
     |> get_module_callbacks()
     |> Map.get({function, arity})
   end
 
   def get_function_specs(module, function, arity) when is_atom(module) and is_atom(function) do
+    # TODO check usages - does not drop MACRO- prefix
     module_specs = module |> get_module_specs()
 
     function_specs =
@@ -308,6 +311,7 @@ defmodule ElixirSense.Core.TypeInfo do
       module
       |> Behaviours.get_module_behaviours()
       |> Enum.reduce_while([], fn behaviour, acc ->
+        # TODO check usages - does not drop MACRO- prefix
         behaviour_specs = behaviour |> get_module_callbacks()
 
         callback_specs =
