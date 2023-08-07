@@ -1144,17 +1144,19 @@ defmodule ElixirSense.SignatureTest do
 
       res = ElixirSense.signature(code, 12, 27)
 
-      assert %{
-               active_param: 0,
-               signatures: [
-                 %{
-                   documentation: "- Args = term" <> _,
-                   name: "init",
-                   params: ["list"],
-                   spec: "@callback init(args :: term) :: init_result(state)"
-                 }
-               ]
-             } = res
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert %{
+                 active_param: 0,
+                 signatures: [
+                   %{
+                     documentation: "- Args = term" <> _,
+                     name: "init",
+                     params: ["list"],
+                     spec: "@callback init(args :: term) :: init_result(state)"
+                   }
+                 ]
+               } = res
+      end
     end
 
     test "retrieve metadata macro signature - fallback to macrocallback" do

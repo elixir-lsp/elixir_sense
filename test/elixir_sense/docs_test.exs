@@ -370,22 +370,24 @@ defmodule ElixirSense.DocsTest do
 
       assert actual_subject == "MyLocalModule.init"
 
-      assert docs =~ """
-             > MyLocalModule.init(list)
+      if ExUnitConfig.erlang_eep48_supported() do
+        assert docs =~ """
+               > MyLocalModule.init(list)
 
-             **Implementing behaviour**
-             :gen_statem
-             **Since**
-             OTP 19.0
+               **Implementing behaviour**
+               :gen_statem
+               **Since**
+               OTP 19.0
 
-             ### Specs
+               ### Specs
 
-             ```
-             @callback init(args :: term) ::\
-             """
+               ```
+               @callback init(args :: term) ::\
+               """
 
-      assert docs =~
-               "this function is called by the new process to initialize the implementation state and server data"
+        assert docs =~
+                 "this function is called by the new process to initialize the implementation state and server data"
+      end
     end
 
     test "retrieve metadata macro documentation - fallback to macrocallback" do

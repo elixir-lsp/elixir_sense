@@ -1007,20 +1007,22 @@ defmodule ElixirSense.SuggestionsTest do
       ElixirSense.suggestions(buffer, 12, 22)
       |> Enum.filter(fn s -> s.type == :function end)
 
-    assert [
-             %{
-               args: "list",
-               arity: 1,
-               def_arity: 1,
-               metadata: %{implementing: :gen_statem, since: "OTP 19.0"},
-               name: "init",
-               origin: "MyLocalModule",
-               spec: "@callback init(args :: term) ::" <> _,
-               summary: "- Args = term" <> _,
-               type: :function,
-               visibility: :public
-             }
-           ] = list
+    if ExUnitConfig.erlang_eep48_supported() do
+      assert [
+               %{
+                 args: "list",
+                 arity: 1,
+                 def_arity: 1,
+                 metadata: %{implementing: :gen_statem, since: "OTP 19.0"},
+                 name: "init",
+                 origin: "MyLocalModule",
+                 spec: "@callback init(args :: term) ::" <> _,
+                 summary: "- Args = term" <> _,
+                 type: :function,
+                 visibility: :public
+               }
+             ] = list
+    end
   end
 
   test "list metadata macro - fallback to macrocallback" do
