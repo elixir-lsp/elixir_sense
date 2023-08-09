@@ -4222,10 +4222,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}],
-             4 => [%CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}]
-           }
+    if Version.match?(System.version(), ">= 1.15.0") do
+      assert state.calls == %{
+               3 => [
+                 %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
+               ],
+               4 => [%CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}]
+             }
+    else
+      assert state.calls == %{
+               3 => [
+                 %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
+               ],
+               4 => [
+                 %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
+                 %CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}
+               ]
+             }
+    end
   end
 
   test "registers calls on attribute and var without args" do
@@ -4240,10 +4254,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}],
-             4 => [%CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}]
-           }
+    if Version.match?(System.version(), ">= 1.15.0") do
+      assert state.calls == %{
+               3 => [
+                 %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
+               ],
+               4 => [%CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}]
+             }
+    else
+      assert state.calls == %{
+               3 => [
+                 %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
+               ],
+               4 => [
+                 %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
+                 %CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}
+               ]
+             }
+    end
   end
 
   test "registers calls on attribute and var anonymous" do
