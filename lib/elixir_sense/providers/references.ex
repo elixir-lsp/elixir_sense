@@ -50,11 +50,7 @@ defmodule ElixirSense.Providers.References do
         } = metadata,
         trace
       ) do
-    binding_env = %Binding{
-      attributes: env.attributes,
-      variables: env.vars,
-      current_module: env.module
-    }
+    binding_env = Binding.from_env(env, metadata)
 
     type = SurroundContext.to_binding(context.context, module)
 
@@ -85,11 +81,7 @@ defmodule ElixirSense.Providers.References do
             |> Enum.map(fn call ->
               env = Metadata.get_env(metadata, call.position)
 
-              binding_env = %Binding{
-                attributes: env.attributes,
-                variables: vars,
-                current_module: env.module
-              }
+              binding_env = Binding.from_env(env, metadata)
 
               found =
                 {call.mod, function}
@@ -257,8 +249,6 @@ defmodule ElixirSense.Providers.References do
 
   defp expand({nil, func}, _env, module, _aliases) when module not in [nil, Elixir],
     do: {nil, func}
-
-  defp expand({{:variable, :__MODULE__}, func}, _env, module, _aliases), do: {module, func}
 
   defp expand({type, func}, env, _module, aliases) do
     case Binding.expand(env, type) do

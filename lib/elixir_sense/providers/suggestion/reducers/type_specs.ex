@@ -31,18 +31,12 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
       %State.Env{
         aliases: aliases,
         module: module,
-        attributes: attributes,
-        vars: vars,
         scope: scope
       } = env
 
       %Metadata{mods_funs_to_positions: mods_funs, types: metadata_types} = file_metadata
 
-      binding_env = %Binding{
-        attributes: attributes,
-        variables: vars,
-        current_module: module
-      }
+      binding_env = Binding.from_env(env, file_metadata)
 
       {mod, hint} =
         hint
@@ -70,7 +64,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
     {:cont, acc}
   end
 
-  defp expand({{:attribute, _} = type, hint}, env, aliases) do
+  defp expand({{kind, _} = type, hint}, env, aliases) when kind in [:attribute, :variable] do
     case Binding.expand(env, type) do
       {:atom, module} -> {Introspection.expand_alias(module, aliases), hint}
       _ -> {nil, ""}

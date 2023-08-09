@@ -25,17 +25,11 @@ defmodule ElixirSense.Providers.Implementation do
   def find(
         context,
         %State.Env{
-          module: module,
-          vars: vars,
-          attributes: attributes
+          module: module
         } = env,
         metadata
       ) do
-    binding_env = %Binding{
-      attributes: attributes,
-      variables: vars,
-      current_module: module
-    }
+    binding_env = Binding.from_env(env, metadata)
 
     type = SurroundContext.to_binding(context.context, module)
 
@@ -123,7 +117,7 @@ defmodule ElixirSense.Providers.Implementation do
     |> Enum.reject(&is_nil/1)
   end
 
-  defp expand({:attribute, _attr} = type, binding_env) do
+  defp expand({kind, _attr} = type, binding_env) when kind in [:attribute, :variable] do
     case Binding.expand(binding_env, type) do
       {:atom, atom} -> atom
       _ -> nil
@@ -201,13 +195,14 @@ defmodule ElixirSense.Providers.Implementation do
   end
 
   defp do_find_delegatee(
-         {{:attribute, _attr} = type, function},
+         {{kind, _} = type, function},
          arity,
          env,
          metadata,
          binding_env,
          visited
-       ) do
+       )
+       when kind in [:attribute, :variable] do
     case Binding.expand(binding_env, type) do
       {:atom, module} ->
         do_find_delegatee(

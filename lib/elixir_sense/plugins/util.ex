@@ -61,14 +61,8 @@ defmodule ElixirSense.Plugins.Util do
     )
   end
 
-  def partial_func_call(code, env, buffer_metadata) do
-    %State.Env{module: module, attributes: attributes, vars: vars} = env
-
-    binding_env = %Binding{
-      attributes: attributes,
-      variables: vars,
-      current_module: module
-    }
+  def partial_func_call(code, %State.Env{} = env, %Metadata{} = buffer_metadata) do
+    binding_env = Binding.from_env(env, buffer_metadata)
 
     func_info = Source.which_func(code, binding_env)
 

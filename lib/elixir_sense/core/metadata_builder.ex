@@ -657,14 +657,16 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre(
          {:@, meta_attr,
-          [{kind, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]} = spec]}]} =
-           ast,
+          [
+            {kind, kind_meta,
+             [{:"::", _meta, _params = [{name, _, type_args}, _type_def]} = spec] = kind_args}
+          ]},
          state
        )
        when kind in [:type, :typep, :opaque] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
     pre_type(
-      ast,
+      {:@, meta_attr, [{kind, add_no_call(kind_meta), kind_args}]},
       state,
       meta_attr,
       name,
@@ -677,15 +679,19 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp pre(
          {:@, meta_attr,
           [
-            {kind, _,
-             [{:when, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]}, _]} = spec]}
-          ]} = ast,
+            {kind, kind_meta,
+             [{:when, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]}, _]} = spec] =
+               kind_args}
+          ]},
          state
        )
        when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
     pre_spec(
-      ast,
+      {:@, meta_attr,
+       [
+         {kind, add_no_call(kind_meta), kind_args}
+       ]},
       state,
       meta_attr,
       name,
@@ -697,14 +703,16 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre(
          {:@, meta_attr,
-          [{kind, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]} = spec]}]} =
-           ast,
+          [
+            {kind, meta_kind,
+             [{:"::", _meta, _params = [{name, _, type_args}, _type_def]} = spec] = kind_args}
+          ]},
          state
        )
        when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
     pre_spec(
-      ast,
+      {:@, meta_attr, [{kind, add_no_call(meta_kind), kind_args}]},
       state,
       meta_attr,
       name,
@@ -717,13 +725,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # incomplete spec
   # @callback my(integer)
   defp pre(
-         {:@, meta_attr, [{kind, _, [{name, _, type_args}]} = spec]} = ast,
+         {:@, meta_attr, [{kind, meta_kind, [{name, meta_name, type_args}]} = spec]},
          state
        )
        when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
     pre_spec(
-      ast,
+      {:@, meta_attr, [{kind, add_no_call(meta_kind), [{name, meta_name, type_args}]}]},
       state,
       meta_attr,
       name,
@@ -1006,9 +1014,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
       add_vars(state, vars, false)
     else
       # pre Elixir 1.4 local call syntax
-      # TODO remove on Elixir 2.0
+      # TODO can we remove when we require elixir 1.15+?
+      # it's only legal inside typespecs
       # credo:disable-for-next-line
-      if not Keyword.get(meta, :no_call, false) do
+      if not Keyword.get(meta, :no_call, false) and
+           (Version.match?(System.version(), "< 1.15.0") or
+              match?([[{:typespec, _, _} | _] | _], state.scopes)) do
         add_call_to_line(state, {nil, var_or_call, 0}, {line, column})
       else
         state
@@ -1220,6 +1231,54 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state
     |> add_call_to_line({{:attribute, attribute}, call, length(params)}, {line, column + shift})
+    |> add_current_env_to_line(line)
+    |> result(ast)
+  end
+
+  defp pre(
+         {{:., meta1, [{:@, _, [{attribute, _, nil}]}]}, _meta, params} = ast,
+         state
+       )
+       when is_atom(attribute) do
+    line = Keyword.fetch!(meta1, :line)
+    column = Keyword.fetch!(meta1, :column)
+
+    shift = if state.generated, do: 0, else: 1
+
+    state
+    |> add_call_to_line({nil, {:attribute, attribute}, length(params)}, {line, column + shift})
+    |> add_current_env_to_line(line)
+    |> result(ast)
+  end
+
+  defp pre(
+         {{:., meta1, [{variable, _var_meta, nil}]}, _meta, params} = ast,
+         state
+       )
+       when is_atom(variable) do
+    line = Keyword.fetch!(meta1, :line)
+    column = Keyword.fetch!(meta1, :column)
+
+    shift = if state.generated, do: 0, else: 1
+
+    state
+    |> add_call_to_line({nil, {:variable, variable}, length(params)}, {line, column + shift})
+    |> add_current_env_to_line(line)
+    |> result(ast)
+  end
+
+  defp pre(
+         {{:., meta1, [{variable, _var_meta, nil}, call]}, _meta, params} = ast,
+         state
+       )
+       when is_call(call, params) and is_atom(variable) do
+    line = Keyword.fetch!(meta1, :line)
+    column = Keyword.fetch!(meta1, :column)
+
+    shift = if state.generated, do: 0, else: 1
+
+    state
+    |> add_call_to_line({{:variable, variable}, call, length(params)}, {line, column + shift})
     |> add_current_env_to_line(line)
     |> result(ast)
   end

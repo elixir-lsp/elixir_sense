@@ -25,16 +25,10 @@ defmodule ElixirSense.Providers.Signature do
       requires: requires,
       aliases: aliases,
       module: module,
-      vars: vars,
-      attributes: attributes,
       scope: scope
     } = env
 
-    binding_env = %Binding{
-      attributes: attributes,
-      variables: vars,
-      current_module: module
-    }
+    binding_env = Binding.from_env(env, metadata)
 
     with %{candidate: {m, f}, npar: npar, elixir_prefix: elixir_prefix} <-
            Source.which_func(prefix, binding_env),

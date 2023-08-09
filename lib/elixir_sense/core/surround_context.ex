@@ -104,6 +104,12 @@ defmodule ElixirSense.Core.SurroundContext do
     {:atom, :"#{inside_charlist}"}
   end
 
+  defp inside_dot_to_binding({:var, ~c"__MODULE__"}, current_module) do
+    if current_module not in [nil, Elixir] do
+      {:atom, current_module}
+    end
+  end
+
   defp inside_dot_to_binding({:var, inside_charlist}, _current_module) do
     {:variable, :"#{inside_charlist}"}
   end

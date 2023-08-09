@@ -29,16 +29,10 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
       requires: requires,
       aliases: aliases,
       module: module,
-      attributes: attributes,
-      vars: vars,
       scope: scope
     } = env
 
-    binding_env = %Binding{
-      attributes: attributes,
-      variables: vars,
-      current_module: module
-    }
+    binding_env = Binding.from_env(env, buffer_metadata)
 
     %Metadata{mods_funs_to_positions: mods_funs, types: metadata_types} = buffer_metadata
 

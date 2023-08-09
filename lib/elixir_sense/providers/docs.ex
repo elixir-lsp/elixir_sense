@@ -21,16 +21,11 @@ defmodule ElixirSense.Providers.Docs do
         context,
         %State.Env{
           module: module,
-          attributes: attributes,
           vars: vars
         } = env,
         metadata
       ) do
-    binding_env = %Binding{
-      attributes: attributes,
-      variables: vars,
-      current_module: module
-    }
+    binding_env = Binding.from_env(env, metadata)
 
     type = SurroundContext.to_binding(context.context, module)
 

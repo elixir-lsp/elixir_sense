@@ -4132,6 +4132,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     state =
       """
       defmodule NyModule do
+        def func_1, do: :ok
         def func do
           func_1
         end
@@ -4139,7 +4140,30 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert state.calls == %{3 => [%CallInfo{arity: 0, func: :func_1, position: {3, 5}, mod: nil}]}
+    if Version.match?(System.version(), ">= 1.15.0") do
+      assert state.calls == %{}
+    else
+      assert state.calls == %{
+               4 => [%CallInfo{arity: 0, func: :func_1, position: {3, 5}, mod: nil}]
+             }
+    end
+  end
+
+  test "registers typespec no parens calls" do
+    state =
+      """
+      defmodule NyModule do
+        @type a :: integer
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{
+             2 => [
+               %CallInfo{arity: 0, func: :integer, position: {2, 14}, mod: nil},
+               %CallInfo{arity: 0, func: :a, position: {2, 9}, mod: nil}
+             ]
+           }
   end
 
   test "registers calls local no arg" do
@@ -4186,35 +4210,57 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            }
   end
 
-  test "registers calls on attribute with args" do
+  test "registers calls on attribute and var with args" do
     state =
       """
       defmodule NyModule do
         def func do
           @attr.func("test")
+          var.func("test")
         end
       end
       """
       |> string_to_state
 
     assert state.calls == %{
-             3 => [%CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}]
+             3 => [%CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}],
+             4 => [%CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}]
            }
   end
 
-  test "registers calls on attribute without args" do
+  test "registers calls on attribute and var without args" do
     state =
       """
       defmodule NyModule do
         def func do
           @attr.func
+          var.func
         end
       end
       """
       |> string_to_state
 
     assert state.calls == %{
-             3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}]
+             3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}],
+             4 => [%CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}]
+           }
+  end
+
+  test "registers calls on attribute and var anonymous" do
+    state =
+      """
+      defmodule NyModule do
+        def func do
+          @attr.()
+          var.()
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state.calls == %{
+             3 => [%CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}],
+             4 => [%CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}]
            }
   end
 

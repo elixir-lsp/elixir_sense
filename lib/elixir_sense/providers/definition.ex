@@ -33,11 +33,7 @@ defmodule ElixirSense.Providers.Definition do
         } = env,
         metadata
       ) do
-    binding_env = %Binding{
-      attributes: attributes,
-      variables: vars,
-      current_module: module
-    }
+    binding_env = Binding.from_env(env, metadata)
 
     type = SurroundContext.to_binding(context.context, module)
 
@@ -113,13 +109,14 @@ defmodule ElixirSense.Providers.Definition do
   end
 
   defp do_find_function_or_module(
-         {{:attribute, _attr} = type, function},
+         {{kind, _} = type, function},
          context,
          env,
          metadata,
          binding_env,
          visited
-       ) do
+       )
+       when kind in [:attribute, :variable] do
     case Binding.expand(binding_env, type) do
       {:atom, module} ->
         do_find_function_or_module(
@@ -179,19 +176,11 @@ defmodule ElixirSense.Providers.Definition do
 
     m =
       case module do
-        nil ->
-          nil
-
-        {:variable, :__MODULE__} ->
-          current_module
-
-        {:variable, _} ->
-          # map field call
-          nil
-
         {:atom, a} ->
           a
-          # a when is_atom(a) -> a
+
+        _ ->
+          nil
       end
 
     case {m, function}

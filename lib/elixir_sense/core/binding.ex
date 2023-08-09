@@ -17,6 +17,19 @@ defmodule ElixirSense.Core.Binding do
             types: %{},
             mods_funs: %{}
 
+  def from_env(%State.Env{} = env, %ElixirSense.Core.Metadata{} = metadata) do
+    %Binding{
+      variables: env.vars,
+      attributes: env.attributes,
+      structs: metadata.structs,
+      imports: env.imports,
+      specs: metadata.specs,
+      current_module: env.module,
+      types: metadata.types,
+      mods_funs: metadata.mods_funs_to_positions
+    }
+  end
+
   defp get_fields_from({:map, fields, _}), do: fields
   defp get_fields_from({:struct, fields, _, _}), do: fields
   defp get_fields_from(_), do: []

@@ -435,6 +435,26 @@ defmodule ElixirSense.Providers.DefinitionTest do
              ElixirSense.definition(buffer, 4, 9)
   end
 
+  test "find definition for function - on var call" do
+    buffer = """
+    defmodule A do
+      @callback abc() :: any()
+    end
+
+    defmodule B do
+      @behaviour A
+      
+      def abc, do: :ok
+    end
+
+    b = B
+    b.abc()
+    """
+
+    assert %Location{type: :function, file: nil, line: 8, column: 3} =
+             ElixirSense.definition(buffer, 12, 4)
+  end
+
   test "find definition of delegated functions" do
     buffer = """
     defmodule MyModule do
