@@ -4144,7 +4144,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert state.calls == %{}
     else
       assert state.calls == %{
-               4 => [%CallInfo{arity: 0, func: :func_1, position: {3, 5}, mod: nil}]
+               4 => [%CallInfo{arity: 0, func: :func_1, position: {4, 5}, mod: nil}]
              }
     end
   end
@@ -4286,10 +4286,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}],
-             4 => [%CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}]
-           }
+    if Version.match?(System.version(), ">= 1.15.0") do
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}],
+               4 => [%CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}]
+             }
+    else
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}],
+               4 => [
+                 %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
+                 %CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}
+               ]
+             }
+    end
   end
 
   test "registers calls pipe with __MODULE__ operator no parens" do
