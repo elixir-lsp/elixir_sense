@@ -1202,6 +1202,20 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ]
   end
 
+  test "find references of variables outside module", %{trace: trace} do
+    buffer = """
+    bas = B
+    bas.abc()
+    """
+
+    references = ElixirSense.references(buffer, 1, 2, trace)
+
+    assert references == [
+             %{uri: nil, range: %{start: %{line: 1, column: 1}, end: %{line: 1, column: 4}}},
+             %{uri: nil, range: %{start: %{line: 2, column: 1}, end: %{line: 2, column: 4}}}
+           ]
+  end
+
   test "find reference for variable split across lines", %{trace: trace} do
     buffer = """
     defmodule MyModule do

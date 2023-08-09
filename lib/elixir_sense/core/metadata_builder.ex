@@ -41,33 +41,67 @@ defmodule ElixirSense.Core.MetadataBuilder do
   @spec build(Macro.t()) :: State.t()
   def build(ast) do
     # dbg(ast)
-    {_ast, state} =
-      Macro.traverse(ast, %State{}, safe_call(&pre/2, :pre), safe_call(&post/2, :post))
+    {_ast, [state]} =
+      Macro.traverse(ast, [%State{}], &safe_call_pre/2, &safe_call_post/2)
 
     state
+    |> remove_attributes_scope
+    |> remove_behaviours_scope
+    |> remove_alias_scope
+    |> remove_import_scope
+    |> remove_require_scope
+    |> remove_vars_scope
+    |> remove_namespace
+    |> remove_protocol_implementation
   end
 
-  defp safe_call(fun, operation) do
-    fn ast, state ->
-      try do
-        # if operation == :pre do
-        #   dbg(ast)
-        # end
-        fun.(ast, state)
-      rescue
-        exception ->
-          warn(
-            Exception.format(
-              :error,
-              "#{inspect(exception.__struct__)} during metadata build #{operation}:\n" <>
-                "#{Exception.message(exception)}\n" <>
-                "ast node: #{inspect(ast, limit: :infinity)}",
-              __STACKTRACE__
-            )
+  defp safe_call_pre(ast, [state = %State{} | _] = states) do
+    try do
+      # if operation == :pre do
+      #   dbg(ast)
+      # end
+      {ast_after_pre, state_after_pre} = pre(ast, state)
+      {ast_after_pre, [state_after_pre | states]}
+    rescue
+      exception ->
+        warn(
+          Exception.format(
+            :error,
+            "#{inspect(exception.__struct__)} during metadata build pre:\n" <>
+              "#{Exception.message(exception)}\n" <>
+              "ast node: #{inspect(ast, limit: :infinity)}",
+            __STACKTRACE__
           )
+        )
 
-          {nil, state}
-      end
+        {nil, [:error | states]}
+    end
+  end
+
+  defp safe_call_post(ast, [:error | states]) do
+    {ast, states}
+  end
+
+  defp safe_call_post(ast_after_pre, [state_after_pre = %State{} | states]) do
+    try do
+      # if operation == :pre do
+      #   dbg(ast_after_pre)
+      # end
+      {ast_after_post, state_after_post} = post(ast_after_pre, state_after_pre)
+      {ast_after_post, [state_after_post | tl(states)]}
+    rescue
+      exception ->
+        warn(
+          Exception.format(
+            :error,
+            "#{inspect(exception.__struct__)} during metadata build post:\n" <>
+              "#{Exception.message(exception)}\n" <>
+              "ast node: #{inspect(ast_after_pre, limit: :infinity)}",
+            __STACKTRACE__
+          )
+        )
+
+        {nil, states}
     end
   end
 
@@ -1347,15 +1381,42 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, state}
   end
 
-  defp post({:defmodule, _, [_module | _]} = ast, state) do
+  defp post(
+         {:defmodule, _meta, [{:__aliases__, _, _module}, _]} = ast,
+         state
+       ) do
     post_module(ast, state)
   end
 
-  defp post({:defprotocol, _, [_protocol | _]} = ast, state) do
+  defp post({:defmodule, _meta, [module, _]} = ast, state)
+       when is_atom(module) do
+    post_module(ast, state)
+  end
+
+  defp post(
+         {:defprotocol, _meta, [{:__aliases__, _, _module}, _]} = ast,
+         state
+       ) do
     post_protocol(ast, state)
   end
 
-  defp post({:defimpl, _, [_protocol | _]} = ast, state) do
+  defp post({:defprotocol, _meta, [module, _]} = ast, state)
+       when is_atom(module) do
+    post_protocol(ast, state)
+  end
+
+  defp post(
+         {:defimpl, _meta, [{:__aliases__, _, _protocol}, _impl_args | _]} = ast,
+         state
+       ) do
+    post_module(ast, state)
+  end
+
+  defp post(
+         {:defimpl, _meta, [protocol, _impl_args | _]} = ast,
+         state
+       )
+       when is_atom(protocol) do
     post_module(ast, state)
   end
 

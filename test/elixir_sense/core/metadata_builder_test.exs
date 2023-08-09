@@ -26,6 +26,26 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ) =~ "def function_arity_zero"
   end
 
+  test "closes all scopes" do
+    state =
+      """
+      """
+      |> string_to_state
+
+    assert state.namespace == []
+    assert state.scopes == []
+    assert state.imports == []
+    assert state.requires == []
+    assert state.aliases == []
+    assert state.attributes == []
+    assert state.protocols == []
+    assert state.scope_attributes == []
+    assert state.behaviours == []
+    assert state.vars == []
+    assert state.scope_vars == []
+    assert state.scope_ids == []
+  end
+
   test "moduledoc heredoc version" do
     state =
       """
@@ -552,7 +572,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
+    assert [%VarInfo{type: {:atom, :my_var}, scope_id: scope_id}] = state |> get_line_vars(3)
+    assert [%VarInfo{name: :var}] = state.vars_info_per_scope_id[scope_id]
+  end
+
+  test "variables from outside module are added to environment" do
+    state =
+      """
+      var = :my_var
+      """
+      |> string_to_state
+
+    assert [%VarInfo{type: {:atom, :my_var}, scope_id: scope_id}] = state |> get_line_vars(1)
+    assert [%VarInfo{name: :var}] = state.vars_info_per_scope_id[scope_id]
   end
 
   test "call binding" do

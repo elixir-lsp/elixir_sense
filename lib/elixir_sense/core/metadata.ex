@@ -96,8 +96,6 @@ defmodule ElixirSense.Core.Metadata do
         :desc
       )
 
-    # |> dbg()
-
     case closest_scopes do
       [_ | _] = scopes ->
         metadata.lines_to_env
@@ -118,7 +116,6 @@ defmodule ElixirSense.Core.Metadata do
           end)
         end)
 
-      # |> dbg()
       [] ->
         metadata.lines_to_env
     end
