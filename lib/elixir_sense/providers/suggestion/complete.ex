@@ -1274,16 +1274,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   defp value_from_binding(binding_ast, %State.Env{} = env, %Metadata{} = metadata) do
     case Binding.expand(
-           %Binding{
-             variables: env.vars,
-             attributes: env.attributes,
-             structs: metadata.structs,
-             imports: env.imports,
-             specs: metadata.specs,
-             current_module: env.module,
-             types: metadata.types,
-             mods_funs: metadata.mods_funs_to_positions
-           },
+           Binding.from_env(env, metadata),
            binding_ast
          ) do
       :none -> :error
