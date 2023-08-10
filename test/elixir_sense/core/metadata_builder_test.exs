@@ -227,6 +227,36 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ] = state |> get_line_vars(5)
   end
 
+  test "variable rebinding" do
+    state =
+      """
+      def my() do
+        abc = 1
+        some(abc)
+        abc = %Abc{cde: 1}
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert [
+             %State.VarInfo{
+               name: :abc,
+               type: {:integer, 1},
+               is_definition: true,
+               positions: [{2, 3}, {3, 8}],
+               scope_id: 2
+             },
+             %State.VarInfo{
+               name: :abc,
+               type: {:struct, [cde: {:integer, 1}], {:atom, Abc}, nil},
+               is_definition: true,
+               positions: [{4, 3}],
+               scope_id: 2
+             }
+           ] = state |> get_line_vars(5)
+  end
+
   test "tuple destructuring" do
     state =
       """

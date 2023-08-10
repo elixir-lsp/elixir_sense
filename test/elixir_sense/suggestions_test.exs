@@ -3094,6 +3094,95 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
+  test "suggest struct fields when variable is struct" do
+    buffer = """
+    defmodule Abc do
+      defstruct [:cde]
+    end
+
+    defmodule Mod do
+      def my() do
+        some(abc)
+        abc = %Abc{cde: 1}
+        abc.
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 9, 9)
+
+    assert [
+             %{call?: true, name: "__struct__", origin: "Abc"},
+             %{call?: true, name: "cde", origin: "Abc", subtype: :struct_field, type: :field}
+           ] = list
+  end
+
+  test "suggest struct fields when variable is rebound to struct" do
+    buffer = """
+    defmodule Abc do
+      defstruct [:cde]
+    end
+
+    defmodule Mod do
+      def my() do
+        abc = 1
+        some(abc)
+        abc = %Abc{cde: 1}
+        abc.cde
+        abc = 1
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 10, 9)
+
+    assert [
+             %{call?: true, name: "__struct__", origin: "Abc"},
+             %{call?: true, name: "cde", origin: "Abc", subtype: :struct_field, type: :field}
+           ] = list
+  end
+
+  test "suggest struct fields when attribute is struct" do
+    buffer = """
+    defmodule Abc do
+      defstruct [:cde]
+    end
+
+    defmodule Mod do
+      @abc %Abc{cde: 1}
+      @abc.
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 7, 8)
+
+    assert [
+             %{call?: true, name: "__struct__", origin: "Abc"},
+             %{call?: true, name: "cde", origin: "Abc", subtype: :struct_field, type: :field}
+           ] = list
+  end
+
+  test "suggest struct fields when attribute is rebound to struct" do
+    buffer = """
+    defmodule Abc do
+      defstruct [:cde]
+    end
+
+    defmodule Mod do
+      @abc 1
+      @abc %Abc{cde: 1}
+      @abc.
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 8, 8)
+
+    assert [
+             %{call?: true, name: "__struct__", origin: "Abc"},
+             %{call?: true, name: "cde", origin: "Abc", subtype: :struct_field, type: :field}
+           ] = list
+  end
+
   test "suggest modules to alias" do
     buffer = """
     defmodule MyModule do

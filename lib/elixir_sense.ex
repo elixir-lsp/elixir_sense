@@ -220,6 +220,25 @@ defmodule ElixirSense do
         &(to_string(&1.name) != hint)
       )
 
+    # if variable is rebound then in env there are many variables with the same name
+    # find the one defined closest to cursor
+    vars =
+      env.vars
+      |> Enum.group_by(fn %State.VarInfo{name: name} -> name end)
+      |> Enum.map(fn {_name, list} ->
+        list
+        |> Enum.max_by(fn
+          %State.VarInfo{positions: [position]} ->
+            # variable is being defined - it's not a good candidate
+            {0, 0}
+
+          %State.VarInfo{positions: positions} ->
+            Enum.min(positions)
+        end)
+      end)
+
+    env = %{env | vars: vars}
+
     module_store = ModuleStore.build()
 
     cursor_context = %{
@@ -432,6 +451,8 @@ defmodule ElixirSense do
         attributes = get_attributes(buffer_file_metadata, module_variants)
 
         # one line can contain variables from many scopes
+        # if the cursor is over variable take variables from the scope as it will
+        # be more correct than the env scope
         vars =
           case Enum.find(env.vars, fn %VarInfo{positions: positions} ->
                  {begin_line, begin_col} in positions
