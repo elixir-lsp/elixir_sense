@@ -83,6 +83,11 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       {:unquoted_atom, unquoted_atom} ->
         expand_erlang_modules(List.to_string(unquoted_atom), env, metadata)
 
+      # elixir >= 1.15
+      {:dot, :expr, _hint} ->
+        # TODO expand expression
+        no()
+
       {:dot, path, hint} ->
         expand_dot(path, List.to_string(hint), false, env, metadata, cursor_position, false, opts)
 

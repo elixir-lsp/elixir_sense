@@ -928,9 +928,10 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
     assert [_ | _] = expand(~c"call.ho", env)
     assert [_ | _] = expand(~c"DateTime.utc_now.ho", env)
+    # TODO expand expression {:dot, :expr, []} {:dot, :expr, ~c"ho"} on 1.15+
     # Code.cursor_context returns :none for those cases
-    # assert {:yes, 'ur', _} = expand('DateTime.utc_now().', env)
-    # assert {:yes, 'ur', _} = expand('DateTime.utc_now().ho', env)
+    assert [] == expand(~c"DateTime.utc_now().", env)
+    assert [] == expand(~c"DateTime.utc_now().ho", env)
   end
 
   test "autocompletion off of unbound variables is not supported" do
@@ -978,8 +979,10 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
     # local call on var
 
-    # TODO
-    # Code.cursor_context returns :none
+    # TODO handle {:anonymous_call, inside_caller} on 1.16+
+    # inside_caller: {:var, charlist} | {:module_attribute, charlist}
+    assert [] == expand(~c"asd.(")
+    assert [] == expand(~c"@asd.(")
 
     # list = expand('asd.(')
     # assert is_list(list)
