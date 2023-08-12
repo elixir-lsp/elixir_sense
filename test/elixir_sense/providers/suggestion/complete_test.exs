@@ -932,6 +932,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
     # Code.cursor_context returns :none for those cases
     assert [] == expand(~c"DateTime.utc_now().", env)
     assert [] == expand(~c"DateTime.utc_now().ho", env)
+    assert [] == expand(~c"DateTime.utc_now().calendar.da", env)
   end
 
   test "autocompletion off of unbound variables is not supported" do

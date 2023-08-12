@@ -83,11 +83,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       {:unquoted_atom, unquoted_atom} ->
         expand_erlang_modules(List.to_string(unquoted_atom), env, metadata)
 
-      # elixir >= 1.15
-      {:dot, :expr, _hint} ->
-        # TODO expand expression
-        no()
-
       {:dot, path, hint} ->
         expand_dot(path, List.to_string(hint), false, env, metadata, cursor_position, false, opts)
 
@@ -303,6 +298,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       :error ->
         :error
     end
+  end
+
+  # elixir >= 1.15
+  defp expand_dot_path(:expr, %State.Env{} = _env, %Metadata{} = _metadata) do
+    # TODO expand expression
+    :error
   end
 
   defp expand_expr(%State.Env{} = env, %Metadata{} = metadata, cursor_position, opts) do
