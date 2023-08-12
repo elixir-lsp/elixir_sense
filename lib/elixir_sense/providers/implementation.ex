@@ -243,7 +243,9 @@ defmodule ElixirSense.Providers.Implementation do
            current_module,
            scope,
            metadata.mods_funs_to_positions,
-           metadata.types
+           metadata.types,
+           # we don't expect macros here so no need to check position
+           {1, 1}
          ) do
       {mod, fun, true, :mod_fun} when not is_nil(fun) ->
         # on defdelegate - no need for arity fallback here

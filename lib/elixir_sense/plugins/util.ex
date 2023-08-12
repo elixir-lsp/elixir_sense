@@ -57,7 +57,9 @@ defmodule ElixirSense.Plugins.Util do
       module,
       scope,
       mods_funs,
-      metadata_types
+      metadata_types,
+      # we don't expect local macros here, no need to pass position
+      {1, 1}
     )
   end
 

@@ -1369,7 +1369,8 @@ defmodule ElixirSense.Core.Introspection do
         current_module,
         scope,
         mods_funs,
-        %{}
+        %{},
+        {1, 1}
       )
 
     {m, res}
@@ -1445,9 +1446,10 @@ defmodule ElixirSense.Core.Introspection do
           # TODO better type
           any(),
           ElixirSense.Core.State.mods_funs_to_positions_t(),
-          ElixirSense.Core.State.types_t()
+          ElixirSense.Core.State.types_t(),
+          {pos_integer, pos_integer}
         ) :: {nil | module, nil | atom, boolean, nil | :mod_fun | :type}
-  def actual_mod_fun({nil, nil}, _, _, _, _, _, _, _), do: {nil, nil, false, nil}
+  def actual_mod_fun({nil, nil}, _, _, _, _, _, _, _, _), do: {nil, nil, false, nil}
 
   def actual_mod_fun(
         {mod, fun} = mod_fun,
@@ -1457,7 +1459,8 @@ defmodule ElixirSense.Core.Introspection do
         current_module,
         scope,
         mods_funs,
-        metadata_types
+        metadata_types,
+        cursor_position
       ) do
     expanded_mod = expand_alias(mod, aliases)
 
@@ -1470,7 +1473,8 @@ defmodule ElixirSense.Core.Introspection do
               scope,
               imports,
               requires,
-              mods_funs
+              mods_funs,
+              cursor_position
             )},
          {:type, {nil, nil}} <-
            {:type, find_type({expanded_mod, fun}, current_module, scope, metadata_types)} do
@@ -1491,6 +1495,7 @@ defmodule ElixirSense.Core.Introspection do
         end
 
       %State.TypeInfo{} ->
+        # local types are hoisted, no need to check position
         {current_module, type}
     end
   end
@@ -1530,7 +1535,8 @@ defmodule ElixirSense.Core.Introspection do
          {:typespec, _, _},
          _imports,
          _requires,
-         _mods_funs
+         _mods_funs,
+         _cursor_position
        )
        when fun != nil,
        do: {nil, nil}
@@ -1542,33 +1548,41 @@ defmodule ElixirSense.Core.Introspection do
          _scope,
          imports,
          _requires,
-         mods_funs
+         mods_funs,
+         cursor_position
        ) do
-    # TODO defmacrop, defguardp are available after they are defined
-    # pass cursor position and check
-    found_in_metadata = Map.has_key?(mods_funs, {current_module, fun, nil})
+    found_in_metadata = mods_funs[{current_module, fun, nil}]
 
-    if found_in_metadata do
-      if fun in [:module_info, :behaviour_info, :__info__] do
-        {nil, nil}
-      else
-        {current_module, fun}
-      end
-    else
-      {functions, macros} = expand_imports(imports, mods_funs)
-
-      found_in_imports =
-        Enum.find_value(functions ++ macros, fn {module, imported} ->
-          if Keyword.has_key?(imported, fun) do
-            {module, fun}
+    case found_in_metadata do
+      %State.ModFunInfo{} = info ->
+        if fun in [:module_info, :behaviour_info, :__info__] do
+          {nil, nil}
+        else
+          if State.ModFunInfo.get_category(info) != :macro or
+               List.last(info.positions) < cursor_position do
+            # local macros are available after definition
+            # local functions are hoisted
+            {current_module, fun}
+          else
+            {nil, nil}
           end
-        end)
+        end
 
-      if found_in_imports do
-        found_in_imports
-      else
-        {nil, nil}
-      end
+      nil ->
+        {functions, macros} = expand_imports(imports, mods_funs)
+
+        found_in_imports =
+          Enum.find_value(functions ++ macros, fn {module, imported} ->
+            if Keyword.has_key?(imported, fun) do
+              {module, fun}
+            end
+          end)
+
+        if found_in_imports do
+          found_in_imports
+        else
+          {nil, nil}
+        end
     end
   end
 
@@ -1579,7 +1593,8 @@ defmodule ElixirSense.Core.Introspection do
          _scope,
          _imports,
          _requires,
-         _mods_funs
+         _mods_funs,
+         _cursor_position
        ),
        do: {nil, nil}
 
@@ -1590,7 +1605,8 @@ defmodule ElixirSense.Core.Introspection do
          _scope,
          _imports,
          _requires,
-         mods_funs
+         mods_funs,
+         _cursor_position
        ) do
     if Map.has_key?(mods_funs, {mod, nil, nil}) or match?({:module, _}, Code.ensure_loaded(mod)) do
       {mod, nil}
@@ -1606,7 +1622,8 @@ defmodule ElixirSense.Core.Introspection do
          _imports,
          _scope,
          requires,
-         mods_funs
+         mods_funs,
+         _cursor_position
        ) do
     found =
       case mods_funs[{mod, fun, nil}] do

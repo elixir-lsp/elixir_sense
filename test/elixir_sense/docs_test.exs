@@ -256,6 +256,71 @@ defmodule ElixirSense.DocsTest do
       #  TODO docs and metadata
     end
 
+    test "retrieve documentation of local macro" do
+      buffer = """
+      defmodule MyModule do
+        defmacrop some(var), do: Macro.expand(var, __CALLER__)
+
+        defmacro other do
+          some(1)
+        end
+      end
+      """
+
+      assert %{
+               actual_subject: _actual_subject,
+               docs: _docs
+             } = ElixirSense.docs(buffer, 5, 6)
+    end
+
+    test "find definition of local macro on definition" do
+      buffer = """
+      defmodule MyModule do
+        defmacrop some(var), do: Macro.expand(var, __CALLER__)
+
+        defmacro other do
+          some(1)
+        end
+      end
+      """
+
+      assert %{
+               actual_subject: _actual_subject,
+               docs: _docs
+             } = ElixirSense.docs(buffer, 2, 14)
+    end
+
+    test "does not find definition of local macro if it's defined after the cursor" do
+      buffer = """
+      defmodule MyModule do
+        defmacro other do
+          some(1)
+        end
+
+        defmacrop some(var), do: Macro.expand(var, __CALLER__)
+      end
+      """
+
+      assert ElixirSense.docs(buffer, 3, 6) == nil
+    end
+
+    test "find definition of local function even if it's defined after the cursor" do
+      buffer = """
+      defmodule MyModule do
+        def other do
+          some(1)
+        end
+
+        defp some(var), do: :ok
+      end
+      """
+
+      assert %{
+               actual_subject: _actual_subject,
+               docs: _docs
+             } = ElixirSense.docs(buffer, 3, 6)
+    end
+
     test "retrieve metadata macro documentation - fallback to macrocallback in metadata" do
       buffer = """
       defmodule MyBehaviour do
@@ -1073,6 +1138,20 @@ defmodule ElixirSense.DocsTest do
              """
 
       # TODO docs and metadata
+    end
+
+    test "retrieve local metadata type documentation even if it's defined after cursor" do
+      buffer = """
+      defmodule MyModule do
+        @type remote_list_t :: [my_t]
+        #                         ^
+
+        @typep my_t :: integer
+      end
+      """
+
+      assert %{actual_subject: _} =
+               ElixirSense.docs(buffer, 2, 29)
     end
 
     test "does not retrieve remote private metadata type documentation" do

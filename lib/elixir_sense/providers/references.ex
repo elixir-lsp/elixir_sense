@@ -65,7 +65,8 @@ defmodule ElixirSense.Providers.References do
           module,
           scope,
           mods_funs,
-          metadata_types
+          metadata_types,
+          context.begin
         )
 
       case actual do
@@ -94,7 +95,8 @@ defmodule ElixirSense.Providers.References do
                   env.module,
                   env.scope,
                   mods_funs,
-                  metadata_types
+                  metadata_types,
+                  call.position
                 )
 
               case found do

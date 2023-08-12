@@ -115,7 +115,8 @@ defmodule ElixirSense.Providers.Docs do
         env.module,
         env.scope,
         metadata.mods_funs_to_positions,
-        metadata.types
+        metadata.types,
+        context.begin
       )
 
     case actual do

@@ -77,7 +77,8 @@ defmodule ElixirSense.Providers.Suggestion do
   @type cursor_context :: %{
           text_before: String.t(),
           text_after: String.t(),
-          at_module_body?: boolean()
+          at_module_body?: boolean(),
+          cursor_position: {pos_integer, pos_integer}
         }
 
   @reducers [

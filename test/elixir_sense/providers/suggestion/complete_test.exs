@@ -34,7 +34,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
         metadata \\ %Metadata{},
         opts \\ []
       ) do
-    Complete.do_expand(expr, env, metadata, opts)
+    Complete.do_expand(expr, env, metadata, {1, 1}, opts)
   end
 
   test "erlang module completion" do

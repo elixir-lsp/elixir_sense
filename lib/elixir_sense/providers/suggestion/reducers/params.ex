@@ -51,7 +51,9 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
              module,
              scope,
              mods_funs,
-             metadata_types
+             metadata_types,
+             #  TODO macros
+             {1, 1}
            ) do
       # TODO drop/add MACRO- prefix
       list =

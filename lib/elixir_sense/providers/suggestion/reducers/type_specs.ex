@@ -112,6 +112,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
   end
 
   defp find_metadata_types(actual_mod, {mod, hint}, metadata_types, module) do
+    # local types are hoisted, no need to check position
     include_private = mod == nil and actual_mod == module
 
     for {{^actual_mod, type, arity}, type_info} when is_integer(arity) <- metadata_types,

@@ -191,7 +191,8 @@ defmodule ElixirSense.Providers.Definition do
            current_module,
            scope,
            metadata.mods_funs_to_positions,
-           metadata.types
+           metadata.types,
+           context.begin
          ) do
       {_, _, false, _} ->
         nil

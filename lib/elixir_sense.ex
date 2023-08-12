@@ -228,7 +228,7 @@ defmodule ElixirSense do
       |> Enum.map(fn {_name, list} ->
         list
         |> Enum.max_by(fn
-          %State.VarInfo{positions: [position]} ->
+          %State.VarInfo{positions: [_position]} ->
             # variable is being defined - it's not a good candidate
             {0, 0}
 
@@ -242,6 +242,7 @@ defmodule ElixirSense do
     module_store = ModuleStore.build()
 
     cursor_context = %{
+      cursor_position: {line, column},
       text_before: text_before,
       text_after: text_after,
       at_module_body?: Metadata.at_module_body?(env)
@@ -282,7 +283,7 @@ defmodule ElixirSense do
 
     env = Metadata.get_env(buffer_file_metadata, {line, column})
 
-    Signature.find(prefix, env, buffer_file_metadata)
+    Signature.find(prefix, {line, column}, env, buffer_file_metadata)
   end
 
   @doc """

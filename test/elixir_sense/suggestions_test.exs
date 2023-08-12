@@ -1971,16 +1971,6 @@ defmodule ElixirSense.SuggestionsTest do
     buffer = """
     defmodule ElixirSenseExample.ModuleA do
       def test_fun_pub(a), do: :ok
-
-      def some_fun() do
-        test
-        a = &test_fun_pr
-        is_bo
-        delegate_
-        my_
-        a_m
-      end
-
       defp test_fun_priv(), do: :ok
       defp is_boo_overlaps_kernel(), do: :ok
       defdelegate delegate_defined, to: Kernel, as: :is_binary
@@ -1992,6 +1982,15 @@ defmodule ElixirSense.SuggestionsTest do
       end
       defmacrop a_macro_priv(a) do
         quote do: :ok
+      end
+
+      def some_fun() do
+        test
+        a = &test_fun_pr
+        is_bo
+        delegate_
+        my_
+        a_m
       end
     end
     """
@@ -2011,7 +2010,7 @@ defmodule ElixirSense.SuggestionsTest do
                type: :function,
                visibility: :public
              }
-           ] = ElixirSense.suggestions(buffer, 5, 9)
+           ] = ElixirSense.suggestions(buffer, 17, 9)
 
     assert [
              %{
@@ -2020,7 +2019,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "ElixirSenseExample.ModuleA",
                type: :function
              }
-           ] = ElixirSense.suggestions(buffer, 6, 21)
+           ] = ElixirSense.suggestions(buffer, 18, 21)
 
     assert [
              %{
@@ -2035,7 +2034,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "Kernel",
                type: :function
              }
-           ] = ElixirSense.suggestions(buffer, 7, 10)
+           ] = ElixirSense.suggestions(buffer, 19, 10)
 
     assert [
              %{
@@ -2050,7 +2049,7 @@ defmodule ElixirSense.SuggestionsTest do
                origin: "ElixirSenseExample.ModuleA",
                type: :function
              }
-           ] = ElixirSense.suggestions(buffer, 8, 14)
+           ] = ElixirSense.suggestions(buffer, 20, 14)
 
     assert [
              %{
@@ -2072,7 +2071,7 @@ defmodule ElixirSense.SuggestionsTest do
                summary: "",
                type: :macro
              }
-           ] = ElixirSense.suggestions(buffer, 9, 8)
+           ] = ElixirSense.suggestions(buffer, 21, 8)
 
     assert [
              %{
@@ -2094,7 +2093,49 @@ defmodule ElixirSense.SuggestionsTest do
                summary: "",
                type: :macro
              }
-           ] = ElixirSense.suggestions(buffer, 10, 8)
+           ] = ElixirSense.suggestions(buffer, 22, 8)
+  end
+
+  test "suggest local macro" do
+    buffer = """
+    defmodule MyModule do
+      defmacrop some_macro(var), do: Macro.expand(var, __CALLER__)
+
+      defmacro other do
+        some_ma
+      end
+    end
+    """
+
+    assert [%{name: "some_macro"}] = ElixirSense.suggestions(buffer, 5, 12)
+  end
+
+  test "does not suggest local macro if it's defined after the cursor" do
+    buffer = """
+    defmodule MyModule do
+      defmacro other do
+        some_ma
+      end
+
+      defmacrop some_macro(var), do: Macro.expand(var, __CALLER__)
+    end
+    """
+
+    assert [] == ElixirSense.suggestions(buffer, 3, 12)
+  end
+
+  test "suggest local function even if it's defined after the cursor" do
+    buffer = """
+    defmodule MyModule do
+      def other do
+        some_fu
+      end
+
+      defp some_fun(var), do: :ok
+    end
+    """
+
+    assert [%{name: "some_fun"}] = ElixirSense.suggestions(buffer, 3, 12)
   end
 
   test "functions defined in other module fully qualified" do
@@ -3872,6 +3913,23 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "@typep my_local_arg_t(a, b) :: {a, b}",
                metadata: %{}
              } == suggestion1
+    end
+
+    test "suggest local types from metadata even if defined after the cursor" do
+      buffer = """
+      defmodule MyModule do
+        @type my_type :: my_loc
+        #                      ^
+
+        @typep my_local_t :: integer
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 2, 26)
+        |> Enum.filter(fn %{type: t} -> t == :type_spec end)
+
+      assert [%{name: "my_local_t"}] = list
     end
 
     test "local types from metadata external call - private types are not suggested" do

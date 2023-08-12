@@ -1212,6 +1212,58 @@ defmodule ElixirSense.Providers.DefinitionTest do
            }
   end
 
+  test "find definition of local macro on definition" do
+    buffer = """
+    defmodule MyModule do
+      defmacrop some(var), do: Macro.expand(var, __CALLER__)
+
+      defmacro other do
+        some(1)
+      end
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 2, 14) == %Location{
+             type: :macro,
+             file: nil,
+             line: 2,
+             column: 3
+           }
+  end
+
+  test "does not find definition of local macro if it's defined after the cursor" do
+    buffer = """
+    defmodule MyModule do
+      defmacro other do
+        some(1)
+      end
+
+      defmacrop some(var), do: Macro.expand(var, __CALLER__)
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 3, 6) == nil
+  end
+
+  test "find definition of local function even if it's defined after the cursor" do
+    buffer = """
+    defmodule MyModule do
+      def other do
+        some(1)
+      end
+
+      defp some(var), do: :ok
+    end
+    """
+
+    assert ElixirSense.definition(buffer, 3, 6) == %Location{
+             type: :function,
+             file: nil,
+             line: 6,
+             column: 3
+           }
+  end
+
   test "find definition of local functions with alias" do
     buffer = """
     defmodule MyModule do
@@ -1429,6 +1481,20 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
     %Location{type: :typespec, file: nil, line: 2, column: 3} =
       ElixirSense.definition(buffer, 4, 29)
+  end
+
+  test "find local metadata type definition even if it's defined after cursor" do
+    buffer = """
+    defmodule MyModule do
+      @type remote_list_t :: [my_t]
+      #                         ^
+
+      @typep my_t :: integer
+    end
+    """
+
+    %Location{type: :typespec, file: nil, line: 5, column: 3} =
+      ElixirSense.definition(buffer, 2, 29)
   end
 
   test "find remote metadata type definition" do

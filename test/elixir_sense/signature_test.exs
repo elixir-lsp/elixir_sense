@@ -105,6 +105,22 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
+    test "find local metadata type signature even if it's defined after cursor" do
+      buffer = """
+      defmodule MyModule do
+        @type remote_list_t :: [my_t(a)]
+        #                            ^
+
+        @typep my_t(abc) :: integer
+      end
+      """
+
+      assert %{
+               active_param: 0
+             } =
+               ElixirSense.signature(buffer, 2, 32)
+    end
+
     test "find type signatures" do
       code = """
       defmodule MyModule do
@@ -1191,6 +1207,65 @@ defmodule ElixirSense.SignatureTest do
                  }
                ]
              } = res
+    end
+
+    test "find signature of local macro" do
+      code = """
+      defmodule MyModule do
+        defmacrop some(var), do: Macro.expand(var, __CALLER__)
+
+        defmacro other do
+          some(1)
+        end
+      end
+      """
+
+      res = ElixirSense.signature(code, 5, 10)
+
+      assert %{
+               active_param: 0,
+               signatures: [
+                 %{
+                   documentation: "",
+                   name: "some",
+                   params: ["var"],
+                   spec: ""
+                 }
+               ]
+             } = res
+    end
+
+    test "does not find signature of local macro if it's defined after the cursor" do
+      code = """
+      defmodule MyModule do
+        defmacro other do
+          some(1)
+        end
+
+        defmacrop some(var), do: Macro.expand(var, __CALLER__)
+      end
+      """
+
+      assert ElixirSense.signature(code, 3, 10) == :none
+    end
+
+    test "find signature of local function even if it's defined after the cursor" do
+      code = """
+      defmodule MyModule do
+        def other do
+          some(1)
+        end
+
+        defp some(var), do: :ok
+      end
+      """
+
+      assert res = ElixirSense.signature(code, 3, 10)
+
+      assert res == %{
+               active_param: 0,
+               signatures: [%{documentation: "", name: "some", params: ["var"], spec: ""}]
+             }
     end
 
     test "returns :none when it cannot identify a function call" do

@@ -63,9 +63,15 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
 
   """
   def populate(hint, env, buffer_metadata, context, acc, opts \\ []) do
-    text_before = context.text_before
-
-    suggestions = find_mods_funcs(hint, env, buffer_metadata, text_before, opts)
+    suggestions =
+      find_mods_funcs(
+        hint,
+        context.cursor_position,
+        env,
+        buffer_metadata,
+        context.text_before,
+        opts
+      )
 
     suggestions_by_type = Enum.group_by(suggestions, & &1.type)
 
@@ -134,6 +140,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
 
   defp find_mods_funcs(
          hint,
+         cursor_position,
          %State.Env{
            module: module
          } = env,
@@ -160,6 +167,6 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
         hint
       end
 
-    Complete.complete(hint, env, metadata, opts)
+    Complete.complete(hint, env, metadata, cursor_position, opts)
   end
 end

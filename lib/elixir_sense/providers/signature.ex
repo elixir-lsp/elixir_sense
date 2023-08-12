@@ -18,8 +18,9 @@ defmodule ElixirSense.Providers.Signature do
   @doc """
   Returns the signature info from the function or type defined in the prefix, if any.
   """
-  @spec find(String.t(), State.Env.t(), Metadata.t()) :: signature_info | :none
-  def find(prefix, env, metadata) do
+  @spec find(String.t(), {pos_integer, pos_integer}, State.Env.t(), Metadata.t()) ::
+          signature_info | :none
+  def find(prefix, cursor_position, env, metadata) do
     %State.Env{
       imports: imports,
       requires: requires,
@@ -41,7 +42,8 @@ defmodule ElixirSense.Providers.Signature do
              module,
              scope,
              metadata.mods_funs_to_positions,
-             metadata.types
+             metadata.types,
+             cursor_position
            ) do
       signatures = find_signatures({mod, fun}, npar, kind, env, metadata)
       %{active_param: npar, signatures: signatures}

@@ -20,7 +20,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     scope: {:func, 0}
   }
 
-  @cursor_context %{text_before: "", text_after: ""}
+  @cursor_context %{text_before: "", text_after: "", cursor_position: {1, 1}}
   @module_store %ElixirSense.Core.ModuleStore{}
 
   test "find definition of built-in functions" do
@@ -185,6 +185,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
     refute "module_info" in suggestions_names
   end
 
+  # TODO change that to only output max arity
   test "a function with default args generate multiple derived entries with same info, except arity" do
     assert [
              %{
@@ -320,7 +321,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                    {SomeModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{type: :defmodule}
                  }
                },
-               %{text_before: "%SomeModule{st", text_after: ""},
+               %{text_before: "%SomeModule{st", text_after: "", cursor_position: {1, 1}},
                @module_store
              )
   end
