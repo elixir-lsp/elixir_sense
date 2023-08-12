@@ -875,7 +875,7 @@ defmodule ElixirSense.Providers.ReferencesTest do
            ] = references
   end
 
-  test "find references with cursor over a module with 1.2 alias syntax", %{trace: trace} do
+  test "find references with cursor over a module with multi alias syntax", %{trace: trace} do
     buffer = """
     defmodule Caller do
       alias ElixirSense.Providers.ReferencesTest.Modules.Callee5

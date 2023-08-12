@@ -17,12 +17,17 @@ defmodule ElixirSense.Core.MetadataBuilder.AliasTest do
         Alias.AliasWithAsOnePart,
         Alias.AliasOnePart,
         Alias.AliasSubmoduleExternal,
+        Alias.AliasSubmoduleExternalInherit,
+        Alias.AliasSubmoduleExternalWithAlias,
+        Alias.AliasSubmoduleExternalWithAliasSpecial,
         Alias.AliasSubmoduleNestedExternal,
         Alias.AliasSubmoduleNested,
         Alias.AliasSubmodule,
         Alias.AliasInSubmodule,
         Alias.AliasWithAsErlang,
         Alias.AliasWithAs,
+        Alias.AliasWithWarn,
+        Alias.AliasWithWarnAs,
         Alias.AliasInheritFunction,
         Alias.AliasInheritSubmodule,
         Alias.AliasNoLeakFunction,
@@ -32,8 +37,10 @@ defmodule ElixirSense.Core.MetadataBuilder.AliasTest do
         Alias.RealiasInScope,
         Alias.Realias,
         Alias.Unalias,
+        Alias.Noop,
         Alias.NoUnaliasNested,
         Alias.RequireWithAs,
+        Alias.RequireWithWarnAs,
         Alias.AfterStructWithImplementation
       ] do
     test "alias rules properly handled in #{inspect(module)}" do

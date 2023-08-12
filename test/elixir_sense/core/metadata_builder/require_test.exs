@@ -12,6 +12,7 @@ defmodule ElixirSense.Core.MetadataBuilder.RequireTest do
         Require.SimpleRequire,
         Require.RequireInSubmodule,
         Require.RequireWithAs,
+        Require.RequireWithWarn,
         Require.RequireWithAsOnePart,
         Require.RequireSubmodule,
         Require.RequireNoLeakFunction,

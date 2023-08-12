@@ -154,7 +154,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Common do
           hint
 
         module_string ->
-          # v1.2 alias syntax detected
+          # multi alias syntax detected
           # prepend module prefix before running completion
           prefix = module_string <> "."
           prefix <> hint

@@ -3254,7 +3254,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert [%{name: "Reducers", type: :module} | _] = list
   end
 
-  test "suggest modules to alias v1.2 syntax" do
+  test "suggest modules to alias in multi alias syntax" do
     buffer = """
     defmodule MyModule do
       alias Stream.{Re
@@ -3266,7 +3266,7 @@ defmodule ElixirSense.SuggestionsTest do
     assert [%{name: "Reducers", type: :module}] = list
   end
 
-  test "suggest modules to alias v1.2 syntax with __MODULE__" do
+  test "suggest modules to alias in multi alias syntax with __MODULE__" do
     buffer = """
     defmodule Stream do
       alias __MODULE__.{Re

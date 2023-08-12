@@ -814,7 +814,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     end
   end
 
-  # transform 1.2 alias/require/import/use syntax ast into regular
+  # transform multi alias/require/import/use syntax ast into regular
   defp pre(
          {directive, meta, [{{:., _, [prefix_expression, :{}]}, _, postfix_expressions} | _]},
          state
@@ -838,75 +838,80 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   # import with options
   defp pre(
-         {:import, meta, [{:__aliases__, _, module_expression = [_ | _]}, opts]} = ast,
+         {:import, meta, [module_ast, opts]} = ast,
          state
        ) do
     line = Keyword.fetch!(meta, :line)
-    module = concat_module_expression(state, module_expression)
+
+    module =
+      case module_ast do
+        {:__aliases__, _, module_expression = [_ | _]} ->
+          concat_module_expression(state, module_expression)
+
+        atom when is_atom(atom) ->
+          atom
+      end
+
     pre_import(ast, state, line, module, opts)
   end
 
-  # atom module
-  defp pre({:import, meta, [atom, opts] = ast}, state)
-       when is_atom(atom) do
-    line = Keyword.fetch!(meta, :line)
-    pre_import(ast, state, line, atom, opts)
-  end
-
-  # require with `as` option
+  # require
   defp pre(
-         {:require, meta, [{_, _, module_expression = [_ | _]}, [as: alias_expression]]} = ast,
+         {:require, meta, [module_ast, options]} = ast,
          state
        ) do
     line = Keyword.fetch!(meta, :line)
-    module = concat_module_expression(state, module_expression)
-    alias_tuple = alias_tuple(module, alias_expression)
 
-    {_, new_state} = pre_alias(ast, state, line, alias_tuple)
-    pre_require(ast, new_state, line, module)
-  end
+    module =
+      case module_ast do
+        {:__aliases__, _, module_expression = [_ | _]} ->
+          concat_module_expression(state, module_expression)
 
-  # require erlang module with `as` option
-  defp pre({:require, meta, [mod, [as: alias_expression]]} = ast, state)
-       when is_atom(mod) do
-    line = Keyword.fetch!(meta, :line)
-    alias_tuple = alias_tuple(mod, alias_expression)
-    {_, new_state} = pre_alias(ast, state, line, alias_tuple)
-    pre_require(ast, new_state, line, mod)
-  end
+        atom when is_atom(atom) ->
+          atom
+      end
 
-  # require with options
-  defp pre(
-         {:require, meta, [{_, _, module_expression = [_ | _]}, _opts]} = ast,
-         state
-       ) do
-    line = Keyword.fetch!(meta, :line)
-    module = concat_module_expression(state, module_expression)
+    state =
+      case Keyword.get(options, :as) do
+        nil ->
+          state
+
+        alias_expression ->
+          # require with `as:` option
+          alias_tuple = alias_tuple(module, alias_expression)
+          {_, new_state} = pre_alias(ast, state, line, alias_tuple)
+          new_state
+      end
+
     pre_require(ast, state, line, module)
   end
 
-  defp pre({:require, meta, [mod, _opts]} = ast, state)
-       when is_atom(mod) do
-    line = Keyword.fetch!(meta, :line)
-    pre_require(ast, state, line, mod)
-  end
-
-  # alias with `as` option
+  # alias with :__aliases__ expression
   defp pre(
-         {:alias, meta, [{_, _, module_expression = [_ | _]}, [as: alias_expression]]} = ast,
+         {:alias, meta, [{:__aliases__, _, module_expression = [_ | _]}, options]} = ast,
          state
        ) do
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
     module = concat_module_expression(state, module_expression)
-    alias_tuple = alias_tuple(module, alias_expression)
+
+    alias_tuple =
+      case Keyword.get(options, :as) do
+        nil ->
+          {Module.concat([List.last(module_expression)]), module}
+
+        alias_expression ->
+          # alias with `as:` option
+          alias_tuple(module, alias_expression)
+      end
+
     state = add_first_alias_positions(state, line, column)
     pre_alias(ast, state, line, alias_tuple)
   end
 
   # alias for __MODULE__
   defp pre(
-         {:alias, meta, [{:__MODULE__, _, nil}, []]} = ast,
+         {:alias, meta, [{:__MODULE__, _, nil}, options]} = ast,
          state
        ) do
     line = Keyword.fetch!(meta, :line)
@@ -916,68 +921,46 @@ defmodule ElixirSense.Core.MetadataBuilder do
     if module == Elixir do
       {[], state}
     else
-      case Module.split(module) |> Enum.reverse() do
-        [_] ->
-          # alias __MODULE__ is a noop when module has 1 part
-          {[], state}
+      module_expression = Module.split(module)
 
-        [last | _] ->
-          alias_tuple = alias_tuple(module, Module.concat([last]))
-          state = add_first_alias_positions(state, line, column)
-          pre_alias(ast, state, line, alias_tuple)
-      end
-    end
-  end
+      alias_tuple =
+        case Keyword.get(options, :as) do
+          nil ->
+            {Module.concat([List.last(module_expression)]), module}
 
-  # alias for submodule of __MODULE__ with `as` option
-  defp pre(
-         {:alias, meta, [{:__MODULE__, _, nil}, [as: alias_expression]]} = ast,
-         state
-       ) do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-    module = get_current_module(state)
-    alias_tuple = alias_tuple(module, alias_expression)
-    state = add_first_alias_positions(state, line, column)
-    pre_alias(ast, state, line, alias_tuple)
-  end
-
-  # alias atom module with `as` option
-  defp pre({:alias, meta, [mod, [as: alias_expression]]} = ast, state)
-       when is_atom(mod) do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-    alias_tuple = alias_tuple(mod, alias_expression)
-    state = add_first_alias_positions(state, line, column)
-    pre_alias(ast, state, line, alias_tuple)
-  end
-
-  # alias
-  defp pre(
-         {:alias, meta, [{:__aliases__, _, module_expression = [_ | _]}, _opts]} = ast,
-         state
-       ) do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-    module = concat_module_expression(state, module_expression)
-    alias_tuple = {Module.concat([List.last(module_expression)]), module}
-    state = add_first_alias_positions(state, line, column)
-    pre_alias(ast, state, line, alias_tuple)
-  end
-
-  # alias atom module
-  defp pre({:alias, meta, [mod, _opts]} = ast, state)
-       when is_atom(mod) do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-
-    if Introspection.elixir_module?(mod) do
-      alias_tuple = {Module.concat([List.last(Module.split(mod))]), mod}
+          alias_expression ->
+            # alias with `as:` option
+            alias_tuple(module, alias_expression)
+        end
 
       state = add_first_alias_positions(state, line, column)
       pre_alias(ast, state, line, alias_tuple)
+    end
+  end
+
+  # alias atom module
+  defp pre({:alias, meta, [module, options]} = ast, state)
+       when is_atom(module) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    alias_tuple =
+      case Keyword.get(options, :as) do
+        nil ->
+          # since elixir 1.14 `alias :erlang_mod` without `as:` is a compile error
+          if Introspection.elixir_module?(module) do
+            {Module.concat([List.last(Module.split(module))]), module}
+          end
+
+        alias_expression ->
+          # alias with `as:` option
+          alias_tuple(module, alias_expression)
+      end
+
+    if alias_tuple do
+      state = add_first_alias_positions(state, line, column)
+      pre_alias(ast, state, line, alias_tuple)
     else
-      # since elixir 1.14 alias :erlang_mod is a compile error
       {ast, state}
     end
   end

@@ -487,7 +487,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert read_line(file, {line, column}) =~ "ElixirSenseExample.ModuleWithFunctions do"
   end
 
-  test "find definition of modules in 1.2 alias syntax" do
+  test "find definition of modules in multi alias syntax" do
     buffer = """
     defmodule MyModule do
       alias ElixirSenseExample.ModuleWithDocs

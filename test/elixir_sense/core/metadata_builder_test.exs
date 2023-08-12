@@ -1848,7 +1848,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 8) == [{MyEnum, Enum}]
   end
 
-  test "aliases defined with v1.2 notation" do
+  test "aliases defined with multi alias notation" do
     state =
       """
       defmodule MyModule do
@@ -1870,7 +1870,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
   end
 
-  test "aliases defined with v1.2 notation __MODULE__" do
+  test "aliases defined with multi alias notation __MODULE__" do
     state =
       """
       defmodule MyModule do
@@ -1975,7 +1975,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 5) == [{B, A.B}, {S, A.C}, {X, A.D}]
   end
 
-  test "aliases defined with v1.2 notation (multiline)" do
+  test "aliases defined with multi alias notation (multiline)" do
     state =
       """
       defmodule A do
@@ -1990,7 +1990,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 5) == [{B, A.B}]
   end
 
-  test "aliases defined with v1.2 notation nested" do
+  test "aliases defined with multi alias notation nested" do
     state =
       """
       defmodule A do
@@ -2009,7 +2009,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
   end
 
-  test "aliases defined with v1.2 notation with atom module" do
+  test "aliases defined with multi alias notation with atom module" do
     state =
       """
       defmodule A do
@@ -2108,7 +2108,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
   end
 
-  test "imports defined with v1.2 notation" do
+  test "imports defined with multi import notation" do
     state =
       """
       defmodule MyModule do
@@ -2127,7 +2127,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
   end
 
-  test "imports defined with v1.2 notation with atom module" do
+  test "imports defined with multi import notation with atom module" do
     state =
       """
       defmodule MyModule do
@@ -2299,7 +2299,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 4) == [{B, MyModule.A}]
   end
 
-  test "requires with 1.2 notation" do
+  test "requires with multi require notation" do
     state =
       """
       defmodule MyModule do
@@ -2320,7 +2320,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
   end
 
-  test "requires with 1.2 notation with atom module" do
+  test "requires with multi require notation with atom module" do
     state =
       """
       defmodule MyModule do
@@ -3879,7 +3879,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
-  test "use v1.2 notation" do
+  test "use multi notation" do
     state =
       """
       defmodule InheritMod do
@@ -3894,7 +3894,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
   end
 
-  test "use v1.2 notation with atom module" do
+  test "use multi notation with atom module" do
     state =
       """
       defmodule InheritMod do

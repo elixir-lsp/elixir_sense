@@ -910,7 +910,7 @@ defmodule ElixirSense.Core.SourceTest do
     end
   end
 
-  describe "alias syntax v1.2" do
+  describe "multi alias syntax" do
     test "single level" do
       code = """
       defmodule MyMod do

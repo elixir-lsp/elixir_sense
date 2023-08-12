@@ -25,6 +25,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
         Import.Import12,
         Import.ImportOfAlias,
         Import.ImportExternal,
+        Import.ImportWithWarn,
         Import.ImportOnePart,
         Import.ImportInSubmodule,
         Import.ImportInheritFunction,

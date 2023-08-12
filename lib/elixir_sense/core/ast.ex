@@ -158,7 +158,7 @@ defmodule ElixirSense.Core.Ast do
 
   defp extract_directive_modules(directive, ast) do
     case ast do
-      # v1.2 notation
+      # multi notation
       {^directive, _, [{{:., _, [{:__aliases__, _, prefix_atoms}, :{}]}, _, aliases}]} ->
         list =
           aliases
