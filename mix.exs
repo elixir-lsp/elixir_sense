@@ -39,9 +39,7 @@ defmodule ElixirSense.MixProject do
 
   defp deps do
     [
-      # TODO: Remove when excoveralls depends on fixed ssl_verify_fun
-      {:ssl_verify_fun, "~> 1.1", manager: :rebar3, only: :test, override: true},
-      {:excoveralls, "~> 0.10", only: :test},
+      {:excoveralls, "~> 0.17", only: :test},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:credo, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.18", only: [:dev], runtime: false}
