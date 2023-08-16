@@ -1801,6 +1801,19 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert %Location{type: :function, file: nil, line: 4} = ElixirSense.definition(buffer, 9, 9)
   end
 
+  test "find variable with the same name as special form" do
+    buffer = """
+    defmodule ElixirSenseExample.Some do
+      def foo do
+        quote = 123
+        abc(quote)
+      end
+    end
+    """
+
+    assert %Location{type: :variable, file: nil, line: 3} = ElixirSense.definition(buffer, 4, 10)
+  end
+
   defp read_line(file, {line, column}) do
     file
     |> File.read!()
