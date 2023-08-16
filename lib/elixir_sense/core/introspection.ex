@@ -1179,7 +1179,6 @@ defmodule ElixirSense.Core.Introspection do
   """
   @spec get_module_subtype(module()) :: module_subtype()
   def get_module_subtype(module) do
-    IO.puts(:stderr, "get_module_subtype(#{inspect(module)})")
     has_func = fn f, a -> module_has_function(module, f, a) end
 
     cond do
