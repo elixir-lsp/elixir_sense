@@ -577,7 +577,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   # quote do
   # quote options do
-  defp pre({:quote, _meta, list} = ast, state) when is_list(list) do
+  defp pre({:quote, _meta, list}, state) when is_list(list) do
     # replace with an empty AST node
     {[], state}
   end
