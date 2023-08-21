@@ -79,7 +79,8 @@ defmodule ElixirSense.Plugins.Ecto do
              _ -> nil
            end),
          assoc_code <- Source.text_after(text_before, line, col),
-         [_, var] <- Regex.run(~r/^assoc\(\s*([a-z][a-zA-Z0-9_]*)\s*,/, assoc_code),
+         [_, var] <-
+           Regex.run(~r/^assoc\(\s*([_\p{Ll}\p{Lo}][\p{L}\p{N}_]*[?!]?)\s*,/, assoc_code),
          %{^var => %{type: type}} <- Query.extract_bindings(text_before, from_info, env, meta),
          true <- function_exported?(type, :__schema__, 1) do
       {:override, Query.find_assoc_suggestions(type, hint)}

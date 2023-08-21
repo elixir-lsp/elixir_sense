@@ -75,7 +75,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
     list = Enum.sort(list)
 
     cond do
-      Regex.match?(~r/\s(def|defmacro)\s+[a-z|_]*$/, text_before) ->
+      Regex.match?(~r/\s(def|defmacro)\s+([_\p{Ll}\p{Lo}][\p{L}\p{N}_]*[?!]?)?$/, text_before) ->
         {:halt, %{acc | result: list}}
 
       match?({_f, _a}, scope) ->

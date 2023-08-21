@@ -515,7 +515,7 @@ defmodule ElixirSense do
   # without parens.
   #
   # Note: This will be removed after refactoring the parser to
-  # allow unparseable nodes in the AST.
+  # allow unparsable nodes in the AST.
   defp maybe_fix_autocomple_on_cursor(%Metadata{error: nil} = meta, _, _, _) do
     meta
   end
@@ -537,11 +537,13 @@ defmodule ElixirSense do
 
     # Fix incomplete kw key, e.g. cursor after `option1: 1, opt`
     fix_incomplete_kw_key = fn text_before, text_after ->
-      if Regex.match?(~r/\,\s*[a-z][a-zA-Z0-9_]*$/, text_before) do
+      if Regex.match?(~r/\,\s*([\p{L}_][\p{L}\p{N}_@]*[?!]?)?$/, text_before) do
         text_before <> ": :__fake_value__" <> text_after
       end
     end
 
+    # TODO this may no longer be needed
+    # only fix_incomplete_call has some tests depending on it
     fixers = [
       fix_incomplete_call,
       fix_incomplete_kw,

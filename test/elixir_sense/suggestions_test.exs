@@ -824,7 +824,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     defmodule MyLocalModule do
       @behaviour MyBehaviour
-      
+
       @impl true
       def flatten(list) do
         []
@@ -911,7 +911,7 @@ defmodule ElixirSense.SuggestionsTest do
 
     defmodule MyLocalModule do
       @behaviour MyBehaviour
-      
+
       @impl true
       defmacro flatten(list) do
         []
@@ -951,7 +951,7 @@ defmodule ElixirSense.SuggestionsTest do
     buffer = """
     defmodule MyLocalModule do
       @behaviour ElixirSenseExample.BehaviourWithMeta
-      
+
       @impl true
       def flatten(list) do
         []
@@ -989,7 +989,7 @@ defmodule ElixirSense.SuggestionsTest do
     buffer = """
     defmodule MyLocalModule do
       @behaviour :gen_statem
-      
+
       @impl true
       def init(list) do
         []
@@ -1029,7 +1029,7 @@ defmodule ElixirSense.SuggestionsTest do
     buffer = """
     defmodule MyLocalModule do
       @behaviour ElixirSenseExample.BehaviourWithMeta
-      
+
       @impl true
       defmacro bar(list) do
         []

@@ -776,7 +776,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre({:@, meta_attr, [{name, meta, params}]}, state) when is_atom(name) do
-    if String.match?(Atom.to_string(name), ~r/^[a-zA-Z_].*/) do
+    name_string = Atom.to_string(name)
+
+    if String.match?(name_string, ~r/^[_\p{Ll}\p{Lo}][\p{L}\p{N}_]*[?!]?$/) and
+         not String.starts_with?(name_string, "__atom_elixir_marker_") do
       line = Keyword.fetch!(meta_attr, :line)
       column = Keyword.fetch!(meta_attr, :column)
 
