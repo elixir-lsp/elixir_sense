@@ -30,6 +30,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
   @join_opts [on: "A query expression or keyword list to filter the join."]
 
   @var_r "[_\p{Ll}\p{Lo}][\p{L}\p{N}_]*[?!]?"
+  # elixir alias must be ASCII, no need to support unicode here
   @mod_r "[A-Z][a-zA-Z0-9_\.]*"
   @binding_r "(#{@var_r}) in (#{@mod_r}|assoc\\(\\s*#{@var_r},\\s*\\:#{@var_r}\\s*\\))"
 
