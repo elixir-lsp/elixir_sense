@@ -18,13 +18,11 @@ defmodule ElixirSense.Location do
         }
   defstruct [:type, :file, :line, :column]
 
-  defguardp file_exists(file) when file not in ["non_existing", nil, ""]
-
   @spec find_mod_fun_source(module, atom, non_neg_integer | {:gte, non_neg_integer} | :any) ::
           Location.t() | nil
   def find_mod_fun_source(mod, fun, arity) do
     case find_mod_file(mod) do
-      {mod, file} when file_exists(file) ->
+      file when is_binary(file) ->
         find_fun_position({mod, file}, fun, arity)
 
       _ ->
@@ -34,10 +32,10 @@ defmodule ElixirSense.Location do
 
   @spec find_type_source(module, atom, non_neg_integer | {:gte, non_neg_integer} | :any) ::
           Location.t() | nil
-  def find_type_source(mod, fun, arity) do
+  def find_type_source(mod, type, arity) do
     case find_mod_file(mod) do
-      {mod, file} when file_exists(file) ->
-        find_type_position({mod, file}, fun, arity)
+      file when is_binary(file) ->
+        find_type_position({mod, file}, type, arity)
 
       _ ->
         nil
@@ -47,6 +45,10 @@ defmodule ElixirSense.Location do
   defp find_mod_file(Elixir), do: nil
 
   defp find_mod_file(module) do
+    find_elixir_file(module) || find_erlang_file(module)
+  end
+
+  defp find_elixir_file(module) do
     file =
       if Code.ensure_loaded?(module) do
         case module.module_info(:compile)[:source] do
@@ -55,26 +57,45 @@ defmodule ElixirSense.Location do
         end
       end
 
-    file =
-      if file && File.exists?(file, [:raw]) do
+    if file do
+      if File.exists?(file, [:raw]) do
         file
       else
-        with {_module, _binary, beam_filename} <- :code.get_object_code(module),
-             erl_file =
-               beam_filename
-               |> to_string
-               |> String.replace(
-                 ~r/(.+)\/ebin\/([^\s]+)\.beam$/,
-                 "\\1/src/\\2.erl"
+        # If Elixir was built in a sandboxed environment,
+        # `module.module_info(:compile)[:source]` would point to a non-existing
+        # location; in this case try to find a "core" Elixir source file under
+        # the configured Elixir source path.
+        with elixir_src when is_binary(elixir_src) <-
+               Application.get_env(:elixir_sense, :elixir_src),
+             file =
+               String.replace(
+                 file,
+                 Regex.recompile!(~r<^(?:.+)(/lib/.+\.ex)$>U),
+                 elixir_src <> "\\1"
                ),
-             true <- File.exists?(erl_file, [:raw]) do
-          erl_file
+             true <- File.exists?(file, [:raw]) do
+          file
         else
           _ -> nil
         end
       end
+    end
+  end
 
-    {module, file}
+  defp find_erlang_file(module) do
+    with {_module, _binary, beam_filename} <- :code.get_object_code(module),
+         erl_file =
+           beam_filename
+           |> to_string
+           |> String.replace(
+             Regex.recompile!(~r/(.+)\/ebin\/([^\s]+)\.beam$/),
+             "\\1/src/\\2.erl"
+           ),
+         true <- File.exists?(erl_file, [:raw]) do
+      erl_file
+    else
+      _ -> nil
+    end
   end
 
   defp find_fun_position({mod, file}, fun, arity) do
