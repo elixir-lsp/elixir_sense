@@ -114,7 +114,7 @@ defmodule ElixirSense.Core.State do
               module_variants: [],
               # NOTE for protocol implementation this will be the first variant
               protocol: nil,
-              protocol_variants: nil,
+              protocol_variants: [],
               vars: [],
               attributes: [],
               behaviours: [],
