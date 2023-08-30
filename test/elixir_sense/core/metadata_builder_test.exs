@@ -1516,7 +1516,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     test "list guards" do
       assert %VarInfo{name: :x, type: :list} = var_with_guards("is_list(x)")
       assert %VarInfo{name: :x, type: :list} = var_with_guards("hd(x) == 1")
-      assert %VarInfo{name: :x, type: :list} = var_with_guards("tl(x) == 1")
+      assert %VarInfo{name: :x, type: :list} = var_with_guards("tl(x) == [1]")
       assert %VarInfo{name: :x, type: :list} = var_with_guards("length(x) == 1")
     end
 
