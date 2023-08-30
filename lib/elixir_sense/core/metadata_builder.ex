@@ -1704,7 +1704,19 @@ defmodule ElixirSense.Core.MetadataBuilder do
     end)
   end
 
-  defp type_information_from_guards({:or, _, [_guard_l, _guard_r]}, _state), do: []
+  defp type_information_from_guards({:or, _, [guard_l, guard_r]}, state) do
+    left = type_information_from_guards(guard_l, state)
+    right = type_information_from_guards(guard_r, state)
+
+    Keyword.merge(left, right, fn _k, v1, v2 ->
+      case {v1, v2} do
+        {{:union, types_1}, {:union, types_2}} -> {:union, types_1 ++ types_2}
+        {{:union, types}, _} -> {:union, types ++ [v2]}
+        {_, {:union, types}} -> {:union, [v1 | types]}
+        _ -> {:union, [v1, v2]}
+      end
+    end)
+  end
 
   defp type_information_from_guards(guard_ast, state) do
     {_, acc} =

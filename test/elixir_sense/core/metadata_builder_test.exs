@@ -1573,8 +1573,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                var_with_guards("is_map_key(x, :a) and is_map_key(x, :b)")
     end
 
-    test "or combination predicate guards can not be used" do
-      assert %VarInfo{name: :x, type: nil} = var_with_guards("is_number(x) or is_atom(x)")
+    test "or combination predicate guards can be merge into union type" do
+      assert %VarInfo{name: :x, type: {:union, [:number, :atom]}} =
+               var_with_guards("is_number(x) or is_atom(x)")
+
+      assert %VarInfo{name: :x, type: {:union, [:number, :atom, :binary]}} =
+               var_with_guards("is_number(x) or is_atom(x) or is_binary(x)")
     end
   end
 
