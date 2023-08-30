@@ -1536,6 +1536,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     test "map guards" do
       assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("is_map(x)")
+      assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("map_size(x) == 1")
 
       assert %VarInfo{name: :x, type: {:map, [a: nil], nil}} =
                var_with_guards("is_map_key(x, :a)")

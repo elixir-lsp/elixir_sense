@@ -1741,6 +1741,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp guard_predicate_type(p, _, _) when p in [:is_list, :hd, :tl, :length], do: :list
   defp guard_predicate_type(p, _, _) when p in [:is_tuple, :tuple_size, :elem], do: :tuple
   defp guard_predicate_type(:is_map, _, _), do: {:map, [], nil}
+  defp guard_predicate_type(:map_size, _, _), do: {:map, [], nil}
 
   defp guard_predicate_type(:is_map_key, [_, key], state) do
     case get_binding_type(state, key) do
