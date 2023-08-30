@@ -1545,7 +1545,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
 
     test "struct guards" do
-      assert %VarInfo{name: :x, type: :struct} = var_with_guards("is_struct(x)")
+      assert %VarInfo{name: :x, type: {:struct, [], nil, nil}} = var_with_guards("is_struct(x)")
 
       assert %VarInfo{name: :x, type: {:struct, [], {:atom, URI}, nil}} =
                var_with_guards("is_struct(x, URI)")

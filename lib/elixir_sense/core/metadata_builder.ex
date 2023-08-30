@@ -1757,7 +1757,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {:struct, [], {:atom, expand_alias(state, list)}, nil}
   end
 
-  defp guard_predicate_type(:is_struct, _, _), do: :struct
+  defp guard_predicate_type(:is_struct, _, _), do: {:struct, [], nil, nil}
   defp guard_predicate_type(_, _, _), do: nil
 
   # struct or struct update
