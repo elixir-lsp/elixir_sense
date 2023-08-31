@@ -231,7 +231,7 @@ defmodule ElixirSense.SuggestionsTest do
                def_arity: 1,
                name: "flatten",
                origin: "List",
-               spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]",
+               spec: "@spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]",
                summary: "Flattens the given `list` of nested lists.",
                type: :function,
                metadata: %{},
@@ -275,7 +275,8 @@ defmodule ElixirSense.SuggestionsTest do
                def_arity: 1,
                name: "some",
                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
-               spec: "@spec some(integer) :: Macro.t\n@spec some(b) :: Macro.t when b: float",
+               spec:
+                 "@spec some(integer()) :: Macro.t()\n@spec some(b) :: Macro.t() when b: float()",
                summary: "some macro\n",
                type: :macro,
                metadata: %{},
@@ -340,7 +341,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 3,
                name: "code_change",
                origin: "GenServer",
-               spec: "@callback code_change(old_vsn, state :: term, extra :: term) ::" <> _,
+               spec: "@callback code_change(old_vsn, state :: term(), extra :: term()) ::" <> _,
                summary:
                  "Invoked to change the state of the `GenServer` when a different version of a\nmodule is loaded (hot code swapping) and the state's term structure should be\nchanged.",
                type: :callback
@@ -441,7 +442,7 @@ defmodule ElixirSense.SuggestionsTest do
                name: "optional",
                subtype: :macrocallback,
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
-               spec: "@macrocallback optional(a) :: Macro.t when a: atom",
+               spec: "@macrocallback optional(a) :: Macro.t() when a: atom()",
                summary: "An optional macrocallback\n",
                type: :callback,
                metadata: %{optional: true}
@@ -453,7 +454,7 @@ defmodule ElixirSense.SuggestionsTest do
                name: "required",
                subtype: :macrocallback,
                origin: "ElixirSenseExample.BehaviourWithMacrocallback",
-               spec: "@macrocallback required(atom) :: Macro.t",
+               spec: "@macrocallback required(atom()) :: Macro.t()",
                summary: "A required macrocallback\n",
                type: :callback,
                metadata: %{optional: false}
@@ -540,7 +541,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 0,
                name: "foo",
                origin: "ElixirSenseExample.OverridableBehaviour",
-               spec: "@callback foo :: any",
+               spec: "@callback foo() :: any()",
                summary: "",
                type: :callback,
                subtype: :callback,
@@ -552,7 +553,7 @@ defmodule ElixirSense.SuggestionsTest do
                metadata: %{optional: false},
                name: "bar",
                origin: "ElixirSenseExample.OverridableBehaviour",
-               spec: "@macrocallback bar(any) :: Macro.t",
+               spec: "@macrocallback bar(any()) :: Macro.t()",
                subtype: :macrocallback,
                summary: "",
                type: :callback
@@ -643,7 +644,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 3,
                name: "reduce",
                origin: "Enumerable",
-               spec: "@callback reduce(t, acc, reducer) :: result",
+               spec: "@callback reduce(t(), acc(), reducer()) :: result()",
                summary: "Reduces the `enumerable` into an element.",
                type: :protocol_function,
                metadata: %{}
@@ -668,7 +669,7 @@ defmodule ElixirSense.SuggestionsTest do
                arity: 3,
                name: "reduce",
                origin: "Enumerable",
-               spec: "@callback reduce(t, acc, reducer) :: result",
+               spec: "@callback reduce(t(), acc(), reducer()) :: result()",
                summary: "Reduces the `enumerable` into an element.",
                type: :protocol_function,
                metadata: %{}
@@ -695,41 +696,45 @@ defmodule ElixirSense.SuggestionsTest do
              %{
                description: "{:reply, reply, new_state}",
                snippet: "{:reply, \"${1:reply}$\", \"${2:new_state}$\"}",
-               spec: "{:reply, reply, new_state} when reply: term, new_state: term, reason: term",
+               spec:
+                 "{:reply, reply, new_state} when reply: term(), new_state: term(), reason: term()",
                type: :return
              },
              %{
                description:
-                 "{:reply, reply, new_state, timeout | :hibernate | {:continue, term}}",
+                 "{:reply, reply, new_state, timeout() | :hibernate | {:continue, term()}}",
                snippet:
-                 "{:reply, \"${1:reply}$\", \"${2:new_state}$\", \"${3:timeout | :hibernate | {:continue, term}}$\"}",
-               spec: "{:reply, reply, new_state, timeout | :hibernate | {:continue, term}}" <> _,
+                 "{:reply, \"${1:reply}$\", \"${2:new_state}$\", \"${3:timeout() | :hibernate | {:continue, term()}}$\"}",
+               spec:
+                 "{:reply, reply, new_state, timeout() | :hibernate | {:continue, term()}}" <> _,
                type: :return
              },
              %{
                description: "{:noreply, new_state}",
                snippet: "{:noreply, \"${1:new_state}$\"}",
-               spec: "{:noreply, new_state} when reply: term, new_state: term, reason: term",
+               spec:
+                 "{:noreply, new_state} when reply: term(), new_state: term(), reason: term()",
                type: :return
              },
              %{
-               description: "{:noreply, new_state, timeout | :hibernate | {:continue, term}}",
+               description: "{:noreply, new_state, timeout() | :hibernate | {:continue, term()}}",
                snippet:
-                 "{:noreply, \"${1:new_state}$\", \"${2:timeout | :hibernate | {:continue, term}}$\"}",
-               spec: "{:noreply, new_state, timeout | :hibernate | {:continue, term}}" <> _,
+                 "{:noreply, \"${1:new_state}$\", \"${2:timeout() | :hibernate | {:continue, term()}}$\"}",
+               spec: "{:noreply, new_state, timeout() | :hibernate | {:continue, term()}}" <> _,
                type: :return
              },
              %{
                description: "{:stop, reason, reply, new_state}",
                snippet: "{:stop, \"${1:reason}$\", \"${2:reply}$\", \"${3:new_state}$\"}",
                spec:
-                 "{:stop, reason, reply, new_state} when reply: term, new_state: term, reason: term",
+                 "{:stop, reason, reply, new_state} when reply: term(), new_state: term(), reason: term()",
                type: :return
              },
              %{
                description: "{:stop, reason, new_state}",
                snippet: "{:stop, \"${1:reason}$\", \"${2:new_state}$\"}",
-               spec: "{:stop, reason, new_state} when reply: term, new_state: term, reason: term",
+               spec:
+                 "{:stop, reason, new_state} when reply: term(), new_state: term(), reason: term()",
                type: :return
              }
            ] = list
@@ -752,9 +757,9 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert list == [
              %{
-               description: "Macro.t",
-               snippet: "\"${1:Macro.t}$\"",
-               spec: "Macro.t",
+               description: "Macro.t()",
+               snippet: "\"${1:Macro.t()}$\"",
+               spec: "Macro.t()",
                type: :return
              }
            ]
@@ -775,15 +780,15 @@ defmodule ElixirSense.SuggestionsTest do
 
     assert [
              %{
-               description: "{:ok, non_neg_integer}",
+               description: "{:ok, non_neg_integer()}",
                snippet: "{:ok, non_neg_integer()}",
-               spec: "{:ok, non_neg_integer}",
+               spec: "{:ok, non_neg_integer()}",
                type: :return
              },
              %{
-               description: "{:error, module}",
+               description: "{:error, module()}",
                snippet: "{:error, module()}",
-               spec: "{:error, module}",
+               spec: "{:error, module()}",
                type: :return
              }
            ] == list
@@ -850,7 +855,7 @@ defmodule ElixirSense.SuggestionsTest do
                metadata: %{implementing: MyBehaviour},
                name: "flatten",
                origin: "MyLocalModule",
-               spec: "@callback flatten(list) :: list",
+               spec: "@callback flatten(list()) :: list()",
                #  TODO docs
                summary: "",
                type: :function,
@@ -890,7 +895,7 @@ defmodule ElixirSense.SuggestionsTest do
                metadata: %{implementing: BB},
                name: "go",
                origin: "BB.String",
-               spec: "@callback go(t) :: integer",
+               spec: "@callback go(t) :: integer()",
                #  TODO docs
                summary: "",
                type: :function,
@@ -938,7 +943,7 @@ defmodule ElixirSense.SuggestionsTest do
                metadata: %{implementing: MyBehaviour},
                name: "flatten",
                origin: "MyLocalModule",
-               spec: "@macrocallback flatten(list) :: list",
+               spec: "@macrocallback flatten(list()) :: list()",
                #  TODO docs
                summary: "",
                type: :macro,
@@ -977,7 +982,7 @@ defmodule ElixirSense.SuggestionsTest do
                metadata: %{implementing: ElixirSenseExample.BehaviourWithMeta},
                name: "flatten",
                origin: "MyLocalModule",
-               spec: "@callback flatten(list) :: list",
+               spec: "@callback flatten(list()) :: list()",
                summary: "Sample doc",
                type: :function,
                visibility: :public
@@ -1016,7 +1021,7 @@ defmodule ElixirSense.SuggestionsTest do
                  metadata: %{implementing: :gen_statem, since: "OTP 19.0"},
                  name: "init",
                  origin: "MyLocalModule",
-                 spec: "@callback init(args :: term) ::" <> _,
+                 spec: "@callback init(args :: term()) ::" <> _,
                  summary: "- Args = term" <> _,
                  type: :function,
                  visibility: :public
@@ -1056,7 +1061,7 @@ defmodule ElixirSense.SuggestionsTest do
                metadata: %{implementing: ElixirSenseExample.BehaviourWithMeta},
                name: "bar",
                origin: "MyLocalModule",
-               spec: "@macrocallback bar(integer) :: Macro.t",
+               spec: "@macrocallback bar(integer()) :: Macro.t()",
                summary: "Docs for bar",
                type: :macro,
                visibility: :public
@@ -1093,7 +1098,7 @@ defmodule ElixirSense.SuggestionsTest do
                metadata: %{implementing: GenServer},
                name: "terminate",
                origin: "MyServer",
-               spec: "@callback terminate(reason, state :: term) :: term" <> _,
+               spec: "@callback terminate(reason, state :: term()) :: term()" <> _,
                summary:
                  "Invoked when the server is about to exit. It should do any cleanup required.",
                type: :function,
@@ -1133,7 +1138,7 @@ defmodule ElixirSense.SuggestionsTest do
       assert %{
                summary: "- InitArgs = Args" <> _,
                metadata: %{implementing: :gen_event},
-               spec: "@callback init(initArgs :: term) ::" <> _,
+               spec: "@callback init(initArgs :: term()) ::" <> _,
                args_list: ["arg"]
              } = init_res
     end
@@ -1187,7 +1192,7 @@ defmodule ElixirSense.SuggestionsTest do
                name: "baz",
                origin: "ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl",
                snippet: nil,
-               spec: "@callback baz(integer) :: :ok",
+               spec: "@callback baz(integer()) :: :ok",
                summary: "Docs for baz",
                type: :function,
                visibility: :public
@@ -1215,7 +1220,7 @@ defmodule ElixirSense.SuggestionsTest do
                  name: "init",
                  origin: "ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang",
                  snippet: nil,
-                 spec: "@callback init(args :: term) :: init_result(state)",
+                 spec: "@callback init(args :: term()) :: init_result(state())",
                  summary: "- Args = term" <> _,
                  type: :function,
                  visibility: :public
@@ -1244,7 +1249,7 @@ defmodule ElixirSense.SuggestionsTest do
                name: "init",
                origin: ":file_server",
                snippet: nil,
-               spec: "@callback init(args :: term) ::" <> _,
+               spec: "@callback init(args :: term()) ::" <> _,
                summary: "- Args = term" <> _,
                type: :function,
                visibility: :public

@@ -166,12 +166,12 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   def spec_ast_to_string(ast) do
-    ast |> Macro.to_string() |> String.replace("()", "")
+    ast |> Macro.to_string()
   end
 
   def type_spec_to_string({kind, type}) do
     binary = Typespec.type_to_quoted(type) |> Macro.to_string()
-    "@#{kind} #{binary}" |> String.replace("()", "")
+    "@#{kind} #{binary}"
   end
 
   def get_type_spec_as_string(module, type, arity) do
@@ -700,6 +700,6 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   def typespec_to_string(kind, spec) do
-    "@#{kind} #{spec |> Macro.to_string() |> String.replace("()", "")}"
+    "@#{kind} #{spec |> Macro.to_string()}"
   end
 end

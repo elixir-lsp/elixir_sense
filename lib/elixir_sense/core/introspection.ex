@@ -895,9 +895,7 @@ defmodule ElixirSense.Core.Introspection do
         ""
       end
 
-    formated_spec = name_str <> returns_str
-
-    formated_spec |> String.replace("()", "")
+    name_str <> returns_str
   end
 
   def define_callback?(mod, fun, arity) do
@@ -1341,7 +1339,7 @@ defmodule ElixirSense.Core.Introspection do
         end
 
       binary = Macro.to_string(quoted)
-      "@#{kind} #{binary}" |> String.replace("()", "")
+      "@#{kind} #{binary}"
     end)
   end
 

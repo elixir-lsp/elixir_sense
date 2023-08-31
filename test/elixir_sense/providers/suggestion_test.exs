@@ -98,7 +98,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                arity: 2,
                name: "delete_at",
                origin: "List",
-               spec: "@spec delete_at(list, integer) :: list",
+               spec: "@spec delete_at(list(), integer()) :: list()",
                summary: "Produces a new list by " <> _,
                type: :function
              }
@@ -121,7 +121,7 @@ defmodule ElixirSense.Providers.SuggestionTest do
                arity: 2,
                name: "delete_at",
                origin: "List",
-               spec: "@spec delete_at(list, integer) :: list",
+               spec: "@spec delete_at(list(), integer()) :: list()",
                summary: "Produces a new list " <> _,
                type: :function
              }

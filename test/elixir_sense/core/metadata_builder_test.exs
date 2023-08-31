@@ -2933,9 +2933,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                generated: [false, false],
                specs: [
                  "@callback with_spec(t, boolean) :: number",
-                 "@callback with_spec(t, integer) :: String.t",
+                 "@callback with_spec(t, integer) :: String.t()",
                  "@spec with_spec(t, boolean) :: number",
-                 "@spec with_spec(t, integer) :: String.t"
+                 "@spec with_spec(t, integer) :: String.t()"
                ]
              },
              {Proto, :with_spec, nil} => %ElixirSense.Core.State.SpecInfo{
@@ -2947,9 +2947,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                generated: [false, false],
                specs: [
                  "@callback with_spec(t, boolean) :: number",
-                 "@callback with_spec(t, integer) :: String.t",
+                 "@callback with_spec(t, integer) :: String.t()",
                  "@spec with_spec(t, boolean) :: number",
-                 "@spec with_spec(t, integer) :: String.t"
+                 "@spec with_spec(t, integer) :: String.t()"
                ]
              },
              {Proto, :without_spec, nil} => %ElixirSense.Core.State.SpecInfo{
@@ -3817,7 +3817,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                kind: :spec,
                name: :private_func,
                positions: [{2, 3}],
-               specs: ["@spec private_func :: String.t"]
+               specs: ["@spec private_func() :: String.t()"]
              },
              {InheritMod, :private_func, nil} => %State.SpecInfo{},
              {InheritMod, :some_callback, 1} => %State.SpecInfo{
@@ -4698,7 +4698,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{3, 3}],
                end_positions: [{3, 30}],
                generated: [false],
-               specs: ["@typep no_args :: integer"]
+               specs: ["@typep no_args() :: integer"]
              },
              {My, :no_args, nil} => %ElixirSense.Core.State.TypeInfo{
                args: [[]],
@@ -4707,7 +4707,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{3, 3}],
                end_positions: [{3, 30}],
                generated: [false],
-               specs: ["@typep no_args :: integer"]
+               specs: ["@typep no_args() :: integer"]
              },
              {My, :overloaded, 0} => %ElixirSense.Core.State.TypeInfo{
                args: [[]],
@@ -4864,7 +4864,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{5, 3}],
                end_positions: [nil],
                generated: [false],
-               specs: ["@macrocallback other(x) :: Macro.t when x: integer"]
+               specs: ["@macrocallback other(x) :: Macro.t() when x: integer"]
              },
              {Proto, :other, nil} => %ElixirSense.Core.State.SpecInfo{
                kind: :macrocallback,
@@ -4873,7 +4873,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{5, 3}],
                end_positions: [nil],
                generated: [false],
-               specs: ["@macrocallback other(x) :: Macro.t when x: integer"]
+               specs: ["@macrocallback other(x) :: Macro.t() when x: integer"]
              }
            }
   end
@@ -4895,23 +4895,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {Proto, :abc, 1} => %State.SpecInfo{
                args: [["{%Model.User{}}"]],
                specs: [
-                 "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t}, local_type]"
+                 "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t()}, local_type()]"
                ]
              },
              {Proto, :abc, nil} => %State.SpecInfo{
                args: [["{%Model.User{}}"]],
                specs: [
-                 "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t}, local_type]"
+                 "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t()}, local_type()]"
                ]
              }
            } = state.specs
 
     assert %{
              {Proto, :local_type, 0} => %State.TypeInfo{
-               specs: ["@type local_type :: Model.User.t"]
+               specs: ["@type local_type() :: Model.User.t()"]
              },
              {Proto, :local_type, nil} => %State.TypeInfo{
-               specs: ["@type local_type :: Model.User.t"]
+               specs: ["@type local_type() :: Model.User.t()"]
              }
            } = state.types
   end
@@ -4949,7 +4949,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert %{
              {MyRecords, :user, 0} => %State.TypeInfo{
                name: :user,
-               specs: ["@type user :: record(:user, name: String.t, age: integer)"]
+               specs: ["@type user :: record(:user, name: String.t(), age: integer)"]
              }
            } = state.types
   end

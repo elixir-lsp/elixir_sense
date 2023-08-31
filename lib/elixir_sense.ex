@@ -201,7 +201,7 @@ defmodule ElixirSense do
         args_list: ["list", "index", "value"],
         arity: 3, def_arity: 3, needed_require: nil, needed_import: nil,
         name: "insert_at", metadata: %{}, snippet: nil, visibility: :public,
-        spec: "@spec insert_at(list, integer, any) :: list", summary: "Returns a list with `value` inserted at the specified `index`."}]
+        spec: "@spec insert_at(list(), integer(), any()) :: list()", summary: "Returns a list with `value` inserted at the specified `index`."}]
   """
   @spec suggestions(String.t(), pos_integer, pos_integer, keyword()) :: [Suggestion.suggestion()]
   def suggestions(buffer, line, column, opts \\ []) do
@@ -268,7 +268,7 @@ defmodule ElixirSense do
           %{name: "flatten",
             params: ["list"],
             documentation: "Flattens the given `list` of nested lists.",
-            spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]"},
+            spec: "@spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]"},
           %{name: "flatten",
             params: ["list", "tail"],
             documentation: "Flattens the given `list` of nested lists.\\nThe list `tail` will be added at the end of\\nthe flattened list.",

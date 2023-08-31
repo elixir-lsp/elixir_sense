@@ -86,7 +86,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @spec flatten(deep_list) :: list when deep_list: [any | deep_list]
+             @spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]
              ```
 
              Flattens the given `list` of nested lists.
@@ -124,7 +124,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @spec flatten(list) :: list
+             @spec flatten(list()) :: list()
              ```
              """
 
@@ -160,7 +160,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @spec flatten(list) :: list
+             @spec flatten(list()) :: list()
              ```
              """
 
@@ -177,7 +177,7 @@ defmodule ElixirSense.DocsTest do
 
       defmodule MyLocalModule do
         @behaviour MyBehaviour
-        
+
         @impl true
         def flatten(list) do
           []
@@ -207,7 +207,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @callback flatten(list) :: list
+             @callback flatten(list()) :: list()
              ```
              """
 
@@ -249,7 +249,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @callback go(t) :: integer
+             @callback go(t) :: integer()
              ```
              """
 
@@ -331,7 +331,7 @@ defmodule ElixirSense.DocsTest do
 
       defmodule MyLocalModule do
         @behaviour MyBehaviour
-        
+
         @impl true
         defmacro flatten(list) do
           []
@@ -362,7 +362,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @macrocallback flatten(list) :: list
+             @macrocallback flatten(list()) :: list()
              ```
              """
 
@@ -373,7 +373,7 @@ defmodule ElixirSense.DocsTest do
       buffer = """
       defmodule MyLocalModule do
         @behaviour ElixirSenseExample.BehaviourWithMeta
-        
+
         @impl true
         def flatten(list) do
           []
@@ -405,7 +405,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @callback flatten(list) :: list
+             @callback flatten(list()) :: list()
              ```
              """
     end
@@ -414,7 +414,7 @@ defmodule ElixirSense.DocsTest do
       buffer = """
       defmodule MyLocalModule do
         @behaviour :gen_statem
-        
+
         @impl true
         def init(list) do
           []
@@ -447,7 +447,7 @@ defmodule ElixirSense.DocsTest do
                ### Specs
 
                ```
-               @callback init(args :: term) ::\
+               @callback init(args :: term()) ::\
                """
 
         assert docs =~
@@ -459,7 +459,7 @@ defmodule ElixirSense.DocsTest do
       buffer = """
       defmodule MyLocalModule do
         @behaviour ElixirSenseExample.BehaviourWithMeta
-        
+
         @impl true
         defmacro bar(list) do
           []
@@ -492,7 +492,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @macrocallback bar(integer) :: Macro.t
+             @macrocallback bar(integer()) :: Macro.t()
              ```
 
              Docs for bar
@@ -528,7 +528,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @spec flatten(list) :: list
+             @spec flatten(list()) :: list()
              ```
              """
 
@@ -567,7 +567,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @spec flatten(list) :: list
+             @spec flatten(list()) :: list()
              ```
              """
 
@@ -625,7 +625,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @spec flatten(list) :: list
+             @spec flatten(list()) :: list()
              ```
              """
 
@@ -653,7 +653,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @spec flatten(deep_list) :: list when deep_list: [any | deep_list]
+             @spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]
              ```
 
              Flattens the given `list` of nested lists.
@@ -682,7 +682,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]
+             @spec flatten(deepList) :: list when deepList: [term() | deepList], list: [term()]
              ```
              """
 
@@ -716,7 +716,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @spec boolean or boolean :: boolean
+             @spec boolean() or boolean() :: boolean()
              ```
 
              """
@@ -756,8 +756,8 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @spec some(integer) :: Macro.t
-             @spec some(b) :: Macro.t when b: float
+             @spec some(integer()) :: Macro.t()
+             @spec some(b) :: Macro.t() when b: float()
              ```
 
              some macro
@@ -807,7 +807,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @spec flatten(deep_list) :: list when deep_list: [any | deep_list]
+             @spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]
              ```
 
              Flattens the given `list` of nested lists.
@@ -1562,7 +1562,7 @@ defmodule ElixirSense.DocsTest do
            ### Specs
 
            ```
-           @callback foo :: :ok
+           @callback foo() :: :ok
            ```
 
            Docs for foo
@@ -1593,7 +1593,7 @@ defmodule ElixirSense.DocsTest do
            ### Specs
 
            ```
-           @callback baz(integer) :: :ok
+           @callback baz(integer()) :: :ok
            ```
 
            Docs for baz
@@ -1624,7 +1624,7 @@ defmodule ElixirSense.DocsTest do
            ### Specs
 
            ```
-           @macrocallback bar(integer) :: Macro.t
+           @macrocallback bar(integer()) :: Macro.t()
            ```
 
            Docs for bar
@@ -1653,7 +1653,7 @@ defmodule ElixirSense.DocsTest do
            ### Specs
 
            ```
-           @callback init(args :: term) ::
+           @callback init(args :: term()) ::
            """
 
     assert docs =~ "Whenever a `gen_server` process is started"
@@ -1686,7 +1686,7 @@ defmodule ElixirSense.DocsTest do
              ### Specs
 
              ```
-             @callback init(args :: term) :: init_result(state)
+             @callback init(args :: term()) :: init_result(state())
              ```
              """
     else
@@ -1718,7 +1718,7 @@ defmodule ElixirSense.DocsTest do
            ### Specs
 
            ```
-           @spec flatten(deep_list) :: list when deep_list: [any | deep_list]
+           @spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]
            ```
 
            Flattens the given `list` of nested lists.
@@ -1863,11 +1863,11 @@ defmodule ElixirSense.DocsTest do
              ElixirSense.docs(buffer, 3, 34)
 
     assert docs =~ "2 params version"
-    assert docs =~ "@spec my_func(1 | 2) :: binary"
-    assert docs =~ "@spec my_func(1 | 2, binary) :: binary"
+    assert docs =~ "@spec my_func(1 | 2) :: binary()"
+    assert docs =~ "@spec my_func(1 | 2, binary()) :: binary()"
 
     refute docs =~ "no params version"
-    refute docs =~ "@spec my_func :: binary"
+    refute docs =~ "@spec my_func() :: binary()"
     refute docs =~ "3 params version"
     refute docs =~ "@spec my_func(1, 2, 3) :: :ok"
     refute docs =~ "@spec my_func(2, 2, 3) :: :error"
@@ -1984,11 +1984,11 @@ defmodule ElixirSense.DocsTest do
              ElixirSense.docs(buffer, 3, 19)
 
     assert docs =~ "2 params version"
-    assert docs =~ "@spec my_func(1 | 2) :: binary"
-    assert docs =~ "@spec my_func(1 | 2, binary) :: binary"
+    assert docs =~ "@spec my_func(1 | 2) :: binary()"
+    assert docs =~ "@spec my_func(1 | 2, binary()) :: binary()"
 
     refute docs =~ "no params version"
-    refute docs =~ "@spec my_func :: binary"
+    refute docs =~ "@spec my_func() :: binary()"
     refute docs =~ "3 params version"
     refute docs =~ "@spec my_func(1, 2, 3) :: :ok"
     refute docs =~ "@spec my_func(2, 2, 3) :: :error"

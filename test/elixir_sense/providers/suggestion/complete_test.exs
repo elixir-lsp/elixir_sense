@@ -141,7 +141,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                arity: 1,
                name: "with_default",
                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
-               spec: "@spec with_default(atom, list, integer) :: Macro.t",
+               spec: "@spec with_default(atom(), list(), integer()) :: Macro.t()",
                summary: "some macro with default arg\n",
                type: :macro
              },
@@ -150,7 +150,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                arity: 2,
                name: "with_default",
                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
-               spec: "@spec with_default(atom, list, integer) :: Macro.t",
+               spec: "@spec with_default(atom(), list(), integer()) :: Macro.t()",
                summary: "some macro with default arg\n",
                type: :macro
              },
@@ -159,7 +159,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                arity: 3,
                name: "with_default",
                origin: "ElixirSenseExample.BehaviourWithMacrocallback.Impl",
-               spec: "@spec with_default(atom, list, integer) :: Macro.t",
+               spec: "@spec with_default(atom(), list(), integer()) :: Macro.t()",
                summary: "some macro with default arg\n",
                type: :macro
              }
@@ -400,7 +400,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                name: "printable?",
                arity: 1,
                spec:
-                 "@spec printable?(t, 0) :: true\n@spec printable?(t, pos_integer | :infinity) :: boolean",
+                 "@spec printable?(t(), 0) :: true\n@spec printable?(t(), pos_integer() | :infinity) :: boolean()",
                summary:
                  "Checks if a string contains only printable characters up to `character_limit`."
              },
@@ -408,7 +408,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                name: "printable?",
                arity: 2,
                spec:
-                 "@spec printable?(t, 0) :: true\n@spec printable?(t, pos_integer | :infinity) :: boolean",
+                 "@spec printable?(t(), 0) :: true\n@spec printable?(t(), pos_integer() | :infinity) :: boolean()",
                summary:
                  "Checks if a string contains only printable characters up to `character_limit`."
              }
@@ -1941,7 +1941,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
              %{
                arity: 2,
                name: "or",
-               spec: "@spec boolean or boolean :: boolean",
+               spec: "@spec boolean() or boolean() :: boolean()",
                type: :function,
                args: "boolean(), boolean()",
                origin: ":erlang",
@@ -1962,7 +1962,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
              %{
                arity: 2,
                name: "and",
-               spec: "@spec boolean and boolean :: boolean",
+               spec: "@spec boolean() and boolean() :: boolean()",
                type: :function,
                args: "boolean(), boolean()",
                origin: ":erlang",
@@ -1988,7 +1988,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                arity: 1,
                name: "whereis",
                origin: ":erlang",
-               spec: "@spec whereis(regName) :: pid | port | :undefined when regName: atom",
+               spec: "@spec whereis(regName) :: pid() | port() | :undefined when regName: atom()",
                type: :function
              }
            ] = expand(~c":erlang.where")

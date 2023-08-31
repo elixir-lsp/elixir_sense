@@ -258,7 +258,7 @@ defmodule ElixirSense.SignatureTest do
                    params: [],
                    documentation: "An integer or a float",
                    name: "number",
-                   spec: "@type number :: integer | float"
+                   spec: "@type number() :: integer() | float()"
                  }
                ]
              }
@@ -281,7 +281,8 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "some macro\n",
                    name: "some",
                    params: ["var"],
-                   spec: "@spec some(integer) :: Macro.t\n@spec some(b) :: Macro.t when b: float"
+                   spec:
+                     "@spec some(integer()) :: Macro.t()\n@spec some(b) :: Macro.t() when b: float()"
                  }
                ]
              }
@@ -325,14 +326,14 @@ defmodule ElixirSense.SignatureTest do
                    name: "flatten",
                    params: ["deepList"],
                    spec:
-                     "@spec flatten(deepList) :: list when deepList: [term | deepList], list: [term]"
+                     "@spec flatten(deepList) :: list when deepList: [term() | deepList], list: [term()]"
                  },
                  %{
                    documentation: summary2,
                    name: "flatten",
                    params: ["deepList", "tail"],
                    spec:
-                     "@spec flatten(deepList, tail) :: list when deepList: [term | deepList], tail: [term], list: [term]"
+                     "@spec flatten(deepList, tail) :: list when deepList: [term() | deepList], tail: [term()], list: [term()]"
                  }
                ]
              } = ElixirSense.signature(code, 2, 24)
@@ -360,7 +361,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "flatten",
                    params: ["list"],
                    documentation: "Flattens the given `list` of nested lists.",
-                   spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]"
+                   spec: "@spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]"
                  },
                  %{
                    name: "flatten",
@@ -389,7 +390,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "flatten",
                    params: ["list"],
                    documentation: "Flattens the given `list` of nested lists.",
-                   spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]"
+                   spec: "@spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]"
                  },
                  %{
                    name: "flatten",
@@ -418,7 +419,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "flatten",
                    params: ["list"],
                    documentation: "Flattens the given `list` of nested lists.",
-                   spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]"
+                   spec: "@spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]"
                  },
                  %{
                    name: "flatten",
@@ -447,7 +448,7 @@ defmodule ElixirSense.SignatureTest do
                      "Returns and removes the value at the specified `index` in the `list`.",
                    name: "pop_at",
                    params: ["list", "index", "default \\\\ nil"],
-                   spec: "@spec pop_at(list, integer, any) :: {any, list}"
+                   spec: "@spec pop_at(list(), integer(), any()) :: {any(), list()}"
                  }
                ]
              }
@@ -469,7 +470,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "starts_with?",
                    params: ["list", "prefix"],
                    spec:
-                     "@spec starts_with?([...], [...]) :: boolean\n@spec starts_with?(list, []) :: true\n@spec starts_with?([], [...]) :: false"
+                     "@spec starts_with?([...], [...]) :: boolean()\n@spec starts_with?(list(), []) :: true\n@spec starts_with?([], [...]) :: false"
                  }
                ]
              }
@@ -509,7 +510,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "flatten",
                    params: ["list"],
                    documentation: "Flattens the given `list` of nested lists.",
-                   spec: "@spec flatten(deep_list) :: list when deep_list: [any | deep_list]"
+                   spec: "@spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]"
                  },
                  %{
                    name: "flatten",
@@ -538,7 +539,7 @@ defmodule ElixirSense.SignatureTest do
                      "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
                    name: "glue",
                    params: ["doc1", "break_string \\\\ \" \"", "doc2"],
-                   spec: "@spec glue(t, binary, t) :: t"
+                   spec: "@spec glue(t(), binary(), t()) :: t()"
                  }
                ]
              }
@@ -559,7 +560,7 @@ defmodule ElixirSense.SignatureTest do
                      "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
                    name: "glue",
                    params: ["doc1", "break_string \\\\ \" \"", "doc2"],
-                   spec: "@spec glue(t, binary, t) :: t"
+                   spec: "@spec glue(t(), binary(), t()) :: t()"
                  }
                ]
              }
@@ -581,7 +582,7 @@ defmodule ElixirSense.SignatureTest do
                      "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
                    name: "glue",
                    params: ["doc1", "break_string \\\\ \" \"", "doc2"],
-                   spec: "@spec glue(t, binary, t) :: t"
+                   spec: "@spec glue(t(), binary(), t()) :: t()"
                  }
                ]
              }
@@ -604,7 +605,7 @@ defmodule ElixirSense.SignatureTest do
                      "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
                    name: "glue",
                    params: ["doc1", "break_string \\\\ \" \"", "doc2"],
-                   spec: "@spec glue(t, binary, t) :: t"
+                   spec: "@spec glue(t(), binary(), t()) :: t()"
                  }
                ]
              }
@@ -626,7 +627,7 @@ defmodule ElixirSense.SignatureTest do
                      "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
                    name: "glue",
                    params: ["doc1", "break_string \\\\ \" \"", "doc2"],
-                   spec: "@spec glue(t, binary, t) :: t"
+                   spec: "@spec glue(t(), binary(), t()) :: t()"
                  }
                ]
              }
@@ -685,14 +686,14 @@ defmodule ElixirSense.SignatureTest do
                    params: ["fun", "args"],
                    documentation:
                      "Invokes the given anonymous function `fun` with the list of\narguments `args`.",
-                   spec: "@spec apply((... -> any), [any]) :: any"
+                   spec: "@spec apply((... -> any()), [any()]) :: any()"
                  },
                  %{
                    name: "apply",
                    params: ["module", "function_name", "args"],
                    documentation:
                      "Invokes the given function from `module` with the list of\narguments `args`.",
-                   spec: "@spec apply(module, function_name :: atom, [any]) :: any"
+                   spec: "@spec apply(module(), function_name :: atom(), [any()]) :: any()"
                  }
                ]
              }
@@ -889,7 +890,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "terminate",
                    params: ["_reason", "_state"],
                    documentation: "Invoked when the server is about to exit" <> _,
-                   spec: "@callback terminate(reason, state :: term) :: term" <> _
+                   spec: "@callback terminate(reason, state :: term()) :: term()" <> _
                  }
                ]
              } = ElixirSense.signature(code, 5, 15)
@@ -919,7 +920,7 @@ defmodule ElixirSense.SignatureTest do
                    name: "init",
                    params: ["arg"],
                    documentation: summary,
-                   spec: "@callback init(args :: term) ::" <> _
+                   spec: "@callback init(args :: term()) ::" <> _
                  }
                ]
              } = ElixirSense.signature(code, 5, 10)
@@ -942,7 +943,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "Docs for bar",
                    name: "bar",
                    params: ["b"],
-                   spec: "@macrocallback bar(integer) :: Macro.t"
+                   spec: "@macrocallback bar(integer()) :: Macro.t()"
                  }
                ]
              } = ElixirSense.signature(code, 2, 60)
@@ -963,7 +964,7 @@ defmodule ElixirSense.SignatureTest do
                      documentation: "- Args = " <> _,
                      name: "init",
                      params: ["_"],
-                     spec: "@callback init(args :: term) :: init_result(state)"
+                     spec: "@callback init(args :: term()) :: init_result(state())"
                    }
                  ]
                } = res
@@ -985,7 +986,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "- Args = " <> _,
                    name: "init",
                    params: ["args"],
-                   spec: "@callback init(args :: term) ::" <> _
+                   spec: "@callback init(args :: term()) ::" <> _
                  }
                ]
              } = res
@@ -1001,7 +1002,7 @@ defmodule ElixirSense.SignatureTest do
 
       defmodule MyLocalModule do
         @behaviour MyBehaviour
-        
+
         @impl true
         def flatten(list) do
           []
@@ -1025,7 +1026,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "",
                    name: "flatten",
                    params: ["list"],
-                   spec: "@callback flatten(list) :: list"
+                   spec: "@callback flatten(list()) :: list()"
                  }
                ]
              } = res
@@ -1060,7 +1061,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "",
                    name: "go",
                    params: ["t"],
-                   spec: "@callback go(t) :: integer"
+                   spec: "@callback go(t) :: integer()"
                  }
                ]
              } = res
@@ -1076,7 +1077,7 @@ defmodule ElixirSense.SignatureTest do
 
       defmodule MyLocalModule do
         @behaviour MyBehaviour
-        
+
         @impl true
         defmacro flatten(list) do
           []
@@ -1101,7 +1102,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "",
                    name: "flatten",
                    params: ["list"],
-                   spec: "@macrocallback flatten(list) :: list"
+                   spec: "@macrocallback flatten(list()) :: list()"
                  }
                ]
              } = res
@@ -1111,7 +1112,7 @@ defmodule ElixirSense.SignatureTest do
       code = """
       defmodule MyLocalModule do
         @behaviour ElixirSenseExample.BehaviourWithMeta
-        
+
         @impl true
         def flatten(list) do
           []
@@ -1134,7 +1135,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "Sample doc",
                    name: "flatten",
                    params: ["list"],
-                   spec: "@callback flatten(list) :: list"
+                   spec: "@callback flatten(list()) :: list()"
                  }
                ]
              } = res
@@ -1144,7 +1145,7 @@ defmodule ElixirSense.SignatureTest do
       code = """
       defmodule MyLocalModule do
         @behaviour :gen_statem
-        
+
         @impl true
         def init(list) do
           []
@@ -1168,7 +1169,7 @@ defmodule ElixirSense.SignatureTest do
                      documentation: "- Args = term" <> _,
                      name: "init",
                      params: ["list"],
-                     spec: "@callback init(args :: term) :: init_result(state)"
+                     spec: "@callback init(args :: term()) :: init_result(state())"
                    }
                  ]
                } = res
@@ -1179,7 +1180,7 @@ defmodule ElixirSense.SignatureTest do
       code = """
       defmodule MyLocalModule do
         @behaviour ElixirSenseExample.BehaviourWithMeta
-        
+
         @impl true
         defmacro bar(list) do
           []
@@ -1203,7 +1204,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "Docs for bar",
                    name: "bar",
                    params: ["list"],
-                   spec: "@macrocallback bar(integer) :: Macro.t"
+                   spec: "@macrocallback bar(integer()) :: Macro.t()"
                  }
                ]
              } = res
@@ -1309,7 +1310,7 @@ defmodule ElixirSense.SignatureTest do
                    params: ["device", "item", "opts"],
                    documentation:
                      "Inspects `item` according to the given options using the IO `device`.",
-                   spec: "@spec inspect(device, item, keyword) :: item when item: var"
+                   spec: "@spec inspect(device(), item, keyword()) :: item when item: var"
                  }
                ]
              } = ElixirSense.signature(code, 2, 24)
@@ -1452,7 +1453,7 @@ defmodule ElixirSense.SignatureTest do
                    documentation: "",
                    name: "or",
                    params: [_, _],
-                   spec: "@spec boolean or boolean :: boolean"
+                   spec: "@spec boolean() or boolean() :: boolean()"
                  }
                ]
              } = ElixirSense.signature(buffer, 4, 14)
@@ -1475,7 +1476,7 @@ defmodule ElixirSense.SignatureTest do
             documentation: summary,
             name: "date",
             params: [],
-            spec: "@spec date :: date when date: :calendar.date"
+            spec: "@spec date() :: date when date: :calendar.date()"
           }
         ]
       } = ElixirSense.signature(buffer, 2, 16)
