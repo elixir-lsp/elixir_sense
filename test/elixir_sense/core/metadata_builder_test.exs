@@ -1567,10 +1567,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
 
     test "and combination predicate guards can be merge" do
-      assert %VarInfo{name: :x, type: :number} = var_with_guards("is_number(x) and x >= 1")
+      assert %VarInfo{name: :x, type: {:intersection, [:number, :boolean]}} =
+               var_with_guards("is_number(x) and x >= 1")
 
-      assert %VarInfo{name: :x, type: {:map, [a: nil, b: nil], nil}} =
-               var_with_guards("is_map_key(x, :a) and is_map_key(x, :b)")
+      assert %VarInfo{
+               name: :x,
+               type: {:intersection, [{:map, [a: nil], nil}, {:map, [b: nil], nil}]}
+             } = var_with_guards("is_map_key(x, :a) and is_map_key(x, :b)")
     end
 
     test "or combination predicate guards can be merge into union type" do

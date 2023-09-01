@@ -1690,18 +1690,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp type_information_from_guards({:and, _, [guard_l, guard_r]}, state) do
     left = type_information_from_guards(guard_l, state)
     right = type_information_from_guards(guard_r, state)
-
-    Keyword.merge(left, right, fn _k, v1, v2 ->
-      case {v1, v2} do
-        # func my_func(x) when is_map_key(x, :a) and is_map_key(x, :b)
-        {{:map, fields1, _}, {:map, fields2, _}} ->
-          {:map, Enum.uniq_by(fields1 ++ fields2, &elem(&1, 0)), nil}
-
-        # In case we can't merge, just pick one
-        _ ->
-          v1
-      end
-    end)
+    Keyword.merge(left, right, fn _k, v1, v2 -> {:intersection, [v1, v2]} end)
   end
 
   defp type_information_from_guards({:or, _, [guard_l, guard_r]}, state) do
