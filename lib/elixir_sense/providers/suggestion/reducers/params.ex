@@ -52,15 +52,18 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Params do
              scope,
              mods_funs,
              metadata_types,
-             #  TODO macros
              {1, 1}
            ) do
-      # TODO drop/add MACRO- prefix
       list =
-        mod
-        |> TypeInfo.extract_param_options(fun, npar)
-        |> options_to_suggestions(mod)
-        |> Enum.filter(&Matcher.match?(&1.name, hint))
+        if Code.ensure_loaded?(mod) do
+          TypeInfo.extract_param_options(mod, fun, npar)
+          |> Kernel.++(TypeInfo.extract_param_options(mod, :"MACRO-#{fun}", npar + 1))
+          |> options_to_suggestions(mod)
+          |> Enum.filter(&Matcher.match?(&1.name, hint))
+        else
+          # TODO metadata?
+          []
+        end
 
       {:cont, %{acc | result: acc.result ++ list}}
     else

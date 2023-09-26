@@ -3297,6 +3297,16 @@ defmodule ElixirSense.SuggestionsTest do
       assert [%{name: "remote_with_params_o"}] = list
     end
 
+    test "handles macros" do
+      buffer = """
+      require Local
+      Local.macro_with_options(remo_wi\
+      """
+
+      list = suggestions_by_type(:param_option, buffer)
+      assert [%{name: "remote_with_params_o"}] = list
+    end
+
     test "suggest the same list when options are already set" do
       buffer1 = "Local.func_with_options("
       buffer2 = "Local.func_with_options(local_o: :an_atom, "

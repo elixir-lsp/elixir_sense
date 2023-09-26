@@ -183,5 +183,10 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     def func_with_erlang_type_options(options) do
       options
     end
+
+    @spec macro_with_options(options_t) :: Macro.t()
+    defmacro macro_with_options(options) do
+      {:asd, [], nil}
+    end
   end
 end
