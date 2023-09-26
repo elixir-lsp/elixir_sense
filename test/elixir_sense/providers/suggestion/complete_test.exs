@@ -2021,20 +2021,24 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
   end
 
   test "provide doc and specs for erlang functions with args from typespec" do
-    assert [
-             %{
-               name: "handle_call",
-               args_list: ["call", "from", "state"]
-             },
-             %{
-               name: "handle_cast",
-               args_list: ["tuple", "state"]
-             },
-             %{
-               name: "handle_info",
-               args_list: ["term", "state"]
-             }
-           ] = expand(~c":pg.handle_")
+    if String.to_integer(System.otp_release()) >= 26 do
+      assert [
+               %{
+                 name: "handle_call",
+                 args_list: ["call", "from", "state"]
+               },
+               %{
+                 name: "handle_cast",
+                 args_list: ["tuple", "state"]
+               },
+               %{
+                 name: "handle_info",
+                 args_list: ["term", "state"]
+               }
+             ] = expand(~c":pg.handle_")
+    else
+      assert [_, _, _] = expand(~c":pg.handle_")
+    end
   end
 
   test "complete after ! operator" do
