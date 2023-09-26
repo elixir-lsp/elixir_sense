@@ -2037,7 +2037,11 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                }
              ] = expand(~c":pg.handle_")
     else
-      assert [_, _, _] = expand(~c":pg.handle_")
+      if String.to_integer(System.otp_release()) >= 23 do
+        assert [_, _, _] = expand(~c":pg.handle_")
+      else
+        assert [] = expand(~c":pg.handle_")
+      end
     end
   end
 
