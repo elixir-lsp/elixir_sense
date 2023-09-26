@@ -685,17 +685,23 @@ defmodule ElixirSense.Core.TypeInfo do
   end
 
   def extract_params(type) do
-    case Typespec.spec_to_quoted(:dummy, type) do
+    quoted = Typespec.spec_to_quoted(:dummy, type)
+
+    case quoted do
       {:when, _, [{:"::", _, [{:dummy, _, args}, _res]}, _var_args]} -> args
       {:"::", _, [{:dummy, _, args}, _res]} -> args
     end
     |> Enum.map(fn arg ->
       case arg do
-        {:"::", _, [left, _right]} -> left
-        other -> other
+        {:"::", _, [{atom, _, _}, _right]} when is_atom(atom) -> to_string(atom)
+        {:|, _, [_left, _right]} -> "term"
+        [_ | _] -> "list"
+        {_, _} -> "tuple"
+        {:{}, _, _} -> "tuple"
+        %{} -> "map"
+        {atom, _, _} when is_atom(atom) -> to_string(atom)
+        _other -> "term"
       end
-      |> Macro.to_string()
-      |> String.to_atom()
     end)
   end
 

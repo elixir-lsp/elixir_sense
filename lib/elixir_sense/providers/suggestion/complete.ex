@@ -1125,7 +1125,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   defp format_params({{_name, _arity}, [params | _]}, _arity_1) do
     TypeInfo.extract_params(params)
-    |> Enum.map(&Atom.to_string/1)
   end
 
   defp format_params(nil, 0), do: []

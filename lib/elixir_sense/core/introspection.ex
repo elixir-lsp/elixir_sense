@@ -406,7 +406,7 @@ defmodule ElixirSense.Core.Introspection do
 
     results =
       for {{_name, _arity}, [params | _]} = spec <- specs do
-        params = TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
+        params = TypeInfo.extract_params(params)
 
         %{
           name: Atom.to_string(fun),
@@ -527,7 +527,7 @@ defmodule ElixirSense.Core.Introspection do
 
     results =
       for {{_name, arity}, [params | _]} <- specs do
-        fun_args_text = TypeInfo.extract_params(params) |> Enum.map_join(", ", &Atom.to_string/1)
+        fun_args_text = TypeInfo.extract_params(params) |> Enum.join(", ")
 
         %{
           module: mod,
@@ -1846,7 +1846,7 @@ defmodule ElixirSense.Core.Introspection do
             # we don't expect macros here
             case TypeInfo.get_callback(behaviour, f, arity) do
               {_, [params | _]} ->
-                TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
+                TypeInfo.extract_params(params)
 
               _ ->
                 # provide dummy
@@ -1860,11 +1860,11 @@ defmodule ElixirSense.Core.Introspection do
 
       [{:attribute, _, :spec, {{^f, ^arity}, [params | _]}}] ->
         # erlang doc with signature meta - moduleless form
-        TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
+        TypeInfo.extract_params(params)
 
       [{:attribute, _, :spec, {{^mod, ^f, ^arity}, [params | _]}}] ->
         # erlang doc with signature meta - form with module
-        TypeInfo.extract_params(params) |> Enum.map(&Atom.to_string/1)
+        TypeInfo.extract_params(params)
     end
   end
 end

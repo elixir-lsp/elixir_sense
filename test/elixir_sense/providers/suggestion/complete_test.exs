@@ -1943,7 +1943,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                name: "or",
                spec: "@spec boolean() or boolean() :: boolean()",
                type: :function,
-               args: "boolean(), boolean()",
+               args: "boolean, boolean",
                origin: ":erlang",
                summary: ""
              },
@@ -1964,7 +1964,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                name: "and",
                spec: "@spec boolean() and boolean() :: boolean()",
                type: :function,
-               args: "boolean(), boolean()",
+               args: "boolean, boolean",
                origin: ":erlang",
                summary: ""
              },
@@ -2018,6 +2018,23 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
       assert "Cancels a timer\\." <> _ = summary1
       assert "Cancels a timer that has been created by" <> _ = summary2
     end
+  end
+
+  test "provide doc and specs for erlang functions with args from typespec" do
+    assert [
+             %{
+               name: "handle_call",
+               args_list: ["call", "from", "state"]
+             },
+             %{
+               name: "handle_cast",
+               args_list: ["tuple", "state"]
+             },
+             %{
+               name: "handle_info",
+               args_list: ["term", "state"]
+             }
+           ] = expand(~c":pg.handle_")
   end
 
   test "complete after ! operator" do
