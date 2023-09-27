@@ -288,7 +288,7 @@ defmodule ElixirSense.Core.Metadata do
     Enum.map(params, fn param ->
       param
       |> Macro.to_string()
-      |> String.slice(1..-2)
+      |> String.slice(1..-2//1)
     end)
   end
 

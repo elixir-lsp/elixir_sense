@@ -443,7 +443,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
     defmodule B do
       @behaviour A
-      
+
       def abc, do: :ok
     end
 
@@ -1819,6 +1819,6 @@ defmodule ElixirSense.Providers.DefinitionTest do
     |> File.read!()
     |> Source.split_lines()
     |> Enum.at(line - 1)
-    |> String.slice((column - 1)..-1)
+    |> String.slice((column - 1)..-1//1)
   end
 end

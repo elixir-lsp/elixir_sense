@@ -1460,7 +1460,7 @@ defmodule ElixirSense.Core.State do
 
           _ ->
             alias = module |> Enum.take(1) |> Module.concat()
-            expanded = namespace |> Enum.slice((length(module) - 1)..-2) |> Enum.reverse()
+            expanded = namespace |> Enum.slice((length(module) - 1)..-2//1) |> Enum.reverse()
             {alias, expanded}
         end
 

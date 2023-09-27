@@ -223,7 +223,7 @@ defmodule ElixirSense.Core.TypeInfo do
     |> Source.split_lines()
     |> Enum.with_index()
     |> Enum.map_join("\n", fn
-      {l, i} when i > 0 -> String.slice(l, (kind_size + 2)..-1)
+      {l, i} when i > 0 -> String.slice(l, (kind_size + 2)..-1//1)
       {l, _} -> l
     end)
   end
