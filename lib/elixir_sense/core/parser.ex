@@ -136,8 +136,10 @@ defmodule ElixirSense.Core.Parser do
     end
   end
 
-  defp normalize_error({:error, {[line: line, column: _column], msg, detail}}),
-    do: {:error, {line, msg, detail}}
+  defp normalize_error({:error, {keyword, msg, detail}}) do
+    line = Keyword.fetch!(keyword, :line)
+    {:error, {line, msg, detail}}
+  end
 
   defp fix_parse_error(
          source,
