@@ -106,7 +106,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_module(ast, state, meta, module, types \\ [], functions \\ []) do
-    module = normalize_module(module)
+    module = normalize_module(module, state)
 
     {position = {line, column}, end_position} = extract_range(meta)
 
@@ -2016,12 +2016,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     module_parts
   end
 
-  defp normalize_module([{:__MODULE__, _, nil} | rest]), do: rest
+  defp normalize_module([{:__MODULE__, _, nil} | rest], state) do
+    list = state |> get_current_module |> Module.split() |> Enum.map(&String.to_atom/1)
+    [:"Elixir"] ++ list ++ rest
+  end
 
-  defp normalize_module({[{:__MODULE__, _, nil} | rest], implementations}),
-    do: {rest, implementations}
-
-  defp normalize_module(other), do: other
+  defp normalize_module(other, _state), do: other
 
   defp maybe_add_protocol_behaviour(state, {_protocol, _}) do
     protocol = state.protocols |> hd |> hd |> elem(0)
