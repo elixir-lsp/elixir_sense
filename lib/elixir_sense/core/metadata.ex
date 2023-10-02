@@ -35,6 +35,7 @@ defmodule ElixirSense.Core.Metadata do
             moduledoc_positions: %{}
 
   @type signature_t :: %{
+          optional(:active_param) => :non_neg_integer,
           name: String.t(),
           params: [String.t()],
           spec: String.t(),

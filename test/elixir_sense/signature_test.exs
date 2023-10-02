@@ -454,7 +454,7 @@ defmodule ElixirSense.SignatureTest do
              }
     end
 
-    test "find signatures when function with many clausess" do
+    test "find signatures when function with many clauses" do
       code = """
       defmodule MyModule do
         List.starts_with?(
@@ -539,7 +539,8 @@ defmodule ElixirSense.SignatureTest do
                      "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
                    name: "glue",
                    params: ["doc1", "break_string \\\\ \" \"", "doc2"],
-                   spec: "@spec glue(t(), binary(), t()) :: t()"
+                   spec: "@spec glue(t(), binary(), t()) :: t()",
+                   active_param: 2
                  }
                ]
              }
@@ -560,7 +561,8 @@ defmodule ElixirSense.SignatureTest do
                      "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
                    name: "glue",
                    params: ["doc1", "break_string \\\\ \" \"", "doc2"],
-                   spec: "@spec glue(t(), binary(), t()) :: t()"
+                   spec: "@spec glue(t(), binary(), t()) :: t()",
+                   active_param: 2
                  }
                ]
              }
@@ -582,7 +584,8 @@ defmodule ElixirSense.SignatureTest do
                      "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
                    name: "glue",
                    params: ["doc1", "break_string \\\\ \" \"", "doc2"],
-                   spec: "@spec glue(t(), binary(), t()) :: t()"
+                   spec: "@spec glue(t(), binary(), t()) :: t()",
+                   active_param: 2
                  }
                ]
              }
@@ -605,7 +608,8 @@ defmodule ElixirSense.SignatureTest do
                      "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
                    name: "glue",
                    params: ["doc1", "break_string \\\\ \" \"", "doc2"],
-                   spec: "@spec glue(t(), binary(), t()) :: t()"
+                   spec: "@spec glue(t(), binary(), t()) :: t()",
+                   active_param: 2
                  }
                ]
              }
@@ -627,7 +631,8 @@ defmodule ElixirSense.SignatureTest do
                      "Glues two documents (`doc1` and `doc2`) inserting the given\nbreak `break_string` between them.",
                    name: "glue",
                    params: ["doc1", "break_string \\\\ \" \"", "doc2"],
-                   spec: "@spec glue(t(), binary(), t()) :: t()"
+                   spec: "@spec glue(t(), binary(), t()) :: t()",
+                   active_param: 2
                  }
                ]
              }
@@ -780,7 +785,13 @@ defmodule ElixirSense.SignatureTest do
       assert ElixirSense.signature(code, 4, 21) == %{
                active_param: 1,
                signatures: [
-                 %{documentation: "", name: "sum", spec: "", params: ["s \\\\ nil", "f"]},
+                 %{
+                   documentation: "",
+                   name: "sum",
+                   spec: "",
+                   params: ["s \\\\ nil", "f"],
+                   active_param: 0
+                 },
                  %{documentation: "", name: "sum", spec: "", params: ["arg", "x", "y"]}
                ]
              }
@@ -810,7 +821,13 @@ defmodule ElixirSense.SignatureTest do
       assert ElixirSense.signature(code, 15, 21) == %{
                active_param: 1,
                signatures: [
-                 %{documentation: "", name: "sum", params: ["s \\\\ nil", "f"], spec: ""},
+                 %{
+                   documentation: "",
+                   name: "sum",
+                   params: ["s \\\\ nil", "f"],
+                   spec: "",
+                   active_param: 0
+                 },
                  %{documentation: "", name: "sum", params: ["tuple", "x", "y"], spec: ""}
                ]
              }
@@ -864,6 +881,71 @@ defmodule ElixirSense.SignatureTest do
                  }
                ]
              }
+    end
+
+    test "finds signatures from metadata module functions with default param - correctly highlight active param" do
+      code = """
+      defmodule MyModule do
+        @spec sum(integer, integer, integer, integer, integer, integer) :: integer
+        defp sum(a \\\\ 1, b \\\\ 1, c, d, e \\\\ 1, f \\\\ 1) do
+          a + b
+        end
+
+        def run do
+          sum(1, 2, 3, 4, 5, 6)
+        end
+      end
+      """
+
+      assert ElixirSense.signature(code, 8, 10) == %{
+               active_param: 0,
+               signatures: [
+                 %{
+                   name: "sum",
+                   params: [
+                     "a \\\\ 1",
+                     "b \\\\ 1",
+                     "c",
+                     "d",
+                     "e \\\\ 1",
+                     "f \\\\ 1"
+                   ],
+                   documentation: "",
+                   spec:
+                     "@spec sum(integer, integer, integer, integer, integer, integer) :: integer",
+                   active_param: 2
+                 }
+               ]
+             }
+
+      assert %{
+               active_param: 1,
+               signatures: [%{active_param: 3}]
+             } = ElixirSense.signature(code, 8, 13)
+
+      assert %{
+               active_param: 2,
+               signatures: [%{active_param: 0}]
+             } = ElixirSense.signature(code, 8, 16)
+
+      assert %{
+               active_param: 3,
+               signatures: [%{active_param: 1}]
+             } = ElixirSense.signature(code, 8, 19)
+
+      assert %{
+               active_param: 4,
+               signatures: [signature]
+             } = ElixirSense.signature(code, 8, 22)
+
+      refute Map.has_key?(signature, :active_param)
+
+      assert %{
+               active_param: 5,
+               signatures: [signature]
+             } = ElixirSense.signature(code, 8, 25)
+
+      refute Map.has_key?(signature, :active_param)
     end
 
     test "finds signatures from metadata elixir behaviour call" do

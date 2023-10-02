@@ -46,6 +46,7 @@ defmodule ElixirSense.Providers.Signature do
              cursor_position
            ) do
       signatures = find_signatures({mod, fun}, npar, kind, env, metadata)
+
       %{active_param: npar, signatures: signatures}
     else
       _ ->
@@ -61,16 +62,28 @@ defmodule ElixirSense.Providers.Signature do
       end
 
     signatures
-    |> Enum.filter(fn %{params: params} ->
-      params_length = length(params)
+    |> Enum.map(fn
+      %{params: []} = signature ->
+        if npar == 0 do
+          signature
+        end
 
-      if params_length == 0 do
-        npar == 0
-      else
-        params_length > npar
-      end
+      %{params: params} = signature ->
+        defaults =
+          params
+          |> Enum.with_index()
+          |> Enum.map(fn {param, index} -> {Regex.match?(~r/\\\\/, param), index} end)
+          |> Enum.sort()
+          |> Enum.at(npar)
+
+        case defaults do
+          nil -> nil
+          {_, index} when index != npar -> Map.put(signature, :active_param, index)
+          _ -> signature
+        end
     end)
-    |> Enum.sort_by(&length(&1.params))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.sort_by(&{length(&1.params), -Map.get(&1, :active_param, npar)})
   end
 
   defp find_function_signatures({nil, _fun}, _env, _metadata), do: []
