@@ -85,7 +85,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]
              ```
 
@@ -123,7 +123,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @spec flatten(list()) :: list()
              ```
              """
@@ -159,7 +159,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @spec flatten(list()) :: list()
              ```
              """
@@ -206,7 +206,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @callback flatten(list()) :: list()
              ```
              """
@@ -248,7 +248,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @callback go(t) :: integer()
              ```
              """
@@ -361,7 +361,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @macrocallback flatten(list()) :: list()
              ```
              """
@@ -405,7 +405,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @callback flatten(list()) :: list()
              ```
              """
@@ -448,7 +448,7 @@ defmodule ElixirSense.DocsTest do
 
                ### Specs
 
-               ```
+               ```elixir
                @callback init(args :: term()) ::\
                """
 
@@ -494,7 +494,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @macrocallback bar(integer()) :: Macro.t()
              ```
 
@@ -530,7 +530,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @spec flatten(list()) :: list()
              ```
              """
@@ -569,7 +569,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @spec flatten(list()) :: list()
              ```
              """
@@ -627,7 +627,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @spec flatten(list()) :: list()
              ```
              """
@@ -655,7 +655,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]
              ```
 
@@ -684,7 +684,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @spec flatten(deepList) :: list when deepList: [term() | deepList], list: [term()]
              ```
              """
@@ -718,7 +718,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @spec boolean() or boolean() :: boolean()
              ```
 
@@ -758,7 +758,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @spec some(integer()) :: Macro.t()
              @spec some(b) :: Macro.t() when b: float()
              ```
@@ -809,7 +809,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]
              ```
 
@@ -1065,7 +1065,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @type remote_t() :: atom()
              ```
 
@@ -1099,7 +1099,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @type some(a) :: {a}
              ```
 
@@ -1133,7 +1133,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @typep some(a) :: {a}
              ```
 
@@ -1200,7 +1200,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @opaque some(a)
              ```
 
@@ -1235,7 +1235,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @type some(a) :: {a}
              ```
 
@@ -1268,7 +1268,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @opaque t(x)
              ```
 
@@ -1298,7 +1298,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @type time_unit() ::
                pos_integer()
                | :second
@@ -1342,7 +1342,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @type keyword() :: [{atom(), any()}]
              ```
 
@@ -1363,7 +1363,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @type keyword(t) :: [{atom(), t}]
              ```
 
@@ -1393,7 +1393,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @type integer()
              ```
 
@@ -1425,7 +1425,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @type list() :: [any()]
              ```
 
@@ -1446,7 +1446,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @type list(t)
              ```
 
@@ -1480,7 +1480,7 @@ defmodule ElixirSense.DocsTest do
 
                ### Specs
 
-               ```
+               ```elixir
                @spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]
                ```
 
@@ -1497,7 +1497,7 @@ defmodule ElixirSense.DocsTest do
 
                ### Specs
 
-               ```
+               ```elixir
                @spec module_info(:module) :: atom
                @spec module_info(:attributes | :compile) :: [{atom, term}]
                @spec module_info(:md5) :: binary
@@ -1564,7 +1564,7 @@ defmodule ElixirSense.DocsTest do
 
            ### Specs
 
-           ```
+           ```elixir
            @callback foo() :: :ok
            ```
 
@@ -1595,7 +1595,7 @@ defmodule ElixirSense.DocsTest do
 
            ### Specs
 
-           ```
+           ```elixir
            @callback baz(integer()) :: :ok
            ```
 
@@ -1626,7 +1626,7 @@ defmodule ElixirSense.DocsTest do
 
            ### Specs
 
-           ```
+           ```elixir
            @macrocallback bar(integer()) :: Macro.t()
            ```
 
@@ -1655,7 +1655,7 @@ defmodule ElixirSense.DocsTest do
 
            ### Specs
 
-           ```
+           ```elixir
            @callback init(args :: term()) ::
            """
 
@@ -1689,7 +1689,7 @@ defmodule ElixirSense.DocsTest do
 
              ### Specs
 
-             ```
+             ```elixir
              @callback init(args :: term()) :: init_result(state())
              ```
              """
@@ -1721,7 +1721,7 @@ defmodule ElixirSense.DocsTest do
 
            ### Specs
 
-           ```
+           ```elixir
            @spec flatten(deep_list) :: list() when deep_list: [any() | deep_list]
            ```
 

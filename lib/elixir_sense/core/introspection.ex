@@ -450,7 +450,7 @@ defmodule ElixirSense.Core.Introspection do
     spec_text =
       if info.specs != [] do
         joined = Enum.join(info.specs, "\n")
-        "### Specs\n\n```\n#{joined}\n```\n\n"
+        "### Specs\n\n```elixir\n#{joined}\n```\n\n"
       else
         ""
       end
@@ -688,7 +688,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp format_type_docs(info) do
-    formatted_spec = "```\n#{info.spec}\n```"
+    formatted_spec = "```elixir\n#{info.spec}\n```"
 
     mod_formatted =
       case info.module do

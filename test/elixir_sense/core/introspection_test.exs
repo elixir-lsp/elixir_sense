@@ -946,7 +946,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
              ### Definition
 
-             ```
+             ```elixir
              @type some_type() :: integer()
              ```
 
