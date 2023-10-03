@@ -85,7 +85,7 @@ defmodule ElixirSense.Core.BitstringTest do
     assert [:integer, :float, :utf16, :utf32, :signed, :unsigned, :size, :unit] ==
              Bitstring.available_options(Bitstring.parse("big"))
 
-    assert [:integer, :utf16, :utf32, :signed, :unsigned, :size, :unit] ==
+    assert [:integer, :float, :utf16, :utf32, :signed, :unsigned, :size, :unit] ==
              Bitstring.available_options(Bitstring.parse("native"))
 
     assert [:integer, :little, :big, :native, :size, :unit] ==

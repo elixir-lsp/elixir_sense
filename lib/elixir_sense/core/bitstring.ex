@@ -27,7 +27,7 @@ defmodule ElixirSense.Core.Bitstring do
     unsigned: [:integer],
     little: [:integer, :float, :utf16, :utf32],
     big: [:integer, :float, :utf16, :utf32],
-    native: [:integer, :utf16, :utf32]
+    native: [:integer, :float, :utf16, :utf32]
   }
 
   @sign_modifiers [:signed, :unsigned]
