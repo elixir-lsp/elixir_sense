@@ -399,6 +399,7 @@ defmodule ElixirSense.DocsTest do
 
              **Implementing behaviour**
              ElixirSenseExample.BehaviourWithMeta
+
              **Since**
              1.2.3
 
@@ -441,6 +442,7 @@ defmodule ElixirSense.DocsTest do
 
                **Implementing behaviour**
                :gen_statem
+
                **Since**
                OTP 19.0
 
@@ -486,6 +488,7 @@ defmodule ElixirSense.DocsTest do
 
              **Implementing behaviour**
              ElixirSenseExample.BehaviourWithMeta
+
              **Since**
              1.2.3
 
@@ -1680,6 +1683,7 @@ defmodule ElixirSense.DocsTest do
 
              **Implementing behaviour**
              :gen_statem
+
              **Since**
              OTP 19.0
 

@@ -612,7 +612,7 @@ defmodule ElixirSense.Core.Introspection do
       |> Enum.sort()
       |> Enum.map(&get_metadata_entry_md/1)
       |> Enum.reject(&is_nil/1)
-      |> Enum.join("\n")
+      |> Enum.join("\n\n")
 
     case text do
       "" -> ""
