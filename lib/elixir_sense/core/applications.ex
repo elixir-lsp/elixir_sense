@@ -26,6 +26,7 @@ defmodule ElixirSense.Core.Applications do
   @spec get_modules_from_applications() :: [module]
   # TODO use :code.all_available |> Enum.map(fn {m, _, _} -> :"#{m}" end) on otp 23+
   # as it returns more
+  # NOTE this function does not return modules from :erts app as it is not loaded
   def get_modules_from_applications do
     for [app] <- loaded_applications(),
         {:ok, modules} = :application.get_key(app, :modules),

@@ -44,14 +44,13 @@ defmodule ElixirSense do
       ...>   MyEnum.to_list(1..3)
       ...> end
       ...> '''
-      iex> %{docs: docs} = ElixirSense.docs(code, 3, 11)
-      iex> docs |> String.split("\n") |> Enum.at(8)
+      iex> %{docs: [doc]} = ElixirSense.docs(code, 3, 11)
+      iex> doc.docs |> String.split("\n") |> Enum.at(0)
       "Converts `enumerable` to a list."
   """
   @spec docs(String.t(), pos_integer, pos_integer) ::
           %{
-            actual_subject: String.t(),
-            docs: nil | String.t(),
+            docs: nonempty_list(Docs.doc()),
             range: %{
               begin: {pos_integer, pos_integer},
               end: {pos_integer, pos_integer}
@@ -69,18 +68,17 @@ defmodule ElixirSense do
         env = Metadata.get_env(metadata, {line, column})
 
         case Docs.all(context, env, metadata) do
-          {actual_subject, docs} ->
+          [] ->
+            nil
+
+          list ->
             %{
-              actual_subject: actual_subject,
-              docs: docs,
+              docs: list,
               range: %{
                 begin: begin_pos,
                 end: end_pos
               }
             }
-
-          nil ->
-            nil
         end
     end
   end

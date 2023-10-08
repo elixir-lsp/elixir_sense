@@ -236,19 +236,6 @@ defmodule ElixirSense.Core.TypeInfo do
     {{:__replace_me__, meta, args}, type}
   end
 
-  @spec get_type_docs(module, atom, non_neg_integer | {:gte, non_neg_integer} | :any) :: [
-          ElixirSense.Core.Normalized.Code.doc_entry_t()
-        ]
-  def get_type_docs(module, type_name, arity) do
-    docs = NormalizedCode.get_docs(module, :type_docs) || []
-
-    docs
-    |> Enum.filter(fn {{name, n_args}, _, _, _, _} ->
-      name == type_name and Introspection.matches_arity?(n_args, arity)
-    end)
-    |> Enum.sort_by(fn {{_, n_args}, _, _, _, _} -> n_args end)
-  end
-
   @spec get_type_doc(
           [ElixirSense.Core.Normalized.Code.doc_entry_t()],
           atom,

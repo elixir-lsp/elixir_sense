@@ -1,10 +1,8 @@
 defmodule ElixirSense.Core.IntrospectionTest do
   use ExUnit.Case, async: true
   doctest ElixirSense.Core.Introspection
-  alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.TypeInfo
   import ElixirSense.Core.Introspection
-  alias ElixirSense.Core.State
 
   test "format_spec_ast with one return option does not split the returns" do
     type_ast = TypeInfo.get_type_ast(GenServer, :debug)
@@ -865,113 +863,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
       assert {MyModule, nil, false, nil} =
                actual_mod_fun({MyModule, nil}, [], [], [], nil, Elixir, %{}, %{}, {1, 1})
-    end
-  end
-
-  describe "get_all_docs" do
-    test "returns delegated metadata on functions" do
-      assert docs =
-               get_all_docs(
-                 {ElixirSenseExample.ModuleWithDelegates, :delegated_fun, 2},
-                 %Metadata{},
-                 %State.Env{},
-                 :mod_fun
-               )
-
-      assert docs == """
-             > ElixirSenseExample.ModuleWithDelegates.delegated_fun(a, b)
-
-             **Delegates to**
-             ElixirSenseExample.ModuleWithDocs.some_fun_no_doc/2
-
-             A delegated function
-
-             """
-    end
-
-    test "returns since metadata on functions" do
-      assert docs =
-               get_all_docs(
-                 {ElixirSenseExample.ModuleWithDocs, :some_fun, 2},
-                 %Metadata{},
-                 %State.Env{},
-                 :mod_fun
-               )
-
-      assert docs == """
-             > ElixirSenseExample.ModuleWithDocs.some_fun(a, b \\\\\\\\ nil)
-
-             **Since**
-             1.1.0
-
-             An example fun
-
-             """
-    end
-
-    test "returns deprecated metadata on functions" do
-      assert docs =
-               get_all_docs(
-                 {ElixirSenseExample.ModuleWithDocs, :soft_deprecated_fun, 1},
-                 %Metadata{},
-                 %State.Env{},
-                 :mod_fun
-               )
-
-      assert docs == """
-             > ElixirSenseExample.ModuleWithDocs.soft_deprecated_fun(a)
-
-             **Deprecated**
-             This function will be removed in a future release
-
-             An example fun
-
-             """
-    end
-
-    test "returns since metadata on types" do
-      assert docs =
-               get_all_docs(
-                 {ElixirSenseExample.ModuleWithDocs, :some_type, 0},
-                 %Metadata{},
-                 %State.Env{},
-                 :type
-               )
-
-      assert docs == """
-             > ElixirSenseExample.ModuleWithDocs.some_type()
-
-             **Since**
-             1.1.0
-
-             ### Definition
-
-             ```elixir
-             @type some_type() :: integer()
-             ```
-
-             An example type
-
-             """
-    end
-
-    test "returns since metadata on modules" do
-      assert docs =
-               get_all_docs(
-                 {ElixirSenseExample.ModuleWithDocs, nil, :any},
-                 %Metadata{},
-                 %State.Env{},
-                 :mod_fun
-               )
-
-      assert docs == """
-             > ElixirSenseExample.ModuleWithDocs
-
-             **Since**
-             1.2.3
-
-             An example module
-             """
     end
   end
 end

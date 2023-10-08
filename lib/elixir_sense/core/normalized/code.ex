@@ -29,7 +29,8 @@ defmodule ElixirSense.Core.Normalized.Code do
           :moduledoc ->
             moduledoc_en = extract_docs(moduledoc, mime_type)
 
-            {max(:erl_anno.line(moduledoc_anno), 1), moduledoc_en, metadata}
+            {max(:erl_anno.line(moduledoc_anno), 1), moduledoc_en,
+             maybe_mark_as_hidden(metadata, moduledoc_en)}
 
           :docs ->
             get_fun_docs(module, docs, mime_type)
@@ -53,7 +54,10 @@ defmodule ElixirSense.Core.Normalized.Code do
 
   defp map_doc_entry({{kind, name, arity}, anno, signatures, docs, metadata}, mime_type) do
     docs_en = extract_docs(docs, mime_type)
+    # TODO check if we can get column here
     line = :erl_anno.line(anno)
+
+    metadata = maybe_mark_as_hidden(metadata, docs_en)
 
     case kind do
       kind when kind in [:function, :macro] ->
@@ -109,19 +113,34 @@ defmodule ElixirSense.Core.Normalized.Code do
     Enum.map(
       docs_from_module,
       fn
-        {{kind, name, arity}, anno, fun_signatures, docs, metadata} ->
-          # IO.inspect signatures, label: "from mod"
-          # as of elixir 1.14 behaviours do not store signature
-          # prefer signature from function
-          {_behaviour_signatures, docs, metadata, mime_type} =
-            Map.get(
-              docs_from_behaviours,
-              {name, arity},
-              {fun_signatures, docs, metadata, mime_type}
-            )
+        {{kind, name, arity}, anno, fun_signatures, fun_docs, fun_metadata} ->
+          {signatures, docs, metadata, mime_type} =
+            case docs_from_behaviours do
+              %{
+                {^name, ^arity} =>
+                  {_behaviour_signatures, behaviour_docs, behaviour_metadata, behaviour_mime_type}
+              } ->
+                # as of elixir 1.14 behaviours do not store signature
+                # prefer signature from function
+                # merge metadata from function and callback
+                merged_metadata =
+                  behaviour_metadata
+                  |> Map.merge(fun_metadata)
 
-          # IO.inspect signatures, label: "from beh"
-          {{kind, name, arity}, anno, fun_signatures, docs, metadata}
+                merged_metadata =
+                  if fun_docs == :hidden do
+                    Map.put(merged_metadata, :hidden, true)
+                  else
+                    merged_metadata
+                  end
+
+                {fun_signatures, behaviour_docs, merged_metadata, behaviour_mime_type}
+
+              _ ->
+                {fun_signatures, fun_docs, fun_metadata, mime_type}
+            end
+
+          {{kind, name, arity}, anno, signatures, docs, metadata}
           |> map_doc_entry(mime_type)
       end
     )
@@ -164,4 +183,10 @@ defmodule ElixirSense.Core.Normalized.Code do
         []
     end
   end
+
+  defp maybe_mark_as_hidden(metadata, false) do
+    Map.put(metadata, :hidden, true)
+  end
+
+  defp maybe_mark_as_hidden(metadata, _text), do: metadata
 end

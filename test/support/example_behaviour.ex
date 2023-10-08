@@ -275,3 +275,37 @@ defmodule ElixirSenseExample.BehaviourWithMeta do
   @doc since: "1.2.3"
   @macrocallback bar(integer()) :: Macro.t()
 end
+
+defmodule ElixirSenseExample.ExampleBehaviourWithDocFalse do
+  @doc false
+  @callback foo() :: :ok
+
+  @doc false
+  @macrocallback bar(integer()) :: Macro.t()
+end
+
+defmodule ElixirSenseExample.ExampleBehaviourWithDocFalseCallbackImpl do
+  @behaviour ElixirSenseExample.ExampleBehaviourWithDocFalse
+
+  @impl true
+  def foo(), do: :ok
+
+  @impl true
+  defmacro bar(_b), do: quote(do: :ok)
+end
+
+defmodule ElixirSenseExample.ExampleBehaviourWithNoDoc do
+  @callback foo() :: :ok
+
+  @macrocallback bar(integer()) :: Macro.t()
+end
+
+defmodule ElixirSenseExample.ExampleBehaviourWithNoDocCallbackImpl do
+  @behaviour ElixirSenseExample.ExampleBehaviourWithNoDoc
+
+  @impl true
+  def foo(), do: :ok
+
+  @impl true
+  defmacro bar(_b), do: quote(do: :ok)
+end
