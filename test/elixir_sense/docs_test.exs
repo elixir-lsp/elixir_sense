@@ -973,7 +973,6 @@ defmodule ElixirSense.DocsTest do
                arity: 2,
                function: :or,
                module: :erlang,
-               metadata: %{hidden: true},
                specs: ["@spec boolean() or boolean() :: boolean()"],
                docs: "",
                kind: :function
@@ -981,8 +980,10 @@ defmodule ElixirSense.DocsTest do
 
       if String.to_integer(System.otp_release()) < 25 do
         assert doc.args == ["boolean", "boolean"]
+        assert doc.metadata == %{}
       else
         assert doc.args == ["term", "term"]
+        assert doc.metadata == %{hidden: true}
       end
 
       %{
@@ -990,6 +991,7 @@ defmodule ElixirSense.DocsTest do
       } = ElixirSense.docs(buffer, 4, 14)
 
       assert %{
+               args: ["term", "term"],
                arity: 2,
                function: :orelse,
                module: :erlang,
@@ -998,12 +1000,6 @@ defmodule ElixirSense.DocsTest do
                docs: "",
                kind: :function
              } = doc
-
-      if String.to_integer(System.otp_release()) < 25 do
-        assert doc.args == ["boolean", "boolean"]
-      else
-        assert doc.args == ["term", "term"]
-      end
     end
 
     test "retrieve macro documentation" do
