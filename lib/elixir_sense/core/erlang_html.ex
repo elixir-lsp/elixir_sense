@@ -1,7 +1,7 @@
 defmodule ElixirSense.Core.ErlangHtml do
   @moduledoc false
 
-  # those typedefs mimic erl_docgen types (as of OTP 24) to not introduce dependency
+  # those typedefs mimic erl_docgen types (as of OTP 26) to not introduce dependency
   @type chunk_elements() :: [chunk_element()]
   @type chunk_element() ::
           {chunk_element_type(), chunk_element_attrs(), chunk_elements()}
@@ -104,6 +104,7 @@ defmodule ElixirSense.Core.ErlangHtml do
 
   def to_markdown({:pre, _attrs1, [{:code, _attrs2, inner}]}, parents, _sanitize_mode) do
     prefix = build_prefix(parents)
+    # TODO should we fence it as erlang?
     "```\n" <> prefix <> to_markdown(inner, parents, :none) <> "\n" <> prefix <> "```\n" <> prefix
   end
 

@@ -6,6 +6,5 @@ defmodule ElixirSenseExample.Fixtures.MetadataBuilder.Alias.AliasSubmoduleExtern
     def env, do: @env
   end
 
-  @env __ENV__
   def env, do: Elixir.SubmoduleExternalInside.env()
 end

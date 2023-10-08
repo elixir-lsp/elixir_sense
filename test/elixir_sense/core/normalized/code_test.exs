@@ -15,7 +15,7 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
               "An example fun\n", %{defaults: 1, since: "1.1.0"}},
              {{:some_fun_doc_false, 2}, 26, :function,
               [{:a, [line: 1], nil}, {:\\, [line: 1], [{:b, [line: 1], nil}, nil]}], false,
-              %{defaults: 1}},
+              %{defaults: 1, hidden: true}},
              {{:some_fun_no_doc, 2}, 28, :function,
               [{:a, [line: 1], nil}, {:\\, [line: 1], [{:b, [line: 1], nil}, nil]}], nil,
               %{defaults: 1}},
@@ -30,7 +30,7 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
               "An example macro\n", %{defaults: 1, since: "1.1.0"}},
              {{:some_macro_doc_false, 2}, 35, :macro,
               [{:a, [line: 1], nil}, {:\\, [line: 1], [{:b, [line: 1], nil}, nil]}], false,
-              %{defaults: 1}},
+              %{defaults: 1, hidden: true}},
              {{:some_macro_no_doc, 2}, 37, :macro,
               [{:a, [line: 1], nil}, {:\\, [line: 1], [{:b, [line: 1], nil}, nil]}], nil,
               %{defaults: 1}}
@@ -40,7 +40,7 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
   test "gets type docs" do
     assert [
              {{:some_type, 0}, 7, :type, "An example type\n", %{since: "1.1.0"}},
-             {{:some_type_doc_false, 0}, 12, :type, false, %{}},
+             {{:some_type_doc_false, 0}, 12, :type, false, %{hidden: true}},
              {{:some_type_no_doc, 0}, 14, :type, nil, %{}},
              {{:soft_deprecated_type, 0}, 95, :type, "An example type\n",
               %{deprecated: "This type will be removed in a future release"}},
@@ -53,14 +53,14 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
              {{:soft_deprecated_callback, 1}, 83, :callback, "An example callback\n",
               %{deprecated: "This callback will be removed in a future release"}},
              {{:some_callback, 1}, 39, :callback, "An example callback\n", %{since: "1.1.0"}},
-             {{:some_callback_doc_false, 1}, 44, :callback, false, %{}},
+             {{:some_callback_doc_false, 1}, 44, :callback, false, %{hidden: true}},
              {{:some_callback_no_doc, 1}, 46, :callback, nil, %{}},
              {{:soft_deprecated_macrocallback, 1}, 89, :macrocallback,
               "An example macrocallback\n",
               %{deprecated: "This callback will be removed in a future release"}},
              {{:some_macrocallback, 1}, 48, :macrocallback, "An example callback\n",
               %{since: "1.1.0"}},
-             {{:some_macrocallback_doc_false, 1}, 53, :macrocallback, false, %{}},
+             {{:some_macrocallback_doc_false, 1}, 53, :macrocallback, false, %{hidden: true}},
              {{:some_macrocallback_no_doc, 1}, 55, :macrocallback, nil, %{}}
            ] == Code.get_docs(ElixirSenseExample.ModuleWithDocs, :callback_docs)
   end
@@ -69,7 +69,7 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
     assert {2, "An example module\n", %{since: "1.2.3"}} ==
              Code.get_docs(ElixirSenseExample.ModuleWithDocs, :moduledoc)
 
-    assert {105, false, %{}} ==
+    assert {105, false, %{hidden: true}} ==
              Code.get_docs(ElixirSenseExample.ModuleWithDocFalse, :moduledoc)
 
     assert {108, nil, %{}} ==
