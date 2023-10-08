@@ -535,7 +535,7 @@ defmodule ElixirSense do
 
     # Fix incomplete kw key, e.g. cursor after `option1: 1, opt`
     fix_incomplete_kw_key = fn text_before, text_after ->
-      if Regex.match?(~r/\,\s*([\p{L}_][\p{L}\p{N}_@]*[?!]?)?$/, text_before) do
+      if Regex.match?(~r/\,\s*([\p{L}_][\p{L}\p{N}_@]*[?!]?)?$/u, text_before) do
         text_before <> ": :__fake_value__" <> text_after
       end
     end

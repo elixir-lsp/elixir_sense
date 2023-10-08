@@ -111,7 +111,7 @@ defmodule ElixirSense.Core.Source do
 
     line_str = line |> String.slice(0, col - 1)
 
-    case Regex.run(~r/[\w0-9\._!\?\:@&\^~+<>=*\/|\\]+$/, line_str) do
+    case Regex.run(~r/[\p{L}\p{N}\.\_\!\?\:\@\&\^\~\+\-\<\>\=\*\/\|\\]+$/u, line_str) do
       nil -> ""
       [prefix] when is_binary(prefix) -> prefix
     end

@@ -213,6 +213,22 @@ defmodule ElixirSense.SuggestionsTest do
     assert list |> Enum.any?(&(&1.type == :function))
   end
 
+  test "functions from unicode module" do
+    buffer = """
+    defmodule :你好 do
+      def 运行 do
+        IO.puts("你好")
+      end
+    end
+
+    :你好.
+    """
+
+    list = ElixirSense.suggestions(buffer, 7, 5)
+
+    assert list |> Enum.any?(&(&1.type == :function && &1.name == "运行"))
+  end
+
   test "with an alias" do
     buffer = """
     defmodule MyModule do

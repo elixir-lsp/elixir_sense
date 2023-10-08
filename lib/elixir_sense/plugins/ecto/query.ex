@@ -215,7 +215,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
   def extract_bindings(prefix, %{pos: {{line, col}, _}} = func_info, env, buffer_metadata) do
     func_code = Source.text_after(prefix, line, col)
 
-    from_matches = Regex.scan(~r/^.+\(?\s*(#{@binding_r})/, func_code)
+    from_matches = Regex.scan(~r/^.+\(?\s*(#{@binding_r})/u, func_code)
 
     # TODO this code is broken
     # depends on join positions that we are unable to get from AST
@@ -223,7 +223,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
     join_matches =
       for join when join in @joins <- func_info.options_so_far,
           code = Source.text_after(prefix, line, col),
-          match <- Regex.scan(~r/^#{join}\:\s*(#{@binding_r})/, code) do
+          match <- Regex.scan(~r/^#{join}\:\s*(#{@binding_r})/u, code) do
         match
       end
 

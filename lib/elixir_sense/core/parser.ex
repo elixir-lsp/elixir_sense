@@ -246,7 +246,7 @@ defmodule ElixirSense.Core.Parser do
         |> Enum.join("\n")
 
       _ ->
-        if Regex.match?(~r/^[\p{L}_][\p{L}\p{N}_@]*[?!]?$/, token) do
+        if Regex.match?(~r/^[\p{L}_][\p{L}\p{N}_@]*[?!]?$/u, token) do
           remove_line(source, line)
         else
           replace_line_with_marker(source, line)
