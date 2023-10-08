@@ -115,11 +115,8 @@ defmodule ElixirSense.Core.Normalized.Code do
       fn
         {{kind, name, arity}, anno, fun_signatures, fun_docs, fun_metadata} ->
           {signatures, docs, metadata, mime_type} =
-            case docs_from_behaviours do
-              %{
-                {^name, ^arity} =>
-                  {_behaviour_signatures, behaviour_docs, behaviour_metadata, behaviour_mime_type}
-              } ->
+            case Map.get(docs_from_behaviours, {name, arity}) do
+              {_behaviour_signatures, behaviour_docs, behaviour_metadata, behaviour_mime_type} ->
                 # as of elixir 1.14 behaviours do not store signature
                 # prefer signature from function
                 # merge metadata from function and callback
@@ -136,7 +133,7 @@ defmodule ElixirSense.Core.Normalized.Code do
 
                 {fun_signatures, behaviour_docs, merged_metadata, behaviour_mime_type}
 
-              _ ->
+              nil ->
                 {fun_signatures, fun_docs, fun_metadata, mime_type}
             end
 

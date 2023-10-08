@@ -209,6 +209,7 @@ defmodule ElixirSense.Providers.Docs do
       |> Enum.sort_by(fn {{^mod, ^fun, a}, _fun_info} -> a end)
       |> Enum.map(fn {{^mod, ^fun, a}, fun_info} ->
         kind = ModFunInfo.get_category(fun_info)
+
         fun_args_text =
           fun_info.params
           |> List.last()
