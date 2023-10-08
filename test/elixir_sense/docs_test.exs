@@ -1326,12 +1326,15 @@ defmodule ElixirSense.DocsTest do
       assert %{
                args: ["_"],
                function: :init,
-               module: ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang,
-               metadata: %{since: "OTP 19.0", implementing: :gen_statem}
+               module: ElixirSenseExample.ExampleBehaviourWithDocCallbackErlang
              } = doc
 
       if ExUnitConfig.erlang_eep48_supported() do
         assert doc.docs =~ "called by the new process"
+        assert %{since: "OTP 19.0", implementing: :gen_statem} = doc.metadata
+      else
+        assert doc.docs == ""
+        assert doc.metadata == %{}
       end
     end
   end
