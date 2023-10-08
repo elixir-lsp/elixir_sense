@@ -162,13 +162,14 @@ defmodule ElixirSense.DocsTest do
       } = ElixirSense.docs(buffer, 2, 13)
 
       assert doc.module == :erlang
-      assert %{name: "erlang", otp_doc_vsn: {1, 0, 0}} = doc.metadata
       assert doc.kind == :module
 
       if ExUnitConfig.erlang_eep48_supported() do
         assert doc.docs =~ """
                By convention,\
                """
+
+        assert %{name: "erlang", otp_doc_vsn: {1, 0, 0}} = doc.metadata
       end
     end
 
@@ -727,13 +728,14 @@ defmodule ElixirSense.DocsTest do
                args: ["list"],
                function: :init,
                module: MyLocalModule,
-               metadata: %{since: "OTP 19.0", implementing: :gen_statem},
                kind: :function
              } = doc
 
       if ExUnitConfig.erlang_eep48_supported() do
         assert doc.docs =~
                  "this function is called by"
+
+        assert %{since: "OTP 19.0", implementing: :gen_statem} = doc.metadata
       end
     end
 
@@ -943,7 +945,6 @@ defmodule ElixirSense.DocsTest do
                args: ["deepList"],
                function: :flatten,
                module: :lists,
-               metadata: %{signature: _},
                kind: :function
              } = doc
 
@@ -951,6 +952,8 @@ defmodule ElixirSense.DocsTest do
         assert doc.docs =~ """
                Returns a flattened version of `DeepList`\\.
                """
+
+        assert %{signature: _} = doc.metadata
       end
     end
 
@@ -1614,7 +1617,6 @@ defmodule ElixirSense.DocsTest do
                type: :time_unit,
                module: :erlang,
                spec: "@type time_unit() ::\n  pos_integer()" <> _,
-               metadata: %{signature: _},
                kind: :type
              } = doc
 
@@ -1622,6 +1624,8 @@ defmodule ElixirSense.DocsTest do
         assert doc.docs =~ """
                Supported time unit representations:
                """
+
+        assert %{signature: _} = doc.metadata
       end
     end
 
