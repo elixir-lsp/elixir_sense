@@ -28,7 +28,7 @@ defmodule ElixirSense.Core.Applications do
   # as it returns more
   def get_modules_from_applications do
     # :erts app is not loaded by default
-    Application.load(:erts)
+    _ = Application.load(:erts)
 
     for [app] <- loaded_applications(),
         {:ok, modules} = :application.get_key(app, :modules),
