@@ -113,6 +113,8 @@ defmodule ElixirSense.Core.BuiltinTypes do
       spec: quote(do: nonempty_binary() :: <<_::8, _::_*8>>),
       doc: "A `binary()` that contains some data"
     },
+    # https://github.com/rrrene/credo/issues/1079
+    # credo:disable-for-lines:10
     "bitstring" => %{
       params: [],
       spec: quote(do: bitstring() :: <<_::_*1>>),
