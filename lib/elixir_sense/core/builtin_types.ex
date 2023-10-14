@@ -10,6 +10,10 @@ defmodule ElixirSense.Core.BuiltinTypes do
       params: [],
       doc: "The bottom type, contains no terms"
     },
+    "dynamic" => %{
+      params: [],
+      doc: "A type compatible with every type"
+    },
     "atom" => %{
       params: [],
       doc:
@@ -31,10 +35,6 @@ defmodule ElixirSense.Core.BuiltinTypes do
       params: [],
       doc:
         "A reference is a term that is unique in an Erlang runtime system, created by calling `make_ref/0`"
-    },
-    "struct" => %{
-      params: [],
-      doc: "Any struct"
     },
     "tuple" => %{
       params: [],
@@ -63,22 +63,22 @@ defmodule ElixirSense.Core.BuiltinTypes do
     "list/1" => %{
       params: [:t],
       doc: "Proper list ([]-terminated)",
-      signature: "list(t)"
+      signature: "list(t())"
     },
     "nonempty_list/1" => %{
       params: [:t],
       doc: "Non-empty proper list",
-      signature: "nonempty_list(t)"
+      signature: "nonempty_list(t())"
     },
     "maybe_improper_list/2" => %{
       params: [:type1, :type2],
       doc: "Proper or improper list (type1=contents, type2=termination)",
-      signature: "maybe_improper_list(type1, type2)"
+      signature: "maybe_improper_list(type1(), type2())"
     },
     "nonempty_improper_list/2" => %{
       params: [:type1, :type2],
       doc: "Improper list (type1=contents, type2=termination)",
-      signature: "nonempty_improper_list(type1, type2)"
+      signature: "nonempty_improper_list(type1(), type2())"
     },
     "nonempty_maybe_improper_list/2" => %{
       params: [:type1, :type2],
@@ -105,13 +105,23 @@ defmodule ElixirSense.Core.BuiltinTypes do
     },
     "binary" => %{
       params: [],
-      spec: quote(do: binary() :: <<_::size(8)>>),
+      spec: quote(do: binary() :: <<_::_*8>>),
       doc: "A blob of binary data"
+    },
+    "nonempty_binary" => %{
+      params: [],
+      spec: quote(do: nonempty_binary() :: <<_::8, _::_*8>>),
+      doc: "A `binary()` that contains some data"
     },
     "bitstring" => %{
       params: [],
-      spec: quote(do: bitstring() :: <<_::size(1)>>),
+      spec: quote(do: bitstring() :: <<_::_*1>>),
       doc: "A bunch of bits"
+    },
+    "nonempty_bitstring" => %{
+      params: [],
+      spec: quote(do: nonempty_bitstring() :: <<_::1, _::_*1>>),
+      doc: "A `bitstring()` that contains some data"
     },
     "boolean" => %{
       params: [],
@@ -140,7 +150,7 @@ defmodule ElixirSense.Core.BuiltinTypes do
     },
     "fun" => %{
       params: [],
-      spec: quote(do: fun() :: (... -> any)),
+      spec: quote(do: fun() :: (... -> any())),
       doc: "A function"
     },
     "function" => %{
@@ -171,7 +181,7 @@ defmodule ElixirSense.Core.BuiltinTypes do
     },
     "keyword/1" => %{
       params: [:t],
-      spec: quote(do: keyword(t) :: [{atom(), t}]),
+      spec: quote(do: keyword(t()) :: [{atom(), t()}]),
       doc: "A keyword list with values of type `t`"
     },
     "list" => %{

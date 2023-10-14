@@ -1664,7 +1664,7 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                module: nil,
                metadata: %{builtin: true},
-               spec: "@type keyword(t) :: [{atom(), t}]",
+               spec: "@type keyword(t()) :: [{atom(), t()}]",
                docs: "A keyword list with values of type `t`",
                kind: :type
              }
@@ -1728,7 +1728,7 @@ defmodule ElixirSense.DocsTest do
                type: :list,
                arity: 1,
                module: nil,
-               spec: "@type list(t)",
+               spec: "@type list(t())",
                metadata: %{builtin: true},
                docs: "Proper list ([]-terminated)",
                kind: :type

@@ -3454,7 +3454,7 @@ defmodule ElixirSense.SuggestionsTest do
 
       assert suggestion.type_spec == "keyword(term())"
       assert suggestion.origin == ""
-      assert suggestion.expanded_spec =~ "@type keyword(t) ::"
+      assert suggestion.expanded_spec =~ "@type keyword(t()) ::"
       assert suggestion.doc == "A keyword list with values of type `t`"
     end
 
@@ -3835,8 +3835,8 @@ defmodule ElixirSense.SuggestionsTest do
 
       [_, suggestion | _] = suggestions_by_type(:type_spec, buffer)
 
-      assert suggestion.spec == "@type list(t)"
-      assert suggestion.signature == "list(t)"
+      assert suggestion.spec == "@type list(t())"
+      assert suggestion.signature == "list(t())"
       assert suggestion.arity == 1
       assert suggestion.doc == "Proper list ([]-terminated)"
       assert suggestion.origin == nil
