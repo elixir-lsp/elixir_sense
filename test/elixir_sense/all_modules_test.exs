@@ -10,5 +10,6 @@ defmodule ElixirSense.Providers.ModulesTest do
     assert "ElixirSense.Providers" not in modules
     assert "ElixirSense.Providers.Definition" in modules
     assert ":kernel" in modules
+    assert ":erlang" in modules
   end
 end

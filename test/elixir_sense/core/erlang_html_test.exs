@@ -16,6 +16,7 @@ defmodule ElixirSense.Core.ErlangHtmlTest do
           :eldap,
           :erl_docgen,
           :erl_interface,
+          :erts,
           :et,
           :eunit,
           :ftp,
