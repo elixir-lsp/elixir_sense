@@ -113,4 +113,8 @@ defmodule ElixirSense.Core.SurroundContext do
   defp inside_dot_to_binding({:var, inside_charlist}, _current_module) do
     {:variable, :"#{inside_charlist}"}
   end
+
+  defp inside_dot_to_binding(:expr, _current_module) do
+    nil
+  end
 end
