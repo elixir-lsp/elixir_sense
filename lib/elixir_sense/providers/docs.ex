@@ -147,7 +147,7 @@ defmodule ElixirSense.Providers.Docs do
        ) do
     actual =
       {Binding.expand(binding_env, mod), fun}
-      |> SurroundContext.expand(env.aliases)
+      |> expand(env.aliases)
       |> Introspection.actual_mod_fun(
         env.imports,
         env.requires,
@@ -622,5 +622,21 @@ defmodule ElixirSense.Providers.Docs do
           }
         end
     end
+  end
+
+  def expand({{:atom, module}, func}, aliases) do
+    {Introspection.expand_alias(module, aliases), func}
+  end
+
+  def expand({nil, func}, _aliases) do
+    {nil, func}
+  end
+
+  def expand({:none, func}, _aliases) do
+    {nil, func}
+  end
+
+  def expand({_, _func}, _aliases) do
+    {nil, nil}
   end
 end

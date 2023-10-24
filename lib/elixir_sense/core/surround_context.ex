@@ -113,16 +113,4 @@ defmodule ElixirSense.Core.SurroundContext do
   defp inside_dot_to_binding({:var, inside_charlist}, _current_module) do
     {:variable, :"#{inside_charlist}"}
   end
-
-  def expand({{:atom, module}, func}, aliases) do
-    {Introspection.expand_alias(module, aliases), func}
-  end
-
-  def expand({nil, func}, _aliases) do
-    {nil, func}
-  end
-
-  def expand({:none, func}, _aliases) do
-    {nil, func}
-  end
 end
