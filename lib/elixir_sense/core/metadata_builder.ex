@@ -66,7 +66,30 @@ defmodule ElixirSense.Core.MetadataBuilder do
           )
         )
 
-        state
+        vars_info_per_scope_id =
+          try do
+            update_vars_info_per_scope_id(state)
+          rescue
+            _ ->
+              state.vars_info_per_scope_id
+          end
+
+        %{
+          state
+          | attributes: [],
+            scope_attributes: [],
+            behaviours: [],
+            aliases: [],
+            imports: [],
+            requires: [],
+            scope_ids: [],
+            vars: [],
+            scope_vars: [],
+            vars_info_per_scope_id: vars_info_per_scope_id,
+            namespace: [],
+            scopes: [],
+            protocols: []
+        }
     end
   end
 

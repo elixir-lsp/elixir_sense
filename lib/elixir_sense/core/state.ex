@@ -878,7 +878,7 @@ defmodule ElixirSense.Core.State do
     }
   end
 
-  defp update_vars_info_per_scope_id(state) do
+  def update_vars_info_per_scope_id(state) do
     [scope_id | _other_scope_ids] = state.scope_ids
 
     [current_scope_vars | other_scope_vars] = state.scope_vars
