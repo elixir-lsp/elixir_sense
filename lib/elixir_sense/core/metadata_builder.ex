@@ -44,15 +44,30 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {_ast, [state]} =
       Macro.traverse(ast, [%State{}], &safe_call_pre/2, &safe_call_post/2)
 
-    state
-    |> remove_attributes_scope
-    |> remove_behaviours_scope
-    |> remove_alias_scope
-    |> remove_import_scope
-    |> remove_require_scope
-    |> remove_vars_scope
-    |> remove_namespace
-    |> remove_protocol_implementation
+    try do
+      state
+      |> remove_attributes_scope
+      |> remove_behaviours_scope
+      |> remove_alias_scope
+      |> remove_import_scope
+      |> remove_require_scope
+      |> remove_vars_scope
+      |> remove_namespace
+      |> remove_protocol_implementation
+    rescue
+      exception ->
+        warn(
+          Exception.format(
+            :error,
+            "#{inspect(exception.__struct__)} during metadata build scope closing:\n" <>
+              "#{Exception.message(exception)}\n" <>
+              "ast node: #{inspect(ast, limit: :infinity)}",
+            __STACKTRACE__
+          )
+        )
+
+        state
+    end
   end
 
   defp safe_call_pre(ast, [state = %State{} | _] = states) do
@@ -587,7 +602,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
          {def_name, meta, [{:when, _, [{name, meta2, params}, guards]}, body]},
          state
        )
-       when def_name in @defs do
+       when def_name in @defs and is_atom(name) do
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, guards, body]}
     pre_func(ast_without_params, state, meta, name, params)
   end
@@ -609,7 +624,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
           ]},
          state
        )
-       when def_name in @defs do
+       when def_name in @defs and is_atom(name) do
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, body]}
     pre_func(ast_without_params, state, meta, name, params)
   end
