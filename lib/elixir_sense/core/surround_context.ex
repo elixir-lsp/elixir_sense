@@ -1,6 +1,5 @@
 defmodule ElixirSense.Core.SurroundContext do
   @moduledoc false
-  alias ElixirSense.Core.Introspection
 
   def to_binding({:alias, charlist}, _current_module) do
     {{:atom, :"Elixir.#{charlist}"}, nil}
