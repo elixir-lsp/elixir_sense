@@ -131,6 +131,6 @@ defmodule ElixirSense.Plugins.Ecto do
   end
 
   defp after_in?(hint, text_before) do
-    Regex.match?(~r/\s+in\s+#{hint}$/, text_before)
+    Regex.match?(~r/\s+in\s+#{hint}$/u, text_before)
   end
 end

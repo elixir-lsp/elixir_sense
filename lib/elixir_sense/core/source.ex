@@ -188,7 +188,7 @@ defmodule ElixirSense.Core.Source do
   def get_v12_module_prefix(text_before, current_module) do
     with %{"module" => module_str} <-
            Regex.named_captures(
-             ~r/(alias|require|import|use)\s+(?<module>[^\s^\{^\}]+?)\.\{[^\}]*?$/,
+             ~r/(alias|require|import|use)\s+(?<module>[^\s^\{^\}]+?)\.\{[^\}]*?$/u,
              text_before
            ),
          {:ok, ast} <- Code.string_to_quoted(module_str),

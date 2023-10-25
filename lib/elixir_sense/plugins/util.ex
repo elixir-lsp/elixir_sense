@@ -16,7 +16,7 @@ defmodule ElixirSense.Plugins.Util do
   end
 
   def trim_leading_for_insertion(hint, value) do
-    [_, hint_prefix] = Regex.run(~r/(.*?)[\w0-9\._!\?\->]*$/, hint)
+    [_, hint_prefix] = Regex.run(~r/(.*?)[\w0-9\._!\?\->]*$/u, hint)
     insert_text = String.replace_prefix(value, hint_prefix, "")
 
     case String.split(hint, ".") do

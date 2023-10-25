@@ -55,7 +55,7 @@ defmodule ElixirSense.Plugins.Ecto.Types do
   end
 
   defp buitin_type_to_suggestion({type, elixir_type, literal_syntax, snippet}, hint, text_after) do
-    [_, hint_prefix] = Regex.run(~r/(.*?)[\w0-9\._!\?\->]*$/, hint)
+    [_, hint_prefix] = Regex.run(~r/(.*?)[\w0-9\._!\?\->]*$/u, hint)
 
     insert_text = String.replace_prefix(type, hint_prefix, "")
     snippet = snippet && String.replace_prefix(snippet, hint_prefix, "")

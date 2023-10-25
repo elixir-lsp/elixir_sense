@@ -72,7 +72,7 @@ defmodule ElixirSense.Providers.Signature do
         defaults =
           params
           |> Enum.with_index()
-          |> Enum.map(fn {param, index} -> {Regex.match?(~r/\\\\/, param), index} end)
+          |> Enum.map(fn {param, index} -> {Regex.match?(~r/\\\\/u, param), index} end)
           |> Enum.sort()
           |> Enum.at(npar)
 

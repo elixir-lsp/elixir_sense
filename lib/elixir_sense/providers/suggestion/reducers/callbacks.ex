@@ -43,7 +43,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
                 Introspection.get_callbacks_with_docs(mod),
               def_prefix?(hint, spec) or Matcher.match?("#{name}", hint) do
             desc = Introspection.extract_summary_from_docs(doc)
-            [_, args_str] = Regex.run(~r/.\(([^\)]*)\)/, signature)
+            [_, args_str] = Regex.run(~r/.\(([^\)]*)\)/u, signature)
 
             args_list =
               args_str

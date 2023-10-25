@@ -131,7 +131,7 @@ defmodule ElixirSense.Location do
   end
 
   defp find_fun_position_in_erl_file(file, nil) do
-    case find_line_by_regex(file, ~r/^-module/) do
+    case find_line_by_regex(file, ~r/^-module/u) do
       nil -> nil
       position -> {position, :module}
     end
@@ -143,7 +143,7 @@ defmodule ElixirSense.Location do
       |> Atom.to_string()
       |> Regex.escape()
 
-    case find_line_by_regex(file, ~r/^#{escaped}\b/) do
+    case find_line_by_regex(file, ~r/^#{escaped}\b/u) do
       nil -> nil
       position -> {position, :function}
     end
@@ -155,7 +155,7 @@ defmodule ElixirSense.Location do
       |> Atom.to_string()
       |> Regex.escape()
 
-    find_line_by_regex(file, ~r/^-(typep?|opaque)\s#{escaped}\b/)
+    find_line_by_regex(file, ~r/^-(typep?|opaque)\s#{escaped}\b/u)
   end
 
   defp find_line_by_regex(file, regex) do

@@ -528,7 +528,7 @@ defmodule ElixirSense do
 
     # Fix incomplete kw, e.g. cursor after `option1: 1,`
     fix_incomplete_kw = fn text_before, text_after ->
-      if Regex.match?(~r/\,\s*$/, text_before) do
+      if Regex.match?(~r/\,\s*$/u, text_before) do
         text_before <> "__fake_key__: :__fake_value__" <> text_after
       end
     end
