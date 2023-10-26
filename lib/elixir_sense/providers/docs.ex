@@ -519,7 +519,7 @@ defmodule ElixirSense.Providers.Docs do
         f == fun,
         Introspection.matches_arity?(arity, call_arity) do
       fun_args_text =
-        if arity == 0, do: "", else: Enum.map(1..arity, fn _ -> "term" end)
+        if arity == 0, do: [], else: Enum.map(1..arity, fn _ -> "term" end)
 
       metadata =
         if {f, arity} in BuiltinFunctions.erlang_builtin_functions(mod) do
