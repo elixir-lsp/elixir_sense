@@ -579,7 +579,7 @@ defmodule ElixirSense.Core.TypeInfo do
     :inline_list
   end
 
-  defp extract_type_def_info(_mod, {:type, _, type_name, args}) do
+  defp extract_type_def_info(_mod, {:type, _, type_name, args}) when is_list(args) do
     {nil, type_name, length(args)}
   end
 
