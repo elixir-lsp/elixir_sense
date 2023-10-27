@@ -419,31 +419,34 @@ defmodule ElixirSense.Core.Introspection do
         {name |> Atom.to_string() |> Macro.underscore() |> String.to_atom(), arity}
       end
 
-    {_, [spec | _]} = List.keyfind(callbacks, key, 0)
+    case List.keyfind(callbacks, key, 0) do
+      nil ->
+        raise "Unable to find callback #{inspect(key)}, callbacks were #{inspect(Enum.map(callbacks, &elem(&1, 0)))}"
+      {_, [spec | _]} ->
+        spec_ast =
+          Typespec.spec_to_quoted(spec_name, spec)
+          |> Macro.prewalk(&drop_macro_env/1)
 
-    spec_ast =
-      Typespec.spec_to_quoted(spec_name, spec)
-      |> Macro.prewalk(&drop_macro_env/1)
+        spec_ast =
+          if kind == :macrocallback do
+            spec_ast |> remove_first_macro_arg()
+          else
+            spec_ast
+          end
 
-    spec_ast =
-      if kind == :macrocallback do
-        spec_ast |> remove_first_macro_arg()
-      else
-        spec_ast
-      end
+        signature = get_typespec_signature(spec_ast, arity)
+        definition = format_spec_ast(spec_ast)
 
-    signature = get_typespec_signature(spec_ast, arity)
-    definition = format_spec_ast(spec_ast)
-
-    %{
-      name: name,
-      kind: kind,
-      arity: arity,
-      callback: "@#{kind} #{definition}",
-      signature: signature,
-      doc: doc,
-      metadata: metadata |> Map.put(:optional, key in optional_callbacks)
-    }
+        %{
+          name: name,
+          kind: kind,
+          arity: arity,
+          callback: "@#{kind} #{definition}",
+          signature: signature,
+          doc: doc,
+          metadata: metadata |> Map.put(:optional, key in optional_callbacks)
+        }
+    end
   end
 
   defp get_callbacks_and_docs(mod) do
