@@ -239,7 +239,11 @@ defmodule ElixirSense.Core.Source do
   end
 
   defp get_field_names(fields) do
-    Keyword.keys(fields) |> Enum.slice(0..-2)
+    if Keyword.keyword?(fields) do
+      Keyword.keys(fields) |> Enum.slice(0..-2)
+    else
+      []
+    end
   end
 
   defp get_var_or_attr({var, _, nil}) when is_atom(var) and var != :__MODULE__ do
