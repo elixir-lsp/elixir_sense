@@ -482,7 +482,7 @@ defmodule ElixirSense.Core.Introspection do
   def to_string_with_parens({name, meta, args}) when is_atom(name) do
     if Code.Formatter.local_without_parens?(
          name,
-         length(args),
+         length(args || []),
          Code.Formatter.locals_without_parens()
        ) do
       # Macro.to_string formats some locals without parens
