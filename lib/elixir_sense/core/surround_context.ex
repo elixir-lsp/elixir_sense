@@ -24,7 +24,8 @@ defmodule ElixirSense.Core.SurroundContext do
   defp to_binding_impl({:alias, {:local_or_var, _charlist1}, _charlist}, _current_module), do: nil
 
   # TODO handle this case?
-  defp to_binding_impl({:alias, {:module_attribute, _charlist1}, _charlist}, _current_module), do: nil
+  defp to_binding_impl({:alias, {:module_attribute, _charlist1}, _charlist}, _current_module),
+    do: nil
 
   defp to_binding_impl({:dot, inside_dot, charlist}, current_module) do
     {inside_dot_to_binding(inside_dot, current_module), :"#{charlist}"}
