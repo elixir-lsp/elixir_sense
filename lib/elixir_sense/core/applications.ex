@@ -31,9 +31,15 @@ defmodule ElixirSense.Core.Applications do
     _ = Application.load(:erts)
 
     for [app] <- loaded_applications(),
-        {:ok, modules} = :application.get_key(app, :modules),
-        module <- modules do
+        module <- safe_get_modules(app) do
       module
+    end
+  end
+
+  defp safe_get_modules(app) do
+    case :application.get_key(app, :modules) do
+      {:ok, modules} -> modules
+      :undefined -> []
     end
   end
 
