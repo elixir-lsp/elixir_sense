@@ -1148,6 +1148,12 @@ defmodule ElixirSense.Core.Introspection do
     {functions, macros} =
       list
       |> Enum.reduce([], fn {module, opts}, acc ->
+        opts = if Keyword.keyword?(opts) do
+          opts
+        else
+          []
+        end
+
         all_exported =
           if acc[module] != nil and Keyword.keyword?(opts[:except]) do
             acc[module]
