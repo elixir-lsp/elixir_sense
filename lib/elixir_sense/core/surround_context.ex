@@ -1,57 +1,66 @@
 defmodule ElixirSense.Core.SurroundContext do
   @moduledoc false
 
-  def to_binding({:alias, charlist}, _current_module) do
+  def to_binding(item, current_module) do
+    try do
+      to_binding_impl(item, current_module)
+    rescue
+      _e in SystemLimitError ->
+        nil
+    end
+  end
+
+  defp to_binding_impl({:alias, charlist}, _current_module) do
     {{:atom, :"Elixir.#{charlist}"}, nil}
   end
 
   # do not handle any other local_or_var
-  def to_binding({:alias, {:local_or_var, ~c"__MODULE__"}, charlist}, current_module) do
+  defp to_binding_impl({:alias, {:local_or_var, ~c"__MODULE__"}, charlist}, current_module) do
     if current_module not in [nil, Elixir] do
       {{:atom, :"#{current_module}.#{charlist}"}, nil}
     end
   end
 
-  def to_binding({:alias, {:local_or_var, _charlist1}, _charlist}, _current_module), do: nil
+  defp to_binding_impl({:alias, {:local_or_var, _charlist1}, _charlist}, _current_module), do: nil
 
   # TODO handle this case?
-  def to_binding({:alias, {:module_attribute, _charlist1}, _charlist}, _current_module), do: nil
+  defp to_binding_impl({:alias, {:module_attribute, _charlist1}, _charlist}, _current_module), do: nil
 
-  def to_binding({:dot, inside_dot, charlist}, current_module) do
+  defp to_binding_impl({:dot, inside_dot, charlist}, current_module) do
     {inside_dot_to_binding(inside_dot, current_module), :"#{charlist}"}
   end
 
-  def to_binding({:local_or_var, ~c"__MODULE__"}, current_module) do
+  defp to_binding_impl({:local_or_var, ~c"__MODULE__"}, current_module) do
     if current_module not in [nil, Elixir] do
       {{:atom, current_module}, nil}
     end
   end
 
-  def to_binding({:local_or_var, charlist}, _current_module) do
+  defp to_binding_impl({:local_or_var, charlist}, _current_module) do
     {:variable, :"#{charlist}"}
   end
 
-  def to_binding({:local_arity, charlist}, _current_module) do
+  defp to_binding_impl({:local_arity, charlist}, _current_module) do
     {nil, :"#{charlist}"}
   end
 
-  def to_binding({:local_call, charlist}, _current_module) do
+  defp to_binding_impl({:local_call, charlist}, _current_module) do
     {nil, :"#{charlist}"}
   end
 
-  def to_binding({:module_attribute, charlist}, _current_module) do
+  defp to_binding_impl({:module_attribute, charlist}, _current_module) do
     {:attribute, :"#{charlist}"}
   end
 
-  def to_binding({:operator, charlist}, _current_module) do
+  defp to_binding_impl({:operator, charlist}, _current_module) do
     {nil, :"#{charlist}"}
   end
 
-  def to_binding({:sigil, charlist}, _current_module) do
+  defp to_binding_impl({:sigil, charlist}, _current_module) do
     {nil, :"sigil_#{charlist}"}
   end
 
-  def to_binding({:struct, charlist}, _current_module) when is_list(charlist) do
+  defp to_binding_impl({:struct, charlist}, _current_module) when is_list(charlist) do
     {{:atom, :"Elixir.#{charlist}"}, nil}
   end
 
@@ -60,15 +69,15 @@ defmodule ElixirSense.Core.SurroundContext do
   # {:local_or_var, charlist}
   # {:module_attribute, charlist}
   # {:dot, inside_dot, charlist}
-  def to_binding({:struct, inside_struct}, current_module) do
-    to_binding(inside_struct, current_module)
+  defp to_binding_impl({:struct, inside_struct}, current_module) do
+    to_binding_impl(inside_struct, current_module)
   end
 
-  def to_binding({:unquoted_atom, charlist}, _current_module) do
+  defp to_binding_impl({:unquoted_atom, charlist}, _current_module) do
     {{:atom, :"#{charlist}"}, nil}
   end
 
-  def to_binding({:keyword, charlist}, _current_module) do
+  defp to_binding_impl({:keyword, charlist}, _current_module) do
     {:keyword, :"#{charlist}"}
   end
 
