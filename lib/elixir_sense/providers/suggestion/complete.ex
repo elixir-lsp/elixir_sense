@@ -1078,9 +1078,13 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
       )
     else
       funs =
-        mod.module_info(:exports)
-        |> Kernel.--(if include_builtin, do: [], else: @builtin_functions)
-        |> Kernel.++(BuiltinFunctions.erlang_builtin_functions(mod))
+        if Code.ensure_loaded?(mod) do
+          mod.module_info(:exports)
+          |> Kernel.--(if include_builtin, do: [], else: @builtin_functions)
+          |> Kernel.++(BuiltinFunctions.erlang_builtin_functions(mod))
+        else
+          []
+        end
 
       for {f, a} <- funs do
         # we don't expect macros here
@@ -1134,10 +1138,14 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   end
 
   defp special_builtins(mod) do
-    mod.module_info(:exports)
-    |> Enum.filter(fn {f, a} ->
-      {f, a} in [{:behaviour_info, 1}]
-    end)
+    if Code.ensure_loaded?(mod) do
+      mod.module_info(:exports)
+      |> Enum.filter(fn {f, a} ->
+        {f, a} in [{:behaviour_info, 1}]
+      end)
+    else
+      []
+    end
   end
 
   defp find_doc(fun, _docs) when fun in @builtin_functions, do: {:function, nil}
