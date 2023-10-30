@@ -192,7 +192,11 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
   end
 
   defp get_fields_from_struct_spec({:"::", _, [_, {:%, _meta1, [_mod, {:%{}, _meta2, fields}]}]}) do
-    Map.new(fields)
+    if Keyword.keyword?(fields) do
+      Map.new(fields)
+    else
+      %{}
+    end
   end
 
   defp get_fields_from_struct_spec(_), do: %{}
