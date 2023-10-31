@@ -1515,14 +1515,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     test "list guards" do
       assert %VarInfo{name: :x, type: :list} = var_with_guards("is_list(x)")
-      assert %VarInfo{name: :x, type: :list} = var_with_guards("hd(x) == 1")
+      assert %VarInfo{name: :x, type: {:list, :number}} = var_with_guards("hd(x) == 1")
       assert %VarInfo{name: :x, type: :list} = var_with_guards("tl(x) == [1]")
       assert %VarInfo{name: :x, type: :list} = var_with_guards("length(x) == 1")
     end
 
     test "tuple guards" do
       assert %VarInfo{name: :x, type: :tuple} = var_with_guards("is_tuple(x)")
-      assert %VarInfo{name: :x, type: :tuple} = var_with_guards("tuple_size(x) == 1")
+      assert %VarInfo{name: :x, type: {:tuple, 1, []}} = var_with_guards("tuple_size(x) == 1")
       assert %VarInfo{name: :x, type: :tuple} = var_with_guards("elem(x, 0) == 1")
     end
 
