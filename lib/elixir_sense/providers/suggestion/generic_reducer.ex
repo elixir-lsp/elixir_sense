@@ -43,7 +43,7 @@ defmodule ElixirSense.Providers.Suggestion.GenericReducer do
             reducer.suggestions(hint, func_call, chain, opts) |> handle_suggestions(acc)
           catch
             kind, payload ->
-              {payload, stacktrace} = Exception.blame(kind, error, __STACKTRACE__)
+              {payload, stacktrace} = Exception.blame(kind, payload, __STACKTRACE__)
               message = Exception.format(kind, payload, stacktrace)
               Logger.error("Error in suggestions reducer: #{message}")
               {:cont, acc}
@@ -58,7 +58,7 @@ defmodule ElixirSense.Providers.Suggestion.GenericReducer do
             reducer.suggestions(hint, opts) |> handle_suggestions(acc)
           catch
             kind, payload ->
-              {payload, stacktrace} = Exception.blame(kind, error, __STACKTRACE__)
+              {payload, stacktrace} = Exception.blame(kind, payload, __STACKTRACE__)
               message = Exception.format(kind, payload, stacktrace)
               Logger.error("Error in suggestions reducer: #{message}")
               {:cont, acc}
