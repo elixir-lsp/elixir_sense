@@ -4,6 +4,7 @@ defmodule ElixirSense.Providers.Suggestion.GenericReducer do
   according to the cursor's position in a function call.
   """
 
+  require Logger
   alias ElixirSense.Plugins.Util
 
   @type func_call :: {module, fun :: atom, arg :: non_neg_integer, any}
@@ -38,14 +39,30 @@ defmodule ElixirSense.Providers.Suggestion.GenericReducer do
     case Util.func_call_chain(text_before, env, buffer_metadata) do
       [func_call | _] = chain ->
         if function_exported?(reducer, :suggestions, 4) do
-          reducer.suggestions(hint, func_call, chain, opts) |> handle_suggestions(acc)
+          try do
+            reducer.suggestions(hint, func_call, chain, opts) |> handle_suggestions(acc)
+          catch
+            kind, payload ->
+              {payload, stacktrace} = Exception.blame(kind, error, __STACKTRACE__)
+              message = Exception.format(kind, payload, stacktrace)
+              Logger.error("Error in suggestions reducer: #{message}")
+              {:cont, acc}
+          end
         else
           {:cont, acc}
         end
 
       [] ->
         if function_exported?(reducer, :suggestions, 2) do
-          reducer.suggestions(hint, opts) |> handle_suggestions(acc)
+          try do
+            reducer.suggestions(hint, opts) |> handle_suggestions(acc)
+          catch
+            kind, payload ->
+              {payload, stacktrace} = Exception.blame(kind, error, __STACKTRACE__)
+              message = Exception.format(kind, payload, stacktrace)
+              Logger.error("Error in suggestions reducer: #{message}")
+              {:cont, acc}
+          end
         else
           {:cont, acc}
         end
