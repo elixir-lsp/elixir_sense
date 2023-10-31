@@ -1,4 +1,8 @@
 defmodule ElixirSense.Core.Guard do
+  @moduledoc """
+  This module is responsible for infer type information from guard expressions
+  """
+
   import ElixirSense.Core.State
 
   alias ElixirSense.Core.MetadataBuilder
