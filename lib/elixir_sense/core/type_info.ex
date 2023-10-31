@@ -590,12 +590,13 @@ defmodule ElixirSense.Core.TypeInfo do
   defp extract_type_def_info(
          _mod,
          {:remote_type, _, [{:atom, _, remote_mod}, {:atom, _, name}, args]}
-       ) do
+       )
+       when is_list(args) do
     remote_mod = if remote_mod == :elixir, do: nil, else: remote_mod
     {remote_mod, name, length(args)}
   end
 
-  defp extract_type_def_info(mod, {_, _, type_name, args}) do
+  defp extract_type_def_info(mod, {_, _, type_name, args}) when is_list(args) do
     {mod, type_name, length(args)}
   end
 
