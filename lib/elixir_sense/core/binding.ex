@@ -950,6 +950,10 @@ defmodule ElixirSense.Core.Binding do
   # not a module
   defp expand_call(_env, {:atom, _mod}, _fun, _arity, _include_private, _stack), do: :none
 
+  defp expand_call(_env, target, fun, arity, include_private, _stack) do
+    raise "No clause matched #{inspect(target)}, #{inspect(fun)}, #{inspect(arity)}, #{inspect(include_private)}"
+  end
+
   defp call_arity_match?(fun_arity, fun_defaults, call_arity) do
     fun_arity - fun_defaults <= call_arity and call_arity <= fun_arity
   end
