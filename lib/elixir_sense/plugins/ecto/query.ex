@@ -223,7 +223,7 @@ defmodule ElixirSense.Plugins.Ecto.Query do
     join_matches =
       for join when join in @joins <- func_info.options_so_far,
           code = Source.text_after(prefix, line, col),
-          match <- Regex.scan(~r/^#{join}\:\s*(#{@binding_r})/u, code) do
+          match <- Regex.scan(~r/^#{Regex.escape(join)}\:\s*(#{@binding_r})/u, code) do
         match
       end
 
