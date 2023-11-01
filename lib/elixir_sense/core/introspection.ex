@@ -30,6 +30,7 @@ defmodule ElixirSense.Core.Introspection do
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.State
   alias ElixirSense.Core.TypeInfo
+  require Logger
 
   @type mod_fun :: {module | nil, atom | nil}
 
@@ -421,7 +422,21 @@ defmodule ElixirSense.Core.Introspection do
 
     case List.keyfind(callbacks, key, 0) do
       nil ->
-        raise "Unable to find callback #{inspect(key)}, callbacks were #{inspect(Enum.map(callbacks, &elem(&1, 0)))}"
+        Logger.error(
+          "Unable to match callback #{inspect(key)} from doc chunk, with any of callbacks from typespec #{inspect(Enum.map(callbacks, &elem(&1, 0)))}"
+        )
+
+        args = if(arity == 0, do: "", else: Enum.map_join(1..arity, ", ", "term"))
+
+        %{
+          name: name,
+          kind: kind,
+          arity: arity,
+          callback: "@#{kind} #{name}(#{args})",
+          signature: "",
+          doc: doc,
+          metadata: metadata |> Map.put(:optional, key in optional_callbacks)
+        }
 
       {_, [spec | _]} ->
         spec_ast =
@@ -457,8 +472,6 @@ defmodule ElixirSense.Core.Introspection do
       @wrapped_behaviours
       |> Map.get(mod, mod)
       |> NormalizedCode.get_docs(:callback_docs)
-
-    # no fallback here as :docsh as ov v0.7.2 does not seem to support callbacks
 
     {callbacks, docs || []}
   end
