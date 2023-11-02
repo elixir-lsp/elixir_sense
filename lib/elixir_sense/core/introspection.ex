@@ -494,10 +494,10 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def to_string_with_parens({name, meta, args}) when is_atom(name) do
-    if Code.Formatter.local_without_parens?(
+    if ElixirSense.Core.Normalized.Code.Formatter.local_without_parens?(
          name,
          length(args || []),
-         Code.Formatter.locals_without_parens()
+         ElixirSense.Core.Normalized.Code.Formatter.locals_without_parens()
        ) do
       # Macro.to_string formats some locals without parens
       # notable case is Phoenix.Endpoint.config/2 callback
