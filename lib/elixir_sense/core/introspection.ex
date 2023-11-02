@@ -426,7 +426,7 @@ defmodule ElixirSense.Core.Introspection do
           "Unable to match callback #{inspect(key)} from doc chunk, with any of callbacks from typespec #{inspect(Enum.map(callbacks, &elem(&1, 0)))}"
         )
 
-        args = if(arity == 0, do: "", else: Enum.map_join(1..arity, ", ", "term"))
+        args = if(arity == 0, do: "", else: Enum.map_join(1..arity, ", ", fn _ -> "term" end))
 
         %{
           name: name,
