@@ -377,7 +377,7 @@ quoted_to_erl(Quoted, Env, Scope) ->
 %% Converts a given string (charlist) into quote expression
 
 string_to_tokens(String, StartLine, StartColumn, File, Opts) when is_integer(StartLine), is_binary(File) ->
-  case elixir_tokenizer:tokenize(String, StartLine, StartColumn, [{file, File} | Opts]) of
+  case elixir_sense_tokenizer:tokenize(String, StartLine, StartColumn, [{file, File} | Opts]) of
     {ok, _Line, _Column, Warnings, Tokens} ->
       [elixir_errors:erl_warn(L, F, M) || {L, F, M} <- lists:reverse(Warnings)],
       {ok, Tokens};
@@ -392,7 +392,7 @@ string_to_tokens(String, StartLine, StartColumn, File, Opts) when is_integer(Sta
 tokens_to_quoted(Tokens, WarningFile, Opts) ->
   handle_parsing_opts(WarningFile, Opts),
 
-  try elixir_parser:parse(Tokens) of
+  try elixir_sense_parser:parse(Tokens) of
     {ok, Forms} ->
       {ok, Forms};
     {error, {Line, _, [{ErrorPrefix, ErrorSuffix}, Token]}} ->
