@@ -4,6 +4,7 @@ defmodule ElixirSense.Core.Source do
   """
 
   alias ElixirSense.Core.Binding
+  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.Normalized.Tokenizer
 
   @line_break ["\n", "\r\n", "\r"]
@@ -394,7 +395,7 @@ defmodule ElixirSense.Core.Source do
     binding_env = binding_env || %Binding{}
 
     # TODO refactor to use Macro.path on elixir 1.14
-    with {:ok, ast} <- Code.Fragment.container_cursor_to_quoted(prefix, columns: true),
+    with {:ok, ast} <- NormalizedCode.Fragment.container_cursor_to_quoted(prefix, columns: true),
          {_, {:ok, call, npar, meta, options, cursor_at_option, option}} <-
            Macro.prewalk(ast, nil, &find_call_pre/2),
          {{m, elixir_prefix}, f} when f not in @excluded_funs <- get_mod_fun(call, binding_env) do

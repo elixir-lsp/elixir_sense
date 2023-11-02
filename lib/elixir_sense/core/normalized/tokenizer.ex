@@ -9,24 +9,23 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
   def tokenize(prefix) do
     prefix
     |> String.to_charlist()
-    |> do_tokenize_1_7()
+    |> do_tokenize()
   end
 
-  defp do_tokenize_1_7(prefix_charlist) do
-    case :elixir_tokenizer.tokenize(prefix_charlist, 1, []) do
-      # Elixir < 1.13
-      {:ok, tokens} ->
-        Enum.reverse(tokens)
+  defp do_tokenize(prefix_charlist) do
+    result =
+      if Version.match?(System.version(), ">= 1.14.0-dev") do
+        :elixir_tokenizer.tokenize(prefix_charlist, 1, [])
+      else
+        # fall back to bundled on < 1.13
+        # on 1.13 use our version as it has all the fixes from last 1.13 release
+        :elixir_sense_tokenizer.tokenize(prefix_charlist, 1, [])
+      end
 
-      # Elixir >= 1.13
+    case result do
       {:ok, _line, _column, _warning, tokens} ->
         Enum.reverse(tokens)
 
-      # Elixir < 1.13
-      {:error, {_line, _column, _error_prefix, _token}, _rest, sofar} ->
-        sofar
-
-      # Elixir >= 1.13
       {:error, _, _, _, sofar} ->
         sofar
     end

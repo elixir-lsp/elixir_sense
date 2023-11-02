@@ -80,7 +80,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         _ -> false
       end
 
-    case NormalizedCode.CursorContext.cursor_context(code) do
+    case NormalizedCode.Fragment.cursor_context(code) do
       {:alias, hint} when is_list(hint) ->
         expand_aliases(List.to_string(hint), env, metadata, cursor_position, false, opts)
 

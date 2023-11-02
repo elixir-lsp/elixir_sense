@@ -22,6 +22,7 @@ defmodule ElixirSense do
   alias ElixirSense.Providers.References
   alias ElixirSense.Providers.Signature
   alias ElixirSense.Providers.Suggestion
+  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
   @type callee_t :: {module, atom, non_neg_integer}
 
@@ -58,7 +59,7 @@ defmodule ElixirSense do
           }
           | nil
   def docs(code, line, column) do
-    case Code.Fragment.surround_context(code, {line, column}) do
+    case NormalizedCode.Fragment.surround_context(code, {line, column}) do
       :none ->
         nil
 
@@ -100,7 +101,7 @@ defmodule ElixirSense do
   """
   @spec definition(String.t(), pos_integer, pos_integer) :: Location.t() | nil
   def definition(code, line, column) do
-    case Code.Fragment.surround_context(code, {line, column}) do
+    case NormalizedCode.Fragment.surround_context(code, {line, column}) do
       :none ->
         nil
 
@@ -133,7 +134,7 @@ defmodule ElixirSense do
   """
   @spec implementations(String.t(), pos_integer, pos_integer) :: [Location.t()]
   def implementations(code, line, column) do
-    case Code.Fragment.surround_context(code, {line, column}) do
+    case NormalizedCode.Fragment.surround_context(code, {line, column}) do
       :none ->
         []
 
@@ -430,7 +431,7 @@ defmodule ElixirSense do
           call_trace_t()
         ) :: [References.reference_info()]
   def references(code, line, column, trace) do
-    case Code.Fragment.surround_context(code, {line, column}) do
+    case NormalizedCode.Fragment.surround_context(code, {line, column}) do
       :none ->
         []
 
