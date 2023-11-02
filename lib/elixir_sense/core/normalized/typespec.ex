@@ -5,19 +5,19 @@ defmodule ElixirSense.Core.Normalized.Typespec do
 
   @spec get_specs(module) :: [tuple]
   def get_specs(module) do
-    Code.Typespec.fetch_specs(module)
+    get_module().fetch_specs(module)
     |> extract_specs
   end
 
   @spec get_types(module) :: [tuple]
   def get_types(module) when is_atom(module) do
-    Code.Typespec.fetch_types(module)
+    get_module().fetch_types(module)
     |> extract_specs
   end
 
   @spec get_callbacks(module) :: [tuple]
   def get_callbacks(module) do
-    Code.Typespec.fetch_callbacks(module)
+    get_module().fetch_callbacks(module)
     |> extract_specs
   end
 
@@ -26,11 +26,21 @@ defmodule ElixirSense.Core.Normalized.Typespec do
 
   @spec type_to_quoted(tuple) :: Macro.t()
   def type_to_quoted(type) do
-    Code.Typespec.type_to_quoted(type)
+    get_module().type_to_quoted(type)
   end
 
   @spec spec_to_quoted(atom, tuple) :: {atom, keyword, [Macro.t()]}
   def spec_to_quoted(name, spec) do
-    Code.Typespec.spec_to_quoted(name, spec)
+    get_module().spec_to_quoted(name, spec)
+  end
+
+  defp get_module() do
+    if Version.match?(System.version(), ">= 1.14.0-dev") do
+      Code.Typespec
+    else
+      # fall back to bundled on < 1.13 (1.12 is broken on OTP 24)
+      # on 1.13 use our version as it has all the fixes from last 1.13 release
+      ElixirSense.Core.Normalized.Code.ElixirSense.Typespec
+    end
   end
 end
