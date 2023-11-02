@@ -1201,7 +1201,7 @@ defmodule ElixirSense.Core.Introspection do
               true
 
             {:behaviour_info, {1, :function}} ->
-              if Version.match?(System.version(), ">= 1.15.0") do
+              if Version.match?(System.version(), ">= 1.15.0-dev") do
                 true
               else
                 # elixir < 1.15 imports behaviour_info from erlang behaviours

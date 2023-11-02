@@ -1076,7 +1076,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       # it's only legal inside typespecs
       # credo:disable-for-next-line
       if not Keyword.get(meta, :no_call, false) and
-           (Version.match?(System.version(), "< 1.15.0") or
+           (Version.match?(System.version(), "< 1.15.0-dev") or
               match?([[{:typespec, _, _} | _] | _], state.scopes)) do
         add_call_to_line(state, {nil, var_or_call, 0}, {line, column})
       else

@@ -6,7 +6,7 @@ defmodule ElixirSense.Core.Normalized.Code.CursorContext do
   # credo:disable-for-lines:10
   def cursor_context(binary, opts) do
     cond do
-      Version.match?(System.version(), ">= 1.13.0") ->
+      Version.match?(System.version(), ">= 1.13.0-dev") ->
         apply(Code.Fragment, :cursor_context, [binary, opts])
 
       true ->
