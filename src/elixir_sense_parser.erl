@@ -526,7 +526,7 @@ error_no_parens_container_strict(Node) ->
     "Elixir cannot compile otherwise. Syntax error before: ", "','").
 
 error_invalid_kw_identifier({_, Location, do}) ->
-  return_error(Location, elixir_tokenizer:invalid_do_error("unexpected keyword: "), "do:");
+  return_error(Location, elixir_sense_tokenizer:invalid_do_error("unexpected keyword: "), "do:");
 error_invalid_kw_identifier({_, Location, KW}) ->
   return_error(Location, "syntax error before: ", "'" ++ atom_to_list(KW) ++ ":'").
 

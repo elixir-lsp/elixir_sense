@@ -59,7 +59,7 @@ start(_Type, _Args) ->
 
   Tokenizer = case code:ensure_loaded('Elixir.String.Tokenizer') of
     {module, Mod} -> Mod;
-    _ -> elixir_tokenizer
+    _ -> elixir_sense_tokenizer
   end,
 
   URIConfig = [

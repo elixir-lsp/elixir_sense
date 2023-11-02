@@ -126,7 +126,7 @@ tokenize(String, Line, Column, #elixir_tokenizer{} = Scope) ->
   tokenize(String, Line, Column, Scope, []);
 
 tokenize(String, Line, Column, Opts) ->
-  IdentifierTokenizer = elixir_config:identifier_tokenizer(),
+  IdentifierTokenizer = elixir_sense_config:identifier_tokenizer(),
 
   Scope =
     lists:foldl(fun
@@ -225,7 +225,7 @@ tokenize([$~, S, H, H, H | T] = Original, Line, Column, Scope, Tokens) when ?is_
   end;
 
 tokenize([$~, S, H | T] = Original, Line, Column, Scope, Tokens) when ?is_sigil(H), ?is_upcase(S) orelse ?is_downcase(S) ->
-  case elixir_interpolation:extract(Line, Column + 3, Scope, ?is_downcase(S), T, sigil_terminator(H)) of
+  case elixir_sense_interpolation:extract(Line, Column + 3, Scope, ?is_downcase(S), T, sigil_terminator(H)) of
     {NewLine, NewColumn, Parts, Rest, NewScope} ->
       {Final, Modifiers} = collect_modifiers(Rest, []),
       Indentation = nil,
@@ -255,7 +255,7 @@ tokenize([$~, S, H | _] = Original, Line, Column, Scope, Tokens) when ?is_upcase
 % and printed with Erlang syntax ($a) in the parser's error messages.
 
 tokenize([$?, $\\, H | T], Line, Column, Scope, Tokens) ->
-  Char = elixir_interpolation:unescape_map(H),
+  Char = elixir_sense_interpolation:unescape_map(H),
 
   NewScope = if
     H =:= Char, H =/= $\\ ->
@@ -508,7 +508,7 @@ tokenize([T | Rest], Line, Column, Scope, Tokens) when ?pipe_op(T) ->
 % Non-operator Atoms
 
 tokenize([$:, H | T] = Original, Line, Column, Scope, Tokens) when ?is_quote(H) ->
-  case elixir_interpolation:extract(Line, Column + 2, Scope, true, T, H) of
+  case elixir_sense_interpolation:extract(Line, Column + 2, Scope, true, T, H) of
     {NewLine, NewColumn, Parts, Rest, InterScope} ->
       NewScope = case is_unnecessary_quote(Parts, InterScope) of
         true ->
@@ -775,7 +775,7 @@ handle_heredocs(T, Line, Column, H, Scope, Tokens) ->
   end.
 
 handle_strings(T, Line, Column, H, Scope, Tokens) ->
-  case elixir_interpolation:extract(Line, Column, Scope, true, T, H) of
+  case elixir_sense_interpolation:extract(Line, Column, Scope, true, T, H) of
     {error, Reason} ->
       interpolation_error(Reason, [H | T], Scope, Tokens, " (for string starting at line ~B)", [Line]);
 
@@ -891,7 +891,7 @@ handle_dot([$., $( | Rest], Line, Column, DotInfo, Scope, Tokens) ->
   tokenize([$( | Rest], Line, Column, Scope, TokensSoFar);
 
 handle_dot([$., H | T] = Original, Line, Column, DotInfo, Scope, Tokens) when ?is_quote(H) ->
-  case elixir_interpolation:extract(Line, Column + 1, Scope, true, T, H) of
+  case elixir_sense_interpolation:extract(Line, Column + 1, Scope, true, T, H) of
     {NewLine, NewColumn, [Part], Rest, InterScope} when is_list(Part) ->
       NewScope = case is_unnecessary_quote([Part], InterScope) of
         true ->
@@ -1017,7 +1017,7 @@ extract_heredoc_with_interpolation(Line, Column, Scope, Interpol, T, H) ->
       %% We prepend a new line so we can transparently remove
       %% spaces later. This new line is removed by calling "tl"
       %% in the final heredoc body three lines below.
-      case elixir_interpolation:extract(Line, Column, Scope, Interpol, [$\n|Headerless], [H,H,H]) of
+      case elixir_sense_interpolation:extract(Line, Column, Scope, Interpol, [$\n|Headerless], [H,H,H]) of
         {NewLine, NewColumn, Parts0, Rest, InterScope} ->
           Indent = NewColumn - 4,
           Fun = fun(Part, Acc) -> extract_heredoc_indent(Part, Acc, Indent) end,
@@ -1088,7 +1088,7 @@ maybe_heredoc_warn(Line, Column, Scope, Marker) ->
 extract_heredoc_head([[$\n|H]|T]) -> [H|T].
 
 unescape_tokens(Tokens, Line, Column, #elixir_tokenizer{unescape=true}) ->
-  case elixir_interpolation:unescape_tokens(Tokens) of
+  case elixir_sense_interpolation:unescape_tokens(Tokens) of
     {ok, Result} ->
       {ok, Result};
 
