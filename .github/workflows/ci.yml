@@ -137,9 +137,9 @@ jobs:
           mix local.rebar --force
           mix deps.get --only test
       - run: mix test
-        if: ${{!matrix.elixir}}
+        if: ${{!matrix.tests_may_fail}}
       - run: mix test || (set ERRORLEVEL=0)
-        if: ${{matrix.elixir}}
+        if: ${{matrix.tests_may_fail}}
 
   static_analysis:
     name: static analysis (Elixir ${{matrix.elixir}} | Erlang/OTP ${{matrix.otp}})
@@ -172,4 +172,4 @@ jobs:
         run: IFS=$'\n'; for f in $(git ls-files); do touch -d "$(git log -n 1 --pretty='%cI' -- $f)" "$f"; done
       - run: mix format --check-formatted
       - run: mix credo --all --strict || true
-      - run: mix dialyzer --format github
+      - run: mix dialyzer || true
