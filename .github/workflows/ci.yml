@@ -138,7 +138,7 @@ jobs:
           mix deps.get --only test
       - run: mix test
         if: ${{!matrix.tests_may_fail}}
-      - run: mix test || (set ERRORLEVEL=0)
+      - run: mix test || type nul
         if: ${{matrix.tests_may_fail}}
 
   static_analysis:
