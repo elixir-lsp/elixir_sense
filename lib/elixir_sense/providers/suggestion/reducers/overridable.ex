@@ -43,7 +43,12 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Overridable do
             nil -> ""
           end
 
-        args_list = info.params |> hd |> Enum.map(&(&1 |> elem(0) |> Atom.to_string()))
+        args_list =
+          info.params
+          |> List.last()
+          |> Enum.with_index()
+          |> Enum.map(&Introspection.param_to_var/1)
+
         args = args_list |> Enum.join(", ")
 
         subtype =
