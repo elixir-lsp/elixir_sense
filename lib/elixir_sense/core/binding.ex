@@ -834,12 +834,10 @@ defmodule ElixirSense.Core.Binding do
         _ -> [:none]
       end
 
-    merged = fields |> Keyword.merge(other_fields)
-
-    if :none in merged do
+    if :none in (fields ++ other_fields) do
       :none
     else
-      {:map, merged, nil}
+      {:map, Keyword.merge(fields, other_fields), nil}
     end
   end
 
@@ -848,17 +846,17 @@ defmodule ElixirSense.Core.Binding do
 
     other_fields = expand_map_fields(env, other_map, stack)
 
-    conflicts =
-      MapSet.new(Keyword.keys(fields))
-      |> MapSet.intersection(MapSet.new(Keyword.keys(other_fields)))
-      |> MapSet.to_list()
-      |> Enum.map(&{&1, nil})
-
-    merged = fields |> Keyword.merge(other_fields) |> Keyword.merge(conflicts)
-
-    if :none in merged do
+    if :none in (fields ++ other_fields) do
       :none
     else
+      conflicts =
+        MapSet.new(Keyword.keys(fields))
+        |> MapSet.intersection(MapSet.new(Keyword.keys(other_fields)))
+        |> MapSet.to_list()
+        |> Enum.map(&{&1, nil})
+
+      merged = fields |> Keyword.merge(other_fields) |> Keyword.merge(conflicts)
+
       {:map, merged, nil}
     end
   end
