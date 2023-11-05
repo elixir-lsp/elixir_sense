@@ -46,7 +46,7 @@ defmodule ElixirSenseExample.FunctionsWithReturnSpec do
   @spec f6() :: %{abc: atom}
   def f6(), do: :ok
 
-  @spec f7() :: %{abc: atom}
+  @spec f7() :: %{abc: String}
   @spec f7() :: nil
   def f7(), do: :ok
 

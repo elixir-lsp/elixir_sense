@@ -923,13 +923,30 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "remote call fun with spec intersection different returns" do
-      assert {:union, [{:map, [abc: nil], nil}, {:atom, nil}]} ==
+      assert {:union, [{:map, [abc: {:atom, String}], nil}, {:atom, nil}]} ==
                Binding.expand(
                  @env
                  |> Map.put(:variables, [
                    %VarInfo{
                      name: :ref,
                      type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f7, []}
+                   }
+                 ]),
+                 {:variable, :ref}
+               )
+    end
+
+    test "remote call fun with spec intersection different returns nested" do
+      assert {:atom, String} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{
+                     name: :ref,
+                     type:
+                       {:call,
+                        {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f7, []},
+                        :abc, []}
                    }
                  ]),
                  {:variable, :ref}
