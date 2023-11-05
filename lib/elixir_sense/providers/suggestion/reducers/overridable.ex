@@ -73,7 +73,11 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Overridable do
     String.starts_with?("defmacro", hint)
   end
 
-  defp def_prefix?(hint, type) when type in [:def, :defp] do
+  defp def_prefix?(hint, type) when type in [:defguard, :defguardp] do
+    String.starts_with?("defguard", hint)
+  end
+
+  defp def_prefix?(hint, type) when type in [:def, :defp, :defdelegate] do
     String.starts_with?("def", hint)
   end
 end
