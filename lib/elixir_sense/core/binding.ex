@@ -951,7 +951,7 @@ defmodule ElixirSense.Core.Binding do
   defp expand_call(env, {:union, variants}, fun, arity, include_private, stack) do
     # TODO choose variant by args?
     Enum.find_value(variants, fn variant ->
-      res = expand_call(env, variant |> dbg, fun, arity, include_private, stack)
+      res = expand_call(env, variant, fun, arity, include_private, stack)
 
       if res != :none do
         res
