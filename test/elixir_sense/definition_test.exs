@@ -14,6 +14,26 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert nil == ElixirSense.definition("__MODULE__", 1, 1)
   end
 
+  test "find module definition inside Phoenix's scope" do
+    _define_existing_atom = ExampleWeb
+
+    buffer = """
+    defmodule ExampleWeb.Router do
+      import Phoenix.Router
+
+      scope "/", ExampleWeb do
+        get "/", PageController, :home
+      end
+    end
+    """
+
+    %Location{type: :module, file: file, line: line, column: column} =
+      ElixirSense.definition(buffer, 5, 15)
+
+    assert file =~ "elixir_sense/test/support/plugins/phoenix/page_controller.ex"
+    assert read_line(file, {line, column}) =~ "ExampleWeb.PageController"
+  end
+
   test "find definition of aliased modules in `use`" do
     buffer = """
     defmodule MyModule do
@@ -443,7 +463,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
 
     defmodule B do
       @behaviour A
-      
+
       def abc, do: :ok
     end
 
