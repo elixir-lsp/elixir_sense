@@ -145,7 +145,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
     |> Enum.sort_by(& &1.name)
   end
 
-  def get_field_types(%Metadata{} = metadata, mod, include_private) do
+  def get_field_types(%Metadata{} = metadata, mod, include_private) when is_atom(mod) do
     case get_field_types_from_metadata(metadata, mod, include_private) do
       nil -> get_field_types_from_introspection(mod, include_private)
       res -> res
@@ -178,7 +178,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
 
   defp get_field_types_from_introspection(nil, _include_private), do: %{}
 
-  defp get_field_types_from_introspection(mod, include_private) do
+  defp get_field_types_from_introspection(mod, include_private) when is_atom(mod) do
     # assume struct typespec is t()
     case TypeInfo.get_type_spec(mod, :t, 0) do
       {kind, spec} when type_is_public(kind, include_private) ->

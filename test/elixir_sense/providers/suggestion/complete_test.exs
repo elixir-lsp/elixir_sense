@@ -585,6 +585,10 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
         %VarInfo{
           name: :from_metadata,
           type: {:struct, [], {:atom, MyStruct}, nil}
+        },
+        %VarInfo{
+          name: :var,
+          type: {:variable, :struct}
         }
       ]
     }
@@ -636,6 +640,18 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                  subtype: :struct_field,
                  type: :field,
                  type_spec: "integer"
+               }
+             ]
+
+    assert expand(~c"var.h", env, metadata) ==
+             [
+               %{
+                 call?: true,
+                 name: "hour",
+                 origin: "DateTime",
+                 subtype: :struct_field,
+                 type: :field,
+                 type_spec: "Calendar.hour()"
                }
              ]
   end

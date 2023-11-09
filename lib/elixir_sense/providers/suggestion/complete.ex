@@ -1209,7 +1209,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp match_map_fields(fields, hint, type, %State.Env{} = _env, %Metadata{} = metadata) do
     {subtype, origin, types} =
       case type do
-        {:struct, mod} ->
+        {:struct, mod} when is_atom(mod) ->
           types =
             Reducers.Struct.get_field_types(
               metadata,
@@ -1221,6 +1221,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
         :map ->
           {:map_key, nil, %{}}
+
+        other ->
+          raise "unexpected #{inspect(other)} for hint #{inspect(hint)}"
       end
 
     for {key, value} when is_atom(key) <- fields,
