@@ -42,8 +42,7 @@ defmodule ElixirSense.Plugins.Phoenix.Scope do
        do: module
 
   # scope path: "/", alias: ExampleWeb do ... end
-  defp get_scope_alias([{:scope, _, [scope_params]}], binding_env, module)
-       when is_list(scope_params) do
+  defp get_scope_alias([{:scope, _, [scope_params]}], binding_env, module) do
     scope_alias = Keyword.get(scope_params, :alias)
     scope_alias = get_mod(scope_alias, binding_env)
     safe_concat(module, scope_alias)
