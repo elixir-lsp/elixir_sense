@@ -1,4 +1,6 @@
 defmodule ElixirSense.Plugins.Phoenix.Scope do
+  @moduledoc false
+
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.Binding
 

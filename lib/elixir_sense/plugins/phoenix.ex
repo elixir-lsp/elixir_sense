@@ -1,4 +1,6 @@
 defmodule ElixirSense.Plugins.Phoenix do
+  @moduledoc false
+
   @behaviour ElixirSense.Plugin
 
   use ElixirSense.Providers.Suggestion.GenericReducer
