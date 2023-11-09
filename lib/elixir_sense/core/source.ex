@@ -396,25 +396,26 @@ defmodule ElixirSense.Core.Source do
 
     # TODO refactor to use Macro.path on elixir 1.14
     with {:ok, ast} <- NormalizedCode.Fragment.container_cursor_to_quoted(prefix, columns: true),
-         {_, {:ok, call, npar, meta, options, cursor_at_option, option}} <-
-           Macro.prewalk(ast, nil, &find_call_pre/2),
-         {{m, elixir_prefix}, f} when f not in @excluded_funs <- get_mod_fun(call, binding_env) do
+         {_, {:ok, call_info}} <- Macro.prewalk(ast, nil, &find_call_pre/2),
+         {{m, elixir_prefix}, f} when f not in @excluded_funs <-
+           get_mod_fun(call_info.call, binding_env) do
       %{
         candidate: {m, f},
         elixir_prefix: elixir_prefix,
-        npar: npar,
-        pos: {{meta[:line], meta[:column]}, {meta[:line], nil}},
-        cursor_at_option: cursor_at_option,
-        options_so_far: options,
-        option: option
+        params: call_info.params,
+        npar: call_info.npar,
+        pos: {{call_info.meta[:line], call_info.meta[:column]}, {call_info.meta[:line], nil}},
+        cursor_at_option: call_info.cursor_at_option,
+        options_so_far: call_info.options,
+        option: call_info.option
       }
     else
       _ -> nil
     end
   end
 
-  def find_call_pre(ast, {:ok, call, npar, meta, options, cursor_at_option, option}),
-    do: {ast, {:ok, call, npar, meta, options, cursor_at_option, option}}
+  def find_call_pre(ast, {:ok, call_info}),
+    do: {ast, {:ok, call_info}}
 
   # transform `a |> b(c)` calls into `b(a, c)`
   def find_call_pre({:|>, _, [params_1, {call, meta, params_rest}]}, state) do
@@ -436,20 +437,45 @@ defmodule ElixirSense.Core.Source do
   defp find_cursor_in_params(params, call, meta) do
     case Enum.reverse(params) do
       [{:__cursor__, _, []} | rest] ->
-        {:ok, call, length(rest), meta, [], :maybe, nil}
+        {:ok,
+         %{
+           call: call,
+           params: Enum.reverse(rest),
+           npar: length(rest),
+           meta: meta,
+           options: [],
+           cursor_at_option: :maybe,
+           option: nil
+         }}
 
       [keyword_list | rest] when is_list(keyword_list) ->
         case Enum.reverse(keyword_list) do
           [{:__cursor__, _, []} | kl_rest] ->
             if Keyword.keyword?(kl_rest) do
-              {:ok, call, length(rest), meta, Enum.reverse(kl_rest) |> Enum.map(&elem(&1, 0)),
-               true, nil}
+              {:ok,
+               %{
+                 call: call,
+                 params: Enum.reverse(rest),
+                 npar: length(rest),
+                 meta: meta,
+                 options: Enum.reverse(kl_rest) |> Enum.map(&elem(&1, 0)),
+                 cursor_at_option: true,
+                 option: nil
+               }}
             end
 
           [{atom, {:__cursor__, _, []}} | kl_rest] when is_atom(atom) ->
             if Keyword.keyword?(kl_rest) do
-              {:ok, call, length(rest), meta, Enum.reverse(kl_rest) |> Enum.map(&elem(&1, 0)),
-               false, atom}
+              {:ok,
+               %{
+                 call: call,
+                 params: Enum.reverse(rest),
+                 npar: length(rest),
+                 meta: meta,
+                 options: Enum.reverse(kl_rest) |> Enum.map(&elem(&1, 0)),
+                 cursor_at_option: false,
+                 option: atom
+               }}
             end
 
           _ ->
@@ -499,6 +525,10 @@ defmodule ElixirSense.Core.Source do
 
   def get_mod_fun([atom, fun], _binding_env) when is_atom(atom), do: {{atom, false}, fun}
   def get_mod_fun(_, _binding_env), do: nil
+
+  def get_mod([{:__aliases__, _, list} | _rest], binding_env) do
+    get_mod(list, binding_env)
+  end
 
   def get_mod([{:__MODULE__, _, nil} | rest], binding_env) do
     if binding_env.current_module not in [nil, Elixir] do
