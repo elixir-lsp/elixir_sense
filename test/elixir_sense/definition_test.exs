@@ -14,6 +14,7 @@ defmodule ElixirSense.Providers.DefinitionTest do
     assert nil == ElixirSense.definition("__MODULE__", 1, 1)
   end
 
+  @tag requires_elixir_1_14: true
   test "find module definition inside Phoenix's scope" do
     _define_existing_atom = ExampleWeb
 
