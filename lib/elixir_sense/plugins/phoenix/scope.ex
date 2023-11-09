@@ -21,8 +21,7 @@ defmodule ElixirSense.Plugins.Phoenix.Scope do
       path
       |> Enum.filter(&match?({:scope, _, _}, &1))
       |> Enum.map(fn {:scope, meta, params} ->
-        # drop `do` block from params
-        params = Enum.filter(params, &(not match?([{:do, _} | _], &1)))
+        params = Enum.reject(params, &match?([{:do, _} | _], &1))
         {:scope, meta, params}
       end)
 
@@ -90,11 +89,8 @@ defmodule ElixirSense.Plugins.Phoenix.Scope do
 
   defp get_mod(scope_alias, binding_env) do
     case scope_alias do
-      {:__aliases__, _, [scope_alias]} ->
-        scope_alias
-
-      _ ->
-        Source.get_mod([scope_alias], binding_env)
+      {:__aliases__, _, [scope_alias]} -> scope_alias
+      _ -> Source.get_mod([scope_alias], binding_env)
     end
   end
 end
