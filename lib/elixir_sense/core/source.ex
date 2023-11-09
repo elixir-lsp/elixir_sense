@@ -224,7 +224,11 @@ defmodule ElixirSense.Core.Source do
         otherwise -> otherwise
       end
 
-    {:ok, Module.concat(module_list), hd(module_list) == Elixir}
+    try do
+      {:ok, Module.concat(module_list), hd(module_list) == Elixir}
+    rescue
+      _ -> :error
+    end
   end
 
   defp extract_module({:__MODULE__, _, nil}, current_module) do
