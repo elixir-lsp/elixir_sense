@@ -398,6 +398,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
   defp expand_sigil(%State.Env{} = env, %Metadata{} = metadata, cursor_position) do
     sigils =
       match_local("sigil_", false, env, metadata, cursor_position)
+      |> Enum.filter(fn %{name: name} -> String.starts_with?(name, "sigil_") end)
       |> Enum.map(fn %{name: "sigil_" <> rest} = local ->
         %{local | name: "~" <> rest}
       end)

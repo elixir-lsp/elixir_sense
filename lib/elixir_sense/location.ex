@@ -7,6 +7,7 @@ defmodule ElixirSense.Location do
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State.ModFunInfo
+  alias ElixirSense.Core.Normalized.Code, as: CodeNormalized
   require ElixirSense.Core.Introspection, as: Introspection
   alias ElixirSense.Location
 
@@ -192,7 +193,7 @@ defmodule ElixirSense.Location do
   end
 
   defp get_function_position_using_docs(module, nil, _) do
-    case Code.fetch_docs(module) do
+    case CodeNormalized.fetch_docs(module) do
       {:error, _} ->
         nil
 
@@ -220,7 +221,7 @@ defmodule ElixirSense.Location do
   end
 
   defp get_function_position_using_docs(module, function, arity) do
-    case Code.fetch_docs(module) do
+    case CodeNormalized.fetch_docs(module) do
       {:error, _} ->
         nil
 
@@ -257,7 +258,7 @@ defmodule ElixirSense.Location do
   end
 
   def get_type_position_using_docs(module, type_name, arity) do
-    case Code.fetch_docs(module) do
+    case CodeNormalized.fetch_docs(module) do
       {:error, _} ->
         nil
 
