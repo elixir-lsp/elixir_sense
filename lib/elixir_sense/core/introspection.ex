@@ -654,7 +654,7 @@ defmodule ElixirSense.Core.Introspection do
         :implementation
 
       has_func.(:__struct__, 0) ->
-        if Map.get(module.__struct__, :__exception__) do
+        if has_func.(:exception, 1) do
           :exception
         else
           :struct
