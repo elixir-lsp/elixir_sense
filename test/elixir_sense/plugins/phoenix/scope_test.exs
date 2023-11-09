@@ -2,6 +2,7 @@ defmodule ElixirSense.Plugins.Phoenix.ScopeTest do
   use ExUnit.Case
   alias ElixirSense.Plugins.Phoenix.Scope
 
+  @moduletag requires_elixir_1_14: true
   describe "within_scope/1" do
     test "returns true and nil alias" do
       buffer = """

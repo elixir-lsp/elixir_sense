@@ -2,6 +2,7 @@ defmodule ElixirSense.Plugins.PhoenixTest do
   use ExUnit.Case
   import TestHelper
 
+  @moduletag requires_elixir_1_14: true
   describe "suggestions/4" do
     test "overrides with controllers for phoenix_route_funcs, when in the second parameter" do
       buffer = """
