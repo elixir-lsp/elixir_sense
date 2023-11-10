@@ -92,6 +92,16 @@ defmodule ElixirSense.Plugins.Phoenix.Scope do
     get_mod(scope_alias, binding_env)
   end
 
+  defp get_mod({name, _, nil}, binding_env) when is_atom(name) do
+    case Binding.expand(binding_env, {:variable, name}) do
+      {:atom, atom} ->
+        atom
+
+      _ ->
+        nil
+    end
+  end
+
   defp get_mod(scope_alias, binding_env) do
     with {mod, _} <- Source.get_mod([scope_alias], binding_env) do
       mod
