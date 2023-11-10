@@ -526,7 +526,7 @@ defmodule ElixirSense.Core.Source do
   def get_mod_fun([atom, fun], _binding_env) when is_atom(atom), do: {{atom, false}, fun}
   def get_mod_fun(_, _binding_env), do: nil
 
-  def get_mod([{name, _, nil} | _rest], binding_env) do
+  def get_mod([{name, _, nil} | _rest], binding_env) when is_atom(name) do
     case Binding.expand(binding_env, {:variable, name}) do
       {:atom, atom} ->
         {atom, false}
