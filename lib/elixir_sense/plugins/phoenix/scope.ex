@@ -88,10 +88,13 @@ defmodule ElixirSense.Plugins.Phoenix.Scope do
     safe_concat([module, scope_alias, get_scope_alias(tail, binding_env)])
   end
 
+  defp get_mod({:__aliases__, _, [scope_alias]}, binding_env) do
+    get_mod(scope_alias, binding_env)
+  end
+
   defp get_mod(scope_alias, binding_env) do
-    case scope_alias do
-      {:__aliases__, _, [scope_alias]} -> scope_alias
-      _ -> Source.get_mod([scope_alias], binding_env)
+    with {mod, _} <- Source.get_mod([scope_alias], binding_env) do
+      mod
     end
   end
 end

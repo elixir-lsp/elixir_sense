@@ -28,7 +28,8 @@ defmodule ElixirSense.Plugins.Phoenix do
     @impl true
     def suggestions(hint, {Phoenix.Router, func, 1, _info}, _list, opts)
         when func in @phoenix_route_funcs do
-      {_, scope_alias} = Scope.within_scope(opts.cursor_context.text_before)
+      binding = Binding.from_env(opts.env, opts.buffer_metadata)
+      {_, scope_alias} = Scope.within_scope(opts.cursor_context.text_before, binding)
 
       case find_controllers(opts.module_store, opts.env, hint, scope_alias) do
         [] -> :ignore

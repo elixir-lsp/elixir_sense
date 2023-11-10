@@ -1,5 +1,6 @@
 defmodule ElixirSense.Plugins.Phoenix.ScopeTest do
   use ExUnit.Case
+  alias ElixirSense.Core.Binding
   alias ElixirSense.Plugins.Phoenix.Scope
 
   @moduletag requires_elixir_1_14: true
@@ -42,6 +43,68 @@ defmodule ElixirSense.Plugins.Phoenix.ScopeTest do
       """
 
       assert {true, ExampleWeb.Admin} = Scope.within_scope(buffer)
+    end
+
+    test "can expand module attributes" do
+      buffer = """
+      defmodule ExampleWeb.Router do
+        import Phoenix.Router
+        @web_prefix ExampleWweb
+
+        scope "/", @web_prefix do
+          get "/",
+      """
+
+      binding = %Binding{
+        structs: %{},
+        variables: [],
+        attributes: [
+          %ElixirSense.Core.State.AttributeInfo{
+            name: :web_prefix,
+            positions: [{4, 5}],
+            type: {:atom, ExampleWeb}
+          }
+        ],
+        current_module: ExampleWeb.Router,
+        imports: [{Kernel, []}, {Phoenix.Router, []}],
+        specs: %{},
+        types: %{},
+        mods_funs: %{}
+      }
+
+      assert {true, ExampleWeb} = Scope.within_scope(buffer, binding)
+    end
+
+    test "can expand variables" do
+      buffer = """
+      defmodule ExampleWeb.Router do
+        import Phoenix.Router
+        web_prefix = ExampleWweb
+
+        scope "/", web_prefix do
+          get "/",
+      """
+
+      binding = %Binding{
+        structs: %{},
+        variables: [
+          %ElixirSense.Core.State.VarInfo{
+            name: :web_prefix,
+            positions: [{5, 5}],
+            scope_id: 2,
+            is_definition: true,
+            type: {:atom, ExampleWeb}
+          }
+        ],
+        attributes: [],
+        current_module: ExampleWeb.Router,
+        imports: [{Kernel, []}, {Phoenix.Router, []}],
+        specs: %{},
+        types: %{},
+        mods_funs: %{}
+      }
+
+      assert {true, ExampleWeb} = Scope.within_scope(buffer, binding)
     end
 
     test "returns false" do
