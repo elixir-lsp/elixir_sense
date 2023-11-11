@@ -1250,14 +1250,22 @@ defmodule ElixirSense.Core.MetadataBuilder do
     line = Keyword.fetch!(meta1, :line)
     column = Keyword.fetch!(meta1, :column)
 
-    module = concat_module_expression(state, module_expression)
+    try do
+      module =
+        concat_module_expression(state, module_expression)
+        |> Module.concat()
 
-    shift = if state.generated, do: 0, else: 1
+      shift = if state.generated, do: 0, else: 1
 
-    state
-    |> add_call_to_line({Module.concat(module), call, length(params)}, {line, column + shift})
-    |> add_current_env_to_line(line)
-    |> result(ast)
+      state
+      |> add_call_to_line({module, call, length(params)}, {line, column + shift})
+      |> add_current_env_to_line(line)
+      |> result(ast)
+    rescue
+      _ ->
+        # Module.concat can fail for invalid aliases
+        result(state, nil)
+    end
   end
 
   defp pre(
@@ -1851,7 +1859,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   # elixir module
   def get_binding_type(state, {:__aliases__, _, list}) when is_list(list) do
-    {:atom, expand_alias(state, list)}
+    try do
+      {:atom, expand_alias(state, list)}
+    rescue
+      _ -> nil
+    end
   end
 
   # variable or local no parens call
