@@ -519,13 +519,17 @@ defmodule ElixirSense.Core.Source do
   def get_mod([{:@, _, [{name, _, nil}]} | rest], binding_env) when is_atom(name) do
     case Binding.expand(binding_env, {:attribute, name}) do
       {:atom, atom} ->
-        mod =
-          atom
-          |> Module.split()
-          |> Kernel.++(rest)
-          |> Module.concat()
+        if ElixirSense.Core.Introspection.elixir_module?(atom) do
+          mod =
+            atom
+            |> Module.split()
+            |> Kernel.++(rest)
+            |> Module.concat()
 
-        {mod, false}
+          {mod, false}
+        else
+          nil
+        end
 
       _ ->
         nil
