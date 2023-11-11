@@ -41,20 +41,16 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Returns do
     callbacks =
       for mod <- behaviours,
           protocol == nil or mod != elem(protocol, 0),
-          Introspection.define_callback?(mod, fun, arity),
           return <- Introspection.get_returns_from_callback(mod, fun, arity) do
         format_return(return)
       end
 
+    # TODO metadata protocols and behaviours
     protocol_functions =
       case protocol do
         {proto, _implementations} ->
-          if Introspection.define_callback?(proto, fun, arity) do
-            for return <- Introspection.get_returns_from_callback(proto, fun, arity) do
-              format_return(return)
-            end
-          else
-            []
+          for return <- Introspection.get_returns_from_callback(proto, fun, arity) do
+            format_return(return)
           end
 
         nil ->

@@ -23,34 +23,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
            """
   end
 
-  test "format_spec_ast for callback with opaque" do
-    ast = get_callback_ast(ElixirSenseExample.CallbackOpaque, :do_stuff, 2)
-
-    assert format_spec_ast(ast) == """
-           do_stuff(t(a), term()) :: t(a) when a: any()\
-           """
-  end
-
-  test "format_spec_ast for macrocallback" do
-    ast =
-      get_callback_ast(ElixirSenseExample.BehaviourWithMacrocallback, :required, 1)
-      |> remove_first_macro_arg()
-
-    assert format_spec_ast(ast) == """
-           required(atom()) :: Macro.t()\
-           """
-  end
-
-  test "format_spec_ast for callback" do
-    ast = get_callback_ast(GenServer, :code_change, 3)
-
-    assert format_spec_ast(ast) == """
-           code_change(old_vsn, state :: term(), extra :: term()) ::
-             {:ok, new_state :: term()} |
-             {:error, reason :: term()} when old_vsn: term() | {:down, term()}\
-           """
-  end
-
   test "get_callbacks_with_docs for with opaque" do
     assert get_callbacks_with_docs(ElixirSenseExample.CallbackOpaque) == [
              %{

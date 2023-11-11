@@ -37,13 +37,6 @@ defmodule ElixirSense.Core.Introspection do
   @type module_subtype ::
           :exception | :protocol | :implementation | :behaviour | :struct | :task | :alias | nil
 
-  @wrapped_behaviours %{
-    :gen_server => GenServer,
-    :gen_event => GenEvent,
-    :supervisor => Supervisor,
-    :application => Application
-  }
-
   defguard matches_arity?(is, expected)
            when is != nil and
                   (expected == :any or is == expected or
@@ -223,10 +216,6 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def get_callbacks_with_docs(mod) when is_atom(mod) do
-    mod =
-      @wrapped_behaviours
-      |> Map.get(mod, mod)
-
     optional_callbacks =
       if Code.ensure_loaded?(mod) and function_exported?(mod, :behaviour_info, 1),
         do: mod.behaviour_info(:optional_callbacks),
@@ -349,19 +338,26 @@ defmodule ElixirSense.Core.Introspection do
     name_str <> returns_str
   end
 
-  def define_callback?(mod, fun, arity) do
-    mod
-    |> Typespec.get_callbacks()
-    |> Enum.any?(fn {{f, a}, _} ->
-      drop_macro_prefix({f, a}) == {fun, arity}
-    end)
-  end
+  def get_returns_from_callback(behaviour, callback, arity) do
+    callbacks = Typespec.get_callbacks(behaviour)
 
-  def get_returns_from_callback(module, func, arity) do
-    @wrapped_behaviours
-    |> Map.get(module, module)
-    |> get_callback_ast(func, arity)
-    |> get_returns_from_spec_ast
+    found =
+      callbacks
+      |> Enum.find(fn {{f, a}, _} ->
+        drop_macro_prefix({f, a}) == {callback, arity}
+      end)
+
+    case found do
+      {{name, _}, [spec | _]} ->
+        ast =
+          Typespec.spec_to_quoted(name, spec)
+          |> Macro.prewalk(&drop_macro_env/1)
+
+        get_returns_from_spec_ast(ast)
+
+      nil ->
+        []
+    end
   end
 
   def get_returns_from_spec_ast(ast) do
@@ -467,11 +463,7 @@ defmodule ElixirSense.Core.Introspection do
 
   defp get_callbacks_and_docs(mod) do
     callbacks = Typespec.get_callbacks(mod)
-
-    docs =
-      @wrapped_behaviours
-      |> Map.get(mod, mod)
-      |> NormalizedCode.get_docs(:callback_docs)
+    docs = NormalizedCode.get_docs(mod, :callback_docs)
 
     {callbacks, docs || []}
   end
@@ -746,18 +738,6 @@ defmodule ElixirSense.Core.Introspection do
 
       {{f, a}, {func_kind, formatted_args, desc, metadata, spec_to_string(spec, :callback)}}
     end
-  end
-
-  def get_callback_ast(module, callback, arity) do
-    {{name, _}, [spec | _]} =
-      module
-      |> Typespec.get_callbacks()
-      |> Enum.find(fn {{f, a}, _} ->
-        drop_macro_prefix({f, a}) == {callback, arity}
-      end)
-
-    Typespec.spec_to_quoted(name, spec)
-    |> Macro.prewalk(&drop_macro_env/1)
   end
 
   defp format_doc_arg({:\\, _, [left, right]}) do
