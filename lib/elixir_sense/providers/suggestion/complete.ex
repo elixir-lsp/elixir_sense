@@ -1235,6 +1235,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
     for {key, value} when is_atom(key) <- fields,
         key_str = Atom.to_string(key),
+        not Regex.match?(~r/^[A-Z]/u, key_str),
         Matcher.match?(key_str, hint) do
       value_is_map =
         case value do
