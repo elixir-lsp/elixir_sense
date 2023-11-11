@@ -623,6 +623,13 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           no()
         end
 
+      {:ok, _} ->
+        # this clause can match e.g. in
+        # @abc %{SOME: 123}
+        # @abc.SOME
+        # but this code does not compile as it defines an invalid alias
+        no()
+
       :error ->
         no()
     end
