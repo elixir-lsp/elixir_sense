@@ -54,8 +54,20 @@ defmodule ElixirSense.Core.Binding do
   end
 
   def expand(%Binding{} = env, expanded, stack \\ []) do
-    unless expanded in stack do
-      do_expand(env, expanded, [expanded | stack])
+    res =
+      unless expanded in stack do
+        do_expand(env, expanded, [expanded | stack])
+      end
+
+    case res do
+      {:struct, _, _, _} ->
+        do_expand(env, res, [res | stack])
+
+      {:map, _, _} ->
+        do_expand(env, res, [res | stack])
+
+      _ ->
+        res
     end
   end
 
@@ -99,14 +111,6 @@ defmodule ElixirSense.Core.Binding do
   end
 
   def do_expand(
-        _env,
-        {:struct, _fields, module, _updated_struct} = s,
-        _stack
-      )
-      when is_atom(module) and not is_nil(module),
-      do: s
-
-  def do_expand(
         %Binding{structs: structs} = env,
         {:struct, fields, module, updated_struct},
         stack
@@ -133,7 +137,7 @@ defmodule ElixirSense.Core.Binding do
       {fields, module} =
         get_struct_fields(env, get_fields_from(expanded) |> Keyword.merge(fields), module)
 
-      {:struct, fields, module, nil}
+      {:struct, fields, if(module != nil, do: {:atom, module}), nil}
     else
       :none
     end
@@ -1375,7 +1379,7 @@ defmodule ElixirSense.Core.Binding do
         {key, from_var(value)}
       end
 
-    {:struct, fields |> Keyword.put(:__struct__, {:atom, type}), type, nil}
+    {:struct, fields |> Keyword.put(:__struct__, {:atom, type}), {:atom, type}, nil}
   end
 
   def from_var(map) when is_map(map) do

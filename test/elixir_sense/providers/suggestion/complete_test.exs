@@ -589,6 +589,14 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
         %VarInfo{
           name: :var,
           type: {:variable, :struct}
+        },
+        %VarInfo{
+          name: :yyyy,
+          type: {:map, [date: {:struct, [], {:atom, DateTime}, nil}], []}
+        },
+        %VarInfo{
+          name: :xxxx,
+          type: {:call, {:atom, Map}, :fetch!, [{:variable, :yyyy}, {:atom, :date}]}
         }
       ]
     }
@@ -644,6 +652,18 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
              ]
 
     assert expand(~c"var.h", env, metadata) ==
+             [
+               %{
+                 call?: true,
+                 name: "hour",
+                 origin: "DateTime",
+                 subtype: :struct_field,
+                 type: :field,
+                 type_spec: "Calendar.hour()"
+               }
+             ]
+
+    assert expand(~c"xxxx.h", env, metadata) ==
              [
                %{
                  call?: true,

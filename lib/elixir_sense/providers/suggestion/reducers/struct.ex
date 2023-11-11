@@ -107,10 +107,13 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
   defp expand_map_field_access(metadata, fields, hint, type, fields_so_far) do
     {subtype, origin, types} =
       case type do
-        {:struct, mod} ->
+        {:struct, {:atom, mod}} ->
           types = get_field_types(metadata, mod, true)
 
-          {:struct_field, if(mod, do: inspect(mod)), types}
+          {:struct_field, inspect(mod), types}
+
+        {:struct, nil} ->
+          {:struct_field, nil, %{}}
 
         :map ->
           {:map_key, nil, %{}}

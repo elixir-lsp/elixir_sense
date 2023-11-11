@@ -97,7 +97,7 @@ defmodule ElixirSense.Core.BindingTest do
                 __struct__: {:atom, ElixirSenseExample.ModuleWithTypedStruct},
                 other: nil,
                 typed_field: nil
-              ], ElixirSenseExample.ModuleWithTypedStruct,
+              ], {:atom, ElixirSenseExample.ModuleWithTypedStruct},
               nil} ==
                Binding.expand(
                  @env,
@@ -105,7 +105,7 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "introspection module not a stuct" do
+    test "introspection module not a struct" do
       assert :none ==
                Binding.expand(@env, {:struct, [], {:atom, ElixirSenseExample.EmptyModule}, nil})
     end
@@ -116,7 +116,7 @@ defmodule ElixirSense.Core.BindingTest do
                 __struct__: {:atom, ElixirSenseExample.ModuleWithTypedStruct},
                 other: {:atom, :a},
                 typed_field: {:atom, :b}
-              ], ElixirSenseExample.ModuleWithTypedStruct,
+              ], {:atom, ElixirSenseExample.ModuleWithTypedStruct},
               nil} ==
                Binding.expand(
                  @env,
@@ -133,7 +133,7 @@ defmodule ElixirSense.Core.BindingTest do
                 __struct__: {:atom, ElixirSenseExample.ModuleWithTypedStruct},
                 other: {:atom, :a},
                 typed_field: {:atom, :b}
-              ], ElixirSenseExample.ModuleWithTypedStruct,
+              ], {:atom, ElixirSenseExample.ModuleWithTypedStruct},
               nil} ==
                Binding.expand(
                  @env,
@@ -149,7 +149,7 @@ defmodule ElixirSense.Core.BindingTest do
                 __struct__: {:atom, ElixirSenseExample.ModuleWithTypedStruct},
                 other: nil,
                 typed_field: nil
-              ], ElixirSenseExample.ModuleWithTypedStruct,
+              ], {:atom, ElixirSenseExample.ModuleWithTypedStruct},
               nil} ==
                Binding.expand(
                  @env
@@ -175,7 +175,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "metadata struct" do
-      assert {:struct, [__struct__: {:atom, MyMod}, abc: nil], MyMod, nil} ==
+      assert {:struct, [__struct__: {:atom, MyMod}, abc: nil], {:atom, MyMod}, nil} ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -832,7 +832,7 @@ defmodule ElixirSense.Core.BindingTest do
               [
                 __struct__: {:atom, ElixirSenseExample.FunctionsWithReturnSpec},
                 abc: {:map, [key: {:atom, nil}], nil}
-              ], ElixirSenseExample.FunctionsWithReturnSpec,
+              ], {:atom, ElixirSenseExample.FunctionsWithReturnSpec},
               nil} ==
                Binding.expand(
                  @env
@@ -849,7 +849,7 @@ defmodule ElixirSense.Core.BindingTest do
     test "remote call fun with spec remote t expanding to struct" do
       assert {:struct,
               [__struct__: {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}, abc: nil],
-              ElixirSenseExample.FunctionsWithReturnSpec.Remote,
+              {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote},
               nil} ==
                Binding.expand(
                  @env
@@ -866,7 +866,7 @@ defmodule ElixirSense.Core.BindingTest do
     test "remote call fun with spec struct" do
       assert {:struct,
               [__struct__: {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, abc: nil],
-              ElixirSenseExample.FunctionsWithReturnSpec,
+              {:atom, ElixirSenseExample.FunctionsWithReturnSpec},
               nil} ==
                Binding.expand(
                  @env
@@ -1041,7 +1041,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "local call metadata fun returning struct" do
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], MyMod, nil} ==
+      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -1074,7 +1074,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "local call metadata fun returning local type expanding to struct" do
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], MyMod, nil} ==
+      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -1115,7 +1115,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "local call metadata fun returning local type expanding to private type" do
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], MyMod, nil} ==
+      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -1158,7 +1158,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "remote call metadata public fun returning local type expanding to struct" do
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], MyMod, nil} ==
+      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -1323,7 +1323,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref}
                )
 
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], MyMod, nil} ==
+      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
                Binding.expand(
                  env
                  |> Map.put(:variables, [
@@ -1332,7 +1332,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref}
                )
 
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], MyMod, nil} ==
+      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
                Binding.expand(
                  env
                  |> Map.put(:variables, [
@@ -1341,7 +1341,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref}
                )
 
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], MyMod, nil} ==
+      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
                Binding.expand(
                  env
                  |> Map.put(:variables, [
@@ -1869,7 +1869,7 @@ defmodule ElixirSense.Core.BindingTest do
     test "intersection" do
       assert {:struct,
               [{:__struct__, {:atom, State}}, {:abc, nil}, {:formatted, {:variable, :formatted}}],
-              State,
+              {:atom, State},
               nil} ==
                Binding.expand(
                  @env
@@ -1956,7 +1956,7 @@ defmodule ElixirSense.Core.BindingTest do
                 {:__struct__, {:atom, State}},
                 {:abc, {:atom, X}},
                 {:formatted, {:variable, :formatted}}
-              ], State,
+              ], {:atom, State},
               nil} ==
                Binding.expand(
                  @env
@@ -1979,7 +1979,7 @@ defmodule ElixirSense.Core.BindingTest do
                 {:__struct__, {:atom, State}},
                 {:abc, {:atom, X}},
                 {:formatted, {:variable, :formatted}}
-              ], State,
+              ], {:atom, State},
               nil} ==
                Binding.expand(
                  @env
@@ -2042,7 +2042,7 @@ defmodule ElixirSense.Core.BindingTest do
                 {:__struct__, {:atom, State}},
                 {:abc, {:atom, X}},
                 {:formatted, {:variable, :formatted}}
-              ], State,
+              ], {:atom, State},
               nil} ==
                Binding.expand(
                  @env
@@ -2065,7 +2065,7 @@ defmodule ElixirSense.Core.BindingTest do
                 {:__struct__, {:atom, State}},
                 {:abc, {:atom, X}},
                 {:formatted, {:variable, :formatted}}
-              ], State,
+              ], {:atom, State},
               nil} ==
                Binding.expand(
                  @env
@@ -2090,7 +2090,7 @@ defmodule ElixirSense.Core.BindingTest do
                 {:__struct__, {:atom, State}},
                 {:abc, {:atom, X}},
                 {:formatted, {:variable, :formatted}}
-              ], State,
+              ], {:atom, State},
               nil} ==
                Binding.expand(
                  @env
@@ -2163,7 +2163,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert_is_stable(
         Binding.from_var(%{__struct__: BindingTest.Some, asd: 123}),
         {:struct, [{:__struct__, {:atom, BindingTest.Some}}, {:asd, {:integer, 123}}],
-         BindingTest.Some, nil}
+         {:atom, BindingTest.Some}, nil}
       )
     end
   end
