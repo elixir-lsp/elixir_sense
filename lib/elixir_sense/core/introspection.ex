@@ -429,7 +429,7 @@ defmodule ElixirSense.Core.Introspection do
           kind: kind,
           arity: arity,
           callback: "@#{kind} #{name}(#{args})",
-          signature: "",
+          signature: nil,
           doc: doc,
           metadata: metadata |> Map.put(:optional, key in optional_callbacks)
         }

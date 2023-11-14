@@ -43,23 +43,44 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
                 Introspection.get_callbacks_with_docs(mod),
               def_prefix?(hint, spec) or Matcher.match?("#{name}", hint) do
             desc = Introspection.extract_summary_from_docs(doc)
-            [_, args_str] = Regex.run(~r/.\(([^\)]*)\)/u, signature)
 
-            args_list =
-              args_str
-              |> String.split(",")
-              |> Enum.map(&String.trim/1)
+            {args, args_list} =
+              if signature do
+                match_res = Regex.run(~r/.\(([^\)]*)\)/u, signature)
+
+                unless match_res do
+                  raise "unable to get arguments from #{inspect(signature)}"
+                end
+
+                [_, args_str] = match_res
+
+                args_list =
+                  args_str
+                  |> String.split(",")
+                  |> Enum.map(&String.trim/1)
+
+                args =
+                  args_str
+                  |> String.replace("\n", " ")
+                  |> String.split(",")
+                  |> Enum.map_join(", ", &String.trim/1)
+
+                {args, args_list}
+              else
+                if arity == 0 do
+                  {"", []}
+                else
+                  args_list = for _ <- 1..arity, do: "term"
+                  {Enum.join(args_list, ", "), args_list}
+                end
+              end
 
             %{
               type: :callback,
               subtype: kind,
               name: Atom.to_string(name),
               arity: arity,
-              args:
-                args_str
-                |> String.replace("\n", " ")
-                |> String.split(",")
-                |> Enum.map_join(", ", &String.trim/1),
+              args: args,
               args_list: args_list,
               origin: mod_name,
               summary: desc,
