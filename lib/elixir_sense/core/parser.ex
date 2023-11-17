@@ -36,6 +36,10 @@ defmodule ElixirSense.Core.Parser do
 
   @spec parse_string(String.t(), boolean, boolean, pos_integer | nil) :: Metadata.t()
   def parse_string(source, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
+    unless String.valid?(source) do
+      raise ArgumentError, message: "invalid string passed to parse_string"
+    end
+
     case string_to_ast(source, if(try_to_fix_parse_error, do: 6, else: 0), cursor_line_number) do
       {:ok, ast, modified_source, error} ->
         acc = MetadataBuilder.build(ast)
