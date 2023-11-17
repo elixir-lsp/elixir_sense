@@ -16,12 +16,17 @@ defmodule ElixirSense.Core.Parser do
   def parse_file(file, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
     case File.read(file) do
       {:ok, source} ->
-        parse_string(
-          source,
-          try_to_fix_parse_error,
-          try_to_fix_line_not_found,
-          cursor_line_number
-        )
+        if String.valid?(source) do
+          parse_string(
+            source,
+            try_to_fix_parse_error,
+            try_to_fix_line_not_found,
+            cursor_line_number
+          )
+        else
+          Logger.warning("Invalid encoding in #{file}")
+          create_metadata("", {:error, :invalid_encoding})
+        end
 
       error ->
         Logger.warning("Unable to read file #{file}: #{inspect(error)}")
