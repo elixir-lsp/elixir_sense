@@ -449,7 +449,7 @@ defmodule ElixirSense.Core.Binding do
     case expand(env, list_candidate, stack) do
       {:list, type} ->
         if name == :fetch do
-          {:tuple, 2, {{:atom, :ok}, type}}
+          {:tuple, 2, [{:atom, :ok}, type]}
         else
           type
         end

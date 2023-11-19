@@ -1779,7 +1779,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "fetch" do
-      assert {:tuple, 2, {{:atom, :ok}, {:atom, :a}}} =
+      assert {:tuple, 2, [{:atom, :ok}, {:atom, :a}]} =
                Binding.expand(
                  @env,
                  {:call, {:atom, Enum}, :fetch, [{:list, {:atom, :a}}, nil]}
