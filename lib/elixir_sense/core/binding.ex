@@ -1191,6 +1191,13 @@ defmodule ElixirSense.Core.Binding do
     expand_type(env, mod, atom, args, false)
   end
 
+  # remote user type
+  defp parse_type(env, {{:., _, [{:__aliases__, _, aliases}, atom]}, _, args}, _mod, _include_private)
+       when is_atom(atom) do
+    # do not propagate include_private when expanding remote types
+    expand_type(env, Module.concat(aliases), atom, args, false)
+  end
+
   # no_return
   defp parse_type(_env, {:no_return, _, _}, _, _include_private), do: :none
 
