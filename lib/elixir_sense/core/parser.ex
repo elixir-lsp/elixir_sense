@@ -10,8 +10,6 @@ defmodule ElixirSense.Core.Parser do
   alias ElixirSense.Core.State
   require Logger
 
-  @dialyzer {:nowarn_function, normalize_error: 1}
-
   @spec parse_file(String.t(), boolean, boolean, pos_integer | nil) :: Metadata.t()
   def parse_file(file, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
     case File.read(file) do
@@ -116,14 +114,16 @@ defmodule ElixirSense.Core.Parser do
         original_error \\ nil,
         opts \\ []
       ) do
+        # IO.puts(source)
     case Code.string_to_quoted(source, opts |> Keyword.merge(columns: true, token_metadata: true)) do
       {:ok, ast} ->
         {:ok, ast, source, original_error}
 
       error ->
+        # dbg(error)
         if errors_threshold > 0 do
           source
-          |> fix_parse_error(cursor_line_number, normalize_error(error))
+          |> fix_parse_error(cursor_line_number, error)
           |> string_to_ast(
             errors_threshold - 1,
             cursor_line_number,
@@ -136,17 +136,12 @@ defmodule ElixirSense.Core.Parser do
     end
   end
 
-  defp normalize_error({:error, {keyword, msg, detail}}) do
-    line = Keyword.fetch!(keyword, :line)
-    {:error, {line, msg, detail}}
-  end
-
   defp fix_parse_error(
          source,
          _cursor_line_number,
-         {:error, {line, {"\"" <> <<_::bytes-size(1)>> <> "\" is missing terminator" <> _, _}, _}}
-       )
-       when is_integer(line) do
+         {:error, {meta, {"\"" <> <<_::bytes-size(1)>> <> "\" is missing terminator" <> _, _}, _}}
+       ) do
+        line = get_line_from_meta(meta)
     source
     |> replace_line_with_marker(line)
   end
@@ -154,9 +149,10 @@ defmodule ElixirSense.Core.Parser do
   defp fix_parse_error(
          source,
          _cursor_line_number,
-         {:error, {line_number, {message, _}, "do"}}
+         {:error, {meta, {message, _}, "do"}}
        )
        when message in ["unexpected reserved word: "] do
+        line_number = get_line_from_meta(meta)
     source
     |> Source.split_lines()
     |> List.update_at(line_number - 1, fn line ->
@@ -167,13 +163,35 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
+  # defp fix_parse_error()
   defp fix_parse_error(
          source,
          cursor_line_number,
-         {:error, {line_number, {message, text}, token}}
+         {:error, {meta, "unexpected reserved word: ", "end"}}
+       )
+       when is_integer(cursor_line_number) do
+    # try to insert closing before end
+    end_line = Keyword.fetch!(meta, :end_line)
+    closing_delimiter = case Keyword.fetch!(meta, :opening_delimiter) do
+      :"{" -> "}"
+      :"[" -> "]"
+      :"(" -> ")"
+    end
+    source
+    |> Source.split_lines()
+    |> List.insert_at(end_line - 1, closing_delimiter)
+    |> Enum.join("\n")
+  end
+
+
+  defp fix_parse_error(
+         source,
+         cursor_line_number,
+         {:error, {meta, {message, text}, token}}
        )
        when is_integer(cursor_line_number) and
               message in ["unexpected token: ", "unexpected reserved word: "] do
+                line_number = get_line_from_meta(meta)
     terminator =
       case Regex.run(~r/terminator\s\"([^\s\"]+)/u, text) do
         [_, terminator] -> terminator
@@ -188,7 +206,7 @@ defmodule ElixirSense.Core.Parser do
           # try to close the line with with missing terminator
           line <> " " <> terminator
         else
-          # try to prepend first occurence of unexpected token with missing terminator
+          # try to prepend first occurrence of unexpected token with missing terminator
           line
           |> String.replace(token, terminator <> " " <> token, global: false)
         end
@@ -209,9 +227,31 @@ defmodule ElixirSense.Core.Parser do
   defp fix_parse_error(
          source,
          _cursor_line_number,
-         {:error, {line_number, "syntax" <> _, terminator_quoted}}
+         {:error, {meta, "unexpected token: ", terminator}}
        )
-       when is_integer(line_number) and terminator_quoted in ["'end'", "')'", "']'"] do
+       when terminator in [")", "]", "}"] do
+    case Keyword.fetch!(meta, :opening_delimiter) do
+      :fn ->
+        end_line = Keyword.fetch!(meta, :end_line)
+        source
+        |> Source.split_lines()
+        |> List.update_at(end_line - 1, fn line ->
+          # try to prepend unexpected terminator with end
+          line
+          |> String.replace(terminator, " end" <> terminator, global: false)
+        end)
+        |> Enum.join("\n")
+      _ -> source
+    end
+  end
+
+  defp fix_parse_error(
+         source,
+         _cursor_line_number,
+         {:error, {meta, "syntax" <> _, terminator_quoted}}
+       )
+       when terminator_quoted in ["'end'", "')'", "']'"] do
+        line_number = get_line_from_meta(meta)
     terminator = Regex.replace(~r/[\"\']/u, terminator_quoted, "")
 
     source
@@ -227,9 +267,9 @@ defmodule ElixirSense.Core.Parser do
   defp fix_parse_error(
          source,
          _cursor_line_number,
-         {:error, {line_number, "unexpected expression after keyword list" <> _, token}}
-       )
-       when is_integer(line_number) do
+         {:error, {meta, "unexpected expression after keyword list" <> _, token}}
+       ) do
+        line_number = get_line_from_meta(meta)
     token = Regex.replace(~r/[\"\']/u, token, "")
 
     source
@@ -242,8 +282,8 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
-  defp fix_parse_error(source, _cursor_line_number, {:error, {line, "syntax" <> _, token}})
-       when is_integer(line) do
+  defp fix_parse_error(source, _cursor_line_number, {:error, {meta, "syntax" <> _, token}}) do
+    line = get_line_from_meta(meta)
     case source
          |> Source.split_lines()
          |> Enum.at(line - 1)
@@ -268,9 +308,9 @@ defmodule ElixirSense.Core.Parser do
   defp fix_parse_error(
          source,
          _cursor_line_number,
-         {:error, {line, "unexpected operator" <> _, _token}}
-       )
-       when is_integer(line) do
+         {:error, {meta, "unexpected operator" <> _, _token}}
+       ) do
+    line = get_line_from_meta(meta)
     remove_line(source, line)
   end
 
@@ -281,9 +321,10 @@ defmodule ElixirSense.Core.Parser do
   defp fix_parse_error(
          source,
          cursor_line_number,
-         {:error, {line_end, text = "missing terminator: " <> _, _}}
+         {:error, {meta, text = "missing terminator: " <> _, _}}
        )
        when is_integer(cursor_line_number) do
+    line_end = get_line_from_meta(meta)
     terminator =
       case Regex.run(~r/terminator:\s([^\s]+)/u, text) do
         [_, terminator] -> terminator
@@ -365,7 +406,7 @@ defmodule ElixirSense.Core.Parser do
   defp fix_parse_error(
          source,
          cursor_line_number,
-         {:error, {_line_end, text = "missing interpolation terminator: \"}\"" <> _, _}}
+         {:error, {_meta, text = "missing interpolation terminator: \"}\"" <> _, _}}
        )
        when is_integer(cursor_line_number) do
     line_start =
@@ -426,4 +467,7 @@ defmodule ElixirSense.Core.Parser do
   end
 
   defp marker(line_number), do: "(__atom_elixir_marker_#{line_number}__())"
+
+  defp get_line_from_meta(meta) when is_integer(meta), do: meta
+  defp get_line_from_meta(meta), do: Keyword.fetch!(meta, :line)
 end
