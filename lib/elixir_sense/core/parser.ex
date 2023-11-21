@@ -8,10 +8,11 @@ defmodule ElixirSense.Core.Parser do
   alias ElixirSense.Core.Normalized.Tokenizer
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
+  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   require Logger
 
-  @spec parse_file(String.t(), boolean, boolean, pos_integer | nil) :: Metadata.t()
-  def parse_file(file, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
+  @spec parse_file(String.t(), boolean, boolean, {pos_integer, pos_integer} | nil) :: Metadata.t()
+  def parse_file(file, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_position) do
     case File.read(file) do
       {:ok, source} ->
         if String.valid?(source) do
@@ -19,7 +20,7 @@ defmodule ElixirSense.Core.Parser do
             source,
             try_to_fix_parse_error,
             try_to_fix_line_not_found,
-            cursor_line_number
+            cursor_position
           )
         else
           Logger.warning("Invalid encoding in #{file}")
@@ -32,24 +33,24 @@ defmodule ElixirSense.Core.Parser do
     end
   end
 
-  @spec parse_string(String.t(), boolean, boolean, pos_integer | nil) :: Metadata.t()
-  def parse_string(source, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_line_number) do
+  @spec parse_string(String.t(), boolean, boolean, {pos_integer, pos_integer} | nil) :: Metadata.t()
+  def parse_string(source, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_position) do
     unless String.valid?(source) do
       raise ArgumentError, message: "invalid string passed to parse_string"
     end
 
-    case string_to_ast(source, if(try_to_fix_parse_error, do: 6, else: 0), cursor_line_number) do
+    case string_to_ast(source, if(try_to_fix_parse_error, do: 6, else: 0), cursor_position, source, nil, []) do
       {:ok, ast, modified_source, error} ->
         acc = MetadataBuilder.build(ast)
 
-        if cursor_line_number == nil or Map.has_key?(acc.lines_to_env, cursor_line_number) or
+        if cursor_position == nil or Map.has_key?(acc.lines_to_env, elem(cursor_position, 0)) or
              !try_to_fix_line_not_found do
           create_metadata(source, {:ok, acc, error})
         else
           result =
-            case try_fix_line_not_found_by_inserting_marker(modified_source, cursor_line_number) do
+            case try_fix_line_not_found_by_inserting_marker(modified_source, cursor_position) do
               {:ok, acc} -> acc
-              _ -> fix_line_not_found_by_taking_previous_line(acc, cursor_line_number)
+              _ -> fix_line_not_found_by_taking_previous_line(acc, elem(cursor_position, 0))
             end
 
           create_metadata(source, {:ok, result, error || {:error, :env_not_found}})
@@ -68,12 +69,12 @@ defmodule ElixirSense.Core.Parser do
     %State{acc | lines_to_env: fixed_lines_to_env}
   end
 
-  defp try_fix_line_not_found_by_inserting_marker(modified_source, cursor_line_number)
+  defp try_fix_line_not_found_by_inserting_marker(modified_source, {cursor_line_number, _} = cursor_position)
        when is_integer(cursor_line_number) do
     with {:ok, ast, _modified_source, _error} <-
            modified_source
            |> fix_line_not_found(cursor_line_number)
-           |> string_to_ast(0, cursor_line_number) do
+           |> string_to_ast(0, cursor_position, modified_source, nil, []) do
       acc = MetadataBuilder.build(ast)
 
       if Map.has_key?(acc.lines_to_env, cursor_line_number) do
@@ -110,11 +111,11 @@ defmodule ElixirSense.Core.Parser do
   def string_to_ast(
         source,
         errors_threshold,
-        cursor_line_number,
-        original_error \\ nil,
-        opts \\ []
+        cursor_position,
+        original_source,
+        original_error,
+        opts
       ) do
-        # IO.puts(source)
     case Code.string_to_quoted(source, opts |> Keyword.merge(columns: true, token_metadata: true)) do
       {:ok, ast} ->
         {:ok, ast, source, original_error}
@@ -123,22 +124,34 @@ defmodule ElixirSense.Core.Parser do
         # dbg(error)
         if errors_threshold > 0 do
           source
-          |> fix_parse_error(cursor_line_number, error)
+          |> fix_parse_error(cursor_position, error)
           |> string_to_ast(
             errors_threshold - 1,
-            cursor_line_number,
+            cursor_position,
+            original_source,
             original_error || {:error, :parse_error},
             opts
           )
         else
-          original_error || {:error, :parse_error}
+          case cursor_position do
+            {cursor_line, cursor_column} ->
+              prefix = Source.text_before(original_source, cursor_line, cursor_column)
+              case NormalizedCode.Fragment.container_cursor_to_quoted(prefix, [columns: true, token_metadata: true]) do
+                {:ok, ast} ->
+                  {:ok, ast, prefix, original_error}
+                _ ->
+                  original_error || {:error, :parse_error}
+              end
+            _ ->
+              original_error || {:error, :parse_error}
+          end
         end
     end
   end
 
   defp fix_parse_error(
          source,
-         _cursor_line_number,
+         _cursor_position,
          {:error, {meta, {"\"" <> <<_::bytes-size(1)>> <> "\" is missing terminator" <> _, _}, _}}
        ) do
         line = get_line_from_meta(meta)
@@ -148,7 +161,7 @@ defmodule ElixirSense.Core.Parser do
 
   defp fix_parse_error(
          source,
-         _cursor_line_number,
+         _cursor_position,
          {:error, {meta, {message, _}, "do"}}
        )
        when message in ["unexpected reserved word: "] do
@@ -166,13 +179,14 @@ defmodule ElixirSense.Core.Parser do
   # defp fix_parse_error()
   defp fix_parse_error(
          source,
-         cursor_line_number,
+         {cursor_line_number, _},
          {:error, {meta, "unexpected reserved word: ", "end"}}
        )
        when is_integer(cursor_line_number) do
     # try to insert closing before end
     end_line = Keyword.fetch!(meta, :end_line)
     closing_delimiter = case Keyword.fetch!(meta, :opening_delimiter) do
+      :"<<" -> ">>"
       :"{" -> "}"
       :"[" -> "]"
       :"(" -> ")"
@@ -186,7 +200,7 @@ defmodule ElixirSense.Core.Parser do
 
   defp fix_parse_error(
          source,
-         cursor_line_number,
+         {cursor_line_number, _},
          {:error, {meta, {message, text}, token}}
        )
        when is_integer(cursor_line_number) and
@@ -226,10 +240,10 @@ defmodule ElixirSense.Core.Parser do
 
   defp fix_parse_error(
          source,
-         _cursor_line_number,
+         _cursor_position,
          {:error, {meta, "unexpected token: ", terminator}}
        )
-       when terminator in [")", "]", "}"] do
+       when terminator in [")", "]", "}", ">>"] do
     case Keyword.fetch!(meta, :opening_delimiter) do
       :fn ->
         end_line = Keyword.fetch!(meta, :end_line)
@@ -247,7 +261,7 @@ defmodule ElixirSense.Core.Parser do
 
   defp fix_parse_error(
          source,
-         _cursor_line_number,
+         _cursor_position,
          {:error, {meta, "syntax" <> _, terminator_quoted}}
        )
        when terminator_quoted in ["'end'", "')'", "']'"] do
@@ -266,7 +280,7 @@ defmodule ElixirSense.Core.Parser do
 
   defp fix_parse_error(
          source,
-         _cursor_line_number,
+         _cursor_position,
          {:error, {meta, "unexpected expression after keyword list" <> _, token}}
        ) do
         line_number = get_line_from_meta(meta)
@@ -282,7 +296,7 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
-  defp fix_parse_error(source, _cursor_line_number, {:error, {meta, "syntax" <> _, token}}) do
+  defp fix_parse_error(source, _cursor_position, {:error, {meta, "syntax" <> _, token}}) do
     line = get_line_from_meta(meta)
     case source
          |> Source.split_lines()
@@ -307,7 +321,7 @@ defmodule ElixirSense.Core.Parser do
 
   defp fix_parse_error(
          source,
-         _cursor_line_number,
+         _cursor_position,
          {:error, {meta, "unexpected operator" <> _, _token}}
        ) do
     line = get_line_from_meta(meta)
@@ -320,7 +334,7 @@ defmodule ElixirSense.Core.Parser do
 
   defp fix_parse_error(
          source,
-         cursor_line_number,
+         {cursor_line_number, _},
          {:error, {meta, text = "missing terminator: " <> _, _}}
        )
        when is_integer(cursor_line_number) do
@@ -405,7 +419,7 @@ defmodule ElixirSense.Core.Parser do
 
   defp fix_parse_error(
          source,
-         cursor_line_number,
+         {cursor_line_number, _},
          {:error, {_meta, text = "missing interpolation terminator: \"}\"" <> _, _}}
        )
        when is_integer(cursor_line_number) do
@@ -423,7 +437,7 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
-  defp fix_parse_error(source, cursor_line_number, _error) when is_integer(cursor_line_number) do
+  defp fix_parse_error(source, {cursor_line_number, _}, _error) when is_integer(cursor_line_number) do
     source
     |> replace_line_with_marker(cursor_line_number)
   end

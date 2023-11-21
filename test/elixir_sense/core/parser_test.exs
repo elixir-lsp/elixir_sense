@@ -21,7 +21,7 @@ defmodule ElixirSense.Core.ParserTest do
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
              },
              source: "defmodule MyModule" <> _
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 3})
   end
 
   test "parse_string with syntax error" do
@@ -39,7 +39,7 @@ defmodule ElixirSense.Core.ParserTest do
                2 => %Env{imports: [{Kernel, []}, {List, []}], module: MyModule},
                3 => %Env{imports: [{Kernel, []}, {List, []}], module: MyModule}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 10})
   end
 
   test "parse_string with syntax error (missing param)" do
@@ -56,7 +56,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 20})
   end
 
   test "parse_string with missing terminator \")\"" do
@@ -73,7 +73,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 8})
   end
 
   test "parse_string with missing terminator \"]\"" do
@@ -90,7 +90,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 11})
   end
 
   test "parse_string with missing terminator \"}\"" do
@@ -107,7 +107,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 12})
   end
 
   test "parse_string with missing terminator \"\"\"" do
@@ -124,7 +124,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 10})
   end
 
   test "parse_string with missing terminator \"\'\"" do
@@ -141,7 +141,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 10})
   end
 
   test "parse_string with missing heredoc terminator" do
@@ -158,7 +158,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 12})
   end
 
   test "parse_string with missing interpolation terminator in \"\"\"" do
@@ -175,7 +175,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 12})
   end
 
   test "parse_string with missing interpolation terminator in \"\'\"" do
@@ -192,7 +192,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 12})
   end
 
   test "parse_string with missing interpolation terminator in heredoc" do
@@ -209,7 +209,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{imports: [{Kernel, []}]},
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 14})
   end
 
   test "parse_string with missing terminator \"end\" attempts to fix it by inserting end at line from error" do
@@ -223,7 +223,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     # assert capture_io(:stderr, fn ->
-             result = parse_string(source, true, true, 3)
+             result = parse_string(source, true, true, {3, 23})
             #  send(self(), {:result, result})
           #  end) =~ "an expression is always required on the right side of ->"
 
@@ -261,7 +261,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{module: MyModule},
                2 => %Env{module: MyModule}
              }
-           } = parse_string(source, true, true, 2)
+           } = parse_string(source, true, true, {2, 3})
 
     source = """
     defmodule MyModule do
@@ -276,7 +276,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{module: MyModule},
                3 => %Env{module: MyModule1}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 1})
 
     assert %Metadata{
              error: {:error, :parse_error},
@@ -284,7 +284,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{module: MyModule},
                2 => %Env{module: MyModule}
              }
-           } = parse_string(source, true, true, 2)
+           } = parse_string(source, true, true, {2, 1})
 
     source = """
     defmodule MyModule do
@@ -300,7 +300,7 @@ defmodule ElixirSense.Core.ParserTest do
                2 => %Env{module: MyModule},
                3 => %Env{module: MyModule.MyModule1}
              }
-           } = parse_string(source, true, true, 2)
+           } = parse_string(source, true, true, {2, 1})
 
     assert %Metadata{
              error: {:error, :parse_error},
@@ -308,7 +308,7 @@ defmodule ElixirSense.Core.ParserTest do
                1 => %Env{module: MyModule},
                3 => %Env{module: MyModule.MyModule1}
              }
-           } = parse_string(source, true, true, 3)
+           } = parse_string(source, true, true, {3, 1})
   end
 
   test "parse_string with incomplete key for multiline keyword as argument" do
@@ -324,7 +324,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     capture_io(:stderr, fn ->
       assert %Metadata{error: {:error, :parse_error}, lines_to_env: %{5 => _}} =
-               parse_string(source, true, true, 5)
+               parse_string(source, true, true, {5, 10})
     end)
   end
 
@@ -340,7 +340,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     %Metadata{error: {:error, :parse_error}, lines_to_env: %{5 => _}} =
-      parse_string(source, true, true, 5)
+      parse_string(source, true, true, {5, 12})
   end
 
   @tag capture_log: true
@@ -361,7 +361,7 @@ defmodule ElixirSense.Core.ParserTest do
                3 => %Env{imports: [{Kernel, []}, {List, []}]}
              },
              source: "defmodule MyModule" <> _
-           } = parse_string(source, true, true, 4)
+           } = parse_string(source, true, true, {4, 3})
   end
 
   test "parse_string with malformed `do` expression" do
@@ -374,7 +374,7 @@ defmodule ElixirSense.Core.ParserTest do
              lines_to_env: %{
                1 => %Env{module: MyModule}
              }
-           } = parse_string(source, true, true, 1)
+           } = parse_string(source, true, true, {1, 23})
   end
 
   test "parse_string with literal strings" do
@@ -395,7 +395,7 @@ defmodule ElixirSense.Core.ParserTest do
                  attributes: [%ElixirSense.Core.State.AttributeInfo{name: :my_attr}]
                }
              }
-           } = parse_string(source, true, true, 6)
+           } = parse_string(source, true, true, {6, 6})
   end
 
   @tag only_this: true
@@ -417,7 +417,7 @@ defmodule ElixirSense.Core.ParserTest do
                  vars: vars
                }
              }
-           } = parse_string(source, true, true, 5)
+           } = parse_string(source, true, true, {5, 14})
 
     assert [
              %ElixirSense.Core.State.VarInfo{name: :x},
@@ -440,7 +440,7 @@ defmodule ElixirSense.Core.ParserTest do
              calls: %{
                4 => [%{func: :foo}]
              }
-           } = parse_string(source, true, true, 4)
+           } = parse_string(source, true, true, {4, 7})
   end
 
   test "parse struct with missing terminator" do
@@ -458,6 +458,6 @@ defmodule ElixirSense.Core.ParserTest do
              calls: %{
                4 => [%{func: :foo}]
              }
-           } = parse_string(source, true, true, 4)
+           } = parse_string(source, true, true, {4, 8})
   end
 end
