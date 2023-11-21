@@ -1452,7 +1452,7 @@ defmodule ElixirSense.Core.State do
 
       maybe_tuple = case module do
         [Elixir, alias] ->
-          if Version.match?(System.version(), "< 1.14.0-dev") do
+          if Version.match?(System.version(), "< 1.16.0-dev") do
           # an edge case with external submodule `Elixir.Some`
           # this ends up unaliasing `Some` on elixir < 1.16
           # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
