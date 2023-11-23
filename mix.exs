@@ -11,6 +11,7 @@ defmodule ElixirSense.MixProject do
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       prune_code_paths: Mix.env() == :prod,
+      compilers: [:yecc] ++ Mix.compilers(),
       test_coverage: [tool: ExCoveralls],
       preferred_cli_env: [coveralls: :test, "coveralls.detail": :test, "coveralls.html": :test],
       dialyzer: [
