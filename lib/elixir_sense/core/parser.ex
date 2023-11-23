@@ -116,6 +116,7 @@ defmodule ElixirSense.Core.Parser do
         original_error,
         opts
       ) do
+    # IO.puts(source)
     case Code.string_to_quoted(source, opts |> Keyword.merge(columns: true, token_metadata: true)) do
       {:ok, ast} ->
         {:ok, ast, source, original_error}
@@ -244,7 +245,7 @@ defmodule ElixirSense.Core.Parser do
          {:error, {meta, "unexpected token: ", terminator}}
        )
        when terminator in [")", "]", "}", ">>"] do
-    case Keyword.fetch!(meta, :opening_delimiter) do
+    case Keyword.get(meta, :opening_delimiter) do
       :fn ->
         end_line = Keyword.fetch!(meta, :end_line)
         source
@@ -264,7 +265,7 @@ defmodule ElixirSense.Core.Parser do
          _cursor_position,
          {:error, {meta, "syntax" <> _, terminator_quoted}}
        )
-       when terminator_quoted in ["'end'", "')'", "']'"] do
+       when terminator_quoted in ["'end'", "')'", "']'", "'}'", "'>>'"] do
         line_number = get_line_from_meta(meta)
     terminator = Regex.replace(~r/[\"\']/u, terminator_quoted, "")
 
@@ -349,7 +350,7 @@ defmodule ElixirSense.Core.Parser do
         [_, line] -> line |> String.to_integer()
       end
 
-    if terminator in ["\"", "\'"] do
+    if terminator in ["\"", "'", ")", "]", "}", ">>"] do
       source
       |> Source.split_lines()
       |> List.update_at(max(cursor_line_number, line_start) - 1, fn line ->

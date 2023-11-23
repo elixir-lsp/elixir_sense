@@ -1390,6 +1390,23 @@ defmodule ElixirSense.SuggestionsTest do
            ]
   end
 
+  test "lists vars in unfinished fn" do
+    buffer = """
+    defmodule MyServer do
+      []
+      |> Enum.min_by(fn x -> 
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 26)
+      |> Enum.filter(fn s -> s.type == :variable end)
+
+    assert list == [
+             %{name: "x", type: :variable}
+           ]
+  end
+
   test "lists vars in string interpolation" do
     buffer = """
     defmodule MyServer do
