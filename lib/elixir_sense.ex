@@ -512,7 +512,7 @@ defmodule ElixirSense do
           boolean,
           keyword
         ) ::
-          {:ok, Macro.t()} | {:error, {line :: pos_integer(), term(), term()}}
+          {:ok, Macro.t()} | {:error, :parse_error}
   def string_to_quoted(
         source,
         cursor_position \\ nil,
