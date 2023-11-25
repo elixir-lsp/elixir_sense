@@ -408,8 +408,7 @@ defmodule ElixirSense.Core.Parser do
         end)
 
       if missing_end do
-        [last | rest] = source
-        [last <> " " <> terminator | rest]
+        [terminator | source]
       else
         source
       end
