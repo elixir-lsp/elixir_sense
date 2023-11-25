@@ -122,6 +122,7 @@ defmodule ElixirSense.Core.Parser do
         {:ok, ast, source, original_error}
 
       error ->
+        error_to_report = original_error || {:error, :parse_error}
         # dbg(error)
         if errors_threshold > 0 do
           source
@@ -130,7 +131,7 @@ defmodule ElixirSense.Core.Parser do
             errors_threshold - 1,
             cursor_position,
             original_source,
-            original_error || {:error, :parse_error},
+            error_to_report,
             opts
           )
         else
@@ -139,12 +140,12 @@ defmodule ElixirSense.Core.Parser do
               prefix = Source.text_before(original_source, cursor_line, cursor_column)
               case NormalizedCode.Fragment.container_cursor_to_quoted(prefix, [columns: true, token_metadata: true]) do
                 {:ok, ast} ->
-                  {:ok, ast, prefix, original_error}
+                  {:ok, ast, prefix, error_to_report}
                 _ ->
-                  original_error || {:error, :parse_error}
+                  error_to_report
               end
             _ ->
-              original_error || {:error, :parse_error}
+              error_to_report
           end
         end
     end
