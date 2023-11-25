@@ -223,9 +223,9 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     # assert capture_io(:stderr, fn ->
-             result = parse_string(source, true, true, {3, 23})
-            #  send(self(), {:result, result})
-          #  end) =~ "an expression is always required on the right side of ->"
+    result = parse_string(source, true, true, {3, 23})
+    #  send(self(), {:result, result})
+    #  end) =~ "an expression is always required on the right side of ->"
 
     # assert_received {:result, result}
 

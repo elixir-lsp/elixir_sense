@@ -1450,24 +1450,25 @@ defmodule ElixirSense.Core.State do
     if length(state.namespace) > 2 and is_list(module) and state.protocols |> hd == [] do
       namespace = state.namespace |> hd
 
-      maybe_tuple = case module do
-        [Elixir, alias] ->
-          if Version.match?(System.version(), "< 1.16.0-dev") do
-          # an edge case with external submodule `Elixir.Some`
-          # this ends up unaliasing `Some` on elixir < 1.16
-          # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
-          {Module.concat([alias]), [Elixir, alias]}
-          else
-          # on elixir >= 1.16 no unaliasing is happening
-          # https://github.com/elixir-lang/elixir/issues/12456
-          nil
-          end
+      maybe_tuple =
+        case module do
+          [Elixir, alias] ->
+            if Version.match?(System.version(), "< 1.16.0-dev") do
+              # an edge case with external submodule `Elixir.Some`
+              # this ends up unaliasing `Some` on elixir < 1.16
+              # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
+              {Module.concat([alias]), [Elixir, alias]}
+            else
+              # on elixir >= 1.16 no unaliasing is happening
+              # https://github.com/elixir-lang/elixir/issues/12456
+              nil
+            end
 
-        _ ->
-          alias = module |> Enum.take(1) |> Module.concat()
-          expanded = namespace |> Enum.slice((length(module) - 1)..-2//1) |> Enum.reverse()
-          {alias, expanded}
-      end
+          _ ->
+            alias = module |> Enum.take(1) |> Module.concat()
+            expanded = namespace |> Enum.slice((length(module) - 1)..-2//1) |> Enum.reverse()
+            {alias, expanded}
+        end
 
       if maybe_tuple do
         state
