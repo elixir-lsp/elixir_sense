@@ -39,7 +39,13 @@ defmodule ElixirSense.Core.Parser do
       raise ArgumentError, message: "invalid string passed to parse_string"
     end
 
-    case string_to_ast(source, if(try_to_fix_parse_error, do: 6, else: 0), cursor_position, source, nil, []) do
+    string_to_ast_options = [
+      errors_threshold: if(try_to_fix_parse_error, do: 6, else: 0),
+      cursor_position: cursor_position,
+      fallback_to_container_cursor_to_quoted: try_to_fix_parse_error
+    ]
+
+    case string_to_ast(source, string_to_ast_options) do
       {:ok, ast, modified_source, error} ->
         acc = MetadataBuilder.build(ast)
 
@@ -49,8 +55,10 @@ defmodule ElixirSense.Core.Parser do
         else
           result =
             case try_fix_line_not_found_by_inserting_marker(modified_source, cursor_position) do
-              {:ok, acc} -> acc
-              _ -> fix_line_not_found_by_taking_previous_line(acc, elem(cursor_position, 0))
+              {:ok, acc} ->
+                acc
+              _ ->
+                fix_line_not_found_by_taking_previous_line(acc, elem(cursor_position, 0))
             end
 
           create_metadata(source, {:ok, result, error || {:error, :env_not_found}})
@@ -58,6 +66,62 @@ defmodule ElixirSense.Core.Parser do
 
       {:error, _reason} = error ->
         create_metadata(source, error)
+    end
+  end
+
+  @default_parser_options [columns: true, token_metadata: true]
+
+  def string_to_ast(source, options \\ []) do
+    errors_threshold = Keyword.get(options, :errors_threshold, 6)
+    cursor_position = Keyword.get(options, :cursor_position)
+    parser_options = Keyword.get(options, :parser_options, [])
+    |> Keyword.merge(@default_parser_options)
+    fallback_to_container_cursor_to_quoted = Keyword.get(options, :fallback_to_container_cursor_to_quoted, true)
+    do_string_to_ast(source, errors_threshold, fallback_to_container_cursor_to_quoted, cursor_position, source, nil, parser_options)
+  end
+
+  defp do_string_to_ast(
+        source,
+        errors_threshold,
+        fallback_to_container_cursor_to_quoted,
+        cursor_position,
+        original_source,
+        original_error,
+        parser_options
+      ) do
+    # IO.puts(source)
+    case Code.string_to_quoted(source, parser_options) do
+      {:ok, ast} ->
+        {:ok, ast, source, original_error}
+
+      error ->
+        error_to_report = original_error || {:error, :parse_error}
+        # dbg(error)
+        if errors_threshold > 0 do
+          source
+          |> fix_parse_error(cursor_position, error)
+          |> do_string_to_ast(
+            errors_threshold - 1,
+            fallback_to_container_cursor_to_quoted,
+            cursor_position,
+            original_source,
+            error_to_report,
+            parser_options
+          )
+        else
+          case {fallback_to_container_cursor_to_quoted, cursor_position} do
+            {true, {cursor_line, cursor_column}} ->
+              prefix = Source.text_before(original_source, cursor_line, cursor_column)
+              case NormalizedCode.Fragment.container_cursor_to_quoted(prefix, parser_options) do
+                {:ok, ast} ->
+                  {:ok, ast, prefix, error_to_report}
+                _ ->
+                  error_to_report
+              end
+            _ ->
+              error_to_report
+          end
+        end
     end
   end
 
@@ -74,7 +138,7 @@ defmodule ElixirSense.Core.Parser do
     with {:ok, ast, _modified_source, _error} <-
            modified_source
            |> fix_line_not_found(cursor_line_number)
-           |> string_to_ast(0, cursor_position, modified_source, nil, []) do
+           |> do_string_to_ast(0, false, cursor_position, modified_source, nil, @default_parser_options) do
       acc = MetadataBuilder.build(ast)
 
       if Map.has_key?(acc.lines_to_env, cursor_line_number) do
@@ -106,49 +170,6 @@ defmodule ElixirSense.Core.Parser do
       first_alias_positions: acc.first_alias_positions,
       moduledoc_positions: acc.moduledoc_positions
     }
-  end
-
-  def string_to_ast(
-        source,
-        errors_threshold,
-        cursor_position,
-        original_source,
-        original_error,
-        opts
-      ) do
-    # IO.puts(source)
-    case Code.string_to_quoted(source, opts |> Keyword.merge(columns: true, token_metadata: true)) do
-      {:ok, ast} ->
-        {:ok, ast, source, original_error}
-
-      error ->
-        error_to_report = original_error || {:error, :parse_error}
-        # dbg(error)
-        if errors_threshold > 0 do
-          source
-          |> fix_parse_error(cursor_position, error)
-          |> string_to_ast(
-            errors_threshold - 1,
-            cursor_position,
-            original_source,
-            error_to_report,
-            opts
-          )
-        else
-          case cursor_position do
-            {cursor_line, cursor_column} ->
-              prefix = Source.text_before(original_source, cursor_line, cursor_column)
-              case NormalizedCode.Fragment.container_cursor_to_quoted(prefix, [columns: true, token_metadata: true]) do
-                {:ok, ast} ->
-                  {:ok, ast, prefix, error_to_report}
-                _ ->
-                  error_to_report
-              end
-            _ ->
-              error_to_report
-          end
-        end
-    end
   end
 
   defp fix_parse_error(

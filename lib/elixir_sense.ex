@@ -500,10 +500,16 @@ defmodule ElixirSense do
       iex> ElixirSense.string_to_quoted(code, 1)
       {:ok, {:defmodule, [do: [line: 1, column: 11], end: [line: 2, column: 1], line: 1, column: 1], [[do: {:__block__, [], []}]]}}
   """
-  @spec string_to_quoted(String.t(), {pos_integer, pos_integer} | nil, non_neg_integer, keyword) ::
+  @spec string_to_quoted(String.t(), {pos_integer, pos_integer} | nil, non_neg_integer, boolean, keyword) ::
           {:ok, Macro.t()} | {:error, {line :: pos_integer(), term(), term()}}
-  def string_to_quoted(source, cursor_position \\ nil, error_threshold \\ 6, opts \\ []) do
-    case Parser.string_to_ast(source, error_threshold, cursor_position, source, nil, opts) do
+  def string_to_quoted(source, cursor_position \\ nil, error_threshold \\ 6, fallback_to_container_cursor_to_quoted \\ true, parser_options \\ []) do
+    string_to_ast_options = [
+      errors_threshold: error_threshold,
+      cursor_position: cursor_position,
+      fallback_to_container_cursor_to_quoted: fallback_to_container_cursor_to_quoted,
+      parser_options: parser_options
+    ]
+    case Parser.string_to_ast(source, string_to_ast_options) do
       {:ok, ast, _source, _error} -> {:ok, ast}
       other -> other
     end
