@@ -13,8 +13,10 @@ defmodule ElixirSense.Providers.Definition do
   alias ElixirSense.Core.State.ModFunInfo
   alias ElixirSense.Core.State.TypeInfo
   alias ElixirSense.Core.State.VarInfo
+  alias ElixirSense.Core.Source
   alias ElixirSense.Core.SurroundContext
   alias ElixirSense.Location
+  alias ElixirSense.Plugins.Phoenix.Scope
 
   @doc """
   Finds out where a module, function, macro or variable was defined.
@@ -174,14 +176,7 @@ defmodule ElixirSense.Providers.Definition do
       scope: scope
     } = env
 
-    m =
-      case module do
-        {:atom, a} ->
-          a
-
-        _ ->
-          nil
-      end
+    m = get_module(module, context, env, metadata)
 
     case {m, function}
          |> Introspection.actual_mod_fun(
@@ -247,6 +242,25 @@ defmodule ElixirSense.Providers.Definition do
               column: column
             }
         end
+    end
+  end
+
+  defp get_module(module, %{end: {line, col}}, env, metadata) do
+    with {true, module} <- get_phoenix_module(module, env) do
+      text_before = Source.text_before(metadata.source, line, col)
+
+      case Scope.within_scope(text_before) do
+        {false, _} -> module
+        {true, scope_alias} -> Module.safe_concat(scope_alias, module)
+      end
+    end
+  end
+
+  defp get_phoenix_module(module, env) do
+    case {Phoenix.Router in env.requires, module} do
+      {true, {:atom, module}} -> {true, module}
+      {false, {:atom, module}} -> module
+      _ -> nil
     end
   end
 end
