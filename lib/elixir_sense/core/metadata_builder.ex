@@ -13,6 +13,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Core.Guard
 
   @scope_keywords [:for, :fn, :with]
   @block_keywords [:do, :else, :rescue, :catch, :after]
@@ -290,6 +291,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
       state
       |> find_vars(params)
       |> merge_same_name_vars()
+
+    vars =
+      if options[:guards],
+        do: infer_type_from_guards(options[:guards], vars, state),
+        else: vars
 
     {position, end_position} = extract_range(meta)
 
@@ -627,7 +633,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when def_name in @defs and is_atom(name) do
     ast_without_params = {def_name, meta, [{name, add_no_call(meta2), []}, guards, body]}
-    pre_func(ast_without_params, state, meta, name, params)
+    pre_func(ast_without_params, state, meta, name, params, guards: guards)
   end
 
   defp pre(
@@ -1810,6 +1816,18 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp match_var(_state, ast, {vars, match_context}) do
     {ast, {vars, match_context}}
+  end
+
+  def infer_type_from_guards(guard_ast, vars, state) do
+    type_info = Guard.type_information_from_guards(guard_ast, state)
+
+    Enum.reduce(type_info, vars, fn {var, type}, acc ->
+      index = Enum.find_index(acc, &(&1.name == var))
+
+      if index,
+        do: List.update_at(acc, index, &Map.put(&1, :type, type)),
+        else: acc
+    end)
   end
 
   # struct or struct update

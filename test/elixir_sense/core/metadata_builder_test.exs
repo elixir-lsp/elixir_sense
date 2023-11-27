@@ -1539,6 +1539,114 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ] = state |> get_line_vars(4)
   end
 
+  describe "infer vars type information from guards" do
+    defp var_with_guards(guard) do
+      """
+      defmodule MyModule do
+        def func(x) when #{guard} do
+          x
+        end
+      end
+      """
+      |> string_to_state()
+      |> get_line_vars(3)
+      |> hd()
+    end
+
+    test "number guards" do
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("is_number(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("is_float(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("is_integer(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("round(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("trunc(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("div(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("rem(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("abs(x)")
+    end
+
+    test "binary guards" do
+      assert %VarInfo{name: :x, type: :binary} = var_with_guards("is_binary(x)")
+      assert %VarInfo{name: :x, type: :binary} = var_with_guards(~s/binary_part(x, 0, 1) == "a"/)
+    end
+
+    test "bitstring guards" do
+      assert %VarInfo{name: :x, type: :bitstring} = var_with_guards("is_bitstring(x)")
+      assert %VarInfo{name: :x, type: :bitstring} = var_with_guards("bit_size(x) == 1")
+      assert %VarInfo{name: :x, type: :bitstring} = var_with_guards("byte_size(x) == 1")
+    end
+
+    test "list guards" do
+      assert %VarInfo{name: :x, type: :list} = var_with_guards("is_list(x)")
+      assert %VarInfo{name: :x, type: {:list, :number}} = var_with_guards("hd(x) == 1")
+      assert %VarInfo{name: :x, type: :list} = var_with_guards("tl(x) == [1]")
+      assert %VarInfo{name: :x, type: :list} = var_with_guards("length(x) == 1")
+    end
+
+    test "tuple guards" do
+      assert %VarInfo{name: :x, type: :tuple} = var_with_guards("is_tuple(x)")
+      assert %VarInfo{name: :x, type: {:tuple, 1, []}} = var_with_guards("tuple_size(x) == 1")
+      assert %VarInfo{name: :x, type: :tuple} = var_with_guards("elem(x, 0) == 1")
+    end
+
+    test "atom guards" do
+      assert %VarInfo{name: :x, type: :atom} = var_with_guards("is_atom(x)")
+    end
+
+    test "boolean guards" do
+      assert %VarInfo{name: :x, type: :boolean} = var_with_guards("is_boolean(x)")
+    end
+
+    test "map guards" do
+      assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("is_map(x)")
+      assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("map_size(x) == 1")
+
+      assert %VarInfo{name: :x, type: {:map, [a: nil], nil}} =
+               var_with_guards("is_map_key(x, :a)")
+
+      assert %VarInfo{name: :x, type: {:map, [{"a", nil}], nil}} =
+               var_with_guards(~s/is_map_key(x, "a")/)
+    end
+
+    test "struct guards" do
+      assert %VarInfo{name: :x, type: {:struct, [], nil, nil}} = var_with_guards("is_struct(x)")
+
+      assert %VarInfo{name: :x, type: {:struct, [], {:atom, URI}, nil}} =
+               var_with_guards("is_struct(x, URI)")
+
+      assert %VarInfo{name: :x, type: {:struct, [], {:atom, URI}, nil}} =
+               """
+               defmodule MyModule do
+                 alias URI, as: MyURI
+
+                 def func(x) when is_struct(x, MyURI) do
+                   x
+                 end
+               end
+               """
+               |> string_to_state()
+               |> get_line_vars(5)
+               |> hd()
+    end
+
+    test "and combination predicate guards can be merge" do
+      assert %VarInfo{name: :x, type: {:intersection, [:number, :boolean]}} =
+               var_with_guards("is_number(x) and x >= 1")
+
+      assert %VarInfo{
+               name: :x,
+               type: {:intersection, [{:map, [a: nil], nil}, {:map, [b: nil], nil}]}
+             } = var_with_guards("is_map_key(x, :a) and is_map_key(x, :b)")
+    end
+
+    test "or combination predicate guards can be merge into union type" do
+      assert %VarInfo{name: :x, type: {:union, [:number, :atom]}} =
+               var_with_guards("is_number(x) or is_atom(x)")
+
+      assert %VarInfo{name: :x, type: {:union, [:number, :atom, :binary]}} =
+               var_with_guards("is_number(x) or is_atom(x) or is_binary(x)")
+    end
+  end
+
   test "aliases" do
     state =
       """
