@@ -103,7 +103,7 @@ defmodule ElixirSense.Core.Guard do
        when p in [:==, :===] do
     type =
       if is_integer(size) do
-        {:tuple, size, []}
+        {:tuple, size, if(size > 0, do: Enum.map(1..size, fn _ -> nil end), else: [])}
       else
         :tuple
       end

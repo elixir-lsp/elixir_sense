@@ -1584,7 +1584,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     test "tuple guards" do
       assert %VarInfo{name: :x, type: :tuple} = var_with_guards("is_tuple(x)")
-      assert %VarInfo{name: :x, type: {:tuple, 1, []}} = var_with_guards("tuple_size(x) == 1")
+      assert %VarInfo{name: :x, type: {:tuple, 1, [nil]}} = var_with_guards("tuple_size(x) == 1")
       assert %VarInfo{name: :x, type: :tuple} = var_with_guards("elem(x, 0) == 1")
     end
 
