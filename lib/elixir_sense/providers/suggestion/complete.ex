@@ -123,7 +123,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
       :expr ->
         # IEx calls expand_local_or_var("", env)
-        # we choose to retun more and handle some special cases
+        # we choose to return more and handle some special cases
         # TODO expand_expr(env) after we require elixir 1.13
         case code do
           [?^] -> expand_var("", env, metadata)
@@ -197,6 +197,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
       {:module_attribute, attribute} ->
         expand_attribute(List.to_string(attribute), env, metadata)
+
+      # elixir >= 1.16
+      {:anonymous_call, _} ->
+        expand_expr(env, metadata, cursor_position, opts)
 
       :none ->
         no()

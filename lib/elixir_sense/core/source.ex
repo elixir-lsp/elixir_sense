@@ -16,7 +16,7 @@ defmodule ElixirSense.Core.Source do
     if String.ends_with?(hint, ".") do
       {mod, _} =
         hint
-        |> String.slice(0..-2)
+        |> String.slice(0..-2//1)
         |> split_module_and_func(current_module, aliases)
 
       {mod, ""}
@@ -245,7 +245,7 @@ defmodule ElixirSense.Core.Source do
 
   defp get_field_names(fields) do
     if Keyword.keyword?(fields) do
-      Keyword.keys(fields) |> Enum.slice(0..-2)
+      Keyword.keys(fields) |> Enum.slice(0..-2//1)
     else
       []
     end
@@ -617,7 +617,7 @@ defmodule ElixirSense.Core.Source do
         prefix
         |> split_lines
         |> Enum.at(line - 1)
-        |> String.slice((column + 1)..-1)
+        |> String.slice((column + 1)..-1//1)
     end
   end
 

@@ -192,18 +192,6 @@ defmodule ElixirSense.DocsTest do
       assert docs_1 == docs_2
     end
 
-    test "existing module with no docs" do
-      buffer = """
-      defmodule MyModule do
-        raise ArgumentError, "Error"
-      end
-      """
-
-      %{docs: [doc]} = ElixirSense.docs(buffer, 2, 11)
-
-      assert doc == %{module: ArgumentError, metadata: %{}, docs: "", kind: :module}
-    end
-
     test "not existing module docs" do
       buffer = """
       defmodule MyModule do

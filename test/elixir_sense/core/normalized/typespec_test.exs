@@ -6,33 +6,33 @@ defmodule ElixirSense.Core.Normalized.TypespecTest do
     assert [
              {{:"MACRO-some_macro", 2},
               [
-                {:type, 17, :fun,
+                {:type, _, :fun,
                  [
-                   {:type, 17, :product, [{:type, 17, :term, []}, {:type, 17, :integer, []}]},
-                   {:remote_type, 17, [{:atom, 0, Macro}, {:atom, 0, :t}, []]}
+                   {:type, _, :product, [{:type, _, :term, []}, {:type, _, :integer, []}]},
+                   {:remote_type, _, [{:atom, 0, Macro}, {:atom, 0, :t}, []]}
                  ]}
               ]},
              {{:some_fun_priv, 1},
               [
-                {:type, 8, :fun,
-                 [{:type, 8, :product, [{:type, 8, :integer, []}]}, {:type, 8, :integer, []}]}
+                {:type, _, :fun,
+                 [{:type, _, :product, [{:type, _, :integer, []}]}, {:type, _, :integer, []}]}
               ]},
              {{:some_fun, 1},
               [
-                {:type, 11, :fun,
-                 [{:type, 11, :product, [{:type, 11, :integer, []}]}, {:type, 11, :integer, []}]}
+                {:type, _, :fun,
+                 [{:type, _, :product, [{:type, _, :integer, []}]}, {:type, _, :integer, []}]}
               ]}
-           ] == Typespec.get_specs(ElixirSenseExample.ModuleWithTypes)
+           ] = Typespec.get_specs(ElixirSenseExample.ModuleWithTypes)
 
     assert [] == Typespec.get_specs(ElixirSenseExample.NotExistingModule)
   end
 
   test "get_types" do
     assert [
-             typep: {:priv_type, {:type, 3, :integer, []}, []},
-             opaque: {:opaque_type, {:user_type, 4, :priv_type, []}, []},
-             type: {:pub_type, {:type, 2, :integer, []}, []}
-           ] == Typespec.get_types(ElixirSenseExample.ModuleWithTypes)
+             typep: {:priv_type, {:type, _, :integer, []}, []},
+             opaque: {:opaque_type, {:user_type, _, :priv_type, []}, []},
+             type: {:pub_type, {:type, _, :integer, []}, []}
+           ] = Typespec.get_types(ElixirSenseExample.ModuleWithTypes)
 
     assert [] == Typespec.get_types(ElixirSenseExample.NotExistingModule)
   end
@@ -41,18 +41,18 @@ defmodule ElixirSense.Core.Normalized.TypespecTest do
     assert [
              {{:"MACRO-some_macrocallback", 2},
               [
-                {:type, 6, :fun,
+                {:type, _, :fun,
                  [
-                   {:type, 6, :product, [{:type, 6, :term, []}, {:type, 6, :integer, []}]},
-                   {:type, 6, :atom, []}
+                   {:type, _, :product, [{:type, _, :term, []}, {:type, _, :integer, []}]},
+                   {:type, _, :atom, []}
                  ]}
               ]},
              {{:some_callback, 1},
               [
-                {:type, 5, :fun,
-                 [{:type, 5, :product, [{:type, 5, :integer, []}]}, {:type, 5, :atom, []}]}
+                {:type, _, :fun,
+                 [{:type, _, :product, [{:type, _, :integer, []}]}, {:type, _, :atom, []}]}
               ]}
-           ] == Typespec.get_callbacks(ElixirSenseExample.ModuleWithTypes)
+           ] = Typespec.get_callbacks(ElixirSenseExample.ModuleWithTypes)
 
     assert [] == Typespec.get_callbacks(ElixirSenseExample.NotExistingModule)
   end

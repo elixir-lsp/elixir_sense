@@ -1804,8 +1804,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
-    assert get_line_aliases(state, 5) == []
-    assert get_line_aliases(state, 7) == []
+
+    if Version.match?(System.version(), "< 1.16.0-dev") do
+      assert get_line_aliases(state, 5) == []
+      assert get_line_aliases(state, 7) == []
+    else
+      # on elixir >= 1.16 no unaliasing is happening
+      # https://github.com/elixir-lang/elixir/issues/12456
+      assert get_line_aliases(state, 5) == [{Child, OtherParent.Child}]
+      assert get_line_aliases(state, 7) == [{Child, OtherParent.Child}]
+    end
   end
 
   # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633

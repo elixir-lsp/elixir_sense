@@ -64,7 +64,7 @@ defmodule ElixirSense do
         nil
 
       %{begin: begin_pos, end: end_pos} = context ->
-        metadata = Parser.parse_string(code, true, true, line)
+        metadata = Parser.parse_string(code, true, true, {line, column})
 
         env = Metadata.get_env(metadata, {line, column})
 
@@ -106,7 +106,7 @@ defmodule ElixirSense do
         nil
 
       context ->
-        buffer_file_metadata = Parser.parse_string(code, true, true, line)
+        buffer_file_metadata = Parser.parse_string(code, true, true, {line, column})
 
         env =
           Metadata.get_env(buffer_file_metadata, {line, column})
@@ -139,7 +139,7 @@ defmodule ElixirSense do
         []
 
       context ->
-        buffer_file_metadata = Parser.parse_string(code, true, true, line)
+        buffer_file_metadata = Parser.parse_string(code, true, true, {line, column})
 
         env = Metadata.get_env(buffer_file_metadata, {line, column})
 
@@ -205,11 +205,16 @@ defmodule ElixirSense do
   @spec suggestions(String.t(), pos_integer, pos_integer, keyword()) :: [Suggestion.suggestion()]
   def suggestions(buffer, line, column, opts \\ []) do
     hint = Source.prefix(buffer, line, column)
-    buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
+    buffer_file_metadata = Parser.parse_string(buffer, true, true, {line, column})
     {text_before, text_after} = Source.split_at(buffer, line, column)
 
     buffer_file_metadata =
-      maybe_fix_autocomple_on_cursor(buffer_file_metadata, text_before, text_after, line)
+      maybe_fix_autocomple_on_cursor(
+        buffer_file_metadata,
+        text_before,
+        text_after,
+        {line, column}
+      )
 
     env =
       Metadata.get_env(buffer_file_metadata, {line, column})
@@ -278,7 +283,7 @@ defmodule ElixirSense do
   @spec signature(String.t(), pos_integer, pos_integer) :: Signature.signature_info() | :none
   def signature(code, line, column) do
     prefix = Source.text_before(code, line, column)
-    buffer_file_metadata = Parser.parse_string(code, true, true, line)
+    buffer_file_metadata = Parser.parse_string(code, true, true, {line, column})
 
     env = Metadata.get_env(buffer_file_metadata, {line, column})
 
@@ -289,7 +294,7 @@ defmodule ElixirSense do
   Returns a map containing the results of all different code expansion methods
   available.
 
-  Available axpansion methods:
+  Available expansion methods:
 
     * `expand_once` - Calls `Macro.expand_once/2`
     * `expand` - Calls `Macro.expand/2`
@@ -361,7 +366,7 @@ defmodule ElixirSense do
   """
   @spec expand_full(String.t(), String.t(), pos_integer) :: Expand.expanded_code_map()
   def expand_full(buffer, code, line) do
-    buffer_file_metadata = Parser.parse_string(buffer, true, true, line)
+    buffer_file_metadata = Parser.parse_string(buffer, true, true, {line, 1})
 
     env = Metadata.get_env(buffer_file_metadata, {line, 1})
 
@@ -438,7 +443,7 @@ defmodule ElixirSense do
       %{
         begin: {begin_line, begin_col}
       } = context ->
-        buffer_file_metadata = Parser.parse_string(code, true, true, line)
+        buffer_file_metadata = Parser.parse_string(code, true, true, {line, column})
 
         env =
           %State.Env{
@@ -500,10 +505,29 @@ defmodule ElixirSense do
       iex> ElixirSense.string_to_quoted(code, 1)
       {:ok, {:defmodule, [do: [line: 1, column: 11], end: [line: 2, column: 1], line: 1, column: 1], [[do: {:__block__, [], []}]]}}
   """
-  @spec string_to_quoted(String.t(), pos_integer | nil, non_neg_integer, keyword) ::
-          {:ok, Macro.t()} | {:error, {line :: pos_integer(), term(), term()}}
-  def string_to_quoted(source, cursor_line_number \\ nil, error_threshold \\ 6, opts \\ []) do
-    case Parser.string_to_ast(source, error_threshold, cursor_line_number, nil, opts) do
+  @spec string_to_quoted(
+          String.t(),
+          {pos_integer, pos_integer} | nil,
+          non_neg_integer,
+          boolean,
+          keyword
+        ) ::
+          {:ok, Macro.t()} | {:error, :parse_error}
+  def string_to_quoted(
+        source,
+        cursor_position \\ nil,
+        error_threshold \\ 6,
+        fallback_to_container_cursor_to_quoted \\ true,
+        parser_options \\ []
+      ) do
+    string_to_ast_options = [
+      errors_threshold: error_threshold,
+      cursor_position: cursor_position,
+      fallback_to_container_cursor_to_quoted: fallback_to_container_cursor_to_quoted,
+      parser_options: parser_options
+    ]
+
+    case Parser.string_to_ast(source, string_to_ast_options) do
       {:ok, ast, _source, _error} -> {:ok, ast}
       other -> other
     end
@@ -519,7 +543,7 @@ defmodule ElixirSense do
     meta
   end
 
-  defp maybe_fix_autocomple_on_cursor(metadata, text_before, text_after, line) do
+  defp maybe_fix_autocomple_on_cursor(metadata, text_before, text_after, {line, column}) do
     # Fix incomplete call, e.g. cursor after `var.`
     fix_incomplete_call = fn text_before, text_after ->
       if String.ends_with?(text_before, ".") do
@@ -553,7 +577,7 @@ defmodule ElixirSense do
       new_buffer = fun.(text_before, text_after)
 
       with true <- new_buffer != nil,
-           meta <- Parser.parse_string(new_buffer, false, true, line),
+           meta <- Parser.parse_string(new_buffer, false, true, {line, column}),
            %Metadata{error: error} <- meta,
            true <- error == nil do
         {:halt, meta}

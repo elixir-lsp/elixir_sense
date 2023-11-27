@@ -1016,10 +1016,14 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
 
     # local call on var
 
-    # TODO handle {:anonymous_call, inside_caller} on 1.16+
-    # inside_caller: {:var, charlist} | {:module_attribute, charlist}
-    assert [] == expand(~c"asd.(")
-    assert [] == expand(~c"@asd.(")
+    if Version.match?(System.version(), "< 1.16.0-dev") do
+      assert [] == expand(~c"asd.(")
+      assert [] == expand(~c"@asd.(")
+    else
+      expr_suggestions = expand(~c"")
+      assert expr_suggestions == expand(~c"asd.(")
+      assert expr_suggestions == expand(~c"@asd.(")
+    end
 
     # list = expand('asd.(')
     # assert is_list(list)
