@@ -1199,7 +1199,6 @@ defmodule ElixirSense.Core.Binding do
          _include_private
        )
        when is_atom(atom) do
-    dbg(aliases)
     # do not propagate include_private when expanding remote types
     expand_type(env, Module.concat(aliases), atom, args, false)
   end
