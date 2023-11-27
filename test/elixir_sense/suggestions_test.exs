@@ -3191,6 +3191,67 @@ defmodule ElixirSense.SuggestionsTest do
     assert [%{name: "hour", origin: "NaiveDateTime"}] = list
   end
 
+  test "suggest struct fields when metadata function evaluates to remote type aliased" do
+    buffer = """
+    defmodule Mod do
+      alias NaiveDateTime, as: MyType
+      @spec fun() :: MyType.t()
+      def fun(), do: MyType.new(1, 2)
+
+      def some do
+        var = fun()
+        var.h
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 8, 10)
+
+    assert [%{name: "hour", origin: "NaiveDateTime"}] = list
+  end
+
+  test "suggest struct fields when metadata function evaluates to remote type __MODULE__" do
+    buffer = """
+    defmodule Mod do
+      @type t :: NaiveDateTime.t()
+      
+      @spec fun() :: __MODULE__.t()
+      def fun(), do: nil
+
+      def some do
+        var = fun()
+        var.h
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 9, 10)
+
+    assert [%{name: "hour", origin: "NaiveDateTime"}] = list
+  end
+
+  test "suggest struct fields when metadata function evaluates to remote type __MODULE__.Submodule" do
+    buffer = """
+    defmodule Mod do
+      defmodule Sub do
+        @type t :: NaiveDateTime.t()
+      end
+      
+      @spec fun() :: __MODULE__.Sub.t()
+      def fun(), do: nil
+
+      def some do
+        var = fun()
+        var.h
+      end
+    end
+    """
+
+    list = ElixirSense.suggestions(buffer, 11, 10)
+
+    assert [%{name: "hour", origin: "NaiveDateTime"}] = list
+  end
+
   test "suggest struct fields when variable is struct" do
     buffer = """
     defmodule Abc do
