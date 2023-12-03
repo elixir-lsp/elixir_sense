@@ -42,6 +42,22 @@ defmodule ElixirSense.Core.Metadata do
           documentation: String.t()
         }
 
+  def fill(source, acc) do
+    %__MODULE__{
+      source: source,
+      error: nil,
+      types: acc.types,
+      specs: acc.specs,
+      structs: acc.structs,
+      mods_funs_to_positions: acc.mods_funs_to_positions,
+      lines_to_env: acc.lines_to_env,
+      vars_info_per_scope_id: acc.vars_info_per_scope_id,
+      calls: acc.calls,
+      first_alias_positions: acc.first_alias_positions,
+      moduledoc_positions: acc.moduledoc_positions
+    }
+  end
+
   @spec get_env(__MODULE__.t(), {pos_integer, pos_integer}) :: State.Env.t()
   def get_env(%__MODULE__{} = metadata, {line, column}) do
     all_scopes =

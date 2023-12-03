@@ -49,7 +49,7 @@ defmodule ElixirSense do
       iex> doc.docs |> String.split("\n") |> Enum.at(0)
       "Converts `enumerable` to a list."
   """
-  @spec docs(String.t(), pos_integer, pos_integer) ::
+  @spec docs(String.t(), pos_integer, pos_integer, keyword) ::
           %{
             docs: nonempty_list(Docs.doc()),
             range: %{
@@ -58,13 +58,13 @@ defmodule ElixirSense do
             }
           }
           | nil
-  def docs(code, line, column) do
+  def docs(code, line, column, options \\ []) do
     case NormalizedCode.Fragment.surround_context(code, {line, column}) do
       :none ->
         nil
 
       %{begin: begin_pos, end: end_pos} = context ->
-        metadata = Parser.parse_string(code, true, true, {line, column})
+        metadata = Keyword.get_lazy(options, :metadata, fn -> Parser.parse_string(code, true, true, {line, column}) end)
 
         env = Metadata.get_env(metadata, {line, column})
 
@@ -99,23 +99,23 @@ defmodule ElixirSense do
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
       "module_with_functions.ex:6:3"
   """
-  @spec definition(String.t(), pos_integer, pos_integer) :: Location.t() | nil
-  def definition(code, line, column) do
+  @spec definition(String.t(), pos_integer, pos_integer, keyword) :: Location.t() | nil
+  def definition(code, line, column, options \\ []) do
     case NormalizedCode.Fragment.surround_context(code, {line, column}) do
       :none ->
         nil
 
       context ->
-        buffer_file_metadata = Parser.parse_string(code, true, true, {line, column})
+        metadata = Keyword.get_lazy(options, :metadata, fn -> Parser.parse_string(code, true, true, {line, column}) end)
 
         env =
-          Metadata.get_env(buffer_file_metadata, {line, column})
-          |> Metadata.add_scope_vars(buffer_file_metadata, {line, column})
+          Metadata.get_env(metadata, {line, column})
+          |> Metadata.add_scope_vars(metadata, {line, column})
 
         Definition.find(
           context,
           env,
-          buffer_file_metadata
+          metadata
         )
     end
   end
@@ -132,21 +132,21 @@ defmodule ElixirSense do
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
       "example_protocol.ex:7:3"
   """
-  @spec implementations(String.t(), pos_integer, pos_integer) :: [Location.t()]
-  def implementations(code, line, column) do
+  @spec implementations(String.t(), pos_integer, pos_integer, keyword) :: [Location.t()]
+  def implementations(code, line, column, options \\ []) do
     case NormalizedCode.Fragment.surround_context(code, {line, column}) do
       :none ->
         []
 
       context ->
-        buffer_file_metadata = Parser.parse_string(code, true, true, {line, column})
+        metadata = Keyword.get_lazy(options, :metadata, fn -> Parser.parse_string(code, true, true, {line, column}) end)
 
-        env = Metadata.get_env(buffer_file_metadata, {line, column})
+        env = Metadata.get_env(metadata, {line, column})
 
         Implementation.find(
           context,
           env,
-          buffer_file_metadata
+          metadata
         )
     end
   end
@@ -203,23 +203,24 @@ defmodule ElixirSense do
         spec: "@spec insert_at(list(), integer(), any()) :: list()", summary: "Returns a list with `value` inserted at the specified `index`."}]
   """
   @spec suggestions(String.t(), pos_integer, pos_integer, keyword()) :: [Suggestion.suggestion()]
-  def suggestions(buffer, line, column, opts \\ []) do
-    hint = Source.prefix(buffer, line, column)
-    buffer_file_metadata = Parser.parse_string(buffer, true, true, {line, column})
-    {text_before, text_after} = Source.split_at(buffer, line, column)
+  def suggestions(code, line, column, options \\ []) do
+    hint = Source.prefix(code, line, column)
+    
+    metadata = Keyword.get_lazy(options, :metadata, fn -> Parser.parse_string(code, true, true, {line, column}) end)
+    {text_before, text_after} = Source.split_at(code, line, column)
 
-    buffer_file_metadata =
+    metadata =
       maybe_fix_autocomple_on_cursor(
-        buffer_file_metadata,
+        metadata,
         text_before,
         text_after,
         {line, column}
       )
 
     env =
-      Metadata.get_env(buffer_file_metadata, {line, column})
+      Metadata.get_env(metadata, {line, column})
       |> Metadata.add_scope_vars(
-        buffer_file_metadata,
+        metadata,
         {line, column},
         &(to_string(&1.name) != hint)
       )
@@ -252,7 +253,7 @@ defmodule ElixirSense do
       at_module_body?: Metadata.at_module_body?(env)
     }
 
-    Suggestion.find(hint, env, buffer_file_metadata, cursor_context, module_store, opts)
+    Suggestion.find(hint, env, metadata, cursor_context, module_store, options)
   end
 
   @doc """
@@ -280,14 +281,14 @@ defmodule ElixirSense do
         ]
       }
   """
-  @spec signature(String.t(), pos_integer, pos_integer) :: Signature.signature_info() | :none
-  def signature(code, line, column) do
+  @spec signature(String.t(), pos_integer, pos_integer, keyword) :: Signature.signature_info() | :none
+  def signature(code, line, column, options \\ []) do
     prefix = Source.text_before(code, line, column)
-    buffer_file_metadata = Parser.parse_string(code, true, true, {line, column})
+    metadata = Keyword.get_lazy(options, :metadata, fn -> Parser.parse_string(code, true, true, {line, column}) end)
 
-    env = Metadata.get_env(buffer_file_metadata, {line, column})
+    env = Metadata.get_env(metadata, {line, column})
 
-    Signature.find(prefix, {line, column}, env, buffer_file_metadata)
+    Signature.find(prefix, {line, column}, env, metadata)
   end
 
   @doc """
@@ -433,9 +434,10 @@ defmodule ElixirSense do
           String.t(),
           pos_integer,
           pos_integer,
-          call_trace_t()
+          call_trace_t(),
+          keyword
         ) :: [References.reference_info()]
-  def references(code, line, column, trace) do
+  def references(code, line, column, trace, options \\ []) do
     case NormalizedCode.Fragment.surround_context(code, {line, column}) do
       :none ->
         []
@@ -443,17 +445,17 @@ defmodule ElixirSense do
       %{
         begin: {begin_line, begin_col}
       } = context ->
-        buffer_file_metadata = Parser.parse_string(code, true, true, {line, column})
+        metadata = Keyword.get_lazy(options, :metadata, fn -> Parser.parse_string(code, true, true, {line, column}) end)
 
         env =
           %State.Env{
             module_variants: module_variants
           } =
-          Metadata.get_env(buffer_file_metadata, {line, column})
-          |> Metadata.add_scope_vars(buffer_file_metadata, {line, column})
+          Metadata.get_env(metadata, {line, column})
+          |> Metadata.add_scope_vars(metadata, {line, column})
 
         # find last env of current module
-        attributes = get_attributes(buffer_file_metadata, module_variants)
+        attributes = get_attributes(metadata, module_variants)
 
         # one line can contain variables from many scopes
         # if the cursor is over variable take variables from the scope as it will
@@ -464,8 +466,8 @@ defmodule ElixirSense do
                end) do
             %VarInfo{scope_id: scope_id} ->
               # in (h|l)?eex templates vars_info_per_scope_id[scope_id] is nil
-              if buffer_file_metadata.vars_info_per_scope_id[scope_id] do
-                buffer_file_metadata.vars_info_per_scope_id[scope_id]
+              if metadata.vars_info_per_scope_id[scope_id] do
+                metadata.vars_info_per_scope_id[scope_id]
               else
                 []
               end
@@ -479,7 +481,7 @@ defmodule ElixirSense do
           env,
           vars,
           attributes,
-          buffer_file_metadata,
+          metadata,
           trace
         )
     end
