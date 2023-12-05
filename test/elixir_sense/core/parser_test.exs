@@ -339,7 +339,7 @@ defmodule ElixirSense.Core.ParserTest do
     end
     """
 
-    %Metadata{error: {:error, :parse_error}, lines_to_env: %{5 => _}} =
+    %Metadata{error: {:error, :parse_error}, lines_to_env: %{6 => _}} =
       parse_string(source, true, true, {5, 12})
   end
 

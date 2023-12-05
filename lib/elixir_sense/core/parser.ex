@@ -7,7 +7,6 @@ defmodule ElixirSense.Core.Parser do
   alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Normalized.Tokenizer
   alias ElixirSense.Core.Source
-  alias ElixirSense.Core.State
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   require Logger
 
@@ -54,16 +53,13 @@ defmodule ElixirSense.Core.Parser do
              !try_to_fix_line_not_found do
           create_metadata(source, {:ok, acc, error})
         else
-          result =
-            case try_fix_line_not_found_by_inserting_marker(modified_source, cursor_position) do
-              {:ok, acc} ->
-                acc
+          case try_fix_line_not_found_by_inserting_marker(modified_source, cursor_position) do
+            {:ok, acc} ->
+              create_metadata(source, {:ok, acc, error || {:error, :env_not_found}})
 
-              _ ->
-                fix_line_not_found_by_taking_previous_line(acc, elem(cursor_position, 0))
-            end
-
-          create_metadata(source, {:ok, result, error || {:error, :env_not_found}})
+            _ ->
+              create_metadata(source, {:ok, acc, error || {:error, :env_not_found}})
+          end
         end
 
       {:error, _reason} = error ->
@@ -141,14 +137,6 @@ defmodule ElixirSense.Core.Parser do
           end
         end
     end
-  end
-
-  defp fix_line_not_found_by_taking_previous_line(acc, cursor_line_number)
-       when is_integer(cursor_line_number) do
-    previous_env_or_default = State.get_closest_previous_env(acc, cursor_line_number)
-
-    fixed_lines_to_env = acc.lines_to_env |> Map.put(cursor_line_number, previous_env_or_default)
-    %State{acc | lines_to_env: fixed_lines_to_env}
   end
 
   defp try_fix_line_not_found_by_inserting_marker(

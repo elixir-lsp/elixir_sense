@@ -1359,19 +1359,6 @@ defmodule ElixirSense.Core.State do
   defp merge_type(old, old), do: old
   defp merge_type(old, new), do: {:intersection, [old, new]}
 
-  def get_closest_previous_env(%__MODULE__{} = metadata, line) do
-    metadata.lines_to_env
-    |> Enum.max_by(
-      fn
-        {env_line, _} when env_line < line -> env_line
-        _ -> 0
-      end,
-      &>=/2,
-      fn -> {0, default_env()} end
-    )
-    |> elem(1)
-  end
-
   def default_env, do: %ElixirSense.Core.State.Env{}
 
   def expand_alias(%__MODULE__{} = _state, module) when is_atom(module) do
