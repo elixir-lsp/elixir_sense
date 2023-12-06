@@ -69,7 +69,7 @@ defmodule ElixirSense.Core.Parser do
 
   @default_parser_options [columns: true, token_metadata: true]
 
-  def string_to_ast(source, options \\ []) do
+  def string_to_ast(source, options \\ []) when is_binary(source) do
     errors_threshold = Keyword.get(options, :errors_threshold, 6)
     cursor_position = Keyword.get(options, :cursor_position)
 
@@ -99,8 +99,7 @@ defmodule ElixirSense.Core.Parser do
          original_source,
          original_error,
          parser_options
-       ) do
-    # IO.puts(source)
+       ) when is_binary(source) do
     case Code.string_to_quoted(source, parser_options) do
       {:ok, ast} ->
         {:ok, ast, source, original_error}
@@ -108,10 +107,12 @@ defmodule ElixirSense.Core.Parser do
       error ->
         error_to_report = original_error || {:error, :parse_error}
         # dbg(error)
-        if errors_threshold > 0 do
-          source
-          |> fix_parse_error(cursor_position, error)
-          |> do_string_to_ast(
+
+        modified_source = if(errors_threshold > 0, do: fix_parse_error(source, cursor_position, error), else: error)
+
+        if is_binary(modified_source) do
+          do_string_to_ast(
+            modified_source,
             errors_threshold - 1,
             fallback_to_container_cursor_to_quoted,
             cursor_position,
@@ -139,7 +140,7 @@ defmodule ElixirSense.Core.Parser do
     end
   end
 
-  defp try_fix_line_not_found_by_inserting_marker(
+  def try_fix_line_not_found_by_inserting_marker(
          modified_source,
          {cursor_line_number, _} = cursor_position
        )
@@ -217,7 +218,6 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
-  # defp fix_parse_error()
   defp fix_parse_error(
          source,
          {cursor_line_number, _},
