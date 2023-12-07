@@ -389,6 +389,7 @@ defmodule ElixirSense.Core.Source do
           | %{
               candidate: {nil | module, atom},
               elixir_prefix: boolean,
+              params: any,
               npar: non_neg_integer,
               cursor_at_option: true | false | :maybe,
               option: atom() | nil,
