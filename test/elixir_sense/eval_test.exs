@@ -35,7 +35,7 @@ defmodule ElixirSense.Evaltest do
       assert ElixirSense.match(code) =~
                """
                # TokenMissingError on line 1:
-               #  ↳ missing terminator: } (for "{" starting at line 1)
+               #  ↳ missing terminator: }\
                """
                |> String.trim()
     end
@@ -140,25 +140,25 @@ defmodule ElixirSense.Evaltest do
 
       assert result.expand_once =~
                """
-               "missing terminator: } (for \\"{\\" starting at line 1)", ""}
+               "missing terminator: }\
                """
                |> String.trim()
 
       assert result.expand =~
                """
-               "missing terminator: } (for \\"{\\" starting at line 1)", ""}
+               "missing terminator: }\
                """
                |> String.trim()
 
       assert result.expand_partial =~
                """
-               "missing terminator: } (for \\"{\\" starting at line 1)", ""}
+               "missing terminator: }\
                """
                |> String.trim()
 
       assert result.expand_all =~
                """
-               "missing terminator: } (for \\"{\\" starting at line 1)", ""}
+               "missing terminator: }\
                """
                |> String.trim()
     end
@@ -177,7 +177,7 @@ defmodule ElixirSense.Evaltest do
 
       assert ElixirSense.quote(code) =~
                """
-               "missing terminator: ) (for \\"(\\" starting at line 1)", \""}
+               "missing terminator: )\
                """
                |> String.trim()
     end

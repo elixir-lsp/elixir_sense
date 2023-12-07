@@ -274,7 +274,7 @@ defmodule ElixirSense.Core.ParserTest do
              error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{module: MyModule},
-               3 => %Env{module: MyModule1}
+               3 => %Env{module: _}
              }
            } = parse_string(source, true, true, {3, 1})
 

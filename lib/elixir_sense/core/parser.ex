@@ -401,6 +401,7 @@ defmodule ElixirSense.Core.Parser do
     line_start =
       case Regex.run(~r/line\s(\d+)/u, text) do
         [_, line] -> line |> String.to_integer()
+        nil -> 1
       end
 
     if terminator in ["\"", "'", ")", "]", "}", ">>"] do
