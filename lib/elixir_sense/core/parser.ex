@@ -99,7 +99,8 @@ defmodule ElixirSense.Core.Parser do
          original_source,
          original_error,
          parser_options
-       ) when is_binary(source) do
+       )
+       when is_binary(source) do
     case Code.string_to_quoted(source, parser_options) do
       {:ok, ast} ->
         {:ok, ast, source, original_error}
@@ -108,7 +109,11 @@ defmodule ElixirSense.Core.Parser do
         error_to_report = original_error || {:error, :parse_error}
         # dbg(error)
 
-        modified_source = if(errors_threshold > 0, do: fix_parse_error(source, cursor_position, error), else: error)
+        modified_source =
+          if(errors_threshold > 0,
+            do: fix_parse_error(source, cursor_position, error),
+            else: error
+          )
 
         if is_binary(modified_source) do
           do_string_to_ast(
@@ -141,10 +146,10 @@ defmodule ElixirSense.Core.Parser do
   end
 
   def try_fix_line_not_found_by_inserting_marker(
-         modified_source,
-         {cursor_line_number, _} = cursor_position
-       )
-       when is_integer(cursor_line_number) do
+        modified_source,
+        {cursor_line_number, _} = cursor_position
+      )
+      when is_integer(cursor_line_number) do
     with {:ok, ast, _modified_source, _error} <-
            modified_source
            |> fix_line_not_found(cursor_line_number)

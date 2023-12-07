@@ -64,7 +64,10 @@ defmodule ElixirSense do
         nil
 
       %{begin: begin_pos, end: end_pos} = context ->
-        metadata = Keyword.get_lazy(options, :metadata, fn -> Parser.parse_string(code, true, true, {line, column}) end)
+        metadata =
+          Keyword.get_lazy(options, :metadata, fn ->
+            Parser.parse_string(code, true, true, {line, column})
+          end)
 
         env = Metadata.get_env(metadata, {line, column})
 
@@ -106,7 +109,10 @@ defmodule ElixirSense do
         nil
 
       context ->
-        metadata = Keyword.get_lazy(options, :metadata, fn -> Parser.parse_string(code, true, true, {line, column}) end)
+        metadata =
+          Keyword.get_lazy(options, :metadata, fn ->
+            Parser.parse_string(code, true, true, {line, column})
+          end)
 
         env =
           Metadata.get_env(metadata, {line, column})
@@ -139,7 +145,10 @@ defmodule ElixirSense do
         []
 
       context ->
-        metadata = Keyword.get_lazy(options, :metadata, fn -> Parser.parse_string(code, true, true, {line, column}) end)
+        metadata =
+          Keyword.get_lazy(options, :metadata, fn ->
+            Parser.parse_string(code, true, true, {line, column})
+          end)
 
         env = Metadata.get_env(metadata, {line, column})
 
@@ -205,8 +214,12 @@ defmodule ElixirSense do
   @spec suggestions(String.t(), pos_integer, pos_integer, keyword()) :: [Suggestion.suggestion()]
   def suggestions(code, line, column, options \\ []) do
     hint = Source.prefix(code, line, column)
-    
-    metadata = Keyword.get_lazy(options, :metadata, fn -> Parser.parse_string(code, true, true, {line, column}) end)
+
+    metadata =
+      Keyword.get_lazy(options, :metadata, fn ->
+        Parser.parse_string(code, true, true, {line, column})
+      end)
+
     {text_before, text_after} = Source.split_at(code, line, column)
 
     metadata =
@@ -281,10 +294,15 @@ defmodule ElixirSense do
         ]
       }
   """
-  @spec signature(String.t(), pos_integer, pos_integer, keyword) :: Signature.signature_info() | :none
+  @spec signature(String.t(), pos_integer, pos_integer, keyword) ::
+          Signature.signature_info() | :none
   def signature(code, line, column, options \\ []) do
     prefix = Source.text_before(code, line, column)
-    metadata = Keyword.get_lazy(options, :metadata, fn -> Parser.parse_string(code, true, true, {line, column}) end)
+
+    metadata =
+      Keyword.get_lazy(options, :metadata, fn ->
+        Parser.parse_string(code, true, true, {line, column})
+      end)
 
     env = Metadata.get_env(metadata, {line, column})
 
@@ -445,7 +463,10 @@ defmodule ElixirSense do
       %{
         begin: {begin_line, begin_col}
       } = context ->
-        metadata = Keyword.get_lazy(options, :metadata, fn -> Parser.parse_string(code, true, true, {line, column}) end)
+        metadata =
+          Keyword.get_lazy(options, :metadata, fn ->
+            Parser.parse_string(code, true, true, {line, column})
+          end)
 
         env =
           %State.Env{
