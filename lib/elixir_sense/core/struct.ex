@@ -18,11 +18,17 @@ defmodule ElixirSense.Core.Struct do
         Enum.map(fields, &(&1 |> elem(0)))
 
       nil ->
-        module
-        |> struct()
-        |> Map.from_struct()
-        |> Map.keys()
-        |> Kernel.++([:__struct__])
+        try do
+          module
+          |> struct()
+          |> Map.from_struct()
+          |> Map.keys()
+          |> Kernel.++([:__struct__])
+        rescue
+          _ ->
+            # return dummy in case struct/1 fails
+            [:__struct__]
+        end
     end
   end
 end
