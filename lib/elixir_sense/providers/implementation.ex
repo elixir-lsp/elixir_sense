@@ -137,29 +137,24 @@ defmodule ElixirSense.Providers.Implementation do
     metadata_implementations_locations =
       metadata_implementations
       |> Enum.map(fn module ->
-        {{line, column}, type} =
+        {{line, column}, info} =
           metadata.mods_funs_to_positions
           |> Enum.find_value(fn
             {{^module, ^maybe_callback, _}, info} when is_nil(maybe_callback) ->
-              {List.last(info.positions), info.type}
+              {List.last(info.positions), info}
 
             {{^module, ^maybe_callback, a}, info} when not is_nil(a) ->
               defaults = info.params |> List.last() |> Introspection.count_defaults()
 
               if Introspection.matches_arity_with_defaults?(a, defaults, arity) do
-                {List.last(info.positions), info.type}
+                {List.last(info.positions), info}
               end
 
             _ ->
               nil
           end)
 
-        kind =
-          case type do
-            :defmodule -> :module
-            :def -> :function
-            :defmacro -> :macro
-          end
+        kind = ModFunInfo.get_category(info)
 
         {module, %Location{type: kind, file: nil, line: line, column: column}}
       end)

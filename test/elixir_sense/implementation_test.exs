@@ -199,6 +199,23 @@ defmodule ElixirSense.Providers.ImplementationTest do
     ] = ElixirSense.implementations(buffer, 2, 19)
   end
 
+  test "find implementations of metadata behaviour module macrocallback when implementation is a guard" do
+    buffer = """
+    defmodule MetadataBehaviour do
+      @macrocallback foo(arg :: any) :: Macro.t
+    end
+
+    defmodule Some do
+      @behaviour MetadataBehaviour
+      defguard foo(arg) when is_nil(arg)
+    end
+    """
+
+    [
+      %Location{type: :macro, file: nil, line: 7, column: 3}
+    ] = ElixirSense.implementations(buffer, 2, 19)
+  end
+
   test "find implementations of metadata behaviour" do
     buffer = """
     defmodule MetadataBehaviour do
@@ -302,6 +319,23 @@ defmodule ElixirSense.Providers.ImplementationTest do
 
     defimpl MetadataProtocol, for: String do
       def some(t), do: :ok
+    end
+    """
+
+    [
+      %Location{type: :function, file: nil, line: 7, column: 3}
+    ] = ElixirSense.implementations(buffer, 3, 8)
+  end
+
+  test "find metadata protocol implementation functions on function when implementation is a delegate" do
+    buffer = """
+    defprotocol MetadataProtocol do
+      @spec some(t) :: any
+      def some(t)
+    end
+
+    defimpl MetadataProtocol, for: String do
+      defdelegate some(t), to: Impl
     end
     """
 
