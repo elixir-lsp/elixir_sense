@@ -5346,6 +5346,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert Elixir == get_line_scope(state, 22)
   end
 
+  test "invalid def" do
+    _state =
+      """
+      def MetadataProtocol, for: BitString do
+      end
+      """
+      |> string_to_state
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true, token_metadata: true)

@@ -285,7 +285,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     post_module(ast, state)
   end
 
-  defp pre_func({type, _, _} = ast, state, meta, name, params, options \\ [])
+  defp pre_func({type, meta, ast_args}, state, meta, name, params, options \\ [])
        when is_atom(name) do
     vars =
       state
@@ -300,6 +300,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {position, end_position} = extract_range(meta)
 
     options = Keyword.put(options, :generated, state.generated)
+
+    ast = {type, Keyword.put(meta, :func, true), ast_args}
 
     state
     |> new_named_func(name, length(params || []))
@@ -344,6 +346,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp post_func(ast, state) do
+    # dbg(ast)
     state
     |> remove_alias_scope
     |> remove_import_scope
@@ -1458,17 +1461,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     post_module(ast, state)
   end
 
-  defp post({def_name, _meta, [{name, _, _params}, _]} = ast, state)
+  defp post({def_name, meta, [{name, _, _params} | _]} = ast, state)
        when def_name in @defs and is_atom(name) do
-    post_func(ast, state)
-  end
-
-  defp post(
-         {def_name, _meta, [{name, _, _params}, _guards, _]} = ast,
-         state
-       )
-       when def_name in @defs and is_atom(name) do
-    post_func(ast, state)
+    if Keyword.get(meta, :func, false) do
+      post_func(ast, state)
+    else
+      {ast, state}
+    end
   end
 
   defp post({def_name, _, _} = ast, state) when def_name in @defs do
