@@ -597,7 +597,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
          {:defdelegate, meta, [{name, meta2, params}, body]},
          state
        )
-       when is_atom(name) do
+       when is_atom(name) and is_list(body) do
     ast_without_params = {:defdelegate, meta, [{name, add_no_call(meta2), []}, body]}
     target_module = body |> Keyword.get(:to)
 
