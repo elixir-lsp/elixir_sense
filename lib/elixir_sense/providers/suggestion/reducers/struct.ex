@@ -71,7 +71,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Struct do
         type =
           case {type, elixir_prefix} do
             {{:atom, mod}, false} ->
-              # which_struct returns not expamded aliases
+              # which_struct returns not expanded aliases
               {:atom, Introspection.expand_alias(mod, aliases)}
 
             _ ->

@@ -419,19 +419,19 @@ defmodule ElixirSense.Core.Parser do
           _ -> :eq
         end
 
-      line_intendations =
+      line_indentations =
         source
         |> Source.split_lines()
         |> Enum.map(fn line ->
-          line = normalize_intendation(line)
-          {line, get_intendation_level(line)}
+          line = normalize_indentation(line)
+          {line, get_indentation_level(line)}
         end)
 
-      line_intendation_at_start = line_intendations |> Enum.at(line_start - 1) |> elem(1)
+      line_indentation_at_start = line_indentations |> Enum.at(line_start - 1) |> elem(1)
 
       {source, _, missing_end} =
-        line_intendations
-        |> Enum.reduce({[], 1, true}, fn {line, intendation},
+        line_indentations
+        |> Enum.reduce({[], 1, true}, fn {line, indentation},
                                          {source_acc, current_line, missing_end} ->
           {modified_lines, missing_end} =
             cond do
@@ -442,7 +442,7 @@ defmodule ElixirSense.Core.Parser do
                 {[line | source_acc], true}
 
               missing_end and line != "" and
-                compare_intendation(compare_mode, intendation, line_intendation_at_start) and
+                compare_indentation(compare_mode, indentation, line_indentation_at_start) and
                   current_line < line_end ->
                 [previous | rest] = source_acc
 
@@ -497,15 +497,15 @@ defmodule ElixirSense.Core.Parser do
     |> replace_line_with_marker(cursor_line_number)
   end
 
-  defp compare_intendation(:eq, left, right), do: left == right
-  defp compare_intendation(:lt, left, right), do: left < right
+  defp compare_indentation(:eq, left, right), do: left == right
+  defp compare_indentation(:lt, left, right), do: left < right
 
-  defp normalize_intendation(line) do
+  defp normalize_indentation(line) do
     line
     |> String.replace_leading("\t", "  ")
   end
 
-  def get_intendation_level(line) do
+  def get_indentation_level(line) do
     trimmed_line = String.trim_leading(line)
     String.length(line) - String.length(trimmed_line)
   end
