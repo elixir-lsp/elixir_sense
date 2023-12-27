@@ -662,7 +662,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       state
       |> add_call_to_line({nil, :test, 0}, {line, column})
 
-    pre_func(ast_without_params, state, meta, def_name, [])
+    pre_func(ast_without_params, state, meta, def_name, [{:_, [line: line, column: column], nil}])
   end
 
   # ex_unit test without context
@@ -681,7 +681,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       state
       |> add_call_to_line({nil, :test, 2}, {line, column})
 
-    pre_func(ast_without_params, state, meta, def_name, [])
+    pre_func(ast_without_params, state, meta, def_name, [{:_, [line: line, column: column], nil}])
   end
 
   # ex_unit test with context

@@ -637,12 +637,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert Map.has_key?(
              state.mods_funs_to_positions,
-             {MyModuleTests, :"test this too does what I want", 0}
+             {MyModuleTests, :"test this too does what I want", 1}
            )
 
     assert Map.has_key?(
              state.mods_funs_to_positions,
-             {MyModuleTests, :"test is not implemented", 0}
+             {MyModuleTests, :"test is not implemented", 1}
            )
   end
 
