@@ -606,6 +606,46 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert [%VarInfo{name: :var}] = state.vars_info_per_scope_id[scope_id]
   end
 
+  test "variables are added to environment in ex_unit test" do
+    state =
+      """
+      defmodule MyModuleTests do
+        use ExUnit.Case, async: true
+
+        test "it does what I want", %{some: some} do
+          IO.puts("")
+        end
+
+        describe "this" do
+          test "too does what I want" do
+            IO.puts("")
+          end
+        end
+
+        test "is not implemented"
+      end
+      """
+      |> string_to_state
+
+    assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
+    assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
+
+    assert Map.has_key?(
+             state.mods_funs_to_positions,
+             {MyModuleTests, :"test it does what I want", 1}
+           )
+
+    assert Map.has_key?(
+             state.mods_funs_to_positions,
+             {MyModuleTests, :"test this too does what I want", 0}
+           )
+
+    assert Map.has_key?(
+             state.mods_funs_to_positions,
+             {MyModuleTests, :"test is not implemented", 0}
+           )
+  end
+
   test "variables from outside module are added to environment" do
     state =
       """
@@ -4757,8 +4797,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           end
         end
 
-        test "test2" do
+        test "test2", %{some: param} do
         end
+
+        test "not implemented"
       end
       """
       |> string_to_state
@@ -4770,7 +4812,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ],
              4 => [%CallInfo{arity: 2, position: {4, 3}, func: :describe, mod: nil}],
              5 => [%CallInfo{arity: 2, position: {5, 5}, func: :test, mod: nil}],
-             9 => [%CallInfo{arity: 2, position: {9, 3}, func: :test, mod: nil}]
+             9 => [%CallInfo{arity: 3, position: {9, 3}, func: :test, mod: nil}],
+             12 => [%CallInfo{arity: 0, position: {12, 3}, func: :test, mod: nil}]
            }
   end
 
@@ -4873,7 +4916,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            }
   end
 
-  test "preferes type over typep for nil arity" do
+  test "prefers type over typep for nil arity" do
     state =
       """
       defmodule My do

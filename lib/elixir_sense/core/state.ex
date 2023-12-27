@@ -55,6 +55,7 @@ defmodule ElixirSense.Core.State do
           generated: boolean,
           first_alias_positions: map(),
           moduledoc_positions: map(),
+          context: map(),
           # TODO better type
           binding_context: list
         }
@@ -84,6 +85,7 @@ defmodule ElixirSense.Core.State do
             types: %{},
             generated: false,
             binding_context: [],
+            context: %{},
             first_alias_positions: %{},
             moduledoc_positions: %{}
 

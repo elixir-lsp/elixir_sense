@@ -629,6 +629,80 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {[], state}
   end
 
+  # ex_unit describe
+  defp pre(
+         {:describe, meta, [name, _body]} = ast,
+         state
+       )
+       when is_binary(name) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    state =
+      state
+      |> add_call_to_line({nil, :describe, 2}, {line, column})
+
+    %{state | context: Map.put(state.context, :ex_unit_describe, name)}
+    |> result(ast)
+  end
+
+  # ex_unit not implemented test
+  defp pre(
+         {:test, meta, [name]},
+         state
+       )
+       when is_binary(name) do
+    def_name = ex_unit_test_name(state, name)
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    ast_without_params = {:def, meta, [{def_name, add_no_call([]), []}, [], []]}
+
+    state =
+      state
+      |> add_call_to_line({nil, :test, 0}, {line, column})
+
+    pre_func(ast_without_params, state, meta, def_name, [])
+  end
+
+  # ex_unit test without context
+  defp pre(
+         {:test, meta, [name, body]},
+         state
+       )
+       when is_binary(name) do
+    def_name = ex_unit_test_name(state, name)
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    ast_without_params = {:def, meta, [{def_name, add_no_call([]), []}, [], body]}
+
+    state =
+      state
+      |> add_call_to_line({nil, :test, 2}, {line, column})
+
+    pre_func(ast_without_params, state, meta, def_name, [])
+  end
+
+  # ex_unit test with context
+  defp pre(
+         {:test, meta, [name, param, body]},
+         state
+       )
+       when is_binary(name) do
+    def_name = ex_unit_test_name(state, name)
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    ast_without_params = {:def, meta, [{def_name, add_no_call([]), []}, [], body]}
+
+    state =
+      state
+      |> add_call_to_line({nil, :test, 3}, {line, column})
+
+    pre_func(ast_without_params, state, meta, def_name, [param])
+  end
+
   # function head with guards
   defp pre(
          {def_name, meta, [{:when, _, [{name, meta2, params}, guards]}, body]},
@@ -1461,6 +1535,16 @@ defmodule ElixirSense.Core.MetadataBuilder do
     post_module(ast, state)
   end
 
+  # ex_unit describe
+  defp post(
+         {:describe, _meta, [name, _body]} = ast,
+         state
+       )
+       when is_binary(name) do
+    %{state | context: Map.delete(state.context, :ex_unit_describe)}
+    |> result(ast)
+  end
+
   defp post({def_name, meta, [{name, _, _params} | _]} = ast, state)
        when def_name in @defs and is_atom(name) do
     if Keyword.get(meta, :func, false) do
@@ -2178,5 +2262,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
       other ->
         other
     end)
+  end
+
+  defp ex_unit_test_name(state, name) do
+    case state.context[:ex_unit_describe] do
+      nil -> "test #{name}"
+      describe -> "test #{describe} #{name}"
+    end
+    |> String.to_atom()
   end
 end
