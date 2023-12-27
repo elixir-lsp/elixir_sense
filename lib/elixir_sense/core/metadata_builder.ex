@@ -643,6 +643,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> add_call_to_line({nil, :describe, 2}, {line, column})
 
     %{state | context: Map.put(state.context, :ex_unit_describe, name)}
+    |> add_current_env_to_line(line)
     |> result(ast)
   end
 
