@@ -646,6 +646,43 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            )
   end
 
+  test "variables are added to environment in ex_unit setup" do
+    state =
+      """
+      defmodule MyModuleTests do
+        use ExUnit.Case, async: true
+
+        setup_all %{some: some} do
+          IO.puts("")
+        end
+
+        setup %{some: other} do
+          IO.puts("")
+        end
+
+        setup do
+          IO.puts("")
+        end
+
+        setup :clean_up_tmp_directory
+
+        setup [:clean_up_tmp_directory, :another_setup]
+
+        setup {MyModule, :my_setup_function}
+      end
+      """
+      |> string_to_state
+
+    assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
+    assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
+
+    assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(9)
+    assert [%VarInfo{name: :other}] = state.vars_info_per_scope_id[scope_id]
+
+    # we do not generate defs - ExUnit.Callbacks.__setup__ is too complicated and generates def names with counters, e.g.
+    # :"__ex_unit_setup_#{counter}_#{length(setup)}"
+  end
+
   test "variables from outside module are added to environment" do
     state =
       """

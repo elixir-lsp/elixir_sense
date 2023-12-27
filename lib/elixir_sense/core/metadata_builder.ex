@@ -632,9 +632,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # ex_unit describe
   defp pre(
          {:describe, meta, [name, _body]} = ast,
-         state
+         state = %{scopes: [[atom | _] | _]}
        )
-       when is_binary(name) do
+       when is_binary(name) and is_atom(atom) do
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
 
@@ -649,9 +649,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # ex_unit not implemented test
   defp pre(
          {:test, meta, [name]},
-         state
+         state = %{scopes: [[atom | _] | _]}
        )
-       when is_binary(name) do
+       when is_binary(name) and is_atom(atom) do
     def_name = ex_unit_test_name(state, name)
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
@@ -668,9 +668,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # ex_unit test without context
   defp pre(
          {:test, meta, [name, body]},
-         state
+         state = %{scopes: [[atom | _] | _]}
        )
-       when is_binary(name) do
+       when is_binary(name) and is_atom(atom) do
     def_name = ex_unit_test_name(state, name)
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
@@ -687,9 +687,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # ex_unit test with context
   defp pre(
          {:test, meta, [name, param, body]},
-         state
+         state = %{scopes: [[atom | _] | _]}
        )
-       when is_binary(name) do
+       when is_binary(name) and is_atom(atom) do
     def_name = ex_unit_test_name(state, name)
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
@@ -701,6 +701,46 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> add_call_to_line({nil, :test, 3}, {line, column})
 
     pre_func(ast_without_params, state, meta, def_name, [param])
+  end
+
+  # ex_unit setup with context
+  defp pre(
+         {setup, meta, [param, body]},
+         state = %{scopes: [[atom | _] | _]}
+       )
+       when setup in [:setup, :setup_all] and is_atom(atom) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    # NOTE this name is not 100% correct - ex_unit uses counters instead of line but it's too complicated
+    def_name = :"__ex_unit_#{setup}_#{line}"
+    ast_without_params = {:def, meta, [{def_name, add_no_call([]), []}, [], body]}
+
+    state =
+      state
+      |> add_call_to_line({nil, setup, 2}, {line, column})
+
+    pre_func(ast_without_params, state, meta, def_name, [param])
+  end
+
+  # ex_unit setup without context
+  defp pre(
+         {setup, meta, [body]},
+         state = %{scopes: [[atom | _] | _]}
+       )
+       when setup in [:setup, :setup_all] and is_atom(atom) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    # NOTE this name is not 100% correct - ex_unit uses counters instead of line but it's too complicated
+    def_name = :"__ex_unit_#{setup}_#{line}"
+    ast_without_params = {:def, meta, [{def_name, add_no_call([]), []}, [], body]}
+
+    state =
+      state
+      |> add_call_to_line({nil, setup, 2}, {line, column})
+
+    pre_func(ast_without_params, state, meta, def_name, [{:_, [line: line, column: column], nil}])
   end
 
   # function head with guards
