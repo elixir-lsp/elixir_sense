@@ -756,15 +756,18 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   ## Helpers
 
-  defp usable_as_unquoted_module?(name) do
-    # Conversion to atom is not a problem because
-    # it is only called with existing modules names.
-    # credo:disable-for-lines:7
-    if Version.match?(System.version(), ">= 1.14.0-dev") do
-      apply(Macro, :classify_atom, [String.to_atom(name)]) in [:identifier, :unquoted] and
+  # Version.match? is slow, we need to avoid it in a hot loop
+  if Version.match?(System.version(), ">= 1.14.0-dev") do
+    defp usable_as_unquoted_module?(name) do
+      # Conversion to atom is not a problem because
+      # it is only called with existing modules names.
+      # credo:disable-for-lines:7
+      Macro.classify_atom(String.to_atom(name)) in [:identifier, :unquoted] and
         not String.starts_with?(name, "Elixir.")
-    else
-      apply(Code.Identifier, :classify, [String.to_atom(name)]) != :other and
+    end
+  else
+    defp usable_as_unquoted_module?(name) do
+      Code.Identifier.classify(String.to_atom(name)) != :other and
         not String.starts_with?(name, "Elixir.")
     end
   end
