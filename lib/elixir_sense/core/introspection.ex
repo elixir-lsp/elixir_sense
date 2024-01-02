@@ -602,8 +602,8 @@ defmodule ElixirSense.Core.Introspection do
   defp to_var(atom, _) when is_atom(atom), do: {:atom, [], nil}
   defp to_var(_, position), do: {:"arg#{position}", [], nil}
 
-  def get_module_docs_summary(module) do
-    case NormalizedCode.get_docs(module, :moduledoc) do
+  def get_module_docs_summary(module, docs \\ nil) do
+    case docs || NormalizedCode.get_docs(module, :moduledoc) do
       {_, doc, metadata} ->
         {extract_summary_from_docs(doc), metadata}
 

@@ -55,6 +55,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
   alias ElixirSense.Providers.Suggestion.Matcher
   alias ElixirSense.Providers.Suggestion.Reducers
+  require Logger
+
+  @module_results_cache_key :"#{__MODULE__}_module_results_cache"
 
   @erlang_module_builtin_functions [{:module_info, 0}, {:module_info, 1}]
   @elixir_module_builtin_functions [{:__info__, 1}]
@@ -510,20 +513,35 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     for mod <- match_modules(hint, true, env, metadata),
         usable_as_unquoted_module?(mod) do
       mod_as_atom = String.to_atom(mod)
-      subtype = Introspection.get_module_subtype(mod_as_atom)
 
-      desc =
-        if hint != "" do
-          Introspection.get_module_docs_summary(mod_as_atom)
-        else
-          # performance optimization
-          # TODO is it still needed on OTP 23+?
-          {"", %{}}
-        end
-
-      name = ":" <> mod
-      %{kind: :module, name: name, full_name: name, type: :erlang, desc: desc, subtype: subtype}
+      case :persistent_term.get({@module_results_cache_key, mod_as_atom}, nil) do
+        nil -> get_erlang_module_result(mod_as_atom)
+        result -> result
+      end
     end
+  end
+
+  def fill_erlang_module_cache(module, docs) do
+    get_erlang_module_result(module, docs)
+  end
+
+  defp get_erlang_module_result(module, docs \\ nil) do
+    subtype = Introspection.get_module_subtype(module)
+    desc = Introspection.get_module_docs_summary(module, docs)
+
+    name = inspect(module)
+
+    result = %{
+      kind: :module,
+      name: name,
+      full_name: name,
+      type: :erlang,
+      desc: desc,
+      subtype: subtype
+    }
+
+    :persistent_term.put({@module_results_cache_key, module}, result)
+    result
   end
 
   defp struct_module_filter(true, %State.Env{} = _env, %Metadata{} = metadata) do
@@ -715,17 +733,13 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     end)
     |> Enum.uniq_by(&elem(&1, 1))
     |> Enum.map(fn {name, module, required_alias?} ->
-      {desc, meta} = Introspection.get_module_docs_summary(module)
-      subtype = Introspection.get_module_subtype(module)
+      result =
+        case :persistent_term.get({@module_results_cache_key, module}, nil) do
+          nil -> get_elixir_module_result(module)
+          result -> result
+        end
 
-      result = %{
-        kind: :module,
-        type: :elixir,
-        name: name,
-        full_name: inspect(module),
-        desc: {desc, meta},
-        subtype: subtype
-      }
+      result = Map.put(result, :name, name)
 
       if required_alias? do
         Map.put(result, :required_alias, module)
@@ -733,6 +747,26 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         result
       end
     end)
+  end
+
+  def fill_elixir_module_cache(module, docs) do
+    get_elixir_module_result(module, docs)
+  end
+
+  defp get_elixir_module_result(module, docs \\ nil) do
+    {desc, meta} = Introspection.get_module_docs_summary(module, docs)
+    subtype = Introspection.get_module_subtype(module)
+
+    result = %{
+      kind: :module,
+      type: :elixir,
+      full_name: inspect(module),
+      desc: {desc, meta},
+      subtype: subtype
+    }
+
+    :persistent_term.put({@module_results_cache_key, module}, result)
+    result
   end
 
   defp valid_alias_piece?(<<?., char, rest::binary>>) when char in ?A..?Z,
