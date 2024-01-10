@@ -29,6 +29,7 @@ defmodule ElixirSense.Core.BuiltinAttributes do
     moduledoc
     for
     protocol
+    nifs
   )a
 
   def all, do: @list
