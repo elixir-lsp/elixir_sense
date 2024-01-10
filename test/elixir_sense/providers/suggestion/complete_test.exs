@@ -2204,4 +2204,44 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
              _
            ] = expand(~c"unquote", %Env{requires: []})
   end
+
+  test "Application.compile_env classified as macro" do
+    assert [
+             %{
+               name: "compile_env",
+               arity: 2,
+               type: :macro,
+               origin: "Application",
+               needed_require: "Application"
+             },
+             %{
+               name: "compile_env",
+               arity: 3,
+               type: :macro,
+               origin: "Application",
+               needed_require: "Application"
+             },
+             %{
+               name: "compile_env",
+               arity: 4,
+               type: :function,
+               origin: "Application",
+               needed_require: nil
+             },
+             %{
+               name: "compile_env!",
+               arity: 2,
+               type: :macro,
+               origin: "Application",
+               needed_require: "Application"
+             },
+             %{
+               name: "compile_env!",
+               arity: 3,
+               type: :function,
+               origin: "Application",
+               needed_require: nil
+             }
+           ] = expand(~c"Application.compile_e")
+  end
 end

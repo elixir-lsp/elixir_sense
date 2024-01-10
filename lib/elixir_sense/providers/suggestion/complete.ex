@@ -954,27 +954,29 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         doc = {Introspection.extract_summary_from_docs(doc_str), meta}
 
         case :lists.keyfind(f, 1, acc) do
-          {f, aa, def_arities, func_kind, docs, specs, args} ->
+          {f, aa, def_arities, func_kinds, docs, specs, args} ->
             :lists.keyreplace(
               f,
               1,
               acc,
-              {f, [a | aa], [def_a | def_arities], func_kind, [doc | docs], [spec | specs],
-               [arg | args]}
+              {f, [a | aa], [def_a | def_arities], [func_kind | func_kinds], [doc | docs],
+               [spec | specs], [arg | args]}
             )
 
           false ->
-            [{f, [a], [def_a], func_kind, [doc], [spec], [arg]} | acc]
+            [{f, [a], [def_a], [func_kind], [doc], [spec], [arg]} | acc]
         end
       end)
 
-    for {fun, arities, def_arities, func_kind, docs, specs, args} <- list,
+    for {fun, arities, def_arities, func_kinds, docs, specs, args} <- list,
         name = Atom.to_string(fun),
         if(exact?, do: name == hint, else: Matcher.match?(name, hint)) do
-      needed_require =
-        if func_kind in [:macro, :defmacro, :defguard] and mod not in env.requires and
-             mod != Kernel.SpecialForms do
-          mod
+      needed_requires =
+        for func_kind <- func_kinds do
+          if func_kind in [:macro, :defmacro, :defguard] and mod not in env.requires and
+               mod != Kernel.SpecialForms do
+            mod
+          end
         end
 
       needed_imports =
@@ -995,10 +997,10 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         arities: arities,
         def_arities: def_arities,
         module: mod,
-        func_kind: func_kind,
+        func_kinds: func_kinds,
         docs: docs,
         specs: specs,
-        needed_require: needed_require,
+        needed_requires: needed_requires,
         needed_imports: needed_imports,
         args: args
       }
@@ -1364,15 +1366,25 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
          arities: arities,
          def_arities: def_arities,
          needed_imports: needed_imports,
-         needed_require: needed_require,
+         needed_requires: needed_requires,
          module: mod,
-         func_kind: func_kind,
+         func_kinds: func_kinds,
          docs: docs,
          specs: specs,
          args: args
        }) do
-    for e <- Enum.zip([arities, docs, specs, args, def_arities, needed_imports]),
-        {a, {doc, metadata}, spec, args, def_arity, needed_import} = e do
+    for e <-
+          Enum.zip([
+            arities,
+            docs,
+            specs,
+            args,
+            def_arities,
+            func_kinds,
+            needed_imports,
+            needed_requires
+          ]),
+        {a, {doc, metadata}, spec, args, def_arity, func_kind, needed_import, needed_require} = e do
       kind =
         case func_kind do
           k when k in [:macro, :defmacro, :defmacrop, :defguard, :defguardp] -> :macro
