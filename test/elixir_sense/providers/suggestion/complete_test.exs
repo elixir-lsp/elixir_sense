@@ -2205,6 +2205,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
            ] = expand(~c"unquote", %Env{requires: []})
   end
 
+  @tag requires_elixir_1_14: true
   test "Application.compile_env classified as macro" do
     assert [
              %{
