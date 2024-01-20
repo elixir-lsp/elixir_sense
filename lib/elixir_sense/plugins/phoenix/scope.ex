@@ -4,8 +4,6 @@ defmodule ElixirSense.Plugins.Phoenix.Scope do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.Binding
 
-  import Module, only: [safe_concat: 2, safe_concat: 1]
-
   def within_scope(buffer, binding_env \\ %Binding{}) do
     {:ok, ast} = Code.Fragment.container_cursor_to_quoted(buffer)
 
@@ -33,59 +31,66 @@ defmodule ElixirSense.Plugins.Phoenix.Scope do
     end
   end
 
-  defp get_scope_alias(scopes_ast, binding_env, module \\ nil)
-
-  # is this possible? scope do ... end
-  defp get_scope_alias([{:scope, _, []}], _binding_env, module), do: module
-
-  # scope "/" do ... end
-  defp get_scope_alias([{:scope, _, [scope_params]}], _binding_env, module)
-       when not is_list(scope_params),
-       do: module
-
   # scope path: "/", alias: ExampleWeb do ... end
-  defp get_scope_alias([{:scope, _, [scope_params]}], binding_env, module) do
+  defp get_scope_alias_from_ast_node({:scope, _, [scope_params]}, binding_env, module)
+       when is_list(scope_params) do
     scope_alias = Keyword.get(scope_params, :alias)
-    scope_alias = get_mod(scope_alias, binding_env)
-    safe_concat(module, scope_alias)
+    concat_module(scope_alias, binding_env, module)
   end
 
   # scope "/", alias: ExampleWeb do ... end
-  defp get_scope_alias(
-         [{:scope, _, [_scope_path, scope_params]}],
+  defp get_scope_alias_from_ast_node(
+         {:scope, _, [_scope_path, scope_params]},
          binding_env,
          module
        )
        when is_list(scope_params) do
     scope_alias = Keyword.get(scope_params, :alias)
-    scope_alias = get_mod(scope_alias, binding_env)
-    safe_concat(module, scope_alias)
+    concat_module(scope_alias, binding_env, module)
   end
 
-  # scope "/", ExampleWeb do ... end
-  defp get_scope_alias(
-         [{:scope, _, [_scope_path, scope_alias]}],
+  defp get_scope_alias_from_ast_node(
+         {:scope, _, [_scope_path, scope_alias]},
          binding_env,
          module
        ) do
-    scope_alias = get_mod(scope_alias, binding_env)
-    safe_concat(module, scope_alias)
+    concat_module(scope_alias, binding_env, module)
   end
 
   # scope "/", ExampleWeb, host: "api." do ... end
-  defp get_scope_alias(
-         [{:scope, _, [_scope_path, scope_alias, _scope_params]}],
+  defp get_scope_alias_from_ast_node(
+         {:scope, _, [_scope_path, scope_alias, scope_params]},
          binding_env,
          module
-       ) do
-    scope_alias = get_mod(scope_alias, binding_env)
-    safe_concat(module, scope_alias)
+       )
+       when is_list(scope_params) do
+    concat_module(scope_alias, binding_env, module)
   end
 
+  defp get_scope_alias_from_ast_node(
+         _ast,
+         _binding_env,
+         module
+       ),
+       do: module
+
+  # no alias - propagate parent
+  defp concat_module(nil, _binding_env, module), do: module
+  # alias: false resets all nested aliases
+  defp concat_module(false, _binding_env, _module), do: nil
+
+  defp concat_module(scope_alias, binding_env, module) do
+    scope_alias = get_mod(scope_alias, binding_env)
+    Module.concat([module, scope_alias])
+  end
+
+  defp get_scope_alias(scopes_ast, binding_env, module \\ nil)
   # recurse
+  defp get_scope_alias([], _binding_env, module), do: module
+
   defp get_scope_alias([head | tail], binding_env, module) do
-    scope_alias = get_scope_alias([head], binding_env, module)
-    safe_concat([module, scope_alias, get_scope_alias(tail, binding_env)])
+    scope_alias = get_scope_alias_from_ast_node(head, binding_env, module)
+    get_scope_alias(tail, binding_env, scope_alias)
   end
 
   defp get_mod({:__aliases__, _, [scope_alias]}, binding_env) do
