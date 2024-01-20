@@ -247,14 +247,14 @@ defmodule ElixirSense.Providers.Definition do
 
   defp get_module(module, %{end: {line, col}}, env, metadata) do
     with {true, module} <- get_phoenix_module(module, env),
-    true <- Introspection.elixir_module?(module)
-     do
+         true <- Introspection.elixir_module?(module) do
       text_before = Source.text_before(metadata.source, line, col)
 
       case Scope.within_scope(text_before) do
-        {false, _} -> module
+        {false, _} ->
+          module
+
         {true, scope_alias} ->
-          dbg({module, scope_alias})
           Module.concat(scope_alias, module)
       end
     end
