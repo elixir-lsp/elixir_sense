@@ -34,12 +34,7 @@ defmodule ElixirSense.Plugins.Phoenix.Scope do
   # scope path: "/", alias: ExampleWeb do ... end
   defp get_scope_alias_from_ast_node({:scope, _, [scope_params]}, binding_env, module) when is_list(scope_params) do
     scope_alias = Keyword.get(scope_params, :alias)
-    if scope_alias do
-      scope_alias = get_mod(scope_alias, binding_env)
-      Module.concat([module, scope_alias] |> dbg)
-    else
-      module
-    end
+    concat_module(scope_alias, binding_env, module)
   end
 
   # scope "/", alias: ExampleWeb do ... end
@@ -50,12 +45,7 @@ defmodule ElixirSense.Plugins.Phoenix.Scope do
        )
        when is_list(scope_params) do
     scope_alias = Keyword.get(scope_params, :alias)
-    if scope_alias do
-      scope_alias = get_mod(scope_alias, binding_env)
-      Module.concat([module, scope_alias] |> dbg)
-    else
-      module
-    end
+    concat_module(scope_alias, binding_env, module)
   end
 
   defp get_scope_alias_from_ast_node(
@@ -63,12 +53,7 @@ defmodule ElixirSense.Plugins.Phoenix.Scope do
          binding_env,
          module
        ) do
-    if scope_alias do
-      scope_alias = get_mod(scope_alias, binding_env)
-      Module.concat([module, scope_alias] |> dbg)
-    else
-      module
-    end
+    concat_module(scope_alias, binding_env, module)
   end
 
   # scope "/", ExampleWeb, host: "api." do ... end
@@ -77,12 +62,16 @@ defmodule ElixirSense.Plugins.Phoenix.Scope do
          binding_env,
          module
        ) when is_list(scope_params) do
-    if scope_alias do
-      scope_alias = get_mod(scope_alias, binding_env)
-      Module.concat([module, scope_alias] |> dbg)
-    else
-      module
-    end
+    concat_module(scope_alias, binding_env, module)
+  end
+
+  # no alias - propagate parent
+  defp concat_module(nil, _binding_env, module), do: module
+  # alias: false resets all nested aliases
+  defp concat_module(false, _binding_env, module), do: nil
+  defp concat_module(scope_alias, binding_env, module) do
+    scope_alias = get_mod(scope_alias, binding_env)
+    Module.concat([module, scope_alias] |> dbg)
   end
 
   defp get_scope_alias_from_ast_node(
