@@ -14,6 +14,13 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
           opts
         ])
     end
+  rescue
+    e in CaseClauseError ->
+      if Version.match?(System.version(), ">= 1.16.0-dev") do
+        reraise e, __STACKTRACE__
+      else
+        :none
+      end
   end
 
   def surround_context(fragment, position, options \\ []) do
@@ -30,6 +37,13 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
           options
         ])
     end
+  rescue
+    e in CaseClauseError ->
+      if Version.match?(System.version(), ">= 1.16.0-dev") do
+        reraise e, __STACKTRACE__
+      else
+        :none
+      end
   end
 
   def container_cursor_to_quoted(fragment, opts \\ []) do
@@ -46,5 +60,12 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
           [fragment, opts]
         )
     end
+  rescue
+    e in MatchError ->
+      if Version.match?(System.version(), ">= 1.16.0-dev") do
+        reraise e, __STACKTRACE__
+      else
+        {:error, {[line: 1, column: 1], "", ""}}
+      end
   end
 end

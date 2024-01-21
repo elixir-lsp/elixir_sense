@@ -29,5 +29,12 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
       {:error, _, _, _, sofar} ->
         sofar
     end
+  rescue
+    e in CaseClauseError ->
+      if Version.match?(System.version(), ">= 1.16.0-dev") do
+        reraise e, __STACKTRACE__
+      else
+        []
+      end
   end
 end
