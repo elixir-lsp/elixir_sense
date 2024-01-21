@@ -880,6 +880,13 @@ defmodule ElixirSense.Core.Introspection do
       # erlang module or `Elixir`
       mod
     end
+  rescue
+    e in SystemLimitError ->
+      Logger.warning(
+        "Unable to expand alias #{inspect(mod)}; env aliases #{inspect(aliases)}: #{Exception.blame(:error, e, __STACKTRACE__)}"
+      )
+
+      mod
   end
 
   @spec actual_mod_fun(
