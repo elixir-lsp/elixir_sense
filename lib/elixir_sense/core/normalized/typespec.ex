@@ -2,17 +2,22 @@ defmodule ElixirSense.Core.Normalized.Typespec do
   @moduledoc """
   A module wrapping internal Elixir Code.Typespec APIs
   """
+  require Logger
 
   @spec get_specs(module) :: [tuple]
   def get_specs(module) do
     get_module().fetch_specs(module)
     |> extract_specs
   rescue
-    e in FunctionClauseError ->
+    e ->
       # workaround for crash
       # Keyword.fetch({:error, :beam_lib, {:not_a_beam_file, ""}}, :module)
       # fixed in elixir 1.16.0
       if Version.match?(System.version(), ">= 1.16.0-dev") do
+        Logger.error(
+          "Code.Typespec.fetch_specs raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+        )
+
         reraise e, __STACKTRACE__
       else
         []
@@ -24,11 +29,15 @@ defmodule ElixirSense.Core.Normalized.Typespec do
     get_module().fetch_types(module)
     |> extract_specs
   rescue
-    e in FunctionClauseError ->
+    e ->
       # workaround for crash
       # Keyword.fetch({:error, :beam_lib, {:not_a_beam_file, ""}}, :module)
       # fixed in elixir 1.16.0
       if Version.match?(System.version(), ">= 1.16.0-dev") do
+        Logger.error(
+          "Code.Typespec.fetch_types raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+        )
+
         reraise e, __STACKTRACE__
       else
         []
@@ -40,11 +49,15 @@ defmodule ElixirSense.Core.Normalized.Typespec do
     get_module().fetch_callbacks(module)
     |> extract_specs
   rescue
-    e in FunctionClauseError ->
+    e ->
       # workaround for crash
       # Keyword.fetch({:error, :beam_lib, {:not_a_beam_file, ""}}, :module)
       # fixed in elixir 1.16.0
       if Version.match?(System.version(), ">= 1.16.0-dev") do
+        Logger.error(
+          "Code.Typespec.fetch_callbacks raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+        )
+
         reraise e, __STACKTRACE__
       else
         []

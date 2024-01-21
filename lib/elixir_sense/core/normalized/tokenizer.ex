@@ -4,6 +4,7 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
 
   Uses private api :elixir_tokenizer
   """
+  require Logger
 
   @spec tokenize(String.t()) :: [tuple]
   def tokenize(prefix) do
@@ -30,8 +31,12 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
         sofar
     end
   rescue
-    e in CaseClauseError ->
+    e ->
       if Version.match?(System.version(), ">= 1.16.0-dev") do
+        Logger.error(
+          ":elixir_tokenizer.tokenize raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+        )
+
         reraise e, __STACKTRACE__
       else
         []

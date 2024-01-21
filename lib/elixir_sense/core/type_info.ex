@@ -9,6 +9,8 @@ defmodule ElixirSense.Core.TypeInfo do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.TypeAst
 
+  require Logger
+
   @doc_spec_line_length 75
   @param_option_spec_line_length 35
 
@@ -214,11 +216,30 @@ defmodule ElixirSense.Core.TypeInfo do
 
     {sanitized, original} = sanitize_type_name(spec_ast)
 
-    sanitized
-    |> Macro.to_string()
-    |> (&"@#{kind} #{&1}").()
-    |> Code.format_string!(line_length: line_length)
-    |> to_string()
+    string =
+      sanitized
+      |> Macro.to_string()
+      |> (&"@#{kind} #{&1}").()
+
+    string =
+      try do
+        string
+        |> Code.format_string!(line_length: line_length)
+        |> to_string()
+      rescue
+        e ->
+          if Version.match?(System.version(), ">= 1.16.0-dev") do
+            Logger.error(
+              "Macro.to_string(#{inspect(sanitized)}) returned invalid code. Please report that to elixir project."
+            )
+
+            reraise e, __STACKTRACE__
+          else
+            string
+          end
+      end
+
+    string
     |> String.replace("__replace_me__", "#{original}")
     |> Source.split_lines()
     |> Enum.with_index()

@@ -1,5 +1,6 @@
 defmodule ElixirSense.Core.Normalized.Code.Fragment do
   @moduledoc false
+  require Logger
 
   def cursor_context(string, opts \\ []) do
     cond do
@@ -15,8 +16,12 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
         ])
     end
   rescue
-    e in CaseClauseError ->
+    e ->
       if Version.match?(System.version(), ">= 1.16.0-dev") do
+        Logger.error(
+          "Code.Fragment.cursor_context raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+        )
+
         reraise e, __STACKTRACE__
       else
         :none
@@ -38,8 +43,12 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
         ])
     end
   rescue
-    e in CaseClauseError ->
+    e ->
       if Version.match?(System.version(), ">= 1.16.0-dev") do
+        Logger.error(
+          "Code.Fragment.surround_context raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+        )
+
         reraise e, __STACKTRACE__
       else
         :none
@@ -61,8 +70,12 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
         )
     end
   rescue
-    e in MatchError ->
+    e ->
       if Version.match?(System.version(), ">= 1.16.0-dev") do
+        Logger.error(
+          "Code.Fragment.container_cursor_to_quoted raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+        )
+
         reraise e, __STACKTRACE__
       else
         {:error, {[line: 1, column: 1], "", ""}}
