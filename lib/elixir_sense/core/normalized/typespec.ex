@@ -7,18 +7,48 @@ defmodule ElixirSense.Core.Normalized.Typespec do
   def get_specs(module) do
     get_module().fetch_specs(module)
     |> extract_specs
+  rescue
+    e in FunctionClauseError ->
+      # workaround for crash
+      # Keyword.fetch({:error, :beam_lib, {:not_a_beam_file, ""}}, :module)
+      # fixed in elixir 1.16.0
+      if Version.match?(System.version(), ">= 1.16.0-dev") do
+        reraise e, __STACKTRACE__
+      else
+        []
+      end
   end
 
   @spec get_types(module) :: [tuple]
   def get_types(module) when is_atom(module) do
     get_module().fetch_types(module)
     |> extract_specs
+  rescue
+    e in FunctionClauseError ->
+      # workaround for crash
+      # Keyword.fetch({:error, :beam_lib, {:not_a_beam_file, ""}}, :module)
+      # fixed in elixir 1.16.0
+      if Version.match?(System.version(), ">= 1.16.0-dev") do
+        reraise e, __STACKTRACE__
+      else
+        []
+      end
   end
 
   @spec get_callbacks(module) :: [tuple]
   def get_callbacks(module) do
     get_module().fetch_callbacks(module)
     |> extract_specs
+  rescue
+    e in FunctionClauseError ->
+      # workaround for crash
+      # Keyword.fetch({:error, :beam_lib, {:not_a_beam_file, ""}}, :module)
+      # fixed in elixir 1.16.0
+      if Version.match?(System.version(), ">= 1.16.0-dev") do
+        reraise e, __STACKTRACE__
+      else
+        []
+      end
   end
 
   defp extract_specs({:ok, specs}), do: specs
