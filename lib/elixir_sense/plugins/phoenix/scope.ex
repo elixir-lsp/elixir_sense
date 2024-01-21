@@ -5,12 +5,13 @@ defmodule ElixirSense.Plugins.Phoenix.Scope do
   alias ElixirSense.Core.Binding
 
   def within_scope(buffer, binding_env \\ %Binding{}) do
-    {:ok, ast} = Code.Fragment.container_cursor_to_quoted(buffer)
-
-    with {true, scopes_ast} <- get_scopes(ast),
+    with {:ok, ast} <- Code.Fragment.container_cursor_to_quoted(buffer),
+         {true, scopes_ast} <- get_scopes(ast),
          scopes_ast = Enum.reverse(scopes_ast),
          scope_alias <- get_scope_alias(scopes_ast, binding_env) do
       {true, scope_alias}
+    else
+      _ -> {false, nil}
     end
   end
 
