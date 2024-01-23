@@ -308,7 +308,8 @@ defmodule ElixirSense.Providers.Docs do
                     }
 
                   {_, docs, callback_meta, mime_type} ->
-                    docs = docs |> NormalizedCode.extract_docs(mime_type)
+                    app = ElixirSense.Core.Applications.get_application(behaviour)
+                    docs = docs |> NormalizedCode.extract_docs(mime_type, behaviour, app)
                     # as of OTP 25 erlang callback doc entry does not have signature in meta
                     # pass meta with implementing flag to trigger looking for specs in behaviour module
                     # assume there is a typespec for behaviour module

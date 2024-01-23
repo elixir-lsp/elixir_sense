@@ -26,25 +26,27 @@ defmodule ElixirSense.Core.Normalized.Code do
     case fetch_docs(module) do
       {:docs_v1, moduledoc_anno, _language, mime_type, moduledoc, metadata, docs}
       when mime_type in @supported_mime_types ->
+        app = ElixirSense.Core.Applications.get_application(module)
+
         case category do
           :moduledoc ->
-            moduledoc_en = extract_docs(moduledoc, mime_type)
+            moduledoc_en = extract_docs(moduledoc, mime_type, module, app)
 
             {max(:erl_anno.line(moduledoc_anno), 1), moduledoc_en,
              maybe_mark_as_hidden(metadata, moduledoc_en)}
 
           :docs ->
-            get_fun_docs(module, docs, mime_type)
+            get_fun_docs(module, app, docs, mime_type)
 
           :callback_docs ->
             for {{kind, _name, _arity}, _anno, _signatures, _docs, _metadata} = entry
                 when kind in [:callback, :macrocallback] <- docs do
-              map_doc_entry(entry, mime_type)
+              map_doc_entry(entry, mime_type, module, app)
             end
 
           :type_docs ->
             for {{:type, _name, _arity}, _anno, _signatures, _docs, _metadata} = entry <- docs do
-              map_doc_entry(entry, mime_type)
+              map_doc_entry(entry, mime_type, module, app)
             end
         end
 
@@ -53,8 +55,13 @@ defmodule ElixirSense.Core.Normalized.Code do
     end
   end
 
-  defp map_doc_entry({{kind, name, arity}, anno, signatures, docs, metadata}, mime_type) do
-    docs_en = extract_docs(docs, mime_type)
+  defp map_doc_entry(
+         {{kind, name, arity}, anno, signatures, docs, metadata},
+         mime_type,
+         module,
+         app
+       ) do
+    docs_en = extract_docs(docs, mime_type, module, app)
     # TODO check if we can get column here
     line = :erl_anno.line(anno)
 
@@ -78,18 +85,23 @@ defmodule ElixirSense.Core.Normalized.Code do
     end
   end
 
-  @spec extract_docs(%{required(String.t()) => String.t()} | :hidden | :none, String.t()) ::
+  @spec extract_docs(
+          %{required(String.t()) => String.t()} | :hidden | :none,
+          String.t(),
+          module(),
+          atom()
+        ) ::
           String.t() | false | nil
-  def extract_docs(%{"en" => docs_en}, "text/markdown"), do: docs_en
+  def extract_docs(%{"en" => docs_en}, "text/markdown", _module, _app), do: docs_en
 
-  def extract_docs(%{"en" => docs_en}, "application/erlang+html") do
-    ErlangHtml.to_markdown(docs_en)
+  def extract_docs(%{"en" => docs_en}, "application/erlang+html", module, app) do
+    ErlangHtml.to_markdown(docs_en, module, app)
   end
 
-  def extract_docs(:hidden, _), do: false
-  def extract_docs(_, _), do: nil
+  def extract_docs(:hidden, _, _, _), do: false
+  def extract_docs(_, _, _, _), do: nil
 
-  defp get_fun_docs(module, docs, mime_type) do
+  defp get_fun_docs(module, app, docs, mime_type) do
     docs_from_module =
       Enum.filter(
         docs,
@@ -139,7 +151,11 @@ defmodule ElixirSense.Core.Normalized.Code do
             end
 
           {{kind, name, arity}, anno, signatures, docs, metadata}
-          |> map_doc_entry(mime_type)
+          |> map_doc_entry(
+            mime_type,
+            Map.get(metadata, :implementing, module),
+            Map.get(metadata, :implementing_module_app, app)
+          )
       end
     )
   end
@@ -161,6 +177,8 @@ defmodule ElixirSense.Core.Normalized.Code do
   end
 
   def callback_documentation(module) do
+    app = ElixirSense.Core.Applications.get_application(module)
+
     case Code.fetch_docs(module) do
       {:docs_v1, _moduledoc_anno, _language, mime_type, _moduledoc, _metadata, docs}
       when mime_type in @supported_mime_types ->
@@ -174,7 +192,9 @@ defmodule ElixirSense.Core.Normalized.Code do
         )
         |> Stream.map(fn {{_kind, name, arity}, _anno, signatures, docs, metadata} ->
           {{name, arity},
-           {signatures, docs, metadata |> Map.put(:implementing, module), mime_type}}
+           {signatures, docs,
+            metadata |> Map.put(:implementing, module) |> Map.put(:implementing_module_app, app),
+            mime_type}}
         end)
 
       _ ->
