@@ -3969,7 +3969,7 @@ defmodule ElixirSense.SuggestionsTest do
              ] = suggestions
 
       if ExUnitConfig.erlang_eep48_supported() do
-        assert "Supported time unit representations:" <> _ = summary
+        assert summary =~ "Supported time unit representations:"
       end
     end
 

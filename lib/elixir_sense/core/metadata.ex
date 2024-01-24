@@ -374,13 +374,15 @@ defmodule ElixirSense.Core.Metadata do
 
     meta = %{implementing: behaviour}
     spec = Introspection.get_spec_as_string(nil, f, a, kind, meta)
+    app = ElixirSense.Core.Applications.get_application(behaviour)
 
     case docs[{f, a}] do
       nil ->
         {spec, "", meta}
 
       {_signatures, docs, callback_meta, mime_type} ->
-        {spec, docs |> NormalizedCode.extract_docs(mime_type), callback_meta |> Map.merge(meta)}
+        {spec, docs |> NormalizedCode.extract_docs(mime_type, behaviour, app),
+         callback_meta |> Map.merge(meta)}
     end
   end
 

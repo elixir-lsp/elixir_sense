@@ -240,7 +240,7 @@ defmodule ElixirSense.SignatureTest do
              } = ElixirSense.signature(code, 2, 32)
 
       if ExUnitConfig.erlang_eep48_supported() do
-        assert "Supported time unit representations:" <> _ = summary
+        assert summary =~ "Supported time unit representations:"
       end
     end
 

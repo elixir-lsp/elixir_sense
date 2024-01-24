@@ -644,6 +644,7 @@ defmodule ElixirSense.DocsTest do
                kind: :function,
                metadata: %{
                  implementing: ElixirSenseExample.BehaviourWithMeta,
+                 implementing_module_app: :elixir_sense,
                  since: "1.2.3"
                },
                module: MyLocalModule,
@@ -682,6 +683,7 @@ defmodule ElixirSense.DocsTest do
                kind: :function,
                metadata: %{
                  implementing: ElixirSenseExample.BehaviourWithMeta,
+                 implementing_module_app: :elixir_sense,
                  since: "1.2.3"
                },
                module: MyLocalModule,
@@ -756,7 +758,11 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                function: :bar,
                module: MyLocalModule,
-               metadata: %{since: "1.2.3", implementing: ElixirSenseExample.BehaviourWithMeta},
+               metadata: %{
+                 since: "1.2.3",
+                 implementing: ElixirSenseExample.BehaviourWithMeta,
+                 implementing_module_app: :elixir_sense
+               },
                specs: ["@macrocallback bar(integer()) :: Macro.t()"],
                docs: "Docs for bar",
                kind: :macro
@@ -1198,7 +1204,10 @@ defmodule ElixirSense.DocsTest do
                function: :foo,
                arity: 0,
                module: ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl,
-               metadata: %{implementing: ElixirSenseExample.ExampleBehaviourWithDoc},
+               metadata: %{
+                 implementing: ElixirSenseExample.ExampleBehaviourWithDoc,
+                 implementing_module_app: :elixir_sense
+               },
                specs: ["@callback foo() :: :ok"],
                docs: "Docs for foo",
                kind: :function
@@ -1223,7 +1232,11 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                module: ElixirSenseExample.ExampleBehaviourWithDocCallbackImpl,
                specs: ["@callback baz(integer()) :: :ok"],
-               metadata: %{implementing: ElixirSenseExample.ExampleBehaviourWithDoc, hidden: true},
+               metadata: %{
+                 implementing: ElixirSenseExample.ExampleBehaviourWithDoc,
+                 hidden: true,
+                 implementing_module_app: :elixir_sense
+               },
                docs: "Docs for baz",
                kind: :function
              }
@@ -1248,6 +1261,7 @@ defmodule ElixirSense.DocsTest do
                module: ElixirSenseExample.ExampleBehaviourWithNoDocCallbackImpl,
                metadata: %{
                  implementing: ElixirSenseExample.ExampleBehaviourWithNoDoc,
+                 implementing_module_app: :elixir_sense,
                  hidden: true
                },
                specs: ["@callback foo() :: :ok"],
@@ -1273,7 +1287,10 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                function: :bar,
                module: ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl,
-               metadata: %{implementing: ElixirSenseExample.ExampleBehaviourWithDoc},
+               metadata: %{
+                 implementing: ElixirSenseExample.ExampleBehaviourWithDoc,
+                 implementing_module_app: :elixir_sense
+               },
                specs: ["@macrocallback bar(integer()) :: Macro.t()"],
                docs: "Docs for bar",
                kind: :macro
@@ -1295,7 +1312,7 @@ defmodule ElixirSense.DocsTest do
                function: :init,
                module: :file_server,
                specs: ["@callback init(args :: term())" <> _],
-               metadata: %{implementing: :gen_server},
+               metadata: %{implementing: :gen_server, implementing_module_app: :stdlib},
                kind: :function
              } = doc
 

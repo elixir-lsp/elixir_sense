@@ -1,6 +1,5 @@
 defmodule ElixirSense.Core.ErlangHtmlTest do
   use ExUnit.Case, async: true
-  import ElixirSense.Core.ErlangHtml
 
   @tag requires_source: true
   test "integration" do
@@ -51,6 +50,10 @@ defmodule ElixirSense.Core.ErlangHtmlTest do
     for m <- loadable,
         t <- [:moduledoc, :docs, :type_docs, :callback_docs],
         do: ElixirSense.Core.Normalized.Code.get_docs(m, t)
+  end
+
+  defp to_markdown(ast) do
+    ElixirSense.Core.ErlangHtml.to_markdown(ast, :my_mod, :my_app)
   end
 
   test "binary" do
@@ -301,14 +304,245 @@ defmodule ElixirSense.Core.ErlangHtmlTest do
     ]
 
     assert """
-           [some link]  
+           [some link](asd)  
            """ == to_markdown(ast)
   end
 
   test "empty link" do
     ast = {:a, [href: "asd"], []}
 
-    assert "" == to_markdown(ast)
+    assert "[](asd)" == to_markdown(ast)
+  end
+
+  describe "seemfa" do
+    test "full" do
+      ast =
+        {:a,
+         [
+           href: "stdlib:gen_server#Module:handle_call/3",
+           rel: "https://erlang.org/doc/link/seemfa"
+         ], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/gen_server#Module:handle_call-3)" ==
+               to_markdown(ast)
+    end
+
+    test "no app" do
+      ast =
+        {:a, [href: "gen_server#Module:handle_call/3", rel: "https://erlang.org/doc/link/seemfa"],
+         ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/gen_server#Module:handle_call-3)" ==
+               to_markdown(ast)
+    end
+
+    test "no app no module" do
+      ast =
+        {:a, [href: "#Module:handle_call/3", rel: "https://erlang.org/doc/link/seemfa"],
+         ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/my_mod#Module:handle_call-3)" ==
+               to_markdown(ast)
+    end
+  end
+
+  describe "seeerl" do
+    test "full" do
+      ast =
+        {:a, [href: "stdlib:string#oldapi", rel: "https://erlang.org/doc/link/seeerl"],
+         ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/string#oldapi)" == to_markdown(ast)
+    end
+
+    test "no app" do
+      ast = {:a, [href: "init", rel: "https://erlang.org/doc/link/seeerl"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/init)" == to_markdown(ast)
+    end
+
+    test "no app no module" do
+      ast = {:a, [href: "#some", rel: "https://erlang.org/doc/link/seeerl"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/my_mod#some)" == to_markdown(ast)
+    end
+  end
+
+  describe "seetype" do
+    test "full" do
+      ast =
+        {:a, [href: "stdlib:gen_server#server_ref", rel: "https://erlang.org/doc/link/seetype"],
+         ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/gen_server#type-server_ref)" ==
+               to_markdown(ast)
+    end
+
+    test "no app" do
+      ast =
+        {:a, [href: "gen_server#server_ref", rel: "https://erlang.org/doc/link/seetype"],
+         ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/gen_server#type-server_ref)" ==
+               to_markdown(ast)
+    end
+
+    test "no app no module" do
+      ast = {:a, [href: "#server_ref", rel: "https://erlang.org/doc/link/seetype"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/my_mod#type-server_ref)" ==
+               to_markdown(ast)
+    end
+  end
+
+  describe "seeapp" do
+    test "full index" do
+      ast = {:a, [href: "stdlib:index", rel: "https://erlang.org/doc/link/seeapp"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/apps/stdlib/)" == to_markdown(ast)
+    end
+
+    test "full app capitalized" do
+      ast =
+        {:a, [href: "stdlib:STDLIB_app#some", rel: "https://erlang.org/doc/link/seeapp"],
+         ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/stdlib_app#some)" == to_markdown(ast)
+    end
+
+    test "no app" do
+      ast =
+        {:a, [href: "os_mon_app#some", rel: "https://erlang.org/doc/link/seeapp"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/os_mon_app#some)" == to_markdown(ast)
+    end
+
+    test "only hash" do
+      ast = {:a, [href: "#some", rel: "https://erlang.org/doc/link/seeapp"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/my_app_app#some)" == to_markdown(ast)
+    end
+  end
+
+  describe "seecom" do
+    test "full" do
+      ast =
+        {:a, [href: "stdlib:string#oldapi", rel: "https://erlang.org/doc/link/seecom"],
+         ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/string#oldapi)" == to_markdown(ast)
+    end
+
+    test "no app" do
+      ast = {:a, [href: "init", rel: "https://erlang.org/doc/link/seecom"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/init)" == to_markdown(ast)
+    end
+
+    test "no app no module" do
+      ast = {:a, [href: "#some", rel: "https://erlang.org/doc/link/seecom"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/my_mod#some)" == to_markdown(ast)
+    end
+  end
+
+  describe "seecref" do
+    test "full" do
+      ast =
+        {:a, [href: "stdlib:string#oldapi", rel: "https://erlang.org/doc/link/seecref"],
+         ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/string#oldapi)" == to_markdown(ast)
+    end
+
+    test "no app" do
+      ast = {:a, [href: "init", rel: "https://erlang.org/doc/link/seecref"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/init)" == to_markdown(ast)
+    end
+
+    test "no app no module" do
+      ast = {:a, [href: "#some", rel: "https://erlang.org/doc/link/seecref"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/my_mod#some)" == to_markdown(ast)
+    end
+  end
+
+  describe "seefile" do
+    test "full" do
+      ast =
+        {:a, [href: "stdlib:string#oldapi", rel: "https://erlang.org/doc/link/seefile"],
+         ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/string#oldapi)" == to_markdown(ast)
+    end
+
+    test "no app" do
+      ast =
+        {:a, [href: "figures/perf-beamasm.svg", rel: "https://erlang.org/doc/link/seefile"],
+         ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/figures/perf-beamasm.svg)" ==
+               to_markdown(ast)
+    end
+
+    test "no app no module" do
+      ast = {:a, [href: "#some", rel: "https://erlang.org/doc/link/seefile"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/man/my_mod#some)" == to_markdown(ast)
+    end
+  end
+
+  describe "seeguide" do
+    test "system" do
+      ast =
+        {:a,
+         [
+           href: "system/design_principles:gen_server_concepts",
+           rel: "https://erlang.org/doc/link/seeguide"
+         ], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/design_principles/gen_server_concepts)" ==
+               to_markdown(ast)
+    end
+
+    test "system index" do
+      ast =
+        {:a,
+         [href: "system/design_principles:index", rel: "https://erlang.org/doc/link/seeguide"],
+         ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/design_principles/users_guide)" ==
+               to_markdown(ast)
+    end
+
+    test "full guide" do
+      ast =
+        {:a, [href: "stdlib:string#old api", rel: "https://erlang.org/doc/link/seeguide"],
+         ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/apps/stdlib/string#old%20api)" ==
+               to_markdown(ast)
+    end
+
+    test "full index" do
+      ast =
+        {:a, [href: "stdlib:index", rel: "https://erlang.org/doc/link/seeguide"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/apps/stdlib/users_guide)" == to_markdown(ast)
+    end
+
+    test "no app" do
+      ast = {:a, [href: "guide", rel: "https://erlang.org/doc/link/seeguide"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/apps/my_app/guide)" == to_markdown(ast)
+    end
+
+    test "no app no module" do
+      ast = {:a, [href: "#some", rel: "https://erlang.org/doc/link/seeguide"], ["some link"]}
+
+      assert "[some link](https://www.erlang.org/doc/apps/my_app/#some)" == to_markdown(ast)
+    end
   end
 
   test "div element" do

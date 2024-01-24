@@ -51,4 +51,19 @@ defmodule ElixirSense.Core.Applications do
     # for performance.
     :ets.match(:ac_tab, {{:loaded, :"$1"}, :_})
   end
+
+  def get_application(module) do
+    Enum.find_value(:application.loaded_applications(), fn {app, _, _} ->
+      modules =
+        case :application.get_key(app, :modules) do
+          {:ok, modules} ->
+            if module in modules do
+              app
+            end
+
+          :undefined ->
+            nil
+        end
+    end)
+  end
 end
