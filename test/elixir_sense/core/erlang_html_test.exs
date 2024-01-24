@@ -496,8 +496,11 @@ defmodule ElixirSense.Core.ErlangHtmlTest do
   describe "seeguide" do
     test "system" do
       ast =
-        {:a, [href: "system/design_principles:gen_server_concepts", rel: "https://erlang.org/doc/link/seeguide"],
-         ["some link"]}
+        {:a,
+         [
+           href: "system/design_principles:gen_server_concepts",
+           rel: "https://erlang.org/doc/link/seeguide"
+         ], ["some link"]}
 
       assert "[some link](https://www.erlang.org/doc/design_principles/gen_server_concepts)" ==
                to_markdown(ast)
@@ -505,7 +508,8 @@ defmodule ElixirSense.Core.ErlangHtmlTest do
 
     test "system index" do
       ast =
-        {:a, [href: "system/design_principles:index", rel: "https://erlang.org/doc/link/seeguide"],
+        {:a,
+         [href: "system/design_principles:index", rel: "https://erlang.org/doc/link/seeguide"],
          ["some link"]}
 
       assert "[some link](https://www.erlang.org/doc/design_principles/users_guide)" ==
