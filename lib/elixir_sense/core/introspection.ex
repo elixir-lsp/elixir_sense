@@ -890,7 +890,7 @@ defmodule ElixirSense.Core.Introspection do
       mod
     end
   rescue
-    e in SystemLimitError ->
+    e ->
       Logger.warning(
         "Unable to expand alias #{inspect(mod)}; env aliases #{inspect(aliases)}: #{Exception.blame(:error, e, __STACKTRACE__)}"
       )
