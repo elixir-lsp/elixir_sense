@@ -753,8 +753,8 @@ defmodule ElixirSense.Core.Introspection do
     format_doc_arg(left) <> " \\\\ " <> Macro.to_string(right)
   end
 
-  defp format_doc_arg({var, _, _}) do
-    Atom.to_string(var)
+  defp format_doc_arg(arg) do
+    Macro.to_string(arg)
   end
 
   def remove_first_macro_arg(
