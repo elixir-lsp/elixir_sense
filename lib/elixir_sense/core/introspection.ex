@@ -53,6 +53,15 @@ defmodule ElixirSense.Core.Introspection do
   def get_exports(module) do
     case Code.ensure_loaded(module) do
       {:module, _} ->
+        exports =
+          try do
+            module.module_info(:exports)
+          rescue
+            ArgumentError ->
+              # in case of race conditions the module might get unloaded
+              []
+          end
+
         for {f, a} <- module.module_info(:exports) do
           {f_dropped, a_dropped} = drop_macro_prefix({f, a})
 
