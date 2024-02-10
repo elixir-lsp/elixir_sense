@@ -295,6 +295,7 @@ defmodule ElixirSense.Core.Normalized.Code do
 
   @docs_chunk [?D, ?o, ?c, ?s]
 
+  # TODO remove when we depend on elixir with fix for https://github.com/elixir-lang/elixir/pull/13286
   defp fetch_docs_from_beam(bin_or_path) do
     case :beam_lib.chunks(bin_or_path, [@docs_chunk]) do
       {:ok, {_module, [{@docs_chunk, bin}]}} ->
@@ -306,7 +307,6 @@ defmodule ElixirSense.Core.Normalized.Code do
       {:error, :beam_lib, {:file_error, _, :enoent}} ->
         {:error, :module_not_found}
 
-      # TODO raise a PR to elixir
       {:error, :beam_lib, reason} ->
         {:error, reason}
     end
