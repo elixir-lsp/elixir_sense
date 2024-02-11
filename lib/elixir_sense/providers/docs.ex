@@ -174,13 +174,12 @@ defmodule ElixirSense.Providers.Docs do
     doc_info =
       metadata.mods_funs_to_positions
       |> Enum.find_value(fn
-        {{^mod, nil, nil}, _fun_info} ->
+        {{^mod, nil, nil}, fun_info = %ModFunInfo{}} ->
           %{
             kind: :module,
             module: mod,
-            # TODO fill metadata and docs
-            metadata: %{},
-            docs: ""
+            metadata: fun_info.meta,
+            docs: fun_info.doc
           }
 
         _ ->
@@ -225,8 +224,7 @@ defmodule ElixirSense.Providers.Docs do
               specs |> Enum.reverse()
           end
 
-        # TODO fill metadata
-        meta = %{}
+        meta = fun_info.meta
 
         behaviour_implementation =
           Metadata.get_module_behaviours(metadata, env, mod)
@@ -246,12 +244,14 @@ defmodule ElixirSense.Providers.Docs do
               args: fun_args_text,
               metadata: meta,
               specs: specs,
-              # TODO provide docs
-              docs: ""
+              docs: fun_info.doc
             }
 
           behaviour ->
             meta = Map.merge(meta, %{implementing: behaviour})
+
+            dbg(metadata.specs)
+            dbg(metadata.mods_funs_to_positions)
 
             case metadata.specs[{behaviour, fun, a}] do
               %State.SpecInfo{} = spec_info ->
@@ -260,7 +260,15 @@ defmodule ElixirSense.Providers.Docs do
                   |> Enum.reject(&String.starts_with?(&1, "@spec"))
                   |> Enum.reverse()
 
-                # TODO callback meta
+                {callback_doc, callback_meta} =
+                  case metadata.mods_funs_to_positions[{behaviour, fun, a}] do
+                    nil ->
+                      {spec_info.doc, spec_info.meta}
+
+                    def_info ->
+                      # in case of protocol implementation get doc and meta from def
+                      {def_info.doc, def_info.meta}
+                  end
 
                 %{
                   kind: kind,
@@ -268,10 +276,9 @@ defmodule ElixirSense.Providers.Docs do
                   function: fun,
                   arity: a,
                   args: fun_args_text,
-                  metadata: meta,
+                  metadata: callback_meta |> Map.merge(meta),
                   specs: specs,
-                  # TODO provide callback docs
-                  docs: ""
+                  docs: callback_doc
                 }
 
               nil ->
@@ -371,11 +378,9 @@ defmodule ElixirSense.Providers.Docs do
           type: fun,
           arity: a,
           args: args,
-          # TODO fill meta
-          metadata: %{},
+          metadata: type_info.meta,
           spec: spec,
-          # TODO provide docs
-          docs: ""
+          docs: type_info.doc
         }
       end)
 
