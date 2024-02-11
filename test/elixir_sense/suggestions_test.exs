@@ -339,6 +339,33 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
+  test "lists metadata modules" do
+    buffer = """
+    defmodule MyServer do
+      @moduledoc "Some"
+      @moduledoc since: "1.2.3"
+    end
+    MySe
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 5, 5)
+      |> Enum.filter(fn s -> s.type == :module end)
+
+    assert [
+             %{
+               name: "MyServer",
+               summary: "Some",
+               type: :module,
+               full_name: "MyServer",
+               metadata: %{since: "1.2.3"},
+               required_alias: nil,
+               # TODO subtype
+               subtype: nil
+             }
+           ] = list
+  end
+
   test "lists callbacks" do
     buffer = """
     defmodule MyServer do
@@ -868,12 +895,11 @@ defmodule ElixirSense.SuggestionsTest do
                args: "list",
                arity: 1,
                def_arity: 1,
-               metadata: %{implementing: MyBehaviour},
+               metadata: %{implementing: MyBehaviour, hidden: true, since: "1.2.3"},
                name: "flatten",
                origin: "MyLocalModule",
                spec: "@callback flatten(list()) :: list()",
-               #  TODO docs
-               summary: "",
+               summary: "Sample doc",
                type: :function,
                visibility: :public
              }
@@ -912,8 +938,7 @@ defmodule ElixirSense.SuggestionsTest do
                name: "go",
                origin: "BB.String",
                spec: "@callback go(t) :: integer()",
-               #  TODO docs
-               summary: "",
+               summary: "asdf",
                type: :function,
                visibility: :public
              }
@@ -956,12 +981,11 @@ defmodule ElixirSense.SuggestionsTest do
                args: "list",
                arity: 1,
                def_arity: 1,
-               metadata: %{implementing: MyBehaviour},
+               metadata: %{implementing: MyBehaviour, hidden: true, since: "1.2.3"},
                name: "flatten",
                origin: "MyLocalModule",
                spec: "@macrocallback flatten(list()) :: list()",
-               #  TODO docs
-               summary: "",
+               summary: "Sample doc",
                type: :macro,
                visibility: :public
              }
@@ -4057,6 +4081,25 @@ defmodule ElixirSense.SuggestionsTest do
         |> Enum.filter(fn %{type: t} -> t == :type_spec end)
 
       assert [%{name: "my_local_t"}] = list
+    end
+
+    test "return docs and meta on local types" do
+      buffer = """
+      defmodule MyModule do
+        @type my_type :: my_loc
+        #                      ^
+
+        @typedoc "Some"
+        @typedoc since: "1.2.3"
+        @type my_local_t :: integer
+      end
+      """
+
+      list =
+        ElixirSense.suggestions(buffer, 2, 26)
+        |> Enum.filter(fn %{type: t} -> t == :type_spec end)
+
+      assert [%{name: "my_local_t", doc: "Some", metadata: %{since: "1.2.3"}}] = list
     end
 
     test "local types from metadata external call - private types are not suggested" do

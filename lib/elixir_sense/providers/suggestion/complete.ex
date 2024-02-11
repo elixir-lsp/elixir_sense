@@ -734,9 +734,22 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
     |> Enum.uniq_by(&elem(&1, 1))
     |> Enum.map(fn {name, module, required_alias?} ->
       result =
-        case :persistent_term.get({@module_results_cache_key, module}, nil) do
-          nil -> get_elixir_module_result(module)
-          result -> result
+        case metadata.mods_funs_to_positions[{module, nil, nil}] do
+          nil ->
+            case :persistent_term.get({@module_results_cache_key, module}, nil) do
+              nil -> get_elixir_module_result(module)
+              result -> result
+            end
+
+          info ->
+            %{
+              kind: :module,
+              type: :elixir,
+              full_name: inspect(module),
+              desc: {info.doc, info.meta},
+              # TODO provide subtype
+              subtype: nil
+            }
         end
 
       result = Map.put(result, :name, name)
@@ -1042,23 +1055,33 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               nil ->
                 case metadata.specs[{mod, f, a}] do
                   nil ->
-                    # TODO provide docs and meta
-                    {"", "", %{}}
+                    {"", info.doc, info.meta}
 
                   %State.SpecInfo{specs: specs} ->
-                    # TODO provide docs and meta
-                    {specs |> Enum.reverse() |> Enum.join("\n"), "", %{}}
+                    {specs |> Enum.reverse() |> Enum.join("\n"), info.doc, info.meta}
                 end
 
               behaviour ->
+                meta = Map.merge(info.meta, %{implementing: behaviour})
+
                 case metadata.specs[{behaviour, f, a}] do
                   %State.SpecInfo{} = spec_info ->
                     specs = spec_info.specs |> Enum.reverse()
-                    # TODO provide docs and meta
+
+                    {callback_doc, callback_meta} =
+                      case metadata.mods_funs_to_positions[{behaviour, f, a}] do
+                        nil ->
+                          {spec_info.doc, spec_info.meta}
+
+                        def_info ->
+                          # in case of protocol implementation get doc and meta from def
+                          {def_info.doc, def_info.meta}
+                      end
+
                     spec =
                       specs |> Enum.reject(&String.starts_with?(&1, "@spec")) |> Enum.join("\n")
 
-                    {spec, "", %{implementing: behaviour}}
+                    {spec, callback_doc, callback_meta |> Map.merge(meta)}
 
                   nil ->
                     Metadata.get_doc_spec_from_behaviour(
@@ -1070,7 +1093,6 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
                 end
             end
 
-          # TODO docs and meta from metadata
           # assume function head is first in code and last in metadata
           head_params = Enum.at(info.params, -1)
           args = head_params |> Enum.map(&Macro.to_string/1)
@@ -1114,9 +1136,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         doc =
           case func_doc do
             nil ->
-              # TODO set builtin meta
-              # provide docs
-              {"", %{}}
+              # TODO provide docs for builtin
+              if f in [:behaviour_info | @builtin_functions] do
+                {"", %{builtin: true}}
+              else
+                {"", %{}}
+              end
 
             {{_fun, _}, _line, _kind, _args, doc, metadata} ->
               {doc, metadata}
