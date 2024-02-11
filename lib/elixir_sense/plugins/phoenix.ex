@@ -48,7 +48,7 @@ defmodule ElixirSense.Plugins.Phoenix do
       {_, scope_alias} = Scope.within_scope(opts.cursor_context.text_before)
       {module, _} = Source.get_mod([module], binding_env)
 
-      module = Module.safe_concat(scope_alias, module)
+      module = Module.concat(scope_alias, module)
 
       suggestions =
         for {export, {2, :function}} when export not in ~w(action call)a <-
