@@ -1104,8 +1104,7 @@ defmodule ElixirSense.SignatureTest do
                active_param: 0,
                signatures: [
                  %{
-                   # TODO provide docs
-                   documentation: "",
+                   documentation: "Sample doc",
                    name: "flatten",
                    params: ["list"],
                    spec: "@callback flatten(list()) :: list()"
@@ -1139,8 +1138,7 @@ defmodule ElixirSense.SignatureTest do
                active_param: 0,
                signatures: [
                  %{
-                   # TODO provide docs
-                   documentation: "",
+                   documentation: "asdf",
                    name: "go",
                    params: ["t"],
                    spec: "@callback go(t) :: integer()"
@@ -1180,8 +1178,7 @@ defmodule ElixirSense.SignatureTest do
                active_param: 0,
                signatures: [
                  %{
-                   # TODO provide docs
-                   documentation: "",
+                   documentation: "Sample doc",
                    name: "flatten",
                    params: ["list"],
                    spec: "@macrocallback flatten(list()) :: list()"

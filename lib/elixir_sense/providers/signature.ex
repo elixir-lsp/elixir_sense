@@ -118,11 +118,20 @@ defmodule ElixirSense.Providers.Signature do
                       |> Enum.reject(&String.starts_with?(&1, "@spec"))
                       |> Enum.reverse()
 
-                    # TODO provide docs
+                    callback_doc =
+                      case metadata.mods_funs_to_positions[{behaviour, fun, arity}] do
+                        nil ->
+                          spec_info.doc
+
+                        def_info ->
+                          # in case of protocol implementation get doc and meta from def
+                          def_info.doc
+                      end
+
                     %{
                       signature
                       | spec: specs |> Enum.join("\n"),
-                        documentation: ""
+                        documentation: callback_doc
                     }
 
                   nil ->

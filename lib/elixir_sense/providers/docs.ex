@@ -250,9 +250,6 @@ defmodule ElixirSense.Providers.Docs do
           behaviour ->
             meta = Map.merge(meta, %{implementing: behaviour})
 
-            dbg(metadata.specs)
-            dbg(metadata.mods_funs_to_positions)
-
             case metadata.specs[{behaviour, fun, a}] do
               %State.SpecInfo{} = spec_info ->
                 specs =

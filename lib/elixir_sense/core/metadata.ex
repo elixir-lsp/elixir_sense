@@ -333,8 +333,7 @@ defmodule ElixirSense.Core.Metadata do
       %{
         name: Atom.to_string(function),
         params: params |> Enum.with_index() |> Enum.map(&Introspection.param_to_var/1),
-        # TODO provide doc
-        documentation: "",
+        documentation: function_info.doc,
         spec: spec
       }
     end)
@@ -360,8 +359,7 @@ defmodule ElixirSense.Core.Metadata do
       %{
         name: Atom.to_string(type),
         params: type_info.args |> List.last(),
-        # TODO extract docs
-        documentation: "",
+        documentation: type_info.doc,
         spec: spec
       }
     end)
