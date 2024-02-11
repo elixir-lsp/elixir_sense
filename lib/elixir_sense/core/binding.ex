@@ -1035,18 +1035,32 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp extract_type({:"::", _, [_, type]}), do: type
+  {:spec, [line: 1],
+   [
+     {:handle, [line: 1],
+      [
+        {:t, [line: 1], []},
+        {{:., [line: 1], [{:__aliases__, [line: 1], [:Order]}, :t]}, [line: 1], []}
+      ]}
+   ]}
+
+  defp extract_type({:"::", _, [_, type]}), do: {:ok, type}
 
   defp extract_type({:when, _, [{:"::", _, [_, type]}, type_params]}) do
     # substitute type params
-    Macro.prewalk(type, fn
-      {atom, _, nil} = var ->
-        Keyword.get(type_params, atom, var)
+    res =
+      Macro.prewalk(type, fn
+        {atom, _, nil} = var ->
+          Keyword.get(type_params, atom, var)
 
-      other ->
-        other
-    end)
+        other ->
+          other
+      end)
+
+    {:ok, res}
   end
+
+  defp extract_type(_), do: :error
 
   defp get_return_from_metadata(
          env,
@@ -1057,9 +1071,14 @@ defmodule ElixirSense.Core.Binding do
        ) do
     case Code.string_to_quoted(func_spec) do
       {:ok, {:@, _, [{_kind, _, [ast]}]}} ->
-        type = extract_type(ast)
-        parsed_type = parse_type(env, type, mod, include_private)
-        expand(env, parsed_type, stack)
+        case extract_type(ast) do
+          {:ok, type} ->
+            parsed_type = parse_type(env, type, mod, include_private)
+            expand(env, parsed_type, stack)
+
+          :error ->
+            nil
+        end
 
       _ ->
         nil
@@ -1092,8 +1111,13 @@ defmodule ElixirSense.Core.Binding do
   defp get_return_from_spec(_env, nil, _, _include_private), do: nil
 
   defp get_return_from_spec(env, {{fun, _arity}, [ast]}, mod, include_private) do
-    type = Typespec.spec_to_quoted(fun, ast) |> extract_type
-    parse_type(env, type, mod, include_private)
+    case Typespec.spec_to_quoted(fun, ast) |> extract_type do
+      {:ok, type} ->
+        parse_type(env, type, mod, include_private)
+
+      :error ->
+        nil
+    end
   end
 
   # intersection specs
@@ -1250,8 +1274,13 @@ defmodule ElixirSense.Core.Binding do
       when type_is_public(kind, include_private) ->
         case Code.string_to_quoted(type_spec) do
           {:ok, {:@, _, [{_kind, _, [ast]}]}} ->
-            type = extract_type(ast)
-            parse_type(env, type, mod, include_private) || :no_spec
+            case extract_type(ast) do
+              {:ok, type} ->
+                parse_type(env, type, mod, include_private) || :no_spec
+
+              :error ->
+                nil
+            end
 
           _ ->
             :no_spec
