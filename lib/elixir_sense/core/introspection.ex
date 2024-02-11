@@ -62,7 +62,7 @@ defmodule ElixirSense.Core.Introspection do
               []
           end
 
-        for {f, a} <- module.module_info(:exports) do
+        for {f, a} <- exports do
           {f_dropped, a_dropped} = drop_macro_prefix({f, a})
 
           kind =

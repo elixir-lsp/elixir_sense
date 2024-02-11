@@ -54,16 +54,15 @@ defmodule ElixirSense.Core.Applications do
 
   def get_application(module) do
     Enum.find_value(:application.loaded_applications(), fn {app, _, _} ->
-      modules =
-        case :application.get_key(app, :modules) do
-          {:ok, modules} ->
-            if module in modules do
-              app
-            end
+      case :application.get_key(app, :modules) do
+        {:ok, modules} ->
+          if module in modules do
+            app
+          end
 
-          :undefined ->
-            nil
-        end
+        :undefined ->
+          nil
+      end
     end)
   end
 end
