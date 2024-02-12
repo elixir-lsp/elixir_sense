@@ -360,8 +360,26 @@ defmodule ElixirSense.SuggestionsTest do
                full_name: "MyServer",
                metadata: %{since: "1.2.3"},
                required_alias: nil,
-               # TODO subtype
                subtype: nil
+             }
+           ] = list
+  end
+
+  test "returns subtype on local modules" do
+    buffer = """
+    defprotocol MyProto do
+    end
+    MyPr
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 3, 5)
+      |> Enum.filter(fn s -> s.type == :module end)
+
+    assert [
+             %{
+               name: "MyProto",
+               subtype: :protocol
              }
            ] = list
   end

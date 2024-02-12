@@ -747,8 +747,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               type: :elixir,
               full_name: inspect(module),
               desc: {info.doc, info.meta},
-              # TODO provide subtype
-              subtype: nil
+              subtype: Metadata.get_module_subtype(metadata, module)
             }
         end
 
