@@ -818,9 +818,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
          state
        ) do
     new_ast = {:@, meta_attr, [{:impl, add_no_call(meta), [impl_arg]}]}
-    # impl adds @doc false
+    # impl adds sets :hidden by default
     state
-    |> register_doc(:doc, false)
+    |> register_doc(:doc, :impl)
     |> result(new_ast)
   end
 

@@ -803,6 +803,20 @@ defmodule ElixirSense.Core.State do
         consume_doc_context(state)
       end
 
+    hidden = Map.get(meta, :hidden)
+
+    # underscored and @impl defs are hidden by default unless they have @doc
+    meta =
+      if (String.starts_with?(to_string(func), "_") or hidden == :impl) and doc == "" do
+        Map.put(meta, :hidden, true)
+      else
+        if hidden != true do
+          Map.delete(meta, :hidden)
+        else
+          meta
+        end
+      end
+
     current_module_variants
     |> Enum.reduce(state, fn variant, acc ->
       acc
@@ -1133,6 +1147,14 @@ defmodule ElixirSense.Core.State do
 
     {state, {doc, meta}} = consume_typedoc_context(state)
 
+    # underscored types are hidden by default unless they have @typedoc
+    meta =
+      if String.starts_with?(to_string(type_name), "_") and doc == "" do
+        Map.put(meta, :hidden, true)
+      else
+        meta
+      end
+
     type_info = %TypeInfo{
       name: type_name,
       args: [arg_names],
@@ -1200,6 +1222,14 @@ defmodule ElixirSense.Core.State do
       else
         # do not consume doc context for specs
         {state, {"", %{}}}
+      end
+
+    # underscored callbacks are hidden by default unless they have @doc
+    meta =
+      if String.starts_with?(to_string(type_name), "_") and doc == "" do
+        Map.put(meta, :hidden, true)
+      else
+        meta
       end
 
     type_info = %SpecInfo{
@@ -1403,6 +1433,7 @@ defmodule ElixirSense.Core.State do
   end
 
   defp format_doc_arg(false), do: {:meta, %{hidden: true}}
+  defp format_doc_arg(:impl), do: {:meta, %{hidden: :impl}}
 
   defp format_doc_arg(quoted) do
     try do
