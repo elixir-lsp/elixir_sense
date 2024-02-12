@@ -5435,6 +5435,266 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
   end
 
+  describe "doc" do
+    test "moduledoc is applied to current module" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc "Some module"
+          @moduledoc since: "1.2.3"
+
+          defmodule NoDoc do
+          end
+
+          defmodule Sub do
+            @moduledoc "Some.Sub module"
+            @moduledoc deprecated: "2.3.4"
+          end
+        end
+
+        defmodule Other do
+          @moduledoc "Other module"
+        end
+
+        defmodule NoDoc do
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some module", meta: %{since: "1.2.3"}} =
+               state.mods_funs_to_positions[{Some, nil, nil}]
+
+      assert %{doc: "", meta: %{}} = state.mods_funs_to_positions[{Some.NoDoc, nil, nil}]
+
+      assert %{doc: "Some.Sub module", meta: %{deprecated: "2.3.4"}} =
+               state.mods_funs_to_positions[{Some.Sub, nil, nil}]
+
+      assert %{doc: "Other module", meta: %{}} = state.mods_funs_to_positions[{Other, nil, nil}]
+      assert %{doc: "", meta: %{}} = state.mods_funs_to_positions[{NoDoc, nil, nil}]
+    end
+
+    test "moduledoc handles charlist" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc 'Some module'
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some module"} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "moduledoc handles interpolated charlist" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc 'Some #{inspect(1)} module'
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some 1 module"} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "moduledoc handles interpolated string" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc \"Some #{inspect(1)} module\"
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some 1 module"} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "moduledoc handles heredoc" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc \"\"\"
+          Some module
+          \"\"\"
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some module\n"} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "moduledoc handles charlist heredoc" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc '''
+          Some module
+          '''
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some module\n"} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "moduledoc handles sigil" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc ~S\"\"\"
+          Some module
+          \"\"\"
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some module\n"} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "moduledoc false is applied to current module" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc false
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{hidden: true}} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "doc is applied to next function" do
+      state =
+        """
+        defmodule Some do
+          @doc "Some fun"
+          @doc since: "1.2.3"
+          def fun() do
+            :ok
+          end
+
+          def fun_nodoc() do
+            :ok
+          end
+
+          @doc "Some macro"
+          @doc deprecated: "2.3.4"
+          defmacro macro() do
+            :ok
+          end
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some fun", meta: %{since: "1.2.3"}} =
+               state.mods_funs_to_positions[{Some, :fun, 0}]
+
+      assert %{doc: "", meta: %{}} = state.mods_funs_to_positions[{Some, :fun_nodoc, 0}]
+
+      assert %{doc: "Some macro", meta: %{deprecated: "2.3.4"}} =
+               state.mods_funs_to_positions[{Some, :macro, 0}]
+    end
+
+    test "doc false is applied to next function" do
+      state =
+        """
+        defmodule Some do
+          @doc false
+          def fun(), do: :ok
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{hidden: true}} = state.mods_funs_to_positions[{Some, :fun, 0}]
+    end
+
+    test "impl true sets hidden meta" do
+      state =
+        """
+        defmodule Some do
+          @impl true
+          def fun(), do: :ok
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{hidden: true}} = state.mods_funs_to_positions[{Some, :fun, 0}]
+    end
+
+    test "deprecated attribute sets deprecated meta" do
+      state =
+        """
+        defmodule Some do
+          @deprecated "to be removed"
+          def fun(), do: :ok
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{deprecated: "to be removed"}} =
+               state.mods_funs_to_positions[{Some, :fun, 0}]
+    end
+
+    test "doc is applied to next callback" do
+      state =
+        """
+        defmodule Some do
+          @doc "Some fun"
+          @doc since: "1.2.3"
+          @callback fun() :: any()
+
+          @callback fun_nodoc() :: any()
+
+          @doc "Some macro"
+          @doc deprecated: "2.3.4"
+          @macrocallback macro() :: Macro.t()
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some fun", meta: %{since: "1.2.3"}} = state.specs[{Some, :fun, 0}]
+      assert %{doc: "", meta: %{}} = state.specs[{Some, :fun_nodoc, 0}]
+      assert %{doc: "Some macro", meta: %{deprecated: "2.3.4"}} = state.specs[{Some, :macro, 0}]
+    end
+
+    test "typedoc is applied to next type" do
+      state =
+        """
+        defmodule Some do
+          @typedoc "Some type"
+          @typedoc since: "1.2.3"
+          @type my_type() :: any()
+
+          @type type_nodoc() :: any()
+
+          @typedoc "Some opaque"
+          @typedoc deprecated: "2.3.4"
+          @opaque my_opaque() :: integer()
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some type", meta: %{since: "1.2.3"}} = state.types[{Some, :my_type, 0}]
+      assert %{doc: "", meta: %{}} = state.types[{Some, :type_nodoc, 0}]
+
+      assert %{doc: "Some opaque", meta: %{deprecated: "2.3.4"}} =
+               state.types[{Some, :my_opaque, 0}]
+    end
+
+    test "typedoc false is applied to next type" do
+      state =
+        """
+        defmodule Some do
+          @typedoc false
+          @type my_type() :: any()
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{hidden: true}} = state.types[{Some, :my_type, 0}]
+    end
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true, token_metadata: true)

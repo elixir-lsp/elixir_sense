@@ -825,6 +825,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre(
+         {:@, meta_attr, [{:deprecated, meta, [deprecated_arg]}]},
+         state
+       ) do
+    new_ast = {:@, meta_attr, [{:deprecated, add_no_call(meta), [deprecated_arg]}]}
+    # treat @deprecated message as @doc deprecated: message
+    state
+    |> register_doc(:doc, deprecated: deprecated_arg)
+    |> result(new_ast)
+  end
+
+  defp pre(
          {:@, meta, [{:behaviour, _, [{:__aliases__, _, module_expression}]}]} = ast,
          state
        ) do

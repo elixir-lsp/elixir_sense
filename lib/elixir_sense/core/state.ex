@@ -1402,6 +1402,36 @@ defmodule ElixirSense.Core.State do
 
   defp format_doc_arg(false), do: {:meta, %{hidden: true}}
 
+  defp format_doc_arg(quoted) do
+    try do
+      case Code.eval_quoted(quoted) do
+        {binary, _} when is_binary(binary) ->
+          binary
+
+        {list, _} when is_list(list) ->
+          if Keyword.keyword?(list) do
+            {:meta, Map.new(list)}
+          else
+            to_string(list)
+          end
+
+        other ->
+          Logger.warning(
+            "Unable to format docstring expression #{inspect(quoted)}: eval resulted in #{inspect(other)}"
+          )
+
+          ""
+      end
+    rescue
+      e ->
+        Logger.warning(
+          "Unable to format docstring expression #{inspect(quoted)}: #{Exception.blame(:error, e, __STACKTRACE__)}"
+        )
+
+        ""
+    end
+  end
+
   def add_vars(%__MODULE__{} = state, vars, is_definition) do
     vars |> Enum.reduce(state, fn var, state -> add_var(state, var, is_definition) end)
   end
