@@ -141,7 +141,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.TypeSpecs do
           args_list: args,
           signature: "#{type_info.name}(#{args_stringified})",
           origin: origin,
-          doc: type_info.doc,
+          doc: Introspection.extract_summary_from_docs(type_info.doc),
           spec: spec,
           metadata: type_info.meta
         }

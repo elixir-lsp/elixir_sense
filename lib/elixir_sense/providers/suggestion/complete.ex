@@ -746,7 +746,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
               kind: :module,
               type: :elixir,
               full_name: inspect(module),
-              desc: {info.doc, info.meta},
+              desc: {Introspection.extract_summary_from_docs(info.doc), info.meta},
               subtype: Metadata.get_module_subtype(metadata, module)
             }
         end

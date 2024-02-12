@@ -65,7 +65,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Overridable do
           args: args,
           args_list: args_list,
           origin: inspect(origin),
-          summary: info.doc,
+          summary: Introspection.extract_summary_from_docs(info.doc),
           metadata: info.meta,
           spec: spec
         }

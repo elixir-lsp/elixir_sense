@@ -131,7 +131,7 @@ defmodule ElixirSense.Providers.Signature do
                     %{
                       signature
                       | spec: specs |> Enum.join("\n"),
-                        documentation: callback_doc
+                        documentation: Introspection.extract_summary_from_docs(callback_doc)
                     }
 
                   nil ->
@@ -147,7 +147,7 @@ defmodule ElixirSense.Providers.Signature do
 
                     %{
                       signature
-                      | documentation: doc,
+                      | documentation: Introspection.extract_summary_from_docs(doc),
                         spec: spec
                     }
                 end
