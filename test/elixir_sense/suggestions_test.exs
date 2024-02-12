@@ -649,11 +649,11 @@ defmodule ElixirSense.SuggestionsTest do
              %{
                args: "x, y",
                arity: 2,
-               metadata: %{},
+               metadata: %{since: "1.2.3"},
                name: "test",
                origin: "ElixirSenseExample.OverridableFunctions",
                spec: "@spec test(number, number) :: number",
-               summary: "",
+               summary: "Some overridable",
                type: :callback,
                subtype: :callback
              }

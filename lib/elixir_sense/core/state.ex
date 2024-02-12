@@ -794,8 +794,10 @@ defmodule ElixirSense.Core.State do
     arity = length(params)
 
     {state, {doc, meta}} =
-      if Keyword.get(options, :generated, false) do
+      if not state.generated and Keyword.get(options, :generated, false) do
         # do not consume docs on generated functions
+        # NOTE state.generated is set when expanding use macro
+        # we want to consume docs there
         {state, {"", %{generated: true}}}
       else
         consume_doc_context(state)
