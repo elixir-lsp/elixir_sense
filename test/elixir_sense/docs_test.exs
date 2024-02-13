@@ -78,9 +78,12 @@ defmodule ElixirSense.DocsTest do
         docs: [doc]
       } = ElixirSense.docs(buffer, 9, 15)
 
-      assert doc == %{module: MyLocalModule, metadata: %{}, docs: "", kind: :module}
-
-      # TODO doc and metadata
+      assert doc == %{
+               module: MyLocalModule,
+               metadata: %{since: "1.2.3"},
+               docs: "Some example doc",
+               kind: :module
+             }
     end
 
     test "retrieve documentation from metadata modules on __MODULE__" do
@@ -99,9 +102,12 @@ defmodule ElixirSense.DocsTest do
         docs: [doc]
       } = ElixirSense.docs(buffer, 6, 6)
 
-      assert doc == %{module: MyLocalModule, metadata: %{}, docs: "", kind: :module}
-
-      # TODO doc and metadata
+      assert doc == %{
+               module: MyLocalModule,
+               metadata: %{since: "1.2.3"},
+               docs: "Some example doc",
+               kind: :module
+             }
     end
 
     @tag requires_elixir_1_14: true
@@ -123,9 +129,12 @@ defmodule ElixirSense.DocsTest do
         docs: [doc]
       } = ElixirSense.docs(buffer, 8, 17)
 
-      assert doc == %{module: MyLocalModule.Sub, metadata: %{}, docs: "", kind: :module}
-
-      # TODO doc and metadata
+      assert doc == %{
+               module: MyLocalModule.Sub,
+               metadata: %{since: "1.2.3"},
+               docs: "Some example doc",
+               kind: :module
+             }
     end
 
     test "retrieve documentation from metadata modules with @moduledoc false" do
@@ -145,9 +154,7 @@ defmodule ElixirSense.DocsTest do
         docs: [doc]
       } = ElixirSense.docs(buffer, 8, 15)
 
-      assert doc == %{module: MyLocalModule, metadata: %{}, docs: "", kind: :module}
-
-      # TODO mark as hidden
+      assert doc == %{module: MyLocalModule, metadata: %{hidden: true}, docs: "", kind: :module}
     end
 
     test "retrieve documentation from erlang modules" do
@@ -346,13 +353,11 @@ defmodule ElixirSense.DocsTest do
                function: :flatten,
                arity: 1,
                module: MyLocalModule,
-               metadata: %{},
+               metadata: %{since: "1.2.3"},
                specs: ["@spec flatten(list()) :: list()"],
-               docs: "",
+               docs: "Sample doc",
                kind: :function
              }
-
-      #  TODO docs and metadata
     end
 
     test "retrieve local private metadata function documentation" do
@@ -380,13 +385,11 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                function: :flatten,
                module: MyLocalModule,
-               metadata: %{},
+               metadata: %{since: "1.2.3"},
                specs: ["@spec flatten(list()) :: list()"],
                docs: "",
                kind: :function
              }
-
-      #  TODO docs and metadata
     end
 
     test "retrieve metadata function documentation - fallback to callback in metadata" do
@@ -422,14 +425,11 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                function: :flatten,
                kind: :function,
-               metadata: %{implementing: MyBehaviour},
+               metadata: %{implementing: MyBehaviour, since: "1.2.3", hidden: true},
                module: MyLocalModule,
                specs: ["@callback flatten(list()) :: list()"],
-               docs: ""
+               docs: "Sample doc"
              }
-
-      # TODO hidden: true in metadata
-      # TODO docs and metadata
     end
 
     test "retrieve metadata function documentation - fallback to callback in metadata no @impl" do
@@ -464,19 +464,18 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                function: :flatten,
                kind: :function,
-               metadata: %{implementing: MyBehaviour},
+               metadata: %{implementing: MyBehaviour, since: "1.2.3"},
                module: MyLocalModule,
                specs: ["@callback flatten(list()) :: list()"],
-               docs: ""
+               docs: "Sample doc"
              }
-
-      #  TODO docs and metadata
     end
 
     test "retrieve metadata function documentation - fallback to protocol function in metadata" do
       buffer = """
       defprotocol BB do
         @doc "asdf"
+        @doc since: "1.2.3"
         @spec go(t) :: integer()
         def go(t)
       end
@@ -494,20 +493,18 @@ defmodule ElixirSense.DocsTest do
 
       %{
         docs: [doc]
-      } = ElixirSense.docs(buffer, 13, 16)
+      } = ElixirSense.docs(buffer, 14, 16)
 
       assert doc == %{
                args: ["t"],
                function: :go,
                arity: 1,
                kind: :function,
-               metadata: %{implementing: BB},
+               metadata: %{implementing: BB, since: "1.2.3"},
                module: BB.String,
                specs: ["@callback go(t) :: integer()"],
-               docs: ""
+               docs: "asdf"
              }
-
-      #  TODO docs and metadata
     end
 
     test "retrieve documentation of local macro" do
@@ -606,13 +603,11 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                function: :flatten,
                kind: :macro,
-               metadata: %{implementing: MyBehaviour},
+               metadata: %{implementing: MyBehaviour, since: "1.2.3", hidden: true},
                module: MyLocalModule,
                specs: ["@macrocallback flatten(list()) :: list()"],
-               docs: ""
+               docs: "Sample doc"
              }
-
-      #  TODO docs and metadata
     end
 
     test "retrieve metadata function documentation - fallback to callback" do
@@ -645,14 +640,13 @@ defmodule ElixirSense.DocsTest do
                metadata: %{
                  implementing: ElixirSenseExample.BehaviourWithMeta,
                  implementing_module_app: :elixir_sense,
-                 since: "1.2.3"
+                 since: "1.2.3",
+                 hidden: true
                },
                module: MyLocalModule,
                specs: ["@callback flatten(list()) :: list()"],
                docs: "Sample doc"
              }
-
-      # TODO hidden: true in metadata
     end
 
     test "retrieve metadata function documentation - fallback to callback no @impl" do
@@ -752,7 +746,6 @@ defmodule ElixirSense.DocsTest do
         docs: [doc]
       } = ElixirSense.docs(buffer, 13, 20)
 
-      # assert actual_subject == "MyLocalModule.bar"
       assert doc == %{
                args: ["list"],
                arity: 1,
@@ -761,7 +754,8 @@ defmodule ElixirSense.DocsTest do
                metadata: %{
                  since: "1.2.3",
                  implementing: ElixirSenseExample.BehaviourWithMeta,
-                 implementing_module_app: :elixir_sense
+                 implementing_module_app: :elixir_sense,
+                 hidden: true
                },
                specs: ["@macrocallback bar(integer()) :: Macro.t()"],
                docs: "Docs for bar",
@@ -794,13 +788,11 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                function: :flatten,
                module: MyLocalModule,
-               metadata: %{},
+               metadata: %{since: "1.2.3"},
                specs: ["@spec flatten(list()) :: list()"],
-               docs: "",
+               docs: "Sample doc",
                kind: :function
              }
-
-      #  TODO docs and metadata
     end
 
     @tag requires_elixir_1_14: true
@@ -831,13 +823,11 @@ defmodule ElixirSense.DocsTest do
                function: :flatten,
                arity: 1,
                kind: :function,
-               metadata: %{},
+               metadata: %{since: "1.2.3"},
                module: MyLocalModule.Sub,
                specs: ["@spec flatten(list()) :: list()"],
-               docs: ""
+               docs: "Sample doc"
              }
-
-      #  TODO docs and metadata
     end
 
     test "does not retrieve remote private metadata function documentation" do
@@ -887,13 +877,11 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                function: :flatten,
                kind: :function,
-               metadata: %{},
+               metadata: %{hidden: true},
                module: MyLocalModule,
                specs: ["@spec flatten(list()) :: list()"],
                docs: ""
              }
-
-      #  TODO mark as hidden in metadata
     end
 
     test "retrieve function documentation on @attr call" do
@@ -1446,13 +1434,11 @@ defmodule ElixirSense.DocsTest do
                type: :some,
                arity: 1,
                module: MyLocalModule,
-               metadata: %{},
+               metadata: %{since: "1.2.3"},
                spec: "@type some(a) :: {a}",
-               docs: "",
+               docs: "My example type",
                kind: :type
              }
-
-      # TODO docs and metadata
     end
 
     test "retrieve local private metadata type documentation" do
@@ -1477,12 +1463,10 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                module: MyLocalModule,
                spec: "@typep some(a) :: {a}",
-               metadata: %{},
+               metadata: %{since: "1.2.3"},
                docs: "",
                kind: :type
              }
-
-      # TODO docs and metadata
     end
 
     test "retrieve local metadata type documentation even if it's defined after cursor" do
@@ -1540,12 +1524,10 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                module: MyLocalModule,
                spec: "@opaque some(a)",
-               metadata: %{},
-               docs: "",
+               metadata: %{since: "1.2.3", opaque: true},
+               docs: "My example type",
                kind: :type
              }
-
-      # TODO docs and metadata
     end
 
     test "retrieve metadata type documentation with @typedoc false" do
@@ -1571,12 +1553,10 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                module: MyLocalModule,
                spec: "@type some(a) :: {a}",
-               metadata: %{},
+               metadata: %{hidden: true},
                docs: "",
                kind: :type
              }
-
-      # TODO mark as hidden
     end
 
     test "does not reveal opaque type details" do

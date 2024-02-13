@@ -333,8 +333,7 @@ defmodule ElixirSense.Core.Metadata do
       %{
         name: Atom.to_string(function),
         params: params |> Enum.with_index() |> Enum.map(&Introspection.param_to_var/1),
-        # TODO provide doc
-        documentation: "",
+        documentation: Introspection.extract_summary_from_docs(function_info.doc),
         spec: spec
       }
     end)
@@ -360,8 +359,7 @@ defmodule ElixirSense.Core.Metadata do
       %{
         name: Atom.to_string(type),
         params: type_info.args |> List.last(),
-        # TODO extract docs
-        documentation: "",
+        documentation: Introspection.extract_summary_from_docs(type_info.doc),
         spec: spec
       }
     end)
@@ -423,5 +421,41 @@ defmodule ElixirSense.Core.Metadata do
       end
 
     behaviours
+  end
+
+  def get_module_subtype(metadata, module) do
+    has_func = fn f, a -> metadata.mods_funs_to_positions |> Map.has_key?({module, f, a}) end
+
+    cond do
+      has_func.(:__protocol__, 1) ->
+        :protocol
+
+      has_func.(:__impl__, 1) ->
+        :implementation
+
+      has_func.(:__struct__, 0) ->
+        if has_func.(:exception, 1) do
+          :exception
+        else
+          :struct
+        end
+
+      has_func.(:behaviour_info, 1) ->
+        :behaviour
+
+      match?("Elixir.Mix.Tasks." <> _, Atom.to_string(module)) ->
+        if has_func.(:run, 1) do
+          :task
+        end
+
+      module == Elixir ->
+        :alias
+
+      not has_func.(:module_info, 1) and match?("Elixir." <> _, Atom.to_string(module)) ->
+        :alias
+
+      true ->
+        nil
+    end
   end
 end

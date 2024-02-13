@@ -1,6 +1,8 @@
 defmodule ElixirSenseExample.OverridableFunctions do
   defmacro __using__(_opts) do
     quote do
+      @doc "Some overridable"
+      @doc since: "1.2.3"
       @spec test(number, number) :: number
       def test(x, y) do
         x + y

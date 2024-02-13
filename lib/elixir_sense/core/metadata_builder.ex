@@ -784,6 +784,58 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre(
+         {:@, meta_attr, [{:moduledoc, meta, [doc_arg]}]},
+         state
+       ) do
+    line = Keyword.fetch!(meta_attr, :line)
+    column = Keyword.fetch!(meta_attr, :column)
+    new_ast = {:@, meta_attr, [{:moduledoc, add_no_call(meta), [doc_arg]}]}
+
+    state
+    |> add_moduledoc_positions(
+      [line: line, column: column],
+      [{:moduledoc, meta, [doc_arg]}],
+      line
+    )
+    |> register_doc(:moduledoc, doc_arg)
+    |> result(new_ast)
+  end
+
+  defp pre(
+         {:@, meta_attr, [{doc, meta, [doc_arg]}]},
+         state
+       )
+       when doc in [:doc, :typedoc] do
+    new_ast = {:@, meta_attr, [{doc, add_no_call(meta), [doc_arg]}]}
+
+    state
+    |> register_doc(doc, doc_arg)
+    |> result(new_ast)
+  end
+
+  defp pre(
+         {:@, meta_attr, [{:impl, meta, [impl_arg]}]},
+         state
+       ) do
+    new_ast = {:@, meta_attr, [{:impl, add_no_call(meta), [impl_arg]}]}
+    # impl adds sets :hidden by default
+    state
+    |> register_doc(:doc, :impl)
+    |> result(new_ast)
+  end
+
+  defp pre(
+         {:@, meta_attr, [{:deprecated, meta, [deprecated_arg]}]},
+         state
+       ) do
+    new_ast = {:@, meta_attr, [{:deprecated, add_no_call(meta), [deprecated_arg]}]}
+    # treat @deprecated message as @doc deprecated: message
+    state
+    |> register_doc(:doc, deprecated: deprecated_arg)
+    |> result(new_ast)
+  end
+
+  defp pre(
          {:@, meta, [{:behaviour, _, [{:__aliases__, _, module_expression}]}]} = ast,
          state
        ) do

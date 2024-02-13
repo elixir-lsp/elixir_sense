@@ -56,6 +56,8 @@ defmodule ElixirSense.Core.State do
           first_alias_positions: map(),
           moduledoc_positions: map(),
           context: map(),
+          doc_context: list(),
+          typedoc_context: list(),
           # TODO better type
           binding_context: list
         }
@@ -87,6 +89,8 @@ defmodule ElixirSense.Core.State do
             binding_context: [],
             context: %{},
             first_alias_positions: %{},
+            doc_context: [[]],
+            typedoc_context: [[]],
             moduledoc_positions: %{}
 
   defmodule Env do
@@ -154,6 +158,8 @@ defmodule ElixirSense.Core.State do
             kind: :type | :typep | :opaque,
             positions: [ElixirSense.Core.State.position_t()],
             end_positions: [ElixirSense.Core.State.position_t() | nil],
+            doc: String.t(),
+            meta: map(),
             generated: list(boolean)
           }
     defstruct name: nil,
@@ -162,7 +168,9 @@ defmodule ElixirSense.Core.State do
               kind: :type,
               positions: [],
               end_positions: [],
-              generated: []
+              generated: [],
+              doc: "",
+              meta: %{}
   end
 
   defmodule SpecInfo do
@@ -176,6 +184,8 @@ defmodule ElixirSense.Core.State do
             kind: :spec | :callback | :macrocallback,
             positions: [ElixirSense.Core.State.position_t()],
             end_positions: [ElixirSense.Core.State.position_t() | nil],
+            doc: String.t(),
+            meta: map(),
             generated: list(boolean)
           }
     defstruct name: nil,
@@ -184,7 +194,9 @@ defmodule ElixirSense.Core.State do
               kind: :spec,
               positions: [],
               end_positions: [],
-              generated: []
+              generated: [],
+              doc: "",
+              meta: %{}
   end
 
   defmodule StructInfo do
@@ -239,6 +251,8 @@ defmodule ElixirSense.Core.State do
             target: nil | {module, atom},
             overridable: false | {true, module},
             generated: list(boolean),
+            doc: String.t(),
+            meta: map(),
             # TODO defmodule defprotocol defimpl?
             type:
               :def
@@ -257,7 +271,9 @@ defmodule ElixirSense.Core.State do
               target: nil,
               type: nil,
               generated: [],
-              overridable: false
+              overridable: false,
+              doc: "",
+              meta: %{}
 
     def get_arities(%ModFunInfo{params: params_variants}) do
       params_variants
@@ -515,6 +531,8 @@ defmodule ElixirSense.Core.State do
         end_position,
         params,
         type,
+        doc,
+        meta,
         options \\ []
       )
       when is_tuple(position) do
@@ -542,6 +560,8 @@ defmodule ElixirSense.Core.State do
       end_positions: new_end_positions,
       params: new_params,
       type: info_type,
+      doc: doc,
+      meta: meta,
       generated: [Keyword.get(options, :generated, false) | current_info.generated],
       overridable: current_info |> Map.get(:overridable, false)
     }
@@ -656,14 +676,26 @@ defmodule ElixirSense.Core.State do
           {module, [module]}
       end
 
-    %__MODULE__{state | namespace: [namespace | state.namespace], scopes: [scopes | state.scopes]}
+    %__MODULE__{
+      state
+      | namespace: [namespace | state.namespace],
+        scopes: [scopes | state.scopes],
+        doc_context: [[] | state.doc_context],
+        typedoc_context: [[] | state.typedoc_context]
+    }
   end
 
   def remove_namespace(%__MODULE__{} = state) do
     outer_mods = state.namespace |> tl
     outer_scopes = state.scopes |> tl
 
-    %{state | namespace: outer_mods, scopes: outer_scopes}
+    %{
+      state
+      | namespace: outer_mods,
+        scopes: outer_scopes,
+        doc_context: tl(state.doc_context),
+        typedoc_context: tl(state.typedoc_context)
+    }
   end
 
   def add_typespec_namespace(%__MODULE__{} = state, name, arity) do
@@ -739,6 +771,8 @@ defmodule ElixirSense.Core.State do
       end_position,
       nil,
       :defmodule,
+      "",
+      %{},
       options
     )
   end
@@ -759,6 +793,58 @@ defmodule ElixirSense.Core.State do
     current_module_variants = get_current_module_variants(state)
     arity = length(params)
 
+    {state, {doc, meta}} =
+      if not state.generated and Keyword.get(options, :generated, false) do
+        # do not consume docs on generated functions
+        # NOTE state.generated is set when expanding use macro
+        # we want to consume docs there
+        {state, {"", %{generated: true}}}
+      else
+        consume_doc_context(state)
+      end
+
+    hidden = Map.get(meta, :hidden)
+
+    # underscored and @impl defs are hidden by default unless they have @doc
+    meta =
+      if (String.starts_with?(to_string(func), "_") or hidden == :impl) and doc == "" do
+        Map.put(meta, :hidden, true)
+      else
+        if hidden != true do
+          Map.delete(meta, :hidden)
+        else
+          meta
+        end
+      end
+
+    meta =
+      if type == :defdelegate do
+        {target_module_expression, target_fun} = options[:target]
+
+        Map.put(
+          meta,
+          :delegate_to,
+          {expand_alias(state, target_module_expression), target_fun, arity}
+        )
+      else
+        meta
+      end
+
+    meta =
+      if type in [:defguard, :defguardp] do
+        Map.put(meta, :guard, true)
+      else
+        meta
+      end
+
+    doc =
+      if type in [:defp, :defmacrop] do
+        # documentation is discarded on private
+        ""
+      else
+        doc
+      end
+
     current_module_variants
     |> Enum.reduce(state, fn variant, acc ->
       acc
@@ -768,6 +854,8 @@ defmodule ElixirSense.Core.State do
         end_position,
         params,
         type,
+        doc,
+        meta,
         options
       )
       |> add_mod_fun_to_position(
@@ -776,6 +864,8 @@ defmodule ElixirSense.Core.State do
         end_position,
         params,
         type,
+        doc,
+        meta,
         options
       )
     end)
@@ -1083,6 +1173,31 @@ defmodule ElixirSense.Core.State do
       type_args
       |> Enum.map(&Macro.to_string/1)
 
+    {state, {doc, meta}} = consume_typedoc_context(state)
+
+    # underscored types are hidden by default unless they have @typedoc
+    meta =
+      if String.starts_with?(to_string(type_name), "_") and doc == "" do
+        Map.put(meta, :hidden, true)
+      else
+        meta
+      end
+
+    meta =
+      if kind == :opaque do
+        Map.put(meta, :opaque, true)
+      else
+        meta
+      end
+
+    doc =
+      if kind == :typep do
+        # documentation is discarded on private
+        ""
+      else
+        doc
+      end
+
     type_info = %TypeInfo{
       name: type_name,
       args: [arg_names],
@@ -1090,7 +1205,9 @@ defmodule ElixirSense.Core.State do
       specs: [spec],
       generated: [Keyword.get(options, :generated, false)],
       positions: [pos],
-      end_positions: [end_pos]
+      end_positions: [end_pos],
+      doc: doc,
+      meta: meta
     }
 
     current_module_variants = get_current_module_variants(state)
@@ -1142,6 +1259,22 @@ defmodule ElixirSense.Core.State do
       type_args
       |> Enum.map(&Macro.to_string/1)
 
+    {state, {doc, meta}} =
+      if kind in [:callback, :macrocallback] do
+        consume_doc_context(state)
+      else
+        # do not consume doc context for specs
+        {state, {"", %{}}}
+      end
+
+    # underscored callbacks are hidden by default unless they have @doc
+    meta =
+      if String.starts_with?(to_string(type_name), "_") and doc == "" do
+        Map.put(meta, :hidden, true)
+      else
+        meta
+      end
+
     type_info = %SpecInfo{
       name: type_name,
       args: [arg_names],
@@ -1149,7 +1282,9 @@ defmodule ElixirSense.Core.State do
       kind: kind,
       generated: [Keyword.get(options, :generated, false)],
       positions: [pos],
-      end_positions: [end_pos]
+      end_positions: [end_pos],
+      doc: doc,
+      meta: meta
     }
 
     current_module_variants = get_current_module_variants(state)
@@ -1273,6 +1408,104 @@ defmodule ElixirSense.Core.State do
 
   def add_behaviours(%__MODULE__{} = state, modules) do
     Enum.reduce(modules, state, fn mod, state -> add_behaviour(state, mod) end)
+  end
+
+  def register_doc(%__MODULE__{} = state, :moduledoc, doc_arg) do
+    current_module_variants = get_current_module_variants(state)
+    doc_arg_formatted = format_doc_arg(doc_arg)
+
+    mods_funs_to_positions =
+      Enum.reduce(current_module_variants, state.mods_funs_to_positions, fn module, acc ->
+        Map.update!(acc, {module, nil, nil}, fn info = %ModFunInfo{} ->
+          case doc_arg_formatted do
+            {:meta, meta} ->
+              %{info | meta: Map.merge(info.meta, meta)}
+
+            text_or_hidden ->
+              %{info | doc: text_or_hidden}
+          end
+        end)
+      end)
+
+    %{state | mods_funs_to_positions: mods_funs_to_positions}
+  end
+
+  def register_doc(%__MODULE__{} = state, :doc, doc_arg) do
+    [doc_context | doc_context_rest] = state.doc_context
+
+    %{state | doc_context: [[doc_arg | doc_context] | doc_context_rest]}
+  end
+
+  def register_doc(%__MODULE__{} = state, :typedoc, doc_arg) do
+    [doc_context | doc_context_rest] = state.typedoc_context
+
+    %{state | typedoc_context: [[doc_arg | doc_context] | doc_context_rest]}
+  end
+
+  defp consume_doc_context(%__MODULE__{} = state) do
+    [doc_context | doc_context_rest] = state.doc_context
+    state = %{state | doc_context: [[] | doc_context_rest]}
+
+    {state, reduce_doc_context(doc_context)}
+  end
+
+  defp consume_typedoc_context(%__MODULE__{} = state) do
+    [doc_context | doc_context_rest] = state.typedoc_context
+    state = %{state | typedoc_context: [[] | doc_context_rest]}
+
+    {state, reduce_doc_context(doc_context)}
+  end
+
+  defp reduce_doc_context(doc_context) do
+    Enum.reduce(doc_context, {"", %{}}, fn doc_arg, {doc_acc, meta_acc} ->
+      case format_doc_arg(doc_arg) do
+        {:meta, meta} -> {doc_acc, Map.merge(meta_acc, meta)}
+        doc -> {doc, meta_acc}
+      end
+    end)
+  end
+
+  defp format_doc_arg(binary) when is_binary(binary), do: binary
+
+  defp format_doc_arg(list) when is_list(list) do
+    if Keyword.keyword?(list) do
+      {:meta, Map.new(list)}
+    else
+      to_string(list)
+    end
+  end
+
+  defp format_doc_arg(false), do: {:meta, %{hidden: true}}
+  defp format_doc_arg(:impl), do: {:meta, %{hidden: :impl}}
+
+  defp format_doc_arg(quoted) do
+    try do
+      case Code.eval_quoted(quoted) do
+        {binary, _} when is_binary(binary) ->
+          binary
+
+        {list, _} when is_list(list) ->
+          if Keyword.keyword?(list) do
+            {:meta, Map.new(list)}
+          else
+            to_string(list)
+          end
+
+        other ->
+          Logger.warning(
+            "Unable to format docstring expression #{inspect(quoted)}: eval resulted in #{inspect(other)}"
+          )
+
+          ""
+      end
+    rescue
+      e ->
+        Logger.warning(
+          "Unable to format docstring expression #{inspect(quoted)}: #{Exception.blame(:error, e, __STACKTRACE__)}"
+        )
+
+        ""
+    end
   end
 
   def add_vars(%__MODULE__{} = state, vars, is_definition) do
