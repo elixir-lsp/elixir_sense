@@ -4191,7 +4191,7 @@ defmodule ElixirSense.SuggestionsTest do
                args_list: [],
                doc: "",
                spec: "@opaque my_local_op_t()",
-               metadata: %{}
+               metadata: %{opaque: true}
              } == suggestion1
     end
   end

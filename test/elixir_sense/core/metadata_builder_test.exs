@@ -4939,6 +4939,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                end_positions: [{4, 36}],
                generated: [false],
                args: [["a", "b"]],
+               meta: %{opaque: true},
                specs: ["@opaque with_args(a, b) :: {a, b}"]
              },
              {My, :with_args, nil} => %ElixirSense.Core.State.TypeInfo{
@@ -4948,6 +4949,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                end_positions: [{4, 36}],
                generated: [false],
                args: [["a", "b"]],
+               meta: %{opaque: true},
                specs: ["@opaque with_args(a, b) :: {a, b}"]
              }
            }
@@ -5608,6 +5610,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{doc: "", meta: %{hidden: true}} = state.mods_funs_to_positions[{Some, :fun, 0}]
     end
 
+    test "doc on private is discarded" do
+      state =
+        """
+        defmodule Some do
+          @doc "Some"
+          defp fun(), do: :ok
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: ""} = state.mods_funs_to_positions[{Some, :fun, 0}]
+    end
+
     test "impl true sets hidden meta if no doc" do
       state =
         """
@@ -5734,6 +5749,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{doc: "", meta: %{hidden: true}} = state.types[{Some, :my_type, 0}]
     end
 
+    test "typedoc is discarded on private" do
+      state =
+        """
+        defmodule Some do
+          @typedoc "Some"
+          @typep my_type() :: any()
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: ""} = state.types[{Some, :my_type, 0}]
+    end
+
     test "underscored type sets hidden meta when there is no typedoc" do
       state =
         """
@@ -5749,6 +5777,46 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{doc: "", meta: %{hidden: true}} = state.types[{Some, :_my_type, 0}]
       assert %{doc: "Some", meta: meta} = state.types[{Some, :_my_type_with_doc, 0}]
       refute match?(%{hidden: true}, meta)
+    end
+  end
+
+  describe "meta" do
+    test "guard" do
+      state =
+        """
+        defmodule Some do
+          defguard fun(a) when a == 1
+        end
+        """
+        |> string_to_state
+
+      assert %{meta: %{guard: true}} =
+               state.mods_funs_to_positions[{Some, :fun, 1}]
+    end
+
+    test "delegate" do
+      state =
+        """
+        defmodule Some do
+          defdelegate count(a), to: Enum
+        end
+        """
+        |> string_to_state
+
+      assert %{meta: %{delegate_to: {Enum, :count, 1}}} =
+               state.mods_funs_to_positions[{Some, :count, 1}]
+    end
+
+    test "opaque" do
+      state =
+        """
+        defmodule Some do
+          @opaque my_type() :: any()
+        end
+        """
+        |> string_to_state
+
+      assert %{meta: %{opaque: true}} = state.types[{Some, :my_type, 0}]
     end
   end
 

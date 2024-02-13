@@ -387,7 +387,7 @@ defmodule ElixirSense.DocsTest do
                module: MyLocalModule,
                metadata: %{since: "1.2.3"},
                specs: ["@spec flatten(list()) :: list()"],
-               docs: "Sample doc",
+               docs: "",
                kind: :function
              }
     end
@@ -1464,7 +1464,7 @@ defmodule ElixirSense.DocsTest do
                module: MyLocalModule,
                spec: "@typep some(a) :: {a}",
                metadata: %{since: "1.2.3"},
-               docs: "My example type",
+               docs: "",
                kind: :type
              }
     end
@@ -1524,7 +1524,7 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                module: MyLocalModule,
                spec: "@opaque some(a)",
-               metadata: %{since: "1.2.3"},
+               metadata: %{since: "1.2.3", opaque: true},
                docs: "My example type",
                kind: :type
              }

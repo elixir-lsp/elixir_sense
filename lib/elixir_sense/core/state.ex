@@ -817,6 +817,34 @@ defmodule ElixirSense.Core.State do
         end
       end
 
+    meta =
+      if type == :defdelegate do
+        {target_module_expression, target_fun} = options[:target]
+
+        Map.put(
+          meta,
+          :delegate_to,
+          {expand_alias(state, target_module_expression), target_fun, arity}
+        )
+      else
+        meta
+      end
+
+    meta =
+      if type in [:defguard, :defguardp] do
+        Map.put(meta, :guard, true)
+      else
+        meta
+      end
+
+    doc =
+      if type in [:defp, :defmacrop] do
+        # documentation is discarded on private
+        ""
+      else
+        doc
+      end
+
     current_module_variants
     |> Enum.reduce(state, fn variant, acc ->
       acc
@@ -1153,6 +1181,21 @@ defmodule ElixirSense.Core.State do
         Map.put(meta, :hidden, true)
       else
         meta
+      end
+
+    meta =
+      if kind == :opaque do
+        Map.put(meta, :opaque, true)
+      else
+        meta
+      end
+
+    doc =
+      if kind == :typep do
+        # documentation is discarded on private
+        ""
+      else
+        doc
       end
 
     type_info = %TypeInfo{
