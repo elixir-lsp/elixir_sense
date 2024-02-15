@@ -21,7 +21,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
   @doc """
   A reducer that adds suggestions of callbacks.
   """
-  def add_callbacks(hint, env, _buffer_metadata, context, acc) do
+  def add_callbacks(hint, env, buffer_metadata, context, acc) do
     text_before = context.text_before
 
     %State.Env{protocol: protocol, behaviours: behaviours, scope: scope} = env
@@ -31,62 +31,87 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
         mod when is_atom(mod) and (protocol == nil or mod != elem(protocol, 0)) ->
           mod_name = inspect(mod)
 
-          for %{
-                name: name,
+          if Map.has_key?(buffer_metadata.mods_funs_to_positions, {mod, nil, nil}) do
+            behaviour_callbacks =
+              buffer_metadata.specs
+              |> Enum.filter(fn {{behaviour_mod, _, arity}, %State.SpecInfo{kind: kind}} ->
+                behaviour_mod == mod and is_integer(arity) and kind in [:callback, :macrocallback]
+              end)
+
+            for {{_, name, arity}, %State.SpecInfo{} = info} <- behaviour_callbacks,
+                hint == "" or def_prefix?(hint, List.last(info.specs)) or
+                  Matcher.match?("#{name}", hint) do
+              %{
+                type: :callback,
+                subtype: info.kind,
+                name: Atom.to_string(name),
                 arity: arity,
-                kind: kind,
-                callback: spec,
-                signature: signature,
-                doc: doc,
-                metadata: metadata
-              } <-
-                Introspection.get_callbacks_with_docs(mod),
-              def_prefix?(hint, spec) or Matcher.match?("#{name}", hint) do
-            desc = Introspection.extract_summary_from_docs(doc)
+                args: Enum.join(List.last(info.args), ", "),
+                args_list: List.last(info.args),
+                origin: mod_name,
+                summary: Introspection.extract_summary_from_docs(info.doc),
+                spec: List.last(info.specs),
+                metadata: info.meta
+              }
+            end
+          else
+            for %{
+                  name: name,
+                  arity: arity,
+                  kind: kind,
+                  callback: spec,
+                  signature: signature,
+                  doc: doc,
+                  metadata: metadata
+                } <-
+                  Introspection.get_callbacks_with_docs(mod),
+                hint == "" or def_prefix?(hint, spec) or Matcher.match?("#{name}", hint) do
+              desc = Introspection.extract_summary_from_docs(doc)
 
-            {args, args_list} =
-              if signature do
-                match_res = Regex.run(~r/.\(([^\)]*)\)/u, signature)
+              {args, args_list} =
+                if signature do
+                  match_res = Regex.run(~r/.\(([^\)]*)\)/u, signature)
 
-                unless match_res do
-                  raise "unable to get arguments from #{inspect(signature)}"
-                end
+                  unless match_res do
+                    raise "unable to get arguments from #{inspect(signature)}"
+                  end
 
-                [_, args_str] = match_res
+                  [_, args_str] = match_res
 
-                args_list =
-                  args_str
-                  |> String.split(",")
-                  |> Enum.map(&String.trim/1)
+                  args_list =
+                    args_str
+                    |> String.split(",")
+                    |> Enum.map(&String.trim/1)
 
-                args =
-                  args_str
-                  |> String.replace("\n", " ")
-                  |> String.split(",")
-                  |> Enum.map_join(", ", &String.trim/1)
+                  args =
+                    args_str
+                    |> String.replace("\n", " ")
+                    |> String.split(",")
+                    |> Enum.map_join(", ", &String.trim/1)
 
-                {args, args_list}
-              else
-                if arity == 0 do
-                  {"", []}
+                  {args, args_list}
                 else
-                  args_list = for _ <- 1..arity, do: "term"
-                  {Enum.join(args_list, ", "), args_list}
+                  if arity == 0 do
+                    {"", []}
+                  else
+                    args_list = for _ <- 1..arity, do: "term"
+                    {Enum.join(args_list, ", "), args_list}
+                  end
                 end
-              end
 
-            %{
-              type: :callback,
-              subtype: kind,
-              name: Atom.to_string(name),
-              arity: arity,
-              args: args,
-              args_list: args_list,
-              origin: mod_name,
-              summary: desc,
-              spec: spec,
-              metadata: metadata
-            }
+              %{
+                type: :callback,
+                subtype: kind,
+                name: Atom.to_string(name),
+                arity: arity,
+                args: args,
+                args_list: args_list,
+                origin: mod_name,
+                summary: desc,
+                spec: spec,
+                metadata: metadata
+              }
+            end
           end
 
         _ ->

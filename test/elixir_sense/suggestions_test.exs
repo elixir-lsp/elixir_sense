@@ -410,6 +410,70 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
+  test "lists metadata behaviour callbacks" do
+    buffer = """
+    defmodule MyBehaviour do
+      @doc "Some callback"
+      @callback my_callback(integer()) :: any()
+
+      @callback my_callback_optional(integer(), atom()) :: any()
+
+      @deprecated "Replace me"
+      @macrocallback my_macrocallback(integer()) :: Macro.t()
+
+      @optional_callbacks my_callback_optional: 2
+    end
+
+    defmodule MyServer do
+      @behaviour MyBehaviour
+
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 15, 3)
+      |> Enum.filter(fn s -> s.type == :callback end)
+
+    assert [
+             %{
+               args: "integer()",
+               arity: 1,
+               name: "my_callback",
+               origin: "MyBehaviour",
+               spec: "@callback my_callback(integer()) :: any()",
+               summary: "Some callback",
+               type: :callback,
+               args_list: ["integer()"],
+               metadata: %{},
+               subtype: :callback
+             },
+             %{
+               args: "integer()",
+               args_list: ["integer()"],
+               arity: 1,
+               metadata: %{deprecated: "Replace me"},
+               name: "my_macrocallback",
+               origin: "MyBehaviour",
+               spec: "@macrocallback my_macrocallback(integer()) :: Macro.t()",
+               subtype: :macrocallback,
+               summary: "",
+               type: :callback
+             },
+             %{
+               args: "integer(), atom()",
+               args_list: ["integer()", "atom()"],
+               arity: 2,
+               metadata: %{optional: true},
+               name: "my_callback_optional",
+               origin: "MyBehaviour",
+               spec: "@callback my_callback_optional(integer(), atom()) :: any()",
+               subtype: :callback,
+               summary: "",
+               type: :callback
+             }
+           ] = list
+  end
+
   test "lists callbacks + def macros after de" do
     buffer = """
     defmodule MyServer do
