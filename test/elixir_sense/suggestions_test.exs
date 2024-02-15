@@ -849,7 +849,7 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
-  test "lists function return values" do
+  test "lists callback return values" do
     buffer = """
     defmodule MyServer do
       use ElixirSenseExample.ExampleBehaviour
@@ -912,7 +912,7 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
-  test "lists macro return values" do
+  test "lists macrocallback return values" do
     buffer = """
     defmodule MyServer do
       @behaviour ElixirSenseExample.BehaviourWithMacrocallback
@@ -934,6 +934,36 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "Macro.t()",
                type: :return
              }
+           ]
+  end
+
+  test "lists metadata callback return values" do
+    buffer = """
+    defmodule MyBehaviour do
+      @callback required(term()) :: {:ok, term()} | :error
+    end
+
+    defmodule MyServer do
+      @behaviour MyBehaviour
+
+      def required(arg) do
+
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 9, 5)
+      |> Enum.filter(fn s -> s.type == :return end)
+
+    assert list == [
+             %{
+               description: "{:ok, term()}",
+               snippet: "{:ok, term()}",
+               spec: "{:ok, term()}",
+               type: :return
+             },
+             %{description: ":error", snippet: ":error", spec: ":error", type: :return}
            ]
   end
 
@@ -963,6 +993,35 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "{:error, module()}",
                type: :return
              }
+           ] == list
+  end
+
+  test "lists metadata protocol implementation return values" do
+    buffer = """
+    defprotocol MyProto do
+      @spec count(t()) :: {:ok, term()} | :error
+      def count(t)
+    end
+
+    defimpl MyProto, for: MyStruct do
+      def count(t) do
+
+      end
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 8, 6)
+      |> Enum.filter(fn s -> s.type == :return end)
+
+    assert [
+             %{
+               description: "{:ok, term()}",
+               snippet: "{:ok, term()}",
+               spec: "{:ok, term()}",
+               type: :return
+             },
+             %{description: ":error", snippet: ":error", spec: ":error", type: :return}
            ] == list
   end
 

@@ -40,17 +40,38 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Returns do
 
     callbacks =
       for mod <- behaviours,
-          protocol == nil or mod != elem(protocol, 0),
-          return <- Introspection.get_returns_from_callback(mod, fun, arity) do
-        format_return(return)
-      end
+          protocol == nil or mod != elem(protocol, 0) do
+        case specs[{mod, fun, arity}] do
+          nil ->
+            for return <- Introspection.get_returns_from_callback(mod, fun, arity) do
+              format_return(return)
+            end
 
-    # TODO metadata protocols and behaviours
+          %State.SpecInfo{specs: info_specs} ->
+            for spec <- info_specs,
+                {:ok, {:@, _, [{_, _, [quoted]}]}} = Code.string_to_quoted(spec),
+                return <- Introspection.get_returns_from_spec_ast(quoted) do
+              format_return(return)
+            end
+        end
+      end
+      |> List.flatten()
+
     protocol_functions =
       case protocol do
         {proto, _implementations} ->
-          for return <- Introspection.get_returns_from_callback(proto, fun, arity) do
-            format_return(return)
+          case specs[{proto, fun, arity}] do
+            nil ->
+              for return <- Introspection.get_returns_from_callback(proto, fun, arity) do
+                format_return(return)
+              end
+
+            %State.SpecInfo{specs: info_specs} ->
+              for spec <- info_specs,
+                  {:ok, {:@, _, [{:callback, _, [quoted]}]}} <- [Code.string_to_quoted(spec)],
+                  return <- Introspection.get_returns_from_spec_ast(quoted) do
+                format_return(return)
+              end
           end
 
         nil ->
