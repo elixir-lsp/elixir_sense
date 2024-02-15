@@ -4,6 +4,7 @@ defmodule ElixirSense.Core.State do
   """
 
   alias ElixirSense.Core.Introspection
+  require Logger
 
   @type fun_arity :: {atom, non_neg_integer}
   @type scope :: atom | fun_arity | {:typespec, atom, non_neg_integer}
@@ -58,6 +59,7 @@ defmodule ElixirSense.Core.State do
           context: map(),
           doc_context: list(),
           typedoc_context: list(),
+          optional_callbacks_context: list(),
           # TODO better type
           binding_context: list
         }
@@ -91,6 +93,7 @@ defmodule ElixirSense.Core.State do
             first_alias_positions: %{},
             doc_context: [[]],
             typedoc_context: [[]],
+            optional_callbacks_context: [[]],
             moduledoc_positions: %{}
 
   defmodule Env do
@@ -681,7 +684,8 @@ defmodule ElixirSense.Core.State do
       | namespace: [namespace | state.namespace],
         scopes: [scopes | state.scopes],
         doc_context: [[] | state.doc_context],
-        typedoc_context: [[] | state.typedoc_context]
+        typedoc_context: [[] | state.typedoc_context],
+        optional_callbacks_context: [[] | state.optional_callbacks_context]
     }
   end
 
@@ -694,7 +698,8 @@ defmodule ElixirSense.Core.State do
       | namespace: outer_mods,
         scopes: outer_scopes,
         doc_context: tl(state.doc_context),
-        typedoc_context: tl(state.typedoc_context)
+        typedoc_context: tl(state.typedoc_context),
+        optional_callbacks_context: tl(state.optional_callbacks_context)
     }
   end
 
@@ -707,6 +712,30 @@ defmodule ElixirSense.Core.State do
 
   #   %{state | scopes: outer_scopes}
   # end
+
+  def register_optional_callbacks(%__MODULE__{} = state, list) do
+    [_ | rest] = state.optional_callbacks_context
+    %{state | optional_callbacks_context: [list | rest]}
+  end
+
+  def apply_optional_callbacks(%__MODULE__{} = state) do
+    [list | _rest] = state.optional_callbacks_context
+    current_module_variants = get_current_module_variants(state)
+
+    updated_specs =
+      list
+      |> Enum.reduce(state.specs, fn {fun, arity}, acc ->
+        current_module_variants
+        |> Enum.reduce(acc, fn module, acc ->
+          acc
+          |> Map.update!({module, fun, arity}, fn spec_info = %SpecInfo{} ->
+            %{spec_info | meta: spec_info.meta |> Map.put(:optional, true)}
+          end)
+        end)
+      end)
+
+    %{state | specs: updated_specs}
+  end
 
   def new_named_func(%__MODULE__{} = state, name, arity) do
     %{state | scopes: [[{name, arity} | hd(state.scopes)] | state.scopes]}

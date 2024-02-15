@@ -192,6 +192,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp post_module(ast, state) do
     state
+    |> apply_optional_callbacks
     |> remove_attributes_scope
     |> remove_behaviours_scope
     |> remove_alias_scope
@@ -821,6 +822,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
     # impl adds sets :hidden by default
     state
     |> register_doc(:doc, :impl)
+    |> result(new_ast)
+  end
+
+  defp pre(
+         {:@, meta_attr, [{:optional_callbacks, meta, [args]}]},
+         state
+       ) do
+    new_ast = {:@, meta_attr, [{:optional_callbacks, add_no_call(meta), [args]}]}
+
+    state
+    |> register_optional_callbacks(args)
     |> result(new_ast)
   end
 

@@ -5818,6 +5818,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{meta: %{opaque: true}} = state.types[{Some, :my_type, 0}]
     end
+
+    test "optional" do
+      state =
+        """
+        defmodule Some do
+          @callback some(any) :: any
+          @optional_callbacks some: 1
+        end
+        """
+        |> string_to_state
+
+      assert %{meta: %{optional: true}} = state.specs[{Some, :some, 1}]
+    end
   end
 
   defp string_to_state(string) do
