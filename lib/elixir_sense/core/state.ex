@@ -558,6 +558,15 @@ defmodule ElixirSense.Core.State do
         type
       end
 
+    overridable = current_info |> Map.get(:overridable, false)
+
+    meta =
+      if overridable do
+        Map.put(meta, :overridable, true)
+      else
+        meta
+      end
+
     info = %ModFunInfo{
       positions: new_positions,
       end_positions: new_end_positions,
@@ -566,7 +575,7 @@ defmodule ElixirSense.Core.State do
       doc: doc,
       meta: meta,
       generated: [Keyword.get(options, :generated, false) | current_info.generated],
-      overridable: current_info |> Map.get(:overridable, false)
+      overridable: overridable
     }
 
     info =
@@ -592,7 +601,8 @@ defmodule ElixirSense.Core.State do
   defp process_option(_state, info, _, {:overridable, {true, module}}) do
     %ModFunInfo{
       info
-      | overridable: {true, module}
+      | overridable: {true, module},
+        meta: Map.put(info.meta, :overridable, true)
     }
   end
 
@@ -921,7 +931,11 @@ defmodule ElixirSense.Core.State do
 
   defp make_def_overridable(mods_funs_to_positions, mfa, overridable_module) do
     update_in(mods_funs_to_positions[mfa], fn mod_fun_info = %ModFunInfo{} ->
-      %ModFunInfo{mod_fun_info | overridable: {true, overridable_module}}
+      %ModFunInfo{
+        mod_fun_info
+        | overridable: {true, overridable_module},
+          meta: Map.put(mod_fun_info.meta, :overridable, true)
+      }
     end)
   end
 

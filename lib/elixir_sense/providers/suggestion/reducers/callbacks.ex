@@ -41,6 +41,10 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
             for {{_, name, arity}, %State.SpecInfo{} = info} <- behaviour_callbacks,
                 hint == "" or def_prefix?(hint, List.last(info.specs)) or
                   Matcher.match?("#{name}", hint) do
+              def_info = buffer_metadata.mods_funs_to_positions[{env.module, name, arity}]
+              def_info_meta = if def_info, do: def_info.meta, else: %{}
+              meta = info.meta |> Map.merge(def_info_meta)
+
               %{
                 type: :callback,
                 subtype: info.kind,
@@ -51,7 +55,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
                 origin: mod_name,
                 summary: Introspection.extract_summary_from_docs(info.doc),
                 spec: List.last(info.specs),
-                metadata: info.meta
+                metadata: meta
               }
             end
           else
@@ -99,6 +103,10 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
                   end
                 end
 
+              def_info = buffer_metadata.mods_funs_to_positions[{env.module, name, arity}]
+              def_info_meta = if def_info, do: def_info.meta, else: %{}
+              meta = metadata |> Map.merge(def_info_meta)
+
               %{
                 type: :callback,
                 subtype: kind,
@@ -109,7 +117,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Callbacks do
                 origin: mod_name,
                 summary: desc,
                 spec: spec,
-                metadata: metadata
+                metadata: meta
               }
             end
           end

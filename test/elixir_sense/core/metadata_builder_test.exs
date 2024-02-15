@@ -5831,6 +5831,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{meta: %{optional: true}} = state.specs[{Some, :some, 1}]
     end
+
+    test "overridable" do
+      state =
+        """
+        defmodule Some do
+          use ElixirSenseExample.OverridableFunctions
+        end
+        """
+        |> string_to_state
+
+      assert %{meta: %{overridable: true}} = state.mods_funs_to_positions[{Some, :test, 2}]
+    end
   end
 
   defp string_to_state(string) do

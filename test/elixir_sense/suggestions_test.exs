@@ -717,12 +717,12 @@ defmodule ElixirSense.SuggestionsTest do
                summary: "",
                type: :callback,
                subtype: :callback,
-               metadata: %{optional: false}
+               metadata: %{optional: false, overridable: true}
              },
              %{
                args: "any",
                arity: 1,
-               metadata: %{optional: false},
+               metadata: %{optional: false, overridable: true},
                name: "bar",
                origin: "ElixirSenseExample.OverridableBehaviour",
                spec: "@macrocallback bar(any()) :: Macro.t()",
@@ -749,7 +749,7 @@ defmodule ElixirSense.SuggestionsTest do
              %{
                args: "var",
                arity: 1,
-               metadata: %{},
+               metadata: %{overridable: true},
                name: "required",
                origin: "ElixirSenseExample.OverridableFunctions",
                spec: "",
@@ -760,7 +760,7 @@ defmodule ElixirSense.SuggestionsTest do
              %{
                args: "x, y",
                arity: 2,
-               metadata: %{since: "1.2.3"},
+               metadata: %{since: "1.2.3", overridable: true},
                name: "test",
                origin: "ElixirSenseExample.OverridableFunctions",
                spec: "@spec test(number, number) :: number",
