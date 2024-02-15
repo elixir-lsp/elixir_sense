@@ -474,6 +474,53 @@ defmodule ElixirSense.SuggestionsTest do
            ] = list
   end
 
+  test "lists metadata protocol functions" do
+    buffer = """
+    defprotocol MyProto do
+      @doc "Some callback"
+      @doc since: "1.2.3"
+      def my_fun(t)
+
+      @doc deprecated: "1.2.3"
+      @spec my_fun_other(t(), integer()) :: any()
+      def my_fun_other(t, a)
+    end
+
+    defimpl MyProto, for: List do
+      
+    end
+    """
+
+    list =
+      ElixirSense.suggestions(buffer, 11, 3)
+      |> Enum.filter(fn s -> s.type == :protocol_function end)
+
+    assert [
+             %{
+               args: "t",
+               args_list: ["t"],
+               arity: 1,
+               metadata: %{since: "1.2.3"},
+               name: "my_fun",
+               origin: "MyProto",
+               spec: "@callback my_fun(t) :: term",
+               summary: "Some callback",
+               type: :protocol_function
+             },
+             %{
+               args: "t(), integer()",
+               args_list: ["t()", "integer()"],
+               arity: 2,
+               metadata: %{deprecated: "1.2.3"},
+               name: "my_fun_other",
+               origin: "MyProto",
+               spec: "@spec my_fun_other(t(), integer()) :: any()",
+               summary: "",
+               type: :protocol_function
+             }
+           ] = list
+  end
+
   test "lists callbacks + def macros after de" do
     buffer = """
     defmodule MyServer do
