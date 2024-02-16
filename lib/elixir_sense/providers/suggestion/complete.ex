@@ -1135,11 +1135,12 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
         doc =
           case func_doc do
             nil ->
+              app = ElixirSense.Core.Applications.get_application(mod)
               # TODO provide docs for builtin
               if f in [:behaviour_info | @builtin_functions] do
-                {"", %{builtin: true}}
+                {"", %{builtin: true, app: app}}
               else
-                {"", %{}}
+                {"", %{app: app}}
               end
 
             {{_fun, _}, _line, _kind, _args, doc, metadata} ->

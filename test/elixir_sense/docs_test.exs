@@ -21,7 +21,7 @@ defmodule ElixirSense.DocsTest do
 
       assert doc == %{
                module: ElixirSenseExample.ModuleWithDocFalse,
-               metadata: %{hidden: true},
+               metadata: %{hidden: true, app: :elixir_sense},
                docs: "",
                kind: :module
              }
@@ -34,7 +34,7 @@ defmodule ElixirSense.DocsTest do
 
       assert doc == %{
                module: ElixirSenseExample.ModuleWithNoDocs,
-               metadata: %{},
+               metadata: %{app: :elixir_sense},
                docs: "",
                kind: :module
              }
@@ -52,7 +52,7 @@ defmodule ElixirSense.DocsTest do
       } = ElixirSense.docs(buffer, 2, 8)
 
       assert doc.module == GenServer
-      assert doc.metadata == %{}
+      assert doc.metadata == %{app: :elixir}
       assert doc.kind == :module
 
       assert doc.docs =~ """
@@ -272,7 +272,7 @@ defmodule ElixirSense.DocsTest do
 
       assert doc == %{
                module: ElixirSenseExample.ModuleWithDocs,
-               metadata: %{hidden: true, defaults: 1},
+               metadata: %{hidden: true, defaults: 1, app: :elixir_sense},
                docs: "",
                kind: :function,
                args: ["a", "b \\\\ nil"],
@@ -290,7 +290,7 @@ defmodule ElixirSense.DocsTest do
       assert doc == %{
                docs: "",
                kind: :function,
-               metadata: %{defaults: 1},
+               metadata: %{defaults: 1, app: :elixir_sense},
                module: ElixirSenseExample.ModuleWithDocs,
                args: ["a", "b \\\\ nil"],
                arity: 2,
@@ -965,10 +965,10 @@ defmodule ElixirSense.DocsTest do
 
       if String.to_integer(System.otp_release()) < 25 do
         assert doc.args == ["boolean", "boolean"]
-        assert doc.metadata == %{}
+        assert doc.metadata == %{app: :erts}
       else
         assert doc.args == ["term", "term"]
-        assert doc.metadata == %{hidden: true}
+        assert doc.metadata == %{hidden: true, app: :erts}
       end
 
       %{
@@ -980,7 +980,7 @@ defmodule ElixirSense.DocsTest do
                arity: 2,
                function: :orelse,
                module: :erlang,
-               metadata: %{builtin: true},
+               metadata: %{builtin: true, app: :erts},
                specs: [],
                docs: "",
                kind: :function
@@ -1004,7 +1004,7 @@ defmodule ElixirSense.DocsTest do
                function: :some,
                arity: 1,
                module: ElixirSenseExample.BehaviourWithMacrocallback.Impl,
-               metadata: %{},
+               metadata: %{app: :elixir_sense},
                specs: [
                  "@spec some(integer()) :: Macro.t()\n@spec some(b) :: Macro.t() when b: float()"
                ],
@@ -1194,7 +1194,8 @@ defmodule ElixirSense.DocsTest do
                module: ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl,
                metadata: %{
                  implementing: ElixirSenseExample.ExampleBehaviourWithDoc,
-                 implementing_module_app: :elixir_sense
+                 implementing_module_app: :elixir_sense,
+                 app: :elixir_sense
                },
                specs: ["@callback foo() :: :ok"],
                docs: "Docs for foo",
@@ -1223,7 +1224,8 @@ defmodule ElixirSense.DocsTest do
                metadata: %{
                  implementing: ElixirSenseExample.ExampleBehaviourWithDoc,
                  hidden: true,
-                 implementing_module_app: :elixir_sense
+                 implementing_module_app: :elixir_sense,
+                 app: :elixir_sense
                },
                docs: "Docs for baz",
                kind: :function
@@ -1250,7 +1252,8 @@ defmodule ElixirSense.DocsTest do
                metadata: %{
                  implementing: ElixirSenseExample.ExampleBehaviourWithNoDoc,
                  implementing_module_app: :elixir_sense,
-                 hidden: true
+                 hidden: true,
+                 app: :elixir_sense
                },
                specs: ["@callback foo() :: :ok"],
                docs: "",
@@ -1277,7 +1280,8 @@ defmodule ElixirSense.DocsTest do
                module: ElixirSenseExample.ExampleBehaviourWithDocCallbackNoImpl,
                metadata: %{
                  implementing: ElixirSenseExample.ExampleBehaviourWithDoc,
-                 implementing_module_app: :elixir_sense
+                 implementing_module_app: :elixir_sense,
+                 app: :elixir_sense
                },
                specs: ["@macrocallback bar(integer()) :: Macro.t()"],
                docs: "Docs for bar",
@@ -1354,7 +1358,7 @@ defmodule ElixirSense.DocsTest do
                arity: 0,
                docs: "",
                kind: :type,
-               metadata: %{hidden: true},
+               metadata: %{hidden: true, app: :elixir_sense},
                module: ElixirSenseExample.ModuleWithDocs,
                spec: "@type some_type_doc_false() :: integer()",
                type: :some_type_doc_false
@@ -1379,7 +1383,7 @@ defmodule ElixirSense.DocsTest do
                arity: 0,
                docs: "",
                kind: :type,
-               metadata: %{},
+               metadata: %{app: :elixir_sense},
                module: ElixirSenseExample.ModuleWithDocs,
                spec: "@type some_type_no_doc() :: integer()",
                type: :some_type_no_doc
@@ -1404,7 +1408,7 @@ defmodule ElixirSense.DocsTest do
                arity: 0,
                docs: "Remote type",
                kind: :type,
-               metadata: %{},
+               metadata: %{app: :elixir_sense},
                module: ElixirSenseExample.ModuleWithTypespecs.Remote,
                spec: "@type remote_t() :: atom()",
                type: :remote_t
@@ -1578,7 +1582,7 @@ defmodule ElixirSense.DocsTest do
                arity: 1,
                module: ElixirSenseExample.CallbackOpaque,
                spec: "@opaque t(x)",
-               metadata: %{opaque: true},
+               metadata: %{opaque: true, app: :elixir_sense},
                docs: "Opaque type\n",
                kind: :type
              }

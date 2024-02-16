@@ -32,8 +32,11 @@ defmodule ElixirSense.Core.Normalized.Code do
           :moduledoc ->
             moduledoc_en = extract_docs(moduledoc, mime_type, module, app)
 
-            {max(:erl_anno.line(moduledoc_anno), 1), moduledoc_en,
-             maybe_mark_as_hidden(metadata, moduledoc_en)}
+            metadata =
+              maybe_mark_as_hidden(metadata, moduledoc_en)
+              |> Map.put(:app, app)
+
+            {max(:erl_anno.line(moduledoc_anno), 1), moduledoc_en, metadata}
 
           :docs ->
             get_fun_docs(module, app, docs, mime_type)
@@ -59,13 +62,16 @@ defmodule ElixirSense.Core.Normalized.Code do
          {{kind, name, arity}, anno, signatures, docs, metadata},
          mime_type,
          module,
-         app
+         app,
+         original_app \\ nil
        ) do
     docs_en = extract_docs(docs, mime_type, module, app)
     # TODO check if we can get column here
     line = :erl_anno.line(anno)
 
-    metadata = maybe_mark_as_hidden(metadata, docs_en)
+    metadata =
+      maybe_mark_as_hidden(metadata, docs_en)
+      |> Map.put(:app, original_app || app)
 
     case kind do
       kind when kind in [:function, :macro] ->
@@ -154,7 +160,8 @@ defmodule ElixirSense.Core.Normalized.Code do
           |> map_doc_entry(
             mime_type,
             Map.get(metadata, :implementing, module),
-            Map.get(metadata, :implementing_module_app, app)
+            Map.get(metadata, :implementing_module_app, app),
+            app
           )
       end
     )

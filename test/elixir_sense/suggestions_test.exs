@@ -617,7 +617,7 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "@macrocallback optional(a) :: Macro.t() when a: atom()",
                summary: "An optional macrocallback\n",
                type: :callback,
-               metadata: %{optional: true}
+               metadata: %{optional: true, app: :elixir_sense}
              },
              %{
                args: "atom",
@@ -629,7 +629,7 @@ defmodule ElixirSense.SuggestionsTest do
                spec: "@macrocallback required(atom()) :: Macro.t()",
                summary: "A required macrocallback\n",
                type: :callback,
-               metadata: %{optional: false}
+               metadata: %{optional: false, app: :elixir_sense}
              }
            ] == list
   end

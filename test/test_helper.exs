@@ -67,3 +67,5 @@ defmodule TestHelper do
     |> Enum.filter(fn s -> s[:kind] == kind end)
   end
 end
+
+Application.load(:erts)

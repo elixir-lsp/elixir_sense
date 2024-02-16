@@ -402,10 +402,12 @@ defmodule ElixirSense.Providers.Docs do
 
       _ ->
         if Code.ensure_loaded?(mod) do
+          app = ElixirSense.Core.Applications.get_application(mod)
+
           %{
             kind: :module,
             module: mod,
-            metadata: %{},
+            metadata: %{app: app},
             docs: ""
           }
         end
@@ -479,6 +481,7 @@ defmodule ElixirSense.Providers.Docs do
   defp get_func_docs_from_typespec(mod, fun, call_arity) do
     # TypeInfo.get_function_specs does fallback to behaviours
     {behaviour, specs} = TypeInfo.get_function_specs(mod, fun, call_arity)
+    app = ElixirSense.Core.Applications.get_application(mod)
 
     meta =
       if behaviour do
@@ -497,7 +500,7 @@ defmodule ElixirSense.Providers.Docs do
           function: fun,
           arity: arity,
           args: fun_args_text,
-          metadata: meta,
+          metadata: meta |> Map.put(:app, app),
           specs: Introspection.get_specs_text(mod, fun, arity, :function, meta),
           docs: ""
         }
@@ -526,9 +529,11 @@ defmodule ElixirSense.Providers.Docs do
 
       metadata =
         if {f, arity} in BuiltinFunctions.erlang_builtin_functions(mod) do
-          %{builtin: true}
+          %{builtin: true, app: :erts}
         else
-          %{}
+          # TODO remove this fallback?
+          app = ElixirSense.Core.Applications.get_application(mod)
+          %{app: app}
         end
 
       %{
@@ -584,6 +589,9 @@ defmodule ElixirSense.Providers.Docs do
 
     case docs do
       [] ->
+        # TODO remove this fallback?
+        app = ElixirSense.Core.Applications.get_application(mod)
+
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(mod),
             name == fun,
             Introspection.matches_arity?(length(args), arity),
@@ -598,7 +606,7 @@ defmodule ElixirSense.Providers.Docs do
             type: fun,
             arity: length(args),
             args: type_args,
-            metadata: %{},
+            metadata: %{app: app},
             spec: spec,
             docs: ""
           }

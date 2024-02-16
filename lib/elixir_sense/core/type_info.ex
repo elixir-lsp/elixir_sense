@@ -37,6 +37,8 @@ defmodule ElixirSense.Core.TypeInfo do
         end
 
       nil ->
+        app = ElixirSense.Core.Applications.get_application(module)
+
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(module),
             kind in [:type, :opaque],
             spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
@@ -46,7 +48,7 @@ defmodule ElixirSense.Core.TypeInfo do
               name: name,
               arity: length(args),
               doc: "",
-              metadata: %{},
+              metadata: %{app: app},
               spec: spec,
               signature: signature
             },
