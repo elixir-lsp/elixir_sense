@@ -1331,10 +1331,10 @@ defmodule ElixirSense.DocsTest do
 
       if ExUnitConfig.erlang_eep48_supported() do
         assert doc.docs =~ "called by the new process"
-        assert %{since: "OTP 19.0", implementing: :gen_statem} = doc.metadata
+        assert %{since: "OTP 19.0", implementing: :gen_statem, app: :elixir_sense} = doc.metadata
       else
         assert doc.docs == ""
-        assert doc.metadata == %{}
+        assert doc.metadata == %{app: :elixir_sense}
       end
     end
   end
