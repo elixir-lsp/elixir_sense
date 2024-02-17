@@ -1952,7 +1952,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                name: "message",
                type: :function,
                arity: 1,
-               spec: "@spec message(Exception.t()) :: String.t()"
+               spec: "@callback message(t()) :: String.t()"
              }
            ] = expand(~c"ArgumentError.mes")
 
@@ -1963,7 +1963,7 @@ defmodule ElixirSense.Providers.Suggestion.CompleteTest do
                name: "exception",
                type: :function,
                arity: 1,
-               spec: "@spec exception(term) :: Exception.t()"
+               spec: "@callback exception(term()) :: t()"
              }
            ] = expand(~c"ArgumentError.exce")
 

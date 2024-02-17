@@ -1110,7 +1110,7 @@ defmodule ElixirSense.DocsTest do
                docs: [doc]
              } = ElixirSense.docs(buffer, 2, 42)
 
-      assert doc == %{
+      assert %{
                args: [],
                function: :module_info,
                module: ElixirSenseExample.ModuleWithFunctions,
@@ -1119,15 +1119,15 @@ defmodule ElixirSense.DocsTest do
                specs: [
                  "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
                ],
-               docs: "",
+               docs: "The `module_info/0` function in each module" <> _,
                kind: :function
-             }
+             } = doc
 
       assert %{
                docs: [doc]
              } = ElixirSense.docs(buffer, 4, 42)
 
-      assert doc == %{
+      assert %{
                args: ["key"],
                arity: 1,
                function: :module_info,
@@ -1140,9 +1140,9 @@ defmodule ElixirSense.DocsTest do
                  "@spec module_info(:exports | :functions | :nifs) :: [{atom, non_neg_integer}]",
                  "@spec module_info(:native) :: boolean"
                ],
-               docs: "",
+               docs: "The call `module_info(Key)`" <> _,
                kind: :function
-             }
+             } = doc
 
       assert %{docs: [%{function: :__info__}]} =
                ElixirSense.docs(buffer, 6, 42)

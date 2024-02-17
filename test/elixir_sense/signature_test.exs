@@ -1420,18 +1420,18 @@ defmodule ElixirSense.SignatureTest do
       end
       """
 
-      assert ElixirSense.signature(buffer, 2, 54) == %{
+      assert %{
                active_param: 0,
                signatures: [
                  %{
-                   documentation: "Built-in function",
+                   documentation: "The `module_info/0` function" <> _,
                    name: "module_info",
                    params: [],
                    spec:
                      "@spec module_info :: [{:module | :attributes | :compile | :exports | :md5 | :native, term}]"
                  },
                  %{
-                   documentation: "Built-in function",
+                   documentation: "The call `module_info(Key)`" <> _,
                    name: "module_info",
                    params: ["key"],
                    spec: """
@@ -1443,13 +1443,13 @@ defmodule ElixirSense.SignatureTest do
                    """
                  }
                ]
-             }
+             } = ElixirSense.signature(buffer, 2, 54)
 
-      assert ElixirSense.signature(buffer, 4, 51) == %{
+      assert %{
                active_param: 0,
                signatures: [
                  %{
-                   documentation: "Built-in function",
+                   documentation: "Provides runtime informatio" <> _,
                    name: "__info__",
                    params: ["atom"],
                    spec: """
@@ -1462,20 +1462,20 @@ defmodule ElixirSense.SignatureTest do
                    """
                  }
                ]
-             }
+             } = ElixirSense.signature(buffer, 4, 51)
 
-      assert ElixirSense.signature(buffer, 6, 54) == %{
+      assert %{
                active_param: 0,
                signatures: [
                  %{
-                   documentation: "Built-in function",
+                   documentation: "The `behaviour_info(Key)`" <> _,
                    name: "behaviour_info",
                    params: ["key"],
                    spec:
                      "@spec behaviour_info(:callbacks | :optional_callbacks) :: [{atom, non_neg_integer}]"
                  }
                ]
-             }
+             } = ElixirSense.signature(buffer, 6, 54)
     end
 
     test "built-in functions cannot be called locally" do

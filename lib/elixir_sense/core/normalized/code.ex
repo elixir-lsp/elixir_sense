@@ -198,6 +198,13 @@ defmodule ElixirSense.Core.Normalized.Code do
           )
         )
         |> Stream.map(fn {{_kind, name, arity}, _anno, signatures, docs, metadata} ->
+          docs =
+            if module == Exception and name in [:exception, :message] do
+              %{"en" => ElixirSense.Core.BuiltinFunctions.get_docs({name, arity})}
+            else
+              docs
+            end
+
           {{name, arity},
            {signatures, docs,
             metadata |> Map.put(:implementing, module) |> Map.put(:implementing_module_app, app),

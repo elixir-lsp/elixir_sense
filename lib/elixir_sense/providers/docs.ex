@@ -62,6 +62,10 @@ defmodule ElixirSense.Providers.Docs do
 
   @type doc :: module_doc | function_doc | type_doc | variable_doc | attribute_doc | keyword_doc
 
+  @builtin_functions BuiltinFunctions.all()
+                     |> Enum.map(&elem(&1, 0))
+                     |> Kernel.--([:exception, :message])
+
   @spec all(
           any,
           State.Env.t(),
@@ -197,7 +201,7 @@ defmodule ElixirSense.Providers.Docs do
     doc_infos =
       metadata.mods_funs_to_positions
       |> Enum.filter(fn
-        {{^mod, ^fun, a}, fun_info} when not is_nil(a) ->
+        {{^mod, ^fun, a}, fun_info} when not is_nil(a) and fun not in @builtin_functions ->
           default_args = fun_info.params |> Enum.at(-1) |> Introspection.count_defaults()
 
           Introspection.matches_arity_with_defaults?(a, default_args, arity)
@@ -417,10 +421,11 @@ defmodule ElixirSense.Providers.Docs do
   # TODO spec
   @spec get_func_docs(nil | module, atom, non_neg_integer | :any) :: list(function_doc())
   def get_func_docs(mod, fun, arity)
-      when mod != nil and fun in [:module_info, :behaviour_info, :__info__] do
+      when mod != nil and fun in @builtin_functions do
     for {f, a} <- BuiltinFunctions.all(), f == fun, Introspection.matches_arity?(a, arity) do
-      spec = BuiltinFunctions.get_specs({f, a})
+      spec = BuiltinFunctions.get_specs({f, a}) |> dbg
       args = BuiltinFunctions.get_args({f, a})
+      docs = BuiltinFunctions.get_docs({f, a})
 
       metadata = %{builtin: true}
 
@@ -432,8 +437,7 @@ defmodule ElixirSense.Providers.Docs do
         args: args,
         metadata: metadata,
         specs: spec,
-        # TODO provide docs
-        docs: ""
+        docs: docs
       }
     end
   end

@@ -1427,8 +1427,9 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
 
       fa = {name |> String.to_atom(), a}
 
-      if fa in BuiltinFunctions.all() do
+      if fa in (BuiltinFunctions.all() -- [exception: 1, message: 1]) do
         args = BuiltinFunctions.get_args(fa)
+        docs = BuiltinFunctions.get_docs(fa)
 
         %{
           type: kind,
@@ -1441,7 +1442,7 @@ defmodule ElixirSense.Providers.Suggestion.Complete do
           needed_require: nil,
           needed_import: nil,
           origin: mod_name,
-          summary: "Built-in function",
+          summary: Introspection.extract_summary_from_docs(docs),
           metadata: %{builtin: true},
           spec: BuiltinFunctions.get_specs(fa) |> Enum.join("\n"),
           snippet: nil

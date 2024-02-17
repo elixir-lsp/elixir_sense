@@ -7,6 +7,7 @@ defmodule ElixirSense.Core.Metadata do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.State
+  alias ElixirSense.Core.BuiltinFunctions
 
   @type t :: %ElixirSense.Core.Metadata{
           source: String.t(),
@@ -308,7 +309,27 @@ defmodule ElixirSense.Core.Metadata do
     end)
   end
 
+  @builtin_functions BuiltinFunctions.all()
+                     |> Enum.map(&elem(&1, 0))
+                     |> Kernel.--([:exception, :message])
+
   @spec get_function_signatures(__MODULE__.t(), module, atom) :: [signature_t]
+  def get_function_signatures(%__MODULE__{} = _metadata, module, function)
+      when module != nil and function in @builtin_functions do
+    for {f, a} <- BuiltinFunctions.all(), f == function do
+      spec = BuiltinFunctions.get_specs({f, a}) |> Enum.join("\n")
+      args = BuiltinFunctions.get_args({f, a})
+      docs = BuiltinFunctions.get_docs({f, a})
+
+      %{
+        name: Atom.to_string(function),
+        params: args,
+        documentation: Introspection.extract_summary_from_docs(docs),
+        spec: spec
+      }
+    end
+  end
+
   def get_function_signatures(%__MODULE__{} = metadata, module, function)
       when not is_nil(module) and not is_nil(function) do
     metadata.mods_funs_to_positions
