@@ -423,7 +423,7 @@ defmodule ElixirSense.Providers.Docs do
   def get_func_docs(mod, fun, arity)
       when mod != nil and fun in @builtin_functions do
     for {f, a} <- BuiltinFunctions.all(), f == fun, Introspection.matches_arity?(a, arity) do
-      spec = BuiltinFunctions.get_specs({f, a}) |> dbg
+      spec = BuiltinFunctions.get_specs({f, a})
       args = BuiltinFunctions.get_args({f, a})
       docs = BuiltinFunctions.get_docs({f, a})
 
