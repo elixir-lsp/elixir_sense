@@ -32,7 +32,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Returns do
 
         %State.SpecInfo{specs: info_specs} ->
           for spec <- info_specs,
-              {:ok, {:@, _, [{_, _, [quoted]}]}} = Code.string_to_quoted(spec),
+              {:ok, {:@, _, [{_, _, [quoted]}]}} <- [Code.string_to_quoted(spec)],
               return <- Introspection.get_returns_from_spec_ast(quoted) do
             format_return(return)
           end
@@ -49,7 +49,7 @@ defmodule ElixirSense.Providers.Suggestion.Reducers.Returns do
 
           %State.SpecInfo{specs: info_specs} ->
             for spec <- info_specs,
-                {:ok, {:@, _, [{_, _, [quoted]}]}} = Code.string_to_quoted(spec),
+                {:ok, {:@, _, [{_, _, [quoted]}]}} <- [Code.string_to_quoted(spec)],
                 return <- Introspection.get_returns_from_spec_ast(quoted) do
               format_return(return)
             end
