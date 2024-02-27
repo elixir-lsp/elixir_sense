@@ -72,9 +72,13 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
   rescue
     e ->
       if Version.match?(System.version(), ">= 1.16.0-dev") do
-        Logger.error(
-          "Code.Fragment.container_cursor_to_quoted raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
-        )
+        try do
+          Logger.error(
+            "Code.Fragment.container_cursor_to_quoted raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+          )
+        rescue
+          _ -> :ok
+        end
 
         reraise e, __STACKTRACE__
       else
