@@ -49,6 +49,7 @@ defmodule ElixirSense do
       iex> doc.docs |> String.split("\n") |> Enum.at(0)
       "Converts `enumerable` to a list."
   """
+  @deprecated "providers will be dropped in the future"
   @spec docs(String.t(), pos_integer, pos_integer, keyword) ::
           %{
             docs: nonempty_list(Docs.doc()),
@@ -102,6 +103,7 @@ defmodule ElixirSense do
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
       "module_with_functions.ex:6:3"
   """
+  @deprecated "providers will be dropped in the future"
   @spec definition(String.t(), pos_integer, pos_integer, keyword) :: Location.t() | nil
   def definition(code, line, column, options \\ []) do
     case NormalizedCode.Fragment.surround_context(code, {line, column}) do
@@ -138,6 +140,7 @@ defmodule ElixirSense do
       iex> "#{Path.basename(path)}:#{to_string(line)}:#{to_string(column)}"
       "example_protocol.ex:7:3"
   """
+  @deprecated "providers will be dropped in the future"
   @spec implementations(String.t(), pos_integer, pos_integer, keyword) :: [Location.t()]
   def implementations(code, line, column, options \\ []) do
     case NormalizedCode.Fragment.surround_context(code, {line, column}) do
@@ -211,6 +214,7 @@ defmodule ElixirSense do
         name: "insert_at", metadata: %{app: :elixir}, snippet: nil, visibility: :public,
         spec: "@spec insert_at(list(), integer(), any()) :: list()", summary: "Returns a list with `value` inserted at the specified `index`."}]
   """
+  @deprecated "providers will be dropped in the future"
   @spec suggestions(String.t(), pos_integer, pos_integer, keyword()) :: [Suggestion.suggestion()]
   def suggestions(code, line, column, options \\ []) do
     hint = Source.prefix(code, line, column)
@@ -294,6 +298,7 @@ defmodule ElixirSense do
         ]
       }
   """
+  @deprecated "providers will be dropped in the future"
   @spec signature(String.t(), pos_integer, pos_integer, keyword) ::
           Signature.signature_info() | :none
   def signature(code, line, column, options \\ []) do
@@ -383,6 +388,7 @@ defmodule ElixirSense do
   ```
 
   """
+  @deprecated "providers will be dropped in the future"
   @spec expand_full(String.t(), String.t(), pos_integer) :: Expand.expanded_code_map()
   def expand_full(buffer, code, line) do
     buffer_file_metadata = Parser.parse_string(buffer, true, true, {line, 1})
@@ -395,6 +401,7 @@ defmodule ElixirSense do
   @doc """
   Converts a string to its quoted form.
   """
+  @deprecated "providers will be dropped in the future"
   @spec quote(String.t()) :: String.t()
   def quote(code) do
     Eval.quote(code)
@@ -412,6 +419,7 @@ defmodule ElixirSense do
       iex> ElixirSense.match(code)
       "# Bindings\n\nstatus = 404\n\nmessage = \"Not found\"\n\narg1 = 1"
   """
+  @deprecated "providers will be dropped in the future"
   @spec match(String.t()) :: String.t()
   def match(code) do
     Eval.match_and_format(code)
@@ -448,6 +456,7 @@ defmodule ElixirSense do
         }
       ]
   """
+  @deprecated "providers will be dropped in the future"
   @spec references(
           String.t(),
           pos_integer,
