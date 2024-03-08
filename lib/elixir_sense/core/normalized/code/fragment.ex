@@ -19,7 +19,7 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
     e ->
       if Version.match?(System.version(), ">= 1.16.0-dev") do
         Logger.error(
-          "Code.Fragment.cursor_context raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+          "Code.Fragment.cursor_context raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
         )
 
         reraise e, __STACKTRACE__
@@ -46,7 +46,7 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
     e ->
       if Version.match?(System.version(), ">= 1.16.0-dev") do
         Logger.error(
-          "Code.Fragment.surround_context raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+          "Code.Fragment.surround_context raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
         )
 
         reraise e, __STACKTRACE__
@@ -74,7 +74,7 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
       if Version.match?(System.version(), ">= 1.16.0-dev") do
         try do
           Logger.error(
-            "Code.Fragment.container_cursor_to_quoted raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+            "Code.Fragment.container_cursor_to_quoted raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
           )
         rescue
           _ -> :ok

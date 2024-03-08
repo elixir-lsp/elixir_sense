@@ -15,7 +15,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
       # fixed in elixir 1.16.0
       if Version.match?(System.version(), ">= 1.16.0-dev") do
         Logger.error(
-          "Code.Typespec.fetch_specs raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+          "Code.Typespec.fetch_specs raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
         )
 
         reraise e, __STACKTRACE__
@@ -35,7 +35,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
       # fixed in elixir 1.16.0
       if Version.match?(System.version(), ">= 1.16.0-dev") do
         Logger.error(
-          "Code.Typespec.fetch_types raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+          "Code.Typespec.fetch_types raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
         )
 
         reraise e, __STACKTRACE__
@@ -55,7 +55,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
       # fixed in elixir 1.16.0
       if Version.match?(System.version(), ">= 1.16.0-dev") do
         Logger.error(
-          "Code.Typespec.fetch_callbacks raised #{Exception.blame(:error, e, __STACKTRACE__)}. Please report that to elixir project."
+          "Code.Typespec.fetch_callbacks raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
         )
 
         reraise e, __STACKTRACE__

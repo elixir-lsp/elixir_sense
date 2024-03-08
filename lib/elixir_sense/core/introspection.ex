@@ -892,7 +892,7 @@ defmodule ElixirSense.Core.Introspection do
   rescue
     e ->
       Logger.warning(
-        "Unable to expand alias #{inspect(mod)}; env aliases #{inspect(aliases)}: #{Exception.blame(:error, e, __STACKTRACE__)}"
+        "Unable to expand alias #{inspect(mod)}; env aliases #{inspect(aliases)}: #{Exception.format(:error, e, __STACKTRACE__)}"
       )
 
       mod
