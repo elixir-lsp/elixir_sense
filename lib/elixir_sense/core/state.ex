@@ -1535,17 +1535,27 @@ defmodule ElixirSense.Core.State do
           end
 
         other ->
-          Logger.warning(
-            "Unable to format docstring expression #{inspect(quoted)}: eval resulted in #{inspect(other)}"
-          )
+          Logger.warning("""
+          Unable to format docstring expression:
+
+          #{inspect(quoted, pretty: true)}
+
+          Eval resulted in:
+
+          #{inspect(other)}
+          """)
 
           ""
       end
     rescue
       e ->
-        Logger.warning(
-          "Unable to format docstring expression #{inspect(quoted)}: #{Exception.blame(:error, e, __STACKTRACE__)}"
-        )
+        Logger.warning("""
+        Unable to format docstring expression:
+
+        #{inspect(quoted, pretty: true)}
+
+        #{Exception.format(:error, e, __STACKTRACE__)}
+        """)
 
         ""
     end
