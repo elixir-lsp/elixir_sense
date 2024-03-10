@@ -1,6 +1,6 @@
 # ElixirSense [![Actions Status](https://img.shields.io/github/actions/workflow/status/elixir-lsp/elixir_sense/ci.yml?branch=master)](github/actions/workflow/status/elixir-lsp/elixir_sense/ci.yml?branch=master)
 
-An API for Elixir projects that provides context-aware information for code completion, documentation, go/jump to definition, signature info and more.
+An API for Elixir projects that provides building blocks for code completion, documentation, go/jump to definition, signature info and more via AST inspection and runtime introspection.
 
 ## Usage
 
