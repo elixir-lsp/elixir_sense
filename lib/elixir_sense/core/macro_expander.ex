@@ -25,25 +25,49 @@ defmodule ElixirSense.Core.MacroExpander do
     {ast, env_after_require}
   end
 
-  defp require_and_expand({:use, meta, arg}, env) do
-    use_directive_expanded = Macro.expand_once({:use, meta, arg}, env)
-    {use_directive_expanded, env}
+  if Version.match?(System.version(), ">= 1.17.0-dev") do
+    defp require_and_expand({:use, meta, args} = ast, env) when is_list(meta) and is_list(args) do
+      case Macro.Env.expand_import(env, meta, :use, length(args), trace: false) |> dbg do
+        {:macro, _receiver, expander} ->
+          {expander.(Keyword.take(meta, [:generated]), args), env}
+        _ ->
+          {ast, env}
+      end
+    end
+  else
+    defp require_and_expand({:use, meta, arg}, env) do
+      use_directive_expanded = Macro.expand_once({:use, meta, arg}, env)
+      {use_directive_expanded, env}
+    end
   end
 
-  defp require_and_expand({{:., meta1, [module, :__using__]}, meta2, params}, env)
-       when is_atom(module) do
-    splitted =
-      Module.split(module)
-      |> Enum.map(&String.to_atom/1)
+  if Version.match?(System.version(), ">= 1.17.0-dev") do
+    defp require_and_expand({{:., meta1, [left, :__using__]}, meta, args} = ast, env) when is_list(meta) and is_list(args) do
+      # TODO expand receiver and check if it is an atom
+      receiver = left
+      case Macro.Env.expand_require(env, meta, receiver, :__using__, length(args), trace: false) |> dbg do
+        {:macro, _receiver, expander} ->
+          {expander.(Keyword.take(meta, [:generated]), args), env}
+        _ ->
+          {ast, env}
+      end
+    end
+  else
+    defp require_and_expand({{:., meta1, [module, :__using__]}, meta2, params}, env)
+        when is_atom(module) do
+      splitted =
+        Module.split(module)
+        |> Enum.map(&String.to_atom/1)
 
-    module_expanded = Macro.expand_once({:__aliases__, [], splitted}, env)
-    ast_with_module_expanded = {{:., meta1, [module_expanded, :__using__]}, meta2, params}
-    ast_expanded = Macro.expand_once(ast_with_module_expanded, env)
+      module_expanded = Macro.expand_once({:__aliases__, [], splitted}, env)
+      ast_with_module_expanded = {{:., meta1, [module_expanded, :__using__]}, meta2, params}
+      ast_expanded = Macro.expand_once(ast_with_module_expanded, env)
 
-    if ast_with_module_expanded != ast_expanded do
-      {{:__block__, [], [ast_expanded]}, env}
-    else
-      {[], env}
+      if ast_with_module_expanded != ast_expanded do
+        {{:__block__, [], [ast_expanded]}, env}
+      else
+        {[], env}
+      end
     end
   end
 
