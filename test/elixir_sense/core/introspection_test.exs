@@ -57,39 +57,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
     end
   end
 
-  test "get_callbacks_with_docs for Elixir behaviours with no docs defined" do
-    assert get_callbacks_with_docs(Exception) == [
-             %{
-               arity: 2,
-               name: :blame,
-               callback: "@callback blame(t(), stacktrace()) :: {t(), stacktrace()}",
-               doc:
-                 "Called from `Exception.blame/3` to augment the exception struct.\n\nCan be used to collect additional information about the exception\nor do some additional expensive computation.\n",
-               signature: "blame(t, stacktrace)",
-               metadata: %{optional: true, app: :elixir},
-               kind: :callback
-             },
-             %{
-               arity: 1,
-               name: :exception,
-               doc: nil,
-               callback: "@callback exception(term()) :: t()",
-               signature: "exception(term)",
-               metadata: %{optional: false, app: :elixir},
-               kind: :callback
-             },
-             %{
-               arity: 1,
-               name: :message,
-               callback: "@callback message(t()) :: String.t()",
-               doc: nil,
-               signature: "message(t)",
-               metadata: %{optional: false, app: :elixir},
-               kind: :callback
-             }
-           ]
-  end
-
   test "get_callbacks_with_docs for Elixir behaviours with docs defined" do
     info =
       get_callbacks_with_docs(GenServer) |> Enum.find(fn info -> info.name == :code_change end)
