@@ -46,7 +46,13 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
 
       assert metadata_env = state.lines_to_env[env.line]
 
-      {functions, macros} = Introspection.expand_imports(metadata_env.imports, %{})
+      {functions, macros} =
+        if Version.match?(System.version(), ">= 1.17.0-dev") do
+          {metadata_env.functions, metadata_env.macros}
+        else
+          Introspection.expand_imports(metadata_env.imports, %{})
+        end
+
       assert deep_sort(functions) == deep_sort(env.functions)
       assert deep_sort(macros) == deep_sort(env.macros)
     end

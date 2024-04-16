@@ -61,15 +61,31 @@ defmodule ElixirSense.Core.State do
           typedoc_context: list(),
           optional_callbacks_context: list(),
           # TODO better type
-          binding_context: list
+          binding_context: list,
+          macro_env: list(Macro.Env.t())
         }
 
   @auto_imported [{Kernel, []}]
-  @auto_required [Application, Kernel, Kernel.Typespec]
+  @auto_imported_functions :elixir_env.new().functions
+  @auto_imported_macros :elixir_env.new().macros
+  @auto_required [Application, Kernel] ++
+                   (if Version.match?(System.version(), ">= 1.17.0-dev") do
+                      []
+                    else
+                      [Kernel.Typespec]
+                    end)
+
+  @vars_initial (if Version.match?(System.version(), ">= 1.17.0-dev") do
+                   {%{}, false}
+                 else
+                   [[]]
+                 end)
 
   defstruct namespace: [[:"Elixir"]],
             scopes: [[:"Elixir"]],
             imports: [@auto_imported],
+            functions: [@auto_imported_functions],
+            macros: [@auto_imported_macros],
             requires: [@auto_required],
             aliases: [[]],
             attributes: [[]],
@@ -77,8 +93,13 @@ defmodule ElixirSense.Core.State do
             scope_attributes: [[]],
             behaviours: [[]],
             specs: %{},
-            vars: [[]],
             scope_vars: [[]],
+            vars: @vars_initial,
+            unused: {%{}, 0},
+            prematch: :raise,
+            stacktrace: false,
+            caller: false,
+            runtime_modules: [],
             scope_id_count: 0,
             scope_ids: [0],
             vars_info_per_scope_id: %{},
@@ -94,7 +115,8 @@ defmodule ElixirSense.Core.State do
             doc_context: [[]],
             typedoc_context: [[]],
             optional_callbacks_context: [[]],
-            moduledoc_positions: %{}
+            moduledoc_positions: %{},
+            macro_env: [:elixir_env.new()]
 
   defmodule Env do
     @moduledoc """
@@ -103,6 +125,8 @@ defmodule ElixirSense.Core.State do
 
     @type t :: %Env{
             imports: list(module),
+            functions: [{module, [{atom, arity}]}],
+            macros: [{module, [{atom, arity}]}],
             requires: list(module),
             aliases: list(ElixirSense.Core.State.alias_t()),
             module: nil | module,
@@ -116,6 +140,8 @@ defmodule ElixirSense.Core.State do
             scope_id: nil | ElixirSense.Core.State.scope_id_t()
           }
     defstruct imports: [],
+              functions: [],
+              macros: [],
               requires: [],
               aliases: [],
               # NOTE for protocol implementation this will be the first variant
@@ -299,10 +325,15 @@ defmodule ElixirSense.Core.State do
     state.aliases |> List.flatten() |> Enum.uniq_by(&elem(&1, 0)) |> Enum.reverse()
   end
 
+  def current_requires(%__MODULE__{} = state) do
+    state.requires |> :lists.reverse() |> List.flatten() |> Enum.uniq() |> Enum.sort()
+  end
+
   def get_current_env(%__MODULE__{} = state) do
     current_module_variants = get_current_module_variants(state)
-    current_imports = state.imports |> :lists.reverse() |> List.flatten()
-    current_requires = state.requires |> :lists.reverse() |> List.flatten()
+    current_functions = state.functions |> hd()
+    current_macros = state.macros |> hd()
+    current_requires = current_requires(state)
     current_aliases = current_aliases(state)
     current_vars = state |> get_current_vars()
     current_attributes = state |> get_current_attributes()
@@ -312,10 +343,54 @@ defmodule ElixirSense.Core.State do
     current_scope_protocols = hd(state.protocols)
 
     %Env{
-      imports: current_imports,
+      functions: current_functions,
+      macros: current_macros,
       requires: current_requires,
       aliases: current_aliases,
       module: current_module_variants |> hd,
+      module_variants: current_module_variants,
+      vars: current_vars,
+      attributes: current_attributes,
+      behaviours: current_behaviours,
+      # NOTE for protocol implementations the scope and namespace will be
+      # escaped with `escape_protocol_implemntations`
+      scope: current_scope,
+      scope_id: current_scope_id,
+      protocol:
+        case current_scope_protocols do
+          [] -> nil
+          [head | _] -> head
+        end,
+      protocol_variants: current_scope_protocols
+    }
+  end
+
+  def get_current_env(%__MODULE__{} = state, macro_env) do
+    current_module_variants = get_current_module_variants(state)
+    # current_vars = state |> get_current_vars()
+    current_vars = state.vars |> elem(0)
+    current_attributes = state |> get_current_attributes()
+    current_behaviours = hd(state.behaviours)
+
+    current_scope =
+      case macro_env.function do
+        nil ->
+          # TODO this is stupid, but we check that in tests
+          inspect(macro_env.module) |> String.to_atom()
+
+        _ ->
+          macro_env.function
+      end
+
+    current_scope_id = hd(state.scope_ids)
+    current_scope_protocols = hd(state.protocols)
+
+    %Env{
+      functions: macro_env.functions,
+      macros: macro_env.macros,
+      requires: macro_env.requires,
+      aliases: macro_env.aliases,
+      module: macro_env.module,
       module_variants: current_module_variants,
       vars: current_vars,
       attributes: current_attributes,
@@ -353,6 +428,16 @@ defmodule ElixirSense.Core.State do
     current_env = get_current_env(state)
 
     env = merge_env_vars(current_env, previous_env)
+    %__MODULE__{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
+  end
+
+  def add_current_env_to_line(%__MODULE__{} = state, line, macro_env) when is_integer(line) do
+    previous_env = state.lines_to_env[line]
+    current_env = get_current_env(state, macro_env)
+
+    # TODO
+    # env = merge_env_vars(current_env, previous_env)
+    env = current_env
     %__MODULE__{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
   end
 
@@ -897,16 +982,6 @@ defmodule ElixirSense.Core.State do
         meta,
         options
       )
-      |> add_mod_fun_to_position(
-        {variant, func, nil},
-        position,
-        end_position,
-        params,
-        type,
-        doc,
-        meta,
-        options
-      )
     end)
   end
 
@@ -940,7 +1015,11 @@ defmodule ElixirSense.Core.State do
   end
 
   def new_alias_scope(%__MODULE__{} = state) do
-    %__MODULE__{state | aliases: [[] | state.aliases]}
+    %__MODULE__{
+      state
+      | aliases: [[] | state.aliases],
+        macro_env: [hd(state.macro_env) | state.macro_env]
+    }
   end
 
   def remove_alias_scope(%__MODULE__{} = state) do
@@ -1150,8 +1229,17 @@ defmodule ElixirSense.Core.State do
     Enum.reduce(aliases_tuples, state, fn tuple, state -> add_alias(state, tuple) end)
   end
 
+  def set_aliases(%__MODULE__{aliases: [_ | rest]} = state, aliases_tuples) do
+    %__MODULE__{state | aliases: [aliases_tuples | rest]}
+  end
+
   def new_import_scope(%__MODULE__{} = state) do
-    %__MODULE__{state | imports: [[] | state.imports]}
+    %__MODULE__{
+      state
+      | imports: [[] | state.imports],
+        functions: [[hd(state.functions)] | state.functions],
+        macros: [[hd(state.macros)] | state.macros]
+    }
   end
 
   def new_require_scope(%__MODULE__{} = state) do
@@ -1159,7 +1247,12 @@ defmodule ElixirSense.Core.State do
   end
 
   def remove_import_scope(%__MODULE__{} = state) do
-    %__MODULE__{state | imports: tl(state.imports)}
+    %__MODULE__{
+      state
+      | imports: tl(state.imports),
+        functions: tl(state.functions),
+        macros: tl(state.macros)
+    }
   end
 
   def remove_require_scope(%__MODULE__{} = state) do
@@ -1169,8 +1262,15 @@ defmodule ElixirSense.Core.State do
   def add_import(%__MODULE__{} = state, module, opts) when is_atom(module) or is_list(module) do
     module = expand_alias(state, module)
     [imports_from_scope | inherited_imports] = state.imports
+    combined_imports = [[imports_from_scope ++ [{module, opts}]] | inherited_imports]
 
-    %__MODULE__{state | imports: [[imports_from_scope ++ [{module, opts}]] | inherited_imports]}
+    {functions, macros} =
+      Introspection.expand_imports(
+        combined_imports |> :lists.reverse() |> List.flatten(),
+        state.mods_funs_to_positions
+      )
+
+    %__MODULE__{state | imports: combined_imports, functions: [functions | tl(state.functions)], macros: [macros | tl(state.macros)]}
   end
 
   def add_import(%__MODULE__{} = state, _module, _opts), do: state
@@ -1200,6 +1300,12 @@ defmodule ElixirSense.Core.State do
 
   def add_requires(%__MODULE__{} = state, modules) do
     Enum.reduce(modules, state, fn mod, state -> add_require(state, mod) end)
+  end
+
+  def set_requires(%__MODULE__{requires: [_ | rest]} = state, requires) do
+    dbg(state.requires)
+    dbg([requires | rest])
+    %__MODULE__{state | requires: [requires | rest]}
   end
 
   def add_type(
@@ -1754,5 +1860,73 @@ defmodule ElixirSense.Core.State do
     else
       state
     end
+  end
+
+  def macro_env(%__MODULE__{} = state, meta \\ []) do
+    function =
+      case hd(hd(state.scopes)) do
+        {function, arity} -> {function, arity}
+        _ -> nil
+      end
+
+    context_modules =
+      state.mods_funs_to_positions
+      |> Enum.filter(&match?({{_module, nil, nil}, _}, &1))
+      |> Enum.map(&(elem(&1, 0) |> elem(0)))
+
+    {functions, macros} =
+      Introspection.expand_imports(
+        state.imports |> :lists.reverse() |> List.flatten(),
+        state.mods_funs_to_positions
+      )
+
+    %Macro.Env{
+      aliases: current_aliases(state),
+      requires: current_requires(state),
+      module: get_current_module(state),
+      line: Keyword.get(meta, :line, 0),
+      function: function,
+      # TODO context :guard, :match
+      context: nil,
+      context_modules: context_modules,
+      functions: functions,
+      macros: macros
+      # TODO macro_aliases
+      # TODO versioned_vars
+    }
+  end
+
+  def macro_env(%__MODULE__{} = state, %__MODULE__.Env{} = env, line) do
+    function =
+      case env.scope do
+        {function, arity} -> {function, arity}
+        _ -> nil
+      end
+
+    context_modules =
+      state.mods_funs_to_positions
+      |> Enum.filter(&match?({{_module, nil, nil}, _}, &1))
+      |> Enum.map(&(elem(&1, 0) |> elem(0)))
+
+    {functions, macros} =
+      Introspection.expand_imports(
+        state.imports |> :lists.reverse() |> List.flatten(),
+        state.mods_funs_to_positions
+      )
+
+    %Macro.Env{
+      aliases: env.aliases,
+      requires: env.requires,
+      module: env.module,
+      line: line,
+      function: function,
+      # TODO context :guard, :match
+      context: nil,
+      context_modules: context_modules,
+      functions: functions,
+      macros: macros
+      # TODO macro_aliases
+      # TODO versioned_vars
+    }
   end
 end

@@ -6,6 +6,404 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, ModFunInfo, AttributeInfo}
 
+  if Version.match?(System.version(), ">= 1.17.0-dev") do
+  describe "vars" do
+    test "in block" do
+      state =
+        """
+        abc = 5
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[2].vars, {:abc, nil})
+    end
+
+    test "underscored" do
+      state =
+        """
+        _ = foo()
+        _abc = bar()
+        record_env()
+        """
+        |> string_to_state
+
+      refute Map.has_key?(state.lines_to_env[3].vars, {:_, nil})
+      assert Map.has_key?(state.lines_to_env[3].vars, {:_abc, nil})
+    end
+
+    test "in if" do
+      state =
+        """
+        cde = "1"
+        if true do
+          abc = 5
+          record_env()
+        else
+          xyz = 123
+          record_env()
+        end
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[4].vars, {:abc, nil})
+      assert Map.has_key?(state.lines_to_env[4].vars, {:cde, nil})
+
+      assert Map.has_key?(state.lines_to_env[7].vars, {:xyz, nil})
+      assert Map.has_key?(state.lines_to_env[7].vars, {:cde, nil})
+      refute Map.has_key?(state.lines_to_env[7].vars, {:abc, nil})
+    end
+
+    test "does not leak outside if" do
+      state =
+        """
+        cde = "1"
+        if true do
+          abc = 5
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      refute Map.has_key?(state.lines_to_env[5].vars, {:abc, nil})
+      assert Map.has_key?(state.lines_to_env[5].vars, {:cde, nil})
+    end
+
+    test "defined on if" do
+      state =
+        """
+        if cde = "1" do
+          abc = 5
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[3].vars, {:abc, nil})
+      assert Map.has_key?(state.lines_to_env[3].vars, {:cde, nil})
+
+      refute Map.has_key?(state.lines_to_env[5].vars, {:abc, nil})
+      assert Map.has_key?(state.lines_to_env[5].vars, {:cde, nil})
+    end
+
+    test "case pattern" do
+      state =
+        """
+        case foo() do
+          abc ->
+            record_env()
+          _ ->
+            record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[3].vars, {:abc, nil})
+
+      refute Map.has_key?(state.lines_to_env[5].vars, {:abc, nil})
+      refute Map.has_key?(state.lines_to_env[7].vars, {:abc, nil})
+    end
+
+    test "cond pattern" do
+      state =
+        """
+        cond do
+          abc = foo() ->
+            record_env()
+          true ->
+            record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[3].vars, {:abc, nil})
+
+      refute Map.has_key?(state.lines_to_env[5].vars, {:abc, nil})
+      refute Map.has_key?(state.lines_to_env[7].vars, {:abc, nil})
+    end
+
+    test "receive pattern" do
+      state =
+        """
+        receive do
+          abc ->
+            record_env()
+        after
+          123 ->
+            x = foo()
+            record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[3].vars, {:abc, nil})
+
+      assert Map.has_key?(state.lines_to_env[7].vars, {:x, nil})
+      refute Map.has_key?(state.lines_to_env[7].vars, {:abc, nil})
+
+      refute Map.has_key?(state.lines_to_env[9].vars, {:x, nil})
+      refute Map.has_key?(state.lines_to_env[9].vars, {:abc, nil})
+    end
+
+    test "with" do
+      state =
+        """
+        with abc <- foo(),
+          cde = bar(),
+          xyz() do
+          z = abc + cde
+          record_env()
+        else
+          other ->
+            c = 123
+            record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[1].vars) == []
+
+      assert Map.keys(state.lines_to_env[2].vars) == [{:abc, nil}]
+      assert Map.keys(state.lines_to_env[3].vars) == [{:abc, nil}, {:cde, nil}]
+
+      assert Map.keys(state.lines_to_env[5].vars) == [{:abc, nil}, {:cde, nil}, {:z, nil}]
+      assert Map.keys(state.lines_to_env[9].vars) == [{:c, nil}, {:other, nil}]
+      assert Map.keys(state.lines_to_env[11].vars) == []
+    end
+
+    test "for" do
+      state =
+        """
+        for abc <- foo(),
+          cde <- bar() do
+          z = 6
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[1].vars) == []
+
+      assert Map.keys(state.lines_to_env[2].vars) == [{:abc, nil}]
+
+      assert Map.keys(state.lines_to_env[4].vars) == [{:abc, nil}, {:cde, nil}, {:z, nil}]
+      assert Map.keys(state.lines_to_env[6].vars) == []
+    end
+
+    test "for bitstring" do
+      state =
+        """
+        for <<r::8, g::8, b::8 <- pixels>> do
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].vars) == [{:b, nil}, {:g, nil}, {:r, nil}]
+    end
+
+    test "for assignment" do
+      state =
+        """
+        for {language, parent} <- languages, grandparent = languages[parent] do
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].vars) == [
+               {:grandparent, nil},
+               {:language, nil},
+               {:parent, nil}
+             ]
+    end
+
+    test "for opts wtf" do
+      state =
+        """
+        for line <- IO.stream(), into: IO.stream() do
+          record_env()
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].vars) == [{:line, nil}]
+    end
+
+    test "for opts" do
+      state =
+        """
+        for line <- IO.stream(), into: IO.stream() do
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].vars) == [{:line, nil}]
+    end
+
+    test "for reduce" do
+      state =
+        """
+        for <<x <- "AbCabCABc">>, x in ?a..?z, reduce: %{} do
+          acc -> record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].vars) == [{:acc, nil}, {:x, nil}]
+    end
+
+    test "fn" do
+      state =
+        """
+        a = fn x ->
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].vars) == [{:x, nil}]
+      assert Map.keys(state.lines_to_env[4].vars) == [{:a, nil}]
+    end
+
+    test "fn multiple clauses" do
+      state =
+        """
+        a = fn
+          x, 1 ->
+            record_env()
+          y, z when is_integer(z) ->
+            record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[3].vars) == [{:x, nil}]
+      assert Map.keys(state.lines_to_env[5].vars) == [{:y, nil}, {:z, nil}]
+      assert Map.keys(state.lines_to_env[7].vars) == [{:a, nil}]
+    end
+
+    test "try" do
+      state =
+        """
+        try do
+          a = 2
+          do_something_that_may_fail()
+        rescue
+          e in ArgumentError ->
+            IO.puts("Invalid argument given")
+        catch
+          value ->
+            IO.puts("Caught \#{inspect(value)}")
+        else
+          other ->
+            IO.puts("Success! The result was \#{inspect(other)}")
+        after
+          b = 2
+          IO.puts("This is printed regardless if it failed or succeeded")
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[3].vars) == [{:a, nil}]
+
+      assert Map.keys(state.lines_to_env[6].vars) == [{:e, nil}]
+
+      assert Map.keys(state.lines_to_env[9].vars) == [{:value, nil}]
+
+      assert Map.keys(state.lines_to_env[12].vars) == [{:other, nil}]
+
+      assert Map.keys(state.lines_to_env[15].vars) == [{:b, nil}]
+
+      assert Map.keys(state.lines_to_env[17].vars) == []
+    end
+
+    test "module body" do
+      state =
+        """
+        x = 1
+        defmodule My do
+          y = 2
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[4].vars) == [{:x, nil}, {:y, nil}]
+      assert Map.keys(state.lines_to_env[6].vars) == [{:x, nil}]
+    end
+
+    test "def body" do
+      state =
+        """
+        defmodule My do
+          x = 1
+          def foo() do
+            abc = bar()
+            record_env()
+          end
+          record_env()
+        end
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[5].vars, {:abc, nil})
+      refute Map.has_key?(state.lines_to_env[5].vars, {:x, nil})
+
+      refute Map.has_key?(state.lines_to_env[7].vars, {:abc, nil})
+      assert Map.has_key?(state.lines_to_env[7].vars, {:x, nil})
+    end
+
+    test "def argument list" do
+      state =
+        """
+        defmodule My do
+          def foo(abc) do
+            record_env()
+          end
+          record_env()
+        end
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[3].vars, {:abc, nil})
+
+      refute Map.has_key?(state.lines_to_env[5].vars, {:abc, nil})
+    end
+
+    test "def guard" do
+      state =
+        """
+        defmodule My do
+          def foo(abc)
+            when record_env() do
+            record_env()
+          end
+          record_env()
+        end
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[3].vars, {:abc, nil})
+    end
+  end
+  end
+
   @tag requires_source: true
   test "build metadata from kernel.ex" do
     assert get_subject_definition_line(Kernel, :defmodule, nil) =~
@@ -77,1543 +475,1552 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert %{Outer => {3, 3}} = state.moduledoc_positions
   end
 
-  test "module attributes" do
-    state =
-      """
-      defmodule MyModule do
-        @myattribute String
-        IO.puts @myattribute
-        defmodule InnerModule do
-          @inner_attr %{abc: nil}
-          @inner_attr_1 __MODULE__
-          IO.puts @inner_attr
-        end
-        IO.puts ""
-        @otherattribute Application.get_env(:elixir_sense, :some_attribute, InnerModule)
-      end
-      """
-      |> string_to_state
-
-    assert get_line_attributes(state, 10) == [
-             %ElixirSense.Core.State.AttributeInfo{
-               name: :myattribute,
-               positions: [{2, 3}, {3, 11}],
-               type: {:atom, String}
-             },
-             %AttributeInfo{
-               name: :otherattribute,
-               positions: [{10, 3}],
-               type:
-                 {:call, {:atom, Application}, :get_env,
-                  [atom: :elixir_sense, atom: :some_attribute, atom: MyModule.InnerModule]}
-             }
-           ]
-
-    assert get_line_attributes(state, 3) == [
-             %AttributeInfo{
-               name: :myattribute,
-               positions: [{2, 3}, {3, 11}],
-               type: {:atom, String}
-             }
-           ]
-
-    assert get_line_attributes(state, 7) == [
-             %AttributeInfo{
-               name: :inner_attr,
-               positions: [{5, 5}, {7, 13}],
-               type: {:map, [abc: {:atom, nil}], nil}
-             },
-             %AttributeInfo{
-               name: :inner_attr_1,
-               positions: [{6, 5}],
-               type: {:atom, MyModule.InnerModule}
-             }
-           ]
-
-    assert get_line_attributes(state, 9) == [
-             %AttributeInfo{
-               name: :myattribute,
-               positions: [{2, 3}, {3, 11}],
-               type: {:atom, String}
-             }
-           ]
-  end
-
-  test "module attributes rebinding" do
-    state =
-      """
-      defmodule MyModule do
-        @myattribute String
-        @myattribute List
-        @myattribute
-        IO.puts ""
-        def a do
-          @myattribute
-        end
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_attributes(state, 5) == [
-             %AttributeInfo{
-               name: :myattribute,
-               positions: [{2, 3}, {3, 3}, {4, 3}],
-               type: {:atom, List}
-             }
-           ]
-
-    assert get_line_attributes(state, 9) == [
-             %AttributeInfo{
-               name: :myattribute,
-               positions: [{2, 3}, {3, 3}, {4, 3}, {7, 5}],
-               type: {:atom, List}
-             }
-           ]
-  end
-
-  test "module attributes value binding" do
-    state =
-      """
-      defmodule MyModule do
-        @myattribute %{abc: String}
-        @some_attr @myattribute
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_attributes(state, 4) == [
-             %AttributeInfo{
-               name: :myattribute,
-               positions: [{2, 3}, {3, 14}],
-               type: {:map, [abc: {:atom, String}], nil}
-             },
-             %AttributeInfo{
-               name: :some_attr,
-               positions: [{3, 3}],
-               type: {:attribute, :myattribute}
-             }
-           ]
-  end
-
-  test "module attributes value binding to and from variables" do
-    state =
-      """
-      defmodule MyModule do
-        @myattribute %{abc: String}
-        var = @myattribute
-        @other var
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_attributes(state, 5) == [
-             %AttributeInfo{
-               name: :myattribute,
-               positions: [{2, 3}, {3, 9}],
-               type: {:map, [abc: {:atom, String}], nil}
-             },
-             %AttributeInfo{
-               name: :other,
-               positions: [{4, 3}],
-               type: {:variable, :var}
-             }
-           ]
-
-    assert [
-             %VarInfo{name: :var, type: {:attribute, :myattribute}}
-           ] = state |> get_line_vars(5)
-  end
-
-  test "variable rebinding" do
-    state =
-      """
-      def my() do
-        abc = 1
-        some(abc)
-        abc = %Abc{cde: 1}
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %State.VarInfo{
-               name: :abc,
-               type: {:integer, 1},
-               is_definition: true,
-               positions: [{2, 3}, {3, 8}],
-               scope_id: 2
-             },
-             %State.VarInfo{
-               name: :abc,
-               type: {:struct, [cde: {:integer, 1}], {:atom, Abc}, nil},
-               is_definition: true,
-               positions: [{4, 3}],
-               scope_id: 2
-             }
-           ] = state |> get_line_vars(5)
-  end
-
-  test "tuple destructuring" do
-    state =
-      """
-      defmodule MyModule do
-        @myattribute {:ok, %{abc: nil}}
-        {:ok, var} = @myattribute
-        other = elem(@myattribute, 0)
-        IO.puts
-        q = {:a, :b, :c}
-        {_, _, q1} = q
-        IO.puts
-      end
-      """
-      |> string_to_state
-
-    assert get_line_attributes(state, 4) == [
-             %AttributeInfo{
-               name: :myattribute,
-               positions: [{2, 3}, {3, 16}, {4, 16}],
-               type: {:tuple, 2, [{:atom, :ok}, {:map, [abc: {:atom, nil}], nil}]}
-             }
-           ]
-
-    assert [
-             %VarInfo{
-               name: :other,
-               type: {:local_call, :elem, [{:attribute, :myattribute}, {:integer, 0}]}
-             },
-             %VarInfo{
-               name: :var,
-               type:
-                 {:tuple_nth,
-                  {:intersection, [{:attribute, :myattribute}, {:tuple, 2, [{:atom, :ok}, nil]}]},
-                  1}
-             }
-           ] = state |> get_line_vars(4)
-
-    assert [
-             %VarInfo{
-               name: :q,
-               type: {:tuple, 3, [{:atom, :a}, {:atom, :b}, {:atom, :c}]}
-             },
-             %VarInfo{
-               name: :q1,
-               type:
-                 {:tuple_nth,
-                  {:intersection,
-                   [{:variable, :q}, {:tuple, 3, [{:variable, :_}, {:variable, :_}, nil]}]}, 2}
-             }
-           ] =
-             state
-             |> get_line_vars(8)
-             |> Enum.filter(&(&1.name |> Atom.to_string() |> String.starts_with?("q")))
-  end
-
-  test "list destructuring" do
-    state =
-      """
-      defmodule MyModule do
-        @a []
-        @myattribute [:ok, :error, :other]
-        @other1 [:some, :error | @myattribute]
-        @other2 [:some | @myattribute]
-        [var, _var1, _var2] = @myattribute
-        [other | rest] = @myattribute
-        [a] = @other
-        [b] = []
-        IO.puts
-      end
-      """
-      |> string_to_state
-
-    assert get_line_attributes(state, 5) == [
-             %AttributeInfo{
-               name: :a,
-               positions: [{2, 3}],
-               type: {:list, :empty}
-             },
-             %AttributeInfo{
-               name: :myattribute,
-               positions: [{3, 3}, {4, 28}, {5, 20}],
-               type: {:list, {:atom, :ok}}
-             },
-             %AttributeInfo{name: :other1, positions: [{4, 3}], type: {:list, {:atom, :some}}},
-             %AttributeInfo{name: :other2, positions: [{5, 3}], type: {:list, {:atom, :some}}}
-           ]
-
-    assert [
-             %VarInfo{
-               name: :a,
-               type: {:list_head, {:attribute, :other}}
-             },
-             %VarInfo{
-               name: :b,
-               type: {:list_head, {:list, :empty}}
-             },
-             %VarInfo{name: :other, type: {:list_head, {:attribute, :myattribute}}},
-             %VarInfo{name: :rest, type: {:list_tail, {:attribute, :myattribute}}},
-             %VarInfo{name: :var, type: {:list_head, {:attribute, :myattribute}}}
-           ] = state |> get_line_vars(10)
-  end
-
-  test "list destructuring for" do
-    state =
-      """
-      defmodule MyModule do
-        @myattribute [:ok, :error, :other]
-        for a <- @myattribute do
-          b = a
-          IO.puts
-        end
-
-        for a <- @myattribute, a1 = @myattribute, a2 <- a1 do
-          b = a
-          IO.puts
-        end
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
-             %VarInfo{name: :b, type: {:variable, :a}}
-           ] = state |> get_line_vars(5)
-
-    assert [
-             %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
-             %VarInfo{name: :a1, type: {:attribute, :myattribute}},
-             %VarInfo{name: :a2, type: {:for_expression, {:variable, :a1}}},
-             %VarInfo{name: :b, type: {:variable, :a}}
-           ] = state |> get_line_vars(10)
-  end
-
-  test "map destructuring" do
-    state =
-      """
-      defmodule MyModule do
-        @a %{}
-        @myattribute %{ok: :a, error: b, other: :c}
-        @other %{"a" => :a, "b" => b}
-        %{error: var1} = @myattribute
-        %{"a" => var2} = @other
-        IO.puts
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{
-               name: :var1,
-               type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
-             },
-             # TODO not atom keys currently not supported
-             %VarInfo{
-               name: :var2,
-               type: {:map_key, {:attribute, :other}, nil}
-             }
-           ] = state |> get_line_vars(7)
-  end
-
-  test "map destructuring for" do
-    state =
-      """
-      defmodule MyModule do
-        @myattribute %{ok: :a, error: b, other: :c}
-        for {k, v} <- @myattribute do
-          IO.puts
-        end
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{
-               name: :k,
-               type: {
-                 :tuple_nth,
-                 {
-                   :intersection,
-                   [
-                     {:for_expression, {:attribute, :myattribute}},
-                     {:tuple, 2, [nil, {:variable, :v}]}
-                   ]
-                 },
-                 0
-               }
-             },
-             %VarInfo{
-               name: :v,
-               type: {
-                 :tuple_nth,
-                 {
-                   :intersection,
-                   [
-                     {:for_expression, {:attribute, :myattribute}},
-                     {:tuple, 2, [{:variable, :k}, nil]}
-                   ]
-                 },
-                 1
-               }
-             }
-           ] = state |> get_line_vars(4)
-  end
-
-  test "struct destructuring" do
-    state =
-      """
-      defmodule MyModule do
-        @a %My{}
-        @myattribute %My{ok: :a, error: b, other: :c}
-        %{error: var1} = @myattribute
-        %My{error: other} = @myattribute
-        IO.puts
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{
-               name: :other,
-               type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
-             },
-             %VarInfo{
-               name: :var1,
-               type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
-             }
-           ] = state |> get_line_vars(6)
-  end
-
-  test "binding in with expression" do
-    state =
-      """
-      defmodule MyModule do
-        @myattribute [:ok, :error, :other]
-        with a <- @myattribute do
-          b = a
-          IO.puts
-        end
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{name: :a, type: {:attribute, :myattribute}},
-             %VarInfo{name: :b, type: {:variable, :a}}
-           ] = state |> get_line_vars(5)
-  end
-
-  test "vars defined inside a function without params" do
-    state =
-      """
-      defmodule MyModule do
-        var_out1 = 1
-        def func do
-          var_in1 = 1
-          var_in2 = 1
-          IO.puts ""
-        end
-        var_out2 = 1
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 4},
-             %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 4}
-           ] = state |> get_line_vars(6)
-  end
-
-  test "vars binding" do
-    state =
-      """
-      defmodule MyModule do
-        def func do
-          var = String
-          IO.puts ""
-          var = Map
-          IO.puts ""
-          if abc do
-            IO.puts ""
-            var = List
-            IO.puts ""
-            var = Enum
-            IO.puts ""
+  describe "attribute binding" do
+    test "module attributes" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute String
+          IO.puts @myattribute
+          defmodule InnerModule do
+            @inner_attr %{abc: nil}
+            @inner_attr_1 __MODULE__
+            IO.puts @inner_attr
           end
           IO.puts ""
-          var = Atom
+          @otherattribute Application.get_env(:elixir_sense, :some_attribute, InnerModule)
+        end
+        """
+        |> string_to_state
+
+      assert get_line_attributes(state, 10) == [
+               %ElixirSense.Core.State.AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 11}],
+                 type: {:atom, String}
+               },
+               %AttributeInfo{
+                 name: :otherattribute,
+                 positions: [{10, 3}],
+                 type:
+                   {:call, {:atom, Application}, :get_env,
+                    [atom: :elixir_sense, atom: :some_attribute, atom: MyModule.InnerModule]}
+               }
+             ]
+
+      assert get_line_attributes(state, 3) == [
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 11}],
+                 type: {:atom, String}
+               }
+             ]
+
+      assert get_line_attributes(state, 7) == [
+               %AttributeInfo{
+                 name: :inner_attr,
+                 positions: [{5, 5}, {7, 13}],
+                 type: {:map, [abc: {:atom, nil}], nil}
+               },
+               %AttributeInfo{
+                 name: :inner_attr_1,
+                 positions: [{6, 5}],
+                 type: {:atom, MyModule.InnerModule}
+               }
+             ]
+
+      assert get_line_attributes(state, 9) == [
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 11}],
+                 type: {:atom, String}
+               }
+             ]
+    end
+
+    test "module attributes rebinding" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute String
+          @myattribute List
+          @myattribute
           IO.puts ""
-          other = var
+          def a do
+            @myattribute
+          end
           IO.puts ""
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert [%VarInfo{type: {:atom, String}}] = state |> get_line_vars(4)
+      assert get_line_attributes(state, 5) == [
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 3}, {4, 3}],
+                 type: {:atom, List}
+               }
+             ]
 
-    assert [%VarInfo{type: {:atom, String}}, %VarInfo{type: {:atom, Map}}] =
-             state |> get_line_vars(6)
+      assert get_line_attributes(state, 9) == [
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 3}, {4, 3}, {7, 5}],
+                 type: {:atom, List}
+               }
+             ]
+    end
 
-    assert [%VarInfo{type: {:atom, String}}, %VarInfo{type: {:atom, Map}}] =
-             state |> get_line_vars(8)
+    test "module attributes value binding" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute %{abc: String}
+          @some_attr @myattribute
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-    assert [
-             %VarInfo{type: {:atom, String}, scope_id: 4},
-             %VarInfo{type: {:atom, Map}, scope_id: 4},
-             %VarInfo{type: {:atom, List}, scope_id: 5}
-           ] = state |> get_line_vars(10)
+      assert get_line_attributes(state, 4) == [
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 14}],
+                 type: {:map, [abc: {:atom, String}], nil}
+               },
+               %AttributeInfo{
+                 name: :some_attr,
+                 positions: [{3, 3}],
+                 type: {:attribute, :myattribute}
+               }
+             ]
+    end
 
-    assert [
-             %VarInfo{type: {:atom, String}, scope_id: 4},
-             %VarInfo{type: {:atom, Map}, scope_id: 4},
-             %VarInfo{type: {:atom, List}, scope_id: 5},
-             %VarInfo{type: {:atom, Enum}, scope_id: 5}
-           ] = state |> get_line_vars(12)
+    test "module attributes value binding to and from variables" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute %{abc: String}
+          var = @myattribute
+          @other var
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-    assert [%VarInfo{type: {:atom, String}}, %VarInfo{type: {:atom, Map}}] =
-             state |> get_line_vars(14)
+      assert get_line_attributes(state, 5) == [
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 9}],
+                 type: {:map, [abc: {:atom, String}], nil}
+               },
+               %AttributeInfo{
+                 name: :other,
+                 positions: [{4, 3}],
+                 type: {:variable, :var}
+               }
+             ]
 
-    assert [
-             %VarInfo{type: {:atom, String}},
-             %VarInfo{type: {:atom, Map}},
-             %VarInfo{type: {:atom, Atom}}
-           ] = state |> get_line_vars(16)
-
-    assert [
-             %VarInfo{name: :other, type: {:variable, :var}},
-             %VarInfo{type: {:atom, String}},
-             %VarInfo{type: {:atom, Map}},
-             %VarInfo{type: {:atom, Atom}}
-           ] = state |> get_line_vars(18)
+      assert [
+               %VarInfo{name: :var, type: {:attribute, :myattribute}}
+             ] = state |> get_line_vars(5)
+    end
   end
 
-  test "variables are added to environment" do
-    state =
-      """
-      defmodule MyModule do
-        def func do
-          var = :my_var
+  describe "var binding" do
+    test "variable rebinding" do
+      state =
+        """
+        def my() do
+          abc = 1
+          some(abc)
+          abc = %Abc{cde: 1}
+          IO.puts ""
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert [%VarInfo{type: {:atom, :my_var}, scope_id: scope_id}] = state |> get_line_vars(3)
-    assert [%VarInfo{name: :var}] = state.vars_info_per_scope_id[scope_id]
-  end
+      assert [
+               %State.VarInfo{
+                 name: :abc,
+                 type: {:integer, 1},
+                 is_definition: true,
+                 positions: [{2, 3}, {3, 8}],
+                 scope_id: 2
+               },
+               %State.VarInfo{
+                 name: :abc,
+                 type: {:struct, [cde: {:integer, 1}], {:atom, Abc}, nil},
+                 is_definition: true,
+                 positions: [{4, 3}],
+                 scope_id: 2
+               }
+             ] = state |> get_line_vars(5)
+    end
 
-  test "variables are added to environment in ex_unit test" do
-    state =
-      """
-      defmodule MyModuleTests do
-        use ExUnit.Case, async: true
-
-        test "it does what I want", %{some: some} do
-          IO.puts("")
+    test "tuple destructuring" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute {:ok, %{abc: nil}}
+          {:ok, var} = @myattribute
+          other = elem(@myattribute, 0)
+          IO.puts
+          q = {:a, :b, :c}
+          {_, _, q1} = q
+          IO.puts
         end
+        """
+        |> string_to_state
 
-        describe "this" do
-          test "too does what I want" do
+      assert get_line_attributes(state, 4) == [
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 16}, {4, 16}],
+                 type: {:tuple, 2, [{:atom, :ok}, {:map, [abc: {:atom, nil}], nil}]}
+               }
+             ]
+
+      assert [
+               %VarInfo{
+                 name: :other,
+                 type: {:local_call, :elem, [{:attribute, :myattribute}, {:integer, 0}]}
+               },
+               %VarInfo{
+                 name: :var,
+                 type:
+                   {:tuple_nth,
+                    {:intersection,
+                     [{:attribute, :myattribute}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
+               }
+             ] = state |> get_line_vars(4)
+
+      assert [
+               %VarInfo{
+                 name: :q,
+                 type: {:tuple, 3, [{:atom, :a}, {:atom, :b}, {:atom, :c}]}
+               },
+               %VarInfo{
+                 name: :q1,
+                 type:
+                   {:tuple_nth,
+                    {:intersection,
+                     [{:variable, :q}, {:tuple, 3, [{:variable, :_}, {:variable, :_}, nil]}]}, 2}
+               }
+             ] =
+               state
+               |> get_line_vars(8)
+               |> Enum.filter(&(&1.name |> Atom.to_string() |> String.starts_with?("q")))
+    end
+
+    test "list destructuring" do
+      state =
+        """
+        defmodule MyModule do
+          @a []
+          @myattribute [:ok, :error, :other]
+          @other1 [:some, :error | @myattribute]
+          @other2 [:some | @myattribute]
+          [var, _var1, _var2] = @myattribute
+          [other | rest] = @myattribute
+          [a] = @other
+          [b] = []
+          IO.puts
+        end
+        """
+        |> string_to_state
+
+      assert get_line_attributes(state, 5) == [
+               %AttributeInfo{
+                 name: :a,
+                 positions: [{2, 3}],
+                 type: {:list, :empty}
+               },
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{3, 3}, {4, 28}, {5, 20}],
+                 type: {:list, {:atom, :ok}}
+               },
+               %AttributeInfo{name: :other1, positions: [{4, 3}], type: {:list, {:atom, :some}}},
+               %AttributeInfo{name: :other2, positions: [{5, 3}], type: {:list, {:atom, :some}}}
+             ]
+
+      assert [
+               %VarInfo{
+                 name: :a,
+                 type: {:list_head, {:attribute, :other}}
+               },
+               %VarInfo{
+                 name: :b,
+                 type: {:list_head, {:list, :empty}}
+               },
+               %VarInfo{name: :other, type: {:list_head, {:attribute, :myattribute}}},
+               %VarInfo{name: :rest, type: {:list_tail, {:attribute, :myattribute}}},
+               %VarInfo{name: :var, type: {:list_head, {:attribute, :myattribute}}}
+             ] = state |> get_line_vars(10)
+    end
+
+    test "list destructuring for" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute [:ok, :error, :other]
+          for a <- @myattribute do
+            b = a
+            IO.puts
+          end
+
+          for a <- @myattribute, a1 = @myattribute, a2 <- a1 do
+            b = a
+            IO.puts
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
+               %VarInfo{name: :b, type: {:variable, :a}}
+             ] = state |> get_line_vars(5)
+
+      assert [
+               %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
+               %VarInfo{name: :a1, type: {:attribute, :myattribute}},
+               %VarInfo{name: :a2, type: {:for_expression, {:variable, :a1}}},
+               %VarInfo{name: :b, type: {:variable, :a}}
+             ] = state |> get_line_vars(10)
+    end
+
+    test "map destructuring" do
+      state =
+        """
+        defmodule MyModule do
+          @a %{}
+          @myattribute %{ok: :a, error: b, other: :c}
+          @other %{"a" => :a, "b" => b}
+          %{error: var1} = @myattribute
+          %{"a" => var2} = @other
+          IO.puts
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{
+                 name: :var1,
+                 type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
+               },
+               # TODO not atom keys currently not supported
+               %VarInfo{
+                 name: :var2,
+                 type: {:map_key, {:attribute, :other}, nil}
+               }
+             ] = state |> get_line_vars(7)
+    end
+
+    test "map destructuring for" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute %{ok: :a, error: b, other: :c}
+          for {k, v} <- @myattribute do
+            IO.puts
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{
+                 name: :k,
+                 type: {
+                   :tuple_nth,
+                   {
+                     :intersection,
+                     [
+                       {:for_expression, {:attribute, :myattribute}},
+                       {:tuple, 2, [nil, {:variable, :v}]}
+                     ]
+                   },
+                   0
+                 }
+               },
+               %VarInfo{
+                 name: :v,
+                 type: {
+                   :tuple_nth,
+                   {
+                     :intersection,
+                     [
+                       {:for_expression, {:attribute, :myattribute}},
+                       {:tuple, 2, [{:variable, :k}, nil]}
+                     ]
+                   },
+                   1
+                 }
+               }
+             ] = state |> get_line_vars(4)
+    end
+
+    test "struct destructuring" do
+      state =
+        """
+        defmodule MyModule do
+          @a %My{}
+          @myattribute %My{ok: :a, error: b, other: :c}
+          %{error: var1} = @myattribute
+          %My{error: other} = @myattribute
+          IO.puts
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{
+                 name: :other,
+                 type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
+               },
+               %VarInfo{
+                 name: :var1,
+                 type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
+               }
+             ] = state |> get_line_vars(6)
+    end
+
+    test "binding in with expression" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute [:ok, :error, :other]
+          with a <- @myattribute do
+            b = a
+            IO.puts
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :a, type: {:attribute, :myattribute}},
+               %VarInfo{name: :b, type: {:variable, :a}}
+             ] = state |> get_line_vars(5)
+    end
+
+    test "vars defined inside a function without params" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          def func do
+            var_in1 = 1
+            var_in2 = 1
+            IO.puts ""
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 4},
+               %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 4}
+             ] = state |> get_line_vars(6)
+    end
+
+    test "vars binding" do
+      state =
+        """
+        defmodule MyModule do
+          def func do
+            var = String
+            IO.puts ""
+            var = Map
+            IO.puts ""
+            if abc do
+              IO.puts ""
+              var = List
+              IO.puts ""
+              var = Enum
+              IO.puts ""
+            end
+            IO.puts ""
+            var = Atom
+            IO.puts ""
+            other = var
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [%VarInfo{type: {:atom, String}}] = state |> get_line_vars(4)
+
+      assert [%VarInfo{type: {:atom, String}}, %VarInfo{type: {:atom, Map}}] =
+               state |> get_line_vars(6)
+
+      assert [%VarInfo{type: {:atom, String}}, %VarInfo{type: {:atom, Map}}] =
+               state |> get_line_vars(8)
+
+      assert [
+               %VarInfo{type: {:atom, String}, scope_id: 4},
+               %VarInfo{type: {:atom, Map}, scope_id: 4},
+               %VarInfo{type: {:atom, List}, scope_id: 5}
+             ] = state |> get_line_vars(10)
+
+      assert [
+               %VarInfo{type: {:atom, String}, scope_id: 4},
+               %VarInfo{type: {:atom, Map}, scope_id: 4},
+               %VarInfo{type: {:atom, List}, scope_id: 5},
+               %VarInfo{type: {:atom, Enum}, scope_id: 5}
+             ] = state |> get_line_vars(12)
+
+      assert [%VarInfo{type: {:atom, String}}, %VarInfo{type: {:atom, Map}}] =
+               state |> get_line_vars(14)
+
+      assert [
+               %VarInfo{type: {:atom, String}},
+               %VarInfo{type: {:atom, Map}},
+               %VarInfo{type: {:atom, Atom}}
+             ] = state |> get_line_vars(16)
+
+      assert [
+               %VarInfo{name: :other, type: {:variable, :var}},
+               %VarInfo{type: {:atom, String}},
+               %VarInfo{type: {:atom, Map}},
+               %VarInfo{type: {:atom, Atom}}
+             ] = state |> get_line_vars(18)
+    end
+
+    test "variables are added to environment" do
+      state =
+        """
+        defmodule MyModule do
+          def func do
+            var = :my_var
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [%VarInfo{type: {:atom, :my_var}, scope_id: scope_id}] = state |> get_line_vars(3)
+      assert [%VarInfo{name: :var}] = state.vars_info_per_scope_id[scope_id]
+    end
+
+    test "variables are added to environment in ex_unit test" do
+      state =
+        """
+        defmodule MyModuleTests do
+          use ExUnit.Case, async: true
+
+          test "it does what I want", %{some: some} do
             IO.puts("")
           end
+
+          describe "this" do
+            test "too does what I want" do
+              IO.puts("")
+            end
+          end
+
+          test "is not implemented"
         end
+        """
+        |> string_to_state
 
-        test "is not implemented"
-      end
-      """
-      |> string_to_state
+      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
+      assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
 
-    assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
-    assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
+      assert Map.has_key?(
+               state.mods_funs_to_positions,
+               {MyModuleTests, :"test it does what I want", 1}
+             )
 
-    assert Map.has_key?(
-             state.mods_funs_to_positions,
-             {MyModuleTests, :"test it does what I want", 1}
-           )
+      assert Map.has_key?(
+               state.mods_funs_to_positions,
+               {MyModuleTests, :"test this too does what I want", 1}
+             )
 
-    assert Map.has_key?(
-             state.mods_funs_to_positions,
-             {MyModuleTests, :"test this too does what I want", 1}
-           )
+      assert Map.has_key?(
+               state.mods_funs_to_positions,
+               {MyModuleTests, :"test is not implemented", 1}
+             )
+    end
 
-    assert Map.has_key?(
-             state.mods_funs_to_positions,
-             {MyModuleTests, :"test is not implemented", 1}
-           )
-  end
+    test "variables are added to environment in ex_unit setup" do
+      state =
+        """
+        defmodule MyModuleTests do
+          use ExUnit.Case, async: true
 
-  test "variables are added to environment in ex_unit setup" do
-    state =
-      """
-      defmodule MyModuleTests do
-        use ExUnit.Case, async: true
+          setup_all %{some: some} do
+            IO.puts("")
+          end
 
-        setup_all %{some: some} do
-          IO.puts("")
+          setup %{some: other} do
+            IO.puts("")
+          end
+
+          setup do
+            IO.puts("")
+          end
+
+          setup :clean_up_tmp_directory
+
+          setup [:clean_up_tmp_directory, :another_setup]
+
+          setup {MyModule, :my_setup_function}
         end
+        """
+        |> string_to_state
 
-        setup %{some: other} do
-          IO.puts("")
+      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
+      assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
+
+      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(9)
+      assert [%VarInfo{name: :other}] = state.vars_info_per_scope_id[scope_id]
+
+      # we do not generate defs - ExUnit.Callbacks.__setup__ is too complicated and generates def names with counters, e.g.
+      # :"__ex_unit_setup_#{counter}_#{length(setup)}"
+    end
+
+    test "variables from outside module are added to environment" do
+      state =
+        """
+        var = :my_var
+        """
+        |> string_to_state
+
+      assert [%VarInfo{type: {:atom, :my_var}, scope_id: scope_id}] = state |> get_line_vars(1)
+      assert [%VarInfo{name: :var}] = state.vars_info_per_scope_id[scope_id]
+    end
+
+    test "call binding" do
+      state =
+        """
+        defmodule MyModule do
+          def remote_calls do
+            var1 = DateTime.now
+            var2 = :erlang.now()
+            var3 = __MODULE__.now(:abc)
+            var4 = "Etc/UTC" |> DateTime.now
+            IO.puts ""
+          end
+
+          def local_calls do
+            var1 = now
+            var2 = now()
+            var3 = now(:abc)
+            var4 = :abc |> now
+            var5 = :abc |> now(5)
+            IO.puts ""
+          end
+
+          @attr %{qwe: String}
+          def map_field(var1) do
+            var1 = var1.abc
+            var2 = @attr.qwe(0)
+            var3 = abc.cde.efg
+            IO.puts ""
+          end
         end
+        """
+        |> string_to_state
 
-        setup do
-          IO.puts("")
-        end
+      assert [
+               %VarInfo{name: :var1, type: {:call, {:atom, DateTime}, :now, []}},
+               %VarInfo{name: :var2, type: {:call, {:atom, :erlang}, :now, []}},
+               %VarInfo{name: :var3, type: {:call, {:atom, MyModule}, :now, [{:atom, :abc}]}},
+               %VarInfo{name: :var4, type: {:call, {:atom, DateTime}, :now, [nil]}}
+             ] = state |> get_line_vars(7)
 
-        setup :clean_up_tmp_directory
+      assert [
+               %VarInfo{name: :var1, type: {:variable, :now}},
+               %VarInfo{name: :var2, type: {:local_call, :now, []}},
+               %VarInfo{name: :var3, type: {:local_call, :now, [{:atom, :abc}]}},
+               %VarInfo{name: :var4, type: {:local_call, :now, [{:atom, :abc}]}},
+               %VarInfo{name: :var5, type: {:local_call, :now, [{:atom, :abc}, {:integer, 5}]}}
+             ] = state |> get_line_vars(16)
 
-        setup [:clean_up_tmp_directory, :another_setup]
-
-        setup {MyModule, :my_setup_function}
-      end
-      """
-      |> string_to_state
-
-    assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
-    assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
-
-    assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(9)
-    assert [%VarInfo{name: :other}] = state.vars_info_per_scope_id[scope_id]
-
-    # we do not generate defs - ExUnit.Callbacks.__setup__ is too complicated and generates def names with counters, e.g.
-    # :"__ex_unit_setup_#{counter}_#{length(setup)}"
-  end
-
-  test "variables from outside module are added to environment" do
-    state =
-      """
-      var = :my_var
-      """
-      |> string_to_state
-
-    assert [%VarInfo{type: {:atom, :my_var}, scope_id: scope_id}] = state |> get_line_vars(1)
-    assert [%VarInfo{name: :var}] = state.vars_info_per_scope_id[scope_id]
-  end
-
-  test "call binding" do
-    state =
-      """
-      defmodule MyModule do
-        def remote_calls do
-          var1 = DateTime.now
-          var2 = :erlang.now()
-          var3 = __MODULE__.now(:abc)
-          var4 = "Etc/UTC" |> DateTime.now
-          IO.puts ""
-        end
-
-        def local_calls do
-          var1 = now
-          var2 = now()
-          var3 = now(:abc)
-          var4 = :abc |> now
-          var5 = :abc |> now(5)
-          IO.puts ""
-        end
-
-        @attr %{qwe: String}
-        def map_field(var1) do
-          var1 = var1.abc
-          var2 = @attr.qwe(0)
-          var3 = abc.cde.efg
-          IO.puts ""
-        end
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{name: :var1, type: {:call, {:atom, DateTime}, :now, []}},
-             %VarInfo{name: :var2, type: {:call, {:atom, :erlang}, :now, []}},
-             %VarInfo{name: :var3, type: {:call, {:atom, MyModule}, :now, [{:atom, :abc}]}},
-             %VarInfo{name: :var4, type: {:call, {:atom, DateTime}, :now, [nil]}}
-           ] = state |> get_line_vars(7)
-
-    assert [
-             %VarInfo{name: :var1, type: {:variable, :now}},
-             %VarInfo{name: :var2, type: {:local_call, :now, []}},
-             %VarInfo{name: :var3, type: {:local_call, :now, [{:atom, :abc}]}},
-             %VarInfo{name: :var4, type: {:local_call, :now, [{:atom, :abc}]}},
-             %VarInfo{name: :var5, type: {:local_call, :now, [{:atom, :abc}, {:integer, 5}]}}
-           ] = state |> get_line_vars(16)
-
-    assert [
-             %VarInfo{name: :var1, type: nil, scope_id: 7},
-             %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, []}, scope_id: 8},
-             %VarInfo{name: :var2, type: {:call, {:attribute, :attr}, :qwe, [{:integer, 0}]}},
-             %VarInfo{name: :var3, type: {:call, {:call, {:variable, :abc}, :cde, []}, :efg, []}}
-           ] = state |> get_line_vars(24)
-  end
-
-  test "map binding" do
-    state =
-      """
-      defmodule MyModule do
-        def func do
-          var = %{asd: 5}
-          IO.puts ""
-          var = %{asd: 5, nested: %{wer: "asd"}}
-          IO.puts ""
-          var = %{"asd" => "dsds"}
-          IO.puts ""
-          var = %{asd: 5, zxc: String}
-          IO.puts ""
-          qwe = %{var | asd: 2, zxc: 5}
-          IO.puts ""
-          qwe = %{var | asd: 2}
-          IO.puts ""
-
-        end
-      end
-      """
-      |> string_to_state
-
-    assert [%VarInfo{type: {:map, [asd: {:integer, 5}], nil}}] = state |> get_line_vars(4)
-
-    assert [
-             %VarInfo{type: {:map, [asd: {:integer, 5}], nil}},
-             %VarInfo{type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}}
-           ] = state |> get_line_vars(6)
-
-    assert [
-             %VarInfo{type: {:map, [asd: {:integer, 5}], nil}},
-             %VarInfo{type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}},
-             %VarInfo{type: {:map, [], nil}}
-           ] = state |> get_line_vars(8)
-
-    assert [
-             %VarInfo{type: {:map, [asd: {:integer, 5}], nil}},
-             %VarInfo{type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}},
-             %VarInfo{type: {:map, [], nil}},
-             %VarInfo{type: {:map, [asd: {:integer, 5}, zxc: {:atom, String}], nil}}
-           ] = state |> get_line_vars(10)
-
-    assert [%VarInfo{type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var}}}] =
-             state |> get_line_vars(12) |> Enum.filter(&(&1.name == :qwe))
-
-    assert [
-             %VarInfo{type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var}}},
-             %VarInfo{type: {:map, [{:asd, {:integer, 2}}], {:variable, :var}}}
-           ] = state |> get_line_vars(14) |> Enum.filter(&(&1.name == :qwe))
-  end
-
-  test "struct binding" do
-    state =
-      """
-      defmodule MyModule do
-        def func(%MyStruct{} = var1, var2 = %:other_struct{}, var3 = %__MODULE__{},
-          var4 = %__MODULE__.Sub{}, var7 = %_{}) do
-          IO.puts ""
-        end
-
-        def some(a) do
-          asd = %Some{sub: Atom}
-          IO.puts ""
-          asd = %Other{a | sub: Atom}
-          IO.puts ""
-          asd = %{asd | other: 123}
-          IO.puts ""
-          z = x = asd
-          IO.puts ""
-        end
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{name: :var1, type: {:struct, [], {:atom, MyStruct}, nil}},
-             %VarInfo{name: :var2, type: {:struct, [], {:atom, :other_struct}, nil}},
-             %VarInfo{name: :var3, type: {:struct, [], {:atom, MyModule}, nil}},
-             %VarInfo{name: :var4, type: {:struct, [], {:atom, MyModule.Sub}, nil}},
-             %VarInfo{name: :var7, type: {:struct, [], nil, nil}}
-           ] = state |> get_line_vars(4)
-
-    assert %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}} =
-             state |> get_line_vars(9) |> Enum.find(&(&1.name == :asd))
-
-    assert [
-             %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}},
-             %VarInfo{
-               name: :asd,
-               type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
-             }
-           ] = state |> get_line_vars(11) |> Enum.filter(&(&1.name == :asd))
-
-    assert [
-             %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}},
-             %VarInfo{
-               name: :asd,
-               type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
-             },
-             %VarInfo{name: :asd, type: {:map, [{:other, {:integer, 123}}], {:variable, :asd}}}
-           ] = state |> get_line_vars(13) |> Enum.filter(&(&1.name == :asd))
-
-    assert [
-             %VarInfo{name: :x, type: {:intersection, [{:variable, :z}, {:variable, :asd}]}},
-             %VarInfo{name: :z, type: {:variable, :asd}}
-           ] = state |> get_line_vars(15) |> Enum.filter(&(&1.name in [:x, :z]))
-  end
-
-  test "struct binding understands builtin sigils and ranges" do
-    state =
-      """
-      defmodule MyModule do
-        def some() do
-          var1 = ~D[2000-01-01]
-          var2 = ~T[13:00:07]
-          var3 = ~U[2015-01-13 13:00:07Z]
-          var4 = ~N[2000-01-01 23:00:07]
-          var5 = ~r/foo/iu
-          var6 = ~R(f\#{1,3}o)
-          var7 = 12..34
-          IO.puts ""
-        end
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{name: :var1, type: {:struct, [], {:atom, Date}}},
-             %VarInfo{name: :var2, type: {:struct, [], {:atom, Time}}},
-             %VarInfo{name: :var3, type: {:struct, [], {:atom, DateTime}}},
-             %VarInfo{name: :var4, type: {:struct, [], {:atom, NaiveDateTime}}},
-             %VarInfo{name: :var5, type: {:struct, [], {:atom, Regex}}},
-             %VarInfo{name: :var6, type: {:struct, [], {:atom, Regex}}},
-             %VarInfo{name: :var7, type: {:struct, [], {:atom, Range}}}
-           ] = state |> get_line_vars(10)
-  end
-
-  test "struct binding understands stepped ranges" do
-    state =
-      """
-      defmodule MyModule do
-        def some() do
-          var1 = 12..34//2
-          IO.puts ""
-        end
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{name: :var1, type: {:struct, [], {:atom, Range}}}
-           ] = state |> get_line_vars(4)
-  end
-
-  test "nested `=` binding" do
-    state =
-      """
-      defmodule MyModule do
-        def some() do
-          %State{formatted: formatted} = state = socket.assigns.state
-          IO.puts ""
-        end
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{
-               name: :formatted,
-               type: {
-                 :map_key,
-                 {
-                   :call,
-                   {:call, {:variable, :socket}, :assigns, []},
-                   :state,
-                   []
-                 },
-                 {:atom, :formatted}
+      assert [
+               %VarInfo{name: :var1, type: nil, scope_id: 7},
+               %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, []}, scope_id: 8},
+               %VarInfo{name: :var2, type: {:call, {:attribute, :attr}, :qwe, [{:integer, 0}]}},
+               %VarInfo{
+                 name: :var3,
+                 type: {:call, {:call, {:variable, :abc}, :cde, []}, :efg, []}
                }
-             },
-             %VarInfo{
-               name: :state,
-               type:
-                 {:intersection,
-                  [
-                    {:struct, [formatted: {:variable, :formatted}], {:atom, Elixir.State}, nil},
-                    {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}
-                  ]}
-             }
-           ] = state |> get_line_vars(4)
-  end
+             ] = state |> get_line_vars(24)
+    end
 
-  test "case binding" do
-    state =
-      """
-      defmodule MyModule do
-        def some() do
-          case Some.call() do
-            {:ok, x} ->
-              IO.puts ""
+    test "map binding" do
+      state =
+        """
+        defmodule MyModule do
+          def func do
+            var = %{asd: 5}
+            IO.puts ""
+            var = %{asd: 5, nested: %{wer: "asd"}}
+            IO.puts ""
+            var = %{"asd" => "dsds"}
+            IO.puts ""
+            var = %{asd: 5, zxc: String}
+            IO.puts ""
+            qwe = %{var | asd: 2, zxc: 5}
+            IO.puts ""
+            qwe = %{var | asd: 2}
+            IO.puts ""
+
           end
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert [
-             %VarInfo{
-               name: :x,
-               type:
-                 {:tuple_nth,
-                  {:intersection,
-                   [{:call, {:atom, Some}, :call, []}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
-             }
-           ] = state |> get_line_vars(5)
-  end
+      assert [%VarInfo{type: {:map, [asd: {:integer, 5}], nil}}] = state |> get_line_vars(4)
 
-  test "rescue binding" do
-    state =
-      """
-      defmodule MyModule do
-        def some() do
-          try do
-            Some.call()
-          rescue
-            e0 in ArgumentError ->
-              :ok
-            e1 in [ArgumentError] ->
-              :ok
-            e2 in [RuntimeError, Enum.EmptyError] ->
-              :ok
-            e3 ->
-              :ok
-          else
-            a ->
-              :ok
+      assert [
+               %VarInfo{type: {:map, [asd: {:integer, 5}], nil}},
+               %VarInfo{type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}}
+             ] = state |> get_line_vars(6)
+
+      assert [
+               %VarInfo{type: {:map, [asd: {:integer, 5}], nil}},
+               %VarInfo{type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}},
+               %VarInfo{type: {:map, [], nil}}
+             ] = state |> get_line_vars(8)
+
+      assert [
+               %VarInfo{type: {:map, [asd: {:integer, 5}], nil}},
+               %VarInfo{type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}},
+               %VarInfo{type: {:map, [], nil}},
+               %VarInfo{type: {:map, [asd: {:integer, 5}, zxc: {:atom, String}], nil}}
+             ] = state |> get_line_vars(10)
+
+      assert [%VarInfo{type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var}}}] =
+               state |> get_line_vars(12) |> Enum.filter(&(&1.name == :qwe))
+
+      assert [
+               %VarInfo{
+                 type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var}}
+               },
+               %VarInfo{type: {:map, [{:asd, {:integer, 2}}], {:variable, :var}}}
+             ] = state |> get_line_vars(14) |> Enum.filter(&(&1.name == :qwe))
+    end
+
+    test "struct binding" do
+      state =
+        """
+        defmodule MyModule do
+          def func(%MyStruct{} = var1, var2 = %:other_struct{}, var3 = %__MODULE__{},
+            var4 = %__MODULE__.Sub{}, var7 = %_{}) do
+            IO.puts ""
+          end
+
+          def some(a) do
+            asd = %Some{sub: Atom}
+            IO.puts ""
+            asd = %Other{a | sub: Atom}
+            IO.puts ""
+            asd = %{asd | other: 123}
+            IO.puts ""
+            z = x = asd
+            IO.puts ""
           end
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert [
-             %VarInfo{
-               name: :e0,
-               type: {:struct, [], {:atom, ArgumentError}, nil}
-             }
-           ] = state |> get_line_vars(6)
+      assert [
+               %VarInfo{name: :var1, type: {:struct, [], {:atom, MyStruct}, nil}},
+               %VarInfo{name: :var2, type: {:struct, [], {:atom, :other_struct}, nil}},
+               %VarInfo{name: :var3, type: {:struct, [], {:atom, MyModule}, nil}},
+               %VarInfo{name: :var4, type: {:struct, [], {:atom, MyModule.Sub}, nil}},
+               %VarInfo{name: :var7, type: {:struct, [], nil, nil}}
+             ] = state |> get_line_vars(4)
 
-    assert [
-             %VarInfo{
-               name: :e1,
-               type: {:struct, [], {:atom, ArgumentError}, nil}
-             }
-           ] = state |> get_line_vars(8)
+      assert %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}} =
+               state |> get_line_vars(9) |> Enum.find(&(&1.name == :asd))
 
-    assert [
-             %VarInfo{
-               name: :e2,
-               type: {:struct, [], {:atom, Exception}, nil}
-             }
-           ] = state |> get_line_vars(10)
+      assert [
+               %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}},
+               %VarInfo{
+                 name: :asd,
+                 type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
+               }
+             ] = state |> get_line_vars(11) |> Enum.filter(&(&1.name == :asd))
 
-    assert [
-             %VarInfo{
-               name: :e3,
-               type: {:struct, [], {:atom, Exception}, nil}
-             }
-           ] = state |> get_line_vars(12)
+      assert [
+               %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}},
+               %VarInfo{
+                 name: :asd,
+                 type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
+               },
+               %VarInfo{name: :asd, type: {:map, [{:other, {:integer, 123}}], {:variable, :asd}}}
+             ] = state |> get_line_vars(13) |> Enum.filter(&(&1.name == :asd))
 
-    assert [
-             %VarInfo{
-               name: :a,
-               type: nil
-             }
-           ] = state |> get_line_vars(15)
-  end
+      assert [
+               %VarInfo{name: :x, type: {:intersection, [{:variable, :z}, {:variable, :asd}]}},
+               %VarInfo{name: :z, type: {:variable, :asd}}
+             ] = state |> get_line_vars(15) |> Enum.filter(&(&1.name in [:x, :z]))
+    end
 
-  test "vars defined inside a function `after`/`rescue`/`catch`" do
-    state =
-      """
-      defmodule MyModule do
-        var_out1 = 1
-        def func(var_arg) do
-          var_in1 = 1
-          var_in2 = 1
-          IO.puts ""
-        after
-          var_after = 1
-          IO.puts ""
-        end
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: 3},
-             %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 4},
-             %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 4}
-           ] = state |> get_line_vars(6)
-
-    assert [
-             %VarInfo{name: :var_after, positions: [{8, 5}], scope_id: 5},
-             %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: 3}
-           ] = state |> get_line_vars(9)
-  end
-
-  test "vars defined inside a function with params" do
-    state =
-      """
-      defmodule MyModule do
-        var_out1 = 1
-        def func(%{key1: par1, key2: [par2|[par3, _]]}, par4, _par5) do
-          var_in1 = 1
-          var_in2 = 1
-          IO.puts ""
-        end
-        defp func1(arg), do: arg + 1
-        var_out2 = 1
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{name: :par1, positions: [{3, 20}], scope_id: 3},
-             %VarInfo{name: :par2, positions: [{3, 33}], scope_id: 3},
-             %VarInfo{name: :par3, positions: [{3, 39}], scope_id: 3},
-             %VarInfo{name: :par4, positions: [{3, 51}], scope_id: 3},
-             %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 4},
-             %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 4}
-           ] = state |> get_line_vars(6)
-
-    assert [
-             %VarInfo{name: :arg, positions: [{8, 14}, {8, 24}], scope_id: 5}
-           ] = state |> get_line_vars(8)
-  end
-
-  test "vars binding by pattern matching with pin operators" do
-    state =
-      """
-      defmodule MyModule do
-        def func(a) do
-          b = 1
-          case a do
-            %{b: ^2} = a1 -> 2
-            %{b: ^b} = a2 -> b
+    test "struct binding understands builtin sigils and ranges" do
+      state =
+        """
+        defmodule MyModule do
+          def some() do
+            var1 = ~D[2000-01-01]
+            var2 = ~T[13:00:07]
+            var3 = ~U[2015-01-13 13:00:07Z]
+            var4 = ~N[2000-01-01 23:00:07]
+            var5 = ~r/foo/iu
+            var6 = ~R(f\#{1,3}o)
+            var7 = 12..34
+            IO.puts ""
           end
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    vars = state |> get_line_vars(5)
+      assert [
+               %VarInfo{name: :var1, type: {:struct, [], {:atom, Date}}},
+               %VarInfo{name: :var2, type: {:struct, [], {:atom, Time}}},
+               %VarInfo{name: :var3, type: {:struct, [], {:atom, DateTime}}},
+               %VarInfo{name: :var4, type: {:struct, [], {:atom, NaiveDateTime}}},
+               %VarInfo{name: :var5, type: {:struct, [], {:atom, Regex}}},
+               %VarInfo{name: :var6, type: {:struct, [], {:atom, Regex}}},
+               %VarInfo{name: :var7, type: {:struct, [], {:atom, Range}}}
+             ] = state |> get_line_vars(10)
+    end
 
-    assert %VarInfo{
-             name: :a1,
-             positions: [{5, 18}],
-             scope_id: 6,
-             is_definition: true,
-             type: {:map, [b: {:integer, 2}], nil}
-           } = Enum.find(vars, &(&1.name == :a1))
-
-    vars = state |> get_line_vars(6)
-
-    assert %VarInfo{
-             name: :a2,
-             positions: [{6, 18}],
-             scope_id: 7,
-             is_definition: true,
-             type: {:map, [b: {:variable, :b}], nil}
-           } = Enum.find(vars, &(&1.name == :a2))
-  end
-
-  test "rebinding vars" do
-    state =
-      """
-      defmodule MyModule do
-        var1 = 1
-        def func(%{var: var1, key: [_|[_, var1]]}) do
-          var1 = 1
-          var1 = 2
-          IO.puts ""
+    test "struct binding understands stepped ranges" do
+      state =
+        """
+        defmodule MyModule do
+          def some() do
+            var1 = 12..34//2
+            IO.puts ""
+          end
         end
-        var1 = 1
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    vars = state |> get_line_vars(6)
+      assert [
+               %VarInfo{name: :var1, type: {:struct, [], {:atom, Range}}}
+             ] = state |> get_line_vars(4)
+    end
 
-    assert [
-             %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}], scope_id: 3},
-             %VarInfo{name: :var1, positions: [{4, 5}], scope_id: 4},
-             %VarInfo{name: :var1, positions: [{5, 5}], scope_id: 4}
-           ] = vars
-  end
-
-  test "vars defined inside a module" do
-    state =
-      """
-      defmodule MyModule do
-        var_out1 = 1
-        def func do
-          var_in = 1
+    test "nested `=` binding" do
+      state =
+        """
+        defmodule MyModule do
+          def some() do
+            %State{formatted: formatted} = state = socket.assigns.state
+            IO.puts ""
+          end
         end
-        var_out2 = 1
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert [
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-             %VarInfo{name: :var_out2, positions: [{6, 3}], scope_id: 2}
-           ] = state |> get_line_vars(7)
-  end
+      assert [
+               %VarInfo{
+                 name: :formatted,
+                 type: {
+                   :map_key,
+                   {
+                     :call,
+                     {:call, {:variable, :socket}, :assigns, []},
+                     :state,
+                     []
+                   },
+                   {:atom, :formatted}
+                 }
+               },
+               %VarInfo{
+                 name: :state,
+                 type:
+                   {:intersection,
+                    [
+                      {:struct, [formatted: {:variable, :formatted}], {:atom, Elixir.State}, nil},
+                      {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}
+                    ]}
+               }
+             ] = state |> get_line_vars(4)
+    end
 
-  test "vars defined in a `for` comprehension" do
-    state =
-      """
-      defmodule MyModule do
-        var_out1 = 1
-        IO.puts ""
-        for var_on <- [1,2], var_on != 2, var_on1 = var_on + 1 do
-          var_in = 1
-          IO.puts ""
+    test "case binding" do
+      state =
+        """
+        defmodule MyModule do
+          def some() do
+            case Some.call() do
+              {:ok, x} ->
+                IO.puts ""
+            end
+          end
         end
-        var_out2 = 1
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert [
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 3)
+      assert [
+               %VarInfo{
+                 name: :x,
+                 type:
+                   {:tuple_nth,
+                    {:intersection,
+                     [{:call, {:atom, Some}, :call, []}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
+               }
+             ] = state |> get_line_vars(5)
+    end
 
-    assert [
-             %VarInfo{is_definition: true, name: :var_in, positions: [{5, 5}], scope_id: 4},
-             %VarInfo{
-               is_definition: true,
-               name: :var_on,
-               positions: [{4, 7}, {4, 24}, {4, 47}],
-               scope_id: 3
-             },
-             %VarInfo{is_definition: true, name: :var_on1, positions: [{4, 37}], scope_id: 3},
-             %VarInfo{is_definition: true, name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 6)
-
-    assert [
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-             %VarInfo{name: :var_out2, positions: [{8, 3}], scope_id: 2}
-           ] = get_line_vars(state, 9)
-  end
-
-  test "vars defined in a `with` expression" do
-    state =
-      """
-      defmodule MyModule do
-        var_out1 = 1
-        IO.puts ""
-        with var_on <- [1,2], var_on != 2, var_on1 = var_on + 1 do
-          var_in = 1
-          IO.puts ""
+    test "rescue binding" do
+      state =
+        """
+        defmodule MyModule do
+          def some() do
+            try do
+              Some.call()
+            rescue
+              e0 in ArgumentError ->
+                :ok
+              e1 in [ArgumentError] ->
+                :ok
+              e2 in [RuntimeError, Enum.EmptyError] ->
+                :ok
+              e3 ->
+                :ok
+            else
+              a ->
+                :ok
+            end
+          end
         end
-        var_out2 = 1
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert [
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 3)
+      assert [
+               %VarInfo{
+                 name: :e0,
+                 type: {:struct, [], {:atom, ArgumentError}, nil}
+               }
+             ] = state |> get_line_vars(6)
 
-    assert [
-             %VarInfo{is_definition: true, name: :var_in, positions: [{5, 5}], scope_id: 4},
-             %VarInfo{
-               is_definition: true,
-               name: :var_on,
-               positions: [{4, 8}, {4, 25}, {4, 48}],
-               scope_id: 3
-             },
-             %VarInfo{is_definition: true, name: :var_on1, positions: [{4, 38}], scope_id: 3},
-             %VarInfo{is_definition: true, name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 6)
+      assert [
+               %VarInfo{
+                 name: :e1,
+                 type: {:struct, [], {:atom, ArgumentError}, nil}
+               }
+             ] = state |> get_line_vars(8)
 
-    assert [
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-             %VarInfo{name: :var_out2, positions: [{8, 3}], scope_id: 2}
-           ] = get_line_vars(state, 9)
-  end
+      assert [
+               %VarInfo{
+                 name: :e2,
+                 type: {:struct, [], {:atom, Exception}, nil}
+               }
+             ] = state |> get_line_vars(10)
 
-  test "vars defined in a `if/else` expression" do
-    state =
-      """
-      defmodule MyModule do
-        var_out1 = 1
-        if var_on = true do
-          var_in_if = 1
-          IO.puts ""
-        else
-          var_in_else = 1
-          IO.puts ""
-        end
-        var_out2 = 1
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+      assert [
+               %VarInfo{
+                 name: :e3,
+                 type: {:struct, [], {:atom, Exception}, nil}
+               }
+             ] = state |> get_line_vars(12)
 
-    assert [
-             %VarInfo{name: :var_in_if, positions: [{4, 5}], scope_id: 3},
-             %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 5)
+      assert [
+               %VarInfo{
+                 name: :a,
+                 type: nil
+               }
+             ] = state |> get_line_vars(15)
+    end
 
-    assert [
-             %VarInfo{name: :var_in_else, positions: [{7, 5}], scope_id: 4},
-             %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 8)
-
-    assert [
-             %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-             %VarInfo{name: :var_out2, positions: [{10, 3}], scope_id: 2}
-           ] = get_line_vars(state, 11)
-  end
-
-  test "vars defined inside a `fn`" do
-    state =
-      """
-      defmodule MyModule do
-        var_out1 = 1
-        fn var_on ->
-          var_in = 1
-          IO.puts ""
-        end
-        var_out2 = 1
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{is_definition: true, name: :var_in, positions: [{4, 5}], scope_id: 4},
-             %VarInfo{is_definition: true, name: :var_on, positions: [{3, 6}], scope_id: 4},
-             %VarInfo{is_definition: true, name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 5)
-
-    assert [
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-             %VarInfo{name: :var_out2, positions: [{7, 3}], scope_id: 2}
-           ] = get_line_vars(state, 8)
-  end
-
-  test "vars defined inside a `case`" do
-    state =
-      """
-      defmodule MyModule do
-        var_out1 = 1
-        case var_on0 = var_out1 do
-          {var_on1} ->
+    test "vars defined inside a function `after`/`rescue`/`catch`" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          def func(var_arg) do
             var_in1 = 1
+            var_in2 = 1
             IO.puts ""
-          {var_on2} ->
-            var_in2 = 2
+          after
+            var_after = 1
             IO.puts ""
-          var_on3 -> IO.puts ""
+          end
         end
-        var_out2 = 1
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert [
-             %VarInfo{is_definition: true, name: :var_in1, positions: [{5, 7}], scope_id: 4},
-             %VarInfo{is_definition: true, name: :var_on0, positions: [{3, 8}], scope_id: 2},
-             %VarInfo{is_definition: true, name: :var_on1, positions: [{4, 6}], scope_id: 4},
-             %VarInfo{
+      assert [
+               %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: 3},
+               %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 4},
+               %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 4}
+             ] = state |> get_line_vars(6)
+
+      assert [
+               %VarInfo{name: :var_after, positions: [{8, 5}], scope_id: 5},
+               %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: 3}
+             ] = state |> get_line_vars(9)
+    end
+
+    test "vars defined inside a function with params" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          def func(%{key1: par1, key2: [par2|[par3, _]]}, par4, _par5) do
+            var_in1 = 1
+            var_in2 = 1
+            IO.puts ""
+          end
+          defp func1(arg), do: arg + 1
+          var_out2 = 1
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :par1, positions: [{3, 20}], scope_id: 3},
+               %VarInfo{name: :par2, positions: [{3, 33}], scope_id: 3},
+               %VarInfo{name: :par3, positions: [{3, 39}], scope_id: 3},
+               %VarInfo{name: :par4, positions: [{3, 51}], scope_id: 3},
+               %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 4},
+               %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 4}
+             ] = state |> get_line_vars(6)
+
+      assert [
+               %VarInfo{name: :arg, positions: [{8, 14}, {8, 24}], scope_id: 5}
+             ] = state |> get_line_vars(8)
+    end
+
+    test "vars binding by pattern matching with pin operators" do
+      state =
+        """
+        defmodule MyModule do
+          def func(a) do
+            b = 1
+            case a do
+              %{b: ^2} = a1 -> 2
+              %{b: ^b} = a2 -> b
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      vars = state |> get_line_vars(5)
+
+      assert %VarInfo{
+               name: :a1,
+               positions: [{5, 18}],
+               scope_id: 6,
                is_definition: true,
-               name: :var_out1,
-               positions: [{2, 3}, {3, 18}],
-               scope_id: 2
-             }
-           ] = get_line_vars(state, 6)
+               type: {:map, [b: {:integer, 2}], nil}
+             } = Enum.find(vars, &(&1.name == :a1))
 
-    assert [
-             %VarInfo{name: :var_in2, positions: [{8, 7}], scope_id: 5},
-             %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
-             %VarInfo{name: :var_on2, positions: [{7, 6}], scope_id: 5},
-             %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2}
-           ] = get_line_vars(state, 9)
+      vars = state |> get_line_vars(6)
 
-    assert [
-             %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
-             %VarInfo{name: :var_on3, positions: [{10, 5}], scope_id: 6},
-             %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2}
-           ] = get_line_vars(state, 10)
+      assert %VarInfo{
+               name: :a2,
+               positions: [{6, 18}],
+               scope_id: 7,
+               is_definition: true,
+               type: {:map, [b: {:variable, :b}], nil}
+             } = Enum.find(vars, &(&1.name == :a2))
+    end
 
-    assert [
-             %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
-             %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2},
-             %VarInfo{name: :var_out2, positions: [{12, 3}], scope_id: 2}
-           ] = get_line_vars(state, 13)
-  end
+    test "rebinding vars" do
+      state =
+        """
+        defmodule MyModule do
+          var1 = 1
+          def func(%{var: var1, key: [_|[_, var1]]}) do
+            var1 = 1
+            var1 = 2
+            IO.puts ""
+          end
+          var1 = 1
+        end
+        """
+        |> string_to_state
 
-  test "vars defined inside a `cond`" do
-    state =
-      """
-      defmodule MyModule do
-        var_out1 = 1
-        cond do
-          1 == 1 ->
+      vars = state |> get_line_vars(6)
+
+      assert [
+               %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}], scope_id: 3},
+               %VarInfo{name: :var1, positions: [{4, 5}], scope_id: 4},
+               %VarInfo{name: :var1, positions: [{5, 5}], scope_id: 4}
+             ] = vars
+    end
+
+    test "vars defined inside a module" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          def func do
+            var_in = 1
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+               %VarInfo{name: :var_out2, positions: [{6, 3}], scope_id: 2}
+             ] = state |> get_line_vars(7)
+    end
+
+    test "vars defined in a `for` comprehension" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          IO.puts ""
+          for var_on <- [1,2], var_on != 2, var_on1 = var_on + 1 do
             var_in = 1
             IO.puts ""
-          var_in1 = Enum.find([], 1) ->
-            IO.puts ""
-          var_in2 = Enum.find([], 2) -> IO.puts ""
-        end
-        var_out2 = 1
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{name: :var_in, positions: [{5, 7}], scope_id: 4},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 6)
-
-    assert [
-             %VarInfo{name: :var_in1, positions: [{7, 5}], scope_id: 5},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 8)
-
-    assert [
-             %VarInfo{name: :var_in2, positions: [{9, 5}], scope_id: 6},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 9)
-
-    assert [
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-             %VarInfo{name: :var_out2, positions: [{11, 3}], scope_id: 2}
-           ] = get_line_vars(state, 12)
-  end
-
-  test "vars defined inside a `try`" do
-    state =
-      """
-      defmodule MyModule do
-        var_out1 = 1
-        try do
-          var_in_try = 1
-          IO.puts ""
-        rescue
-          e1 in ArgumentError -> IO.puts ""
-          e2 in KeyError ->
-            var_in_rescue = 0
-            IO.puts ""
-        catch
-          :exit, reason1 -> IO.puts ""
-          reason2 ->
-            var_in_catch = 0
-            IO.puts ""
-        else
-          {:atom, var_on_else} -> IO.puts ""
-          :atom ->
-            var_in_else = 0
-            IO.puts ""
-        after
-          var_in_after = 0
+          end
+          var_out2 = 1
           IO.puts ""
         end
-        var_out2 = 1
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert [
-             %VarInfo{name: :var_in_try, positions: [{4, 5}], scope_id: 3},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 5)
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 3)
 
-    assert [
-             %VarInfo{name: :e1, positions: [{7, 5}], scope_id: 5},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 7)
+      assert [
+               %VarInfo{is_definition: true, name: :var_in, positions: [{5, 5}], scope_id: 4},
+               %VarInfo{
+                 is_definition: true,
+                 name: :var_on,
+                 positions: [{4, 7}, {4, 24}, {4, 47}],
+                 scope_id: 3
+               },
+               %VarInfo{is_definition: true, name: :var_on1, positions: [{4, 37}], scope_id: 3},
+               %VarInfo{is_definition: true, name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 6)
 
-    assert [
-             %VarInfo{name: :e2, positions: [{8, 5}], scope_id: 6},
-             %VarInfo{name: :var_in_rescue, positions: [{9, 7}], scope_id: 6},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 10)
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+               %VarInfo{name: :var_out2, positions: [{8, 3}], scope_id: 2}
+             ] = get_line_vars(state, 9)
+    end
 
-    assert [
-             %VarInfo{name: :reason1, positions: [{12, 12}], scope_id: 8},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 12)
-
-    assert [
-             %VarInfo{name: :reason2, positions: [{13, 5}], scope_id: 9},
-             %VarInfo{name: :var_in_catch, positions: [{14, 7}], scope_id: 9},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 15)
-
-    assert [
-             %VarInfo{name: :var_on_else, positions: [{17, 13}], scope_id: 11},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 17)
-
-    assert [
-             %VarInfo{name: :var_in_else, positions: [{19, 7}], scope_id: 12},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 20)
-
-    assert [
-             %VarInfo{name: :var_in_after, positions: [{22, 5}], scope_id: 13},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 23)
-
-    assert [
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-             %VarInfo{name: :var_out2, positions: [{25, 3}], scope_id: 2}
-           ] = get_line_vars(state, 26)
-  end
-
-  test "vars defined inside a `receive`" do
-    state =
-      """
-      defmodule MyModule do
-        var_out1 = 1
-        receive do
-          {:atom, msg1} -> IO.puts ""
-          :msg ->
-            var_in = 0
+    test "vars defined in a `with` expression" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          IO.puts ""
+          with var_on <- [1,2], var_on != 2, var_on1 = var_on + 1 do
+            var_in = 1
             IO.puts ""
-        after
-          300 ->
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 3)
+
+      assert [
+               %VarInfo{is_definition: true, name: :var_in, positions: [{5, 5}], scope_id: 4},
+               %VarInfo{
+                 is_definition: true,
+                 name: :var_on,
+                 positions: [{4, 8}, {4, 25}, {4, 48}],
+                 scope_id: 3
+               },
+               %VarInfo{is_definition: true, name: :var_on1, positions: [{4, 38}], scope_id: 3},
+               %VarInfo{is_definition: true, name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 6)
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+               %VarInfo{name: :var_out2, positions: [{8, 3}], scope_id: 2}
+             ] = get_line_vars(state, 9)
+    end
+
+    test "vars defined in a `if/else` expression" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          if var_on = true do
+            var_in_if = 1
+            IO.puts ""
+          else
+            var_in_else = 1
+            IO.puts ""
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :var_in_if, positions: [{4, 5}], scope_id: 3},
+               %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 5)
+
+      assert [
+               %VarInfo{name: :var_in_else, positions: [{7, 5}], scope_id: 4},
+               %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 8)
+
+      assert [
+               %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+               %VarInfo{name: :var_out2, positions: [{10, 3}], scope_id: 2}
+             ] = get_line_vars(state, 11)
+    end
+
+    test "vars defined inside a `fn`" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          fn var_on ->
+            var_in = 1
+            IO.puts ""
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{is_definition: true, name: :var_in, positions: [{4, 5}], scope_id: 4},
+               %VarInfo{is_definition: true, name: :var_on, positions: [{3, 6}], scope_id: 4},
+               %VarInfo{is_definition: true, name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 5)
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+               %VarInfo{name: :var_out2, positions: [{7, 3}], scope_id: 2}
+             ] = get_line_vars(state, 8)
+    end
+
+    test "vars defined inside a `case`" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          case var_on0 = var_out1 do
+            {var_on1} ->
+              var_in1 = 1
+              IO.puts ""
+            {var_on2} ->
+              var_in2 = 2
+              IO.puts ""
+            var_on3 -> IO.puts ""
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{is_definition: true, name: :var_in1, positions: [{5, 7}], scope_id: 4},
+               %VarInfo{is_definition: true, name: :var_on0, positions: [{3, 8}], scope_id: 2},
+               %VarInfo{is_definition: true, name: :var_on1, positions: [{4, 6}], scope_id: 4},
+               %VarInfo{
+                 is_definition: true,
+                 name: :var_out1,
+                 positions: [{2, 3}, {3, 18}],
+                 scope_id: 2
+               }
+             ] = get_line_vars(state, 6)
+
+      assert [
+               %VarInfo{name: :var_in2, positions: [{8, 7}], scope_id: 5},
+               %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
+               %VarInfo{name: :var_on2, positions: [{7, 6}], scope_id: 5},
+               %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2}
+             ] = get_line_vars(state, 9)
+
+      assert [
+               %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
+               %VarInfo{name: :var_on3, positions: [{10, 5}], scope_id: 6},
+               %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2}
+             ] = get_line_vars(state, 10)
+
+      assert [
+               %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
+               %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2},
+               %VarInfo{name: :var_out2, positions: [{12, 3}], scope_id: 2}
+             ] = get_line_vars(state, 13)
+    end
+
+    test "vars defined inside a `cond`" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          cond do
+            1 == 1 ->
+              var_in = 1
+              IO.puts ""
+            var_in1 = Enum.find([], 1) ->
+              IO.puts ""
+            var_in2 = Enum.find([], 2) -> IO.puts ""
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :var_in, positions: [{5, 7}], scope_id: 4},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 6)
+
+      assert [
+               %VarInfo{name: :var_in1, positions: [{7, 5}], scope_id: 5},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 8)
+
+      assert [
+               %VarInfo{name: :var_in2, positions: [{9, 5}], scope_id: 6},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 9)
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+               %VarInfo{name: :var_out2, positions: [{11, 3}], scope_id: 2}
+             ] = get_line_vars(state, 12)
+    end
+
+    test "vars defined inside a `try`" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          try do
+            var_in_try = 1
+            IO.puts ""
+          rescue
+            e1 in ArgumentError -> IO.puts ""
+            e2 in KeyError ->
+              var_in_rescue = 0
+              IO.puts ""
+          catch
+            :exit, reason1 -> IO.puts ""
+            reason2 ->
+              var_in_catch = 0
+              IO.puts ""
+          else
+            {:atom, var_on_else} -> IO.puts ""
+            :atom ->
+              var_in_else = 0
+              IO.puts ""
+          after
             var_in_after = 0
             IO.puts ""
-        end
-        var_out2 = 1
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{name: :msg1, positions: [{4, 13}], scope_id: 4},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 4)
-
-    assert [
-             %VarInfo{name: :var_in, positions: [{6, 7}], scope_id: 5},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 7)
-
-    assert [
-             %VarInfo{name: :var_in_after, positions: [{10, 7}], scope_id: 7},
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 11)
-
-    assert [
-             %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-             %VarInfo{name: :var_out2, positions: [{13, 3}], scope_id: 2}
-           ] = get_line_vars(state, 14)
-  end
-
-  test "functions of arity 0 should not be in the vars list" do
-    state =
-      """
-      defmodule MyModule do
-        myself = self
-        mynode = node()
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert [
-             %VarInfo{name: :mynode, positions: [{3, 3}], scope_id: 2},
-             %VarInfo{name: :myself, positions: [{2, 3}], scope_id: 2}
-           ] = get_line_vars(state, 3)
-  end
-
-  test "inherited vars" do
-    state =
-      """
-      top_level_var = 1
-      IO.puts ""
-      defmodule OuterModule do
-        outer_module_var = 1
-        IO.puts ""
-        defmodule InnerModule do
-          inner_module_var = 1
+          end
+          var_out2 = 1
           IO.puts ""
-          def func do
-            func_var = 1
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :var_in_try, positions: [{4, 5}], scope_id: 3},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 5)
+
+      assert [
+               %VarInfo{name: :e1, positions: [{7, 5}], scope_id: 5},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 7)
+
+      assert [
+               %VarInfo{name: :e2, positions: [{8, 5}], scope_id: 6},
+               %VarInfo{name: :var_in_rescue, positions: [{9, 7}], scope_id: 6},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 10)
+
+      assert [
+               %VarInfo{name: :reason1, positions: [{12, 12}], scope_id: 8},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 12)
+
+      assert [
+               %VarInfo{name: :reason2, positions: [{13, 5}], scope_id: 9},
+               %VarInfo{name: :var_in_catch, positions: [{14, 7}], scope_id: 9},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 15)
+
+      assert [
+               %VarInfo{name: :var_on_else, positions: [{17, 13}], scope_id: 11},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 17)
+
+      assert [
+               %VarInfo{name: :var_in_else, positions: [{19, 7}], scope_id: 12},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 20)
+
+      assert [
+               %VarInfo{name: :var_in_after, positions: [{22, 5}], scope_id: 13},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 23)
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+               %VarInfo{name: :var_out2, positions: [{25, 3}], scope_id: 2}
+             ] = get_line_vars(state, 26)
+    end
+
+    test "vars defined inside a `receive`" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          receive do
+            {:atom, msg1} -> IO.puts ""
+            :msg ->
+              var_in = 0
+              IO.puts ""
+          after
+            300 ->
+              var_in_after = 0
+              IO.puts ""
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :msg1, positions: [{4, 13}], scope_id: 4},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 4)
+
+      assert [
+               %VarInfo{name: :var_in, positions: [{6, 7}], scope_id: 5},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 7)
+
+      assert [
+               %VarInfo{name: :var_in_after, positions: [{10, 7}], scope_id: 7},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 11)
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
+               %VarInfo{name: :var_out2, positions: [{13, 3}], scope_id: 2}
+             ] = get_line_vars(state, 14)
+    end
+
+    test "functions of arity 0 should not be in the vars list" do
+      state =
+        """
+        defmodule MyModule do
+          myself = self
+          mynode = node()
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :mynode, positions: [{3, 3}], scope_id: 2},
+               %VarInfo{name: :myself, positions: [{2, 3}], scope_id: 2}
+             ] = get_line_vars(state, 3)
+    end
+
+    test "inherited vars" do
+      state =
+        """
+        top_level_var = 1
+        IO.puts ""
+        defmodule OuterModule do
+          outer_module_var = 1
+          IO.puts ""
+          defmodule InnerModule do
+            inner_module_var = 1
+            IO.puts ""
+            def func do
+              func_var = 1
+              IO.puts ""
+            end
             IO.puts ""
           end
           IO.puts ""
         end
         IO.puts ""
-      end
-      IO.puts ""
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert [
-             %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
-           ] = get_line_vars(state, 2)
+      assert [
+               %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+             ] = get_line_vars(state, 2)
 
-    assert [
-             %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
-             %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
-           ] = get_line_vars(state, 5)
+      assert [
+               %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
+               %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+             ] = get_line_vars(state, 5)
 
-    assert [
-             %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: 4},
-             %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
-             %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
-           ] = get_line_vars(state, 8)
+      assert [
+               %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: 4},
+               %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
+               %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+             ] = get_line_vars(state, 8)
 
-    assert [
-             %VarInfo{name: :func_var, positions: [{10, 7}], scope_id: 6}
-           ] = get_line_vars(state, 11)
+      assert [
+               %VarInfo{name: :func_var, positions: [{10, 7}], scope_id: 6}
+             ] = get_line_vars(state, 11)
 
-    assert [
-             %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: 4},
-             %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
-             %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
-           ] = get_line_vars(state, 13)
+      assert [
+               %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: 4},
+               %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
+               %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+             ] = get_line_vars(state, 13)
 
-    assert [
-             %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
-             %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
-           ] = get_line_vars(state, 15)
+      assert [
+               %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
+               %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+             ] = get_line_vars(state, 15)
 
-    assert [
-             %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
-           ] = get_line_vars(state, 17)
-  end
+      assert [
+               %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+             ] = get_line_vars(state, 17)
+    end
 
-  test "vars as a struct type" do
-    state =
-      """
-      defmodule MyModule do
-        def func(%my_var{}, %_my_other{}, %_{}, x) do
-          %abc{} = x
-          IO.puts ""
+    test "vars as a struct type" do
+      state =
+        """
+        defmodule MyModule do
+          def func(%my_var{}, %_my_other{}, %_{}, x) do
+            %abc{} = x
+            IO.puts ""
+          end
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert [
-             %VarInfo{is_definition: true, name: :abc, positions: [{3, 6}], scope_id: 4},
-             %VarInfo{is_definition: true, name: :my_var, positions: [{2, 13}], scope_id: 3},
-             %VarInfo{is_definition: true, name: :x, positions: [{2, 43}, {3, 14}], scope_id: 3}
-           ] = state |> get_line_vars(4)
+      assert [
+               %VarInfo{is_definition: true, name: :abc, positions: [{3, 6}], scope_id: 4},
+               %VarInfo{is_definition: true, name: :my_var, positions: [{2, 13}], scope_id: 3},
+               %VarInfo{is_definition: true, name: :x, positions: [{2, 43}, {3, 14}], scope_id: 3}
+             ] = state |> get_line_vars(4)
+    end
   end
 
   describe "infer vars type information from guards" do
@@ -1724,1383 +2131,1384 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-  test "aliases" do
-    state =
-      """
-      defmodule OuterModule do
-        alias List, as: MyList
-        def a1, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
-        defmodule InnerModule do
-          alias Enum, as: MyEnum
-          def a1, do: IO.puts "InnerModule " <> inspect(__ENV__.aliases)
-          def func do
-            alias String, as: MyString
-            IO.puts ""
-            if true do
-              alias Macro, as: MyMacro
+  describe "alias" do
+    test "aliases" do
+      state =
+        """
+        defmodule OuterModule do
+          alias List, as: MyList
+          def a1, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
+          defmodule InnerModule do
+            alias Enum, as: MyEnum
+            def a1, do: IO.puts "InnerModule " <> inspect(__ENV__.aliases)
+            def func do
+              alias String, as: MyString
+              IO.puts ""
+              if true do
+                alias Macro, as: MyMacro
+                IO.puts ""
+              end
               IO.puts ""
             end
             IO.puts ""
           end
+          def a2, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
+          alias Code, as: MyCode
+          def a3, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
+          defmodule AnotherInnerModule do
+            def a1, do: IO.puts "AnotherInnerModule " <> inspect(__ENV__.aliases)
+          end
+          def a4, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
+          defmodule SomeInnerModule.Nested do
+            def a1, do: IO.puts "SomeInnerModule.Nested " <> inspect(__ENV__.aliases)
+          end
+          def a5, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
+        end
+        IO.puts ""
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 3) == [{MyList, List}]
+
+      assert get_line_aliases(state, 6) == [
+               {MyList, List},
+               {InnerModule, OuterModule.InnerModule},
+               {MyEnum, Enum}
+             ]
+
+      assert get_line_aliases(state, 9) == [
+               {MyList, List},
+               {InnerModule, OuterModule.InnerModule},
+               {MyEnum, Enum},
+               {MyString, String}
+             ]
+
+      assert get_line_aliases(state, 12) == [
+               {MyList, List},
+               {InnerModule, OuterModule.InnerModule},
+               {MyEnum, Enum},
+               {MyString, String},
+               {MyMacro, Macro}
+             ]
+
+      assert get_line_aliases(state, 14) == [
+               {MyList, List},
+               {InnerModule, OuterModule.InnerModule},
+               {MyEnum, Enum},
+               {MyString, String}
+             ]
+
+      assert get_line_aliases(state, 16) == [
+               {MyList, List},
+               {InnerModule, OuterModule.InnerModule},
+               {MyEnum, Enum}
+             ]
+
+      # submodule defines an implicit alias in parent module
+      assert get_line_aliases(state, 18) == [
+               {MyList, List},
+               {InnerModule, OuterModule.InnerModule}
+             ]
+
+      assert get_line_aliases(state, 20) == [
+               {MyList, List},
+               {InnerModule, OuterModule.InnerModule},
+               {MyCode, Code}
+             ]
+
+      assert get_line_aliases(state, 22) == [
+               {MyList, List},
+               {InnerModule, OuterModule.InnerModule},
+               {MyCode, Code},
+               {AnotherInnerModule, OuterModule.AnotherInnerModule}
+             ]
+
+      assert get_line_aliases(state, 24) == [
+               {MyList, List},
+               {InnerModule, OuterModule.InnerModule},
+               {MyCode, Code},
+               {AnotherInnerModule, OuterModule.AnotherInnerModule}
+             ]
+
+      # submodule aliases are inherited to sibling submodules
+      assert get_line_aliases(state, 26) == [
+               {MyList, List},
+               {InnerModule, OuterModule.InnerModule},
+               {MyCode, Code},
+               {AnotherInnerModule, OuterModule.AnotherInnerModule},
+               {SomeInnerModule, OuterModule.SomeInnerModule}
+             ]
+
+      # submodule Sub0.Sub1.Sub2 is equivalent to alias Sub0
+      assert get_line_aliases(state, 28) == [
+               {MyList, List},
+               {InnerModule, OuterModule.InnerModule},
+               {MyCode, Code},
+               {AnotherInnerModule, OuterModule.AnotherInnerModule},
+               {SomeInnerModule, OuterModule.SomeInnerModule}
+             ]
+
+      assert get_line_aliases(state, 30) == []
+    end
+
+    test "nested module alias" do
+      state =
+        """
+        defmodule Parent.Nested do
           IO.puts ""
         end
-        def a2, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
-        alias Code, as: MyCode
-        def a3, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
-        defmodule AnotherInnerModule do
-          def a1, do: IO.puts "AnotherInnerModule " <> inspect(__ENV__.aliases)
-        end
-        def a4, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
-        defmodule SomeInnerModule.Nested do
-          def a1, do: IO.puts "SomeInnerModule.Nested " <> inspect(__ENV__.aliases)
-        end
-        def a5, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
-      end
-      IO.puts ""
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert get_line_aliases(state, 3) == [{MyList, List}]
+      assert get_line_aliases(state, 2) == []
+    end
 
-    assert get_line_aliases(state, 6) == [
-             {MyList, List},
-             {InnerModule, OuterModule.InnerModule},
-             {MyEnum, Enum}
-           ]
-
-    assert get_line_aliases(state, 9) == [
-             {MyList, List},
-             {InnerModule, OuterModule.InnerModule},
-             {MyEnum, Enum},
-             {MyString, String}
-           ]
-
-    assert get_line_aliases(state, 12) == [
-             {MyList, List},
-             {InnerModule, OuterModule.InnerModule},
-             {MyEnum, Enum},
-             {MyString, String},
-             {MyMacro, Macro}
-           ]
-
-    assert get_line_aliases(state, 14) == [
-             {MyList, List},
-             {InnerModule, OuterModule.InnerModule},
-             {MyEnum, Enum},
-             {MyString, String}
-           ]
-
-    assert get_line_aliases(state, 16) == [
-             {MyList, List},
-             {InnerModule, OuterModule.InnerModule},
-             {MyEnum, Enum}
-           ]
-
-    # submodule defines an implicit alias in parent module
-    assert get_line_aliases(state, 18) == [{MyList, List}, {InnerModule, OuterModule.InnerModule}]
-
-    assert get_line_aliases(state, 20) == [
-             {MyList, List},
-             {InnerModule, OuterModule.InnerModule},
-             {MyCode, Code}
-           ]
-
-    assert get_line_aliases(state, 22) == [
-             {MyList, List},
-             {InnerModule, OuterModule.InnerModule},
-             {MyCode, Code},
-             {AnotherInnerModule, OuterModule.AnotherInnerModule}
-           ]
-
-    assert get_line_aliases(state, 24) == [
-             {MyList, List},
-             {InnerModule, OuterModule.InnerModule},
-             {MyCode, Code},
-             {AnotherInnerModule, OuterModule.AnotherInnerModule}
-           ]
-
-    # submodule aliases are inherited to sibling submodules
-    assert get_line_aliases(state, 26) == [
-             {MyList, List},
-             {InnerModule, OuterModule.InnerModule},
-             {MyCode, Code},
-             {AnotherInnerModule, OuterModule.AnotherInnerModule},
-             {SomeInnerModule, OuterModule.SomeInnerModule}
-           ]
-
-    # submodule Sub0.Sub1.Sub2 is equivalent to alias Sub0
-    assert get_line_aliases(state, 28) == [
-             {MyList, List},
-             {InnerModule, OuterModule.InnerModule},
-             {MyCode, Code},
-             {AnotherInnerModule, OuterModule.AnotherInnerModule},
-             {SomeInnerModule, OuterModule.SomeInnerModule}
-           ]
-
-    assert get_line_aliases(state, 30) == []
-  end
-
-  test "nested module alias" do
-    state =
-      """
-      defmodule Parent.Nested do
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 2) == []
-  end
-
-  test "submodule alias" do
-    state =
-      """
-      defmodule Parent do
-        alias OtherParent.Child
-        IO.puts ""
-        defmodule Some do
+    test "submodule alias" do
+      state =
+        """
+        defmodule Parent do
+          alias OtherParent.Child
+          IO.puts ""
+          defmodule Some do
+            IO.puts ""
+          end
+          IO.puts ""
+          defmodule Other.One do
+            IO.puts ""
+          end
+          IO.puts ""
+          defprotocol MyProt do
+            def a(t)
+          end
           IO.puts ""
         end
-        IO.puts ""
-        defmodule Other.One do
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
+      assert get_line_aliases(state, 5) == [{Child, OtherParent.Child}, {Some, Parent.Some}]
+      assert get_line_aliases(state, 7) == [{Child, OtherParent.Child}, {Some, Parent.Some}]
+
+      assert get_line_aliases(state, 9) == [
+               {Child, OtherParent.Child},
+               {Some, Parent.Some},
+               {Other, Parent.Other}
+             ]
+
+      assert get_line_aliases(state, 11) == [
+               {Child, OtherParent.Child},
+               {Some, Parent.Some},
+               {Other, Parent.Other}
+             ]
+
+      assert get_line_aliases(state, 15) == [
+               {Child, OtherParent.Child},
+               {Some, Parent.Some},
+               {Other, Parent.Other},
+               {MyProt, Parent.MyProt}
+             ]
+    end
+
+    test "submodule alias nested parent" do
+      state =
+        """
+        defmodule Parent.Nested do
+          alias OtherParent.Child
           IO.puts ""
-        end
-        IO.puts ""
-        defprotocol MyProt do
-          def a(t)
-        end
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
-    assert get_line_aliases(state, 5) == [{Child, OtherParent.Child}, {Some, Parent.Some}]
-    assert get_line_aliases(state, 7) == [{Child, OtherParent.Child}, {Some, Parent.Some}]
-
-    assert get_line_aliases(state, 9) == [
-             {Child, OtherParent.Child},
-             {Some, Parent.Some},
-             {Other, Parent.Other}
-           ]
-
-    assert get_line_aliases(state, 11) == [
-             {Child, OtherParent.Child},
-             {Some, Parent.Some},
-             {Other, Parent.Other}
-           ]
-
-    assert get_line_aliases(state, 15) == [
-             {Child, OtherParent.Child},
-             {Some, Parent.Some},
-             {Other, Parent.Other},
-             {MyProt, Parent.MyProt}
-           ]
-  end
-
-  test "submodule alias nested parent" do
-    state =
-      """
-      defmodule Parent.Nested do
-        alias OtherParent.Child
-        IO.puts ""
-        defmodule Some do
+          defmodule Some do
+            def a1, do: IO.puts "Some " <> inspect(__ENV__.aliases)
+          end
           def a1, do: IO.puts "Some " <> inspect(__ENV__.aliases)
+          defmodule Other.One do
+            def a1, do: IO.puts "Other.One " <> inspect(__ENV__.aliases)
+          end
+          def a2, do: IO.puts "Some " <> inspect(__ENV__.aliases)
         end
-        def a1, do: IO.puts "Some " <> inspect(__ENV__.aliases)
-        defmodule Other.One do
-          def a1, do: IO.puts "Other.One " <> inspect(__ENV__.aliases)
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
+
+      assert get_line_aliases(state, 5) == [
+               {Child, OtherParent.Child},
+               {Some, Parent.Nested.Some}
+             ]
+
+      assert get_line_aliases(state, 7) == [
+               {Child, OtherParent.Child},
+               {Some, Parent.Nested.Some}
+             ]
+
+      assert get_line_aliases(state, 9) == [
+               {Child, OtherParent.Child},
+               {Some, Parent.Nested.Some},
+               {Other, Parent.Nested.Other}
+             ]
+
+      assert get_line_aliases(state, 11) == [
+               {Child, OtherParent.Child},
+               {Some, Parent.Nested.Some},
+               {Other, Parent.Nested.Other}
+             ]
+    end
+
+    # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1459604747
+    test "submodule overwriting alias" do
+      state =
+        """
+        defmodule Parent do
+          alias OtherParent.Child
+          def a1, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
+          defmodule Child do
+            def a2, do: IO.puts "Parent.Child " <> inspect(__ENV__.aliases)
+          end
+          def a3, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
         end
-        def a2, do: IO.puts "Some " <> inspect(__ENV__.aliases)
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
-    assert get_line_aliases(state, 5) == [{Child, OtherParent.Child}, {Some, Parent.Nested.Some}]
-    assert get_line_aliases(state, 7) == [{Child, OtherParent.Child}, {Some, Parent.Nested.Some}]
+      assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
+      assert get_line_aliases(state, 5) == [{Child, Parent.Child}]
+      assert get_line_aliases(state, 7) == [{Child, Parent.Child}]
+    end
 
-    assert get_line_aliases(state, 9) == [
-             {Child, OtherParent.Child},
-             {Some, Parent.Nested.Some},
-             {Other, Parent.Nested.Other}
-           ]
-
-    assert get_line_aliases(state, 11) == [
-             {Child, OtherParent.Child},
-             {Some, Parent.Nested.Some},
-             {Other, Parent.Nested.Other}
-           ]
-  end
-
-  # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1459604747
-  test "submodule overwriting alias" do
-    state =
-      """
-      defmodule Parent do
-        alias OtherParent.Child
-        def a1, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
-        defmodule Child do
-          def a2, do: IO.puts "Parent.Child " <> inspect(__ENV__.aliases)
-        end
-        def a3, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
-    assert get_line_aliases(state, 5) == [{Child, Parent.Child}]
-    assert get_line_aliases(state, 7) == [{Child, Parent.Child}]
-  end
-
-  # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1459604747
-  test "nested submodule overwriting alias" do
-    state =
-      """
-      defmodule Parent do
-        alias OtherParent.Child
-        IO.puts ""
-        defmodule Child.One do
+    # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1459604747
+    test "nested submodule overwriting alias" do
+      state =
+        """
+        defmodule Parent do
+          alias OtherParent.Child
+          IO.puts ""
+          defmodule Child.One do
+            IO.puts ""
+          end
           IO.puts ""
         end
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
-    assert get_line_aliases(state, 5) == [{Child, Parent.Child}]
-    assert get_line_aliases(state, 7) == [{Child, Parent.Child}]
-  end
+      assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
+      assert get_line_aliases(state, 5) == [{Child, Parent.Child}]
+      assert get_line_aliases(state, 7) == [{Child, Parent.Child}]
+    end
 
-  # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
-  test "external submodule overwriting alias" do
-    state =
-      """
-      defmodule Parent do
-        alias OtherParent.Child
-        def a1, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
-        defmodule Elixir.Child do
-          def a2, do: IO.puts "Elixir.Child " <> inspect(__ENV__.aliases)
+    # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
+    test "external submodule overwriting alias" do
+      state =
+        """
+        defmodule Parent do
+          alias OtherParent.Child
+          def a1, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
+          defmodule Elixir.Child do
+            def a2, do: IO.puts "Elixir.Child " <> inspect(__ENV__.aliases)
+          end
+          def a3, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
         end
-        def a3, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
+
+      if Version.match?(System.version(), "< 1.16.0-dev") do
+        assert get_line_aliases(state, 5) == []
+        assert get_line_aliases(state, 7) == []
+      else
+        # on elixir >= 1.16 no unaliasing is happening
+        # https://github.com/elixir-lang/elixir/issues/12456
+        assert get_line_aliases(state, 5) == [{Child, OtherParent.Child}]
+        assert get_line_aliases(state, 7) == [{Child, OtherParent.Child}]
       end
-      """
-      |> string_to_state
+    end
 
-    assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
+    # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
+    test "nested external submodule overwriting alias" do
+      state =
+        """
+        defmodule Parent do
+          alias OtherParent.Child
+          def a1, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
+          defmodule Elixir.Child.One do
+            def a2, do: IO.puts "Elixir.Child.One " <> inspect(__ENV__.aliases)
+          end
+          def a3, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
+        end
+        """
+        |> string_to_state
 
-    if Version.match?(System.version(), "< 1.16.0-dev") do
-      assert get_line_aliases(state, 5) == []
-      assert get_line_aliases(state, 7) == []
-    else
-      # on elixir >= 1.16 no unaliasing is happening
-      # https://github.com/elixir-lang/elixir/issues/12456
+      assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
       assert get_line_aliases(state, 5) == [{Child, OtherParent.Child}]
       assert get_line_aliases(state, 7) == [{Child, OtherParent.Child}]
     end
-  end
 
-  # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
-  test "nested external submodule overwriting alias" do
-    state =
-      """
-      defmodule Parent do
-        alias OtherParent.Child
-        def a1, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
-        defmodule Elixir.Child.One do
-          def a2, do: IO.puts "Elixir.Child.One " <> inspect(__ENV__.aliases)
-        end
-        def a3, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
-    assert get_line_aliases(state, 5) == [{Child, OtherParent.Child}]
-    assert get_line_aliases(state, 7) == [{Child, OtherParent.Child}]
-  end
-
-  test "aliases with `fn`" do
-    state =
-      """
-      defmodule MyModule do
-        alias Enum, as: MyEnum
-        IO.puts ""
-        fn var_on ->
-          alias List, as: MyList
+    test "aliases with `fn`" do
+      state =
+        """
+        defmodule MyModule do
+          alias Enum, as: MyEnum
           IO.puts ""
-        end
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 3) == [{MyEnum, Enum}]
-    assert get_line_aliases(state, 6) == [{MyEnum, Enum}, {MyList, List}]
-    assert get_line_aliases(state, 8) == [{MyEnum, Enum}]
-  end
-
-  test "aliases defined with multi alias notation" do
-    state =
-      """
-      defmodule MyModule do
-        alias Foo.{User, Email, Elixir.Test}
-        alias Elixir.User.{Data.Other, Address}
-        alias Elixir.{String.Stream}
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 5) == [
-             {User, Foo.User},
-             {Email, Foo.Email},
-             {Test, Foo.Elixir.Test},
-             {Other, User.Data.Other},
-             {Address, User.Address},
-             {Stream, String.Stream}
-           ]
-  end
-
-  test "aliases defined with multi alias notation __MODULE__" do
-    state =
-      """
-      defmodule MyModule do
-        alias __MODULE__.{User, Email}
-        alias __MODULE__.Sub.{A, B.C}
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 4) == [
-             {User, MyModule.User},
-             {Email, MyModule.Email},
-             {A, MyModule.Sub.A},
-             {C, MyModule.Sub.B.C}
-           ]
-  end
-
-  test "aliases with __MODULE__" do
-    state =
-      """
-      defmodule MyModule do
-        alias __MODULE__.Sub
-        alias __MODULE__
-        alias __MODULE__.A.B, as: C
-        alias __MODULE__, as: Some
-        alias Some.Private
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 7) == [
-             {Sub, MyModule.Sub},
-             {C, MyModule.A.B},
-             {Some, MyModule},
-             {Private, MyModule.Private}
-           ]
-  end
-
-  test "aliases with __MODULE__ when module has parts" do
-    state =
-      """
-      defmodule MyModule.Sub do
-        alias __MODULE__
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 3) == [
-             {Sub, MyModule.Sub}
-           ]
-  end
-
-  test "aliases of aliases" do
-    ElixirSense.Core.Source.split_module_and_func("Elixir.Keyword", CurrentMod, [
-      {Keyword, My.Mod}
-    ])
-
-    state =
-      """
-      defmodule MyModule do
-        alias Foo.Bar, as: Fb
-        alias Fb.Sub, as: S
-        alias Elixir.Fb.Oth
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 5) == [{Fb, Foo.Bar}, {S, Foo.Bar.Sub}, {Oth, Fb.Oth}]
-  end
-
-  test "aliases erlang module" do
-    state =
-      """
-      defmodule MyModule do
-        alias :ets, as: Ets
-        alias :erlang_module
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    # alias :erlang_module is a compile error since 1.14
-    assert get_line_aliases(state, 4) == [{Ets, :ets}]
-  end
-
-  test "aliases atom module" do
-    state =
-      """
-      defmodule MyModule do
-        alias :"Elixir.A.B"
-        alias :"Elixir.A.C", as: S
-        alias :"Elixir.A.D", as: :"Elixir.X"
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 5) == [{B, A.B}, {S, A.C}, {X, A.D}]
-  end
-
-  test "aliases defined with multi alias notation (multiline)" do
-    state =
-      """
-      defmodule A do
-        alias A.{
-          B
-        }
-        IO.puts("")
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 5) == [{B, A.B}]
-  end
-
-  test "aliases defined with multi alias notation nested" do
-    state =
-      """
-      defmodule A do
-        alias Components.{Dialog, Dialog.Footer, Button, :"Elixir.Other"}
-        alias Some.{}
-        def a1, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 4) == [
-             {Dialog, Components.Dialog},
-             {Footer, Components.Dialog.Footer},
-             {Button, Components.Button},
-             {Other, Components.Other}
-           ]
-  end
-
-  test "aliases defined with multi alias notation with atom module" do
-    state =
-      """
-      defmodule A do
-        alias :"Elixir.Components".{Dialog, Dialog.Footer, Button, :"Elixir.Other"}
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 3) == [
-             {Dialog, Components.Dialog},
-             {Footer, Components.Dialog.Footer},
-             {Button, Components.Button},
-             {Other, Components.Other}
-           ]
-  end
-
-  test "aliases without options" do
-    state =
-      """
-      defmodule MyModule do
-        alias Foo.User
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 3) == [{User, Foo.User}]
-  end
-
-  test "aliases single level without options" do
-    state =
-      """
-      defmodule MyModule do
-        alias Foo
-        alias :erlang_module
-        IO.puts ""
-        alias Enum, as: Foo
-        alias Elixir.Foo
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 4) == []
-    assert get_line_aliases(state, 7) == []
-  end
-
-  test "aliases duplicated" do
-    state =
-      """
-      defmodule MyModule do
-        alias Foo.User
-        alias Foo.User
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 4) == [{User, Foo.User}]
-  end
-
-  test "unalias" do
-    state =
-      """
-      defmodule MyModule do
-        alias Foo.User
-        IO.puts ""
-        alias Elixir.User
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_aliases(state, 3) == [{User, Foo.User}]
-    assert get_line_aliases(state, 5) == []
-  end
-
-  test "import with options" do
-    state =
-      """
-      defmodule MyModule do
-        import Enum, only: []
-        import Elixir.{List}, only: []
-        import :lists, only: []
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_imports(state, 5) == [
-             {Kernel, []},
-             {Enum, [only: []]},
-             {List, []},
-             {:lists, [only: []]}
-           ]
-  end
-
-  test "imports defined with multi import notation" do
-    state =
-      """
-      defmodule MyModule do
-        import Foo.Bar.{User, Email, :"Elixir.Other"}
-        import Bar.{}
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_imports(state, 4) == [
-             {Kernel, []},
-             {Foo.Bar.User, []},
-             {Foo.Bar.Email, []},
-             {Foo.Bar.Other, []}
-           ]
-  end
-
-  test "imports defined with multi import notation with atom module" do
-    state =
-      """
-      defmodule MyModule do
-        import :"Elixir.Foo.Bar".{User, Email, :"Elixir.Other"}
-        import Bar.{}
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_imports(state, 4) == [
-             {Kernel, []},
-             {Foo.Bar.User, []},
-             {Foo.Bar.Email, []},
-             {Foo.Bar.Other, []}
-           ]
-  end
-
-  test "imports" do
-    state =
-      """
-      defmodule OuterModule do
-        import List
-        IO.puts ""
-        defmodule InnerModule do
-          import Enum.List
-          IO.puts ""
-          def func do
-            import String
-            IO.puts ""
-            if true do
-              import Macro
-              IO.puts ""
-            end
+          fn var_on ->
+            alias List, as: MyList
             IO.puts ""
           end
           IO.puts ""
         end
-        import Code
-        IO.puts ""
-      end
-      IO.puts ""
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert get_line_imports(state, 3) == [{Kernel, []}, {List, []}]
+      assert get_line_aliases(state, 3) == [{MyEnum, Enum}]
+      assert get_line_aliases(state, 6) == [{MyEnum, Enum}, {MyList, List}]
+      assert get_line_aliases(state, 8) == [{MyEnum, Enum}]
+    end
 
-    # note that `import` causes `require` module's macros available
-    assert get_line_requires(state, 3) == [Application, Kernel, Kernel.Typespec, List]
+    test "aliases defined with multi alias notation" do
+      state =
+        """
+        defmodule MyModule do
+          alias Foo.{User, Email, Elixir.Test}
+          alias Elixir.User.{Data.Other, Address}
+          alias Elixir.{String.Stream}
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-    assert get_line_imports(state, 6) == [{Kernel, []}, {List, []}, {Enum.List, []}]
-    assert get_line_imports(state, 9) == [{Kernel, []}, {List, []}, {Enum.List, []}, {String, []}]
+      assert get_line_aliases(state, 5) == [
+               {User, Foo.User},
+               {Email, Foo.Email},
+               {Test, Foo.Elixir.Test},
+               {Other, User.Data.Other},
+               {Address, User.Address},
+               {Stream, String.Stream}
+             ]
+    end
 
-    assert get_line_imports(state, 12) == [
-             {Kernel, []},
-             {List, []},
-             {Enum.List, []},
-             {String, []},
-             {Macro, []}
-           ]
+    test "aliases defined with multi alias notation __MODULE__" do
+      state =
+        """
+        defmodule MyModule do
+          alias __MODULE__.{User, Email}
+          alias __MODULE__.Sub.{A, B.C}
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-    assert get_line_imports(state, 14) == [
-             {Kernel, []},
-             {List, []},
-             {Enum.List, []},
-             {String, []}
-           ]
+      assert get_line_aliases(state, 4) == [
+               {User, MyModule.User},
+               {Email, MyModule.Email},
+               {A, MyModule.Sub.A},
+               {C, MyModule.Sub.B.C}
+             ]
+    end
 
-    assert get_line_imports(state, 16) == [{Kernel, []}, {List, []}, {Enum.List, []}]
-    assert get_line_imports(state, 19) == [{Kernel, []}, {List, []}, {Code, []}]
-    assert get_line_imports(state, 21) == [{Kernel, []}]
+    test "aliases with __MODULE__" do
+      state =
+        """
+        defmodule MyModule do
+          alias __MODULE__.Sub
+          alias __MODULE__
+          alias __MODULE__.A.B, as: C
+          alias __MODULE__, as: Some
+          alias Some.Private
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 7) == [
+               {Sub, MyModule.Sub},
+               {C, MyModule.A.B},
+               {Some, MyModule},
+               {Private, MyModule.Private}
+             ]
+    end
+
+    test "aliases with __MODULE__ when module has parts" do
+      state =
+        """
+        defmodule MyModule.Sub do
+          alias __MODULE__
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 3) == [
+               {Sub, MyModule.Sub}
+             ]
+    end
+
+    test "aliases of aliases" do
+      ElixirSense.Core.Source.split_module_and_func("Elixir.Keyword", CurrentMod, [
+        {Keyword, My.Mod}
+      ])
+
+      state =
+        """
+        defmodule MyModule do
+          alias Foo.Bar, as: Fb
+          alias Fb.Sub, as: S
+          alias Elixir.Fb.Oth
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 5) == [{Fb, Foo.Bar}, {S, Foo.Bar.Sub}, {Oth, Fb.Oth}]
+    end
+
+    test "aliases erlang module" do
+      maybe_forbidden =
+        if Version.match?(System.version(), "< 1.14.0-dev") do
+          "alias :erlang_module"
+        else
+          ""
+        end
+
+      state =
+        """
+        defmodule MyModule do
+          alias :ets, as: Ets
+          #{maybe_forbidden}
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      # alias :erlang_module is a compile error since 1.14
+      assert get_line_aliases(state, 4) == [{Ets, :ets}]
+    end
+
+    test "aliases atom module" do
+      state =
+        """
+        defmodule MyModule do
+          alias :"Elixir.A.B"
+          alias :"Elixir.A.C", as: S
+          alias :"Elixir.A.D", as: :"Elixir.X"
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 5) == [{B, A.B}, {S, A.C}, {X, A.D}]
+    end
+
+    test "aliases defined with multi alias notation (multiline)" do
+      state =
+        """
+        defmodule A do
+          alias A.{
+            B
+          }
+          IO.puts("")
+        end
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 5) == [{B, A.B}]
+    end
+
+    test "aliases defined with multi alias notation nested" do
+      state =
+        """
+        defmodule A do
+          alias Components.{Dialog, Dialog.Footer, Button, :"Elixir.Other"}
+          alias Some.{}
+          def a1, do: IO.puts "Parent " <> inspect(__ENV__.aliases)
+        end
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 4) == [
+               {Dialog, Components.Dialog},
+               {Footer, Components.Dialog.Footer},
+               {Button, Components.Button},
+               {Other, Components.Other}
+             ]
+    end
+
+    test "aliases defined with multi alias notation with atom module" do
+      state =
+        """
+        defmodule A do
+          alias :"Elixir.Components".{Dialog, Dialog.Footer, Button, :"Elixir.Other"}
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 3) == [
+               {Dialog, Components.Dialog},
+               {Footer, Components.Dialog.Footer},
+               {Button, Components.Button},
+               {Other, Components.Other}
+             ]
+    end
+
+    test "aliases without options" do
+      state =
+        """
+        defmodule MyModule do
+          alias Foo.User
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 3) == [{User, Foo.User}]
+    end
+
+    test "aliases single level without options" do
+      state =
+        """
+        defmodule MyModule do
+          alias Foo
+          IO.puts ""
+          alias Enum, as: Foo
+          alias Elixir.Foo
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 3) == []
+      assert get_line_aliases(state, 6) == []
+    end
+
+    test "aliases duplicated" do
+      state =
+        """
+        defmodule MyModule do
+          alias Foo.User
+          alias Foo.User
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 4) == [{User, Foo.User}]
+    end
+
+    test "unalias" do
+      state =
+        """
+        defmodule MyModule do
+          alias Foo.User
+          IO.puts ""
+          alias Elixir.User
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_aliases(state, 3) == [{User, Foo.User}]
+      assert get_line_aliases(state, 5) == []
+    end
   end
 
-  test "imports duplicated" do
-    state =
-      """
-      defmodule OuterModule do
-        import List
-        import List
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+  describe "import" do
+    test "import with options" do
+      state =
+        """
+        defmodule MyModule do
+          import Enum, only: []
+          import Elixir.{List}, only: []
+          import :lists, only: []
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-    assert get_line_imports(state, 4) == [{Kernel, []}, {List, []}, {List, []}]
-  end
+      {functions, macros} = get_line_imports(state, 5)
+      assert Keyword.keys(functions) == [Kernel]
+      assert Keyword.keys(macros) == [Kernel]
+    end
 
-  test "imports with __MODULE__" do
-    state =
-      """
-      defmodule OuterModule do
-        import __MODULE__.Sub
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+    test "imports defined with multi import notation" do
+      state =
+        """
+        defmodule MyModule do
+          import Foo.Bar.{User, Email, :"Elixir.Other"}
+          import Bar.{}
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-    assert get_line_imports(state, 3) == [{Kernel, []}, {OuterModule.Sub, []}]
-  end
+      {functions, _macros} = get_line_imports(state, 4)
+      assert Keyword.keys(functions) == [Kernel]
+    end
 
-  test "imports aliased module" do
-    state =
-      """
-      defmodule OuterModule do
-        alias Some.Other.Module, as: S
-        import S
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+    test "imports defined with multi import notation with atom module" do
+      state =
+        """
+        defmodule MyModule do
+          import :"Elixir.Foo.Bar".{User, Email, :"Elixir.Other"}
+          import Bar.{}
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-    assert get_line_imports(state, 4) == [{Kernel, []}, {Some.Other.Module, []}]
-  end
+      {functions, _macros} = get_line_imports(state, 4)
+      assert Keyword.keys(functions) == [Kernel]
+    end
 
-  test "requires" do
-    state =
-      """
-      defmodule MyModule do
-        require Mod
-        IO.puts ""
-        defmodule Inner do
-          require OtherMod
+    test "imports" do
+      state =
+        """
+        defmodule OuterModule do
+          import List
+          IO.puts ""
+          defmodule InnerModule do
+            import Enumerable.List
+            IO.puts ""
+            def func do
+              import String
+              IO.puts ""
+              if true do
+                import Macro
+                IO.puts ""
+              end
+              IO.puts ""
+            end
+            IO.puts ""
+          end
+          import Code
           IO.puts ""
         end
         IO.puts ""
-      end
-      IO.puts ""
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert get_line_requires(state, 3) == [Application, Kernel, Kernel.Typespec, Mod]
-    assert get_line_requires(state, 6) == [Application, Kernel, Kernel.Typespec, Mod, OtherMod]
-    assert get_line_requires(state, 8) == [Application, Kernel, Kernel.Typespec, Mod]
-    assert get_line_requires(state, 10) == [Application, Kernel, Kernel.Typespec]
+      {functions, _macros} = get_line_imports(state, 3)
+      assert Keyword.keys(functions) == [List, Kernel]
+
+      # note that `import` causes `require` module's macros available
+      assert get_line_requires(state, 3) == prepend_default_requires([List])
+
+      {functions, _macros} = get_line_imports(state, 6)
+      assert Keyword.keys(functions) == [Enumerable.List, List, Kernel]
+
+      {functions, _macros} = get_line_imports(state, 9)
+      assert Keyword.keys(functions) == [String, Enumerable.List, List, Kernel]
+
+      {functions, _macros} = get_line_imports(state, 12)
+      assert Keyword.keys(functions) == [Macro, String, Enumerable.List, List, Kernel]
+
+      {functions, _macros} = get_line_imports(state, 14)
+      assert Keyword.keys(functions) == [String, Enumerable.List, List, Kernel]
+
+      {functions, _macros} = get_line_imports(state, 16)
+      assert Keyword.keys(functions) == [Enumerable.List, List, Kernel]
+      {functions, _macros} = get_line_imports(state, 19)
+      assert Keyword.keys(functions) == [Code, List, Kernel]
+      {functions, _macros} = get_line_imports(state, 21)
+      assert Keyword.keys(functions) == [Kernel]
+    end
+
+    test "imports duplicated" do
+      state =
+        """
+        defmodule OuterModule do
+          import List
+          import List
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      {functions, _macros} = get_line_imports(state, 4)
+      assert Keyword.keys(functions) == [List, Kernel]
+    end
+
+    test "imports with __MODULE__" do
+      state =
+        """
+        defmodule OuterModule do
+          import __MODULE__.Sub
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_imports(state, 3) == [{Kernel, []}, {OuterModule.Sub, []}]
+    end
+
+    test "imports aliased module" do
+      state =
+        """
+        defmodule OuterModule do
+          alias Some.Other.Module, as: S
+          import S
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_imports(state, 4) == [{Kernel, []}, {Some.Other.Module, []}]
+    end
   end
 
-  test "requires single level" do
-    state =
-      """
-      defmodule MyModule do
-        require Mod
+  describe "require" do
+    test "requires" do
+      state =
+        """
+        defmodule MyModule do
+          require Mod
+          IO.puts ""
+          defmodule Inner do
+            require OtherMod
+            IO.puts ""
+          end
+          IO.puts ""
+        end
         IO.puts ""
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert get_line_requires(state, 3) == [Application, Kernel, Kernel.Typespec, Mod]
+      assert get_line_requires(state, 3) == prepend_default_requires([Mod])
+      assert get_line_requires(state, 6) == prepend_default_requires([Mod, OtherMod])
+      assert get_line_requires(state, 8) == prepend_default_requires([Mod])
+      assert get_line_requires(state, 10) == prepend_default_requires([])
+    end
+
+    test "requires single level" do
+      state =
+        """
+        defmodule MyModule do
+          require Mod
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_requires(state, 3) == [Mod] |> prepend_default_requires
+    end
+
+    test "requires with __MODULE__" do
+      state =
+        """
+        defmodule MyModule do
+          require __MODULE__.Sub
+          require __MODULE__.A, as: B
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_requires(state, 4) ==
+               prepend_default_requires([
+                 MyModule.A,
+                 MyModule.Sub
+               ])
+
+      assert get_line_aliases(state, 4) == [{B, MyModule.A}]
+    end
+
+    test "requires with multi require notation" do
+      state =
+        """
+        defmodule MyModule do
+          require Mod.{Mo1, Mod2, :"Elixir.Mod3"}
+          require Foo.{}
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_requires(state, 4) ==
+               prepend_default_requires([Mod.Mo1, Mod.Mod2, Mod.Mod3])
+    end
+
+    test "requires with multi require notation with atom module" do
+      state =
+        """
+        defmodule MyModule do
+          require :"Elixir.Mod".{Mo1, Mod2, :"Elixir.Mod3"}
+          require Foo.{}
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_requires(state, 4) ==
+               prepend_default_requires([
+                 Mod.Mo1,
+                 Mod.Mod2,
+                 Mod.Mod3
+               ])
+    end
+
+    test "requires duplicated" do
+      state =
+        """
+        defmodule MyModule do
+          require Mod.Mo1
+          require Mod.Mo1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_requires(state, 4) == prepend_default_requires([Mod.Mo1])
+    end
+
+    test "requires with :as option" do
+      state =
+        """
+        defmodule MyModule do
+          require Integer, as: I
+          require :ets, as: E
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_requires(state, 4) == prepend_default_requires([Integer, :ets])
+      assert get_line_aliases(state, 4) == [{I, Integer}, {E, :ets}]
+    end
+
+    test "requires atom module" do
+      state =
+        """
+        defmodule MyModule do
+          require :my_mod
+          require :"Elixir.MyMod.Some"
+          require :"Elixir.MyMod.Other", as: A
+          require :"Elixir.MyMod.Other1", as: :"Elixir.A1"
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_requires(state, 6) ==
+               prepend_default_requires([
+                 MyMod.Other,
+                 MyMod.Other1,
+                 MyMod.Some,
+                 :my_mod
+               ])
+
+      assert get_line_aliases(state, 6) == [{A, MyMod.Other}, {A1, MyMod.Other1}]
+    end
+
+    test "requires aliased module" do
+      state =
+        """
+        defmodule MyModule do
+          alias Some.Other.Module, as: S
+          require S
+          require S.Sub
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_requires(state, 5) ==
+               prepend_default_requires([
+                 Some.Other.Module,
+                 Some.Other.Module.Sub
+               ])
+    end
   end
 
-  test "requires with __MODULE__" do
-    state =
-      """
-      defmodule MyModule do
-        require __MODULE__.Sub
-        require __MODULE__.A, as: B
+  describe "current module" do
+    test "current module" do
+      state =
+        """
         IO.puts ""
-      end
-      """
-      |> string_to_state
+        defmodule OuterModule do
+          IO.puts ""
+          defmodule InnerModule do
+            def func do
+              if true do
+                IO.puts ""
+              end
+            end
+          end
+          IO.puts ""
+        end
 
-    assert get_line_requires(state, 4) == [
-             Application,
-             Kernel,
-             Kernel.Typespec,
-             MyModule.A,
-             MyModule.Sub
-           ]
+        defmodule Some.Nested do
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-    assert get_line_aliases(state, 4) == [{B, MyModule.A}]
-  end
+      assert get_line_module(state, 1) == nil
+      assert get_line_protocol(state, 1) == nil
+      assert get_line_module(state, 3) == OuterModule
+      assert get_line_protocol(state, 3) == nil
+      assert get_line_module(state, 7) == OuterModule.InnerModule
+      assert get_line_protocol(state, 7) == nil
+      assert get_line_module(state, 11) == OuterModule
+      assert get_line_protocol(state, 11) == nil
 
-  test "requires with multi require notation" do
-    state =
-      """
-      defmodule MyModule do
-        require Mod.{Mo1, Mod2, :"Elixir.Mod3"}
-        require Foo.{}
+      assert get_line_module(state, 15) == Some.Nested
+      assert get_line_protocol(state, 15) == nil
+    end
+
+    test "current module with __MODULE__" do
+      state =
+        """
         IO.puts ""
-      end
-      """
-      |> string_to_state
+        defmodule OuterModule do
+          IO.puts ""
+          defmodule __MODULE__.InnerModule do
+            def func do
+              if true do
+                IO.puts ""
+              end
+            end
+          end
+          IO.puts ""
+        end
 
-    assert get_line_requires(state, 4) == [
-             Application,
-             Kernel,
-             Kernel.Typespec,
-             Mod.Mod3,
-             Mod.Mod2,
-             Mod.Mo1
-           ]
-  end
+        defmodule Some.Nested do
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-  test "requires with multi require notation with atom module" do
-    state =
-      """
-      defmodule MyModule do
-        require :"Elixir.Mod".{Mo1, Mod2, :"Elixir.Mod3"}
-        require Foo.{}
+      assert get_line_module(state, 1) == nil
+      assert get_line_protocol(state, 1) == nil
+      assert get_line_module(state, 3) == OuterModule
+      assert get_line_protocol(state, 3) == nil
+      assert get_line_module(state, 7) == OuterModule.InnerModule
+      assert get_line_protocol(state, 7) == nil
+      assert get_line_module(state, 11) == OuterModule
+      assert get_line_protocol(state, 11) == nil
+
+      assert get_line_module(state, 15) == Some.Nested
+      assert get_line_protocol(state, 15) == nil
+    end
+
+    test "current module with `Elixir` prefix" do
+      state =
+        """
         IO.puts ""
-      end
-      """
-      |> string_to_state
+        defmodule Elixir.OuterModule do
+          IO.puts ""
+          defmodule InnerModule do
+            IO.puts ""
+          end
 
-    assert get_line_requires(state, 4) == [
-             Application,
-             Kernel,
-             Kernel.Typespec,
-             Mod.Mod3,
-             Mod.Mod2,
-             Mod.Mo1
-           ]
-  end
+          defmodule Elixir.ExternalModule do
+            IO.puts ""
+          end
 
-  test "requires duplicated" do
-    state =
-      """
-      defmodule MyModule do
-        require Mod.Mo1
-        require Mod.Mo1
+          defprotocol Elixir.Reversible do
+            def reverse(term)
+            IO.puts ""
+          end
+          IO.puts ""
+        end
+
+        defmodule Elixir.Some.Nested do
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_module(state, 1) == Elixir
+      assert get_line_module(state, 3) == OuterModule
+      assert get_line_module(state, 5) == OuterModule.InnerModule
+      assert get_line_module(state, 9) == ExternalModule
+      assert get_line_module(state, 14) == Reversible
+      assert get_line_module(state, 16) == OuterModule
+      # external submodule does not create an alias
+      assert get_line_aliases(state, 16) == [{InnerModule, OuterModule.InnerModule}]
+
+      assert get_line_module(state, 20) == Some.Nested
+    end
+
+    test "current module with `Elixir` submodule" do
+      state =
+        """
         IO.puts ""
-      end
-      """
-      |> string_to_state
+        defmodule OuterModule do
+          IO.puts ""
 
-    assert get_line_requires(state, 4) == [Application, Kernel, Kernel.Typespec, Mod.Mo1]
-  end
+          defmodule Elixir do
+            IO.puts ""
+          end
 
-  test "requires with :as option" do
-    state =
-      """
-      defmodule MyModule do
-        require Integer, as: I
-        require :ets, as: E
+          IO.puts ""
+        end
+
+        defmodule Some.Nested do
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_module(state, 1) == nil
+      assert get_line_module(state, 3) == OuterModule
+      assert get_line_module(state, 6) == OuterModule.Elixir
+      assert get_line_module(state, 9) == OuterModule
+
+      assert get_line_module(state, 13) == Some.Nested
+    end
+
+    test "current module atom" do
+      state =
+        """
         IO.puts ""
-      end
-      """
-      |> string_to_state
+        defmodule :outer_module do
+          IO.puts ""
+          defmodule :inner_module do
+            def func do
+              if true do
+                IO.puts ""
+              end
+            end
+          end
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-    assert get_line_requires(state, 4) == [Application, Kernel, Kernel.Typespec, :ets, Integer]
-    assert get_line_aliases(state, 4) == [{I, Integer}, {E, :ets}]
-  end
+      assert get_line_module(state, 1) == nil
+      assert get_line_protocol(state, 1) == nil
+      assert get_line_module(state, 3) == :outer_module
+      assert get_line_protocol(state, 3) == nil
+      assert get_line_module(state, 7) == :inner_module
+      assert get_line_protocol(state, 7) == nil
+      assert get_line_module(state, 11) == :outer_module
+      assert get_line_protocol(state, 11) == nil
+    end
 
-  test "requires atom module" do
-    state =
-      """
-      defmodule MyModule do
-        require :my_mod
-        require :"Elixir.MyMod.Some"
-        require :"Elixir.MyMod.Other", as: A
-        require :"Elixir.MyMod.Other1", as: :"Elixir.A1"
+    test "current module as atom" do
+      state =
+        """
         IO.puts ""
-      end
-      """
-      |> string_to_state
+        defmodule :"Elixir.OuterModule" do
+          IO.puts ""
+          defmodule :"Elixir.InnerModule" do
+            def func do
+              if true do
+                IO.puts ""
+              end
+            end
+          end
+          IO.puts ""
 
-    assert get_line_requires(state, 6) == [
-             Application,
-             Kernel,
-             Kernel.Typespec,
-             MyMod.Other1,
-             MyMod.Other,
-             MyMod.Some,
-             :my_mod
-           ]
-
-    assert get_line_aliases(state, 6) == [{A, MyMod.Other}, {A1, MyMod.Other1}]
-  end
-
-  test "requires aliased module" do
-    state =
-      """
-      defmodule MyModule do
-        alias Some.Other.Module, as: S
-        require S
-        require S.Sub
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_requires(state, 5) == [
-             Application,
-             Kernel,
-             Kernel.Typespec,
-             Some.Other.Module.Sub,
-             Some.Other.Module
-           ]
-  end
-
-  test "current module" do
-    state =
-      """
-      IO.puts ""
-      defmodule OuterModule do
-        IO.puts ""
-        defmodule InnerModule do
-          def func do
-            if true do
-              IO.puts ""
+          defmodule :"Elixir.OuterModule.InnerModule1" do
+            def func do
+              if true do
+                IO.puts ""
+              end
             end
           end
         end
-        IO.puts ""
-      end
+        """
+        |> string_to_state
 
-      defmodule Some.Nested do
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+      assert get_line_module(state, 1) == nil
+      assert get_line_protocol(state, 1) == nil
+      assert get_line_module(state, 3) == OuterModule
+      assert get_line_protocol(state, 3) == nil
+      assert get_line_module(state, 7) == InnerModule
+      assert get_line_protocol(state, 7) == nil
+      assert get_line_module(state, 11) == OuterModule
+      assert get_line_protocol(state, 11) == nil
+      assert get_line_module(state, 16) == OuterModule.InnerModule1
+      assert get_line_protocol(state, 16) == nil
+    end
 
-    assert get_line_module(state, 1) == Elixir
-    assert get_line_protocol(state, 1) == nil
-    assert get_line_module(state, 3) == OuterModule
-    assert get_line_protocol(state, 3) == nil
-    assert get_line_module(state, 7) == OuterModule.InnerModule
-    assert get_line_protocol(state, 7) == nil
-    assert get_line_module(state, 11) == OuterModule
-    assert get_line_protocol(state, 11) == nil
-
-    assert get_line_module(state, 15) == Some.Nested
-    assert get_line_protocol(state, 15) == nil
-  end
-
-  test "current module with __MODULE__" do
-    state =
-      """
-      IO.puts ""
-      defmodule OuterModule do
-        IO.puts ""
-        defmodule __MODULE__.InnerModule do
-          def func do
-            if true do
-              IO.puts ""
-            end
-          end
-        end
-        IO.puts ""
-      end
-
-      defmodule Some.Nested do
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_module(state, 1) == Elixir
-    assert get_line_protocol(state, 1) == nil
-    assert get_line_module(state, 3) == OuterModule
-    assert get_line_protocol(state, 3) == nil
-    assert get_line_module(state, 7) == OuterModule.InnerModule
-    assert get_line_protocol(state, 7) == nil
-    assert get_line_module(state, 11) == OuterModule
-    assert get_line_protocol(state, 11) == nil
-
-    assert get_line_module(state, 15) == Some.Nested
-    assert get_line_protocol(state, 15) == nil
-  end
-
-  test "current module with `Elixir` prefix" do
-    state =
-      """
-      IO.puts ""
-      defmodule Elixir.OuterModule do
-        IO.puts ""
-        defmodule InnerModule do
-          IO.puts ""
-        end
-
-        defmodule Elixir.ExternalModule do
-          IO.puts ""
-        end
-
-        defprotocol Elixir.Reversible do
+    test "current module and protocol implementation" do
+      state =
+        """
+        defprotocol My.Reversible do
           def reverse(term)
           IO.puts ""
         end
-        IO.puts ""
-      end
 
-      defmodule Elixir.Some.Nested do
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_module(state, 1) == Elixir
-    assert get_line_module(state, 3) == OuterModule
-    assert get_line_module(state, 5) == OuterModule.InnerModule
-    assert get_line_module(state, 9) == ExternalModule
-    assert get_line_module(state, 14) == Reversible
-    assert get_line_module(state, 16) == OuterModule
-    # external submodule does not create an alias
-    assert get_line_aliases(state, 16) == [{InnerModule, OuterModule.InnerModule}]
-
-    assert get_line_module(state, 20) == Some.Nested
-  end
-
-  test "current module with `Elixir` submodule" do
-    state =
-      """
-      IO.puts ""
-      defmodule OuterModule do
-        IO.puts ""
-
-        defmodule Elixir do
-          IO.puts ""
-        end
-
-        IO.puts ""
-      end
-
-      defmodule Some.Nested do
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_module(state, 1) == Elixir
-    assert get_line_module(state, 3) == OuterModule
-    assert get_line_module(state, 6) == OuterModule.Elixir
-    assert get_line_module(state, 9) == OuterModule
-
-    assert get_line_module(state, 13) == Some.Nested
-  end
-
-  test "current module atom" do
-    state =
-      """
-      IO.puts ""
-      defmodule :outer_module do
-        IO.puts ""
-        defmodule :inner_module do
-          def func do
-            if true do
-              IO.puts ""
-            end
-          end
-        end
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_module(state, 1) == Elixir
-    assert get_line_protocol(state, 1) == nil
-    assert get_line_module(state, 3) == :outer_module
-    assert get_line_protocol(state, 3) == nil
-    assert get_line_module(state, 7) == :inner_module
-    assert get_line_protocol(state, 7) == nil
-    assert get_line_module(state, 11) == :outer_module
-    assert get_line_protocol(state, 11) == nil
-  end
-
-  test "current module as atom" do
-    state =
-      """
-      IO.puts ""
-      defmodule :"Elixir.OuterModule" do
-        IO.puts ""
-        defmodule :"Elixir.InnerModule" do
-          def func do
-            if true do
-              IO.puts ""
-            end
-          end
-        end
-        IO.puts ""
-
-        defmodule :"Elixir.OuterModule.InnerModule1" do
-          def func do
-            if true do
-              IO.puts ""
-            end
-          end
-        end
-      end
-      """
-      |> string_to_state
-
-    assert get_line_module(state, 1) == Elixir
-    assert get_line_protocol(state, 1) == nil
-    assert get_line_module(state, 3) == OuterModule
-    assert get_line_protocol(state, 3) == nil
-    assert get_line_module(state, 7) == InnerModule
-    assert get_line_protocol(state, 7) == nil
-    assert get_line_module(state, 11) == OuterModule
-    assert get_line_protocol(state, 11) == nil
-    assert get_line_module(state, 16) == OuterModule.InnerModule1
-    assert get_line_protocol(state, 16) == nil
-  end
-
-  test "current module and protocol implementation" do
-    state =
-      """
-      defprotocol My.Reversible do
-        def reverse(term)
-        IO.puts ""
-      end
-
-      defimpl My.Reversible, for: String do
-        def reverse(term), do: String.reverse(term)
-        IO.puts ""
-      end
-
-      defimpl My.Reversible, for: [Map, My.List] do
-        def reverse(term), do: Enum.reverse(term)
-        IO.puts ""
-
-        defmodule OuterModule do
-          IO.puts ""
-        end
-
-        defprotocol Other do
-          def other(term)
-          IO.puts ""
-        end
-
-        defimpl Other, for: [Map, My.Map] do
-          def other(term), do: nil
-          IO.puts ""
-        end
-      end
-      """
-      |> string_to_state
-
-    # protocol and implementations create modules
-    assert get_line_module(state, 3) == My.Reversible
-    assert get_line_protocol(state, 3) == nil
-    assert get_line_module(state, 8) == My.Reversible.String
-    assert get_line_protocol(state, 8) == {My.Reversible, [String]}
-    assert get_line_module(state, 13) == [My.Reversible.Map, My.Reversible.My.List]
-    assert get_line_protocol(state, 13) == {My.Reversible, [Map, My.List]}
-
-    # implementation has behaviour
-    assert get_line_behaviours(state, 8) == [My.Reversible]
-
-    # multiple implementations create multiple modules
-    assert get_line_module(state, 16) == [
-             My.Reversible.Map.OuterModule,
-             My.Reversible.My.List.OuterModule
-           ]
-
-    assert get_line_protocol(state, 16) == nil
-
-    # protocol and implementations inside protocol implementation creates a cross product
-    assert get_line_module(state, 21) == [My.Reversible.Map.Other, My.Reversible.My.List.Other]
-    assert get_line_protocol(state, 21) == nil
-
-    assert get_line_module(state, 26) == [
-             My.Reversible.Map.Other.Map,
-             My.Reversible.Map.Other.My.Map,
-             My.Reversible.My.List.Other.Map,
-             My.Reversible.My.List.Other.My.Map
-           ]
-
-    assert get_line_protocol(state, 26) == [
-             {My.Reversible.Map.Other, [Map, My.Map]},
-             {My.Reversible.My.List.Other, [Map, My.Map]}
-           ]
-  end
-
-  test "protocol implementation for atom modules" do
-    state =
-      """
-      defprotocol :my_reversible do
-        def reverse(term)
-        IO.puts ""
-      end
-
-      defimpl :my_reversible, for: [String, :my_str, :"Elixir.MyStr"] do
-        def reverse(term), do: String.reverse(term)
-        IO.puts ""
-      end
-
-      defprotocol :"Elixir.My.Reversible" do
-        def reverse(term)
-        IO.puts ""
-      end
-
-      defimpl :"Elixir.My.Reversible", for: [String, :my_str, :"Elixir.MyStr"] do
-        def reverse(term), do: String.reverse(term)
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_module(state, 3) == :my_reversible
-    assert get_line_protocol(state, 3) == nil
-
-    assert get_line_module(state, 8) == [
-             :"Elixir.my_reversible.String",
-             :"Elixir.my_reversible.my_str",
-             :"Elixir.my_reversible.MyStr"
-           ]
-
-    assert get_line_protocol(state, 8) == {:my_reversible, [String, :my_str, MyStr]}
-
-    assert get_line_module(state, 13) == My.Reversible
-    assert get_line_protocol(state, 13) == nil
-
-    assert get_line_module(state, 18) == [
-             My.Reversible.String,
-             :"Elixir.My.Reversible.my_str",
-             My.Reversible.MyStr
-           ]
-
-    assert get_line_protocol(state, 18) == {My.Reversible, [String, :my_str, MyStr]}
-  end
-
-  test "protocol implementation module naming rules" do
-    state =
-      """
-      defprotocol NiceProto do
-        def reverse(term)
-      end
-
-      defmodule NiceProtoImplementations do
-        defimpl NiceProto, for: String do
+        defimpl My.Reversible, for: String do
           def reverse(term), do: String.reverse(term)
+          IO.puts ""
+        end
+
+        defimpl My.Reversible, for: [Map, My.List] do
+          def reverse(term), do: Enum.reverse(term)
+          IO.puts ""
+
+          defmodule OuterModule do
+            IO.puts ""
+          end
+
+          defprotocol Other do
+            def other(term)
+            IO.puts ""
+          end
+
+          defimpl Other, for: [Map, My.Map] do
+            def other(term), do: nil
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      # protocol and implementations create modules
+      assert get_line_module(state, 3) == My.Reversible
+      assert get_line_protocol(state, 3) == nil
+      assert get_line_module(state, 8) == My.Reversible.String
+      assert get_line_protocol(state, 8) == {My.Reversible, [String]}
+      assert get_line_module(state, 13) == [My.Reversible.Map, My.Reversible.My.List]
+      assert get_line_protocol(state, 13) == {My.Reversible, [Map, My.List]}
+
+      # implementation has behaviour
+      assert get_line_behaviours(state, 8) == [My.Reversible]
+
+      # multiple implementations create multiple modules
+      assert get_line_module(state, 16) == [
+               My.Reversible.Map.OuterModule,
+               My.Reversible.My.List.OuterModule
+             ]
+
+      assert get_line_protocol(state, 16) == nil
+
+      # protocol and implementations inside protocol implementation creates a cross product
+      assert get_line_module(state, 21) == [My.Reversible.Map.Other, My.Reversible.My.List.Other]
+      assert get_line_protocol(state, 21) == nil
+
+      assert get_line_module(state, 26) == [
+               My.Reversible.Map.Other.Map,
+               My.Reversible.Map.Other.My.Map,
+               My.Reversible.My.List.Other.Map,
+               My.Reversible.My.List.Other.My.Map
+             ]
+
+      assert get_line_protocol(state, 26) == [
+               {My.Reversible.Map.Other, [Map, My.Map]},
+               {My.Reversible.My.List.Other, [Map, My.Map]}
+             ]
+    end
+  end
+
+  describe "protocol implementations" do
+    test "protocol implementation for atom modules" do
+      state =
+        """
+        defprotocol :my_reversible do
+          def reverse(term)
+          IO.puts ""
+        end
+
+        defimpl :my_reversible, for: [String, :my_str, :"Elixir.MyStr"] do
+          def reverse(term), do: String.reverse(term)
+          IO.puts ""
+        end
+
+        defprotocol :"Elixir.My.Reversible" do
+          def reverse(term)
+          IO.puts ""
+        end
+
+        defimpl :"Elixir.My.Reversible", for: [String, :my_str, :"Elixir.MyStr"] do
+          def reverse(term), do: String.reverse(term)
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_module(state, 3) == :my_reversible
+      assert get_line_protocol(state, 3) == nil
+
+      assert get_line_module(state, 8) == [
+               :"Elixir.my_reversible.String",
+               :"Elixir.my_reversible.my_str",
+               :"Elixir.my_reversible.MyStr"
+             ]
+
+      assert get_line_protocol(state, 8) == {:my_reversible, [String, :my_str, MyStr]}
+
+      assert get_line_module(state, 13) == My.Reversible
+      assert get_line_protocol(state, 13) == nil
+
+      assert get_line_module(state, 18) == [
+               My.Reversible.String,
+               :"Elixir.My.Reversible.my_str",
+               My.Reversible.MyStr
+             ]
+
+      assert get_line_protocol(state, 18) == {My.Reversible, [String, :my_str, MyStr]}
+    end
+
+    test "protocol implementation module naming rules" do
+      state =
+        """
+        defprotocol NiceProto do
+          def reverse(term)
+        end
+
+        defmodule NiceProtoImplementations do
+          defimpl NiceProto, for: String do
+            def reverse(term), do: String.reverse(term)
+            def a3, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
+          end
           def a3, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
-        end
-        def a3, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
 
-        defmodule Some do
+          defmodule Some do
+            defstruct [a: nil]
+          end
+
+          defimpl NiceProto, for: Some do
+            def reverse(term), do: String.reverse(term)
+            IO.puts ""
+          end
+
+          alias Enumerable.Date.Range, as: R
+          alias NiceProto, as: N
+
+          defimpl N, for: R do
+            def reverse(term), do: String.reverse(term)
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      # protocol implementation module name does not inherit enclosing module, only protocol
+      assert get_line_module(state, 8) == NiceProto.String
+      assert get_line_protocol(state, 8) == {NiceProto, [String]}
+      assert get_line_aliases(state, 8) == []
+      assert get_line_aliases(state, 10) == []
+
+      # properly gets implementation name inherited from enclosing module
+      assert get_line_module(state, 16) == NiceProto.NiceProtoImplementations.Some
+      assert get_line_protocol(state, 16) == {NiceProto, [NiceProtoImplementations.Some]}
+
+      # aliases are expanded on protocol and implementation
+      assert get_line_module(state, 24) == NiceProto.Enumerable.Date.Range
+      assert get_line_protocol(state, 24) == {NiceProto, [Enumerable.Date.Range]}
+    end
+
+    test "protocol implementation using __MODULE__" do
+      state =
+        """
+        defprotocol NiceProto do
+          def reverse(term)
+        end
+
+        defmodule MyStruct do
           defstruct [a: nil]
+
+          defimpl NiceProto, for: __MODULE__ do
+            def reverse(term), do: String.reverse(term)
+          end
         end
+        """
+        |> string_to_state
 
-        defimpl NiceProto, for: Some do
-          def reverse(term), do: String.reverse(term)
-          IO.puts ""
+      # protocol implementation module name does not inherit enclosing module, only protocol
+      assert get_line_module(state, 8) == NiceProto.MyStruct
+      assert get_line_protocol(state, 8) == {NiceProto, [MyStruct]}
+    end
+
+    test "protocol implementation using __MODULE__ 2" do
+      state =
+        """
+        defmodule Nice do
+          defprotocol Proto do
+            def reverse(term)
+          end
+
+          defimpl __MODULE__.Proto, for: String do
+            def reverse(term), do: String.reverse(term)
+          end
         end
+        """
+        |> string_to_state
 
-        alias Enumerable.Date.Range, as: R
-        alias NiceProto, as: N
+      assert get_line_module(state, 7) == Nice.Proto.String
+      assert get_line_protocol(state, 7) == {Nice.Proto, [String]}
+    end
 
-        defimpl N, for: R do
-          def reverse(term), do: String.reverse(term)
-          IO.puts ""
-        end
-      end
-      """
-      |> string_to_state
-
-    # protocol implementation module name does not inherit enclosing module, only protocol
-    assert get_line_module(state, 8) == NiceProto.String
-    assert get_line_protocol(state, 8) == {NiceProto, [String]}
-    assert get_line_aliases(state, 8) == []
-    assert get_line_aliases(state, 10) == []
-
-    # properly gets implementation name inherited from enclosing module
-    assert get_line_module(state, 16) == NiceProto.NiceProtoImplementations.Some
-    assert get_line_protocol(state, 16) == {NiceProto, [NiceProtoImplementations.Some]}
-
-    # aliases are expanded on protocol and implementation
-    assert get_line_module(state, 24) == NiceProto.Enumerable.Date.Range
-    assert get_line_protocol(state, 24) == {NiceProto, [Enumerable.Date.Range]}
-  end
-
-  test "protocol implementation using __MODULE__" do
-    state =
-      """
-      defprotocol NiceProto do
-        def reverse(term)
-      end
-
-      defmodule MyStruct do
-        defstruct [a: nil]
-
-        defimpl NiceProto, for: __MODULE__ do
-          def reverse(term), do: String.reverse(term)
-        end
-      end
-      """
-      |> string_to_state
-
-    # protocol implementation module name does not inherit enclosing module, only protocol
-    assert get_line_module(state, 8) == NiceProto.MyStruct
-    assert get_line_protocol(state, 8) == {NiceProto, [MyStruct]}
-  end
-
-  test "protocol implementation using __MODULE__ 2" do
-    state =
-      """
-      defmodule Nice do
+    test "protocol implementation for structs does not require for" do
+      state =
+        """
         defprotocol Proto do
           def reverse(term)
         end
 
-        defimpl __MODULE__.Proto, for: String do
-          def reverse(term), do: String.reverse(term)
+        defmodule MyStruct do
+          defstruct [:field]
+
+          defimpl Proto do
+            def reverse(term), do: String.reverse(term)
+          end
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert get_line_module(state, 7) == Nice.Proto.String
-    assert get_line_protocol(state, 7) == {Nice.Proto, [String]}
-  end
+      assert get_line_module(state, 9) == Proto.MyStruct
+      assert get_line_protocol(state, 9) == {Proto, [MyStruct]}
+    end
 
-  test "protocol implementation for structs does not require for" do
-    state =
-      """
-      defprotocol Proto do
-        def reverse(term)
-      end
-
-      defmodule MyStruct do
-        defstruct [:field]
-
-        defimpl Proto do
-          def reverse(term), do: String.reverse(term)
+    test "protocol implementation by deriving" do
+      state =
+        """
+        defprotocol Proto do
+          def reverse(term)
         end
-      end
-      """
-      |> string_to_state
 
-    assert get_line_module(state, 9) == Proto.MyStruct
-    assert get_line_protocol(state, 9) == {Proto, [MyStruct]}
-  end
+        defimpl Proto, for: Any do
+          def reverse(term), do: term
+        end
 
-  test "protocol implementation by deriving" do
-    state =
-      """
-      defprotocol Proto do
-        def reverse(term)
-      end
-
-      defimpl Proto, for: Any do
-        def reverse(term), do: term
-      end
-
-      defmodule MyStruct do
-        @derive Proto
-        defstruct [:field]
+        defmodule MyStruct do
+          @derive Proto
+          defstruct [:field]
+          IO.puts ""
+        end
         IO.puts ""
-      end
-      IO.puts ""
 
-      defmodule MyOtherStruct do
-        @derive [{Proto, opt: 1}, Enumerable]
-        defstruct [:field]
-      end
-      """
-      |> string_to_state
+        defmodule MyOtherStruct do
+          @derive [{Proto, opt: 1}, Enumerable]
+          defstruct [:field]
+        end
+        """
+        |> string_to_state
 
-    assert %{
-             {Enumerable.MyOtherStruct, nil, nil} => %ModFunInfo{
-               params: [nil],
-               type: :defmodule
-             },
-             {Proto.Any, nil, nil} => %ModFunInfo{
-               params: [nil],
-               type: :defmodule
-             },
-             {Proto.MyOtherStruct, nil, nil} => %ModFunInfo{
-               params: [nil],
-               type: :defmodule
-             },
-             {Proto.MyOtherStruct, :reverse, 1} => %ModFunInfo{
-               params: [[{:term, [line: 6, column: 15], nil}]],
-               type: :def
-             },
-             {Proto.MyOtherStruct, :reverse, nil} => %ModFunInfo{
-               params: [[{:term, [line: 6, column: 15], nil}]],
-               type: :def
-             },
-             {Proto.MyStruct, nil, nil} => %ModFunInfo{
-               params: [nil],
-               type: :defmodule
-             },
-             {Proto.MyStruct, :reverse, 1} => %ModFunInfo{
-               params: [[{:term, [line: 6, column: 15], nil}]],
-               type: :def
-             },
-             {Proto.MyStruct, :reverse, nil} => %ModFunInfo{
-               params: [[{:term, [line: 6, column: 15], nil}]],
-               type: :def
-             }
-           } = state.mods_funs_to_positions
+      assert %{
+               {Enumerable.MyOtherStruct, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 type: :defmodule
+               },
+               {Proto.Any, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 type: :defmodule
+               },
+               {Proto.MyOtherStruct, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 type: :defmodule
+               },
+               {Proto.MyOtherStruct, :reverse, 1} => %ModFunInfo{
+                 params: [[{:term, [line: 6, column: 15], nil}]],
+                 type: :def
+               },
+               {Proto.MyOtherStruct, :reverse, nil} => %ModFunInfo{
+                 params: [[{:term, [line: 6, column: 15], nil}]],
+                 type: :def
+               },
+               {Proto.MyStruct, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 type: :defmodule
+               },
+               {Proto.MyStruct, :reverse, 1} => %ModFunInfo{
+                 params: [[{:term, [line: 6, column: 15], nil}]],
+                 type: :def
+               },
+               {Proto.MyStruct, :reverse, nil} => %ModFunInfo{
+                 params: [[{:term, [line: 6, column: 15], nil}]],
+                 type: :def
+               }
+             } = state.mods_funs_to_positions
+    end
   end
 
   test "protocol registers callbacks from specs or generate dummy callbacks" do
@@ -3218,11 +3626,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{5, 5}],
                type: :def
              },
-             {OuterModule.InnerModule, :func, nil} => %ModFunInfo{
-               params: [[]],
-               positions: [{5, 5}],
-               type: :def
-             },
              {Impls, nil, nil} => %ModFunInfo{
                params: [nil],
                positions: [{28, 1}],
@@ -3297,103 +3700,105 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
-  test "behaviours" do
-    state =
-      """
-      IO.puts ""
-      defmodule OuterModule do
-        use Application
-        @behaviour SomeModule.SomeBehaviour
+  describe "behaviours" do
+    test "behaviours" do
+      state =
+        """
         IO.puts ""
-        defmodule InnerModuleWithUse do
-          use GenServer
+        defmodule OuterModule do
+          use Application
+          @behaviour SomeModule.SomeBehaviour
+          IO.puts ""
+          defmodule InnerModuleWithUse do
+            use GenServer
+            IO.puts ""
+          end
+          defmodule InnerModuleWithBh do
+            @behaviour SomeOtherBehaviour
+            IO.puts ""
+          end
+          defmodule InnerModuleWithoutBh do
+            IO.puts ""
+          end
           IO.puts ""
         end
-        defmodule InnerModuleWithBh do
-          @behaviour SomeOtherBehaviour
+        """
+        |> string_to_state
+
+      assert get_line_behaviours(state, 1) == []
+      assert get_line_behaviours(state, 5) == [Application, SomeModule.SomeBehaviour]
+      assert get_line_behaviours(state, 8) == [GenServer]
+      assert get_line_behaviours(state, 12) == [SomeOtherBehaviour]
+      assert get_line_behaviours(state, 15) == []
+      assert get_line_behaviours(state, 17) == [Application, SomeModule.SomeBehaviour]
+    end
+
+    test "behaviour from erlang module" do
+      state =
+        """
+        defmodule OuterModule do
+          @behaviour :gen_server
           IO.puts ""
         end
-        defmodule InnerModuleWithoutBh do
+        """
+        |> string_to_state
+
+      assert get_line_behaviours(state, 3) == [:gen_server]
+    end
+
+    test "behaviour from __MODULE__" do
+      state =
+        """
+        defmodule OuterModule do
+          @behaviour __MODULE__.Sub
           IO.puts ""
         end
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert get_line_behaviours(state, 1) == []
-    assert get_line_behaviours(state, 5) == [Application, SomeModule.SomeBehaviour]
-    assert get_line_behaviours(state, 8) == [GenServer]
-    assert get_line_behaviours(state, 12) == [SomeOtherBehaviour]
-    assert get_line_behaviours(state, 15) == []
-    assert get_line_behaviours(state, 17) == [Application, SomeModule.SomeBehaviour]
-  end
+      assert get_line_behaviours(state, 3) == [OuterModule.Sub]
+    end
 
-  test "behaviour from erlang module" do
-    state =
-      """
-      defmodule OuterModule do
-        @behaviour :gen_server
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+    test "behaviour from atom module" do
+      state =
+        """
+        defmodule OuterModule do
+          @behaviour :"Elixir.My.Behavior"
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-    assert get_line_behaviours(state, 3) == [:gen_server]
-  end
+      assert get_line_behaviours(state, 3) == [My.Behavior]
+    end
 
-  test "behaviour from __MODULE__" do
-    state =
-      """
-      defmodule OuterModule do
-        @behaviour __MODULE__.Sub
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+    test "behaviour duplicated" do
+      state =
+        """
+        defmodule OuterModule do
+          @behaviour :gen_server
+          @behaviour :gen_server
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-    assert get_line_behaviours(state, 3) == [OuterModule.Sub]
-  end
+      assert get_line_behaviours(state, 4) == [:gen_server]
+    end
 
-  test "behaviour from atom module" do
-    state =
-      """
-      defmodule OuterModule do
-        @behaviour :"Elixir.My.Behavior"
-        IO.puts ""
-      end
-      """
-      |> string_to_state
+    test "behaviour from aliased module" do
+      state =
+        """
+        defmodule OuterModule do
+          alias Some.Module, as: S
+          @behaviour S
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-    assert get_line_behaviours(state, 3) == [My.Behavior]
-  end
-
-  test "behaviour duplicated" do
-    state =
-      """
-      defmodule OuterModule do
-        @behaviour :gen_server
-        @behaviour :gen_server
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_behaviours(state, 4) == [:gen_server]
-  end
-
-  test "behaviour from aliased module" do
-    state =
-      """
-      defmodule OuterModule do
-        alias Some.Module, as: S
-        @behaviour S
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert get_line_behaviours(state, 4) == [Some.Module]
+      assert get_line_behaviours(state, 4) == [Some.Module]
+    end
   end
 
   test "current scope" do
@@ -3474,23 +3879,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:value, [line: 2, column: 20], nil}]],
                positions: [{2, 3}]
              },
-             {MyModule, :is_even, nil} => %{
-               params: [[{:value, [line: 2, column: 20], nil}]],
-               positions: [{2, 3}]
-             },
              {MyModule, :is_odd, 1} => %{
                params: [[{:value, [line: 3, column: 20], nil}]],
                positions: [{3, 3}]
              },
-             {MyModule, :is_odd, nil} => %{
-               params: [[{:value, [line: 3, column: 20], nil}]],
-               positions: [{3, 3}]
-             },
              {MyModule, :useless, 0} => %{
-               params: [[]],
-               positions: [{4, 3}]
-             },
-             {MyModule, :useless, nil} => %{
                params: [[]],
                positions: [{4, 3}]
              }
@@ -3529,15 +3922,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[]],
                type: :def
              },
-             {MyModuleWithFuns, :func, nil} => %ModFunInfo{
-               params: [[]],
-               type: :def
-             },
              {MyModuleWithFuns, :funcp, 0} => %ModFunInfo{
-               params: [[]],
-               type: :defp
-             },
-             {MyModuleWithFuns, :funcp, nil} => %ModFunInfo{
                params: [[]],
                type: :defp
              },
@@ -3545,15 +3930,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:value, [line: 16, column: 20], nil}]],
                type: :defguard
              },
-             {MyModuleWithFuns, :is_even, nil} => %ModFunInfo{
-               params: [[{:value, [line: 16, column: 20], nil}]],
-               type: :defguard
-             },
              {MyModuleWithFuns, :is_evenp, 1} => %ModFunInfo{
-               params: [[{:value, [line: 17, column: 22], nil}]],
-               type: :defguardp
-             },
-             {MyModuleWithFuns, :is_evenp, nil} => %ModFunInfo{
                params: [[{:value, [line: 17, column: 22], nil}]],
                type: :defguardp
              },
@@ -3561,15 +3938,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:ast, [line: 10, column: 19], nil}]],
                type: :defmacro
              },
-             {MyModuleWithFuns, :macro1, nil} => %ModFunInfo{
-               params: [[{:ast, [line: 10, column: 19], nil}]],
-               type: :defmacro
-             },
              {MyModuleWithFuns, :macro1p, 1} => %ModFunInfo{
-               params: [[{:ast, [line: 13, column: 21], nil}]],
-               type: :defmacrop
-             },
-             {MyModuleWithFuns, :macro1p, nil} => %ModFunInfo{
                params: [[{:ast, [line: 13, column: 21], nil}]],
                type: :defmacrop
              },
@@ -3589,10 +3958,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:atom, [line: 3, column: 1], nil}]],
                type: :def
              },
-             {MyModuleWithFuns, :__info__, nil} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 3, column: 1], nil}]],
-               type: :def
-             },
              {MyModuleWithFuns, :module_info, 0} => %ElixirSense.Core.State.ModFunInfo{
                params: [[]],
                type: :def
@@ -3601,15 +3966,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:atom, [line: 3, column: 1], nil}]],
                type: :def
              },
-             {MyModuleWithFuns, :module_info, nil} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 3, column: 1], nil}], []],
-               type: :def
-             },
              {MyModuleWithFuns.Nested, :__info__, 1} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 19, column: 3], nil}]],
-               type: :def
-             },
-             {MyModuleWithFuns.Nested, :__info__, nil} => %ElixirSense.Core.State.ModFunInfo{
                params: [[{:atom, [line: 19, column: 3], nil}]],
                type: :def
              },
@@ -3621,15 +3978,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:atom, [line: 19, column: 3], nil}]],
                type: :def
              },
-             {MyModuleWithFuns.Nested, :module_info, nil} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 19, column: 3], nil}], []],
-               type: :def
-             },
              {MyModuleWithoutFuns, :__info__, 1} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 1, column: 1], nil}]],
-               type: :def
-             },
-             {MyModuleWithoutFuns, :__info__, nil} => %ElixirSense.Core.State.ModFunInfo{
                params: [[{:atom, [line: 1, column: 1], nil}]],
                type: :def
              },
@@ -3639,10 +3988,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              },
              {MyModuleWithoutFuns, :module_info, 1} => %ElixirSense.Core.State.ModFunInfo{
                params: [[{:atom, [line: 1, column: 1], nil}]],
-               type: :def
-             },
-             {MyModuleWithoutFuns, :module_info, nil} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 1, column: 1], nil}], []],
                type: :def
              }
            } = state.mods_funs_to_positions
@@ -3668,19 +4013,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                target: {OtherModule, :func_delegated},
                type: :defdelegate
              },
-             {MyModuleWithFuns, :func_delegated, nil} => %ModFunInfo{
-               params: [[{:par, [line: 3, column: 30], nil}]],
-               positions: [{3, 3}],
-               target: {OtherModule, :func_delegated},
-               type: :defdelegate
-             },
              {MyModuleWithFuns, :func_delegated_alias, 1} => %ModFunInfo{
-               params: [[{:par, [line: 6, column: 36], nil}]],
-               positions: [{6, 3}],
-               target: {Enum, :func_delegated_alias},
-               type: :defdelegate
-             },
-             {MyModuleWithFuns, :func_delegated_alias, nil} => %ModFunInfo{
                params: [[{:par, [line: 6, column: 36], nil}]],
                positions: [{6, 3}],
                target: {Enum, :func_delegated_alias},
@@ -3692,19 +4025,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                target: {MyModuleWithFuns.Sub, :my_func},
                type: :defdelegate
              },
-             {MyModuleWithFuns, :func_delegated_as, nil} => %ModFunInfo{
-               params: [[{:par, [line: 5, column: 33], nil}]],
-               positions: [{5, 3}],
-               target: {MyModuleWithFuns.Sub, :my_func},
-               type: :defdelegate
-             },
              {MyModuleWithFuns, :func_delegated_erlang, 1} => %ModFunInfo{
-               params: [[{:par, [line: 4, column: 37], nil}]],
-               positions: [{4, 3}],
-               target: {:erlang_module, :func_delegated_erlang},
-               type: :defdelegate
-             },
-             {MyModuleWithFuns, :func_delegated_erlang, nil} => %ModFunInfo{
                params: [[{:par, [line: 4, column: 37], nil}]],
                positions: [{4, 3}],
                target: {:erlang_module, :func_delegated_erlang},
@@ -3780,1078 +4101,1090 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert %{OuterMod => {2, 3}, OuterMod.InnerMod => {5, 5}} = state.first_alias_positions
   end
 
-  test "use" do
-    state =
-      """
-      defmodule InheritMod do
-        use ElixirSenseExample.ExampleBehaviour
+  describe "use" do
+    test "use" do
+      state =
+        """
+        defmodule InheritMod do
+          use ElixirSenseExample.ExampleBehaviour
 
-        IO.puts("")
-      end
-      """
-      |> string_to_state
-
-    assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
-
-    # note that `use` causes `require` to be able to execute `__using__/1` macro
-    assert get_line_requires(state, 4) == [
-             Application,
-             Kernel,
-             Kernel.Typespec,
-             :lists,
-             MyImports.Two.ThreeImports,
-             MyImports.OneImports,
-             MyImports.NestedImports,
-             MyImports,
-             Some.List,
-             MyMacros.Two.Three,
-             MyMacros.One,
-             :ets,
-             MyMacros.Nested,
-             MyMacros,
-             ElixirSenseExample.ExampleBehaviour
-           ]
-
-    assert get_line_imports(state, 4) == [
-             {Kernel, []},
-             {Some.List, []},
-             {MyImports, []},
-             {MyImports.NestedImports, []},
-             {MyImports.OneImports, []},
-             {MyImports.Two.ThreeImports, []},
-             {:lists, [only: []]}
-           ]
-
-    assert Enum.sort(get_line_aliases(state, 4)) ==
-             Enum.sort([
-               {Utils, MyModule.Some.Nested},
-               {Ets, :ets},
-               {One, MyModule.One},
-               {Three, MyModule.Two.Three},
-               {Four, MyModule.Four},
-               {OutsideOfMyModule, Three.OutsideOfMyModule},
-               {NestedMacros, MyMacros.Nested},
-               {ErlangMacros, :ets},
-               {Nested, InheritMod.Nested},
-               {Deeply, InheritMod.Deeply},
-               {ProtocolEmbedded, InheritMod.ProtocolEmbedded}
-             ])
-
-    assert get_line_attributes(state, 4) == [
-             %AttributeInfo{name: :my_attribute, positions: [{2, 3}]}
-           ]
-
-    assert %{
-             {InheritMod, :handle_call, 3} => %ModFunInfo{
-               params: [
-                 [
-                   {:msg, _, _},
-                   {:_from, _, _},
-                   {:state, _, _}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :def
-             },
-             {InheritMod, :handle_call, nil} => %ModFunInfo{},
-             {InheritMod, nil, nil} => %ModFunInfo{
-               params: [nil],
-               positions: [{1, 1}],
-               type: :defmodule
-             },
-             {InheritMod, :private_func, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :defp
-             },
-             {InheritMod, :private_func_arg, 1} => %ModFunInfo{
-               params: [
-                 [{:a, _, _}],
-                 [{:\\, _, [{:a, _, _}, nil]}]
-               ],
-               positions: [{2, 3}, {2, 3}],
-               type: :defp
-             },
-             {InheritMod, :private_guard, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :defguardp
-             },
-             {InheritMod, :private_guard_arg, 1} => %ModFunInfo{
-               params: [
-                 [
-                   {:a, _, _}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :defguardp
-             },
-             {InheritMod, :private_macro, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :defmacrop
-             },
-             {InheritMod, :private_macro_arg, 1} => %ModFunInfo{
-               params: [
-                 [
-                   {:a, _, _}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :defmacrop
-             },
-             {InheritMod, :public_func, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :def,
-               overridable: {true, ElixirSenseExample.ExampleBehaviour}
-             },
-             {InheritMod, :public_func_arg, 2} => %ModFunInfo{
-               params: [
-                 [
-                   {:b, _, _},
-                   {:\\, _,
-                    [
-                      {:a, _, _},
-                      "def"
-                    ]}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :def
-             },
-             {InheritMod, :public_guard, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :defguard
-             },
-             {InheritMod, :public_guard_arg, 1} => %ModFunInfo{
-               params: [
-                 [
-                   {:a, _, _}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :defguard
-             },
-             {InheritMod, :public_macro, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :defmacro
-             },
-             {InheritMod, :public_macro_arg, 1} => %ModFunInfo{
-               params: [
-                 [
-                   {:a, _, _}
-                 ]
-               ],
-               positions: [{2, 3}],
-               type: :defmacro
-             },
-             {InheritMod.Deeply.Nested, nil, nil} => %ModFunInfo{
-               params: [nil],
-               positions: [{2, 3}],
-               type: :defmodule
-             },
-             {InheritMod.Nested, nil, nil} => %ModFunInfo{
-               params: [nil],
-               positions: [{2, 3}],
-               type: :defmodule
-             },
-             {InheritMod.ProtocolEmbedded, nil, nil} => %ModFunInfo{
-               params: [nil],
-               positions: [{2, 3}],
-               type: :defmodule
-             },
-             {InheritMod, :behaviour_info, 1} => %ModFunInfo{
-               params: [[{:atom, [line: 2, column: 3], nil}]],
-               positions: [{2, 3}],
-               target: nil,
-               type: :def
-             },
-             {InheritMod.ProtocolEmbedded, :module_info, 1} => %ModFunInfo{}
-           } = state.mods_funs_to_positions
-
-    assert %{
-             {InheritMod, :my_opaque_type, 0} => %State.TypeInfo{
-               args: [[]],
-               kind: :opaque,
-               name: :my_opaque_type,
-               positions: [{2, 3}],
-               specs: ["@opaque my_opaque_type :: any"]
-             },
-             {InheritMod, :my_opaque_type, nil} => %State.TypeInfo{},
-             {InheritMod, :my_priv_type, 0} => %State.TypeInfo{
-               args: [[]],
-               kind: :typep,
-               name: :my_priv_type,
-               positions: [{2, 3}],
-               specs: ["@typep my_priv_type :: any"]
-             },
-             {InheritMod, :my_pub_type, 0} => %State.TypeInfo{
-               args: [[]],
-               kind: :type,
-               name: :my_pub_type,
-               positions: [{2, 3}],
-               specs: ["@type my_pub_type :: any"]
-             },
-             {InheritMod, :my_pub_type_arg, 2} => %State.TypeInfo{
-               args: [["a", "b"]],
-               kind: :type,
-               name: :my_pub_type_arg,
-               positions: [{2, 3}],
-               specs: ["@type my_pub_type_arg(a, b) :: {b, a}"]
-             }
-           } = state.types
-
-    assert %{
-             {InheritMod, :private_func, 0} => %State.SpecInfo{
-               args: [[]],
-               kind: :spec,
-               name: :private_func,
-               positions: [{2, 3}],
-               specs: ["@spec private_func() :: String.t()"]
-             },
-             {InheritMod, :private_func, nil} => %State.SpecInfo{},
-             {InheritMod, :some_callback, 1} => %State.SpecInfo{
-               args: [["abc"]],
-               kind: :callback,
-               name: :some_callback,
-               positions: [{2, 3}],
-               specs: ["@callback some_callback(abc) :: :ok when abc: integer"]
-             }
-           } = state.specs
-  end
-
-  test "use defining struct" do
-    state =
-      """
-      defmodule InheritMod do
-        use ElixirSenseExample.ExampleBehaviourWithStruct
-
-        IO.puts("")
-      end
-      """
-      |> string_to_state
-
-    assert %{
-             InheritMod => %State.StructInfo{
-               fields: [{:a, nil}, {:b, 1}, __struct__: InheritMod],
-               type: :defstruct
-             }
-           } = state.structs
-
-    assert %{
-             {InheritMod, :__struct__, 0} => %State.ModFunInfo{},
-             {InheritMod, :__struct__, 1} => %State.ModFunInfo{}
-           } = state.mods_funs_to_positions
-  end
-
-  test "use defining exception" do
-    state =
-      """
-      defmodule MyError do
-        use ElixirSenseExample.ExampleBehaviourWithException
-
-        IO.puts("")
-      end
-      """
-      |> string_to_state
-
-    assert %{
-             MyError => %State.StructInfo{
-               fields: [{:a, nil}, {:b, 1}, __exception__: true, __struct__: MyError],
-               type: :defexception
-             }
-           } = state.structs
-
-    assert %{
-             {MyError, :__struct__, 0} => %State.ModFunInfo{},
-             {MyError, :__struct__, 1} => %State.ModFunInfo{},
-             {MyError, :exception, 1} => %State.ModFunInfo{}
-           } = state.mods_funs_to_positions
-  end
-
-  test "use multi notation" do
-    state =
-      """
-      defmodule InheritMod do
-        use ElixirSenseExample.{ExampleBehaviour}
-        # use Foo.{}
-
-        IO.puts("")
-      end
-      """
-      |> string_to_state
-
-    assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
-  end
-
-  test "use multi notation with atom module" do
-    state =
-      """
-      defmodule InheritMod do
-        use :"Elixir.ElixirSenseExample".{:"Elixir.ExampleBehaviour"}
-
-        IO.puts("")
-      end
-      """
-      |> string_to_state
-
-    assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
-  end
-
-  test "use with __MODULE__" do
-    state =
-      """
-      defmodule ElixirSenseExample do
-        use __MODULE__.ExampleBehaviour
-
-        IO.puts("")
-      end
-      """
-      |> string_to_state
-
-    assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
-  end
-
-  test "use aliased" do
-    state =
-      """
-      defmodule InheritMod do
-        alias ElixirSenseExample.ExampleBehaviour, as: S
-        use S
-
-        IO.puts("")
-      end
-      """
-      |> string_to_state
-
-    assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
-  end
-
-  test "use atom module" do
-    state =
-      """
-      defmodule InheritMod do
-        use :"Elixir.ElixirSenseExample.ExampleBehaviour"
-
-        IO.puts("")
-      end
-      """
-      |> string_to_state
-
-    assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
-  end
-
-  test "find struct" do
-    state =
-      """
-      defmodule MyStruct do
-        defstruct [:some_field, a_field: 1]
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert state.structs == %{
-             MyStruct => %StructInfo{
-               type: :defstruct,
-               fields: [some_field: nil, a_field: 1, __struct__: MyStruct]
-             }
-           }
-
-    # defstruct adds struct/0 and struct/1 functions
-    assert %{
-             {MyStruct, :__struct__, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :def
-             },
-             {MyStruct, :__struct__, 1} => %ModFunInfo{
-               params: [[{:kv, [line: 2, column: 3], nil}]],
-               positions: [{2, 3}],
-               type: :def
-             },
-             {MyStruct, :__struct__, nil} => %ModFunInfo{
-               params: [[{:kv, [line: 2, column: 3], nil}], []],
-               positions: [{2, 3}, {2, 3}],
-               type: :def
-             },
-             {MyStruct, nil, nil} => %ModFunInfo{
-               params: [nil],
-               positions: [{1, 1}],
-               type: :defmodule
-             }
-           } = state.mods_funs_to_positions
-  end
-
-  test "find struct fields from expression" do
-    state =
-      """
-      defmodule MyStruct do
-        @fields_1 [a: nil]
-        defstruct [a_field: nil] ++ @fields_1
-      end
-      """
-      |> string_to_state
-
-    # TODO expression is not supported
-    assert state.structs == %{
-             MyStruct => %StructInfo{type: :defstruct, fields: [__struct__: MyStruct]}
-           }
-  end
-
-  test "find exception" do
-    state =
-      """
-      defmodule MyError do
-        defexception [message: nil]
-
-        IO.puts("")
-      end
-      """
-      |> string_to_state
-
-    assert state.structs == %{
-             MyError => %StructInfo{
-               type: :defexception,
-               fields: [message: nil, __exception__: true, __struct__: MyError]
-             }
-           }
-
-    # defexception adds Exception behaviour
-    assert get_line_behaviours(state, 4) == [Exception]
-    # and message/1 and exception/1 callbacks
-    assert %{
-             {MyError, :__struct__, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :def
-             },
-             {MyError, :__struct__, 1} => %ModFunInfo{
-               params: [[{:kv, [line: 2, column: 3], nil}]],
-               positions: [{2, 3}],
-               type: :def
-             },
-             {MyError, :exception, 1} => %ModFunInfo{
-               params: [[{:args, [line: 2, column: 3], nil}], [{:msg, [line: 2, column: 3], nil}]],
-               positions: [{2, 3}, {2, 3}],
-               type: :def
-             },
-             {MyError, :message, 1} => %ModFunInfo{
-               params: [[{:exception, [line: 2, column: 3], nil}]],
-               positions: [{2, 3}],
-               type: :def
-             }
-           } = state.mods_funs_to_positions
-  end
-
-  test "find exception without message key" do
-    state =
-      """
-      defmodule MyError do
-        defexception []
-
-        IO.puts("")
-      end
-      """
-      |> string_to_state
-
-    assert state.structs == %{
-             MyError => %StructInfo{
-               type: :defexception,
-               fields: [__exception__: true, __struct__: MyError]
-             }
-           }
-
-    # defexception adds Exception behaviour
-    assert get_line_behaviours(state, 4) == [Exception]
-    # and message/1 and exception/1 callbacks
-    assert %{
-             {MyError, :__struct__, 0} => %ModFunInfo{
-               params: [[]],
-               positions: [{2, 3}],
-               type: :def
-             },
-             {MyError, :__struct__, 1} => %ModFunInfo{
-               params: [[{:kv, [line: 2, column: 3], nil}]],
-               positions: [{2, 3}],
-               type: :def
-             },
-             {MyError, :exception, 1} => %ModFunInfo{
-               params: [[{:args, [line: 2, column: 3], nil}]],
-               positions: [{2, 3}],
-               type: :def
-             }
-           } = state.mods_funs_to_positions
-  end
-
-  test "registers calls with __MODULE__" do
-    state =
-      """
-      defmodule NyModule do
-        def func1, do: :ok
-        def func2(a), do: :ok
-        def func do
-          __MODULE__.func1
-          __MODULE__.func1()
-          __MODULE__.func2(2)
-          __MODULE__.Sub.func2(2)
+          IO.puts("")
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert state.calls == %{
-             5 => [%CallInfo{arity: 0, func: :func1, position: {5, 16}, mod: NyModule}],
-             6 => [%CallInfo{arity: 0, func: :func1, position: {6, 16}, mod: NyModule}],
-             7 => [%CallInfo{arity: 1, func: :func2, position: {7, 16}, mod: NyModule}],
-             8 => [%CallInfo{arity: 1, func: :func2, position: {8, 20}, mod: NyModule.Sub}]
-           }
-  end
+      assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
 
-  test "registers calls with erlang module" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          :erl_mod.func1
-          :erl_mod.func1()
-          :erl_mod.func2(2)
+      # note that `use` causes `require` to be able to execute `__using__/1` macro
+      assert get_line_requires(state, 4) ==
+               prepend_default_requires([
+                 :lists,
+                 MyImports.Two.ThreeImports,
+                 MyImports.OneImports,
+                 MyImports.NestedImports,
+                 MyImports,
+                 Some.List,
+                 MyMacros.Two.Three,
+                 MyMacros.One,
+                 :ets,
+                 MyMacros.Nested,
+                 MyMacros,
+                 ElixirSenseExample.ExampleBehaviour
+               ])
+
+      assert get_line_imports(state, 4) == [
+               {Kernel, []},
+               {Some.List, []},
+               {MyImports, []},
+               {MyImports.NestedImports, []},
+               {MyImports.OneImports, []},
+               {MyImports.Two.ThreeImports, []},
+               {:lists, [only: []]}
+             ]
+
+      assert Enum.sort(get_line_aliases(state, 4)) ==
+               Enum.sort([
+                 {Utils, MyModule.Some.Nested},
+                 {Ets, :ets},
+                 {One, MyModule.One},
+                 {Three, MyModule.Two.Three},
+                 {Four, MyModule.Four},
+                 {OutsideOfMyModule, Three.OutsideOfMyModule},
+                 {NestedMacros, MyMacros.Nested},
+                 {ErlangMacros, :ets},
+                 {Nested, InheritMod.Nested},
+                 {Deeply, InheritMod.Deeply},
+                 {ProtocolEmbedded, InheritMod.ProtocolEmbedded}
+               ])
+
+      assert get_line_attributes(state, 4) == [
+               %AttributeInfo{name: :my_attribute, positions: [{2, 3}]}
+             ]
+
+      assert %{
+               {InheritMod, :handle_call, 3} => %ModFunInfo{
+                 params: [
+                   [
+                     {:msg, _, _},
+                     {:_from, _, _},
+                     {:state, _, _}
+                   ]
+                 ],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {InheritMod, :handle_call, nil} => %ModFunInfo{},
+               {InheritMod, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 positions: [{1, 1}],
+                 type: :defmodule
+               },
+               {InheritMod, :private_func, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 type: :defp
+               },
+               {InheritMod, :private_func_arg, 1} => %ModFunInfo{
+                 params: [
+                   [{:a, _, _}],
+                   [{:\\, _, [{:a, _, _}, nil]}]
+                 ],
+                 positions: [{2, 3}, {2, 3}],
+                 type: :defp
+               },
+               {InheritMod, :private_guard, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 type: :defguardp
+               },
+               {InheritMod, :private_guard_arg, 1} => %ModFunInfo{
+                 params: [
+                   [
+                     {:a, _, _}
+                   ]
+                 ],
+                 positions: [{2, 3}],
+                 type: :defguardp
+               },
+               {InheritMod, :private_macro, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 type: :defmacrop
+               },
+               {InheritMod, :private_macro_arg, 1} => %ModFunInfo{
+                 params: [
+                   [
+                     {:a, _, _}
+                   ]
+                 ],
+                 positions: [{2, 3}],
+                 type: :defmacrop
+               },
+               {InheritMod, :public_func, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 type: :def,
+                 overridable: {true, ElixirSenseExample.ExampleBehaviour}
+               },
+               {InheritMod, :public_func_arg, 2} => %ModFunInfo{
+                 params: [
+                   [
+                     {:b, _, _},
+                     {:\\, _,
+                      [
+                        {:a, _, _},
+                        "def"
+                      ]}
+                   ]
+                 ],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {InheritMod, :public_guard, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 type: :defguard
+               },
+               {InheritMod, :public_guard_arg, 1} => %ModFunInfo{
+                 params: [
+                   [
+                     {:a, _, _}
+                   ]
+                 ],
+                 positions: [{2, 3}],
+                 type: :defguard
+               },
+               {InheritMod, :public_macro, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 type: :defmacro
+               },
+               {InheritMod, :public_macro_arg, 1} => %ModFunInfo{
+                 params: [
+                   [
+                     {:a, _, _}
+                   ]
+                 ],
+                 positions: [{2, 3}],
+                 type: :defmacro
+               },
+               {InheritMod.Deeply.Nested, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 positions: [{2, 3}],
+                 type: :defmodule
+               },
+               {InheritMod.Nested, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 positions: [{2, 3}],
+                 type: :defmodule
+               },
+               {InheritMod.ProtocolEmbedded, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 positions: [{2, 3}],
+                 type: :defmodule
+               },
+               {InheritMod, :behaviour_info, 1} => %ModFunInfo{
+                 params: [[{:atom, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 target: nil,
+                 type: :def
+               },
+               {InheritMod.ProtocolEmbedded, :module_info, 1} => %ModFunInfo{}
+             } = state.mods_funs_to_positions
+
+      assert %{
+               {InheritMod, :my_opaque_type, 0} => %State.TypeInfo{
+                 args: [[]],
+                 kind: :opaque,
+                 name: :my_opaque_type,
+                 positions: [{2, 3}],
+                 specs: ["@opaque my_opaque_type :: any"]
+               },
+               {InheritMod, :my_opaque_type, nil} => %State.TypeInfo{},
+               {InheritMod, :my_priv_type, 0} => %State.TypeInfo{
+                 args: [[]],
+                 kind: :typep,
+                 name: :my_priv_type,
+                 positions: [{2, 3}],
+                 specs: ["@typep my_priv_type :: any"]
+               },
+               {InheritMod, :my_pub_type, 0} => %State.TypeInfo{
+                 args: [[]],
+                 kind: :type,
+                 name: :my_pub_type,
+                 positions: [{2, 3}],
+                 specs: ["@type my_pub_type :: any"]
+               },
+               {InheritMod, :my_pub_type_arg, 2} => %State.TypeInfo{
+                 args: [["a", "b"]],
+                 kind: :type,
+                 name: :my_pub_type_arg,
+                 positions: [{2, 3}],
+                 specs: ["@type my_pub_type_arg(a, b) :: {b, a}"]
+               }
+             } = state.types
+
+      assert %{
+               {InheritMod, :private_func, 0} => %State.SpecInfo{
+                 args: [[]],
+                 kind: :spec,
+                 name: :private_func,
+                 positions: [{2, 3}],
+                 specs: ["@spec private_func() :: String.t()"]
+               },
+               {InheritMod, :private_func, nil} => %State.SpecInfo{},
+               {InheritMod, :some_callback, 1} => %State.SpecInfo{
+                 args: [["abc"]],
+                 kind: :callback,
+                 name: :some_callback,
+                 positions: [{2, 3}],
+                 specs: ["@callback some_callback(abc) :: :ok when abc: integer"]
+               }
+             } = state.specs
+    end
+
+    test "use defining struct" do
+      state =
+        """
+        defmodule InheritMod do
+          use ElixirSenseExample.ExampleBehaviourWithStruct
+
+          IO.puts("")
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 0, func: :func1, position: {3, 14}, mod: :erl_mod}],
-             4 => [%CallInfo{arity: 0, func: :func1, position: {4, 14}, mod: :erl_mod}],
-             5 => [%CallInfo{arity: 1, func: :func2, position: {5, 14}, mod: :erl_mod}]
-           }
-  end
+      assert %{
+               InheritMod => %State.StructInfo{
+                 fields: [{:a, nil}, {:b, 1}, __struct__: InheritMod],
+                 type: :defstruct
+               }
+             } = state.structs
 
-  test "registers calls with atom module" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          :"Elixir.MyMod".func1
-          :"Elixir.MyMod".func1()
-          :"Elixir.MyMod".func2(2)
+      assert %{
+               {InheritMod, :__struct__, 0} => %State.ModFunInfo{},
+               {InheritMod, :__struct__, 1} => %State.ModFunInfo{}
+             } = state.mods_funs_to_positions
+    end
+
+    test "use defining exception" do
+      state =
+        """
+        defmodule MyError do
+          use ElixirSenseExample.ExampleBehaviourWithException
+
+          IO.puts("")
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 0, func: :func1, position: {3, 21}, mod: MyMod}],
-             4 => [%CallInfo{arity: 0, func: :func1, position: {4, 21}, mod: MyMod}],
-             5 => [%CallInfo{arity: 1, func: :func2, position: {5, 21}, mod: MyMod}]
-           }
-  end
+      assert %{
+               MyError => %State.StructInfo{
+                 fields: [{:a, nil}, {:b, 1}, __exception__: true, __struct__: MyError],
+                 type: :defexception
+               }
+             } = state.structs
 
-  test "registers calls no arg no parens" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          MyMod.func
+      assert %{
+               {MyError, :__struct__, 0} => %State.ModFunInfo{},
+               {MyError, :__struct__, 1} => %State.ModFunInfo{},
+               {MyError, :exception, 1} => %State.ModFunInfo{}
+             } = state.mods_funs_to_positions
+    end
+
+    test "use multi notation" do
+      state =
+        """
+        defmodule InheritMod do
+          use ElixirSenseExample.{ExampleBehaviour}
+          # use Foo.{}
+
+          IO.puts("")
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod}]
-           }
-  end
+      assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
+    end
 
-  test "registers calls no arg" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          MyMod.func()
+    test "use multi notation with atom module" do
+      state =
+        """
+        defmodule InheritMod do
+          use :"Elixir.ElixirSenseExample".{:"Elixir.ExampleBehaviour"}
+
+          IO.puts("")
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod}]
-           }
-  end
+      assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
+    end
 
-  test "registers calls local no arg no parens" do
-    state =
-      """
-      defmodule NyModule do
-        def func_1, do: :ok
-        def func do
-          func_1
+    test "use with __MODULE__" do
+      state =
+        """
+        defmodule ElixirSenseExample do
+          use __MODULE__.ExampleBehaviour
+
+          IO.puts("")
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    if Version.match?(System.version(), ">= 1.15.0") do
-      assert state.calls == %{}
-    else
-      assert state.calls == %{
-               4 => [%CallInfo{arity: 0, func: :func_1, position: {4, 5}, mod: nil}]
-             }
+      assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
+    end
+
+    test "use aliased" do
+      state =
+        """
+        defmodule InheritMod do
+          alias ElixirSenseExample.ExampleBehaviour, as: S
+          use S
+
+          IO.puts("")
+        end
+        """
+        |> string_to_state
+
+      assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
+    end
+
+    test "use atom module" do
+      state =
+        """
+        defmodule InheritMod do
+          use :"Elixir.ElixirSenseExample.ExampleBehaviour"
+
+          IO.puts("")
+        end
+        """
+        |> string_to_state
+
+      assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
     end
   end
 
-  test "registers typespec no parens calls" do
-    state =
-      """
-      defmodule NyModule do
-        @type a :: integer
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             2 => [
-               %CallInfo{arity: 0, func: :integer, position: {2, 14}, mod: nil},
-               %CallInfo{arity: 0, func: :a, position: {2, 9}, mod: nil}
-             ]
-           }
-  end
-
-  test "registers calls local no arg" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          func_1()
+  describe "structs and exceptions" do
+    test "find struct" do
+      state =
+        """
+        defmodule MyStruct do
+          defstruct [:some_field, a_field: 1]
+          IO.puts ""
         end
-      end
-      """
-      |> string_to_state
+        """
+        |> string_to_state
 
-    assert state.calls == %{3 => [%CallInfo{arity: 0, func: :func_1, position: {3, 5}, mod: nil}]}
-  end
-
-  test "registers calls local arg" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          func_1("a")
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{3 => [%CallInfo{arity: 1, func: :func_1, position: {3, 5}, mod: nil}]}
-  end
-
-  test "registers calls arg" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          MyMod.func("test")
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 1, func: :func, position: {3, 11}, mod: MyMod}]
-           }
-  end
-
-  test "registers calls on attribute and var with args" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          @attr.func("test")
-          var.func("test")
-        end
-      end
-      """
-      |> string_to_state
-
-    if Version.match?(System.version(), ">= 1.15.0") do
-      assert state.calls == %{
-               3 => [
-                 %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
-               ],
-               4 => [%CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}]
+      assert state.structs == %{
+               MyStruct => %StructInfo{
+                 type: :defstruct,
+                 fields: [some_field: nil, a_field: 1, __struct__: MyStruct]
+               }
              }
-    else
-      assert state.calls == %{
-               3 => [
-                 %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
-               ],
-               4 => [
-                 %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
-                 %CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}
-               ]
+
+      # defstruct adds struct/0 and struct/1 functions
+      assert %{
+               {MyStruct, :__struct__, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {MyStruct, :__struct__, 1} => %ModFunInfo{
+                 params: [[{:kv, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {MyStruct, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 positions: [{1, 1}],
+                 type: :defmodule
+               }
+             } = state.mods_funs_to_positions
+    end
+
+    test "find struct fields from expression" do
+      state =
+        """
+        defmodule MyStruct do
+          @fields_1 [a: nil]
+          defstruct [a_field: nil] ++ @fields_1
+        end
+        """
+        |> string_to_state
+
+      # TODO expression is not supported
+      assert state.structs == %{
+               MyStruct => %StructInfo{type: :defstruct, fields: [__struct__: MyStruct]}
              }
+    end
+
+    test "find exception" do
+      state =
+        """
+        defmodule MyError do
+          defexception [message: nil]
+
+          IO.puts("")
+        end
+        """
+        |> string_to_state
+
+      assert state.structs == %{
+               MyError => %StructInfo{
+                 type: :defexception,
+                 fields: [message: nil, __exception__: true, __struct__: MyError]
+               }
+             }
+
+      # defexception adds Exception behaviour
+      assert get_line_behaviours(state, 4) == [Exception]
+      # and message/1 and exception/1 callbacks
+      assert %{
+               {MyError, :__struct__, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {MyError, :__struct__, 1} => %ModFunInfo{
+                 params: [[{:kv, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {MyError, :exception, 1} => %ModFunInfo{
+                 params: [
+                   [{:args, [line: 2, column: 3], nil}],
+                   [{:msg, [line: 2, column: 3], nil}]
+                 ],
+                 positions: [{2, 3}, {2, 3}],
+                 type: :def
+               },
+               {MyError, :message, 1} => %ModFunInfo{
+                 params: [[{:exception, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 type: :def
+               }
+             } = state.mods_funs_to_positions
+    end
+
+    test "find exception without message key" do
+      state =
+        """
+        defmodule MyError do
+          defexception []
+
+          IO.puts("")
+        end
+        """
+        |> string_to_state
+
+      assert state.structs == %{
+               MyError => %StructInfo{
+                 type: :defexception,
+                 fields: [__exception__: true, __struct__: MyError]
+               }
+             }
+
+      # defexception adds Exception behaviour
+      assert get_line_behaviours(state, 4) == [Exception]
+      # and message/1 and exception/1 callbacks
+      assert %{
+               {MyError, :__struct__, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {MyError, :__struct__, 1} => %ModFunInfo{
+                 params: [[{:kv, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {MyError, :exception, 1} => %ModFunInfo{
+                 params: [[{:args, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 type: :def
+               }
+             } = state.mods_funs_to_positions
     end
   end
 
-  test "registers calls on attribute and var without args" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          @attr.func
-          var.func
-        end
-      end
-      """
-      |> string_to_state
-
-    if Version.match?(System.version(), ">= 1.15.0") do
-      assert state.calls == %{
-               3 => [
-                 %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
-               ],
-               4 => [%CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}]
-             }
-    else
-      assert state.calls == %{
-               3 => [
-                 %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
-               ],
-               4 => [
-                 %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
-                 %CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}
-               ]
-             }
-    end
-  end
-
-  test "registers calls on attribute and var anonymous" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          @attr.()
-          var.()
-        end
-      end
-      """
-      |> string_to_state
-
-    if Version.match?(System.version(), ">= 1.15.0") do
-      assert state.calls == %{
-               3 => [%CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}],
-               4 => [%CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}]
-             }
-    else
-      assert state.calls == %{
-               3 => [%CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}],
-               4 => [
-                 %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
-                 %CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}
-               ]
-             }
-    end
-  end
-
-  test "registers calls pipe with __MODULE__ operator no parens" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          "test" |> __MODULE__.func
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 1, func: :func, position: {3, 26}, mod: NyModule}]
-           }
-  end
-
-  test "registers calls pipe operator no parens" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          "test" |> MyMod.func
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 1, func: :func, position: {3, 21}, mod: MyMod}]
-           }
-  end
-
-  test "registers calls pipe operator" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          "test" |> MyMod.func()
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 1, func: :func, position: {3, 21}, mod: MyMod}]
-           }
-  end
-
-  test "registers calls pipe operator with arg" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          "test" |> MyMod.func("arg")
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 2, func: :func, position: {3, 21}, mod: MyMod}]
-           }
-  end
-
-  test "registers calls pipe operator erlang module" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          "test" |> :my_mod.func("arg")
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 2, func: :func, position: {3, 23}, mod: :my_mod}]
-           }
-  end
-
-  test "registers calls pipe operator atom module" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          "test" |> :"Elixir.MyMod".func("arg")
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 2, func: :func, position: {3, 31}, mod: MyMod}]
-           }
-  end
-
-  test "registers calls pipe operator local" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          "test" |> func("arg")
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{3 => [%CallInfo{arity: 2, func: :func, position: {3, 15}, mod: nil}]}
-  end
-
-  test "registers calls pipe operator nested external into local" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          "test" |> MyMod.func() |> other
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [
-               %CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod},
-               %CallInfo{arity: 1, position: {3, 31}, func: :other, mod: nil}
-             ]
-           }
-  end
-
-  test "registers calls pipe operator nested external into external" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          "test" |> MyMod.func() |> Other.other
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [
-               %CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod},
-               %CallInfo{arity: 1, position: {3, 37}, func: :other, mod: Other}
-             ]
-           }
-  end
-
-  test "registers calls pipe operator nested local into external" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          "test" |> func_1() |> Some.other
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [
-               %CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil},
-               %CallInfo{arity: 1, position: {3, 32}, func: :other, mod: Some}
-             ]
-           }
-  end
-
-  test "registers calls pipe operator nested local into local" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          "test" |> func_1() |> other
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [
-               %CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil},
-               %CallInfo{arity: 1, position: {3, 27}, func: :other, mod: nil}
-             ]
-           }
-  end
-
-  test "registers calls capture operator __MODULE__" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          &__MODULE__.func/1
-          &__MODULE__.Sub.func/1
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 1, position: {3, 17}, func: :func, mod: NyModule}],
-             4 => [%CallInfo{arity: 1, position: {4, 21}, func: :func, mod: NyModule.Sub}]
-           }
-  end
-
-  test "registers calls capture operator external" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          &MyMod.func/1
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 1, position: {3, 12}, func: :func, mod: MyMod}]
-           }
-  end
-
-  test "registers calls capture operator external erlang module" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          &:erl_mod.func/1
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 1, func: :func, position: {3, 15}, mod: :erl_mod}]
-           }
-  end
-
-  test "registers calls capture operator external atom module" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          &:"Elixir.MyMod".func/1
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{
-             3 => [%CallInfo{arity: 1, func: :func, position: {3, 22}, mod: MyMod}]
-           }
-  end
-
-  test "registers calls capture operator local" do
-    state =
-      """
-      defmodule NyModule do
-        def func do
-          &func/1
-        end
-      end
-      """
-      |> string_to_state
-
-    assert state.calls == %{3 => [%CallInfo{arity: 1, func: :func, position: {3, 6}, mod: nil}]}
-  end
-
-  test "registers calls on ex_unit DSL" do
-    state =
-      """
-      defmodule MyModuleTest do
-        use ExUnit.Case
-
-        describe "describe1" do
-          test "test1" do
+  describe "calls" do
+    test "registers calls with __MODULE__" do
+      state =
+        """
+        defmodule NyModule do
+          def func1, do: :ok
+          def func2(a), do: :ok
+          def func do
+            __MODULE__.func1
+            __MODULE__.func1()
+            __MODULE__.func2(2)
+            __MODULE__.Sub.func2(2)
           end
         end
+        """
+        |> string_to_state
 
-        test "test2", %{some: param} do
+      assert state.calls == %{
+               5 => [%CallInfo{arity: 0, func: :func1, position: {5, 16}, mod: NyModule}],
+               6 => [%CallInfo{arity: 0, func: :func1, position: {6, 16}, mod: NyModule}],
+               7 => [%CallInfo{arity: 1, func: :func2, position: {7, 16}, mod: NyModule}],
+               8 => [%CallInfo{arity: 1, func: :func2, position: {8, 20}, mod: NyModule.Sub}]
+             }
+    end
+
+    test "registers calls with erlang module" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            :erl_mod.func1
+            :erl_mod.func1()
+            :erl_mod.func2(2)
+          end
         end
+        """
+        |> string_to_state
 
-        test "not implemented"
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 0, func: :func1, position: {3, 14}, mod: :erl_mod}],
+               4 => [%CallInfo{arity: 0, func: :func1, position: {4, 14}, mod: :erl_mod}],
+               5 => [%CallInfo{arity: 1, func: :func2, position: {5, 14}, mod: :erl_mod}]
+             }
+    end
+
+    test "registers calls with atom module" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            :"Elixir.MyMod".func1
+            :"Elixir.MyMod".func1()
+            :"Elixir.MyMod".func2(2)
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 0, func: :func1, position: {3, 21}, mod: MyMod}],
+               4 => [%CallInfo{arity: 0, func: :func1, position: {4, 21}, mod: MyMod}],
+               5 => [%CallInfo{arity: 1, func: :func2, position: {5, 21}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls no arg no parens" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            MyMod.func
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls no arg" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            MyMod.func()
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls local no arg no parens" do
+      state =
+        """
+        defmodule NyModule do
+          def func_1, do: :ok
+          def func do
+            func_1
+          end
+        end
+        """
+        |> string_to_state
+
+      if Version.match?(System.version(), ">= 1.15.0") do
+        assert state.calls == %{}
+      else
+        assert state.calls == %{
+                 4 => [%CallInfo{arity: 0, func: :func_1, position: {4, 5}, mod: nil}]
+               }
       end
-      """
-      |> string_to_state
+    end
 
-    assert state.calls == %{
-             2 => [
-               %CallInfo{arity: 2, position: {2, 3}, func: :__register__, mod: ExUnit.Case},
-               %CallInfo{arity: 2, position: {2, 3}, func: :unless, mod: nil}
-             ],
-             4 => [%CallInfo{arity: 2, position: {4, 3}, func: :describe, mod: nil}],
-             5 => [%CallInfo{arity: 2, position: {5, 5}, func: :test, mod: nil}],
-             9 => [%CallInfo{arity: 3, position: {9, 3}, func: :test, mod: nil}],
-             12 => [%CallInfo{arity: 0, position: {12, 3}, func: :test, mod: nil}]
-           }
+    test "registers typespec no parens calls" do
+      state =
+        """
+        defmodule NyModule do
+          @type a :: integer
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               2 => [
+                 %CallInfo{arity: 0, func: :integer, position: {2, 14}, mod: nil},
+                 %CallInfo{arity: 0, func: :a, position: {2, 9}, mod: nil}
+               ]
+             }
+    end
+
+    test "registers calls local no arg" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            func_1()
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 0, func: :func_1, position: {3, 5}, mod: nil}]
+             }
+    end
+
+    test "registers calls local arg" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            func_1("a")
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func_1, position: {3, 5}, mod: nil}]
+             }
+    end
+
+    test "registers calls arg" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            MyMod.func("test")
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 11}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls on attribute and var with args" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            @attr.func("test")
+            var.func("test")
+          end
+        end
+        """
+        |> string_to_state
+
+      if Version.match?(System.version(), ">= 1.15.0") do
+        assert state.calls == %{
+                 3 => [
+                   %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
+                 ],
+                 4 => [%CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}]
+               }
+      else
+        assert state.calls == %{
+                 3 => [
+                   %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
+                 ],
+                 4 => [
+                   %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
+                   %CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}
+                 ]
+               }
+      end
+    end
+
+    test "registers calls on attribute and var without args" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            @attr.func
+            var.func
+          end
+        end
+        """
+        |> string_to_state
+
+      if Version.match?(System.version(), ">= 1.15.0") do
+        assert state.calls == %{
+                 3 => [
+                   %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
+                 ],
+                 4 => [%CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}]
+               }
+      else
+        assert state.calls == %{
+                 3 => [
+                   %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
+                 ],
+                 4 => [
+                   %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
+                   %CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}
+                 ]
+               }
+      end
+    end
+
+    test "registers calls on attribute and var anonymous" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            @attr.()
+            var.()
+          end
+        end
+        """
+        |> string_to_state
+
+      if Version.match?(System.version(), ">= 1.15.0") do
+        assert state.calls == %{
+                 3 => [
+                   %CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}
+                 ],
+                 4 => [%CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}]
+               }
+      else
+        assert state.calls == %{
+                 3 => [
+                   %CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}
+                 ],
+                 4 => [
+                   %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
+                   %CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}
+                 ]
+               }
+      end
+    end
+
+    test "registers calls pipe with __MODULE__ operator no parens" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> __MODULE__.func
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 26}, mod: NyModule}]
+             }
+    end
+
+    test "registers calls pipe operator no parens" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> MyMod.func
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 21}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls pipe operator" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> MyMod.func()
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 21}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls pipe operator with arg" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> MyMod.func("arg")
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 2, func: :func, position: {3, 21}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls pipe operator erlang module" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> :my_mod.func("arg")
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 2, func: :func, position: {3, 23}, mod: :my_mod}]
+             }
+    end
+
+    test "registers calls pipe operator atom module" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> :"Elixir.MyMod".func("arg")
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 2, func: :func, position: {3, 31}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls pipe operator local" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> func("arg")
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 2, func: :func, position: {3, 15}, mod: nil}]
+             }
+    end
+
+    test "registers calls pipe operator nested external into local" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> MyMod.func() |> other
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [
+                 %CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod},
+                 %CallInfo{arity: 1, position: {3, 31}, func: :other, mod: nil}
+               ]
+             }
+    end
+
+    test "registers calls pipe operator nested external into external" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> MyMod.func() |> Other.other
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [
+                 %CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod},
+                 %CallInfo{arity: 1, position: {3, 37}, func: :other, mod: Other}
+               ]
+             }
+    end
+
+    test "registers calls pipe operator nested local into external" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> func_1() |> Some.other
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [
+                 %CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil},
+                 %CallInfo{arity: 1, position: {3, 32}, func: :other, mod: Some}
+               ]
+             }
+    end
+
+    test "registers calls pipe operator nested local into local" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> func_1() |> other
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [
+                 %CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil},
+                 %CallInfo{arity: 1, position: {3, 27}, func: :other, mod: nil}
+               ]
+             }
+    end
+
+    test "registers calls capture operator __MODULE__" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            &__MODULE__.func/1
+            &__MODULE__.Sub.func/1
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, position: {3, 17}, func: :func, mod: NyModule}],
+               4 => [%CallInfo{arity: 1, position: {4, 21}, func: :func, mod: NyModule.Sub}]
+             }
+    end
+
+    test "registers calls capture operator external" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            &MyMod.func/1
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, position: {3, 12}, func: :func, mod: MyMod}]
+             }
+    end
+
+    test "registers calls capture operator external erlang module" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            &:erl_mod.func/1
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 15}, mod: :erl_mod}]
+             }
+    end
+
+    test "registers calls capture operator external atom module" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            &:"Elixir.MyMod".func/1
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 22}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls capture operator local" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            &func/1
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{3 => [%CallInfo{arity: 1, func: :func, position: {3, 6}, mod: nil}]}
+    end
+
+    test "registers calls on ex_unit DSL" do
+      state =
+        """
+        defmodule MyModuleTest do
+          use ExUnit.Case
+
+          describe "describe1" do
+            test "test1" do
+            end
+          end
+
+          test "test2", %{some: param} do
+          end
+
+          test "not implemented"
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               2 => [
+                 %CallInfo{arity: 2, position: {2, 3}, func: :__register__, mod: ExUnit.Case},
+                 %CallInfo{arity: 2, position: {2, 3}, func: :unless, mod: nil}
+               ],
+               4 => [%CallInfo{arity: 2, position: {4, 3}, func: :describe, mod: nil}],
+               5 => [%CallInfo{arity: 2, position: {5, 5}, func: :test, mod: nil}],
+               9 => [%CallInfo{arity: 3, position: {9, 3}, func: :test, mod: nil}],
+               12 => [%CallInfo{arity: 0, position: {12, 3}, func: :test, mod: nil}]
+             }
+    end
   end
 
   test "registers types" do
@@ -5870,7 +6203,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   defp get_line_imports(state, line) do
     case state.lines_to_env[line] do
       nil -> []
-      env -> env.imports
+      env -> {env.functions, env.macros}
     end
   end
 
@@ -5899,10 +6232,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   defp get_line_module(state, line) do
     if env = state.lines_to_env[line] do
-      case env.module_variants do
-        [single] -> single
-        other -> other
-      end
+      env.module
     end
   end
 
@@ -5977,5 +6307,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
     # .eex?
     |> Enum.filter(&(String.ends_with?(&1, ".ex") or String.ends_with?(&1, ".exs")))
+  end
+
+  defp prepend_default_requires(list) do
+    (if Version.match?(System.version(), ">= 1.17.0-dev") do
+       [Application, Kernel]
+     else
+       [Application, Kernel, Kernel.Typespec]
+     end ++ list)
+    |> Enum.sort()
   end
 end
