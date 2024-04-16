@@ -897,16 +897,6 @@ defmodule ElixirSense.Core.State do
         meta,
         options
       )
-      |> add_mod_fun_to_position(
-        {variant, func, nil},
-        position,
-        end_position,
-        params,
-        type,
-        doc,
-        meta,
-        options
-      )
     end)
   end
 
