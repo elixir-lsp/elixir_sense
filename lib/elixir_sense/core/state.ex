@@ -1270,7 +1270,12 @@ defmodule ElixirSense.Core.State do
         state.mods_funs_to_positions
       )
 
-    %__MODULE__{state | imports: combined_imports, functions: [functions | tl(state.functions)], macros: [macros | tl(state.macros)]}
+    %__MODULE__{
+      state
+      | imports: combined_imports,
+        functions: [functions | tl(state.functions)],
+        macros: [macros | tl(state.macros)]
+    }
   end
 
   def add_import(%__MODULE__{} = state, _module, _opts), do: state

@@ -315,15 +315,15 @@ defmodule ElixirSense.Core.Compiler do
     valid_opts = [:context, :location, :line, :file, :unquote, :bind_quoted, :generated]
     {e_opts, st, et} = expand_opts(meta, :quote, valid_opts, opts, s, e)
 
-    _context = Keyword.get(e_opts, :context, e.module || :"Elixir")
+    context = Keyword.get(e_opts, :context, e.module || :"Elixir")
 
-    {_file, _line} =
+    {file, line} =
       case Keyword.fetch(e_opts, :location) do
         {:ok, :keep} -> {e.file, false}
         :error -> {Keyword.get(e_opts, :file, nil), Keyword.get(e_opts, :line, false)}
       end
 
-    {_binding, default_unquote} =
+    {binding, default_unquote} =
       case Keyword.fetch(e_opts, :bind_quoted) do
         {:ok, bq} ->
           if is_list(bq) and Enum.all?(bq, &match?({key, _} when is_atom(key), &1)) do
@@ -336,14 +336,14 @@ defmodule ElixirSense.Core.Compiler do
           {[], true}
       end
 
-    _unquote_opt = Keyword.get(e_opts, :unquote, default_unquote)
-    _generated = Keyword.get(e_opts, :generated, false)
+    unquote_opt = Keyword.get(e_opts, :unquote, default_unquote)
+    generated = Keyword.get(e_opts, :generated, false)
 
     # TODO this is a stub only
-    expand_quote(exprs, st, et)
-    # {q, prelude} = ElixirQuote.build(meta, line, file, context, unquote_opt, generated)
-    # quoted = ElixirQuote.quote(meta, exprs, binding, q, prelude, et)
-    # expand(quoted, st, et)
+    # expand_quote(exprs, st, et)
+    {q, prelude} = __MODULE__.Quote.build(meta, line, file, context, unquote_opt, generated)
+    quoted = __MODULE__.Quote.quote(meta, exprs, binding, q, prelude, et)
+    expand(quoted, st, et)
   end
 
   def expand({:quote, _meta, [_, _]}, _s, _e), do: raise("invalid_args")
@@ -2930,6 +2930,17 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defmodule Quote do
+    alias ElixirSense.Core.Compiler.Dispatch, as: ElixirDispatch
+
+    defstruct line: false,
+              file: nil,
+              context: nil,
+              vars_hygiene: true,
+              aliases_hygiene: true,
+              imports_hygiene: true,
+              unquote: true,
+              generated: false
+
     def fun_to_quoted(function) do
       {:module, module} = :erlang.fun_info(function, :module)
       {:name, name} = :erlang.fun_info(function, :name)
@@ -2937,10 +2948,492 @@ defmodule ElixirSense.Core.Compiler do
 
       {:&, [], [{:/, [], [{{:., [], [module, name]}, [{:no_parens, true}], []}, arity]}]}
     end
+
+    def build(meta, line, file, context, unquote, generated) do
+      acc0 = []
+
+      {e_line, acc1} = validate_compile(meta, :line, line, acc0)
+      {e_file, acc2} = validate_compile(meta, :file, file, acc1)
+      {e_context, acc3} = validate_compile(meta, :context, context, acc2)
+
+      validate_runtime(:unquote, unquote)
+      validate_runtime(:generated, generated)
+
+      q = %__MODULE__{
+        line: e_line,
+        file: e_file,
+        unquote: unquote,
+        context: e_context,
+        generated: generated
+      }
+
+      {q, acc3}
+    end
+
+    def validate_compile(_meta, :line, value, acc) when is_boolean(value) do
+      {value, acc}
+    end
+
+    def validate_compile(_meta, :file, nil, acc) do
+      {nil, acc}
+    end
+
+    def validate_compile(meta, key, value, acc) do
+      case is_valid(key, value) do
+        true ->
+          {value, acc}
+
+        false ->
+          var = {key, meta, __MODULE__}
+          call = {{:., meta, [__MODULE__, :validate_runtime]}, meta, [key, value]}
+          {var, [{:=, meta, [var, call]} | acc]}
+      end
+    end
+
+    def validate_runtime(key, value) do
+      case is_valid(key, value) do
+        true ->
+          value
+
+        false ->
+          raise ArgumentError,
+                "invalid runtime value for option :#{Atom.to_string(key)} in quote, got: #{inspect(value)}"
+      end
+    end
+
+    def is_valid(:line, line), do: is_integer(line)
+    def is_valid(:file, file), do: is_binary(file)
+    def is_valid(:context, context), do: is_atom(context) and context != nil
+    def is_valid(:generated, generated), do: is_boolean(generated)
+    def is_valid(:unquote, unquote), do: is_boolean(unquote)
+
+    def quote(_meta, {:unquote_splicing, _, [_]}, _binding, %__MODULE__{unquote: true}, _, _),
+      do: raise("unquote_splicing only works inside arguments and block contexts")
+
+    def quote(meta, expr, binding, q, prelude, e) do
+      context = q.context
+
+      vars =
+        Enum.map(binding, fn {k, v} ->
+          {:{}, [], {:=, [], {:{}, [], [k, meta, context]}, v}}
+        end)
+
+      quoted = do_quote(expr, q, e)
+
+      with_vars =
+        case vars do
+          [] -> quoted
+          _ -> {:{}, [], [:__block__, [], vars ++ [quoted]]}
+        end
+
+      case prelude do
+        [] -> with_vars
+        _ -> {:__block__, [], prelude ++ [with_vars]}
+      end
+    end
+
+    # quote/unquote
+
+    defp do_quote({:quote, meta, [arg]}, q, e) do
+      t_arg = do_quote(arg, %__MODULE__{q | unquote: false}, e)
+
+      new_meta =
+        case q do
+          %__MODULE__{vars_hygiene: true, context: context} ->
+            Keyword.put(meta, :context, context)
+
+          _ ->
+            meta
+        end
+
+      {:{}, [], [:quote, meta(new_meta, q), [t_arg]]}
+    end
+
+    defp do_quote({:quote, meta, [opts, arg]}, q, e) do
+      t_opts = do_quote(opts, q, e)
+      t_arg = do_quote(arg, %__MODULE__{q | unquote: false}, e)
+
+      new_meta =
+        case q do
+          %__MODULE__{vars_hygiene: true, context: context} ->
+            Keyword.put(meta, :context, context)
+
+          _ ->
+            meta
+        end
+
+      {:{}, [], [:quote, meta(new_meta, q), [t_opts, t_arg]]}
+    end
+
+    defp do_quote({:unquote, _meta, [expr]}, %__MODULE__{unquote: true}, _), do: expr
+
+    # Aliases
+
+    defp do_quote({:__aliases__, meta, [h | t]}, %__MODULE__{aliases_hygiene: true} = q, e)
+         when is_atom(h) and h != :"Elixir" do
+      # TODO Macro.Env version errors when list is returned
+      annotation =
+        case :elixir_aliases.expand(meta, [h | t], e, false) do
+          atom when is_atom(atom) -> atom
+          aliases when is_list(aliases) -> false
+        end
+
+      alias_meta = Keyword.put(Keyword.delete(meta, :counter), :alias, annotation)
+      do_quote_tuple(:__aliases__, alias_meta, [h | t], q, e)
+    end
+
+    # Vars
+
+    defp do_quote({name, meta, nil}, %__MODULE__{vars_hygiene: true} = q, e)
+         when is_atom(name) and is_list(meta) do
+      import_meta =
+        if q.imports_hygiene do
+          import_meta(meta, name, 0, q, e)
+        else
+          meta
+        end
+
+      {:{}, [], [name, meta(import_meta, q), q.context]}
+    end
+
+    # Unquote
+
+    defp do_quote(
+           {{{:., meta, [left, :unquote]}, _, [expr]}, _, args},
+           %__MODULE__{unquote: true} = q,
+           e
+         ) do
+      do_quote_call(left, meta, expr, args, q, e)
+    end
+
+    defp do_quote({{:., meta, [left, :unquote]}, _, [expr]}, %__MODULE__{unquote: true} = q, e) do
+      do_quote_call(left, meta, expr, nil, q, e)
+    end
+
+    # Imports
+
+    defp do_quote(
+           {:&, meta, [{:/, _, [{f, _, c}, a]}] = args},
+           %__MODULE__{imports_hygiene: true} = q,
+           e
+         )
+         when is_atom(f) and is_integer(a) and is_atom(c) do
+      new_meta =
+        case ElixirDispatch.find_import(meta, f, a, e) do
+          false ->
+            meta
+
+          receiver ->
+            Keyword.put(Keyword.put(meta, :imports, [{a, receiver}]), :context, q.context)
+        end
+
+      do_quote_tuple(:&, new_meta, args, q, e)
+    end
+
+    defp do_quote({name, meta, args_or_context}, %__MODULE__{imports_hygiene: true} = q, e)
+         when is_atom(name) and is_list(meta) and
+                (is_list(args_or_context) or is_atom(args_or_context)) do
+      arity =
+        case args_or_context do
+          args when is_list(args) -> length(args)
+          _context when is_atom(args_or_context) -> 0
+        end
+
+      import_meta = import_meta(meta, name, arity, q, e)
+      annotated = annotate({name, import_meta, args_or_context}, q.context)
+      do_quote_tuple(annotated, q, e)
+    end
+
+    # Two-element tuples
+
+    defp do_quote({left, right}, %__MODULE__{unquote: true} = q, e)
+         when is_tuple(left) and elem(left, 0) == :unquote_splicing and
+                is_tuple(right) and elem(right, 0) == :unquote_splicing do
+      do_quote({{}, [], [left, right]}, q, e)
+    end
+
+    defp do_quote({left, right}, q, e) do
+      t_left = do_quote(left, q, e)
+      t_right = do_quote(right, q, e)
+      {t_left, t_right}
+    end
+
+    # Everything else
+
+    defp do_quote(other, q, e) when is_atom(e) do
+      do_escape(other, q, e)
+    end
+
+    defp do_quote({_, _, _} = tuple, q, e) do
+      annotated = annotate(tuple, q.context)
+      do_quote_tuple(annotated, q, e)
+    end
+
+    defp do_quote([], _, _), do: []
+
+    defp do_quote([h | t], %__MODULE__{unquote: false} = q, e) do
+      head_quoted = do_quote(h, q, e)
+      do_quote_simple_list(t, head_quoted, q, e)
+    end
+
+    defp do_quote([h | t], q, e) do
+      do_quote_tail(:lists.reverse(t, [h]), q, e)
+    end
+
+    defp do_quote(other, _, _), do: other
+
+    defp import_meta(meta, name, arity, q, e) do
+      case Keyword.get(meta, :import, false) == false &&
+             ElixirDispatch.find_imports(meta, name, e) do
+        [] ->
+          case arity == 1 and Keyword.get(meta, :ambiguous_op, nil) == nil do
+            true ->
+              Keyword.put(meta, :ambiguous_op, q.context)
+
+            _ ->
+              meta
+          end
+
+        imports ->
+          Keyword.put(Keyword.put(meta, :context, q.context), :imports, imports)
+      end
+    end
+
+    defp do_quote_call(left, meta, expr, args, q, e) do
+      all = [left, {:unquote, meta, [expr]}, args, q.context]
+      tall = Enum.map(all, fn x -> do_quote(x, q, e) end)
+      {{:., meta, [:elixir_quote, :dot]}, meta, [meta(meta, q) | tall]}
+    end
+
+    defp do_quote_tuple({left, meta, right}, q, e) do
+      do_quote_tuple(left, meta, right, q, e)
+    end
+
+    defp do_quote_tuple(left, meta, right, q, e) do
+      t_left = do_quote(left, q, e)
+      t_right = do_quote(right, q, e)
+      {:{}, [], [t_left, meta(meta, q), t_right]}
+    end
+
+    defp do_quote_simple_list([], prev, _, _), do: [prev]
+
+    defp do_quote_simple_list([h | t], prev, q, e) do
+      [prev | do_quote_simple_list(t, do_quote(h, q, e), q, e)]
+    end
+
+    defp do_quote_simple_list(other, prev, q, e) do
+      [{:|, [], [prev, do_quote(other, q, e)]}]
+    end
+
+    defp do_quote_tail(
+           [{:|, meta, [{:unquote_splicing, _, [left]}, right]} | t],
+           %__MODULE__{unquote: true} = q,
+           e
+         ) do
+      tt = do_quote_splice(t, q, e, [], [])
+      tr = do_quote(right, q, e)
+      do_runtime_list(meta, :tail_list, [left, tr, tt])
+    end
+
+    defp do_quote_tail(list, q, e) do
+      do_quote_splice(list, q, e, [], [])
+    end
+
+    defp do_quote_splice(
+           [{:unquote_splicing, meta, [expr]} | t],
+           %__MODULE__{unquote: true} = q,
+           e,
+           buffer,
+           acc
+         ) do
+      runtime = do_runtime_list(meta, :list, [expr, do_list_concat(buffer, acc)])
+      do_quote_splice(t, q, e, [], runtime)
+    end
+
+    defp do_quote_splice([h | t], q, e, buffer, acc) do
+      th = do_quote(h, q, e)
+      do_quote_splice(t, q, e, [th | buffer], acc)
+    end
+
+    defp do_quote_splice([], _q, _e, buffer, acc) do
+      do_list_concat(buffer, acc)
+    end
+
+    defp do_list_concat(left, []), do: left
+    defp do_list_concat([], right), do: right
+
+    defp do_list_concat(left, right) do
+      {:., [], [:erlang, :++], [], [left, right]}
+    end
+
+    defp do_runtime_list(meta, fun, args) do
+      {:., meta, [:elixir_quote, fun], meta, args}
+    end
+
+    defp meta(meta, q) do
+      generated(keep(Keyword.delete(meta, :column), q), q)
+    end
+
+    defp generated(meta, %__MODULE__{generated: true}), do: [{:generated, true} | meta]
+    defp generated(meta, %__MODULE__{generated: false}), do: meta
+
+    defp keep(meta, %__MODULE__{file: nil, line: line}) do
+      line(meta, line)
+    end
+
+    defp keep(meta, %__MODULE__{file: file}) do
+      case Keyword.pop(meta, :line) do
+        {nil, _} ->
+          [{:keep, {file, 0}} | meta]
+
+        {line, meta_no_line} ->
+          [{:keep, {file, line}} | meta_no_line]
+      end
+    end
+
+    defp line(meta, true), do: meta
+
+    defp line(meta, false) do
+      Keyword.delete(meta, :line)
+    end
+
+    defp line(meta, line) do
+      Keyword.put(meta, :line, line)
+    end
+
+    defguardp defs(kind) when kind in [:def, :defp, :defmacro, :defmacrop, :@]
+    defguardp lexical(kind) when kind in [:import, :alias, :require]
+
+    defp annotate({def, meta, [h | t]}, context) when defs(def) do
+      {def, meta, [annotate_def(h, context) | t]}
+    end
+
+    defp annotate({{:., _, [_, def]} = target, meta, [h | t]}, context) when defs(def) do
+      {target, meta, [annotate_def(h, context) | t]}
+    end
+
+    defp annotate({lexical, meta, [_ | _] = args}, context) when lexical(lexical) do
+      new_meta = Keyword.put(Keyword.delete(meta, :counter), :context, context)
+      {lexical, new_meta, args}
+    end
+
+    defp annotate(tree, _context), do: tree
+
+    defp annotate_def({:when, meta, [left, right]}, context) do
+      {:when, meta, [annotate_def(left, context), right]}
+    end
+
+    defp annotate_def({fun, meta, args}, context) do
+      {fun, Keyword.put(meta, :context, context), args}
+    end
+
+    defp annotate_def(other, _context), do: other
+
+    defp do_escape({left, meta, right}, q, e = :prune_metadata) do
+      tm = for {k, v} <- meta, k == :no_parens or k == :line, do: {k, v}
+      tl = do_quote(left, q, e)
+      tr = do_quote(right, q, e)
+      {:{}, [], [tl, tm, tr]}
+    end
+
+    defp do_escape(tuple, q, e) when is_tuple(tuple) do
+      tt = do_quote(Tuple.to_list(tuple), q, e)
+      {:{}, [], tt}
+    end
+
+    defp do_escape(bitstring, _, _) when is_bitstring(bitstring) do
+      case Bitwise.band(bit_size(bitstring), 7) do
+        0 ->
+          bitstring
+
+        size ->
+          <<bits::size(size), bytes::binary>> = bitstring
+
+          {:<<>>, [],
+           [{:"::", [], [bits, {size, [], [size]}]}, {:"::", [], [bytes, {:binary, [], nil}]}]}
+      end
+    end
+
+    defp do_escape(map, q, e) when is_map(map) do
+      tt = do_quote(Enum.sort(Map.to_list(map)), q, e)
+      {:%{}, [], tt}
+    end
+
+    defp do_escape([], _, _), do: []
+
+    defp do_escape([h | t], %__MODULE__{unquote: false} = q, e) do
+      do_quote_simple_list(t, do_quote(h, q, e), q, e)
+    end
+
+    defp do_escape([h | t], q, e) do
+      # The improper case is inefficient, but improper lists are rare.
+      try do
+        l = Enum.reverse(t, [h])
+        do_quote_tail(l, q, e)
+      catch
+        _ ->
+          {l, r} = reverse_improper(t, [h])
+          tl = do_quote_splice(l, q, e, [], [])
+          tr = do_quote(r, q, e)
+          update_last(tl, fn x -> {:|, [], [x, tr]} end)
+      end
+    end
+
+    defp do_escape(other, _, _) when is_number(other) or is_pid(other) or is_atom(other),
+      do: other
+
+    defp do_escape(fun, _, _) when is_function(fun) do
+      case {Function.info(fun, :env), Function.info(fun, :type)} do
+        {{:env, []}, {:type, :external}} ->
+          fun_to_quoted(fun)
+
+        _ ->
+          raise ArgumentError
+      end
+    end
+
+    defp do_escape(_other, _, _), do: raise(ArgumentError)
+
+    defp reverse_improper([h | t], acc), do: reverse_improper(t, [h | acc])
+    defp reverse_improper([], acc), do: acc
+    defp reverse_improper(t, acc), do: {acc, t}
+    defp update_last([], _), do: []
+    defp update_last([h], f), do: [f.(h)]
+    defp update_last([h | t], f), do: [h | update_last(t, f)]
   end
 
   defmodule Dispatch do
     import :ordsets, only: [is_element: 2]
+
+    def find_import(meta, name, arity, e) do
+      tuple = {name, arity}
+
+      case find_import_by_name_arity(meta, tuple, [], e) do
+        {:function, receiver} ->
+          # ElixirEnv.trace({:imported_function, meta, receiver, name, arity}, e)
+          receiver
+
+        {:macro, receiver} ->
+          # ElixirEnv.trace({:imported_macro, meta, receiver, name, arity}, e)
+          receiver
+
+        _ ->
+          false
+      end
+    end
+
+    def find_imports(meta, name, e) do
+      funs = e.functions
+      macs = e.macros
+
+      acc0 = %{}
+      acc1 = find_imports_by_name(funs, acc0, name, meta, e)
+      acc2 = find_imports_by_name(macs, acc1, name, meta, e)
+
+      imports = acc2 |> Map.to_list() |> Enum.sort()
+      # trace_import_quoted(imports, meta, name, e)
+      imports
+    end
 
     def import_function(meta, name, arity, e) do
       tuple = {name, arity}
@@ -3000,6 +3493,30 @@ defmodule ElixirSense.Core.Compiler do
         false -> {:remote, receiver, name, arity}
       end
     end
+
+    def find_imports_by_name([{mod, imports} | mod_imports], acc, name, meta, e) do
+      new_acc = find_imports_by_name(name, imports, acc, mod, meta, e)
+      find_imports_by_name(mod_imports, new_acc, name, meta, e)
+    end
+
+    def find_imports_by_name([], acc, _name, _meta, _e), do: acc
+
+    def find_imports_by_name(name, [{name, arity} | imports], acc, mod, meta, e) do
+      case Map.get(acc, arity) do
+        nil ->
+          find_imports_by_name(name, imports, Map.put(acc, arity, mod), mod, meta, e)
+
+        _other_mod ->
+          raise "ambiguous_call"
+      end
+    end
+
+    def find_imports_by_name(name, [{import_name, _} | imports], acc, mod, meta, e)
+        when name > import_name do
+      find_imports_by_name(name, imports, acc, mod, meta, e)
+    end
+
+    def find_imports_by_name(_name, _imports, acc, _mod, _meta, _e), do: acc
 
     defp find_import_by_name_arity(meta, {_name, arity} = tuple, extra, e) do
       case is_import(meta, arity) do
