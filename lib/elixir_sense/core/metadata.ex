@@ -295,20 +295,6 @@ defmodule ElixirSense.Core.Metadata do
     end
   end
 
-  def get_function_params(%__MODULE__{} = metadata, module, function) do
-    params =
-      metadata
-      |> get_function_info(module, function)
-      |> Map.get(:params)
-      |> Enum.reverse()
-
-    Enum.map(params, fn param ->
-      param
-      |> Macro.to_string()
-      |> String.slice(1..-2//1)
-    end)
-  end
-
   @builtin_functions BuiltinFunctions.all()
                      |> Enum.map(&elem(&1, 0))
                      |> Kernel.--([:exception, :message])

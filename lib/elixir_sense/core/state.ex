@@ -909,7 +909,6 @@ defmodule ElixirSense.Core.State do
         if Map.has_key?(mods_funs_to_positions_acc, {module, f, a}) do
           mods_funs_to_positions_acc
           |> make_def_overridable({module, f, a}, overridable_module)
-          |> make_def_overridable({module, f, nil}, overridable_module)
         else
           # Some behaviour callbacks can be not implemented by __using__ macro
           mods_funs_to_positions_acc
@@ -1248,26 +1247,7 @@ defmodule ElixirSense.Core.State do
     types =
       current_module_variants
       |> Enum.reduce(state.types, fn current_module, acc ->
-        info =
-          case acc[{current_module, type_name, nil}] do
-            nil ->
-              type_info
-
-            %TypeInfo{positions: positions, args: args, specs: specs} = ti ->
-              %TypeInfo{
-                ti
-                | positions: [pos | positions],
-                  end_positions: [end_pos | ti.end_positions],
-                  generated: [Keyword.get(options, :generated, false) | ti.generated],
-                  args: [arg_names | args],
-                  specs: [spec | specs],
-                  # in case there are multiple definitions for nil arity prefer public ones
-                  kind: if(ti.kind != :typep, do: ti.kind, else: type_info.kind)
-              }
-          end
-
         acc
-        |> Map.put({current_module, type_name, nil}, info)
         |> Map.put({current_module, type_name, length(arg_names)}, type_info)
       end)
 
@@ -1325,11 +1305,9 @@ defmodule ElixirSense.Core.State do
     specs =
       current_module_variants
       |> Enum.reduce(state.specs, fn current_module, acc ->
-        nil_info = combine_specs(acc[{current_module, type_name, nil}], type_info)
         arity_info = combine_specs(acc[{current_module, type_name, length(arg_names)}], type_info)
 
         acc
-        |> Map.put({current_module, type_name, nil}, nil_info)
         |> Map.put({current_module, type_name, length(arg_names)}, arity_info)
       end)
 

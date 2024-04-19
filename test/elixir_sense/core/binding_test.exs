@@ -1314,7 +1314,7 @@ defmodule ElixirSense.Core.BindingTest do
           }
         })
 
-      assert nil ==
+      assert :none ==
                Binding.expand(
                  env
                  |> Map.put(:variables, [
@@ -1350,7 +1350,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref}
                )
 
-      assert nil ==
+      assert :none ==
                Binding.expand(
                  env
                  |> Map.put(:variables, [

@@ -947,17 +947,20 @@ defmodule ElixirSense.Core.Introspection do
 
   # local type
   defp find_type({nil, type}, current_module, {:typespec, _, _}, metadata_types) do
-    case metadata_types[{current_module, type, nil}] do
-      nil ->
-        if BuiltinTypes.builtin_type?(type) do
-          {nil, type}
-        else
-          {nil, nil}
-        end
+    found_in_metadata =
+      Enum.any?(metadata_types, fn
+        {{^current_module, ^type, _}, _} -> true
+        _ -> false
+      end)
 
-      %State.TypeInfo{} ->
-        # local types are hoisted, no need to check position
-        {current_module, type}
+    if found_in_metadata do
+      {current_module, type}
+    else
+      if BuiltinTypes.builtin_type?(type) do
+        {nil, type}
+      else
+        {nil, nil}
+      end
     end
   end
 
@@ -970,16 +973,14 @@ defmodule ElixirSense.Core.Introspection do
   # remote type
   defp find_type({mod, type}, _current_module, {:typespec, _, _}, metadata_types) do
     found =
-      case metadata_types[{mod, type, nil}] do
-        nil ->
-          Typespec.get_types(mod)
-          |> Enum.any?(fn {kind, {name, _def, _args}} ->
-            name == type and kind in [:type, :opaque]
-          end)
-
-        %State.TypeInfo{kind: kind} ->
-          kind in [:type, :opaque]
-      end
+      Enum.any?(metadata_types, fn
+        {{^mod, ^type, _}, %State.TypeInfo{kind: kind}} when kind in [:type, :opaque] -> true
+        _ -> false
+      end) or
+        Typespec.get_types(mod)
+        |> Enum.any?(fn {kind, {name, _def, _args}} ->
+          name == type and kind in [:type, :opaque]
+        end)
 
     if found do
       {mod, type}
@@ -1005,6 +1006,18 @@ defmodule ElixirSense.Core.Introspection do
   # local call
   defp find_function_or_module(
          {nil, fun},
+         _current_module,
+         _scope,
+         _imports,
+         _requires,
+         _mods_funs,
+         _cursor_position
+       )
+       when fun in [:module_info, :behaviour_info, :__info__],
+       do: {nil, nil}
+
+  defp find_function_or_module(
+         {nil, fun},
          current_module,
          _scope,
          imports,
@@ -1012,38 +1025,33 @@ defmodule ElixirSense.Core.Introspection do
          mods_funs,
          cursor_position
        ) do
-    found_in_metadata = mods_funs[{current_module, fun, nil}]
+    found_in_metadata =
+      Enum.any?(mods_funs, fn
+        {{^current_module, ^fun, _}, info} ->
+          State.ModFunInfo.get_category(info) != :macro or
+            List.last(info.positions) < cursor_position
 
-    case found_in_metadata do
-      %State.ModFunInfo{} = info ->
-        if fun in [:module_info, :behaviour_info, :__info__] do
-          {nil, nil}
-        else
-          if State.ModFunInfo.get_category(info) != :macro or
-               List.last(info.positions) < cursor_position do
-            # local macros are available after definition
-            # local functions are hoisted
-            {current_module, fun}
-          else
-            {nil, nil}
+        _ ->
+          false
+      end)
+
+    if found_in_metadata do
+      {current_module, fun}
+    else
+      {functions, macros} = expand_imports(imports, mods_funs)
+
+      found_in_imports =
+        Enum.find_value(functions ++ macros, fn {module, imported} ->
+          if Keyword.has_key?(imported, fun) do
+            {module, fun}
           end
-        end
+        end)
 
-      nil ->
-        {functions, macros} = expand_imports(imports, mods_funs)
-
-        found_in_imports =
-          Enum.find_value(functions ++ macros, fn {module, imported} ->
-            if Keyword.has_key?(imported, fun) do
-              {module, fun}
-            end
-          end)
-
-        if found_in_imports do
-          found_in_imports
-        else
-          {nil, nil}
-        end
+      if found_in_imports do
+        found_in_imports
+      else
+        {nil, nil}
+      end
     end
   end
 
@@ -1087,18 +1095,19 @@ defmodule ElixirSense.Core.Introspection do
          _cursor_position
        ) do
     found =
-      case mods_funs[{mod, fun, nil}] do
-        nil ->
-          case get_exports(mod) |> Keyword.get(fun) do
-            nil -> false
-            {_arity, :function} -> true
-            {_arity, :macro} -> mod in requires
-          end
-
-        info ->
+      Enum.any?(mods_funs, fn
+        {{^mod, ^fun, _}, info} ->
           is_pub(info.type) and
             (is_function_type(info.type) or mod in requires)
-      end
+
+        _ ->
+          false
+      end) or
+        case get_exports(mod) |> Keyword.get(fun) do
+          nil -> false
+          {_arity, :function} -> true
+          {_arity, :macro} -> mod in requires
+        end
 
     if found do
       {mod, fun}

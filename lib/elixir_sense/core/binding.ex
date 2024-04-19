@@ -1006,21 +1006,21 @@ defmodule ElixirSense.Core.Binding do
          stack
        ) do
     arity =
-      case mods_funs[{mod, fun, nil}] do
-        %State.ModFunInfo{type: fun_type} = info
+      Enum.find_value(mods_funs, nil, fn
+        {{^mod, ^fun, _}, %State.ModFunInfo{type: fun_type} = info}
         when (include_private and fun_type != :def) or
                fun_type in [:def, :defmacro, :defguard, :defdelegate] ->
           # correct arity for calls with default params
           State.ModFunInfo.get_arities(info)
-          |> Enum.find_value(arity, fn {a, defaults} ->
+          |> Enum.find_value(nil, fn {a, defaults} ->
             if call_arity_match?(a, defaults, arity) do
               a
             end
           end)
 
         _ ->
-          nil
-      end
+          false
+      end)
 
     case {arity, specs[{mod, fun, arity}]} do
       {nil, _} ->

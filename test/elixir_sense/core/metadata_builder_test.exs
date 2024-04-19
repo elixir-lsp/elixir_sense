@@ -8,13 +8,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   @tag requires_source: true
   test "build metadata from kernel.ex" do
-    assert get_subject_definition_line(Kernel, :defmodule, nil) =~
+    assert get_subject_definition_line(Kernel, :defmodule, 2) =~
              "defmacro defmodule(alias, do_block)"
   end
 
   @tag requires_source: true
   test "build metadata from kernel/special_forms.ex" do
-    assert get_subject_definition_line(Kernel.SpecialForms, :alias, nil) =~
+    assert get_subject_definition_line(Kernel.SpecialForms, :alias, 2) =~
              "defmacro alias(module, opts)"
   end
 
@@ -22,7 +22,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_subject_definition_line(
              ElixirSenseExample.ModuleWithFunctions,
              :function_arity_zero,
-             nil
+             0
            ) =~ "def function_arity_zero"
   end
 
@@ -3084,19 +3084,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:term, [line: 6, column: 15], nil}]],
                type: :def
              },
-             {Proto.MyOtherStruct, :reverse, nil} => %ModFunInfo{
-               params: [[{:term, [line: 6, column: 15], nil}]],
-               type: :def
-             },
              {Proto.MyStruct, nil, nil} => %ModFunInfo{
                params: [nil],
                type: :defmodule
              },
              {Proto.MyStruct, :reverse, 1} => %ModFunInfo{
-               params: [[{:term, [line: 6, column: 15], nil}]],
-               type: :def
-             },
-             {Proto.MyStruct, :reverse, nil} => %ModFunInfo{
                params: [[{:term, [line: 6, column: 15], nil}]],
                type: :def
              }
@@ -3130,29 +3122,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  "@spec with_spec(t, boolean) :: number",
                  "@spec with_spec(t, integer) :: String.t()"
                ]
-             },
-             {Proto, :with_spec, nil} => %ElixirSense.Core.State.SpecInfo{
-               args: [["t", "boolean"], ["t", "integer"]],
-               kind: :callback,
-               name: :with_spec,
-               positions: [{3, 3}, {2, 3}],
-               end_positions: [{3, 40}, {2, 42}],
-               generated: [false, false],
-               specs: [
-                 "@callback with_spec(t, boolean) :: number",
-                 "@callback with_spec(t, integer) :: String.t()",
-                 "@spec with_spec(t, boolean) :: number",
-                 "@spec with_spec(t, integer) :: String.t()"
-               ]
-             },
-             {Proto, :without_spec, nil} => %ElixirSense.Core.State.SpecInfo{
-               args: [["t", "integer"]],
-               kind: :callback,
-               name: :without_spec,
-               positions: [{6, 3}],
-               end_positions: [nil],
-               generated: [true],
-               specs: ["@callback without_spec(t, integer) :: term"]
              },
              {Proto, :without_spec, 2} => %ElixirSense.Core.State.SpecInfo{
                args: [["t", "integer"]],
@@ -3218,11 +3187,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{5, 5}],
                type: :def
              },
-             {OuterModule.InnerModule, :func, nil} => %ModFunInfo{
-               params: [[]],
-               positions: [{5, 5}],
-               type: :def
-             },
              {Impls, nil, nil} => %ModFunInfo{
                params: [nil],
                positions: [{28, 1}],
@@ -3246,23 +3210,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
-  test "prefers def over defp for nil arity" do
-    state =
-      """
-      defmodule OuterModule do
-        defp abc(a, b, c), do: a
-        def abc(a), do: a
-        defp abc(a, b), do: a
-        IO.puts ""
-      end
-      """
-      |> string_to_state
-
-    assert %{
-             {OuterModule, :abc, nil} => %ModFunInfo{type: :def}
-           } = state.mods_funs_to_positions
-  end
-
   test "functions with default args" do
     state =
       """
@@ -3275,16 +3222,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert %{
              {OuterModule, :abc, 4} => %ModFunInfo{
-               params: [
-                 [
-                   {:a, [line: 2, column: 11], nil},
-                   {:\\, [line: 2, column: 16], [{:b, [line: 2, column: 14], nil}, nil]},
-                   {:c, [line: 2, column: 24], nil},
-                   {:\\, [line: 2, column: 29], [{:d, [line: 2, column: 27], nil}, [1]]}
-                 ]
-               ]
-             },
-             {OuterModule, :abc, nil} => %ModFunInfo{
                params: [
                  [
                    {:a, [line: 2, column: 11], nil},
@@ -3474,23 +3411,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:value, [line: 2, column: 20], nil}]],
                positions: [{2, 3}]
              },
-             {MyModule, :is_even, nil} => %{
-               params: [[{:value, [line: 2, column: 20], nil}]],
-               positions: [{2, 3}]
-             },
              {MyModule, :is_odd, 1} => %{
                params: [[{:value, [line: 3, column: 20], nil}]],
                positions: [{3, 3}]
              },
-             {MyModule, :is_odd, nil} => %{
-               params: [[{:value, [line: 3, column: 20], nil}]],
-               positions: [{3, 3}]
-             },
              {MyModule, :useless, 0} => %{
-               params: [[]],
-               positions: [{4, 3}]
-             },
-             {MyModule, :useless, nil} => %{
                params: [[]],
                positions: [{4, 3}]
              }
@@ -3529,15 +3454,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[]],
                type: :def
              },
-             {MyModuleWithFuns, :func, nil} => %ModFunInfo{
-               params: [[]],
-               type: :def
-             },
              {MyModuleWithFuns, :funcp, 0} => %ModFunInfo{
-               params: [[]],
-               type: :defp
-             },
-             {MyModuleWithFuns, :funcp, nil} => %ModFunInfo{
                params: [[]],
                type: :defp
              },
@@ -3545,15 +3462,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:value, [line: 16, column: 20], nil}]],
                type: :defguard
              },
-             {MyModuleWithFuns, :is_even, nil} => %ModFunInfo{
-               params: [[{:value, [line: 16, column: 20], nil}]],
-               type: :defguard
-             },
              {MyModuleWithFuns, :is_evenp, 1} => %ModFunInfo{
-               params: [[{:value, [line: 17, column: 22], nil}]],
-               type: :defguardp
-             },
-             {MyModuleWithFuns, :is_evenp, nil} => %ModFunInfo{
                params: [[{:value, [line: 17, column: 22], nil}]],
                type: :defguardp
              },
@@ -3561,15 +3470,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:ast, [line: 10, column: 19], nil}]],
                type: :defmacro
              },
-             {MyModuleWithFuns, :macro1, nil} => %ModFunInfo{
-               params: [[{:ast, [line: 10, column: 19], nil}]],
-               type: :defmacro
-             },
              {MyModuleWithFuns, :macro1p, 1} => %ModFunInfo{
-               params: [[{:ast, [line: 13, column: 21], nil}]],
-               type: :defmacrop
-             },
-             {MyModuleWithFuns, :macro1p, nil} => %ModFunInfo{
                params: [[{:ast, [line: 13, column: 21], nil}]],
                type: :defmacrop
              },
@@ -3589,10 +3490,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:atom, [line: 3, column: 1], nil}]],
                type: :def
              },
-             {MyModuleWithFuns, :__info__, nil} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 3, column: 1], nil}]],
-               type: :def
-             },
              {MyModuleWithFuns, :module_info, 0} => %ElixirSense.Core.State.ModFunInfo{
                params: [[]],
                type: :def
@@ -3601,15 +3498,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:atom, [line: 3, column: 1], nil}]],
                type: :def
              },
-             {MyModuleWithFuns, :module_info, nil} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 3, column: 1], nil}], []],
-               type: :def
-             },
              {MyModuleWithFuns.Nested, :__info__, 1} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 19, column: 3], nil}]],
-               type: :def
-             },
-             {MyModuleWithFuns.Nested, :__info__, nil} => %ElixirSense.Core.State.ModFunInfo{
                params: [[{:atom, [line: 19, column: 3], nil}]],
                type: :def
              },
@@ -3621,15 +3510,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[{:atom, [line: 19, column: 3], nil}]],
                type: :def
              },
-             {MyModuleWithFuns.Nested, :module_info, nil} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 19, column: 3], nil}], []],
-               type: :def
-             },
              {MyModuleWithoutFuns, :__info__, 1} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 1, column: 1], nil}]],
-               type: :def
-             },
-             {MyModuleWithoutFuns, :__info__, nil} => %ElixirSense.Core.State.ModFunInfo{
                params: [[{:atom, [line: 1, column: 1], nil}]],
                type: :def
              },
@@ -3639,10 +3520,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              },
              {MyModuleWithoutFuns, :module_info, 1} => %ElixirSense.Core.State.ModFunInfo{
                params: [[{:atom, [line: 1, column: 1], nil}]],
-               type: :def
-             },
-             {MyModuleWithoutFuns, :module_info, nil} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 1, column: 1], nil}], []],
                type: :def
              }
            } = state.mods_funs_to_positions
@@ -3668,19 +3545,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                target: {OtherModule, :func_delegated},
                type: :defdelegate
              },
-             {MyModuleWithFuns, :func_delegated, nil} => %ModFunInfo{
-               params: [[{:par, [line: 3, column: 30], nil}]],
-               positions: [{3, 3}],
-               target: {OtherModule, :func_delegated},
-               type: :defdelegate
-             },
              {MyModuleWithFuns, :func_delegated_alias, 1} => %ModFunInfo{
-               params: [[{:par, [line: 6, column: 36], nil}]],
-               positions: [{6, 3}],
-               target: {Enum, :func_delegated_alias},
-               type: :defdelegate
-             },
-             {MyModuleWithFuns, :func_delegated_alias, nil} => %ModFunInfo{
                params: [[{:par, [line: 6, column: 36], nil}]],
                positions: [{6, 3}],
                target: {Enum, :func_delegated_alias},
@@ -3692,19 +3557,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                target: {MyModuleWithFuns.Sub, :my_func},
                type: :defdelegate
              },
-             {MyModuleWithFuns, :func_delegated_as, nil} => %ModFunInfo{
-               params: [[{:par, [line: 5, column: 33], nil}]],
-               positions: [{5, 3}],
-               target: {MyModuleWithFuns.Sub, :my_func},
-               type: :defdelegate
-             },
              {MyModuleWithFuns, :func_delegated_erlang, 1} => %ModFunInfo{
-               params: [[{:par, [line: 4, column: 37], nil}]],
-               positions: [{4, 3}],
-               target: {:erlang_module, :func_delegated_erlang},
-               type: :defdelegate
-             },
-             {MyModuleWithFuns, :func_delegated_erlang, nil} => %ModFunInfo{
                params: [[{:par, [line: 4, column: 37], nil}]],
                positions: [{4, 3}],
                target: {:erlang_module, :func_delegated_erlang},
@@ -3853,7 +3706,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{2, 3}],
                type: :def
              },
-             {InheritMod, :handle_call, nil} => %ModFunInfo{},
              {InheritMod, nil, nil} => %ModFunInfo{
                params: [nil],
                positions: [{1, 1}],
@@ -3980,7 +3832,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{2, 3}],
                specs: ["@opaque my_opaque_type :: any"]
              },
-             {InheritMod, :my_opaque_type, nil} => %State.TypeInfo{},
              {InheritMod, :my_priv_type, 0} => %State.TypeInfo{
                args: [[]],
                kind: :typep,
@@ -4012,7 +3863,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{2, 3}],
                specs: ["@spec private_func() :: String.t()"]
              },
-             {InheritMod, :private_func, nil} => %State.SpecInfo{},
              {InheritMod, :some_callback, 1} => %State.SpecInfo{
                args: [["abc"]],
                kind: :callback,
@@ -4171,11 +4021,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {MyStruct, :__struct__, 1} => %ModFunInfo{
                params: [[{:kv, [line: 2, column: 3], nil}]],
                positions: [{2, 3}],
-               type: :def
-             },
-             {MyStruct, :__struct__, nil} => %ModFunInfo{
-               params: [[{:kv, [line: 2, column: 3], nil}], []],
-               positions: [{2, 3}, {2, 3}],
                type: :def
              },
              {MyStruct, nil, nil} => %ModFunInfo{
@@ -4878,25 +4723,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                generated: [false],
                specs: ["@type no_arg_no_parens :: integer"]
              },
-             {My, :no_arg_no_parens, nil} => %ElixirSense.Core.State.TypeInfo{
-               args: [[]],
-               kind: :type,
-               name: :no_arg_no_parens,
-               positions: [{2, 3}],
-               end_positions: [{2, 36}],
-               generated: [false],
-               specs: ["@type no_arg_no_parens :: integer"]
-             },
              {My, :no_args, 0} => %ElixirSense.Core.State.TypeInfo{
-               args: [[]],
-               kind: :typep,
-               name: :no_args,
-               positions: [{3, 3}],
-               end_positions: [{3, 30}],
-               generated: [false],
-               specs: ["@typep no_args() :: integer"]
-             },
-             {My, :no_args, nil} => %ElixirSense.Core.State.TypeInfo{
                args: [[]],
                kind: :typep,
                name: :no_args,
@@ -4923,26 +4750,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                args: [["a"]],
                specs: ["@type overloaded(a) :: {a}"]
              },
-             {My, :overloaded, nil} => %ElixirSense.Core.State.TypeInfo{
-               kind: :type,
-               name: :overloaded,
-               positions: [{6, 3}, {5, 3}],
-               end_positions: [nil, {5, 25}],
-               generated: [false, false],
-               args: [["a"], []],
-               specs: ["@type overloaded(a) :: {a}", "@type overloaded :: {}"]
-             },
              {My, :with_args, 2} => %ElixirSense.Core.State.TypeInfo{
-               kind: :opaque,
-               name: :with_args,
-               positions: [{4, 3}],
-               end_positions: [{4, 36}],
-               generated: [false],
-               args: [["a", "b"]],
-               meta: %{opaque: true},
-               specs: ["@opaque with_args(a, b) :: {a, b}"]
-             },
-             {My, :with_args, nil} => %ElixirSense.Core.State.TypeInfo{
                kind: :opaque,
                name: :with_args,
                positions: [{4, 3}],
@@ -4955,23 +4763,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            }
   end
 
-  test "prefers type over typep for nil arity" do
-    state =
-      """
-      defmodule My do
-        @typep abc(a, b) :: {a, b}
-        @type abc() :: integer
-        @typep abc(a) :: integer
-      end
-      IO.puts("")
-      """
-      |> string_to_state
-
-    assert %{
-             {My, :abc, nil} => %ElixirSense.Core.State.TypeInfo{kind: :type}
-           } = state.types
-  end
-
   test "protocol exports type t" do
     state =
       """
@@ -4982,15 +4773,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert state.types == %{
-             {Proto, :t, nil} => %ElixirSense.Core.State.TypeInfo{
-               args: [[]],
-               kind: :type,
-               name: :t,
-               positions: [{1, 1}],
-               end_positions: [{3, 4}],
-               generated: [true],
-               specs: ["@type t :: term"]
-             },
              {Proto, :t, 0} => %ElixirSense.Core.State.TypeInfo{
                args: [[]],
                kind: :type,
@@ -5028,15 +4810,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                generated: [false, false],
                specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
              },
-             {Proto, :abc, nil} => %ElixirSense.Core.State.SpecInfo{
-               kind: :spec,
-               name: :abc,
-               args: [[], []],
-               positions: [{3, 3}, {2, 3}],
-               end_positions: [{3, 25}, {2, 30}],
-               generated: [false, false],
-               specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
-             },
              {Proto, :my, 1} => %ElixirSense.Core.State.SpecInfo{
                kind: :callback,
                name: :my,
@@ -5046,25 +4819,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                generated: [false],
                specs: ["@callback my(a :: integer) :: atom"]
              },
-             {Proto, :my, nil} => %ElixirSense.Core.State.SpecInfo{
-               kind: :callback,
-               name: :my,
-               args: [["a :: integer"]],
-               positions: [{4, 3}],
-               end_positions: [{4, 37}],
-               generated: [false],
-               specs: ["@callback my(a :: integer) :: atom"]
-             },
              {Proto, :other, 1} => %ElixirSense.Core.State.SpecInfo{
-               kind: :macrocallback,
-               name: :other,
-               args: [["x"]],
-               positions: [{5, 3}],
-               end_positions: [nil],
-               generated: [false],
-               specs: ["@macrocallback other(x) :: Macro.t() when x: integer"]
-             },
-             {Proto, :other, nil} => %ElixirSense.Core.State.SpecInfo{
                kind: :macrocallback,
                name: :other,
                args: [["x"]],
@@ -5095,20 +4850,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                specs: [
                  "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t()}, local_type()]"
                ]
-             },
-             {Proto, :abc, nil} => %State.SpecInfo{
-               args: [["{%Model.User{}}"]],
-               specs: [
-                 "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t()}, local_type()]"
-               ]
              }
            } = state.specs
 
     assert %{
              {Proto, :local_type, 0} => %State.TypeInfo{
-               specs: ["@type local_type() :: Model.User.t()"]
-             },
-             {Proto, :local_type, nil} => %State.TypeInfo{
                specs: ["@type local_type() :: Model.User.t()"]
              }
            } = state.types
@@ -5367,9 +5113,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  type: :defmacrop,
                  overridable: {true, ElixirSenseExample.OverridableFunctions}
                },
-               {My, :required, nil} => %ModFunInfo{
-                 type: :defmacrop
-               },
                {My, :test, 2} => %ModFunInfo{
                  params: [
                    [{:a, [line: 4, column: 13], nil}, {:b, [line: 4, column: 16], nil}],
@@ -5379,9 +5122,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  target: nil,
                  type: :defp,
                  overridable: {true, ElixirSenseExample.OverridableFunctions}
-               },
-               {My, :test, nil} => %ModFunInfo{
-                 type: :defp
                }
              } = state.mods_funs_to_positions
     end
