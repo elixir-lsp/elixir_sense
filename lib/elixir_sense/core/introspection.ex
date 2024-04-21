@@ -819,6 +819,7 @@ defmodule ElixirSense.Core.Introspection do
         {module, nil},
         [],
         [],
+        [],
         aliases,
         current_module,
         scope,
@@ -900,7 +901,8 @@ defmodule ElixirSense.Core.Introspection do
 
   @spec actual_mod_fun(
           {nil | module, nil | atom},
-          [module],
+          keyword,
+          keyword,
           [module],
           [{module, module}],
           nil | module,
@@ -910,11 +912,12 @@ defmodule ElixirSense.Core.Introspection do
           ElixirSense.Core.State.types_t(),
           {pos_integer, pos_integer}
         ) :: {nil | module, nil | atom, boolean, nil | :mod_fun | :type}
-  def actual_mod_fun({nil, nil}, _, _, _, _, _, _, _, _), do: {nil, nil, false, nil}
+  def actual_mod_fun({nil, nil}, _, _, _, _, _, _, _, _, _), do: {nil, nil, false, nil}
 
   def actual_mod_fun(
         {mod, fun} = mod_fun,
-        imports,
+        functions,
+        macros,
         requires,
         aliases,
         current_module,
@@ -932,7 +935,8 @@ defmodule ElixirSense.Core.Introspection do
               {expanded_mod, fun},
               current_module,
               scope,
-              imports,
+              functions,
+              macros,
               requires,
               mods_funs,
               cursor_position
@@ -995,7 +999,8 @@ defmodule ElixirSense.Core.Introspection do
          {_mod, fun},
          _current_module,
          {:typespec, _, _},
-         _imports,
+         _functions,
+         _macros,
          _requires,
          _mods_funs,
          _cursor_position
@@ -1008,7 +1013,8 @@ defmodule ElixirSense.Core.Introspection do
          {nil, fun},
          _current_module,
          _scope,
-         _imports,
+         _functions,
+         _macros,
          _requires,
          _mods_funs,
          _cursor_position
@@ -1020,7 +1026,8 @@ defmodule ElixirSense.Core.Introspection do
          {nil, fun},
          current_module,
          _scope,
-         imports,
+         functions,
+         macros,
          _requires,
          mods_funs,
          cursor_position
@@ -1038,8 +1045,6 @@ defmodule ElixirSense.Core.Introspection do
     if found_in_metadata do
       {current_module, fun}
     else
-      {functions, macros} = expand_imports(imports, mods_funs)
-
       found_in_imports =
         Enum.find_value(functions ++ macros, fn {module, imported} ->
           if Keyword.has_key?(imported, fun) do
@@ -1060,7 +1065,8 @@ defmodule ElixirSense.Core.Introspection do
          {Elixir, _},
          _current_module,
          _scope,
-         _imports,
+         _functions,
+         _macros,
          _requires,
          _mods_funs,
          _cursor_position
@@ -1072,7 +1078,8 @@ defmodule ElixirSense.Core.Introspection do
          {mod, nil},
          _current_module,
          _scope,
-         _imports,
+         _functions,
+         _macros,
          _requires,
          mods_funs,
          _cursor_position
@@ -1088,7 +1095,8 @@ defmodule ElixirSense.Core.Introspection do
   defp find_function_or_module(
          {mod, fun},
          _current_module,
-         _imports,
+         _functions,
+         _macros,
          _scope,
          requires,
          mods_funs,

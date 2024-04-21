@@ -9,7 +9,8 @@ defmodule ElixirSense.Core.BindingTest do
   alias ElixirSense.Core.State.TypeInfo
 
   @env %Binding{
-    imports: [{Kernel, []}]
+    functions: __ENV__.functions,
+    macros: __ENV__.macros
   }
 
   describe "expand" do
@@ -1050,15 +1051,12 @@ defmodule ElixirSense.Core.BindingTest do
                    ],
                    current_module: MyMod,
                    specs: %{
-                     {MyMod, :fun, nil} => %SpecInfo{
-                       specs: ["@spec fun() :: %MyMod{}"]
-                     },
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: %MyMod{}"]
                      }
                    },
                    mods_funs: %{
-                     {MyMod, :fun, nil} => %ModFunInfo{
+                     {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :defp
                      }
@@ -1083,15 +1081,12 @@ defmodule ElixirSense.Core.BindingTest do
                    ],
                    current_module: MyMod,
                    specs: %{
-                     {MyMod, :fun, nil} => %SpecInfo{
-                       specs: ["@spec fun() :: t()"]
-                     },
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: t()"]
                      }
                    },
                    mods_funs: %{
-                     {MyMod, :fun, nil} => %ModFunInfo{
+                     {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :def
                      }
@@ -1102,9 +1097,6 @@ defmodule ElixirSense.Core.BindingTest do
                      }
                    },
                    types: %{
-                     {MyMod, :t, nil} => %TypeInfo{
-                       specs: ["@type t() :: %MyMod{}"]
-                     },
                      {MyMod, :t, 0} => %TypeInfo{
                        specs: ["@type t() :: %MyMod{}"]
                      }
@@ -1124,15 +1116,12 @@ defmodule ElixirSense.Core.BindingTest do
                    ],
                    current_module: MyMod,
                    specs: %{
-                     {MyMod, :fun, nil} => %SpecInfo{
-                       specs: ["@spec fun() :: t()"]
-                     },
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: t()"]
                      }
                    },
                    mods_funs: %{
-                     {MyMod, :fun, nil} => %ModFunInfo{
+                     {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :def
                      }
@@ -1143,10 +1132,6 @@ defmodule ElixirSense.Core.BindingTest do
                      }
                    },
                    types: %{
-                     {MyMod, :t, nil} => %TypeInfo{
-                       kind: :typep,
-                       specs: ["@type t() :: %MyMod{}"]
-                     },
                      {MyMod, :t, 0} => %TypeInfo{
                        kind: :typep,
                        specs: ["@type t() :: %MyMod{}"]
@@ -1167,15 +1152,12 @@ defmodule ElixirSense.Core.BindingTest do
                    ],
                    current_module: SomeMod,
                    specs: %{
-                     {MyMod, :fun, nil} => %SpecInfo{
-                       specs: ["@spec fun() :: t()"]
-                     },
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: t()"]
                      }
                    },
                    mods_funs: %{
-                     {MyMod, :fun, nil} => %ModFunInfo{
+                     {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :def
                      }
@@ -1186,9 +1168,6 @@ defmodule ElixirSense.Core.BindingTest do
                      }
                    },
                    types: %{
-                     {MyMod, :t, nil} => %TypeInfo{
-                       specs: ["@type t() :: %MyMod{}"]
-                     },
                      {MyMod, :t, 0} => %TypeInfo{
                        specs: ["@type t() :: %MyMod{}"]
                      }
@@ -1208,15 +1187,12 @@ defmodule ElixirSense.Core.BindingTest do
                    ],
                    current_module: SomeMod,
                    specs: %{
-                     {MyMod, :fun, nil} => %SpecInfo{
-                       specs: ["@spec fun() :: t()"]
-                     },
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: t()"]
                      }
                    },
                    mods_funs: %{
-                     {MyMod, :fun, nil} => %ModFunInfo{
+                     {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :def
                      }
@@ -1227,10 +1203,6 @@ defmodule ElixirSense.Core.BindingTest do
                      }
                    },
                    types: %{
-                     {MyMod, :t, nil} => %TypeInfo{
-                       kind: :opaque,
-                       specs: ["@type t() :: %MyMod{}"]
-                     },
                      {MyMod, :t, 0} => %TypeInfo{
                        kind: :opaque,
                        specs: ["@type t() :: %MyMod{}"]
@@ -1251,15 +1223,12 @@ defmodule ElixirSense.Core.BindingTest do
                    ],
                    current_module: SomeMod,
                    specs: %{
-                     {MyMod, :fun, nil} => %SpecInfo{
-                       specs: ["@spec fun() :: t()"]
-                     },
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: t()"]
                      }
                    },
                    mods_funs: %{
-                     {MyMod, :fun, nil} => %ModFunInfo{
+                     {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :defp
                      }
@@ -1270,9 +1239,6 @@ defmodule ElixirSense.Core.BindingTest do
                      }
                    },
                    types: %{
-                     {MyMod, :t, nil} => %TypeInfo{
-                       specs: ["@type t() :: %MyMod{}"]
-                     },
                      {MyMod, :t, 0} => %TypeInfo{
                        specs: ["@type t() :: %MyMod{}"]
                      }
@@ -1288,15 +1254,12 @@ defmodule ElixirSense.Core.BindingTest do
         |> Map.merge(%{
           current_module: MyMod,
           specs: %{
-            {MyMod, :fun, nil} => %SpecInfo{
-              specs: ["@spec fun(integer(), integer(), any()) :: %MyMod{}"]
-            },
             {MyMod, :fun, 3} => %SpecInfo{
               specs: ["@spec fun(integer(), integer(), any()) :: %MyMod{}"]
             }
           },
           mods_funs: %{
-            {MyMod, :fun, nil} => %ModFunInfo{
+            {MyMod, :fun, 3} => %ModFunInfo{
               params: [
                 [
                   {:\\, [], []},
@@ -1437,7 +1400,7 @@ defmodule ElixirSense.Core.BindingTest do
                    variables: [
                      %VarInfo{name: :ref, type: {:local_call, :f02, []}}
                    ],
-                   imports: [{ElixirSenseExample.FunctionsWithReturnSpec, []}]
+                   functions: [{ElixirSenseExample.FunctionsWithReturnSpec, [{:f02, 0}]}]
                  }),
                  {:variable, :ref}
                )
@@ -1465,7 +1428,7 @@ defmodule ElixirSense.Core.BindingTest do
                    variables: [
                      %VarInfo{name: :ref, type: {:variable, :f02}}
                    ],
-                   imports: [{ElixirSenseExample.FunctionsWithReturnSpec, []}]
+                   functions: [{ElixirSenseExample.FunctionsWithReturnSpec, [{:f02, 0}]}]
                  }),
                  {:variable, :ref}
                )

@@ -111,7 +111,6 @@ defmodule ElixirSense.Core.State do
     """
 
     @type t :: %Env{
-            imports: list(module),
             functions: [{module, [{atom, arity}]}],
             macros: [{module, [{atom, arity}]}],
             requires: list(module),
@@ -126,8 +125,7 @@ defmodule ElixirSense.Core.State do
             scope: nil | ElixirSense.Core.State.scope(),
             scope_id: nil | ElixirSense.Core.State.scope_id_t()
           }
-    defstruct imports: [],
-              functions: [],
+    defstruct functions: [],
               macros: [],
               requires: [],
               aliases: [],

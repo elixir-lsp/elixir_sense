@@ -12,7 +12,8 @@ defmodule ElixirSense.Core.Binding do
             variables: [],
             attributes: [],
             current_module: nil,
-            imports: [],
+            functions: [],
+            macros: [],
             specs: %{},
             types: %{},
             mods_funs: %{}
@@ -22,7 +23,8 @@ defmodule ElixirSense.Core.Binding do
       variables: env.vars,
       attributes: env.attributes,
       structs: metadata.structs,
-      imports: env.imports,
+      functions: env.functions,
+      macros: env.macros,
       specs: metadata.specs,
       current_module: env.module,
       types: metadata.types,
@@ -293,7 +295,7 @@ defmodule ElixirSense.Core.Binding do
 
   # local call
   def do_expand(
-        %Binding{imports: imports, current_module: current_module, mods_funs: mods_funs} = env,
+        %Binding{functions: functions, macros: macros, current_module: current_module} = env,
         {:local_call, function, arguments},
         stack
       ) do
@@ -301,8 +303,7 @@ defmodule ElixirSense.Core.Binding do
       :none
     else
       combined_imports =
-        imports
-        |> Introspection.expand_imports(mods_funs)
+        {functions, macros}
         |> Introspection.combine_imports()
 
       candidate_targets = List.wrap(current_module) ++ combined_imports ++ [Kernel.SpecialForms]

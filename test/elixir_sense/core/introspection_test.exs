@@ -165,34 +165,34 @@ defmodule ElixirSense.Core.IntrospectionTest do
   test "actual_mod_fun Elixir proxy" do
     # Elixir is not a valid module
     assert {Elixir, nil, false, nil} =
-             actual_mod_fun({Elixir, nil}, [], [], [], nil, Abc, %{}, %{}, {1, 1})
+             actual_mod_fun({Elixir, nil}, [], [], [], [], nil, Abc, %{}, %{}, {1, 1})
 
     # But defines some types: Code.Typespec.fetch_types(Elixir) returns keyword, as_boolean and other elixir builtins
     # we do not support that as such types compile fine but are marked as unknown by dialyzer
     # no longer true - on elixir 1.14 Code.Typespec.fetch_types(Elixir) returns :error
     assert {Elixir, :keyword, false, nil} =
-             actual_mod_fun({Elixir, :keyword}, [], [], [], nil, Abc, %{}, %{}, {1, 1})
+             actual_mod_fun({Elixir, :keyword}, [], [], [], [], nil, Abc, %{}, %{}, {1, 1})
 
     # not found
     assert {Elixir, :asdf, false, nil} =
-             actual_mod_fun({Elixir, :asdf}, [], [], [], nil, Abc, %{}, %{}, {1, 1})
+             actual_mod_fun({Elixir, :asdf}, [], [], [], [], nil, Abc, %{}, %{}, {1, 1})
   end
 
   test "actual_mod_fun :erlang builtings" do
     assert {:erlang, :andalso, true, :mod_fun} =
-             actual_mod_fun({:erlang, :andalso}, [], [], [], nil, Abc, %{}, %{}, {1, 1})
+             actual_mod_fun({:erlang, :andalso}, [], [], [], [], nil, Abc, %{}, %{}, {1, 1})
 
     assert {:erlang, :orelse, true, :mod_fun} =
-             actual_mod_fun({:erlang, :orelse}, [], [], [], nil, Abc, %{}, %{}, {1, 1})
+             actual_mod_fun({:erlang, :orelse}, [], [], [], [], nil, Abc, %{}, %{}, {1, 1})
   end
 
   describe "actual_mod_fun and requires" do
     test "finds only macros from required modules" do
       assert {Logger, :info, false, nil} =
-               actual_mod_fun({Logger, :info}, [], [], [], nil, Abc, %{}, %{}, {1, 1})
+               actual_mod_fun({Logger, :info}, [], [], [], [], nil, Abc, %{}, %{}, {1, 1})
 
       assert {Logger, :info, true, :mod_fun} =
-               actual_mod_fun({Logger, :info}, [], [Logger], [], nil, Abc, %{}, %{}, {1, 1})
+               actual_mod_fun({Logger, :info}, [], [], [Logger], [], nil, Abc, %{}, %{}, {1, 1})
     end
 
     test "finds only public macros from required metadata modules" do
@@ -203,7 +203,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
         mod_fun = %{
           {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
-          {MyModule, :info, nil} => macro_info,
           {MyModule, :info, 1} => macro_info
         }
 
@@ -215,11 +214,12 @@ defmodule ElixirSense.Core.IntrospectionTest do
           end
 
         assert {MyModule, :info, false, nil} =
-                 actual_mod_fun({MyModule, :info}, [], [], [], nil, Abc, mod_fun, %{}, {1, 1})
+                 actual_mod_fun({MyModule, :info}, [], [], [], [], nil, Abc, mod_fun, %{}, {1, 1})
 
         assert {MyModule, :info, ^findable, ^kind} =
                  actual_mod_fun(
                    {MyModule, :info},
+                   [],
                    [],
                    [MyModule],
                    [],
@@ -236,12 +236,12 @@ defmodule ElixirSense.Core.IntrospectionTest do
   describe "actual_mod_fun and local calls" do
     test "finds macros from Kernel.SpecialForms" do
       assert {Kernel.SpecialForms, :unquote, true, :mod_fun} =
-               actual_mod_fun({nil, :unquote}, [], [], [], nil, Abc, %{}, %{}, {1, 1})
+               actual_mod_fun({nil, :unquote}, [], [], [], [], nil, Abc, %{}, %{}, {1, 1})
     end
 
     test "not existing local" do
       assert {nil, :not_existing, false, nil} =
-               actual_mod_fun({nil, :not_existing}, [], [], [], nil, Abc, %{}, %{}, {1, 1})
+               actual_mod_fun({nil, :not_existing}, [], [], [], [], nil, Abc, %{}, %{}, {1, 1})
     end
 
     test "module builtin functions cannot be called locally" do
@@ -251,14 +251,25 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
       mod_fun = %{
         {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
-        {MyModule, :__info__, nil} => def_info,
-        {MyModule, :module_info, nil} => def_info,
-        {MyModule, :behaviour_info, nil} => def_info
+        {MyModule, :__info__, 1} => def_info,
+        {MyModule, :module_info, 1} => def_info,
+        {MyModule, :behaviour_info, 1} => def_info
       }
 
       for fun <- [:module_info, :behaviour_info, :__info__] do
         assert {nil, ^fun, false, nil} =
-                 actual_mod_fun({nil, fun}, [], [], [], MyModule, MyModule, mod_fun, %{}, {1, 1})
+                 actual_mod_fun(
+                   {nil, fun},
+                   [],
+                   [],
+                   [],
+                   [],
+                   MyModule,
+                   MyModule,
+                   mod_fun,
+                   %{},
+                   {1, 1}
+                 )
       end
     end
 
@@ -270,13 +281,13 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
         mod_fun = %{
           {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
-          {MyModule, :info, nil} => def_info,
           {MyModule, :info, 1} => def_info
         }
 
         assert {nil, :not_existing, false, nil} =
                  actual_mod_fun(
                    {nil, :not_existing},
+                   [],
                    [],
                    [],
                    [],
@@ -290,6 +301,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
         assert {MyModule, :info, true, :mod_fun} =
                  actual_mod_fun(
                    {nil, :info},
+                   [],
                    [],
                    [],
                    [],
@@ -313,13 +325,13 @@ defmodule ElixirSense.Core.IntrospectionTest do
         }
 
         types = %{
-          {MyModule, :info, nil} => type_info,
           {MyModule, :info, 1} => type_info
         }
 
         assert {MyModule, :info, true, :type} =
                  actual_mod_fun(
                    {nil, :info},
+                   [],
                    [],
                    [],
                    [],
@@ -344,6 +356,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
                    [],
                    [],
                    [],
+                   [],
                    MyModule,
                    {:typespec, :a, 1},
                    %{},
@@ -357,14 +370,25 @@ defmodule ElixirSense.Core.IntrospectionTest do
   describe "actual_mod_fun and imports" do
     test "finds functions from imported modules" do
       assert {nil, :at, false, nil} =
-               actual_mod_fun({nil, :at}, [], [], [], nil, Elixir, %{}, %{}, {1, 1})
+               actual_mod_fun({nil, :at}, [], [], [], [], nil, Elixir, %{}, %{}, {1, 1})
 
       assert {Enum, :at, true, :mod_fun} =
-               actual_mod_fun({nil, :at}, [{Enum, []}], [], [], nil, Elixir, %{}, %{}, {1, 1})
+               actual_mod_fun(
+                 {nil, :at},
+                 [{Enum, [{:at, 2}]}],
+                 [],
+                 [],
+                 [],
+                 nil,
+                 Elixir,
+                 %{},
+                 %{},
+                 {1, 1}
+               )
     end
 
     test "finds public functions and macros from imported metadata modules" do
-      for kind <- [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp, :defdelegate] do
+      for kind <- [:def, :defmacro, :defguard, :defdelegate] do
         def_info = %ElixirSense.Core.State.ModFunInfo{
           type: kind,
           params: [
@@ -376,26 +400,14 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
         mod_fun = %{
           {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
-          {MyModule, :info, nil} => def_info,
           {MyModule, :info, 1} => def_info
         }
 
-        findable = kind not in [:defp, :defmacrop, :defguardp]
-
-        expected_module =
-          if findable do
-            MyModule
-          end
-
-        kind =
-          if findable do
-            :mod_fun
-          end
-
-        assert {^expected_module, :info, ^findable, ^kind} =
+        assert {MyModule, :info, true, :mod_fun} =
                  actual_mod_fun(
                    {nil, :info},
-                   [{MyModule, []}],
+                   [{MyModule, [{:info, 1}]}],
+                   [],
                    [],
                    [],
                    nil,
@@ -407,217 +419,15 @@ defmodule ElixirSense.Core.IntrospectionTest do
       end
     end
 
-    test "respects import options on metadata functions and macros" do
-      def_info = %ElixirSense.Core.State.ModFunInfo{
-        type: :def,
-        params: [
-          [
-            {:a, [line: 2, column: 11], nil}
-          ]
-        ]
-      }
-
-      defmacro_info = %ElixirSense.Core.State.ModFunInfo{
-        type: :defmacro,
-        params: [
-          [
-            {:a, [line: 2, column: 11], nil}
-          ]
-        ]
-      }
-
-      default_args = %ElixirSense.Core.State.ModFunInfo{
-        type: :def,
-        params: [
-          [
-            {:a, [line: 2, column: 11], nil},
-            {:\\, [line: 2, column: 16], [{:b, [line: 2, column: 14], nil}, nil]},
-            {:c, [line: 2, column: 24], nil},
-            {:\\, [line: 2, column: 29], [{:d, [line: 2, column: 27], nil}, [1]]}
-          ]
-        ]
-      }
-
-      mod_fun = %{
-        {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
-        {MyModule, :def_info, nil} => def_info,
-        {MyModule, :def_info, 1} => def_info,
-        {MyModule, :defmacro_info, nil} => defmacro_info,
-        {MyModule, :defmacro_info, 1} => defmacro_info,
-        {MyModule, :default_args, nil} => default_args,
-        {MyModule, :default_args, 4} => default_args
-      }
-
-      assert {MyModule, :def_info, true, :mod_fun} =
-               actual_mod_fun(
-                 {nil, :def_info},
-                 [{MyModule, []}],
-                 [],
-                 [],
-                 nil,
-                 Elixir,
-                 mod_fun,
-                 %{},
-                 {1, 1}
-               )
-
-      assert {nil, :def_info, false, nil} =
-               actual_mod_fun(
-                 {nil, :def_info},
-                 [{MyModule, [only: :macros]}],
-                 [],
-                 [],
-                 nil,
-                 Elixir,
-                 mod_fun,
-                 %{},
-                 {1, 1}
-               )
-
-      assert {nil, :def_info, false, nil} =
-               actual_mod_fun(
-                 {nil, :def_info},
-                 [{MyModule, [except: [{:def_info, 1}]]}],
-                 [],
-                 [],
-                 nil,
-                 Elixir,
-                 mod_fun,
-                 %{},
-                 {1, 1}
-               )
-
-      assert {MyModule, :defmacro_info, true, :mod_fun} =
-               actual_mod_fun(
-                 {nil, :defmacro_info},
-                 [{MyModule, [only: :macros]}],
-                 [],
-                 [],
-                 nil,
-                 Elixir,
-                 mod_fun,
-                 %{},
-                 {1, 1}
-               )
-
-      assert {MyModule, :default_args, true, :mod_fun} =
-               actual_mod_fun(
-                 {nil, :default_args},
-                 [{MyModule, [only: [{:default_args, 2}]]}],
-                 [],
-                 [],
-                 nil,
-                 Elixir,
-                 mod_fun,
-                 %{},
-                 {1, 1}
-               )
-
-      assert {MyModule, :default_args, true, :mod_fun} =
-               actual_mod_fun(
-                 {nil, :default_args},
-                 [{MyModule, [except: [{:default_args, 4}]]}],
-                 [],
-                 [],
-                 nil,
-                 Elixir,
-                 mod_fun,
-                 %{},
-                 {1, 1}
-               )
-    end
-
-    test "behaviour_info can be imported from from erlang behaviours on elixir < 1.15" do
-      assert {nil, :behaviour_info, false, nil} =
-               actual_mod_fun(
-                 {nil, :behaviour_info},
-                 [{Application, []}],
-                 [],
-                 [],
-                 nil,
-                 Elixir,
-                 %{},
-                 %{},
-                 {1, 1}
-               )
-
-      erl_behaviour_result =
-        actual_mod_fun(
-          {nil, :behaviour_info},
-          [{:gen_server, []}],
-          [],
-          [],
-          nil,
-          Elixir,
-          %{},
-          %{},
-          {1, 1}
-        )
-
-      if Version.match?(System.version(), ">= 1.15.0") do
-        assert {nil, :behaviour_info, false, nil} = erl_behaviour_result
-      else
-        assert {:gen_server, :behaviour_info, true, :mod_fun} = erl_behaviour_result
-      end
-    end
-
-    test "types are not imported" do
-      assert {nil, :t, false, nil} =
-               actual_mod_fun(
-                 {nil, :t},
-                 [{Enum, []}],
-                 [],
-                 [],
-                 MyModule,
-                 {:typespec, :a, 1},
-                 %{},
-                 %{},
-                 {1, 1}
-               )
-    end
-
     test "finds macros from imported modules" do
       assert {nil, :info, false, nil} =
-               actual_mod_fun({nil, :info}, [], [], [], nil, Elixir, %{}, %{}, {1, 1})
+               actual_mod_fun({nil, :info}, [], [], [], [], nil, Elixir, %{}, %{}, {1, 1})
 
       assert {Logger, :info, true, :mod_fun} =
-               actual_mod_fun({nil, :info}, [{Logger, []}], [], [], nil, Elixir, %{}, %{}, {1, 1})
-    end
-
-    test "respects import options" do
-      assert {Enum, :at, true, :mod_fun} =
-               actual_mod_fun({nil, :at}, [{Enum, []}], [], [], nil, Elixir, %{}, %{}, {1, 1})
-
-      assert {nil, :at, false, nil} =
                actual_mod_fun(
-                 {nil, :at},
-                 [{Enum, [only: [abc: 1]]}],
+                 {nil, :info},
                  [],
-                 [],
-                 nil,
-                 Elixir,
-                 %{},
-                 %{},
-                 {1, 1}
-               )
-
-      assert {nil, :at, false, nil} =
-               actual_mod_fun(
-                 {nil, :at},
-                 [{Enum, [except: [at: 2, at: 3]]}],
-                 [],
-                 [],
-                 nil,
-                 Elixir,
-                 %{},
-                 %{},
-                 {1, 1}
-               )
-
-      assert {nil, :at, false, nil} =
-               actual_mod_fun(
-                 {nil, :at},
-                 [{Enum, [only: :macros]}],
+                 [{Logger, [{:info, 1}]}],
                  [],
                  [],
                  nil,
@@ -632,16 +442,28 @@ defmodule ElixirSense.Core.IntrospectionTest do
   describe "actual_mod_fun and remote calls" do
     test "finds functions from remote modules" do
       assert {Enum, :at, true, :mod_fun} =
-               actual_mod_fun({Enum, :at}, [], [], [], nil, Elixir, %{}, %{}, {1, 1})
+               actual_mod_fun({Enum, :at}, [], [], [], [], nil, Elixir, %{}, %{}, {1, 1})
 
       assert {Enum, :not_existing, false, nil} =
-               actual_mod_fun({Enum, :not_existing}, [], [], [], nil, Elixir, %{}, %{}, {1, 1})
+               actual_mod_fun(
+                 {Enum, :not_existing},
+                 [],
+                 [],
+                 [],
+                 [],
+                 nil,
+                 Elixir,
+                 %{},
+                 %{},
+                 {1, 1}
+               )
     end
 
     test "does not find functions in typespec" do
       assert {Enum, :at, false, nil} =
                actual_mod_fun(
                  {Enum, :at},
+                 [],
                  [],
                  [],
                  [],
@@ -661,7 +483,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
         mod_fun = %{
           {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
-          {MyModule, :info, nil} => def_info,
           {MyModule, :info, 1} => def_info
         }
 
@@ -669,12 +490,24 @@ defmodule ElixirSense.Core.IntrospectionTest do
         kind = if(findable, do: :mod_fun)
 
         assert {MyModule, :info, ^findable, ^kind} =
-                 actual_mod_fun({MyModule, :info}, [], [], [], nil, Elixir, mod_fun, %{}, {1, 1})
+                 actual_mod_fun(
+                   {MyModule, :info},
+                   [],
+                   [],
+                   [],
+                   [],
+                   nil,
+                   Elixir,
+                   mod_fun,
+                   %{},
+                   {1, 1}
+                 )
       end
 
       assert {MyModule, :not_existing, false, nil} =
                actual_mod_fun(
                  {MyModule, :not_existing},
+                 [],
                  [],
                  [],
                  [],
@@ -693,14 +526,14 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
       mod_fun = %{
         {MyModule, nil, nil} => %ElixirSense.Core.State.ModFunInfo{},
-        {MyModule, :__info__, nil} => def_info,
-        {MyModule, :module_info, nil} => def_info,
-        {MyModule, :behaviour_info, nil} => def_info
+        {MyModule, :__info__, 1} => def_info,
+        {MyModule, :module_info, 1} => def_info,
+        {MyModule, :behaviour_info, 1} => def_info
       }
 
       for fun <- [:module_info, :__info__, :behaviour_info], module <- [MyModule, Application] do
         assert {^module, ^fun, true, :mod_fun} =
-                 actual_mod_fun({module, fun}, [], [], [], nil, Elixir, mod_fun, %{}, {1, 1})
+                 actual_mod_fun({module, fun}, [], [], [], [], nil, Elixir, mod_fun, %{}, {1, 1})
       end
     end
 
@@ -708,6 +541,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
       assert {Enum, :t, true, :type} =
                actual_mod_fun(
                  {Enum, :t},
+                 [],
                  [],
                  [],
                  [],
@@ -721,13 +555,13 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
     test "does not find types outside typespec scope" do
       assert {Enum, :t, false, nil} =
-               actual_mod_fun({Enum, :t}, [], [], [], MyModule, {:a, 1}, %{}, %{}, {1, 1})
+               actual_mod_fun({Enum, :t}, [], [], [], [], MyModule, {:a, 1}, %{}, %{}, {1, 1})
 
       assert {Enum, :t, false, nil} =
-               actual_mod_fun({Enum, :t}, [], [], [], MyModule, MyModule, %{}, %{}, {1, 1})
+               actual_mod_fun({Enum, :t}, [], [], [], [], MyModule, MyModule, %{}, %{}, {1, 1})
 
       assert {Enum, :t, false, nil} =
-               actual_mod_fun({Enum, :t}, [], [], [], nil, Elixir, %{}, %{}, {1, 1})
+               actual_mod_fun({Enum, :t}, [], [], [], [], nil, Elixir, %{}, %{}, {1, 1})
     end
 
     test "finds public metadata types from remote modules" do
@@ -741,7 +575,6 @@ defmodule ElixirSense.Core.IntrospectionTest do
         }
 
         types = %{
-          {MyModule, :info, nil} => type_info,
           {MyModule, :info, 1} => type_info
         }
 
@@ -758,6 +591,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
                    [],
                    [],
                    [],
+                   [],
                    MyModule,
                    {:typespec, :a, 1},
                    mod_fun,
@@ -771,16 +605,17 @@ defmodule ElixirSense.Core.IntrospectionTest do
   describe "actual_mod_fun modules" do
     test "finds modules" do
       assert {Enum, nil, true, :mod_fun} =
-               actual_mod_fun({Enum, nil}, [], [], [], nil, Elixir, %{}, %{}, {1, 1})
+               actual_mod_fun({Enum, nil}, [], [], [], [], nil, Elixir, %{}, %{}, {1, 1})
 
       assert {:lists, nil, true, :mod_fun} =
-               actual_mod_fun({:lists, nil}, [], [], [], nil, Elixir, %{}, %{}, {1, 1})
+               actual_mod_fun({:lists, nil}, [], [], [], [], nil, Elixir, %{}, %{}, {1, 1})
     end
 
     test "finds modules in typespec scope" do
       assert {Enum, nil, true, :mod_fun} =
                actual_mod_fun(
                  {Enum, nil},
+                 [],
                  [],
                  [],
                  [],
@@ -798,10 +633,10 @@ defmodule ElixirSense.Core.IntrospectionTest do
       }
 
       assert {MyModule, nil, true, :mod_fun} =
-               actual_mod_fun({MyModule, nil}, [], [], [], nil, Elixir, mod_fun, %{}, {1, 1})
+               actual_mod_fun({MyModule, nil}, [], [], [], [], nil, Elixir, mod_fun, %{}, {1, 1})
 
       assert {MyModule, nil, false, nil} =
-               actual_mod_fun({MyModule, nil}, [], [], [], nil, Elixir, %{}, %{}, {1, 1})
+               actual_mod_fun({MyModule, nil}, [], [], [], [], nil, Elixir, %{}, %{}, {1, 1})
     end
   end
 end
