@@ -13,6 +13,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Guard
+  alias ElixirSense.Core.Compiler
 
   @scope_keywords [:for, :fn, :with]
   @block_keywords [:do, :else, :rescue, :catch, :after]
@@ -35,52 +36,57 @@ defmodule ElixirSense.Core.MetadataBuilder do
   """
   @spec build(Macro.t()) :: State.t()
   def build(ast) do
-    # dbg(ast)
-    {_ast, [state]} =
-      Macro.traverse(ast, [%State{}], &safe_call_pre/2, &safe_call_post/2)
-
-    try do
+    if Version.match?(System.version(), ">= 1.17.0-dev") do
+      {_ast, state, _env} = Compiler.expand(ast, %State{}, Compiler.env())
       state
-      |> remove_attributes_scope
-      |> remove_lexical_scope
-      |> remove_vars_scope
-      |> remove_module
-      |> remove_protocol_implementation
-    rescue
-      exception ->
-        warn(
-          Exception.format(
-            :error,
-            "#{inspect(exception.__struct__)} during metadata build scope closing:\n" <>
-              "#{Exception.message(exception)}\n" <>
-              "ast node: #{inspect(ast, limit: :infinity)}",
-            __STACKTRACE__
+    else
+      # dbg(ast)
+      {_ast, [state]} =
+        Macro.traverse(ast, [%State{}], &safe_call_pre/2, &safe_call_post/2)
+
+      try do
+        state
+        |> remove_attributes_scope
+        |> remove_lexical_scope
+        |> remove_vars_scope
+        |> remove_module
+        |> remove_protocol_implementation
+      rescue
+        exception ->
+          warn(
+            Exception.format(
+              :error,
+              "#{inspect(exception.__struct__)} during metadata build scope closing:\n" <>
+                "#{Exception.message(exception)}\n" <>
+                "ast node: #{inspect(ast, limit: :infinity)}",
+              __STACKTRACE__
+            )
           )
-        )
 
-        vars_info_per_scope_id =
-          try do
-            update_vars_info_per_scope_id(state)
-          rescue
-            _ ->
-              state.vars_info_per_scope_id
-          end
+          vars_info_per_scope_id =
+            try do
+              update_vars_info_per_scope_id(state)
+            rescue
+              _ ->
+                state.vars_info_per_scope_id
+            end
 
-        %{
-          state
-          | attributes: [],
-            scope_attributes: [],
-            aliases: [],
-            imports: [],
-            requires: [],
-            scope_ids: [],
-            vars: [],
-            scope_vars: [],
-            vars_info_per_scope_id: vars_info_per_scope_id,
-            module: [],
-            scopes: [],
-            protocols: []
-        }
+          %{
+            state
+            | attributes: [],
+              scope_attributes: [],
+              aliases: [],
+              imports: [],
+              requires: [],
+              scope_ids: [],
+              vars: [],
+              scope_vars: [],
+              vars_info_per_scope_id: vars_info_per_scope_id,
+              module: [],
+              scopes: [],
+              protocols: []
+          }
+      end
     end
   end
 

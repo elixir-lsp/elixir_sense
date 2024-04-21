@@ -60,7 +60,8 @@ defmodule ElixirSense.Core.State do
           typedoc_context: list(),
           optional_callbacks_context: list(),
           # TODO better type
-          binding_context: list
+          binding_context: list,
+          macro_env: list(Macro.Env.t())
         }
 
   @auto_imported_functions :elixir_env.new().functions
@@ -85,6 +86,12 @@ defmodule ElixirSense.Core.State do
             specs: %{},
             vars_info: [[]],
             scope_vars_info: [[]],
+            vars: {%{}, false},
+            unused: {%{}, 0},
+            prematch: :raise,
+            stacktrace: false,
+            caller: false,
+            runtime_modules: [],
             scope_id_count: 0,
             scope_ids: [0],
             vars_info_per_scope_id: %{},
@@ -100,7 +107,8 @@ defmodule ElixirSense.Core.State do
             doc_context: [[]],
             typedoc_context: [[]],
             optional_callbacks_context: [[]],
-            moduledoc_positions: %{}
+            moduledoc_positions: %{},
+            macro_env: [:elixir_env.new()]
 
   defmodule Env do
     @moduledoc """
@@ -360,6 +368,31 @@ defmodule ElixirSense.Core.State do
     }
   end
 
+  def get_current_env(%__MODULE__{} = state, macro_env) do
+    # current_vars = state |> get_current_vars()
+    current_vars = state.vars |> elem(0)
+    current_attributes = state |> get_current_attributes()
+    current_behaviours = hd(state.behaviours)
+
+    current_scope_id = hd(state.scope_ids)
+    current_scope_protocol = hd(state.protocols)
+
+    %Env{
+      functions: macro_env.functions,
+      macros: macro_env.macros,
+      requires: macro_env.requires,
+      aliases: macro_env.aliases,
+      module: macro_env.module,
+      function: macro_env.function,
+      vars: current_vars,
+      attributes: current_attributes,
+      behaviours: current_behaviours,
+      typespec: nil,
+      scope_id: current_scope_id,
+      protocol: current_scope_protocol
+    }
+  end
+
   def get_current_module(%__MODULE__{} = state) do
     state.module |> hd
   end
@@ -369,6 +402,16 @@ defmodule ElixirSense.Core.State do
     current_env = get_current_env(state)
 
     env = merge_env_vars(current_env, previous_env)
+    %__MODULE__{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
+  end
+
+  def add_current_env_to_line(%__MODULE__{} = state, line, macro_env) when is_integer(line) do
+    _previous_env = state.lines_to_env[line]
+    current_env = get_current_env(state, macro_env)
+
+    # TODO
+    # env = merge_env_vars(current_env, previous_env)
+    env = current_env
     %__MODULE__{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
   end
 
@@ -1833,5 +1876,59 @@ defmodule ElixirSense.Core.State do
         generated: true
       )
     end)
+  def macro_env(%__MODULE__{} = state, meta \\ []) do
+    function =
+      case hd(hd(state.scopes)) do
+        {function, arity} -> {function, arity}
+        _ -> nil
+      end
+
+    context_modules =
+      state.mods_funs_to_positions
+      |> Enum.filter(&match?({{_module, nil, nil}, _}, &1))
+      |> Enum.map(&(elem(&1, 0) |> elem(0)))
+
+    %Macro.Env{
+      aliases: current_aliases(state),
+      requires: current_requires(state),
+      module: get_current_module(state),
+      line: Keyword.get(meta, :line, 0),
+      function: function,
+      # TODO context :guard, :match
+      context: nil,
+      context_modules: context_modules,
+      functions: state.functions |> hd,
+      macros: state.macros |> hd
+      # TODO macro_aliases
+      # TODO versioned_vars
+    }
+  end
+
+  def macro_env(%__MODULE__{} = state, %__MODULE__.Env{} = env, line) do
+    function =
+      case env.scope do
+        {function, arity} -> {function, arity}
+        _ -> nil
+      end
+
+    context_modules =
+      state.mods_funs_to_positions
+      |> Enum.filter(&match?({{_module, nil, nil}, _}, &1))
+      |> Enum.map(&(elem(&1, 0) |> elem(0)))
+
+    %Macro.Env{
+      aliases: env.aliases,
+      requires: env.requires,
+      module: env.module,
+      line: line,
+      function: function,
+      # TODO context :guard, :match
+      context: nil,
+      context_modules: context_modules,
+      functions: env.functions,
+      macros: env.macros
+      # TODO macro_aliases
+      # TODO versioned_vars
+    }
   end
 end

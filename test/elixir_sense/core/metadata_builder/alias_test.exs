@@ -58,6 +58,7 @@ defmodule ElixirSense.Core.MetadataBuilder.AliasTest do
       assert metadata_env = state.lines_to_env[env.line]
 
       assert metadata_env.aliases == env.aliases
+      # assert State.macro_env(state, metadata_env, env.line) == env
     end
   end
 
