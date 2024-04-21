@@ -288,13 +288,6 @@ defmodule ElixirSense.Core.Metadata do
     end
   end
 
-  def get_function_info(%__MODULE__{} = metadata, module, function) do
-    case Map.get(metadata.mods_funs_to_positions, {module, function, nil}) do
-      nil -> %{positions: [], params: []}
-      info -> info
-    end
-  end
-
   @builtin_functions BuiltinFunctions.all()
                      |> Enum.map(&elem(&1, 0))
                      |> Kernel.--([:exception, :message])
