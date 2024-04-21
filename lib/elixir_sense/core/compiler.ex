@@ -340,9 +340,11 @@ defmodule ElixirSense.Core.Compiler do
     generated = Keyword.get(e_opts, :generated, false)
 
     # TODO this is a stub only
-    # expand_quote(exprs, st, et)
-    {q, prelude} = __MODULE__.Quote.build(meta, line, file, context, unquote_opt, generated)
-    quoted = __MODULE__.Quote.quote(meta, exprs, binding, q, prelude, et)
+    # expand_quote(exprs, st, et) |> elem(0) |> IO.inspect
+    {q, prelude} =
+      __MODULE__.Quote.build(meta, line, file, context, unquote_opt, generated) |> dbg
+
+    quoted = __MODULE__.Quote.quote(meta, exprs |> dbg, binding, q, prelude, et) |> dbg
     expand(quoted, st, et)
   end
 
@@ -697,8 +699,8 @@ defmodule ElixirSense.Core.Compiler do
     {other, s, e}
   end
 
-  def expand(_other, _s, _e) do
-    raise "invalid_quoted_expr"
+  def expand(other, _s, _e) do
+    raise "invalid_quoted_expr #{inspect(other)}"
   end
 
   ## Macro handling
@@ -3018,7 +3020,7 @@ defmodule ElixirSense.Core.Compiler do
           {:{}, [], {:=, [], {:{}, [], [k, meta, context]}, v}}
         end)
 
-      quoted = do_quote(expr, q, e)
+      quoted = do_quote(expr, q, e) |> dbg
 
       with_vars =
         case vars do
@@ -3040,7 +3042,7 @@ defmodule ElixirSense.Core.Compiler do
       new_meta =
         case q do
           %__MODULE__{vars_hygiene: true, context: context} ->
-            Keyword.put(meta, :context, context)
+            keystore(:context, meta, context)
 
           _ ->
             meta
@@ -3056,7 +3058,7 @@ defmodule ElixirSense.Core.Compiler do
       new_meta =
         case q do
           %__MODULE__{vars_hygiene: true, context: context} ->
-            Keyword.put(meta, :context, context)
+            keystore(:context, meta, context)
 
           _ ->
             meta
@@ -3069,16 +3071,15 @@ defmodule ElixirSense.Core.Compiler do
 
     # Aliases
 
-    defp do_quote({:__aliases__, meta, [h | t]}, %__MODULE__{aliases_hygiene: true} = q, e)
+    defp do_quote({:__aliases__, meta, [h | t] = list}, %__MODULE__{aliases_hygiene: true} = q, e)
          when is_atom(h) and h != :"Elixir" do
-      # TODO Macro.Env version errors when list is returned
       annotation =
-        case :elixir_aliases.expand(meta, [h | t], e, false) do
-          atom when is_atom(atom) -> atom
-          aliases when is_list(aliases) -> false
+        case Macro.Env.expand_alias(e, meta, list, trace: false) do
+          {:alias, atom} -> atom
+          :error -> false
         end
 
-      alias_meta = Keyword.put(Keyword.delete(meta, :counter), :alias, annotation)
+      alias_meta = keystore(:alias, Keyword.delete(meta, :counter), annotation)
       do_quote_tuple(:__aliases__, alias_meta, [h | t], q, e)
     end
 
@@ -3124,7 +3125,7 @@ defmodule ElixirSense.Core.Compiler do
             meta
 
           receiver ->
-            Keyword.put(Keyword.put(meta, :imports, [{a, receiver}]), :context, q.context)
+            keystore(:context, keystore(:imports, meta, [{a, receiver}]), q.context)
         end
 
       do_quote_tuple(:&, new_meta, args, q, e)
@@ -3149,7 +3150,7 @@ defmodule ElixirSense.Core.Compiler do
     defp do_quote({left, right}, %__MODULE__{unquote: true} = q, e)
          when is_tuple(left) and elem(left, 0) == :unquote_splicing and
                 is_tuple(right) and elem(right, 0) == :unquote_splicing do
-      do_quote({{}, [], [left, right]}, q, e)
+      do_quote({:{}, [], [left, right]}, q, e)
     end
 
     defp do_quote({left, right}, q, e) do
@@ -3186,16 +3187,16 @@ defmodule ElixirSense.Core.Compiler do
       case Keyword.get(meta, :import, false) == false &&
              ElixirDispatch.find_imports(meta, name, e) do
         [] ->
-          case arity == 1 and Keyword.get(meta, :ambiguous_op, nil) == nil do
-            true ->
-              Keyword.put(meta, :ambiguous_op, q.context)
+          case arity == 1 && Keyword.fetch(meta, :ambiguous_op) do
+            {:ok, nil} ->
+              keystore(:ambiguous_op, meta, q.context)
 
             _ ->
               meta
           end
 
         imports ->
-          Keyword.put(Keyword.put(meta, :context, q.context), :imports, imports)
+          keystore(:imports, keystore(:context, meta, q.context), imports)
       end
     end
 
@@ -3263,11 +3264,11 @@ defmodule ElixirSense.Core.Compiler do
     defp do_list_concat([], right), do: right
 
     defp do_list_concat(left, right) do
-      {:., [], [:erlang, :++], [], [left, right]}
+      {{:., [], [:erlang, :++]}, [], [left, right]}
     end
 
     defp do_runtime_list(meta, fun, args) do
-      {:., meta, [:elixir_quote, fun], meta, args}
+      {{:., meta, [:elixir_quote, fun]}, meta, args}
     end
 
     defp meta(meta, q) do
@@ -3298,7 +3299,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp line(meta, line) do
-      Keyword.put(meta, :line, line)
+      keystore(:line, meta, line)
     end
 
     defguardp defs(kind) when kind in [:def, :defp, :defmacro, :defmacrop, :@]
@@ -3313,7 +3314,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp annotate({lexical, meta, [_ | _] = args}, context) when lexical(lexical) do
-      new_meta = Keyword.put(Keyword.delete(meta, :counter), :context, context)
+      new_meta = keystore(:context, Keyword.delete(meta, :counter), context)
       {lexical, new_meta, args}
     end
 
@@ -3324,7 +3325,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp annotate_def({fun, meta, args}, context) do
-      {fun, Keyword.put(meta, :context, context), args}
+      {fun, keystore(:context, meta, context), args}
     end
 
     defp annotate_def(other, _context), do: other
@@ -3400,6 +3401,30 @@ defmodule ElixirSense.Core.Compiler do
     defp update_last([], _), do: []
     defp update_last([h], f), do: [f.(h)]
     defp update_last([h | t], f), do: [h | update_last(t, f)]
+
+    defp keyfind(key, meta) do
+      :lists.keyfind(key, 1, meta)
+    end
+
+    defp keydelete(key, meta) do
+      Keyword.delete(meta, key)
+    end
+
+    defp keystore(key, meta, value) when value == nil do
+      meta
+    end
+
+    defp keystore(key, meta, value) do
+      :lists.keystore(key, 1, meta, {key, value})
+    end
+
+    defp keynew(key, meta, value) do
+      if Keyword.has_key?(meta, key) do
+        meta
+      else
+        [{key, value} | meta]
+      end
+    end
   end
 
   defmodule Dispatch do

@@ -235,7 +235,75 @@ defmodule ElixirSense.Core.CompilerTest do
       assert_expansion("__ENV__.foo")
     end
 
-    # TODO quote
+    test "expands quote literal" do
+      assert_expansion("quote do: 2")
+      assert_expansion("quote do: :foo")
+      assert_expansion("quote do: \"asd\"")
+      assert_expansion("quote do: []")
+      assert_expansion("quote do: [12]")
+      assert_expansion("quote do: [12, 34]")
+      assert_expansion("quote do: [12 | 34]")
+      assert_expansion("quote do: [12 | [34]]")
+      assert_expansion("quote do: {12}")
+      assert_expansion("quote do: {12, 34}")
+      assert_expansion("quote do: %{a: 12}")
+    end
+
+    test "expands quote variable" do
+      assert_expansion("quote do: abc")
+    end
+
+    test "expands quote quote" do
+      assert_expansion("""
+      quote do: (quote do: 1)
+      """)
+    end
+
+    test "expands quote block" do
+      assert_expansion("""
+      quote do: ()
+      """)
+    end
+
+    test "expands quote unquote" do
+      assert_expansion("""
+      a = 1
+      quote do: unquote(a)
+      """)
+    end
+
+    test "expands quote unquote block" do
+      assert_expansion("""
+      a = 1
+      quote do: (unquote(a))
+      """)
+    end
+
+    test "expands quote unquote_splicing tuple" do
+      assert_expansion("""
+      quote do: {unquote_splicing([1, 2]), unquote_splicing([2])}
+      """)
+    end
+
+    test "expands quote unquote_splicing" do
+      assert_expansion("""
+      a = [1, 2, 3]
+      quote do: (unquote_splicing(a))
+      """)
+    end
+
+    test "expands quote alias" do
+      assert_expansion("quote do: Date")
+      assert_expansion("quote do: Elixir.Date")
+      assert_expansion("quote do: String.Chars")
+      assert_expansion("alias String.Chars; quote do: Chars")
+      assert_expansion("alias String.Chars; quote do: Chars.foo().A")
+    end
+
+    test "expands quote import" do
+      assert_expansion("quote do: inspect(1)")
+      assert_expansion("quote do: &inspect/1")
+    end
 
     test "expands &super" do
       assert_expansion_env("""
