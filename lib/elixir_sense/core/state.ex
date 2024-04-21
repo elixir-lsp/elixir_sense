@@ -731,12 +731,6 @@ defmodule ElixirSense.Core.State do
     %{state | scopes: [[{:typespec, name, arity} | hd(state.scopes)] | state.scopes]}
   end
 
-  # def remove_typespec_namespace(%__MODULE__{} = state) do
-  #   outer_scopes = state.scopes |> tl
-
-  #   %{state | scopes: outer_scopes}
-  # end
-
   def register_optional_callbacks(%__MODULE__{} = state, list) do
     [_ | rest] = state.optional_callbacks_context
     %{state | optional_callbacks_context: [list | rest]}
@@ -942,14 +936,6 @@ defmodule ElixirSense.Core.State do
     end)
   end
 
-  def new_alias_scope(%__MODULE__{} = state) do
-    %__MODULE__{state | aliases: [[] | state.aliases]}
-  end
-
-  def remove_alias_scope(%__MODULE__{} = state) do
-    %__MODULE__{state | aliases: tl(state.aliases)}
-  end
-
   def new_vars_scope(%__MODULE__{} = state) do
     scope_id = state.scope_id_count + 1
 
@@ -1153,28 +1139,24 @@ defmodule ElixirSense.Core.State do
     Enum.reduce(aliases_tuples, state, fn tuple, state -> add_alias(state, tuple) end)
   end
 
-  def new_import_scope(%__MODULE__{} = state) do
+  def new_lexical_scope(%__MODULE__{} = state) do
     %__MODULE__{
       state
       | functions: [hd(state.functions) | state.functions],
-        macros: [hd(state.macros) | state.macros]
+        macros: [hd(state.macros) | state.macros],
+        requires: [[] | state.requires],
+        aliases: [[] | state.aliases]
     }
   end
 
-  def new_require_scope(%__MODULE__{} = state) do
-    %__MODULE__{state | requires: [[] | state.requires]}
-  end
-
-  def remove_import_scope(%__MODULE__{} = state) do
+  def remove_lexical_scope(%__MODULE__{} = state) do
     %__MODULE__{
       state
       | functions: tl(state.functions),
-        macros: tl(state.macros)
+        macros: tl(state.macros),
+        requires: tl(state.requires),
+        aliases: tl(state.aliases)
     }
-  end
-
-  def remove_require_scope(%__MODULE__{} = state) do
-    %__MODULE__{state | requires: tl(state.requires)}
   end
 
   def add_import(%__MODULE__{} = state, module, opts) when is_atom(module) or is_list(module) do

@@ -49,9 +49,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       state
       |> remove_attributes_scope
       |> remove_behaviours_scope
-      |> remove_alias_scope
-      |> remove_import_scope
-      |> remove_require_scope
+      |> remove_lexical_scope
       |> remove_vars_scope
       |> remove_namespace
       |> remove_protocol_implementation
@@ -155,11 +153,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> add_namespace(module)
       |> add_current_module_to_index(position, end_position, generated: state.generated)
       |> alias_submodule(module)
-      |> new_alias_scope
+      |> new_lexical_scope
       |> new_attributes_scope
       |> new_behaviours_scope
-      |> new_import_scope
-      |> new_require_scope
       |> new_vars_scope
       |> maybe_add_protocol_behaviour(module)
 
@@ -195,9 +191,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> apply_optional_callbacks
     |> remove_attributes_scope
     |> remove_behaviours_scope
-    |> remove_alias_scope
-    |> remove_import_scope
-    |> remove_require_scope
+    |> remove_lexical_scope
     |> remove_vars_scope
     |> remove_namespace
     |> remove_protocol_implementation
@@ -307,9 +301,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
     |> new_named_func(name, length(params || []))
     |> add_func_to_index(name, params || [], position, end_position, type, options)
-    |> new_alias_scope
-    |> new_import_scope
-    |> new_require_scope
+    |> new_lexical_scope
     |> new_func_vars_scope
     |> add_vars(vars, true)
     |> add_current_env_to_line(Keyword.fetch!(meta, :line))
@@ -349,9 +341,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp post_func(ast, state) do
     # dbg(ast)
     state
-    |> remove_alias_scope
-    |> remove_import_scope
-    |> remove_require_scope
+    |> remove_lexical_scope
     |> remove_func_vars_scope
     |> remove_last_scope_from_scopes
     |> result(ast)
@@ -400,9 +390,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end
 
     state
-    |> new_alias_scope
-    |> new_import_scope
-    |> new_require_scope
+    |> new_lexical_scope
     |> new_vars_scope
     |> result(ast)
   end
@@ -418,9 +406,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end
 
     state
-    |> remove_alias_scope
-    |> remove_import_scope
-    |> remove_require_scope
+    |> remove_lexical_scope
     |> maybe_move_vars_to_outer_scope
     |> remove_vars_scope
     |> result(ast)
@@ -435,9 +421,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> merge_same_name_vars()
 
     state
-    |> new_alias_scope
-    |> new_import_scope
-    |> new_require_scope
+    |> new_lexical_scope
     |> new_vars_scope
     |> add_vars(vars, true)
     |> add_current_env_to_line(line)
@@ -446,9 +430,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp post_clause(ast, state) do
     state
-    |> remove_alias_scope
-    |> remove_import_scope
-    |> remove_require_scope
+    |> remove_lexical_scope
     |> maybe_move_vars_to_outer_scope
     |> remove_vars_scope
     |> result(ast)
