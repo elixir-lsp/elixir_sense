@@ -2285,7 +2285,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     state =
       """
       defmodule MyModule do
-        import Enum, only: []
+        import Enum, only: [{:at, 2}]
         import Elixir.{List}, only: []
         import :lists, only: []
         IO.puts ""
@@ -2293,31 +2293,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 5) == [
-             {Kernel, []},
-             {Enum, [only: []]},
-             {List, []},
-             {:lists, [only: []]}
-           ]
+    {functions, macros} = get_line_imports(state, 5)
+    assert Keyword.keys(functions) == [Enum, Kernel]
+    assert Keyword.keys(macros) == [Kernel]
   end
 
   test "imports defined with multi import notation" do
     state =
       """
       defmodule MyModule do
-        import Foo.Bar.{User, Email, :"Elixir.Other"}
-        import Bar.{}
+        import String.{Chars}
+        import Code.{}
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_imports(state, 4) == [
-             {Kernel, []},
-             {Foo.Bar.User, []},
-             {Foo.Bar.Email, []},
-             {Foo.Bar.Other, []}
-           ]
+    {functions, _} = get_line_imports(state, 4)
+    assert Keyword.keys(functions) == [String.Chars, Kernel]
   end
 
   test "imports defined with multi import notation with atom module" do
@@ -2331,12 +2324,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 4) == [
-             {Kernel, []},
-             {Foo.Bar.User, []},
-             {Foo.Bar.Email, []},
-             {Foo.Bar.Other, []}
-           ]
+    {functions, _macros} = get_line_imports(state, 4)
+    assert Keyword.keys(functions) == [Kernel]
   end
 
   test "imports" do
@@ -2366,32 +2355,29 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 3) == [{Kernel, []}, {List, []}]
+    {functions, _} = get_line_imports(state, 3)
+    assert Keyword.keys(functions) == [List, Kernel]
 
     # note that `import` causes `require` module's macros available
     assert get_line_requires(state, 3) == [Application, Kernel, Kernel.Typespec, List]
 
-    assert get_line_imports(state, 6) == [{Kernel, []}, {List, []}, {Enum.List, []}]
-    assert get_line_imports(state, 9) == [{Kernel, []}, {List, []}, {Enum.List, []}, {String, []}]
+    {functions, _} = get_line_imports(state, 6)
+    assert Keyword.keys(functions) == [List, Kernel]
+    {functions, _} = get_line_imports(state, 9)
+    assert Keyword.keys(functions) == [String, List, Kernel]
 
-    assert get_line_imports(state, 12) == [
-             {Kernel, []},
-             {List, []},
-             {Enum.List, []},
-             {String, []},
-             {Macro, []}
-           ]
+    {functions, _} = get_line_imports(state, 12)
+    assert Keyword.keys(functions) == [Macro, String, List, Kernel]
 
-    assert get_line_imports(state, 14) == [
-             {Kernel, []},
-             {List, []},
-             {Enum.List, []},
-             {String, []}
-           ]
+    {functions, _} = get_line_imports(state, 14)
+    assert Keyword.keys(functions) == [String, List, Kernel]
 
-    assert get_line_imports(state, 16) == [{Kernel, []}, {List, []}, {Enum.List, []}]
-    assert get_line_imports(state, 19) == [{Kernel, []}, {List, []}, {Code, []}]
-    assert get_line_imports(state, 21) == [{Kernel, []}]
+    {functions, _} = get_line_imports(state, 16)
+    assert Keyword.keys(functions) == [List, Kernel]
+    {functions, _} = get_line_imports(state, 19)
+    assert Keyword.keys(functions) == [Code, List, Kernel]
+    {functions, _} = get_line_imports(state, 21)
+    assert Keyword.keys(functions) == [Kernel]
   end
 
   test "imports duplicated" do
@@ -2405,34 +2391,40 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 4) == [{Kernel, []}, {List, []}, {List, []}]
+    {functions, _macros} = get_line_imports(state, 4)
+    assert Keyword.keys(functions) == [List, Kernel]
   end
 
   test "imports with __MODULE__" do
     state =
       """
       defmodule OuterModule do
+        defmodule Sub do
+          def a(), do: :ok
+        end
         import __MODULE__.Sub
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_imports(state, 3) == [{Kernel, []}, {OuterModule.Sub, []}]
+    {functions, _} = get_line_imports(state, 6)
+    assert Keyword.has_key?(functions, OuterModule.Sub)
   end
 
   test "imports aliased module" do
     state =
       """
       defmodule OuterModule do
-        alias Some.Other.Module, as: S
+        alias Enum, as: S
         import S
         IO.puts ""
       end
       """
       |> string_to_state
 
-    assert get_line_imports(state, 4) == [{Kernel, []}, {Some.Other.Module, []}]
+    {functions, _} = get_line_imports(state, 4)
+    assert Keyword.has_key?(functions, Enum)
   end
 
   test "requires" do
@@ -2507,9 +2499,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              Application,
              Kernel,
              Kernel.Typespec,
-             Mod.Mod3,
+             Mod.Mo1,
              Mod.Mod2,
-             Mod.Mo1
+             Mod.Mod3
            ]
   end
 
@@ -2528,9 +2520,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              Application,
              Kernel,
              Kernel.Typespec,
-             Mod.Mod3,
+             Mod.Mo1,
              Mod.Mod2,
-             Mod.Mo1
+             Mod.Mod3
            ]
   end
 
@@ -2559,7 +2551,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_requires(state, 4) == [Application, Kernel, Kernel.Typespec, :ets, Integer]
+    assert get_line_requires(state, 4) == [Application, Integer, Kernel, Kernel.Typespec, :ets]
     assert get_line_aliases(state, 4) == [{I, Integer}, {E, :ets}]
   end
 
@@ -2580,8 +2572,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              Application,
              Kernel,
              Kernel.Typespec,
-             MyMod.Other1,
              MyMod.Other,
+             MyMod.Other1,
              MyMod.Some,
              :my_mod
            ]
@@ -2605,8 +2597,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              Application,
              Kernel,
              Kernel.Typespec,
-             Some.Other.Module.Sub,
-             Some.Other.Module
+             Some.Other.Module,
+             Some.Other.Module.Sub
            ]
   end
 
@@ -3649,31 +3641,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     # note that `use` causes `require` to be able to execute `__using__/1` macro
     assert get_line_requires(state, 4) == [
              Application,
+             ElixirSenseExample.ExampleBehaviour,
              Kernel,
              Kernel.Typespec,
-             :lists,
-             MyImports.Two.ThreeImports,
-             MyImports.OneImports,
+             List,
              MyImports.NestedImports,
-             MyImports,
-             Some.List,
-             MyMacros.Two.Three,
-             MyMacros.One,
-             :ets,
-             MyMacros.Nested,
+             MyImports.OneImports,
+             MyImports.Two.ThreeImports,
              MyMacros,
-             ElixirSenseExample.ExampleBehaviour
+             MyMacros.Nested,
+             MyMacros.One,
+             MyMacros.Two.Three,
+             Some.List,
+             :ets,
+             :lists
            ]
 
-    assert get_line_imports(state, 4) == [
-             {Kernel, []},
-             {Some.List, []},
-             {MyImports, []},
-             {MyImports.NestedImports, []},
-             {MyImports.OneImports, []},
-             {MyImports.Two.ThreeImports, []},
-             {:lists, [only: []]}
-           ]
+    {functions, _} = get_line_imports(state, 4)
+    assert Keyword.keys(functions) == [List, Kernel]
 
     assert Enum.sort(get_line_aliases(state, 4)) ==
              Enum.sort([
@@ -4908,13 +4893,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 3) == [
-             {Kernel, []},
-             {ExUnit.Callbacks, []},
-             {ExUnit.Assertions, []},
-             {ExUnit.Case, [only: [describe: 2, test: 1, test: 2, test: 3]]},
-             {ExUnit.DocTest, []}
-           ]
+    {functions, _} = get_line_imports(state, 3)
+    assert ExUnit.Assertions in Keyword.keys(functions)
   end
 
   test "gets ExUnit imports from case template" do
@@ -4927,13 +4907,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_imports(state, 3) == [
-             {Kernel, []},
-             {ExUnit.Callbacks, []},
-             {ExUnit.Assertions, []},
-             {ExUnit.Case, [only: [describe: 2, test: 1, test: 2, test: 3]]},
-             {ExUnit.DocTest, []}
-           ]
+    {functions, _} = get_line_imports(state, 3)
+    assert ExUnit.Assertions in Keyword.keys(functions)
   end
 
   test "safely skip code inside `quote do`" do
@@ -5609,8 +5584,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   defp get_line_imports(state, line) do
     case state.lines_to_env[line] do
-      nil -> []
-      env -> env.imports
+      nil -> {[], []}
+      env -> {env.functions, env.macros}
     end
   end
 

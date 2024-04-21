@@ -1,7 +1,6 @@
 defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
   use ExUnit.Case, async: true
 
-  alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.MetadataBuilder
   alias ElixirSenseExample.Fixtures.MetadataBuilder.Import
 
@@ -46,9 +45,8 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
 
       assert metadata_env = state.lines_to_env[env.line]
 
-      {functions, macros} = Introspection.expand_imports(metadata_env.imports, %{})
-      assert deep_sort(functions) == deep_sort(env.functions)
-      assert deep_sort(macros) == deep_sort(env.macros)
+      assert deep_sort(metadata_env.functions) == deep_sort(env.functions)
+      assert deep_sort(metadata_env.macros) == deep_sort(env.macros)
     end
   end
 
@@ -71,9 +69,8 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
     {env, _} = Code.eval_string(code, [])
     assert metadata_env = state.lines_to_env[env.line]
 
-    {functions, macros} = Introspection.expand_imports(metadata_env.imports, %{})
-    assert deep_sort(functions) == deep_sort(env.functions)
-    assert deep_sort(macros) == deep_sort(env.macros)
+    assert deep_sort(metadata_env.functions) == deep_sort(env.functions)
+    assert deep_sort(metadata_env.macros) == deep_sort(env.macros)
   end
 
   test "auto imported after last module" do
@@ -91,9 +88,8 @@ defmodule ElixirSense.Core.MetadataBuilder.ImportTest do
     {env, _} = Code.eval_string(code, [])
     assert metadata_env = state.lines_to_env[env.line]
 
-    {functions, macros} = Introspection.expand_imports(metadata_env.imports, %{})
-    assert deep_sort(functions) == deep_sort(env.functions)
-    assert deep_sort(macros) == deep_sort(env.macros)
+    assert deep_sort(metadata_env.functions) == deep_sort(env.functions)
+    assert deep_sort(metadata_env.macros) == deep_sort(env.macros)
   after
     :code.delete(Some.B.C)
     :code.purge(Some.B.C)

@@ -17,11 +17,13 @@ defmodule ElixirSense.Core.ParserTest do
              error: {:error, :env_not_found},
              mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 1}]}},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}]},
-               3 => %Env{imports: [{Kernel, []}, {List, []}]}
+               1 => %Env{},
+               3 => %Env{functions: functions}
              },
              source: "defmodule MyModule" <> _
            } = parse_string(source, true, true, {3, 3})
+
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with syntax error" do
@@ -35,11 +37,14 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
              error: {:error, :parse_error},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}], module: MyModule},
-               2 => %Env{imports: [{Kernel, []}, {List, []}], module: MyModule},
-               3 => %Env{imports: [{Kernel, []}, {List, []}], module: MyModule}
+               1 => %Env{module: MyModule},
+               2 => %Env{functions: functions2, module: MyModule},
+               3 => %Env{functions: functions3, module: MyModule}
              }
            } = parse_string(source, true, true, {3, 10})
+
+    assert Keyword.has_key?(functions2, List)
+    assert Keyword.has_key?(functions3, List)
   end
 
   test "parse_string with syntax error (missing param)" do
@@ -53,10 +58,12 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
              error: {:error, :parse_error},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}]},
-               3 => %Env{imports: [{Kernel, []}, {List, []}]}
+               1 => %Env{},
+               3 => %Env{functions: functions}
              }
            } = parse_string(source, true, true, {3, 20})
+
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with missing terminator \")\"" do
@@ -70,10 +77,12 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
              error: {:error, :parse_error},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}]},
-               3 => %Env{imports: [{Kernel, []}, {List, []}]}
+               1 => %Env{},
+               3 => %Env{functions: functions}
              }
            } = parse_string(source, true, true, {3, 8})
+
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with missing terminator \"]\"" do
@@ -87,10 +96,12 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
              error: {:error, :parse_error},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}]},
-               3 => %Env{imports: [{Kernel, []}, {List, []}]}
+               1 => %Env{},
+               3 => %Env{functions: functions}
              }
            } = parse_string(source, true, true, {3, 11})
+
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with missing terminator \"}\"" do
@@ -104,10 +115,12 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
              error: {:error, :parse_error},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}]},
-               3 => %Env{imports: [{Kernel, []}, {List, []}]}
+               1 => %Env{},
+               3 => %Env{functions: functions}
              }
            } = parse_string(source, true, true, {3, 12})
+
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with missing terminator \"\"\"" do
@@ -121,10 +134,12 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
              error: {:error, :parse_error},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}]},
-               3 => %Env{imports: [{Kernel, []}, {List, []}]}
+               1 => %Env{},
+               3 => %Env{functions: functions}
              }
            } = parse_string(source, true, true, {3, 10})
+
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with missing terminator \"\'\"" do
@@ -138,10 +153,12 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
              error: {:error, :parse_error},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}]},
-               3 => %Env{imports: [{Kernel, []}, {List, []}]}
+               1 => %Env{},
+               3 => %Env{functions: functions}
              }
            } = parse_string(source, true, true, {3, 10})
+
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with missing heredoc terminator" do
@@ -155,10 +172,12 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
              error: {:error, :parse_error},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}]},
-               3 => %Env{imports: [{Kernel, []}, {List, []}]}
+               1 => %Env{},
+               3 => %Env{functions: functions}
              }
            } = parse_string(source, true, true, {3, 12})
+
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with missing interpolation terminator in \"\"\"" do
@@ -172,10 +191,12 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
              error: {:error, :parse_error},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}]},
-               3 => %Env{imports: [{Kernel, []}, {List, []}]}
+               1 => %Env{},
+               3 => %Env{functions: functions}
              }
            } = parse_string(source, true, true, {3, 12})
+
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with missing interpolation terminator in \"\'\"" do
@@ -189,10 +210,12 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
              error: {:error, :parse_error},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}]},
-               3 => %Env{imports: [{Kernel, []}, {List, []}]}
+               1 => %Env{},
+               3 => %Env{functions: functions}
              }
            } = parse_string(source, true, true, {3, 12})
+
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with missing interpolation terminator in heredoc" do
@@ -206,10 +229,12 @@ defmodule ElixirSense.Core.ParserTest do
     assert %Metadata{
              error: {:error, :parse_error},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}]},
-               3 => %Env{imports: [{Kernel, []}, {List, []}]}
+               1 => %Env{},
+               3 => %Env{functions: functions}
              }
            } = parse_string(source, true, true, {3, 14})
+
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with missing terminator \"end\" attempts to fix it by inserting end at line from error" do
@@ -357,11 +382,13 @@ defmodule ElixirSense.Core.ParserTest do
              error: {:error, :env_not_found},
              mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 1}]}},
              lines_to_env: %{
-               1 => %Env{imports: [{Kernel, []}]},
-               3 => %Env{imports: [{Kernel, []}, {List, []}]}
+               1 => %Env{},
+               3 => %Env{functions: functions}
              },
              source: "defmodule MyModule" <> _
            } = parse_string(source, true, true, {4, 3})
+
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with malformed `do` expression" do

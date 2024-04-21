@@ -65,11 +65,20 @@ defmodule ElixirSense.Core.State do
         }
 
   @auto_imported [{Kernel, []}]
-  @auto_required [Application, Kernel, Kernel.Typespec]
+  @auto_imported_functions :elixir_env.new().functions
+  @auto_imported_macros :elixir_env.new().macros
+  @auto_required [Application, Kernel] ++
+                   (if Version.match?(System.version(), ">= 1.17.0-dev") do
+                      []
+                    else
+                      [Kernel.Typespec]
+                    end)
 
   defstruct namespace: [[:"Elixir"]],
             scopes: [[:"Elixir"]],
             imports: [@auto_imported],
+            functions: [@auto_imported_functions],
+            macros: [@auto_imported_macros],
             requires: [@auto_required],
             aliases: [[]],
             attributes: [[]],
@@ -103,6 +112,8 @@ defmodule ElixirSense.Core.State do
 
     @type t :: %Env{
             imports: list(module),
+            functions: [{module, [{atom, arity}]}],
+            macros: [{module, [{atom, arity}]}],
             requires: list(module),
             aliases: list(ElixirSense.Core.State.alias_t()),
             module: nil | module,
@@ -116,6 +127,8 @@ defmodule ElixirSense.Core.State do
             scope_id: nil | ElixirSense.Core.State.scope_id_t()
           }
     defstruct imports: [],
+              functions: [],
+              macros: [],
               requires: [],
               aliases: [],
               # NOTE for protocol implementation this will be the first variant
@@ -299,10 +312,15 @@ defmodule ElixirSense.Core.State do
     state.aliases |> List.flatten() |> Enum.uniq_by(&elem(&1, 0)) |> Enum.reverse()
   end
 
+  def current_requires(%__MODULE__{} = state) do
+    state.requires |> :lists.reverse() |> List.flatten() |> Enum.uniq() |> Enum.sort()
+  end
+
   def get_current_env(%__MODULE__{} = state) do
     current_module_variants = get_current_module_variants(state)
-    current_imports = state.imports |> :lists.reverse() |> List.flatten()
-    current_requires = state.requires |> :lists.reverse() |> List.flatten()
+    current_functions = state.functions |> hd()
+    current_macros = state.macros |> hd()
+    current_requires = current_requires(state)
     current_aliases = current_aliases(state)
     current_vars = state |> get_current_vars()
     current_attributes = state |> get_current_attributes()
@@ -312,7 +330,8 @@ defmodule ElixirSense.Core.State do
     current_scope_protocols = hd(state.protocols)
 
     %Env{
-      imports: current_imports,
+      functions: current_functions,
+      macros: current_macros,
       requires: current_requires,
       aliases: current_aliases,
       module: current_module_variants |> hd,
@@ -1140,7 +1159,12 @@ defmodule ElixirSense.Core.State do
   end
 
   def new_import_scope(%__MODULE__{} = state) do
-    %__MODULE__{state | imports: [[] | state.imports]}
+    %__MODULE__{
+      state
+      | imports: [[] | state.imports],
+        functions: [hd(state.functions) | state.functions],
+        macros: [hd(state.macros) | state.macros]
+    }
   end
 
   def new_require_scope(%__MODULE__{} = state) do
@@ -1148,7 +1172,12 @@ defmodule ElixirSense.Core.State do
   end
 
   def remove_import_scope(%__MODULE__{} = state) do
-    %__MODULE__{state | imports: tl(state.imports)}
+    %__MODULE__{
+      state
+      | imports: tl(state.imports),
+        functions: tl(state.functions),
+        macros: tl(state.macros)
+    }
   end
 
   def remove_require_scope(%__MODULE__{} = state) do
@@ -1158,8 +1187,20 @@ defmodule ElixirSense.Core.State do
   def add_import(%__MODULE__{} = state, module, opts) when is_atom(module) or is_list(module) do
     module = expand_alias(state, module)
     [imports_from_scope | inherited_imports] = state.imports
+    combined_imports = [[imports_from_scope ++ [{module, opts}]] | inherited_imports]
 
-    %__MODULE__{state | imports: [[imports_from_scope ++ [{module, opts}]] | inherited_imports]}
+    {functions, macros} =
+      Introspection.expand_imports(
+        combined_imports |> :lists.reverse() |> List.flatten(),
+        state.mods_funs_to_positions
+      )
+
+    %__MODULE__{
+      state
+      | imports: combined_imports,
+        functions: [functions | tl(state.functions)],
+        macros: [macros | tl(state.macros)]
+    }
   end
 
   def add_import(%__MODULE__{} = state, _module, _opts), do: state

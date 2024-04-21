@@ -108,7 +108,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       require :ets, as: ErlangMacros
       require MyMacros.{One, Two.Three}
       import Some.{List}, only: []
-      import MyImports
+      import List
       import MyImports.NestedImports
       import MyImports.{OneImports, Two.ThreeImports}
       import :lists, only: []

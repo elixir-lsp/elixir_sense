@@ -1045,14 +1045,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   # transform multi alias/require/import/use syntax ast into regular
   defp pre(
-         {directive, meta, [{{:., _, [prefix_expression, :{}]}, _, postfix_expressions} | _]},
+         {directive, meta, [{{:., _, [prefix_expression, :{}]}, _, postfix_expressions} | rest]},
          state
        )
        when directive in [:alias, :require, :import, :use] do
     directives =
       modules_from_12_syntax(state, postfix_expressions, prefix_expression)
       |> Enum.map(fn module_list ->
-        {directive, meta, [{:__aliases__, [], module_list}]}
+        {directive, meta, [{:__aliases__, [], module_list} | rest]}
       end)
 
     state
