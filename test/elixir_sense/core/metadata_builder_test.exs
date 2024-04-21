@@ -34,7 +34,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert state.namespace == []
     assert state.scopes == []
-    assert state.imports == []
+    assert state.functions == []
+    assert state.macros == []
     assert state.requires == []
     assert state.aliases == []
     assert state.attributes == []

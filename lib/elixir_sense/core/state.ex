@@ -35,7 +35,6 @@ defmodule ElixirSense.Core.State do
   @type t :: %ElixirSense.Core.State{
           namespace: [[atom]],
           scopes: [[scope]],
-          imports: list(list(module)),
           requires: list(list(module)),
           aliases: list(list(alias_t)),
           attributes: list(list(ElixirSense.Core.State.AttributeInfo.t())),
@@ -64,7 +63,6 @@ defmodule ElixirSense.Core.State do
           binding_context: list
         }
 
-  @auto_imported [{Kernel, []}]
   @auto_imported_functions :elixir_env.new().functions
   @auto_imported_macros :elixir_env.new().macros
   @auto_required [Application, Kernel] ++
@@ -76,7 +74,6 @@ defmodule ElixirSense.Core.State do
 
   defstruct namespace: [[:"Elixir"]],
             scopes: [[:"Elixir"]],
-            imports: [@auto_imported],
             functions: [@auto_imported_functions],
             macros: [@auto_imported_macros],
             requires: [@auto_required],
@@ -1159,8 +1156,7 @@ defmodule ElixirSense.Core.State do
   def new_import_scope(%__MODULE__{} = state) do
     %__MODULE__{
       state
-      | imports: [[] | state.imports],
-        functions: [hd(state.functions) | state.functions],
+      | functions: [hd(state.functions) | state.functions],
         macros: [hd(state.macros) | state.macros]
     }
   end
@@ -1172,8 +1168,7 @@ defmodule ElixirSense.Core.State do
   def remove_import_scope(%__MODULE__{} = state) do
     %__MODULE__{
       state
-      | imports: tl(state.imports),
-        functions: tl(state.functions),
+      | functions: tl(state.functions),
         macros: tl(state.macros)
     }
   end
@@ -1184,19 +1179,18 @@ defmodule ElixirSense.Core.State do
 
   def add_import(%__MODULE__{} = state, module, opts) when is_atom(module) or is_list(module) do
     module = expand_alias(state, module)
-    [imports_from_scope | inherited_imports] = state.imports
-    combined_imports = [[imports_from_scope ++ [{module, opts}]] | inherited_imports]
 
     {functions, macros} =
-      Introspection.expand_imports(
-        combined_imports |> :lists.reverse() |> List.flatten(),
+      Introspection.expand_import(
+        {hd(state.functions), hd(state.macros)},
+        module,
+        opts,
         state.mods_funs_to_positions
       )
 
     %__MODULE__{
       state
-      | imports: combined_imports,
-        functions: [functions | tl(state.functions)],
+      | functions: [functions | tl(state.functions)],
         macros: [macros | tl(state.macros)]
     }
   end

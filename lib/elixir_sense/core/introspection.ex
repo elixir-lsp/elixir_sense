@@ -1171,117 +1171,146 @@ defmodule ElixirSense.Core.Introspection do
   def is_function_type(type), do: type in [:def, :defp, :defdelegate]
   def is_macro_type(type), do: type in [:defmacro, :defmacrop, :defguard, :defguardp]
 
-  def expand_imports(list, mods_funs) do
-    {functions, macros} =
-      list
-      |> Enum.reduce([], fn {module, opts}, acc ->
-        opts =
-          if Keyword.keyword?(opts) do
-            opts
+  def expand_import({functions, macros}, module, opts, mods_funs) do
+    opts =
+      if Keyword.keyword?(opts) do
+        opts
+      else
+        []
+      end
+
+    {all_exported_functions, all_exported_macros} =
+      if (functions[module] != nil or macros[module] != nil) and Keyword.keyword?(opts[:except]) do
+        {functions[module], macros[module]}
+      else
+        if Map.has_key?(mods_funs, {module, nil, nil}) do
+          funs_macros =
+            mods_funs
+            |> Enum.filter(fn {{m, _f, a}, info} ->
+              m == module and a != nil and is_pub(info.type)
+            end)
+            |> Enum.split_with(fn {_, info} -> is_macro_type(info.type) end)
+
+          functions =
+            funs_macros
+            |> elem(1)
+            |> Enum.flat_map(fn {{_m, f, _a}, info} ->
+              for {arity, default_args} <- State.ModFunInfo.get_arities(info),
+                  args <- (arity - default_args)..arity do
+                {f, args}
+              end
+            end)
+
+          macros =
+            funs_macros
+            |> elem(0)
+            |> Enum.flat_map(fn {{_m, f, _a}, info} ->
+              for {arity, default_args} <- State.ModFunInfo.get_arities(info),
+                  args <- (arity - default_args)..arity do
+                {f, args}
+              end
+            end)
+
+          {functions, macros}
+        else
+          {macros, functions} =
+            get_exports(module)
+            |> Enum.split_with(fn {_, {_, kind}} -> kind == :macro end)
+
+          {functions |> Enum.map(fn {f, {a, _}} -> {f, a} end),
+           macros |> Enum.map(fn {f, {a, _}} -> {f, a} end)}
+        end
+      end
+
+    imported_functions =
+      all_exported_functions
+      |> Enum.reject(fn
+        {:__info__, 1} ->
+          true
+
+        {:module_info, arity} when arity in [0, 1] ->
+          true
+
+        {:behaviour_info, 1} ->
+          if Version.match?(System.version(), ">= 1.15.0-dev") do
+            true
           else
-            []
+            # elixir < 1.15 imports behaviour_info from erlang behaviours
+            # https://github.com/elixir-lang/elixir/commit/4b26edd8c164b46823e1dc1ec34b639cc3563246
+            elixir_module?(module)
           end
 
-        all_exported =
-          if acc[module] != nil and Keyword.keyword?(opts[:except]) do
-            acc[module]
-          else
-            if Map.has_key?(mods_funs, {module, nil, nil}) do
-              mods_funs
-              |> Enum.filter(fn {{m, _f, a}, info} ->
-                m == module and a != nil and is_pub(info.type)
-              end)
-              |> Enum.flat_map(fn {{_m, f, _a}, info} ->
-                kind = if(is_macro_type(info.type), do: :macro, else: :function)
+        {:orelse, 2} ->
+          module == :erlang
 
-                for {arity, default_args} <- State.ModFunInfo.get_arities(info),
-                    args <- (arity - default_args)..arity do
-                  {f, {args, kind}}
-                end
-              end)
-            else
-              get_exports(module)
-            end
-          end
+        {:andalso, 2} ->
+          module == :erlang
 
-        imported =
-          all_exported
-          |> Enum.reject(fn
-            {:__info__, {1, :function}} ->
-              true
-
-            {:module_info, {arity, :function}} when arity in [0, 1] ->
-              true
-
-            {:behaviour_info, {1, :function}} ->
-              if Version.match?(System.version(), ">= 1.15.0-dev") do
-                true
-              else
-                # elixir < 1.15 imports behaviour_info from erlang behaviours
-                # https://github.com/elixir-lang/elixir/commit/4b26edd8c164b46823e1dc1ec34b639cc3563246
-                elixir_module?(module)
-              end
-
-            {:orelse, {2, :function}} ->
-              module == :erlang
-
-            {:andalso, {2, :function}} ->
-              module == :erlang
-
-            {name, {arity, kind}} ->
-              name_string = name |> Atom.to_string()
-
-              rejected_after_only? =
-                cond do
-                  opts[:only] == :sigils and not String.starts_with?(name_string, "sigil_") ->
-                    true
-
-                  opts[:only] == :macros and kind != :macro ->
-                    true
-
-                  opts[:only] == :functions and kind != :function ->
-                    true
-
-                  Keyword.keyword?(opts[:only]) ->
-                    {name, arity} not in opts[:only]
-
-                  String.starts_with?(name_string, "_") ->
-                    true
-
-                  true ->
-                    false
-                end
-
-              if rejected_after_only? do
-                true
-              else
-                if Keyword.keyword?(opts[:except]) do
-                  {name, arity} in opts[:except]
-                else
-                  false
-                end
-              end
-          end)
-
-        Keyword.put(acc, module, imported)
-      end)
-      |> Enum.reduce({[], []}, fn {module, imported}, {functions_acc, macros_acc} ->
-        {functions, macros} =
-          imported
-          |> Enum.split_with(fn {_name, {_arity, kind}} -> kind == :function end)
-
-        {append_expanded_module_imports(functions, module, functions_acc),
-         append_expanded_module_imports(macros, module, macros_acc)}
+        {name, arity} ->
+          reject_import(name, arity, :function, opts)
       end)
 
-    {Enum.reverse(functions), Enum.reverse(macros)}
+    imported_macros =
+      all_exported_macros
+      |> Enum.reject(fn
+        {name, arity} ->
+          reject_import(name, arity, :macro, opts)
+      end)
+
+    functions =
+      case imported_functions do
+        [] ->
+          Keyword.delete(functions, module)
+
+        _ ->
+          Keyword.put(functions, module, imported_functions)
+      end
+
+    macros =
+      case imported_macros do
+        [] ->
+          Keyword.delete(macros, module)
+
+        _ ->
+          Keyword.put(macros, module, imported_macros)
+      end
+
+    {functions, macros}
   end
 
-  defp append_expanded_module_imports([], _module, acc), do: acc
+  defp reject_import(name, arity, kind, opts) do
+    name_string = name |> Atom.to_string()
 
-  defp append_expanded_module_imports(list, module, acc) do
-    list = list |> Enum.map(fn {name, {arity, _kind}} -> {name, arity} end)
-    [{module, list} | acc]
+    rejected_after_only? =
+      cond do
+        opts[:only] == :sigils and not String.starts_with?(name_string, "sigil_") ->
+          true
+
+        opts[:only] == :macros and kind != :macro ->
+          true
+
+        opts[:only] == :functions and kind != :function ->
+          true
+
+        Keyword.keyword?(opts[:only]) ->
+          {name, arity} not in opts[:only]
+
+        String.starts_with?(name_string, "_") ->
+          true
+
+        true ->
+          false
+      end
+
+    if rejected_after_only? do
+      true
+    else
+      if Keyword.keyword?(opts[:except]) do
+        {name, arity} in opts[:except]
+      else
+        false
+      end
+    end
   end
 
   def combine_imports({functions, macros}) do
