@@ -44,7 +44,8 @@ defmodule ElixirSense.Core.Introspection do
 
   defguard matches_arity_with_defaults?(is, defaults, expected)
            when is != nil and
-                  (expected == :any or (is_integer(expected) and expected in (is - defaults)..is) or
+                  (expected == :any or
+                     (is_integer(expected) and expected in (is - defaults)..is//1) or
                      (is_tuple(expected) and elem(expected, 0) == :gte and is >= elem(expected, 1)))
 
   @spec get_exports(module) :: [{atom, {non_neg_integer, :macro | :function}}]

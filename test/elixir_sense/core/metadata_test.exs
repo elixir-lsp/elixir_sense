@@ -277,7 +277,7 @@ defmodule ElixirSense.Core.MetadataTest do
     assert env.scope == {:x, 1}
 
     env = Metadata.get_env(metadata, {54, 3})
-    assert env.scope == :"String(__or__)List"
+    assert env.scope == :String
 
     env = Metadata.get_env(metadata, {55, 3})
     assert env.scope == {:x, 1}

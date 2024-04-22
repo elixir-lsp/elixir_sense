@@ -143,8 +143,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_module(ast, state, meta, module, types \\ [], functions \\ []) do
-    module = normalize_module(module, state)
-
     {position = {line, column}, end_position} = extract_range(meta)
 
     state =
@@ -209,72 +207,70 @@ defmodule ElixirSense.Core.MetadataBuilder do
     # turn specs into callbacks or create dummy callbacks
     builtins = BuiltinFunctions.all() |> Keyword.keys()
 
-    specs =
-      get_current_module_variants(state)
-      |> Enum.reduce(state.specs, fn variant, acc ->
-        keys =
-          state.mods_funs_to_positions
-          |> Map.keys()
-          |> Enum.filter(fn
-            {^variant, name, _arity} when not is_nil(name) ->
-              name not in builtins
+    current_module = get_current_module(state)
 
-            _ ->
-              false
-          end)
+    keys =
+      state.mods_funs_to_positions
+      |> Map.keys()
+      |> Enum.filter(fn
+        {^current_module, name, _arity} when not is_nil(name) ->
+          name not in builtins
 
-        new_specs =
-          for key = {_mod, name, _arity} <- keys,
-              into: %{},
-              do:
-                (
-                  new_spec =
-                    case acc[key] do
-                      nil ->
-                        %State.ModFunInfo{positions: positions, params: params} =
-                          state.mods_funs_to_positions[key]
-
-                        args =
-                          for param_variant <- params do
-                            param_variant
-                            |> Enum.map(&Macro.to_string/1)
-                          end
-
-                        specs =
-                          for arg <- args do
-                            joined = Enum.join(arg, ", ")
-                            "@callback #{name}(#{joined}) :: term"
-                          end
-
-                        %State.SpecInfo{
-                          name: name,
-                          args: args,
-                          specs: specs,
-                          kind: :callback,
-                          positions: positions,
-                          end_positions: Enum.map(positions, fn _ -> nil end),
-                          generated: Enum.map(positions, fn _ -> true end)
-                        }
-
-                      spec = %State.SpecInfo{specs: specs} ->
-                        %State.SpecInfo{
-                          spec
-                          | # TODO :spec will get replaced here, refactor into array
-                            kind: :callback,
-                            specs:
-                              specs
-                              |> Enum.map(fn s ->
-                                String.replace_prefix(s, "@spec", "@callback")
-                              end)
-                              |> Kernel.++(specs)
-                        }
-                    end
-
-                  {key, new_spec}
-                )
-
-        Map.merge(acc, new_specs)
+        _ ->
+          false
       end)
+
+    new_specs =
+      for key = {_mod, name, _arity} <- keys,
+          into: %{},
+          do:
+            (
+              new_spec =
+                case state.specs[key] do
+                  nil ->
+                    %State.ModFunInfo{positions: positions, params: params} =
+                      state.mods_funs_to_positions[key]
+
+                    args =
+                      for param_variant <- params do
+                        param_variant
+                        |> Enum.map(&Macro.to_string/1)
+                      end
+
+                    specs =
+                      for arg <- args do
+                        joined = Enum.join(arg, ", ")
+                        "@callback #{name}(#{joined}) :: term"
+                      end
+
+                    %State.SpecInfo{
+                      name: name,
+                      args: args,
+                      specs: specs,
+                      kind: :callback,
+                      positions: positions,
+                      end_positions: Enum.map(positions, fn _ -> nil end),
+                      generated: Enum.map(positions, fn _ -> true end)
+                    }
+
+                  spec = %State.SpecInfo{specs: specs} ->
+                    %State.SpecInfo{
+                      spec
+                      | # TODO :spec will get replaced here, refactor into array
+                        kind: :callback,
+                        specs:
+                          specs
+                          |> Enum.map(fn s ->
+                            String.replace_prefix(s, "@spec", "@callback")
+                          end)
+                          |> Kernel.++(specs)
+                    }
+                end
+
+              {key, new_spec}
+            )
+
+    specs = Map.merge(state.specs, new_specs)
 
     state = %{state | specs: specs}
     post_module(ast, state)
@@ -541,42 +537,27 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre(
-         {:defmodule, meta, [{:__aliases__, _, module}, _]} = ast,
+         {:defmodule, meta, [module, _]} = ast,
          state
        ) do
-    pre_module(ast, state, meta, module)
-  end
-
-  defp pre({:defmodule, meta, [module, _]} = ast, state)
-       when is_atom(module) do
+    {:ok, module} = split_module_expression(state, normalize_module(module, state))
     pre_module(ast, state, meta, module)
   end
 
   defp pre(
-         {:defprotocol, meta, [{:__aliases__, _, module}, _]} = ast,
+         {:defprotocol, meta, [protocol, _]} = ast,
          state
        ) do
+    {:ok, module} = split_module_expression(state, normalize_module(protocol, state))
     pre_protocol(ast, state, meta, module)
-  end
-
-  defp pre({:defprotocol, meta, [module, _]} = ast, state)
-       when is_atom(module) do
-    pre_protocol(ast, state, meta, module)
-  end
-
-  defp pre(
-         {:defimpl, meta, [{:__aliases__, _, protocol}, impl_args | _]} = ast,
-         state
-       ) do
-    pre_protocol_implementation(ast, state, meta, protocol, impl_args)
   end
 
   defp pre(
          {:defimpl, meta, [protocol, impl_args | _]} = ast,
          state
-       )
-       when is_atom(protocol) do
-    pre_protocol_implementation(ast, state, meta, protocol, impl_args)
+       ) do
+    {:ok, module} = split_module_expression(state, protocol)
+    pre_protocol_implementation(ast, state, meta, module, impl_args)
   end
 
   defp pre(
@@ -850,7 +831,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
        ) do
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
-    current_module_variants = state |> get_current_module_variants
+    current_module = state |> get_current_module
 
     List.wrap(derived_protos)
     |> Enum.map(fn
@@ -863,32 +844,29 @@ defmodule ElixirSense.Core.MetadataBuilder do
           # protocol implementation module for Any
           mod_any = Module.concat(proto_module ++ [Any])
 
-          current_module_variants
-          |> Enum.reduce(acc, fn variant, acc_1 ->
-            # protocol implementation module built by @derive
-            mod = Module.concat(proto_module ++ [variant])
+          # protocol implementation module built by @derive
+          mod = Module.concat(proto_module ++ [current_module])
 
-            case acc_1.mods_funs_to_positions[{mod_any, nil, nil}] do
-              nil ->
-                # implementation for: Any not detected (is in other file etc.)
-                acc_1
-                |> add_module_to_index(mod, {line, column}, nil, generated: true)
+          case acc.mods_funs_to_positions[{mod_any, nil, nil}] do
+            nil ->
+              # implementation for: Any not detected (is in other file etc.)
+              acc
+              |> add_module_to_index(mod, {line, column}, nil, generated: true)
 
-              _any_mods_funs ->
-                # copy implementation for: Any
-                copied_mods_funs_to_positions =
-                  for {{module, fun, arity}, val} <- acc_1.mods_funs_to_positions,
-                      module == mod_any,
-                      into: %{},
-                      do: {{mod, fun, arity}, val}
+            _any_mods_funs ->
+              # copy implementation for: Any
+              copied_mods_funs_to_positions =
+                for {{module, fun, arity}, val} <- acc.mods_funs_to_positions,
+                    module == mod_any,
+                    into: %{},
+                    do: {{mod, fun, arity}, val}
 
-                %{
-                  acc_1
-                  | mods_funs_to_positions:
-                      acc_1.mods_funs_to_positions |> Map.merge(copied_mods_funs_to_positions)
-                }
-            end
-          end)
+              %{
+                acc
+                | mods_funs_to_positions:
+                    acc.mods_funs_to_positions |> Map.merge(copied_mods_funs_to_positions)
+              }
+          end
 
         :error ->
           acc
@@ -1584,41 +1562,23 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp post(
-         {:defmodule, _meta, [{:__aliases__, _, _module}, _]} = ast,
+         {:defmodule, _meta, [_module, _]} = ast,
          state
        ) do
     post_module(ast, state)
   end
 
-  defp post({:defmodule, _meta, [module, _]} = ast, state)
-       when is_atom(module) do
-    post_module(ast, state)
-  end
-
   defp post(
-         {:defprotocol, _meta, [{:__aliases__, _, _module}, _]} = ast,
+         {:defprotocol, _meta, [_protocol, _]} = ast,
          state
        ) do
     post_protocol(ast, state)
   end
 
-  defp post({:defprotocol, _meta, [module, _]} = ast, state)
-       when is_atom(module) do
-    post_protocol(ast, state)
-  end
-
   defp post(
-         {:defimpl, _meta, [{:__aliases__, _, _protocol}, _impl_args | _]} = ast,
+         {:defimpl, _meta, [_protocol, _impl_args | _]} = ast,
          state
        ) do
-    post_module(ast, state)
-  end
-
-  defp post(
-         {:defimpl, _meta, [protocol, _impl_args | _]} = ast,
-         state
-       )
-       when is_atom(protocol) do
     post_module(ast, state)
   end
 
@@ -2190,11 +2150,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp get_implementations_from_for_expression(state, for: for_expression) do
     for_expression
     |> List.wrap()
-    |> Enum.map(fn
-      {:__aliases__, _, implementation} -> implementation
-      module when is_atom(module) -> module
-      {:__MODULE__, _, nil} -> state |> get_current_module
-      _ -> nil
+    |> Enum.map(fn alias ->
+      {:ok, module} = split_module_expression(state, alias)
+      module
     end)
   end
 
@@ -2254,15 +2212,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
     module_parts
   end
 
-  defp normalize_module([{:__MODULE__, _, nil} | rest], state) do
+  defp normalize_module({:__aliases__, meta, [{:__MODULE__, _, nil} | rest]}, state) do
     list = state |> get_current_module |> Module.split() |> Enum.map(&String.to_atom/1)
-    [:"Elixir"] ++ list ++ rest
+    {:__aliases__, meta, [:"Elixir"] ++ list ++ rest}
   end
 
   defp normalize_module(other, _state), do: other
 
   defp maybe_add_protocol_behaviour(state, {_protocol, _}) do
-    protocol = state.protocols |> hd |> hd |> elem(0)
+    protocol = state.protocols |> hd |> elem(0)
 
     state
     |> add_behaviour(protocol)

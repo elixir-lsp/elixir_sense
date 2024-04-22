@@ -38,7 +38,7 @@ defmodule ElixirSense.Core.State do
           requires: list(list(module)),
           aliases: list(list(alias_t)),
           attributes: list(list(ElixirSense.Core.State.AttributeInfo.t())),
-          protocols: list(list(protocol_t())),
+          protocols: list(protocol_t() | nil),
           scope_attributes: list(list(atom)),
           behaviours: list(list(module)),
           specs: specs_t,
@@ -79,7 +79,7 @@ defmodule ElixirSense.Core.State do
             requires: [@auto_required],
             aliases: [[]],
             attributes: [[]],
-            protocols: [[]],
+            protocols: [nil],
             scope_attributes: [[]],
             behaviours: [[]],
             specs: %{},
@@ -113,9 +113,7 @@ defmodule ElixirSense.Core.State do
             requires: list(module),
             aliases: list(ElixirSense.Core.State.alias_t()),
             module: nil | module,
-            module_variants: list(module),
             protocol: nil | ElixirSense.Core.State.protocol_t(),
-            protocol_variants: list(ElixirSense.Core.State.protocol_t()),
             vars: list(ElixirSense.Core.State.VarInfo.t()),
             attributes: list(ElixirSense.Core.State.AttributeInfo.t()),
             behaviours: list(module),
@@ -128,10 +126,8 @@ defmodule ElixirSense.Core.State do
               aliases: [],
               # NOTE for protocol implementation this will be the first variant
               module: nil,
-              module_variants: [],
               # NOTE for protocol implementation this will be the first variant
               protocol: nil,
-              protocol_variants: [],
               vars: [],
               attributes: [],
               behaviours: [],
@@ -312,7 +308,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def get_current_env(%__MODULE__{} = state) do
-    current_module_variants = get_current_module_variants(state)
+    current_module = get_current_module(state)
     current_functions = state.functions |> hd()
     current_macros = state.macros |> hd()
     current_requires = current_requires(state)
@@ -322,15 +318,14 @@ defmodule ElixirSense.Core.State do
     current_behaviours = hd(state.behaviours)
     current_scope = hd(hd(state.scopes))
     current_scope_id = hd(state.scope_ids)
-    current_scope_protocols = hd(state.protocols)
+    current_scope_protocol = hd(state.protocols)
 
     %Env{
       functions: current_functions,
       macros: current_macros,
       requires: current_requires,
       aliases: current_aliases,
-      module: current_module_variants |> hd,
-      module_variants: current_module_variants,
+      module: current_module,
       vars: current_vars,
       attributes: current_attributes,
       behaviours: current_behaviours,
@@ -338,27 +333,14 @@ defmodule ElixirSense.Core.State do
       # escaped with `escape_protocol_implemntations`
       scope: current_scope,
       scope_id: current_scope_id,
-      protocol:
-        case current_scope_protocols do
-          [] -> nil
-          [head | _] -> head
-        end,
-      protocol_variants: current_scope_protocols
+      protocol: current_scope_protocol
     }
   end
 
   def get_current_module(%__MODULE__{} = state) do
-    get_current_module_variants(state) |> hd
-  end
-
-  def get_current_module_variants(%__MODULE__{protocols: [[] | _]} = state) do
-    state.namespace |> hd |> unescape_protocol_implementations
-  end
-
-  def get_current_module_variants(%__MODULE__{protocols: [protocols | _]}) do
-    for {protocol, implementations} <- protocols,
-        implementation <- implementations do
-      Module.concat(protocol, implementation)
+    case state.namespace |> hd do
+      atom when is_atom(atom) -> atom
+      list -> list |> Enum.reverse() |> Module.concat()
     end
   end
 
@@ -494,11 +476,11 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_struct(%__MODULE__{} = state, type, fields) do
+    module = get_current_module(state)
+
     structs =
-      get_current_module_variants(state)
-      |> Enum.reduce(state.structs, fn variant, acc ->
-        acc |> Map.put(variant, %StructInfo{type: type, fields: fields ++ [__struct__: variant]})
-      end)
+      state.structs
+      |> Map.put(module, %StructInfo{type: type, fields: fields ++ [__struct__: module]})
 
     %__MODULE__{state | structs: structs}
   end
@@ -622,58 +604,33 @@ defmodule ElixirSense.Core.State do
 
   defp process_option(_state, info, _type, _option), do: info
 
-  @dot_marker "(__dot__)"
-  @or_marker "(__or__)"
-
-  def escape_protocol_implementations({protocol, implementations}) do
+  def add_namespace(%__MODULE__{} = state, {protocol, [first | _]}) do
     joined_implementations =
-      implementations
-      |> Enum.map_join(@or_marker, fn
-        parts when is_list(parts) ->
-          parts
-          |> Enum.map_join(@dot_marker, &Atom.to_string/1)
+      case first do
+        list when is_list(list) ->
+          expand_alias(state, list) |> Module.split() |> Enum.map(&String.to_atom/1)
 
         module when is_atom(module) ->
-          Atom.to_string(module) |> String.replace("Elixir.", "")
-      end)
-      |> String.to_atom()
-
-    List.wrap(protocol) ++ [joined_implementations]
-  end
-
-  def escape_protocol_implementations(module_parts), do: module_parts
-
-  def unescape_protocol_implementations(module) when is_atom(module) do
-    if Introspection.elixir_module?(module) do
-      Module.split(module)
-      |> Enum.reverse()
-      |> Enum.map(&String.to_atom/1)
-      |> unescape_protocol_implementations
-    else
-      [module]
-    end
-  end
-
-  def unescape_protocol_implementations(parts) do
-    parts
-    |> Enum.reduce([[]], fn part, acc ->
-      part_variants =
-        part
-        |> Atom.to_string()
-        |> String.replace(@dot_marker, ".")
-        |> String.split(@or_marker)
-
-      for part_variant <- part_variants, acc_variant <- acc do
-        [part_variant | acc_variant]
+          [module]
       end
-    end)
-    |> Enum.map(&Module.concat/1)
+
+    combined = List.wrap(protocol) ++ joined_implementations
+
+    combined =
+      case combined do
+        atom when is_atom(atom) ->
+          atom
+
+        list ->
+          [:"Elixir"] ++
+            (expand_alias(state, list) |> Module.split() |> Enum.map(&String.to_atom/1))
+      end
+
+    add_namespace(state, combined)
   end
 
   def add_namespace(%__MODULE__{} = state, module) do
     # TODO refactor to allow {:implementation, protocol, [implementations]} in scope
-    module = escape_protocol_implementations(module)
-
     {namespace, scopes} =
       case module do
         [:"Elixir" | module = [_ | _]] ->
@@ -738,17 +695,14 @@ defmodule ElixirSense.Core.State do
 
   def apply_optional_callbacks(%__MODULE__{} = state) do
     [list | _rest] = state.optional_callbacks_context
-    current_module_variants = get_current_module_variants(state)
+    module = get_current_module(state)
 
     updated_specs =
       list
       |> Enum.reduce(state.specs, fn {fun, arity}, acc ->
-        current_module_variants
-        |> Enum.reduce(acc, fn module, acc ->
-          acc
-          |> Map.update!({module, fun, arity}, fn spec_info = %SpecInfo{} ->
-            %{spec_info | meta: spec_info.meta |> Map.put(:optional, true)}
-          end)
+        acc
+        |> Map.update!({module, fun, arity}, fn spec_info = %SpecInfo{} ->
+          %{spec_info | meta: spec_info.meta |> Map.put(:optional, true)}
         end)
       end)
 
@@ -762,13 +716,12 @@ defmodule ElixirSense.Core.State do
   def maybe_add_protocol_implementation(%__MODULE__{} = state, {protocol, implementations}) do
     implementation_modules =
       implementations
-      |> Enum.flat_map(fn
+      |> Enum.map(fn
         module when is_list(module) ->
-          expanded = expand_alias(state, module)
-          unescape_protocol_implementations(expanded)
+          expand_alias(state, module)
 
         module when is_atom(module) ->
-          unescape_protocol_implementations(module)
+          module
       end)
 
     candidate =
@@ -778,15 +731,13 @@ defmodule ElixirSense.Core.State do
         protocol
       end
 
-    protocols =
-      unescape_protocol_implementations(candidate)
-      |> Enum.map(&{&1, implementation_modules})
+    protocols = {candidate, implementation_modules}
 
     %__MODULE__{state | protocols: [protocols | state.protocols]}
   end
 
   def maybe_add_protocol_implementation(%__MODULE__{} = state, _) do
-    %__MODULE__{state | protocols: [[] | state.protocols]}
+    %__MODULE__{state | protocols: [nil | state.protocols]}
   end
 
   def remove_protocol_implementation(%__MODULE__{} = state) do
@@ -799,13 +750,9 @@ defmodule ElixirSense.Core.State do
 
   def add_current_module_to_index(%__MODULE__{} = state, position, end_position, options)
       when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
-    current_module_variants = get_current_module_variants(state)
+    current_module = get_current_module(state)
 
-    current_module_variants
-    |> Enum.reduce(state, fn variant, acc ->
-      acc
-      |> add_module_to_index(variant, position, end_position, options)
-    end)
+    add_module_to_index(state, current_module, position, end_position, options)
   end
 
   def add_module_to_index(%__MODULE__{} = state, module, position, end_position, options)
@@ -837,7 +784,7 @@ defmodule ElixirSense.Core.State do
         options
       )
       when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
-    current_module_variants = get_current_module_variants(state)
+    current_module = get_current_module(state)
     arity = length(params)
 
     {state, {doc, meta}} =
@@ -892,20 +839,17 @@ defmodule ElixirSense.Core.State do
         doc
       end
 
-    current_module_variants
-    |> Enum.reduce(state, fn variant, acc ->
-      acc
-      |> add_mod_fun_to_position(
-        {variant, func, arity},
-        position,
-        end_position,
-        params,
-        type,
-        doc,
-        meta,
-        options
-      )
-    end)
+    add_mod_fun_to_position(
+      state,
+      {current_module, func, arity},
+      position,
+      end_position,
+      params,
+      type,
+      doc,
+      meta,
+      options
+    )
   end
 
   def make_overridable(%__MODULE__{} = state, fa_list, overridable_module) do
@@ -1257,14 +1201,11 @@ defmodule ElixirSense.Core.State do
       meta: meta
     }
 
-    current_module_variants = get_current_module_variants(state)
+    current_module = get_current_module(state)
 
     types =
-      current_module_variants
-      |> Enum.reduce(state.types, fn current_module, acc ->
-        acc
-        |> Map.put({current_module, type_name, length(arg_names)}, type_info)
-      end)
+      state.types
+      |> Map.put({current_module, type_name, length(arg_names)}, type_info)
 
     %__MODULE__{state | types: types}
   end
@@ -1315,16 +1256,14 @@ defmodule ElixirSense.Core.State do
       meta: meta
     }
 
-    current_module_variants = get_current_module_variants(state)
+    current_module = get_current_module(state)
+
+    arity_info =
+      combine_specs(state.specs[{current_module, type_name, length(arg_names)}], type_info)
 
     specs =
-      current_module_variants
-      |> Enum.reduce(state.specs, fn current_module, acc ->
-        arity_info = combine_specs(acc[{current_module, type_name, length(arg_names)}], type_info)
-
-        acc
-        |> Map.put({current_module, type_name, length(arg_names)}, arity_info)
-      end)
+      state.specs
+      |> Map.put({current_module, type_name, length(arg_names)}, arity_info)
 
     %__MODULE__{state | specs: specs}
   end
@@ -1437,20 +1376,19 @@ defmodule ElixirSense.Core.State do
   end
 
   def register_doc(%__MODULE__{} = state, :moduledoc, doc_arg) do
-    current_module_variants = get_current_module_variants(state)
+    current_module = get_current_module(state)
     doc_arg_formatted = format_doc_arg(doc_arg)
 
     mods_funs_to_positions =
-      Enum.reduce(current_module_variants, state.mods_funs_to_positions, fn module, acc ->
-        Map.update!(acc, {module, nil, nil}, fn info = %ModFunInfo{} ->
-          case doc_arg_formatted do
-            {:meta, meta} ->
-              %{info | meta: Map.merge(info.meta, meta)}
+      state.mods_funs_to_positions
+      |> Map.update!({current_module, nil, nil}, fn info = %ModFunInfo{} ->
+        case doc_arg_formatted do
+          {:meta, meta} ->
+            %{info | meta: Map.merge(info.meta, meta)}
 
-            text_or_hidden ->
-              %{info | doc: text_or_hidden}
-          end
-        end)
+          text_or_hidden ->
+            %{info | doc: text_or_hidden}
+        end
       end)
 
     %{state | mods_funs_to_positions: mods_funs_to_positions}
@@ -1636,8 +1574,12 @@ defmodule ElixirSense.Core.State do
     module
   end
 
-  def expand_alias(%__MODULE__{} = _state, [Elixir | _] = module) do
+  def expand_alias(%__MODULE__{} = _state, [:"Elixir" | _] = module) do
     Module.concat(module)
+  end
+
+  def expand_alias(%__MODULE__{} = state, {:__MODULE__, _, nil}) do
+    get_current_module(state)
   end
 
   def expand_alias(%__MODULE__{} = state, [{:__MODULE__, _, nil} | rest]) do
@@ -1703,9 +1645,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def alias_submodule(%__MODULE__{} = state, module) do
-    module = escape_protocol_implementations(module)
-
-    if length(state.namespace) > 2 and is_list(module) and state.protocols |> hd == [] do
+    if length(state.namespace) > 2 and is_list(module) and state.protocols |> hd == nil do
       namespace = state.namespace |> hd
 
       maybe_tuple =

@@ -122,13 +122,13 @@ defmodule ElixirSense.Core.Metadata do
             if metadata_line >= begin_line do
               case {key, type} do
                 {{module, nil, nil}, _} ->
-                  module in env.module_variants and is_atom(env.scope) and env.scope != Elixir
+                  module == env.module and is_atom(env.scope) and env.scope != Elixir
 
                 {{module, fun, arity}, State.ModFunInfo} ->
-                  module in env.module_variants and env.scope == {fun, arity}
+                  module == env.module and env.scope == {fun, arity}
 
                 {{module, fun, arity}, type} when type in [State.TypeInfo, State.SpecInfo] ->
-                  module in env.module_variants and env.scope == {:typespec, fun, arity}
+                  module == env.module and env.scope == {:typespec, fun, arity}
               end
             end
           end)
@@ -388,7 +388,7 @@ defmodule ElixirSense.Core.Metadata do
 
   def get_last_module_env(metadata, module) do
     metadata.lines_to_env
-    |> Enum.filter(fn {_k, v} -> module in v.module_variants end)
+    |> Enum.filter(fn {_k, v} -> module == v.module end)
     |> Enum.max_by(fn {k, _v} -> k end, fn -> {nil, nil} end)
     |> elem(1)
   end

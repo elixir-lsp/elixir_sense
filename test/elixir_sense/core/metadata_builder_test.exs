@@ -2834,7 +2834,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
         defimpl Other, for: [Map, My.Map] do
           def other(term), do: nil
-          IO.puts ""
+          IO.inspect(__ENV__.module)
         end
       end
       """
@@ -2845,35 +2845,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_protocol(state, 3) == nil
     assert get_line_module(state, 8) == My.Reversible.String
     assert get_line_protocol(state, 8) == {My.Reversible, [String]}
-    assert get_line_module(state, 13) == [My.Reversible.Map, My.Reversible.My.List]
+    assert get_line_module(state, 13) == My.Reversible.Map
     assert get_line_protocol(state, 13) == {My.Reversible, [Map, My.List]}
 
     # implementation has behaviour
     assert get_line_behaviours(state, 8) == [My.Reversible]
 
     # multiple implementations create multiple modules
-    assert get_line_module(state, 16) == [
-             My.Reversible.Map.OuterModule,
-             My.Reversible.My.List.OuterModule
-           ]
+    assert get_line_module(state, 16) == My.Reversible.Map.OuterModule
 
     assert get_line_protocol(state, 16) == nil
 
     # protocol and implementations inside protocol implementation creates a cross product
-    assert get_line_module(state, 21) == [My.Reversible.Map.Other, My.Reversible.My.List.Other]
+    assert get_line_module(state, 21) == My.Reversible.Map.Other
     assert get_line_protocol(state, 21) == nil
 
-    assert get_line_module(state, 26) == [
-             My.Reversible.Map.Other.Map,
-             My.Reversible.Map.Other.My.Map,
-             My.Reversible.My.List.Other.Map,
-             My.Reversible.My.List.Other.My.Map
-           ]
+    assert get_line_module(state, 26) == My.Reversible.Map.Other.Map
 
-    assert get_line_protocol(state, 26) == [
-             {My.Reversible.Map.Other, [Map, My.Map]},
-             {My.Reversible.My.List.Other, [Map, My.Map]}
-           ]
+    assert get_line_protocol(state, 26) == {My.Reversible.Map.Other, [Map, My.Map]}
   end
 
   test "protocol implementation for atom modules" do
@@ -2904,22 +2893,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_module(state, 3) == :my_reversible
     assert get_line_protocol(state, 3) == nil
 
-    assert get_line_module(state, 8) == [
-             :"Elixir.my_reversible.String",
-             :"Elixir.my_reversible.my_str",
-             :"Elixir.my_reversible.MyStr"
-           ]
+    assert get_line_module(state, 8) == :"Elixir.my_reversible.String"
 
     assert get_line_protocol(state, 8) == {:my_reversible, [String, :my_str, MyStr]}
 
     assert get_line_module(state, 13) == My.Reversible
     assert get_line_protocol(state, 13) == nil
 
-    assert get_line_module(state, 18) == [
-             My.Reversible.String,
-             :"Elixir.My.Reversible.my_str",
-             My.Reversible.MyStr
-           ]
+    assert get_line_module(state, 18) == My.Reversible.String
 
     assert get_line_protocol(state, 18) == {My.Reversible, [String, :my_str, MyStr]}
   end
@@ -2944,7 +2925,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
         defimpl NiceProto, for: Some do
           def reverse(term), do: String.reverse(term)
-          IO.puts ""
+          IO.inspect(__ENV__.module)
         end
 
         alias Enumerable.Date.Range, as: R
@@ -2965,8 +2946,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert get_line_aliases(state, 10) == []
 
     # properly gets implementation name inherited from enclosing module
-    assert get_line_module(state, 16) == NiceProto.NiceProtoImplementations.Some
-    assert get_line_protocol(state, 16) == {NiceProto, [NiceProtoImplementations.Some]}
+    assert get_line_module(state, 18) == NiceProto.NiceProtoImplementations.Some
+    assert get_line_protocol(state, 18) == {NiceProto, [NiceProtoImplementations.Some]}
 
     # aliases are expanded on protocol and implementation
     assert get_line_module(state, 24) == NiceProto.Enumerable.Date.Range
@@ -3383,7 +3364,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert State.get_scope_name(state, 21) == :Module1
     assert State.get_scope_name(state, 26) == :Module2
     assert State.get_scope_name(state, 31) == :Reversible
-    assert State.get_scope_name(state, 35) == :"Map(__or__)My(__dot__)List"
+    assert State.get_scope_name(state, 35) == :Map
     assert State.get_scope_name(state, 37) == {:reverse, 1}
   end
 
@@ -3597,7 +3578,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule Impls do
         alias Reversible, as: R
         alias My.List, as: Ml
-        defimpl R, for: [Map, Ml] do
+        defimpl R, for: [Ml, Map] do
           def reverse(term), do: Enum.reverse(term)
           IO.puts ""
         end
@@ -5615,10 +5596,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   defp get_line_module(state, line) do
     if env = state.lines_to_env[line] do
-      case env.module_variants do
-        [single] -> single
-        other -> other
-      end
+      env.module
     end
   end
 
@@ -5631,11 +5609,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   defp get_line_protocol(state, line) do
     if env = state.lines_to_env[line] do
-      case env.protocol_variants do
-        [] -> nil
-        [single] -> single
-        other -> other
-      end
+      env.protocol
     end
   end
 
