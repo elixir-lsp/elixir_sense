@@ -107,7 +107,7 @@ defmodule ElixirSenseExample.ExampleBehaviour do
       require MyMacros.Nested, as: NestedMacros
       require :ets, as: ErlangMacros
       require MyMacros.{One, Two.Three}
-      import Some.{List}, only: []
+
       import List
       import MyImports.NestedImports
       import MyImports.{OneImports, Two.ThreeImports}

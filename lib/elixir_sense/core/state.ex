@@ -489,12 +489,10 @@ defmodule ElixirSense.Core.State do
     end)
   end
 
-  def add_struct(%__MODULE__{} = state, type, fields) do
-    module = get_current_module(state)
-
+  def add_struct(%__MODULE__{} = state, %__MODULE__.Env{} = env, type, fields) do
     structs =
       state.structs
-      |> Map.put(module, %StructInfo{type: type, fields: fields ++ [__struct__: module]})
+      |> Map.put(env.module, %StructInfo{type: type, fields: fields ++ [__struct__: env.module]})
 
     %__MODULE__{state | structs: structs}
   end
@@ -692,9 +690,9 @@ defmodule ElixirSense.Core.State do
     %{state | optional_callbacks_context: [list | rest]}
   end
 
-  def apply_optional_callbacks(%__MODULE__{} = state) do
+  def apply_optional_callbacks(%__MODULE__{} = state, %__MODULE__.Env{} = env) do
     [list | _rest] = state.optional_callbacks_context
-    module = get_current_module(state)
+    module = env.module
 
     updated_specs =
       list
@@ -771,10 +769,20 @@ defmodule ElixirSense.Core.State do
   end
 
   # TODO require end position
-  def add_func_to_index(state, func, params, position, end_position \\ nil, type, options \\ [])
+  def add_func_to_index(
+        state,
+        env,
+        func,
+        params,
+        position,
+        end_position \\ nil,
+        type,
+        options \\ []
+      )
 
   def add_func_to_index(
         %__MODULE__{} = state,
+        %__MODULE__.Env{} = env,
         func,
         params,
         position,
@@ -783,7 +791,7 @@ defmodule ElixirSense.Core.State do
         options
       )
       when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
-    current_module = get_current_module(state)
+    current_module = env.module
     arity = length(params)
 
     {state, {doc, meta}} =
@@ -851,8 +859,13 @@ defmodule ElixirSense.Core.State do
     )
   end
 
-  def make_overridable(%__MODULE__{} = state, fa_list, overridable_module) do
-    module = get_current_module(state)
+  def make_overridable(
+        %__MODULE__{} = state,
+        %__MODULE__.Env{} = env,
+        fa_list,
+        overridable_module
+      ) do
+    module = env.module
 
     mods_funs_to_positions =
       fa_list
@@ -1151,6 +1164,7 @@ defmodule ElixirSense.Core.State do
 
   def add_type(
         %__MODULE__{} = state,
+        %__MODULE__.Env{} = env,
         type_name,
         type_args,
         spec,
@@ -1200,7 +1214,7 @@ defmodule ElixirSense.Core.State do
       meta: meta
     }
 
-    current_module = get_current_module(state)
+    current_module = env.module
 
     types =
       state.types
@@ -1222,7 +1236,17 @@ defmodule ElixirSense.Core.State do
     }
   end
 
-  def add_spec(%__MODULE__{} = state, type_name, type_args, spec, kind, pos, end_pos, options) do
+  def add_spec(
+        %__MODULE__{} = state,
+        %__MODULE__.Env{} = env,
+        type_name,
+        type_args,
+        spec,
+        kind,
+        pos,
+        end_pos,
+        options
+      ) do
     arg_names =
       type_args
       |> Enum.map(&Macro.to_string/1)
@@ -1255,7 +1279,7 @@ defmodule ElixirSense.Core.State do
       meta: meta
     }
 
-    current_module = get_current_module(state)
+    current_module = env.module
 
     arity_info =
       combine_specs(state.specs[{current_module, type_name, length(arg_names)}], type_info)
@@ -1374,8 +1398,8 @@ defmodule ElixirSense.Core.State do
     Enum.reduce(modules, state, fn mod, state -> add_behaviour(state, mod) end)
   end
 
-  def register_doc(%__MODULE__{} = state, :moduledoc, doc_arg) do
-    current_module = get_current_module(state)
+  def register_doc(%__MODULE__{} = state, %__MODULE__.Env{} = env, :moduledoc, doc_arg) do
+    current_module = env.module
     doc_arg_formatted = format_doc_arg(doc_arg)
 
     mods_funs_to_positions =
@@ -1393,13 +1417,13 @@ defmodule ElixirSense.Core.State do
     %{state | mods_funs_to_positions: mods_funs_to_positions}
   end
 
-  def register_doc(%__MODULE__{} = state, :doc, doc_arg) do
+  def register_doc(%__MODULE__{} = state, %__MODULE__.Env{}, :doc, doc_arg) do
     [doc_context | doc_context_rest] = state.doc_context
 
     %{state | doc_context: [[doc_arg | doc_context] | doc_context_rest]}
   end
 
-  def register_doc(%__MODULE__{} = state, :typedoc, doc_arg) do
+  def register_doc(%__MODULE__{} = state, %__MODULE__.Env{}, :typedoc, doc_arg) do
     [doc_context | doc_context_rest] = state.typedoc_context
 
     %{state | typedoc_context: [[doc_arg | doc_context] | doc_context_rest]}

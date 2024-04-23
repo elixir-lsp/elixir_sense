@@ -157,11 +157,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> new_vars_scope
       |> maybe_add_protocol_behaviour(module)
 
+    env = get_current_env(state)
+
     state =
       types
       |> Enum.reduce(state, fn {type_name, type_args, spec, kind}, acc ->
         acc
-        |> add_type(type_name, type_args, kind, spec, position, end_position, generated: true)
+        |> add_type(env, type_name, type_args, kind, spec, position, end_position,
+          generated: true
+        )
       end)
 
     state =
@@ -171,6 +175,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
         acc
         |> add_func_to_index(
+          env,
           name,
           mapped_args,
           position,
@@ -185,8 +190,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp post_module(ast, state) do
+    env = get_current_env(state)
+
     state
-    |> apply_optional_callbacks
+    |> apply_optional_callbacks(env)
     |> remove_attributes_scope
     |> remove_behaviours_scope
     |> remove_lexical_scope
@@ -294,9 +301,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     ast = {type, Keyword.put(meta, :func, true), ast_args}
 
+    env = get_current_env(state)
+
     state
     |> new_named_func(name, length(params || []))
-    |> add_func_to_index(name, params || [], position, end_position, type, options)
+    |> add_func_to_index(env, name, params || [], position, end_position, type, options)
     |> new_lexical_scope
     |> new_func_vars_scope
     |> add_vars(vars, true)
@@ -489,9 +498,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
     spec = TypeInfo.typespec_to_string(kind, spec)
 
     {position = {line, _column}, end_position} = extract_range(meta)
+    env = get_current_env(state)
 
     state
-    |> add_type(type_name, type_args, spec, kind, position, end_position,
+    |> add_type(env, type_name, type_args, spec, kind, position, end_position,
       generated: state.generated
     )
     |> add_typespec_namespace(type_name, length(type_args))
@@ -503,11 +513,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     spec = TypeInfo.typespec_to_string(kind, spec)
 
     {position = {line, _column}, end_position} = extract_range(meta)
+    env = get_current_env(state)
 
     state =
       if kind in [:callback, :macrocallback] do
         state
         |> add_func_to_index(
+          env,
           :behaviour_info,
           [{:atom, meta, nil}],
           position,
@@ -520,7 +532,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end
 
     state
-    |> add_spec(type_name, type_args, spec, kind, position, end_position,
+    |> add_spec(env, type_name, type_args, spec, kind, position, end_position,
       generated: state.generated
     )
     |> add_typespec_namespace(type_name, length(type_args))
@@ -754,6 +766,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     line = Keyword.fetch!(meta_attr, :line)
     column = Keyword.fetch!(meta_attr, :column)
     new_ast = {:@, meta_attr, [{:moduledoc, add_no_call(meta), [doc_arg]}]}
+    env = get_current_env(state)
 
     state
     |> add_moduledoc_positions(
@@ -761,7 +774,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       [{:moduledoc, meta, [doc_arg]}],
       line
     )
-    |> register_doc(:moduledoc, doc_arg)
+    |> register_doc(env, :moduledoc, doc_arg)
     |> result(new_ast)
   end
 
@@ -771,9 +784,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when doc in [:doc, :typedoc] do
     new_ast = {:@, meta_attr, [{doc, add_no_call(meta), [doc_arg]}]}
+    env = get_current_env(state)
 
     state
-    |> register_doc(doc, doc_arg)
+    |> register_doc(env, doc, doc_arg)
     |> result(new_ast)
   end
 
@@ -782,9 +796,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
          state
        ) do
     new_ast = {:@, meta_attr, [{:impl, add_no_call(meta), [impl_arg]}]}
+    env = get_current_env(state)
     # impl adds sets :hidden by default
     state
-    |> register_doc(:doc, :impl)
+    |> register_doc(env, :doc, :impl)
     |> result(new_ast)
   end
 
@@ -804,9 +819,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
          state
        ) do
     new_ast = {:@, meta_attr, [{:deprecated, add_no_call(meta), [deprecated_arg]}]}
+    env = get_current_env(state)
     # treat @deprecated message as @doc deprecated: message
     state
-    |> register_doc(:doc, deprecated: deprecated_arg)
+    |> register_doc(env, :doc, deprecated: deprecated_arg)
     |> result(new_ast)
   end
 
@@ -1155,10 +1171,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre({:defoverridable, meta, [arg]} = ast, state) do
+    env = get_current_env(state)
+
     state =
       case arg do
         keyword when is_list(keyword) ->
-          State.make_overridable(state, keyword, meta[:context])
+          State.make_overridable(state, env, keyword, meta[:context])
 
         {:__aliases__, _meta, list} ->
           # TODO check __MODULE__ and __MODULE__.Beh
@@ -1170,7 +1188,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
               behaviour_module.behaviour_info(:callbacks)
               |> Enum.map(&Introspection.drop_macro_prefix/1)
 
-            State.make_overridable(state, keyword, meta[:context])
+            State.make_overridable(state, env, keyword, meta[:context])
           else
             state
           end
@@ -1364,10 +1382,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     options = [generated: true]
 
     shift = if state.generated, do: 0, else: 1
+    env = get_current_env(state)
 
     state
     |> new_named_func(name, 1)
     |> add_func_to_index(
+      env,
       name,
       [{:\\, [], [{:args, [], nil}, []]}],
       position,
@@ -1377,6 +1397,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     )
     |> new_named_func(name, 2)
     |> add_func_to_index(
+      env,
       name,
       [{:record, [], nil}, {:args, [], nil}],
       position,
@@ -2238,6 +2259,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         end
 
     options = [generated: true]
+    env = get_current_env(state)
 
     state =
       if type == :defexception do
@@ -2248,6 +2270,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         if Keyword.has_key?(fields, :message) do
           state
           |> add_func_to_index(
+            env,
             :exception,
             [{:msg, [line: line, column: column], nil}],
             position,
@@ -2256,6 +2279,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
             options
           )
           |> add_func_to_index(
+            env,
             :message,
             [{:exception, [line: line, column: column], nil}],
             position,
@@ -2267,6 +2291,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
           state
         end
         |> add_func_to_index(
+          env,
           :exception,
           [{:args, [line: line, column: column], nil}],
           position,
@@ -2277,8 +2302,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
       else
         state
       end
-      |> add_func_to_index(:__struct__, [], position, end_position, :def, options)
+      |> add_func_to_index(env, :__struct__, [], position, end_position, :def, options)
       |> add_func_to_index(
+        env,
         :__struct__,
         [{:kv, [line: line, column: column], nil}],
         position,
@@ -2288,7 +2314,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       )
 
     state
-    |> add_struct(type, fields)
+    |> add_struct(env, type, fields)
   end
 
   defp expand_aliases_in_ast(state, ast) do
