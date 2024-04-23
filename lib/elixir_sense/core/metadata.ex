@@ -122,13 +122,13 @@ defmodule ElixirSense.Core.Metadata do
             if metadata_line >= begin_line do
               case {key, type} do
                 {{module, nil, nil}, _} ->
-                  module == env.module and is_atom(env.scope) and env.scope != Elixir
+                  module == env.module and is_nil(env.function) and is_nil(env.typespec)
 
                 {{module, fun, arity}, State.ModFunInfo} ->
-                  module == env.module and env.scope == {fun, arity}
+                  module == env.module and env.function == {fun, arity}
 
                 {{module, fun, arity}, type} when type in [State.TypeInfo, State.SpecInfo] ->
-                  module == env.module and env.scope == {:typespec, fun, arity}
+                  module == env.module and env.typespec == {fun, arity}
               end
             end
           end)
@@ -204,7 +204,7 @@ defmodule ElixirSense.Core.Metadata do
 
   @spec at_module_body?(State.Env.t()) :: boolean()
   def at_module_body?(env) do
-    is_atom(env.scope) and env.scope != Elixir
+    not is_nil(env.module) and is_nil(env.function) and is_nil(env.typespec)
   end
 
   def get_position_to_insert_alias(%__MODULE__{} = metadata, {line, column}) do

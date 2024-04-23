@@ -503,7 +503,7 @@ defmodule ElixirSense.Core.Source do
   end
 
   def get_mod_fun([{:__MODULE__, _, nil}, fun], binding_env) do
-    if binding_env.current_module not in [nil, Elixir] do
+    if binding_env.current_module != nil do
       {{binding_env.current_module, false}, fun}
     end
   end
@@ -536,7 +536,7 @@ defmodule ElixirSense.Core.Source do
   end
 
   def get_mod([{:__MODULE__, _, nil} | rest], binding_env) do
-    if binding_env.current_module not in [nil, Elixir] do
+    if binding_env.current_module != nil do
       mod =
         binding_env.current_module
         |> Module.split()

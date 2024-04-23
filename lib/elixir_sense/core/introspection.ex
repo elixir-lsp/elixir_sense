@@ -808,25 +808,19 @@ defmodule ElixirSense.Core.Introspection do
 
   @spec actual_module(
           nil | module,
-          [{module, module}],
-          nil | module,
-          # TODO better type
-          any,
-          ElixirSense.Core.State.mods_funs_to_positions_t()
+          ElixirSense.Core.State.Env.t(),
+          ElixirSense.Core.State.mods_funs_to_positions_t(),
+          boolean
         ) :: {nil | module, boolean}
-  def actual_module(module, aliases, current_module, scope, mods_funs) do
+  def actual_module(module, env, mods_funs, expand_aliases?) do
     {m, nil, res, _} =
       actual_mod_fun(
         {module, nil},
-        [],
-        [],
-        [],
-        aliases,
-        current_module,
-        scope,
+        env,
         mods_funs,
         %{},
-        {1, 1}
+        {1, 1},
+        expand_aliases?
       )
 
     {m, res}
@@ -902,48 +896,35 @@ defmodule ElixirSense.Core.Introspection do
 
   @spec actual_mod_fun(
           {nil | module, nil | atom},
-          keyword,
-          keyword,
-          [module],
-          [{module, module}],
-          nil | module,
-          # TODO better type
-          any(),
+          ElixirSense.Core.State.Env.t(),
           ElixirSense.Core.State.mods_funs_to_positions_t(),
           ElixirSense.Core.State.types_t(),
-          {pos_integer, pos_integer}
+          {pos_integer, pos_integer},
+          boolean
         ) :: {nil | module, nil | atom, boolean, nil | :mod_fun | :type}
-  def actual_mod_fun({nil, nil}, _, _, _, _, _, _, _, _, _), do: {nil, nil, false, nil}
+  def actual_mod_fun({nil, nil}, _, _, _, _, _), do: {nil, nil, false, nil}
 
   def actual_mod_fun(
         {mod, fun} = mod_fun,
-        functions,
-        macros,
-        requires,
-        aliases,
-        current_module,
-        scope,
+        %State.Env{} = env,
         mods_funs,
         metadata_types,
-        cursor_position
+        cursor_position,
+        expand_aliases?
       ) do
-    expanded_mod = expand_alias(mod, aliases)
+    expanded_mod = if expand_aliases?, do: expand_alias(mod, env.aliases), else: mod
 
     with {:mod_fun, {nil, nil}} <- {:mod_fun, find_kernel_special_forms_macro(mod_fun)},
          {:mod_fun, {nil, nil}} <-
            {:mod_fun,
             find_function_or_module(
               {expanded_mod, fun},
-              current_module,
-              scope,
-              functions,
-              macros,
-              requires,
+              env,
               mods_funs,
               cursor_position
             )},
          {:type, {nil, nil}} <-
-           {:type, find_type({expanded_mod, fun}, current_module, scope, metadata_types)} do
+           {:type, find_type({expanded_mod, fun}, env, metadata_types)} do
       {expanded_mod, fun, false, nil}
     else
       {kind, {m, f}} -> {m, f, true, kind}
@@ -951,7 +932,11 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   # local type
-  defp find_type({nil, type}, current_module, {:typespec, _, _}, metadata_types) do
+  defp find_type(
+         {nil, type},
+         %State.Env{module: current_module, typespec: {_, _}},
+         metadata_types
+       ) do
     found_in_metadata =
       Enum.any?(metadata_types, fn
         {{^current_module, ^type, _}, _} -> true
@@ -970,13 +955,13 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   # Elixir proxy
-  defp find_type({Elixir, _type}, _current_module, _scope, _metadata_types), do: {nil, nil}
+  defp find_type({Elixir, _type}, _env, _metadata_types), do: {nil, nil}
 
   # invalid case
-  defp find_type({_mod, nil}, _current_module, _scope, _metadata_types), do: {nil, nil}
+  defp find_type({_mod, nil}, _env, _metadata_types), do: {nil, nil}
 
   # remote type
-  defp find_type({mod, type}, _current_module, {:typespec, _, _}, metadata_types) do
+  defp find_type({mod, type}, %State.Env{typespec: {_, _}}, metadata_types) do
     found =
       Enum.any?(metadata_types, fn
         {{^mod, ^type, _}, %State.TypeInfo{kind: kind}} when kind in [:type, :opaque] -> true
@@ -994,15 +979,11 @@ defmodule ElixirSense.Core.Introspection do
     end
   end
 
-  defp find_type({_mod, _type}, _current_module, _scope, _metadata_types), do: {nil, nil}
+  defp find_type({_mod, _type}, _env, _metadata_types), do: {nil, nil}
 
   defp find_function_or_module(
          {_mod, fun},
-         _current_module,
-         {:typespec, _, _},
-         _functions,
-         _macros,
-         _requires,
+         %State.Env{typespec: {_, _}},
          _mods_funs,
          _cursor_position
        )
@@ -1012,11 +993,7 @@ defmodule ElixirSense.Core.Introspection do
   # local call
   defp find_function_or_module(
          {nil, fun},
-         _current_module,
-         _scope,
-         _functions,
-         _macros,
-         _requires,
+         _env,
          _mods_funs,
          _cursor_position
        )
@@ -1025,11 +1002,11 @@ defmodule ElixirSense.Core.Introspection do
 
   defp find_function_or_module(
          {nil, fun},
-         current_module,
-         _scope,
-         functions,
-         macros,
-         _requires,
+         %State.Env{
+           module: current_module,
+           functions: functions,
+           macros: macros
+         },
          mods_funs,
          cursor_position
        ) do
@@ -1064,11 +1041,7 @@ defmodule ElixirSense.Core.Introspection do
   # Elixir proxy
   defp find_function_or_module(
          {Elixir, _},
-         _current_module,
-         _scope,
-         _functions,
-         _macros,
-         _requires,
+         _env,
          _mods_funs,
          _cursor_position
        ),
@@ -1077,11 +1050,7 @@ defmodule ElixirSense.Core.Introspection do
   # module
   defp find_function_or_module(
          {mod, nil},
-         _current_module,
-         _scope,
-         _functions,
-         _macros,
-         _requires,
+         _env,
          mods_funs,
          _cursor_position
        ) do
@@ -1095,11 +1064,7 @@ defmodule ElixirSense.Core.Introspection do
   # remote call
   defp find_function_or_module(
          {mod, fun},
-         _current_module,
-         _functions,
-         _macros,
-         _scope,
-         requires,
+         %State.Env{requires: requires},
          mods_funs,
          _cursor_position
        ) do

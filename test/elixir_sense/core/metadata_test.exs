@@ -166,121 +166,199 @@ defmodule ElixirSense.Core.MetadataTest do
     metadata = Parser.parse_string(code, true, true, {1, 1})
 
     env = Metadata.get_env(metadata, {1, 1})
-    assert env.scope == Elixir
+    assert env.module == nil
+    assert env.function == nil
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {4, 3})
-    assert env.scope == :MyModule1
+    assert env.module == MyModule1
+    assert env.function == nil
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {7, 1})
-    assert env.scope == Elixir
+    assert env.module == nil
+    assert env.function == nil
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {9, 1})
-    assert env.scope == :MyModule2
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {10, 2})
-    assert env.scope == :MyModule2
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {10, 3})
-    assert env.scope == {:typespec, :a, 0}
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == {:a, 0}
 
     env = Metadata.get_env(metadata, {10, 20})
-    assert env.scope == {:typespec, :a, 0}
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == {:a, 0}
 
     env = Metadata.get_env(metadata, {12, 3})
-    assert env.scope == {:func, 1}
+    assert env.module == MyModule2
+    assert env.function == {:func, 1}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {14, 6})
-    assert env.scope == {:func, 1}
+    assert env.module == MyModule2
+    assert env.function == {:func, 1}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {14, 7})
-    assert env.scope == :MyModule2
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {16, 3})
-    assert env.scope == :MyModule2
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {18, 3})
-    assert env.scope == {:go1, 0}
+    assert env.module == MyModule2
+    assert env.function == {:go1, 0}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {20, 3})
-    assert env.scope == {:go2, 1}
+    assert env.module == MyModule2
+    assert env.function == {:go2, 1}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {21, 12})
-    assert env.scope == {:go2, 1}
+    assert env.module == MyModule2
+    assert env.function == {:go2, 1}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {23, 3})
-    assert env.scope == :MyModule2
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {25, 3})
-    assert env.scope == {:go2, 0}
+    assert env.module == MyModule2
+    assert env.function == {:go2, 0}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {25, 3})
-    assert env.scope == {:go2, 0}
+    assert env.module == MyModule2
+    assert env.function == {:go2, 0}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {25, 19})
-    assert env.scope == {:go2, 0}
+    assert env.module == MyModule2
+    assert env.function == {:go2, 0}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {25, 20})
-    assert env.scope == {:go2, 0}
+    assert env.module == MyModule2
+    assert env.function == {:go2, 0}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {27, 3})
-    assert env.scope == :MyModule2
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {29, 3})
-    assert env.scope == {:typespec, :go31, 1}
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == {:go31, 1}
 
     env = Metadata.get_env(metadata, {29, 23})
-    assert env.scope == {:typespec, :go31, 1}
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == {:go31, 1}
 
     env = Metadata.get_env(metadata, {30, 3})
-    assert env.scope == {:go31, 1}
+    assert env.module == MyModule2
+    assert env.function == {:go31, 1}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {30, 23})
-    assert env.scope == {:go31, 1}
+    assert env.module == MyModule2
+    assert env.function == {:go31, 1}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {31, 3})
-    assert env.scope == {:go32, 1}
+    assert env.module == MyModule2
+    assert env.function == {:go32, 1}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {32, 3})
-    assert env.scope == {:go33, 1}
+    assert env.module == MyModule2
+    assert env.function == {:go33, 1}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {36, 3})
-    assert env.scope == {:typespec, :some, 1}
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == {:some, 1}
 
     env = Metadata.get_env(metadata, {37, 3})
-    assert env.scope == {:some, 1}
+    assert env.module == MyModule2
+    assert env.function == {:some, 1}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {41, 3})
-    assert env.scope == {:typespec, :x, 0}
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == {:x, 0}
 
     env = Metadata.get_env(metadata, {43, 3})
-    assert env.scope == {:typespec, :y, 1}
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == {:y, 1}
 
     env = Metadata.get_env(metadata, {43, 3})
-    assert env.scope == {:typespec, :y, 1}
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == {:y, 1}
 
     env = Metadata.get_env(metadata, {44, 11})
-    assert env.scope == {:typespec, :y, 1}
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == {:y, 1}
 
     env = Metadata.get_env(metadata, {46, 3})
-    assert env.scope == :MyModule2
+    assert env.module == MyModule2
+    assert env.function == nil
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {49, 1})
-    assert env.scope == :Pr
+    assert env.module == Pr
+    assert env.function == nil
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {50, 3})
-    assert env.scope == {:typespec, :x, 1}
+    assert env.module == Pr
+    assert env.function == nil
+    assert env.typespec == {:x, 1}
 
     env = Metadata.get_env(metadata, {51, 3})
-    assert env.scope == {:x, 1}
+    assert env.module == Pr
+    assert env.function == {:x, 1}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {51, 11})
-    assert env.scope == {:x, 1}
+    assert env.module == Pr
+    assert env.function == {:x, 1}
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {54, 3})
-    assert env.scope == :String
+    assert env.module == Pr.String
+    assert env.function == nil
+    assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {55, 3})
-    assert env.scope == {:x, 1}
+    assert env.module == Pr.String
+    assert env.function == {:x, 1}
+    assert env.typespec == nil
   end
 
   test "env is correct in module with do:" do
@@ -291,7 +369,7 @@ defmodule ElixirSense.Core.MetadataTest do
     metadata = Parser.parse_string(code, true, true, {1, 19})
 
     env = Metadata.get_env(metadata, {1, 19})
-    assert env.scope == :A
+    assert env.module == A
   end
 
   test "get_position_to_insert_alias when aliases exist" do

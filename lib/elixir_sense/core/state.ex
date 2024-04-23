@@ -72,8 +72,8 @@ defmodule ElixirSense.Core.State do
                       [Kernel.Typespec]
                     end)
 
-  defstruct namespace: [[:"Elixir"]],
-            scopes: [[:"Elixir"]],
+  defstruct namespace: [[Elixir]],
+            scopes: [[Elixir]],
             functions: [@auto_imported_functions],
             macros: [@auto_imported_macros],
             requires: [@auto_required],
@@ -113,11 +113,12 @@ defmodule ElixirSense.Core.State do
             requires: list(module),
             aliases: list(ElixirSense.Core.State.alias_t()),
             module: nil | module,
+            function: nil | {atom, arity},
             protocol: nil | ElixirSense.Core.State.protocol_t(),
             vars: list(ElixirSense.Core.State.VarInfo.t()),
             attributes: list(ElixirSense.Core.State.AttributeInfo.t()),
             behaviours: list(module),
-            scope: nil | ElixirSense.Core.State.scope(),
+            typespec: nil | {atom, arity},
             scope_id: nil | ElixirSense.Core.State.scope_id_t()
           }
     defstruct functions: [],
@@ -126,12 +127,13 @@ defmodule ElixirSense.Core.State do
               aliases: [],
               # NOTE for protocol implementation this will be the first variant
               module: nil,
+              function: nil,
               # NOTE for protocol implementation this will be the first variant
               protocol: nil,
               vars: [],
               attributes: [],
               behaviours: [],
-              scope: nil,
+              typespec: nil,
               scope_id: nil
   end
 
@@ -320,18 +322,29 @@ defmodule ElixirSense.Core.State do
     current_scope_id = hd(state.scope_ids)
     current_scope_protocol = hd(state.protocols)
 
+    current_function =
+      case current_scope do
+        {_name, _arity} = function -> function
+        _ -> nil
+      end
+
+    current_typespec =
+      case current_scope do
+        {:typespec, name, arity} -> {name, arity}
+        _ -> nil
+      end
+
     %Env{
       functions: current_functions,
       macros: current_macros,
       requires: current_requires,
       aliases: current_aliases,
       module: current_module,
+      function: current_function,
+      typespec: current_typespec,
       vars: current_vars,
       attributes: current_attributes,
       behaviours: current_behaviours,
-      # NOTE for protocol implementations the scope and namespace will be
-      # escaped with `escape_protocol_implemntations`
-      scope: current_scope,
       scope_id: current_scope_id,
       protocol: current_scope_protocol
     }
@@ -339,6 +352,7 @@ defmodule ElixirSense.Core.State do
 
   def get_current_module(%__MODULE__{} = state) do
     case state.namespace |> hd do
+      [Elixir] -> nil
       atom when is_atom(atom) -> atom
       list -> list |> Enum.reverse() |> Module.concat()
     end
@@ -485,21 +499,6 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | structs: structs}
   end
 
-  def get_scope_name(%__MODULE__{} = state, line) do
-    case state.lines_to_env[line] do
-      nil -> nil
-      %Env{scope: scope} -> scope
-    end
-  end
-
-  def get_current_scope_name(%__MODULE__{} = state) do
-    case hd(hd(state.scopes)) do
-      {:typespec, fun, _} -> fun |> Atom.to_string()
-      {fun, _} -> fun |> Atom.to_string()
-      mod -> mod |> Atom.to_string()
-    end
-  end
-
   def get_current_vars(%__MODULE__{} = state) do
     state.scope_vars
     |> List.flatten()
@@ -622,7 +621,7 @@ defmodule ElixirSense.Core.State do
           atom
 
         list ->
-          [:"Elixir"] ++
+          [Elixir] ++
             (expand_alias(state, list) |> Module.split() |> Enum.map(&String.to_atom/1))
       end
 
@@ -633,9 +632,9 @@ defmodule ElixirSense.Core.State do
     # TODO refactor to allow {:implementation, protocol, [implementations]} in scope
     {namespace, scopes} =
       case module do
-        [:"Elixir" | module = [_ | _]] ->
+        [Elixir | module = [_ | _]] ->
           case state.namespace do
-            [[:"Elixir"]] ->
+            [[Elixir]] ->
               # top level module - drop prefix
               module_reversed = :lists.reverse(module)
               namespace = module_reversed ++ hd(state.namespace)
@@ -1273,7 +1272,7 @@ defmodule ElixirSense.Core.State do
         %VarInfo{name: var_name} = var_info,
         is_definition
       ) do
-    scope = get_current_scope_name(state)
+    scope = hd(hd(state.scopes))
     [vars_from_scope | other_vars] = state.vars
     is_var_defined = is_variable_defined(state, var_name)
     var_name_as_string = Atom.to_string(var_name)
@@ -1574,7 +1573,7 @@ defmodule ElixirSense.Core.State do
     module
   end
 
-  def expand_alias(%__MODULE__{} = _state, [:"Elixir" | _] = module) do
+  def expand_alias(%__MODULE__{} = _state, [Elixir | _] = module) do
     Module.concat(module)
   end
 

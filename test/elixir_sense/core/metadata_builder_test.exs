@@ -2625,7 +2625,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_module(state, 1) == Elixir
+    assert get_line_module(state, 1) == nil
     assert get_line_protocol(state, 1) == nil
     assert get_line_module(state, 3) == OuterModule
     assert get_line_protocol(state, 3) == nil
@@ -2660,7 +2660,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_module(state, 1) == Elixir
+    assert get_line_module(state, 1) == nil
     assert get_line_protocol(state, 1) == nil
     assert get_line_module(state, 3) == OuterModule
     assert get_line_protocol(state, 3) == nil
@@ -2700,7 +2700,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_module(state, 1) == Elixir
+    assert get_line_module(state, 1) == nil
     assert get_line_module(state, 3) == OuterModule
     assert get_line_module(state, 5) == OuterModule.InnerModule
     assert get_line_module(state, 9) == ExternalModule
@@ -2732,7 +2732,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_module(state, 1) == Elixir
+    assert get_line_module(state, 1) == nil
     assert get_line_module(state, 3) == OuterModule
     assert get_line_module(state, 6) == OuterModule.Elixir
     assert get_line_module(state, 9) == OuterModule
@@ -2758,7 +2758,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_module(state, 1) == Elixir
+    assert get_line_module(state, 1) == nil
     assert get_line_protocol(state, 1) == nil
     assert get_line_module(state, 3) == :outer_module
     assert get_line_protocol(state, 3) == nil
@@ -2794,7 +2794,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_module(state, 1) == Elixir
+    assert get_line_module(state, 1) == nil
     assert get_line_protocol(state, 1) == nil
     assert get_line_module(state, 3) == OuterModule
     assert get_line_protocol(state, 3) == nil
@@ -3352,20 +3352,61 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert State.get_scope_name(state, 3) == {:func, 0}
-    assert State.get_scope_name(state, 5) == :MyModule
-    assert State.get_scope_name(state, 7) == {:func_with_when, 1}
-    assert State.get_scope_name(state, 9) == :MyModule
-    assert State.get_scope_name(state, 11) == {:macro1, 1}
-    assert State.get_scope_name(state, 13) == :MyModule
-    assert State.get_scope_name(state, 15) == :MyModule
-    assert State.get_scope_name(state, 16) == {:func_delegated, 1}
-    assert State.get_scope_name(state, 18) == {:is_even, 1}
-    assert State.get_scope_name(state, 21) == :Module1
-    assert State.get_scope_name(state, 26) == :Module2
-    assert State.get_scope_name(state, 31) == :Reversible
-    assert State.get_scope_name(state, 35) == :Map
-    assert State.get_scope_name(state, 37) == {:reverse, 1}
+    assert nil == get_line_typespec(state, 3)
+    assert {:func, 0} == get_line_function(state, 3)
+    assert MyModule == get_line_module(state, 3)
+
+    assert nil == get_line_typespec(state, 5)
+    assert nil == get_line_function(state, 5)
+    assert MyModule == get_line_module(state, 5)
+
+    assert nil == get_line_typespec(state, 7)
+    assert {:func_with_when, 1} == get_line_function(state, 7)
+    assert MyModule == get_line_module(state, 7)
+
+    assert nil == get_line_typespec(state, 9)
+    assert nil == get_line_function(state, 9)
+    assert MyModule == get_line_module(state, 9)
+
+    assert nil == get_line_typespec(state, 11)
+    assert {:macro1, 1} == get_line_function(state, 11)
+    assert MyModule == get_line_module(state, 11)
+
+    assert nil == get_line_typespec(state, 13)
+    assert nil == get_line_function(state, 13)
+    assert MyModule == get_line_module(state, 13)
+
+    assert nil == get_line_typespec(state, 15)
+    assert nil == get_line_function(state, 15)
+    assert MyModule == get_line_module(state, 15)
+
+    assert nil == get_line_typespec(state, 16)
+    assert {:func_delegated, 1} == get_line_function(state, 16)
+    assert MyModule == get_line_module(state, 16)
+
+    assert nil == get_line_typespec(state, 18)
+    assert {:is_even, 1} == get_line_function(state, 18)
+    assert MyModule == get_line_module(state, 18)
+
+    assert nil == get_line_typespec(state, 21)
+    assert nil == get_line_function(state, 21)
+    assert MyModule.Nester.Module1 == get_line_module(state, 21)
+
+    assert nil == get_line_typespec(state, 26)
+    assert nil == get_line_function(state, 26)
+    assert AnotherNester.Module2 == get_line_module(state, 26)
+
+    assert nil == get_line_typespec(state, 31)
+    assert nil == get_line_function(state, 31)
+    assert Reversible == get_line_module(state, 31)
+
+    assert nil == get_line_typespec(state, 35)
+    assert nil == get_line_function(state, 35)
+    assert Reversible.Map == get_line_module(state, 35)
+
+    assert nil == get_line_typespec(state, 37)
+    assert {:reverse, 1} == get_line_function(state, 37)
+    assert Reversible.Map == get_line_module(state, 37)
   end
 
   test "finds positions for guards" do
@@ -5112,17 +5153,49 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert Elixir == get_line_scope(state, 1)
-    assert :My == get_line_scope(state, 2)
-    assert {:typespec, :a, 0} == get_line_scope(state, 5)
-    assert :My == get_line_scope(state, 7)
-    assert :B == get_line_scope(state, 9)
-    assert :My == get_line_scope(state, 13)
-    assert {:typespec, :test, 2} == get_line_scope(state, 15)
-    assert {:test, 2} == get_line_scope(state, 16)
-    assert {:test, 2} == get_line_scope(state, 17)
-    assert :My == get_line_scope(state, 20)
-    assert Elixir == get_line_scope(state, 22)
+    assert nil == get_line_typespec(state, 1)
+    assert nil == get_line_function(state, 1)
+    assert nil == get_line_module(state, 1)
+
+    assert nil == get_line_typespec(state, 2)
+    assert nil == get_line_function(state, 2)
+    assert My == get_line_module(state, 2)
+
+    assert {:a, 0} == get_line_typespec(state, 5)
+    assert nil == get_line_function(state, 5)
+    assert My == get_line_module(state, 5)
+
+    assert nil == get_line_typespec(state, 7)
+    assert nil == get_line_function(state, 7)
+    assert My == get_line_module(state, 7)
+
+    assert nil == get_line_typespec(state, 9)
+    assert nil == get_line_function(state, 9)
+    assert My.B == get_line_module(state, 9)
+
+    assert nil == get_line_typespec(state, 13)
+    assert nil == get_line_function(state, 13)
+    assert My == get_line_module(state, 13)
+
+    assert {:test, 2} == get_line_typespec(state, 15)
+    assert nil == get_line_function(state, 15)
+    assert My == get_line_module(state, 15)
+
+    assert nil == get_line_typespec(state, 16)
+    assert {:test, 2} == get_line_function(state, 16)
+    assert My == get_line_module(state, 16)
+
+    assert nil == get_line_typespec(state, 17)
+    assert {:test, 2} == get_line_function(state, 17)
+    assert My == get_line_module(state, 17)
+
+    assert nil == get_line_typespec(state, 20)
+    assert nil == get_line_function(state, 20)
+    assert My == get_line_module(state, 20)
+
+    assert nil == get_line_typespec(state, 22)
+    assert nil == get_line_function(state, 22)
+    assert nil == get_line_module(state, 22)
   end
 
   test "invalid def" do
@@ -5600,10 +5673,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-  defp get_line_scope(state, line) do
-    case state.lines_to_env[line] do
-      nil -> []
-      env -> env.scope
+  defp get_line_typespec(state, line) do
+    if env = state.lines_to_env[line] do
+      env.typespec
+    end
+  end
+
+  defp get_line_function(state, line) do
+    if env = state.lines_to_env[line] do
+      env.function
     end
   end
 

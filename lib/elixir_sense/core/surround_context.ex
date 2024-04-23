@@ -16,7 +16,7 @@ defmodule ElixirSense.Core.SurroundContext do
 
   # do not handle any other local_or_var
   defp to_binding_impl({:alias, {:local_or_var, ~c"__MODULE__"}, charlist}, current_module) do
-    if current_module not in [nil, Elixir] do
+    if current_module != nil do
       {{:atom, :"#{current_module}.#{charlist}"}, nil}
     end
   end
@@ -32,7 +32,7 @@ defmodule ElixirSense.Core.SurroundContext do
   end
 
   defp to_binding_impl({:local_or_var, ~c"__MODULE__"}, current_module) do
-    if current_module not in [nil, Elixir] do
+    if current_module != nil do
       {{:atom, current_module}, nil}
     end
   end
@@ -91,7 +91,7 @@ defmodule ElixirSense.Core.SurroundContext do
          {:alias, {:local_or_var, ~c"__MODULE__"}, inside_charlist},
          current_module
        ) do
-    if current_module not in [nil, Elixir] do
+    if current_module != nil do
       {:atom, :"#{current_module |> Atom.to_string()}.#{inside_charlist}"}
     end
   end
@@ -114,7 +114,7 @@ defmodule ElixirSense.Core.SurroundContext do
   end
 
   defp inside_dot_to_binding({:var, ~c"__MODULE__"}, current_module) do
-    if current_module not in [nil, Elixir] do
+    if current_module != nil do
       {:atom, current_module}
     end
   end
