@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.Compiler do
-  import ElixirSense.Core.State
+  import ElixirSense.Core.State, except: [expand: 2, expand: 3, no_alias_expansion: 1]
   require Logger
 
   @env :elixir_env.new()
@@ -10,7 +10,7 @@ defmodule ElixirSense.Core.Compiler do
       do_expand(ast, state, env)
     catch
       kind, payload ->
-        Logger.warning("Unable to expand ast node #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}")
+        # Logger.warning("Unable to expand ast node #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}")
         {ast, state, env}
     end
   end
@@ -762,9 +762,15 @@ defmodule ElixirSense.Core.Compiler do
 
         {position, end_position} = extract_range(meta)
 
+        line = Keyword.fetch!(meta, :line)
+
         state =
           state
           |> add_module_to_index(full, position, end_position, [])
+          |> add_current_env_to_line(line, %{env | module: full})
+          |> add_module_functions(%{env | module: full}, [], position, end_position)
+
+          dbg(state)
 
         {result, state, _env} = expand(block, state, %{env | module: full})
         {result, state, env}
@@ -791,8 +797,14 @@ defmodule ElixirSense.Core.Compiler do
     {{:__block__, [], []}, state, env}
   end
 
+  defp expand_macro(meta, Kernel, def_kind, [call], _callback, state, env)
+       when def_kind in [:defguard, :defguardp] do
+    # transform guard to def with empty body
+    expand_macro(meta, Kernel, def_kind, [call, {:__block__, [], []}], _callback, state, env)
+  end
+
   defp expand_macro(meta, Kernel, def_kind, [call, expr], _callback, state, env)
-       when def_kind in [:def, :defp, :defmacro, :defmacrop] do
+       when def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
     dbg(call)
     dbg(expr)
     assert_no_match_or_guard_scope(env.context, :"{def_kind}/2")
@@ -806,9 +818,9 @@ defmodule ElixirSense.Core.Compiler do
     # TODO store mod_fun_to_pos
     line = Keyword.fetch!(meta, :line)
 
-    state =
-      state
-      |> add_current_env_to_line(line, env)
+    # state =
+    #   state
+    #   |> add_current_env_to_line(line, env)
 
     state = %{state | vars: {%{}, false}, unused: {%{}, 0}}
 
@@ -855,6 +867,7 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
+      |> add_current_env_to_line(line, %{g_env | context: nil, function: {name, arity}})
       |> add_mod_fun_to_position(
         {module, name, arity},
         position,
@@ -884,13 +897,14 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_macro_callback(meta, module, fun, args, callback, state, env) do
+    dbg({module, fun, args})
     try do
       callback.(meta, args)
     catch
       # TODO raise?
       # For language servers, if expanding the macro fails, we just give up.
-      _kind, payload ->
-        IO.inspect(payload, label: inspect(fun))
+      kind, payload ->
+        # IO.inspect(payload, label: inspect(fun))
         {{{:., meta, [module, fun]}, meta, args}, state, env}
     else
       ast -> expand(ast, state, env)

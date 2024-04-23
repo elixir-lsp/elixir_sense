@@ -1931,4 +1931,29 @@ defmodule ElixirSense.Core.State do
       # TODO versioned_vars
     }
   end
+
+  @module_functions [
+    {:__info__, [:atom], :def},
+    {:module_info, [], :def},
+    {:module_info, [:atom], :def}
+  ]
+
+  def add_module_functions(state, env, functions, position, end_position) do
+    {line, column} = position
+    (functions ++ @module_functions)
+      |> Enum.reduce(state, fn {name, args, kind}, acc ->
+        mapped_args = for arg <- args, do: {arg, [line: line, column: column], nil}
+
+        acc
+        |> add_func_to_index(
+          env,
+          name,
+          mapped_args,
+          position,
+          end_position,
+          kind,
+          generated: true
+        )
+      end)
+  end
 end

@@ -39,6 +39,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     if Version.match?(System.version(), ">= 1.17.0-dev") do
       {_ast, state, _env} = Compiler.expand(ast, %State{}, Compiler.env())
       state
+      |> remove_attributes_scope
+      |> remove_behaviours_scope
+      |> remove_lexical_scope
+      |> remove_vars_scope
+      |> remove_module
+      |> remove_protocol_implementation
     else
       # dbg(ast)
       {_ast, [state]} =
