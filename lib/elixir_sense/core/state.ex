@@ -42,8 +42,8 @@ defmodule ElixirSense.Core.State do
           scope_attributes: list(list(atom)),
           behaviours: list(list(module)),
           specs: specs_t,
-          vars: list(list(ElixirSense.Core.State.VarInfo.t())),
-          scope_vars: list(list(ElixirSense.Core.State.VarInfo.t())),
+          vars_info: list(list(ElixirSense.Core.State.VarInfo.t())),
+          scope_vars_info: list(list(ElixirSense.Core.State.VarInfo.t())),
           scope_id_count: non_neg_integer,
           scope_ids: list(scope_id_t),
           vars_info_per_scope_id: vars_info_per_scope_id_t,
@@ -83,8 +83,8 @@ defmodule ElixirSense.Core.State do
             scope_attributes: [[]],
             behaviours: [[]],
             specs: %{},
-            vars: [[]],
-            scope_vars: [[]],
+            vars_info: [[]],
+            scope_vars_info: [[]],
             scope_id_count: 0,
             scope_ids: [0],
             vars_info_per_scope_id: %{},
@@ -500,14 +500,14 @@ defmodule ElixirSense.Core.State do
   end
 
   def get_current_vars(%__MODULE__{} = state) do
-    state.scope_vars
+    state.scope_vars_info
     |> List.flatten()
     |> reduce_vars()
     |> Enum.flat_map(fn {_var, scopes} -> scopes end)
   end
 
   def get_current_vars_refs(%__MODULE__{} = state) do
-    state.scope_vars |> List.flatten()
+    state.scope_vars_info |> List.flatten()
   end
 
   def get_current_attributes(%__MODULE__{} = state) do
@@ -886,8 +886,8 @@ defmodule ElixirSense.Core.State do
       state
       | scope_ids: [scope_id | state.scope_ids],
         scope_id_count: scope_id,
-        vars: [[] | state.vars],
-        scope_vars: [[] | state.scope_vars]
+        vars_info: [[] | state.vars_info],
+        scope_vars_info: [[] | state.scope_vars_info]
     }
   end
 
@@ -912,8 +912,8 @@ defmodule ElixirSense.Core.State do
       state
       | scope_ids: [scope_id | state.scope_ids],
         scope_id_count: scope_id,
-        vars: [[] | state.vars],
-        scope_vars: [[]]
+        vars_info: [[] | state.vars_info],
+        scope_vars_info: [[]]
     }
   end
 
@@ -929,8 +929,8 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{
       state
       | scope_ids: tl(state.scope_ids),
-        vars: tl(state.vars),
-        scope_vars: tl(state.scope_vars),
+        vars_info: tl(state.vars_info),
+        scope_vars_info: tl(state.scope_vars_info),
         vars_info_per_scope_id: update_vars_info_per_scope_id(state)
     }
   end
@@ -939,8 +939,8 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{
       state
       | scope_ids: tl(state.scope_ids),
-        vars: tl(state.vars),
-        scope_vars: tl(state.vars),
+        vars_info: tl(state.vars_info),
+        scope_vars_info: tl(state.vars_info),
         vars_info_per_scope_id: update_vars_info_per_scope_id(state)
     }
   end
@@ -948,7 +948,7 @@ defmodule ElixirSense.Core.State do
   def update_vars_info_per_scope_id(state) do
     [scope_id | _other_scope_ids] = state.scope_ids
 
-    [current_scope_vars | other_scope_vars] = state.scope_vars
+    [current_scope_vars | other_scope_vars] = state.scope_vars_info
 
     current_scope_reduced_vars = reduce_vars(current_scope_vars)
 
@@ -1273,7 +1273,7 @@ defmodule ElixirSense.Core.State do
         is_definition
       ) do
     scope = hd(hd(state.scopes))
-    [vars_from_scope | other_vars] = state.vars
+    [vars_from_scope | other_vars] = state.vars_info
     is_var_defined = is_variable_defined(state, var_name)
     var_name_as_string = Atom.to_string(var_name)
 
@@ -1301,8 +1301,8 @@ defmodule ElixirSense.Core.State do
 
     %__MODULE__{
       state
-      | vars: [vars_from_scope | other_vars],
-        scope_vars: [vars_from_scope | tl(state.scope_vars)]
+      | vars_info: [vars_from_scope | other_vars],
+        scope_vars_info: [vars_from_scope | tl(state.scope_vars_info)]
     }
   end
 
@@ -1515,7 +1515,7 @@ defmodule ElixirSense.Core.State do
   end
 
   defp pop_var(%__MODULE__{} = state, position) do
-    [current_scope_vars | other_vars] = state.vars
+    [current_scope_vars | other_vars] = state.vars_info
 
     var =
       Enum.find(current_scope_vars, fn %VarInfo{positions: positions} -> position in positions end)
@@ -1527,8 +1527,8 @@ defmodule ElixirSense.Core.State do
 
     state = %__MODULE__{
       state
-      | vars: [current_scope_vars | other_vars],
-        scope_vars: [current_scope_vars | tl(state.scope_vars)]
+      | vars_info: [current_scope_vars | other_vars],
+        scope_vars_info: [current_scope_vars | tl(state.scope_vars_info)]
     }
 
     {var, state}
@@ -1592,10 +1592,10 @@ defmodule ElixirSense.Core.State do
   end
 
   def maybe_move_vars_to_outer_scope(%__MODULE__{} = state) do
-    scope_vars = move_references_to_outer_scope(state.scope_vars)
-    vars = move_references_to_outer_scope(state.vars)
+    scope_vars = move_references_to_outer_scope(state.scope_vars_info)
+    vars = move_references_to_outer_scope(state.vars_info)
 
-    %__MODULE__{state | vars: vars, scope_vars: scope_vars}
+    %__MODULE__{state | vars_info: vars, scope_vars_info: scope_vars}
   end
 
   defp move_references_to_outer_scope(vars) do

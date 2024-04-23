@@ -42,8 +42,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert state.protocols == []
     assert state.scope_attributes == []
     assert state.behaviours == []
-    assert state.vars == []
-    assert state.scope_vars == []
+    assert state.vars_info == []
+    assert state.scope_vars_info == []
     assert state.scope_ids == []
   end
 
