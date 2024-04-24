@@ -40,7 +40,7 @@ defmodule ElixirSense.Core.State do
           attributes: list(list(ElixirSense.Core.State.AttributeInfo.t())),
           protocols: list(protocol_t() | nil),
           scope_attributes: list(list(atom)),
-          behaviours: list(list(module)),
+          behaviours: %{optional(module) => [module]},
           specs: specs_t,
           vars_info: list(list(ElixirSense.Core.State.VarInfo.t())),
           scope_vars_info: list(list(ElixirSense.Core.State.VarInfo.t())),
@@ -81,7 +81,7 @@ defmodule ElixirSense.Core.State do
             attributes: [[]],
             protocols: [nil],
             scope_attributes: [[]],
-            behaviours: [[]],
+            behaviours: %{},
             specs: %{},
             vars_info: [[]],
             scope_vars_info: [[]],
@@ -317,7 +317,7 @@ defmodule ElixirSense.Core.State do
     current_aliases = current_aliases(state)
     current_vars = state |> get_current_vars()
     current_attributes = state |> get_current_attributes()
-    current_behaviours = hd(state.behaviours)
+    current_behaviours = state.behaviours |> Map.get(current_module, [])
     current_scope = hd(state.scopes)
     current_scope_id = hd(state.scope_ids)
     current_scope_protocol = hd(state.protocols)
@@ -853,10 +853,6 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | attributes: [[] | state.attributes], scope_attributes: [[]]}
   end
 
-  def new_behaviours_scope(%__MODULE__{} = state) do
-    %__MODULE__{state | behaviours: [[] | state.behaviours]}
-  end
-
   def remove_vars_scope(%__MODULE__{} = state) do
     %__MODULE__{
       state
@@ -946,11 +942,6 @@ defmodule ElixirSense.Core.State do
   def remove_attributes_scope(%__MODULE__{} = state) do
     attributes = tl(state.attributes)
     %__MODULE__{state | attributes: attributes, scope_attributes: attributes}
-  end
-
-  def remove_behaviours_scope(%__MODULE__{} = state) do
-    behaviours = tl(state.behaviours)
-    %__MODULE__{state | behaviours: behaviours}
   end
 
   def add_alias(%__MODULE__{} = state, {alias, aliased}) when is_list(aliased) do
@@ -1291,19 +1282,14 @@ defmodule ElixirSense.Core.State do
     state
   end
 
-  def add_behaviour(%__MODULE__{} = state, module) when is_atom(module) or is_tuple(module) do
-    # TODO pass env
-    {module, state, _env} = expand(module, state)
-    [behaviours_from_scope | other_behaviours] = state.behaviours
-    behaviours_from_scope = behaviours_from_scope -- [module]
-    %__MODULE__{state | behaviours: [[module | behaviours_from_scope] | other_behaviours]}
+  def add_behaviour(module, %__MODULE__{} = state, env) when is_atom(module) do
+    state =
+      update_in(state.behaviours[get_current_module(state)], &Enum.uniq([module | &1 || []]))
+
+    {module, state, env}
   end
 
-  def add_behaviour(%__MODULE__{} = state, _module), do: state
-
-  def add_behaviours(%__MODULE__{} = state, modules) do
-    Enum.reduce(modules, state, fn mod, state -> add_behaviour(state, mod) end)
-  end
+  def add_behaviour(_module, %__MODULE__{} = state, env), do: {nil, state, env}
 
   def register_doc(%__MODULE__{} = state, %__MODULE__.Env{} = env, :moduledoc, doc_arg) do
     current_module = env.module
@@ -1502,6 +1488,17 @@ defmodule ElixirSense.Core.State do
 
   def expand(ast, %__MODULE__{} = state) do
     expand(ast, state, get_current_env(state))
+  end
+
+  def expand({:@, meta, [{:behaviour, _, [arg]}]}, state, env) do
+    line = Keyword.fetch!(meta, :line)
+
+    state =
+      state
+      |> add_current_env_to_line(line)
+
+    {arg, state, env} = expand(arg, state, env)
+    add_behaviour(arg, state, env)
   end
 
   def expand({form, meta, [{{:., _, [base, :{}]}, _, refs} | rest]}, state, env)
@@ -1783,20 +1780,21 @@ defmodule ElixirSense.Core.State do
 
   def add_module_functions(state, env, functions, position, end_position) do
     {line, column} = position
-    (functions ++ @module_functions)
-      |> Enum.reduce(state, fn {name, args, kind}, acc ->
-        mapped_args = for arg <- args, do: {arg, [line: line, column: column], nil}
 
-        acc
-        |> add_func_to_index(
-          env,
-          name,
-          mapped_args,
-          position,
-          end_position,
-          kind,
-          generated: true
-        )
-      end)
+    (functions ++ @module_functions)
+    |> Enum.reduce(state, fn {name, args, kind}, acc ->
+      mapped_args = for arg <- args, do: {arg, [line: line, column: column], nil}
+
+      acc
+      |> add_func_to_index(
+        env,
+        name,
+        mapped_args,
+        position,
+        end_position,
+        kind,
+        generated: true
+      )
+    end)
   end
 end

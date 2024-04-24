@@ -455,7 +455,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert state.attributes == []
     assert state.protocols == []
     assert state.scope_attributes == []
-    assert state.behaviours == []
     assert state.vars_info == []
     assert state.scope_vars_info == []
     assert state.scope_ids == []
@@ -3673,22 +3672,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{
                {Impls, nil, nil} => %ModFunInfo{
                  params: [nil],
-                 positions: [{28, 1}],
+                 positions: [{11, 1}],
                  type: :defmodule
                },
                {Reversible, :reverse, 1} => %ModFunInfo{
-                 params: [[{:term, [line: 19, column: 15], nil}]],
-                 positions: [{19, 3}],
+                 params: [[{:term, [line: 2, column: 15], nil}]],
+                 positions: [{2, 3}],
                  type: :def
                },
                {Reversible.String, :__impl__, 1} => %ElixirSense.Core.State.ModFunInfo{
-                 params: [[{:atom, [line: 23, column: 1], nil}]],
-                 positions: [{23, 1}],
+                 params: [[{:atom, [line: 6, column: 1], nil}]],
+                 positions: [{6, 1}],
                  type: :def
                },
                {Reversible, :behaviour_info, 1} => %ElixirSense.Core.State.ModFunInfo{
-                 params: [[{:atom, [line: 18, column: 1], nil}]],
-                 positions: [{18, 1}],
+                 params: [[{:atom, [line: 1, column: 1], nil}]],
+                 positions: [{1, 1}],
                  type: :def
                }
              } = state.mods_funs_to_positions

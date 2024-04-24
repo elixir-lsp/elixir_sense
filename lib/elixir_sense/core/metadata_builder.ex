@@ -42,7 +42,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     try do
       state
       |> remove_attributes_scope
-      |> remove_behaviours_scope
       |> remove_lexical_scope
       |> remove_vars_scope
       |> remove_module
@@ -71,7 +70,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
           state
           | attributes: [],
             scope_attributes: [],
-            behaviours: [],
             aliases: [],
             imports: [],
             requires: [],
@@ -137,7 +135,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_module(ast, state, meta, alias, types \\ [], functions \\ [], options \\ []) do
-    {position = {line, column}, end_position} = extract_range(meta)
+    {position, end_position} = extract_range(meta)
 
     {full, module, state} =
       case Keyword.get(options, :for) do
@@ -158,11 +156,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> add_current_module_to_index(position, end_position, generated: state.generated)
       |> new_lexical_scope
       |> new_attributes_scope
-      |> new_behaviours_scope
       |> new_vars_scope
-      |> maybe_add_protocol_behaviour(module)
 
     env = get_current_env(state)
+    {state, env} = maybe_add_protocol_behaviour(module, state, env)
 
     state =
       types
@@ -174,7 +171,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end)
 
     state = add_module_functions(state, env, functions, position, end_position)
-    
+
     state
     |> result(ast)
   end
@@ -185,7 +182,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
     |> apply_optional_callbacks(env)
     |> remove_attributes_scope
-    |> remove_behaviours_scope
     |> remove_lexical_scope
     |> remove_vars_scope
     |> remove_module
@@ -435,13 +431,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
     |> add_attribute(name, type, is_definition, position)
     |> add_current_env_to_line(line)
-    |> result(ast)
-  end
-
-  defp pre_behaviour(ast, state, line, module) do
-    state
-    |> add_current_env_to_line(line)
-    |> add_behaviour(module)
     |> result(ast)
   end
 
@@ -774,9 +763,9 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(new_ast)
   end
 
-  defp pre({:@, meta, [{:behaviour, _, [erlang_module]}]} = ast, state) do
-    line = Keyword.fetch!(meta, :line)
-    pre_behaviour(ast, state, line, erlang_module)
+  defp pre({:@, _meta, [{:behaviour, _, [_arg]}]} = ast, state) do
+    {ast, state, _env} = expand(ast, state)
+    {ast, state}
   end
 
   # protocol derive
@@ -1962,12 +1951,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     [state |> get_current_module]
   end
 
-  defp maybe_add_protocol_behaviour(state, {protocol, _}) do
-    state
-    |> add_behaviour(protocol)
+  defp maybe_add_protocol_behaviour({protocol, _}, state, env) do
+    {_, state, env} = add_behaviour(protocol, state, env)
+    {state, env}
   end
 
-  defp maybe_add_protocol_behaviour(state, _), do: state
+  defp maybe_add_protocol_behaviour(_, state, env), do: {state, env}
 
   defp add_struct_or_exception(state, type, fields, {line, column} = position, end_position) do
     fields =
@@ -1983,9 +1972,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state =
       if type == :defexception do
-        state =
-          state
-          |> add_behaviour(Exception)
+        {_, state, env} = add_behaviour(Exception, state, env)
 
         if Keyword.has_key?(fields, :message) do
           state
