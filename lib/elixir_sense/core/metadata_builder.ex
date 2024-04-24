@@ -841,13 +841,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
       proto -> proto
     end)
     |> Enum.reduce(state, fn proto, acc ->
-      case split_module_expression(state, proto) do
-        {:ok, proto_module} ->
+      case expand_alias(state, proto) do
+        proto_module when is_atom(proto_module) ->
           # protocol implementation module for Any
-          mod_any = Module.concat(proto_module ++ [Any])
+          mod_any = Module.concat(proto_module, Any)
 
           # protocol implementation module built by @derive
-          mod = Module.concat(proto_module ++ [current_module])
+          mod = Module.concat(proto_module, current_module)
 
           case acc.mods_funs_to_positions[{mod_any, nil, nil}] do
             nil ->
