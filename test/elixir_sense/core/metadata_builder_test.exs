@@ -13,7 +13,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
   @behaviour_support Version.match?(System.version(), "< 1.17.0-dev")
   @defdelegate_support Version.match?(System.version(), "< 1.17.0-dev")
-  @defguard_support Version.match?(System.version(), "< 1.17.0-dev")
   @first_alias_positions Version.match?(System.version(), "< 1.17.0-dev")
   @struct_support Version.match?(System.version(), "< 1.17.0-dev")
   @calls_support Version.match?(System.version(), "< 1.17.0-dev")
@@ -3300,63 +3299,65 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert get_line_protocol(state, 16) == nil
     end
 
-    test "current module and protocol implementation" do
-      state =
-        """
-        defprotocol My.Reversible do
-          def reverse(term)
-          IO.puts ""
-        end
-
-        defimpl My.Reversible, for: String do
-          def reverse(term), do: String.reverse(term)
-          IO.puts ""
-        end
-
-        defimpl My.Reversible, for: [Map, My.List] do
-          def reverse(term), do: Enum.reverse(term)
-          IO.puts ""
-
-          defmodule OuterModule do
+    if @protocol_support do
+      test "current module and protocol implementation" do
+        state =
+          """
+          defprotocol My.Reversible do
+            def reverse(term)
             IO.puts ""
           end
 
-          defprotocol Other do
-            def other(term)
+          defimpl My.Reversible, for: String do
+            def reverse(term), do: String.reverse(term)
             IO.puts ""
           end
 
-          defimpl Other, for: [Map, My.Map] do
-            def other(term), do: nil
-            IO.inspect(__ENV__.module)
+          defimpl My.Reversible, for: [Map, My.List] do
+            def reverse(term), do: Enum.reverse(term)
+            IO.puts ""
+
+            defmodule OuterModule do
+              IO.puts ""
+            end
+
+            defprotocol Other do
+              def other(term)
+              IO.puts ""
+            end
+
+            defimpl Other, for: [Map, My.Map] do
+              def other(term), do: nil
+              IO.inspect(__ENV__.module)
+            end
           end
-        end
-        """
-        |> string_to_state
+          """
+          |> string_to_state
 
-      # protocol and implementations create modules
-      assert get_line_module(state, 3) == My.Reversible
-      assert get_line_protocol(state, 3) == nil
-      assert get_line_module(state, 8) == My.Reversible.String
-      assert get_line_protocol(state, 8) == {My.Reversible, [String]}
-      assert get_line_module(state, 13) == My.Reversible.Map
-      assert get_line_protocol(state, 13) == {My.Reversible, [Map, My.List]}
+        # protocol and implementations create modules
+        assert get_line_module(state, 3) == My.Reversible
+        assert get_line_protocol(state, 3) == nil
+        assert get_line_module(state, 8) == My.Reversible.String
+        assert get_line_protocol(state, 8) == {My.Reversible, [String]}
+        assert get_line_module(state, 13) == My.Reversible.Map
+        assert get_line_protocol(state, 13) == {My.Reversible, [Map, My.List]}
 
-      # implementation has behaviour
-      assert get_line_behaviours(state, 8) == [My.Reversible]
+        # implementation has behaviour
+        assert get_line_behaviours(state, 8) == [My.Reversible]
 
-      # multiple implementations create multiple modules
-      assert get_line_module(state, 16) == My.Reversible.Map.OuterModule
+        # multiple implementations create multiple modules
+        assert get_line_module(state, 16) == My.Reversible.Map.OuterModule
 
-      assert get_line_protocol(state, 16) == nil
+        assert get_line_protocol(state, 16) == nil
 
-      # protocol and implementations inside protocol implementation creates a cross product
-      assert get_line_module(state, 21) == My.Reversible.Map.Other
-      assert get_line_protocol(state, 21) == nil
+        # protocol and implementations inside protocol implementation creates a cross product
+        assert get_line_module(state, 21) == My.Reversible.Map.Other
+        assert get_line_protocol(state, 21) == nil
 
-      assert get_line_module(state, 26) == My.Reversible.Map.Other.Map
+        assert get_line_module(state, 26) == My.Reversible.Map.Other.Map
 
-      assert get_line_protocol(state, 26) == {My.Reversible.Map.Other, [Map, My.Map]}
+        assert get_line_protocol(state, 26) == {My.Reversible.Map.Other, [Map, My.Map]}
+      end
     end
   end
 
@@ -3627,25 +3628,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmodule Some.Nested do
         IO.puts ""
       end
-
-      defprotocol Reversible do
-        def reverse(term)
-        IO.puts ""
-      end
-
-      defimpl Reversible, for: String do
-        def reverse(term), do: String.reverse(term)
-        IO.puts ""
-      end
-
-      defmodule Impls do
-        alias Reversible, as: R
-        alias My.List, as: Ml
-        defimpl R, for: [Map, Ml] do
-          def reverse(term), do: Enum.reverse(term)
-          IO.puts ""
-        end
-      end
       """
       |> string_to_state
 
@@ -3659,28 +3641,58 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                params: [[]],
                positions: [{5, 5}],
                type: :def
-             },
-             {Impls, nil, nil} => %ModFunInfo{
-               params: [nil],
-               positions: [{28, 1}],
-               type: :defmodule
-             },
-             {Reversible, :reverse, 1} => %ModFunInfo{
-               params: [[{:term, [line: 19, column: 15], nil}]],
-               positions: [{19, 3}],
-               type: :def
-             },
-             {Reversible.String, :__impl__, 1} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 23, column: 1], nil}]],
-               positions: [{23, 1}],
-               type: :def
-             },
-             {Reversible, :behaviour_info, 1} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 18, column: 1], nil}]],
-               positions: [{18, 1}],
-               type: :def
              }
            } = state.mods_funs_to_positions
+  end
+
+  if @protocol_support do
+    test "registers positions in protocol implementation" do
+      state =
+        """
+        defprotocol Reversible do
+          def reverse(term)
+          IO.puts ""
+        end
+
+        defimpl Reversible, for: String do
+          def reverse(term), do: String.reverse(term)
+          IO.puts ""
+        end
+
+        defmodule Impls do
+          alias Reversible, as: R
+          alias My.List, as: Ml
+          defimpl R, for: [Map, Ml] do
+            def reverse(term), do: Enum.reverse(term)
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {Impls, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 positions: [{28, 1}],
+                 type: :defmodule
+               },
+               {Reversible, :reverse, 1} => %ModFunInfo{
+                 params: [[{:term, [line: 19, column: 15], nil}]],
+                 positions: [{19, 3}],
+                 type: :def
+               },
+               {Reversible.String, :__impl__, 1} => %ElixirSense.Core.State.ModFunInfo{
+                 params: [[{:atom, [line: 23, column: 1], nil}]],
+                 positions: [{23, 1}],
+                 type: :def
+               },
+               {Reversible, :behaviour_info, 1} => %ElixirSense.Core.State.ModFunInfo{
+                 params: [[{:atom, [line: 18, column: 1], nil}]],
+                 positions: [{18, 1}],
+                 type: :def
+               }
+             } = state.mods_funs_to_positions
+    end
   end
 
   test "functions with default args" do
@@ -3889,11 +3901,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert MyModule == get_line_module(state, 16)
     end
 
-    if @defguard_support do
-      assert nil == get_line_typespec(state, 18)
-      assert {:is_even, 1} == get_line_function(state, 18)
-      assert MyModule == get_line_module(state, 18)
-    end
+    assert nil == get_line_typespec(state, 18)
+    assert {:is_even, 1} == get_line_function(state, 18)
+    assert MyModule == get_line_module(state, 18)
 
     assert nil == get_line_typespec(state, 21)
     assert nil == get_line_function(state, 21)
