@@ -33,8 +33,8 @@ defmodule ElixirSense.Core.State do
   @type var_type :: nil | {:atom, atom} | {:map, keyword} | {:struct, keyword, module}
 
   @type t :: %ElixirSense.Core.State{
-          namespace: [[atom]],
-          scopes: [[scope]],
+          namespace: [atom],
+          scopes: [scope],
           requires: list(list(module)),
           aliases: list(list(alias_t)),
           attributes: list(list(ElixirSense.Core.State.AttributeInfo.t())),
@@ -72,8 +72,8 @@ defmodule ElixirSense.Core.State do
                       [Kernel.Typespec]
                     end)
 
-  defstruct namespace: [[Elixir]],
-            scopes: [[Elixir]],
+  defstruct namespace: [nil],
+            scopes: [nil],
             functions: [@auto_imported_functions],
             macros: [@auto_imported_macros],
             requires: [@auto_required],
@@ -318,7 +318,7 @@ defmodule ElixirSense.Core.State do
     current_vars = state |> get_current_vars()
     current_attributes = state |> get_current_attributes()
     current_behaviours = hd(state.behaviours)
-    current_scope = hd(hd(state.scopes))
+    current_scope = hd(state.scopes)
     current_scope_id = hd(state.scope_ids)
     current_scope_protocol = hd(state.protocols)
 
@@ -351,11 +351,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def get_current_module(%__MODULE__{} = state) do
-    case state.namespace |> hd do
-      [Elixir] -> nil
-      atom when is_atom(atom) -> atom
-      list -> list |> Enum.reverse() |> Module.concat()
-    end
+    state.namespace |> hd
   end
 
   def add_current_env_to_line(%__MODULE__{} = state, line) when is_integer(line) do
@@ -394,7 +390,7 @@ defmodule ElixirSense.Core.State do
         line
       )
       when is_integer(line) and is_binary(here_doc) do
-    module_name = module_name(state)
+    module_name = get_current_module(state)
 
     new_line_count = here_doc |> String.split("\n") |> Enum.count()
     line_to_insert_alias = new_line_count + line + 1
@@ -413,7 +409,7 @@ defmodule ElixirSense.Core.State do
         line
       )
       when is_integer(line) and is_boolean(params) do
-    module_name = module_name(state)
+    module_name = get_current_module(state)
 
     line_to_insert_alias = line + 1
 
@@ -428,12 +424,12 @@ defmodule ElixirSense.Core.State do
 
   def add_first_alias_positions(%__MODULE__{} = state, line, column)
       when is_integer(line) and is_integer(column) do
-    current_scope = hd(hd(state.scopes))
+    current_scope = hd(state.scopes)
 
-    is_module? = is_atom(current_scope) and current_scope != Elixir
+    is_module? = is_atom(current_scope) and current_scope != nil
 
     if is_module? do
-      module_name = module_name(state)
+      module_name = get_current_module(state)
 
       %__MODULE__{
         state
@@ -444,17 +440,6 @@ defmodule ElixirSense.Core.State do
       state
     end
   end
-
-  defp module_name(state) do
-    hd(state.scopes)
-    |> Enum.reverse()
-    |> after_elixir_prefix()
-    |> Enum.filter(&is_atom/1)
-    |> Module.concat()
-  end
-
-  defp after_elixir_prefix([Elixir | rest]), do: rest
-  defp after_elixir_prefix(rest), do: rest
 
   def add_call_to_line(%__MODULE__{} = state, {nil, :__block__, _}, _position), do: state
 
@@ -607,39 +592,10 @@ defmodule ElixirSense.Core.State do
 
   def add_namespace(%__MODULE__{} = state, module) do
     # TODO refactor to allow {:implementation, protocol, [implementations]} in scope
-    {namespace, scopes} =
-      case module do
-        [Elixir | module = [_ | _]] ->
-          case state.namespace do
-            [[Elixir]] ->
-              # top level module - drop prefix
-              module_reversed = :lists.reverse(module)
-              namespace = module_reversed ++ hd(state.namespace)
-              scopes = module_reversed ++ hd(state.scopes)
-              {namespace, scopes}
-
-            [_ | _] ->
-              # external submodule
-              module_reversed = :lists.reverse(module)
-              namespace = module_reversed
-              scopes = module_reversed
-              {namespace, scopes}
-          end
-
-        module when is_list(module) ->
-          module_reversed = :lists.reverse(module)
-          namespace = module_reversed ++ hd(state.namespace)
-          scopes = module_reversed ++ hd(state.scopes)
-          {namespace, scopes}
-
-        module when is_atom(module) ->
-          {module, [module]}
-      end
-
     %__MODULE__{
       state
-      | namespace: [namespace | state.namespace],
-        scopes: [scopes | state.scopes],
+      | namespace: [module | state.namespace],
+        scopes: [module | state.scopes],
         doc_context: [[] | state.doc_context],
         typedoc_context: [[] | state.typedoc_context],
         optional_callbacks_context: [[] | state.optional_callbacks_context]
@@ -661,7 +617,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_typespec_namespace(%__MODULE__{} = state, name, arity) do
-    %{state | scopes: [[{:typespec, name, arity} | hd(state.scopes)] | state.scopes]}
+    %{state | scopes: [{:typespec, name, arity} | state.scopes]}
   end
 
   def register_optional_callbacks(%__MODULE__{} = state, list) do
@@ -686,10 +642,13 @@ defmodule ElixirSense.Core.State do
   end
 
   def new_named_func(%__MODULE__{} = state, name, arity) do
-    %{state | scopes: [[{name, arity} | hd(state.scopes)] | state.scopes]}
+    %{state | scopes: [{name, arity} | state.scopes]}
   end
 
-  def maybe_add_protocol_implementation(%__MODULE__{} = state, protocol = {_protocol, _implementations}) do
+  def maybe_add_protocol_implementation(
+        %__MODULE__{} = state,
+        protocol = {_protocol, _implementations}
+      ) do
     %__MODULE__{state | protocols: [protocol | state.protocols]}
   end
 
@@ -1252,7 +1211,7 @@ defmodule ElixirSense.Core.State do
         %VarInfo{name: var_name} = var_info,
         is_definition
       ) do
-    scope = hd(hd(state.scopes))
+    scope = hd(state.scopes)
     [vars_from_scope | other_vars] = state.vars_info
     is_var_defined = is_variable_defined(state, var_name)
     var_name_as_string = Atom.to_string(var_name)
