@@ -447,7 +447,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert state.namespace == []
+    assert state.module == []
     assert state.scopes == []
     assert state.functions == []
     assert state.macros == []

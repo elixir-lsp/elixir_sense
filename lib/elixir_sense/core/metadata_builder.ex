@@ -51,7 +51,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> remove_behaviours_scope
       |> remove_lexical_scope
       |> remove_vars_scope
-      |> remove_namespace
+      |> remove_module
       |> remove_protocol_implementation
     rescue
       exception ->
@@ -85,7 +85,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
             vars: [],
             scope_vars: [],
             vars_info_per_scope_id: vars_info_per_scope_id,
-            namespace: [],
+            module: [],
             scopes: [],
             protocols: []
         }
@@ -160,7 +160,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state =
       state
       |> maybe_add_protocol_implementation(module)
-      |> add_namespace(full)
+      |> add_module(full)
       |> add_current_module_to_index(position, end_position, generated: state.generated)
       |> new_lexical_scope
       |> new_attributes_scope
@@ -209,7 +209,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> remove_behaviours_scope
     |> remove_lexical_scope
     |> remove_vars_scope
-    |> remove_namespace
+    |> remove_module
     |> remove_protocol_implementation
     |> result(ast)
   end

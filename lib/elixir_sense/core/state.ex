@@ -33,7 +33,7 @@ defmodule ElixirSense.Core.State do
   @type var_type :: nil | {:atom, atom} | {:map, keyword} | {:struct, keyword, module}
 
   @type t :: %ElixirSense.Core.State{
-          namespace: [atom],
+          module: [atom],
           scopes: [scope],
           requires: list(list(module)),
           aliases: list(list(alias_t)),
@@ -72,7 +72,7 @@ defmodule ElixirSense.Core.State do
                       [Kernel.Typespec]
                     end)
 
-  defstruct namespace: [nil],
+  defstruct module: [nil],
             scopes: [nil],
             functions: [@auto_imported_functions],
             macros: [@auto_imported_macros],
@@ -351,7 +351,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def get_current_module(%__MODULE__{} = state) do
-    state.namespace |> hd
+    state.module |> hd
   end
 
   def add_current_env_to_line(%__MODULE__{} = state, line) when is_integer(line) do
@@ -590,11 +590,11 @@ defmodule ElixirSense.Core.State do
     Module.concat(protocol, first)
   end
 
-  def add_namespace(%__MODULE__{} = state, module) do
+  def add_module(%__MODULE__{} = state, module) do
     # TODO refactor to allow {:implementation, protocol, [implementations]} in scope
     %__MODULE__{
       state
-      | namespace: [module | state.namespace],
+      | module: [module | state.module],
         scopes: [module | state.scopes],
         doc_context: [[] | state.doc_context],
         typedoc_context: [[] | state.typedoc_context],
@@ -602,14 +602,11 @@ defmodule ElixirSense.Core.State do
     }
   end
 
-  def remove_namespace(%__MODULE__{} = state) do
-    outer_mods = state.namespace |> tl
-    outer_scopes = state.scopes |> tl
-
+  def remove_module(%__MODULE__{} = state) do
     %{
       state
-      | namespace: outer_mods,
-        scopes: outer_scopes,
+      | module: tl(state.module),
+        scopes: tl(state.scopes),
         doc_context: tl(state.doc_context),
         typedoc_context: tl(state.typedoc_context),
         optional_callbacks_context: tl(state.optional_callbacks_context)
