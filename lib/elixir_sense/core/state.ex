@@ -700,7 +700,7 @@ defmodule ElixirSense.Core.State do
 
   def add_func_to_index(
         %__MODULE__{} = state,
-        %__MODULE__.Env{} = env,
+        env,
         func,
         params,
         position,
@@ -1774,4 +1774,29 @@ defmodule ElixirSense.Core.State do
   end
 
   defp map_fold(_fun, s, e, [], acc), do: {Enum.reverse(acc), s, e}
+
+  @module_functions [
+    {:__info__, [:atom], :def},
+    {:module_info, [], :def},
+    {:module_info, [:atom], :def}
+  ]
+
+  def add_module_functions(state, env, functions, position, end_position) do
+    {line, column} = position
+    (functions ++ @module_functions)
+      |> Enum.reduce(state, fn {name, args, kind}, acc ->
+        mapped_args = for arg <- args, do: {arg, [line: line, column: column], nil}
+
+        acc
+        |> add_func_to_index(
+          env,
+          name,
+          mapped_args,
+          position,
+          end_position,
+          kind,
+          generated: true
+        )
+      end)
+  end
 end

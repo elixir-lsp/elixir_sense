@@ -24,11 +24,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {:impl_for!, [:data], :def},
     {:behaviour_info, [:atom], :def}
   ]
-  @module_functions [
-    {:__info__, [:atom], :def},
-    {:module_info, [], :def},
-    {:module_info, [:atom], :def}
-  ]
 
   defguardp is_call(call, params)
             when is_atom(call) and is_list(params) and
@@ -178,23 +173,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
         )
       end)
 
-    state =
-      (functions ++ @module_functions)
-      |> Enum.reduce(state, fn {name, args, kind}, acc ->
-        mapped_args = for arg <- args, do: {arg, [line: line, column: column], nil}
-
-        acc
-        |> add_func_to_index(
-          env,
-          name,
-          mapped_args,
-          position,
-          end_position,
-          kind,
-          generated: true
-        )
-      end)
-
+    state = add_module_functions(state, env, functions, position, end_position)
+    
     state
     |> result(ast)
   end
