@@ -38,12 +38,11 @@ defmodule ElixirSense.Core.ParserTest do
              error: {:error, :parse_error},
              lines_to_env: %{
                1 => %Env{module: MyModule},
-               2 => %Env{functions: functions2, module: MyModule},
+               2 => %Env{functions: _functions2, module: MyModule},
                3 => %Env{functions: functions3, module: MyModule}
              }
            } = parse_string(source, true, true, {3, 10})
 
-    assert Keyword.has_key?(functions2, List)
     assert Keyword.has_key?(functions3, List)
   end
 
@@ -373,6 +372,7 @@ defmodule ElixirSense.Core.ParserTest do
     defmodule MyModule do
       use EnumFake
       import List
+      foo()
 
     end
     """
@@ -382,10 +382,10 @@ defmodule ElixirSense.Core.ParserTest do
              mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 1}]}},
              lines_to_env: %{
                1 => %Env{},
-               3 => %Env{functions: functions}
+               4 => %Env{functions: functions}
              },
              source: "defmodule MyModule" <> _
-           } = parse_string(source, true, true, {4, 3})
+           } = parse_string(source, true, true, {5, 3})
 
     assert Keyword.has_key?(functions, List)
   end

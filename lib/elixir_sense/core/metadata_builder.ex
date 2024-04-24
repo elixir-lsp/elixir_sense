@@ -8,7 +8,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.Introspection
-  alias ElixirSense.Core.MacroExpander
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.VarInfo
@@ -979,110 +978,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     end
   end
 
-  # transform multi alias/require/import/use syntax ast into regular
   defp pre(
-         {directive, meta, [{{:., _, [prefix_expression, :{}]}, _, postfix_expressions} | rest]},
+         {directive, _meta, _args} = ast,
          state
        )
        when directive in [:alias, :require, :import, :use] do
-    directives =
-      modules_from_12_syntax(state, postfix_expressions, prefix_expression)
-      |> Enum.map(fn module_list ->
-        {directive, meta, [{:__aliases__, [], module_list} | rest]}
-      end)
-
-    state
-    |> result({:__block__, meta, directives})
-  end
-
-  # transform alias/require/import/use without options into with empty options
-  defp pre({directive, meta, [module_info]}, state)
-       when directive in [:alias, :require, :import, :use] do
-    pre({directive, meta, [module_info, []]}, state)
-  end
-
-  # import with options
-  defp pre(
-         {:import, meta, [module_ast, opts]} = ast,
-         state
-       ) do
-    line = Keyword.fetch!(meta, :line)
-
-    {arg, state, env} = expand(module_ast, state)
-    # options = expand(no_alias_opts(module_ast), state)
-
-    if is_atom(arg) do
-      state
-      |> add_current_env_to_line(line)
-      |> add_require(arg)
-      |> add_import(arg, opts)
-      |> result(ast)
-    else
-      {ast, state}
-    end
-  end
-
-  # require
-  defp pre(
-         {:require, meta, [module_ast, options]} = ast,
-         state
-       ) do
-    line = Keyword.fetch!(meta, :line)
-
-    {arg, state, _env} = expand(module_ast, state)
-    # options = expand(no_alias_opts(module_ast), state)
-
-    if is_atom(arg) do
-      state =
-        state
-        |> add_current_env_to_line(line)
-
-      case Keyword.get(options, :as) do
-        nil ->
-          state
-
-        as ->
-          # require with `as:` option
-          alias_tuple = {no_alias_expansion(as), arg}
-          add_alias(state, alias_tuple)
-      end
-      |> add_require(arg)
-      |> result(ast)
-    else
-      {ast, state}
-    end
-  end
-
-  defp pre(
-         {:alias, meta, [module_ast, options]} = ast,
-         state
-       ) do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-
-    {arg, state, env} = expand(module_ast, state)
-    # options = expand(no_alias_opts(module_ast), state, env)
-
-    if is_atom(arg) do
-      state = add_first_alias_positions(state, line, column)
-
-      alias_tuple =
-        case Keyword.get(options, :as) do
-          nil ->
-            {Module.concat([List.last(Module.split(arg))]), arg}
-
-          as ->
-            # alias with `as:` option
-            {no_alias_expansion(as), arg}
-        end
-
-      state
-      |> add_current_env_to_line(line)
-      |> add_alias(alias_tuple)
-      |> result(ast)
-    else
-      {ast, state}
-    end
+    {ast, state, _env} = expand(ast, state)
+    {ast, state}
   end
 
   defp pre({:defoverridable, meta, [arg]} = ast, state) do
@@ -1179,27 +1081,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result({:when, meta, [:_, rhs]})
   end
 
-  defp pre({:use, _meta, []} = ast, state) do
-    # defmacro use in Kernel
-    {ast, state}
-  end
-
-  defp pre({:use, meta, _} = ast, state) do
-    # take first variant as we optimistically assume that the result of expanding `use` will be the same for all variants
-    current_module = get_current_module(state)
-
-    expanded_ast =
-      ast
-      |> MacroExpander.add_default_meta()
-      |> MacroExpander.expand_use(
-        current_module,
-        current_aliases(state),
-        meta |> Keyword.take([:line, :column])
-      )
-
-    {{:__generated__, [], [expanded_ast]}, %{state | generated: true}}
-  end
-
   defp pre({type, meta, fields} = ast, state)
        when type in [:defstruct, :defexception] do
     {position, end_position} = extract_range(meta)
@@ -1286,7 +1167,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
               is_atom(name) do
     {position = {line, column}, end_position} = extract_range(meta1)
 
-    {module, state, env} = expand(module_expression, state)
+    # TODO pass env
+    {module, state, _env} = expand(module_expression, state)
 
     type =
       case call do
@@ -1335,7 +1217,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
     column = Keyword.fetch!(meta1, :column)
 
     try do
-      {module, state, env} = expand(module_expression, state)
+      # TODO pass env
+      {module, state, _env} = expand(module_expression, state)
 
       shift = if state.generated, do: 0, else: 1
 
@@ -2078,7 +1961,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
          protocol,
          for_expression
        ) do
-    {protocol, state, env} = expand(protocol, state)
+    # TODO pass env
+    {protocol, state, _env} = expand(protocol, state)
     implementations = get_implementations_from_for_expression(state, for_expression)
 
     pre_module(ast, state, meta, protocol, [], [{:__impl__, [:atom], :def}], for: implementations)
@@ -2097,40 +1981,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp get_implementations_from_for_expression(state, _other) do
     [state |> get_current_module]
   end
-
-  defp modules_from_12_syntax(state, expressions, prefix_expression) do
-    case split_module_expression(state, prefix_expression) do
-      {:ok, prefix_atoms} ->
-        for expression <- expressions do
-          case split_module_expression(state, expression) do
-            {:ok, suffix_atoms} ->
-              List.wrap(prefix_atoms) ++ List.wrap(suffix_atoms)
-
-            :error ->
-              :error
-          end
-        end
-        |> Enum.reject(&(&1 == :error))
-
-      :error ->
-        []
-    end
-  end
-
-  defp split_module_expression(state, {:__aliases__, _, mods}) do
-    {:ok,
-     case mods do
-       [{:__MODULE__, _, nil} | rest] -> [state |> get_current_module | rest]
-       other -> other
-     end}
-  end
-
-  defp split_module_expression(_state, mod) when is_atom(mod), do: {:ok, mod}
-
-  defp split_module_expression(state, {:__MODULE__, _, nil}),
-    do: {:ok, [state |> get_current_module]}
-
-  defp split_module_expression(_, _), do: :error
 
   defp maybe_add_protocol_behaviour(state, {protocol, _}) do
     state

@@ -959,7 +959,8 @@ defmodule ElixirSense.Core.State do
       [aliases_from_scope | inherited_aliases] = state.aliases
       aliases_from_scope = aliases_from_scope |> Enum.reject(&match?({^alias, _}, &1))
 
-      {expanded, state, env} = expand(aliased, state)
+      # TODO pass env
+      {expanded, state, _env} = expand(aliased, state)
 
       aliases_from_scope =
         if alias != expanded do
@@ -1291,7 +1292,8 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_behaviour(%__MODULE__{} = state, module) when is_atom(module) or is_tuple(module) do
-    {module, state, env} = expand(module, state)
+    # TODO pass env
+    {module, state, _env} = expand(module, state)
     [behaviours_from_scope | other_behaviours] = state.behaviours
     behaviours_from_scope = behaviours_from_scope -- [module]
     %__MODULE__{state | behaviours: [[module | behaviours_from_scope] | other_behaviours]}
@@ -1502,8 +1504,135 @@ defmodule ElixirSense.Core.State do
     expand(ast, state, get_current_env(state))
   end
 
+  def expand({form, meta, [{{:., _, [base, :{}]}, _, refs} | rest]}, state, env)
+      when form in [:require, :alias, :import, :use] do
+    case rest do
+      [] ->
+        expand_multi_alias_call(form, meta, base, refs, [], state, env)
+
+      [opts] ->
+        opts = Keyword.delete(opts, :as)
+        # if Keyword.has_key?(opts, :as) do
+        #   raise "as_in_multi_alias_call"
+        # end
+
+        expand_multi_alias_call(form, meta, base, refs, opts, state, env)
+    end
+  end
+
+  def expand({form, meta, [arg]}, state, env) when form in [:require, :alias, :import] do
+    expand({form, meta, [arg, []]}, state, env)
+  end
+
   def expand(module, %__MODULE__{} = state, %__MODULE__.Env{} = env) when is_atom(module) do
     {module, state, env}
+  end
+
+  def expand({:alias, meta, [arg, opts]}, state, env) do
+    line = Keyword.fetch!(meta, :line)
+    column = Keyword.fetch!(meta, :column)
+
+    {arg, state, env} = expand(arg, state, env)
+    # options = expand(no_alias_opts(arg), state, env, env)
+
+    if is_atom(arg) do
+      state = add_first_alias_positions(state, line, column)
+
+      alias_tuple =
+        case Keyword.get(opts, :as) do
+          nil ->
+            {Module.concat([List.last(Module.split(arg))]), arg}
+
+          as ->
+            # alias with `as:` option
+            {no_alias_expansion(as), arg}
+        end
+
+      state =
+        state
+        |> add_current_env_to_line(line)
+        |> add_alias(alias_tuple)
+
+      {arg, state, env}
+    else
+      {nil, state, env}
+    end
+  rescue
+    ArgumentError -> {nil, state, env}
+  end
+
+  def expand({:require, meta, [arg, opts]}, state, env) do
+    line = Keyword.fetch!(meta, :line)
+
+    {arg, state, env} = expand(arg, state, env)
+    # opts = expand(no_alias_opts(opts), state, env)
+
+    if is_atom(arg) do
+      state =
+        state
+        |> add_current_env_to_line(line)
+
+      state =
+        case Keyword.get(opts, :as) do
+          nil ->
+            state
+
+          as ->
+            # require with `as:` option
+            alias_tuple = {no_alias_expansion(as), arg}
+            add_alias(state, alias_tuple)
+        end
+        |> add_require(arg)
+
+      {arg, state, env}
+    else
+      {nil, state, env}
+    end
+  end
+
+  def expand({:import, meta, [arg, opts]}, state, env) do
+    line = Keyword.fetch!(meta, :line)
+
+    {arg, state, env} = expand(arg, state, env)
+    # opts = expand(no_alias_opts(opts), state, env)
+
+    if is_atom(arg) do
+      state =
+        state
+        |> add_current_env_to_line(line)
+        |> add_require(arg)
+        |> add_import(arg, opts)
+
+      {arg, state, env}
+    else
+      {nil, state, env}
+    end
+  end
+
+  def expand({:use, _meta, []} = ast, state, env) do
+    # defmacro use in Kernel
+    {ast, state, env}
+  end
+
+  def expand({:use, meta, _} = ast, state, env) do
+    alias ElixirSense.Core.MacroExpander
+    line = Keyword.fetch!(meta, :line)
+
+    state =
+      state
+      |> add_current_env_to_line(line)
+
+    # TODO pass env
+    expanded_ast =
+      ast
+      |> MacroExpander.add_default_meta()
+      |> MacroExpander.expand_use(
+        env.module,
+        env.aliases,
+        meta |> Keyword.take([:line, :column])
+      )
+
+    {{:__generated__, [], [expanded_ast]}, %{state | generated: true}, env}
   end
 
   def expand(
@@ -1529,6 +1658,10 @@ defmodule ElixirSense.Core.State do
   def expand({:__aliases__, _, module}, %__MODULE__{} = state, %__MODULE__.Env{} = env)
       when is_list(module) do
     {Introspection.expand_alias(Module.concat(module), env.aliases), state, env}
+  end
+
+  def expand(ast, %__MODULE__{} = state, %__MODULE__.Env{} = env) do
+    {ast, state, env}
   end
 
   def maybe_move_vars_to_outer_scope(%__MODULE__{} = state) do
@@ -1615,24 +1748,23 @@ defmodule ElixirSense.Core.State do
     {module, state, env}
   end
 
-  # defp expand_multi_alias_call(kind, meta, base, refs, opts, state, env) do
-  #   # {base_ref, state, env} = expand(base, state, env)
-  #   base_ref = expand_alias(state, base)
+  defp expand_multi_alias_call(kind, meta, base, refs, opts, state, env) do
+    {base_ref, state, env} = expand(base, state, env)
 
-  #   fun = fn
-  #     {:__aliases__, _, ref}, state, env ->
-  #       expand({kind, meta, [Module.concat([base_ref | ref]), opts]}, state, env)
+    fun = fn
+      {:__aliases__, _, ref}, state, env ->
+        expand({kind, meta, [Module.concat([base_ref | ref]), opts]}, state, env)
 
-  #     ref, state, env when is_atom(ref) ->
-  #       expand({kind, meta, [Module.concat([base_ref, ref]), opts]}, state, env)
+      ref, state, env when is_atom(ref) ->
+        expand({kind, meta, [Module.concat([base_ref, ref]), opts]}, state, env)
 
-  #     _other, s, e ->
-  #       {nil, s, e}
-  #       # raise "expected_compile_time_module"
-  #   end
+      _other, s, e ->
+        {nil, s, e}
+        # raise "expected_compile_time_module"
+    end
 
-  #   map_fold(fun, state, env, refs)
-  # end
+    map_fold(fun, state, env, refs)
+  end
 
   defp map_fold(fun, s, e, list), do: map_fold(fun, s, e, list, [])
 
