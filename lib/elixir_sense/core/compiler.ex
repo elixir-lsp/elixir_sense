@@ -10,7 +10,7 @@ defmodule ElixirSense.Core.Compiler do
       do_expand(ast, state, env)
     catch
       kind, payload ->
-        # Logger.warning("Unable to expand ast node #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}")
+        Logger.warning("Unable to expand ast node #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}")
         {ast, state, env}
     end
   end
@@ -713,6 +713,25 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   ## Macro handling
+
+  defp expand_macro(
+         meta,
+         Kernel,
+         :@,
+         [{:behaviour, _meta, [arg]}],
+         _callback,
+         state,
+         env
+       ) do
+        line = Keyword.fetch!(meta, :line)
+
+        state =
+          state
+          |> add_current_env_to_line(line)
+    
+        {arg, state, env} = expand(arg, state, env)
+        add_behaviour(arg, state, env)
+  end
 
   defp expand_macro(
          meta,

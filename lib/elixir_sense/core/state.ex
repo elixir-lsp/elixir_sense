@@ -372,7 +372,7 @@ defmodule ElixirSense.Core.State do
     # current_vars = state |> get_current_vars()
     current_vars = state.vars |> elem(0)
     current_attributes = state |> get_current_attributes()
-    current_behaviours = hd(state.behaviours)
+    current_behaviours = state.behaviours |> Map.get(macro_env.module, [])
 
     current_scope_id = hd(state.scope_ids)
     current_scope_protocol = hd(state.protocols)
@@ -1876,6 +1876,8 @@ defmodule ElixirSense.Core.State do
         generated: true
       )
     end)
+  end
+  
   def macro_env(%__MODULE__{} = state, meta \\ []) do
     function =
       case hd(hd(state.scopes)) do
@@ -1930,30 +1932,5 @@ defmodule ElixirSense.Core.State do
       # TODO macro_aliases
       # TODO versioned_vars
     }
-  end
-
-  @module_functions [
-    {:__info__, [:atom], :def},
-    {:module_info, [], :def},
-    {:module_info, [:atom], :def}
-  ]
-
-  def add_module_functions(state, env, functions, position, end_position) do
-    {line, column} = position
-    (functions ++ @module_functions)
-      |> Enum.reduce(state, fn {name, args, kind}, acc ->
-        mapped_args = for arg <- args, do: {arg, [line: line, column: column], nil}
-
-        acc
-        |> add_func_to_index(
-          env,
-          name,
-          mapped_args,
-          position,
-          end_position,
-          kind,
-          generated: true
-        )
-      end)
   end
 end
