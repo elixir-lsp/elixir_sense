@@ -1010,9 +1010,7 @@ defmodule ElixirSense.Core.State do
     end
   end
 
-  def add_aliases(%__MODULE__{} = state, aliases_tuples) do
-    Enum.reduce(aliases_tuples, state, fn tuple, state -> add_alias(state, tuple) end)
-  end
+  def add_alias(%__MODULE__{} = state, _), do: state
 
   def new_lexical_scope(%__MODULE__{} = state) do
     %__MODULE__{
@@ -1052,10 +1050,6 @@ defmodule ElixirSense.Core.State do
 
   def add_import(%__MODULE__{} = state, _module, _opts), do: state
 
-  def add_imports(%__MODULE__{} = state, modules, opts) do
-    Enum.reduce(modules, state, fn mod, state -> add_import(state, mod, opts) end)
-  end
-
   def add_require(%__MODULE__{} = state, module) when is_atom(module) do
     [requires_from_scope | inherited_requires] = state.requires
 
@@ -1072,10 +1066,6 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_require(%__MODULE__{} = state, _module), do: state
-
-  def add_requires(%__MODULE__{} = state, modules) do
-    Enum.reduce(modules, state, fn mod, state -> add_require(state, mod) end)
-  end
 
   def add_type(
         %__MODULE__{} = state,

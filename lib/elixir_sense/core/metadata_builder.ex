@@ -452,32 +452,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_alias(ast, state, line, aliases_tuples) do
-    state
-    |> add_current_env_to_line(line)
-    |> add_aliases(List.wrap(aliases_tuples))
-    |> result(ast)
-  end
-
-  defp pre_import(ast, state, line, modules, opts) do
-    modules = List.wrap(modules)
-
-    state
-    |> add_current_env_to_line(line)
-    |> add_requires(modules)
-    |> add_imports(modules, opts)
-    |> result(ast)
-  end
-
-  defp pre_require(ast, state, line, modules) do
-    modules = List.wrap(modules)
-
-    state
-    |> add_current_env_to_line(line)
-    |> add_requires(modules)
-    |> result(ast)
-  end
-
   defp pre_module_attribute(ast, state, {line, _} = position, name, type, is_definition) do
     state
     |> add_attribute(name, type, is_definition, position)
@@ -1038,7 +1012,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
     # options = expand(no_alias_opts(module_ast), state)
 
     if is_atom(arg) do
-      pre_import(ast, state, line, arg, opts)
+      state
+      |> add_current_env_to_line(line)
+      |> add_require(arg)
+      |> add_import(arg, opts)
+      |> result(ast)
     else
       {ast, state}
     end
@@ -1056,18 +1034,20 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     if is_atom(arg) do
       state =
-        case Keyword.get(options, :as) do
-          nil ->
-            state
+        state
+        |> add_current_env_to_line(line)
 
-          as ->
-            # require with `as:` option
-            alias_tuple = {no_alias_expansion(as), arg}
-            {_, new_state} = pre_alias(ast, state, line, alias_tuple)
-            new_state
-        end
+      case Keyword.get(options, :as) do
+        nil ->
+          state
 
-      pre_require(ast, state, line, arg)
+        as ->
+          # require with `as:` option
+          alias_tuple = {no_alias_expansion(as), arg}
+          add_alias(state, alias_tuple)
+      end
+      |> add_require(arg)
+      |> result(ast)
     else
       {ast, state}
     end
@@ -1096,7 +1076,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
             {no_alias_expansion(as), arg}
         end
 
-      pre_alias(ast, state, line, alias_tuple)
+      state
+      |> add_current_env_to_line(line)
+      |> add_alias(alias_tuple)
+      |> result(ast)
     else
       {ast, state}
     end
