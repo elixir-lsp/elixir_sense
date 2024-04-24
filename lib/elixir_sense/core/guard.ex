@@ -129,7 +129,8 @@ defmodule ElixirSense.Core.Guard do
   defp guard_predicate_type(:is_boolean, params, _), do: {:boolean, hd(params)}
 
   defp guard_predicate_type(:is_struct, [var, {:__aliases__, _, _list} = module], state) do
-    type = {:struct, [], {:atom, expand_alias(state, module)}, nil}
+    {module, _state, _env} = expand(module, state)
+    type = {:struct, [], {:atom, module}, nil}
     {type, var}
   end
 

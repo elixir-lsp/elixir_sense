@@ -570,9 +570,11 @@ defmodule ElixirSense.Core.State do
          :defdelegate,
          {:target, {target_module_expression, target_function}}
        ) do
+    {module, _state, _env} = expand(target_module_expression, state)
+
     %ModFunInfo{
       info
-      | target: {expand_alias(state, target_module_expression), target_function}
+      | target: {module, target_function}
     }
   end
 
@@ -737,11 +739,12 @@ defmodule ElixirSense.Core.State do
     meta =
       if type == :defdelegate do
         {target_module_expression, target_fun} = options[:target]
+        {module, _state, _env} = expand(target_module_expression, state)
 
         Map.put(
           meta,
           :delegate_to,
-          {expand_alias(state, target_module_expression), target_fun, arity}
+          {module, target_fun, arity}
         )
       else
         meta
@@ -956,7 +959,7 @@ defmodule ElixirSense.Core.State do
       [aliases_from_scope | inherited_aliases] = state.aliases
       aliases_from_scope = aliases_from_scope |> Enum.reject(&match?({^alias, _}, &1))
 
-      expanded = expand_alias(state, aliased)
+      {expanded, state, env} = expand(aliased, state)
 
       aliases_from_scope =
         if alias != expanded do
@@ -1298,7 +1301,7 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_behaviour(%__MODULE__{} = state, module) when is_atom(module) or is_tuple(module) do
-    module = expand_alias(state, module)
+    {module, state, env} = expand(module, state)
     [behaviours_from_scope | other_behaviours] = state.behaviours
     behaviours_from_scope = behaviours_from_scope -- [module]
     %__MODULE__{state | behaviours: [[module | behaviours_from_scope] | other_behaviours]}
@@ -1505,26 +1508,37 @@ defmodule ElixirSense.Core.State do
 
   def default_env, do: %ElixirSense.Core.State.Env{}
 
-  def expand_alias(%__MODULE__{} = _state, module) when is_atom(module) do
-    module
+  def expand(ast, %__MODULE__{} = state) do
+    expand(ast, state, get_current_env(state))
   end
 
-  def expand_alias(%__MODULE__{} = _state, {:__aliases__, _, [Elixir | _] = module}) do
-    Module.concat(module)
+  def expand(module, %__MODULE__{} = state, %__MODULE__.Env{} = env) when is_atom(module) do
+    {module, state, env}
   end
 
-  def expand_alias(%__MODULE__{} = state, {:__MODULE__, _, nil}) do
-    get_current_module(state)
+  def expand(
+        {:__aliases__, _, [Elixir | _] = module},
+        %__MODULE__{} = state,
+        %__MODULE__.Env{} = env
+      ) do
+    {Module.concat(module), state, env}
   end
 
-  def expand_alias(%__MODULE__{} = state, {:__aliases__, _, [{:__MODULE__, _, nil} | rest]}) do
-    current_module = get_current_module(state)
-    Module.concat([current_module | rest])
+  def expand({:__MODULE__, _, nil}, %__MODULE__{} = state, %__MODULE__.Env{} = env) do
+    {env.module, state, env}
   end
 
-  def expand_alias(%__MODULE__{} = state, {:__aliases__, _, module}) when is_list(module) do
-    current_aliases = current_aliases(state)
-    Introspection.expand_alias(Module.concat(module), current_aliases)
+  def expand(
+        {:__aliases__, _, [{:__MODULE__, _, nil} | rest]},
+        %__MODULE__{} = state,
+        %__MODULE__.Env{} = env
+      ) do
+    {Module.concat([env.module | rest]), state, env}
+  end
+
+  def expand({:__aliases__, _, module}, %__MODULE__{} = state, %__MODULE__.Env{} = env)
+      when is_list(module) do
+    {Introspection.expand_alias(Module.concat(module), env.aliases), state, env}
   end
 
   def maybe_move_vars_to_outer_scope(%__MODULE__{} = state) do
@@ -1610,4 +1624,32 @@ defmodule ElixirSense.Core.State do
   def alias_defmodule(_raw, module, state, env) do
     {module, state, env}
   end
+
+  # defp expand_multi_alias_call(kind, meta, base, refs, opts, state, env) do
+  #   # {base_ref, state, env} = expand(base, state, env)
+  #   base_ref = expand_alias(state, base)
+
+  #   fun = fn
+  #     {:__aliases__, _, ref}, state, env ->
+  #       expand({kind, meta, [Module.concat([base_ref | ref]), opts]}, state, env)
+
+  #     ref, state, env when is_atom(ref) ->
+  #       expand({kind, meta, [Module.concat([base_ref, ref]), opts]}, state, env)
+
+  #     _other, s, e ->
+  #       {nil, s, e}
+  #       # raise "expected_compile_time_module"
+  #   end
+
+  #   map_fold(fun, state, env, refs)
+  # end
+
+  defp map_fold(fun, s, e, list), do: map_fold(fun, s, e, list, [])
+
+  defp map_fold(fun, s, e, [h | t], acc) do
+    {rh, rs, re} = fun.(h, s, e)
+    map_fold(fun, rs, re, t, [rh | acc])
+  end
+
+  defp map_fold(_fun, s, e, [], acc), do: {Enum.reverse(acc), s, e}
 end
