@@ -142,15 +142,24 @@ defmodule ElixirSense.Core.MetadataBuilder do
     end
   end
 
-  defp pre_module(ast, state, meta, module, types \\ [], functions \\ []) do
+  defp pre_module(ast, state, meta, alias, types \\ [], functions \\ [], options \\ []) do
     {position = {line, column}, end_position} = extract_range(meta)
 
+    {full, module, state} = case Keyword.get(options, :for) do
+      nil ->
+        module = expand_alias(state, alias)
+        {full, state, _env} = alias_defmodule(alias, module, state, get_current_env(state))
+
+        {full, module, state}
+      implementations ->
+        {implementation_alias(alias, implementations), {alias, implementations}, state}
+    end
+    
     state =
       state
       |> maybe_add_protocol_implementation(module)
-      |> add_namespace(module)
+      |> add_namespace(full)
       |> add_current_module_to_index(position, end_position, generated: state.generated)
-      |> alias_submodule(module)
       |> new_lexical_scope
       |> new_attributes_scope
       |> new_behaviours_scope
@@ -448,21 +457,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp wrap_modules(modules) do
-    case modules do
-      [m | _] when is_atom(m) ->
-        [modules]
-
-      m when is_atom(m) ->
-        [m]
-
-      other ->
-        other
-    end
-  end
-
   defp pre_import(ast, state, line, modules, opts) do
-    modules = wrap_modules(modules)
+    modules = List.wrap(modules)
 
     state
     |> add_current_env_to_line(line)
@@ -472,7 +468,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_require(ast, state, line, modules) do
-    modules = wrap_modules(modules)
+    modules = List.wrap(modules)
 
     state
     |> add_current_env_to_line(line)
@@ -552,7 +548,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
          {:defmodule, meta, [module, _]} = ast,
          state
        ) do
-    {:ok, module} = split_module_expression(state, normalize_module(module, state))
     pre_module(ast, state, meta, module)
   end
 
@@ -560,16 +555,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
          {:defprotocol, meta, [protocol, _]} = ast,
          state
        ) do
-    {:ok, module} = split_module_expression(state, normalize_module(protocol, state))
-    pre_protocol(ast, state, meta, module)
+    pre_protocol(ast, state, meta, protocol)
   end
 
   defp pre(
          {:defimpl, meta, [protocol, impl_args | _]} = ast,
          state
        ) do
-    {:ok, module} = split_module_expression(state, protocol)
-    pre_protocol_implementation(ast, state, meta, module, impl_args)
+    pre_protocol_implementation(ast, state, meta, protocol, impl_args)
   end
 
   defp pre(
@@ -588,7 +581,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end
 
     options =
-      with {:ok, mod} <- split_module_expression(state, target_module),
+      with mod = target_module,
            {:ok, target_function} <- target_function do
         [target: {mod, target_function}]
       else
@@ -826,15 +819,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(new_ast)
   end
 
-  defp pre(
-         {:@, meta, [{:behaviour, _, [{:__aliases__, _, module_expression}]}]} = ast,
-         state
-       ) do
-    line = Keyword.fetch!(meta, :line)
-    module = concat_module_expression(state, module_expression)
-    pre_behaviour(ast, state, line, module)
-  end
-
   defp pre({:@, meta, [{:behaviour, _, [erlang_module]}]} = ast, state) do
     line = Keyword.fetch!(meta, :line)
     pre_behaviour(ast, state, line, erlang_module)
@@ -1048,16 +1032,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
        ) do
     line = Keyword.fetch!(meta, :line)
 
-    module =
-      case module_ast do
-        {:__aliases__, _, module_expression = [_ | _]} ->
-          concat_module_expression(state, module_expression)
+    arg = expand_alias(state, module_ast)
+    # options = expand_alias(state, no_alias_opts(module_ast))
 
-        atom when is_atom(atom) ->
-          atom
-      end
-
-    pre_import(ast, state, line, module, opts)
+    if is_atom(arg) do
+      pre_import(ast, state, line, arg, opts)
+    else
+      {ast, state}
+    end
   end
 
   # require
@@ -1067,103 +1049,49 @@ defmodule ElixirSense.Core.MetadataBuilder do
        ) do
     line = Keyword.fetch!(meta, :line)
 
-    module =
-      case module_ast do
-        {:__aliases__, _, module_expression = [_ | _]} ->
-          concat_module_expression(state, module_expression)
+    arg = expand_alias(state, module_ast)
+    # options = expand_alias(state, no_alias_opts(module_ast))
 
-        atom when is_atom(atom) ->
-          atom
-      end
 
-    state =
-      case Keyword.get(options, :as) do
+    if is_atom(arg) do
+      state = case Keyword.get(options, :as) do
         nil ->
           state
 
-        alias_expression ->
+        as ->
           # require with `as:` option
-          alias_tuple = alias_tuple(module, alias_expression)
+          alias_tuple = {no_alias_expansion(as), arg}
           {_, new_state} = pre_alias(ast, state, line, alias_tuple)
           new_state
       end
 
-    pre_require(ast, state, line, module)
-  end
-
-  # alias with :__aliases__ expression
-  defp pre(
-         {:alias, meta, [{:__aliases__, _, module_expression = [_ | _]}, options]} = ast,
-         state
-       ) do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-    module = concat_module_expression(state, module_expression)
-
-    alias_tuple =
-      case Keyword.get(options, :as) do
-        nil ->
-          {Module.concat([List.last(module_expression)]), module}
-
-        alias_expression ->
-          # alias with `as:` option
-          alias_tuple(module, alias_expression)
-      end
-
-    state = add_first_alias_positions(state, line, column)
-    pre_alias(ast, state, line, alias_tuple)
-  end
-
-  # alias for __MODULE__
-  defp pre(
-         {:alias, meta, [{:__MODULE__, _, nil}, options]} = ast,
-         state
-       ) do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-    module = get_current_module(state)
-
-    if module == Elixir do
-      {[], state}
+      pre_require(ast, state, line, arg)
     else
-      module_expression = Module.split(module)
-
-      alias_tuple =
-        case Keyword.get(options, :as) do
-          nil ->
-            {Module.concat([List.last(module_expression)]), module}
-
-          alias_expression ->
-            # alias with `as:` option
-            alias_tuple(module, alias_expression)
-        end
-
-      state = add_first_alias_positions(state, line, column)
-      pre_alias(ast, state, line, alias_tuple)
+      {ast, state}
     end
   end
 
-  # alias atom module
-  defp pre({:alias, meta, [module, options]} = ast, state)
-       when is_atom(module) do
+  defp pre(
+         {:alias, meta, [module_ast, options]} = ast,
+         state
+       ) do
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
 
-    alias_tuple =
-      case Keyword.get(options, :as) do
-        nil ->
-          # since elixir 1.14 `alias :erlang_mod` without `as:` is a compile error
-          if Introspection.elixir_module?(module) do
-            {Module.concat([List.last(Module.split(module))]), module}
-          end
+    arg = expand_alias(state, module_ast)
+    # options = expand_alias(state, no_alias_opts(module_ast))
 
-        alias_expression ->
-          # alias with `as:` option
-          alias_tuple(module, alias_expression)
-      end
-
-    if alias_tuple do
+    if is_atom(arg) do
       state = add_first_alias_positions(state, line, column)
+      alias_tuple =
+        case Keyword.get(options, :as) do
+          nil ->
+            {Module.concat([List.last(Module.split(arg))]), arg}
+
+          as ->
+            # alias with `as:` option
+            {no_alias_expansion(as), arg}
+        end
       pre_alias(ast, state, line, alias_tuple)
     else
       {ast, state}
@@ -2022,14 +1950,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # current module
-  def get_binding_type(state, {:__MODULE__, _, nil}) do
-    {:atom, state |> get_current_module}
+  def get_binding_type(state, {:__MODULE__, _, nil} = module) do
+    {:atom, expand_alias(state, module)}
   end
 
   # elixir module
-  def get_binding_type(state, {:__aliases__, _, list}) when is_list(list) do
+  def get_binding_type(state, {:__aliases__, _, list} = module) when is_list(list) do
     try do
-      {:atom, expand_alias(state, list)}
+      {:atom, expand_alias(state, module)}
     rescue
       _ -> nil
     end
@@ -2163,31 +2091,23 @@ defmodule ElixirSense.Core.MetadataBuilder do
          protocol,
          for_expression
        ) do
+    protocol = expand_alias(state, protocol)
     implementations = get_implementations_from_for_expression(state, for_expression)
 
-    pre_module(ast, state, meta, {protocol, implementations}, [], [{:__impl__, [:atom], :def}])
+    pre_module(ast, state, meta, protocol, [], [{:__impl__, [:atom], :def}], for: implementations)
   end
 
   defp get_implementations_from_for_expression(state, for: for_expression) do
     for_expression
     |> List.wrap()
     |> Enum.map(fn alias ->
-      {:ok, module} = split_module_expression(state, alias)
+      module = expand_alias(state, alias)
       module
     end)
   end
 
   defp get_implementations_from_for_expression(state, _other) do
     [state |> get_current_module]
-  end
-
-  defp alias_tuple(module, alias_module) when is_atom(alias_module) do
-    {alias_module, module}
-  end
-
-  defp alias_tuple(module, {:__aliases__, _, alias_atoms = [al | _]})
-       when is_atom(al) do
-    {Module.concat(alias_atoms), module}
   end
 
   defp modules_from_12_syntax(state, expressions, prefix_expression) do
@@ -2233,16 +2153,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     module_parts
   end
 
-  defp normalize_module({:__aliases__, meta, [{:__MODULE__, _, nil} | rest]}, state) do
-    list = state |> get_current_module |> Module.split() |> Enum.map(&String.to_atom/1)
-    {:__aliases__, meta, [:"Elixir"] ++ list ++ rest}
-  end
-
-  defp normalize_module(other, _state), do: other
-
-  defp maybe_add_protocol_behaviour(state, {_protocol, _}) do
-    protocol = state.protocols |> hd |> elem(0)
-
+  defp maybe_add_protocol_behaviour(state, {protocol, _}) do
     state
     |> add_behaviour(protocol)
   end
@@ -2318,16 +2229,17 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp expand_aliases_in_ast(state, ast) do
+    # TODO shouldn't that handle more cases?
     Macro.prewalk(ast, fn
       {:__aliases__, meta, [Elixir]} ->
         {:__aliases__, meta, [Elixir]}
 
-      {:__aliases__, meta, list} ->
-        list = state |> expand_alias(list) |> Module.split() |> Enum.map(&String.to_atom/1)
+      {:__aliases__, meta, _list} = module ->
+        list = state |> expand_alias(module) |> Module.split() |> Enum.map(&String.to_atom/1)
         {:__aliases__, meta, list}
 
-      {:__MODULE__, meta, nil} ->
-        list = state |> get_current_module |> Module.split() |> Enum.map(&String.to_atom/1)
+      {:__MODULE__, meta, nil} = module ->
+        list = state |> expand_alias(module) |> Module.split() |> Enum.map(&String.to_atom/1)
         {:__aliases__, meta, list}
 
       other ->

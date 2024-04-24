@@ -601,29 +601,8 @@ defmodule ElixirSense.Core.State do
 
   defp process_option(_state, info, _type, _option), do: info
 
-  def add_namespace(%__MODULE__{} = state, {protocol, [first | _]}) do
-    joined_implementations =
-      case first do
-        list when is_list(list) ->
-          expand_alias(state, list) |> Module.split() |> Enum.map(&String.to_atom/1)
-
-        module when is_atom(module) ->
-          [module]
-      end
-
-    combined = List.wrap(protocol) ++ joined_implementations
-
-    combined =
-      case combined do
-        atom when is_atom(atom) ->
-          atom
-
-        list ->
-          [Elixir] ++
-            (expand_alias(state, list) |> Module.split() |> Enum.map(&String.to_atom/1))
-      end
-
-    add_namespace(state, combined)
+  def implementation_alias(protocol, [first | _]) do
+    Module.concat(protocol, first)
   end
 
   def add_namespace(%__MODULE__{} = state, module) do
@@ -710,27 +689,8 @@ defmodule ElixirSense.Core.State do
     %{state | scopes: [[{name, arity} | hd(state.scopes)] | state.scopes]}
   end
 
-  def maybe_add_protocol_implementation(%__MODULE__{} = state, {protocol, implementations}) do
-    implementation_modules =
-      implementations
-      |> Enum.map(fn
-        module when is_list(module) ->
-          expand_alias(state, module)
-
-        module when is_atom(module) ->
-          module
-      end)
-
-    candidate =
-      if is_list(protocol) do
-        expand_alias(state, protocol)
-      else
-        protocol
-      end
-
-    protocols = {candidate, implementation_modules}
-
-    %__MODULE__{state | protocols: [protocols | state.protocols]}
+  def maybe_add_protocol_implementation(%__MODULE__{} = state, protocol = {_protocol, _implementations}) do
+    %__MODULE__{state | protocols: [protocol | state.protocols]}
   end
 
   def maybe_add_protocol_implementation(%__MODULE__{} = state, _) do
@@ -1115,9 +1075,7 @@ defmodule ElixirSense.Core.State do
     }
   end
 
-  def add_import(%__MODULE__{} = state, module, opts) when is_atom(module) or is_list(module) do
-    module = expand_alias(state, module)
-
+  def add_import(%__MODULE__{} = state, module, opts) when is_atom(module) do
     {functions, macros} =
       Introspection.expand_import(
         {hd(state.functions), hd(state.macros)},
@@ -1139,9 +1097,7 @@ defmodule ElixirSense.Core.State do
     Enum.reduce(modules, state, fn mod, state -> add_import(state, mod, opts) end)
   end
 
-  def add_require(%__MODULE__{} = state, module) when is_atom(module) or is_list(module) do
-    module = expand_alias(state, module)
-
+  def add_require(%__MODULE__{} = state, module) when is_atom(module) do
     [requires_from_scope | inherited_requires] = state.requires
 
     current_requires = state.requires |> :lists.reverse() |> List.flatten()
@@ -1385,7 +1341,7 @@ defmodule ElixirSense.Core.State do
     state
   end
 
-  def add_behaviour(%__MODULE__{} = state, module) when is_atom(module) or is_list(module) do
+  def add_behaviour(%__MODULE__{} = state, module) when is_atom(module) or is_tuple(module) do
     module = expand_alias(state, module)
     [behaviours_from_scope | other_behaviours] = state.behaviours
     behaviours_from_scope = behaviours_from_scope -- [module]
@@ -1597,7 +1553,7 @@ defmodule ElixirSense.Core.State do
     module
   end
 
-  def expand_alias(%__MODULE__{} = _state, [Elixir | _] = module) do
+  def expand_alias(%__MODULE__{} = _state, {:__aliases__, _, [Elixir | _] = module}) do
     Module.concat(module)
   end
 
@@ -1605,12 +1561,12 @@ defmodule ElixirSense.Core.State do
     get_current_module(state)
   end
 
-  def expand_alias(%__MODULE__{} = state, [{:__MODULE__, _, nil} | rest]) do
+  def expand_alias(%__MODULE__{} = state, {:__aliases__, _, [{:__MODULE__, _, nil} | rest]}) do
     current_module = get_current_module(state)
     Module.concat([current_module | rest])
   end
 
-  def expand_alias(%__MODULE__{} = state, module) when is_list(module) do
+  def expand_alias(%__MODULE__{} = state, {:__aliases__, _, module}) when is_list(module) do
     current_aliases = current_aliases(state)
     Introspection.expand_alias(Module.concat(module), current_aliases)
   end
@@ -1667,38 +1623,35 @@ defmodule ElixirSense.Core.State do
     [current_scope_vars, vars_to_move ++ outer_scope_vars | other_scopes_vars]
   end
 
-  def alias_submodule(%__MODULE__{} = state, module) do
-    if length(state.namespace) > 2 and is_list(module) and state.protocols |> hd == nil do
-      namespace = state.namespace |> hd
+  def no_alias_expansion({:__aliases__, _, [h | t]} = _aliases) when is_atom(h) do
+    Module.concat([h | t])
+  end
 
-      maybe_tuple =
-        case module do
-          [Elixir, alias] ->
-            if Version.match?(System.version(), "< 1.16.0-dev") do
-              # an edge case with external submodule `Elixir.Some`
-              # this ends up unaliasing `Some` on elixir < 1.16
-              # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
-              {Module.concat([alias]), [Elixir, alias]}
-            else
-              # on elixir >= 1.16 no unaliasing is happening
-              # https://github.com/elixir-lang/elixir/issues/12456
-              nil
-            end
+  def no_alias_expansion(other), do: other
 
-          _ ->
-            alias = module |> Enum.take(1) |> Module.concat()
-            expanded = namespace |> Enum.slice((length(module) - 1)..-2//1) |> Enum.reverse()
-            {alias, expanded}
-        end
+  # defmodule Elixir.Alias
+  def alias_defmodule({:__aliases__, _, [Elixir, _ | _]}, module, state, env),
+    do: {module, state, env}
 
-      if maybe_tuple do
-        state
-        |> add_alias(maybe_tuple)
-      else
-        state
-      end
-    else
-      state
+  # defmodule Alias in root
+  def alias_defmodule({:__aliases__, _, _}, module, state, %{module: nil} = env),
+    do: {module, state, env}
+
+  # defmodule Alias nested
+  def alias_defmodule({:__aliases__, _meta, [h | t]}, _module, state, env) when is_atom(h) do
+    module = Module.concat([env.module, h])
+    alias = String.to_atom("Elixir." <> Atom.to_string(h))
+    # {:ok, env} = Macro.Env.define_alias(env, meta, module, as: alias, trace: false)
+    state = add_alias(state, {alias, module})
+
+    case t do
+      [] -> {module, state, env}
+      _ -> {String.to_atom(Enum.join([module | t], ".")), state, env}
     end
+  end
+
+  # defmodule _
+  def alias_defmodule(_raw, module, state, env) do
+    {module, state, env}
   end
 end
