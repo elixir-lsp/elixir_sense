@@ -384,7 +384,7 @@ defmodule ElixirSense.Core.State do
       aliases: macro_env.aliases,
       module: macro_env.module,
       function: macro_env.function,
-      vars: current_vars,
+      versioned_vars: current_vars,
       attributes: current_attributes,
       behaviours: current_behaviours,
       typespec: nil,

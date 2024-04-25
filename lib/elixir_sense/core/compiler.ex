@@ -1106,8 +1106,18 @@ defmodule ElixirSense.Core.Compiler do
     {{fun, meta, args}, state, env}
   end
 
-  defp expand_local(_meta, _fun, _args, _state, _env) do
-    raise "undefined_function"
+  defp expand_local(meta, fun, args, state, env) do
+    # elixir compiler raises here
+    # raise "undefined_function"
+    line = Keyword.fetch!(meta, :line)
+
+    state =
+      state
+      |> add_current_env_to_line(line, env)
+
+    {args, state, env} = expand_args(args, state, env)
+
+    {{fun, meta, args}, state, env}
   end
 
   defp expand_opts(meta, kind, allowed, opts, s, e) do
