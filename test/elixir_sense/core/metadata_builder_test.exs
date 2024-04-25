@@ -30,6 +30,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.has_key?(state.lines_to_env[2].versioned_vars, {:abc, nil})
+
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}]}
+             ] = state |> get_line_vars(2)
     end
 
     test "underscored" do
@@ -43,6 +47,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       refute Map.has_key?(state.lines_to_env[3].versioned_vars, {:_, nil})
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:_abc, nil})
+
+      assert [
+               %VarInfo{name: :_abc, positions: [{2, 1}]}
+             ] = state |> get_line_vars(3)
     end
 
     test "in if" do
@@ -62,9 +70,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.has_key?(state.lines_to_env[4].versioned_vars, {:abc, nil})
       assert Map.has_key?(state.lines_to_env[4].versioned_vars, {:cde, nil})
 
+      assert [
+               %VarInfo{name: :abc, positions: [{3, 3}]},
+               %VarInfo{name: :cde, positions: [{1, 1}]}
+             ] = state |> get_line_vars(4)
+
       assert Map.has_key?(state.lines_to_env[7].versioned_vars, {:xyz, nil})
       assert Map.has_key?(state.lines_to_env[7].versioned_vars, {:cde, nil})
       refute Map.has_key?(state.lines_to_env[7].versioned_vars, {:abc, nil})
+
+      assert [
+               %VarInfo{name: :cde, positions: [{1, 1}]},
+               %VarInfo{name: :xyz, positions: [{6, 3}]}
+             ] = state |> get_line_vars(7)
     end
 
     test "does not leak outside if" do
@@ -80,6 +98,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
       assert Map.has_key?(state.lines_to_env[5].versioned_vars, {:cde, nil})
+
+      assert [
+               %VarInfo{name: :cde, positions: [{1, 1}]}
+             ] = state |> get_line_vars(5)
     end
 
     test "defined on if" do
@@ -96,8 +118,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:cde, nil})
 
+      assert [
+               %VarInfo{name: :abc, positions: [{2, 3}]},
+               %VarInfo{name: :cde, positions: [{1, 4}]}
+             ] = state |> get_line_vars(3)
+
       refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
       assert Map.has_key?(state.lines_to_env[5].versioned_vars, {:cde, nil})
+
+      assert [
+               %VarInfo{name: :cde, positions: [{1, 4}]}
+             ] = state |> get_line_vars(5)
     end
 
     test "case pattern" do
@@ -115,8 +146,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
 
+      assert [
+               %VarInfo{name: :abc, positions: [{2, 3}]}
+             ] = state |> get_line_vars(3)
+
       refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
+
+      assert [] = state |> get_line_vars(5)
+
       refute Map.has_key?(state.lines_to_env[7].versioned_vars, {:abc, nil})
+
+      assert [] = state |> get_line_vars(5)
     end
 
     test "cond pattern" do
@@ -134,8 +174,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
 
+      assert [
+               %VarInfo{name: :abc, positions: [{2, 3}]}
+             ] = state |> get_line_vars(3)
+
       refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
+
+      assert [] = state |> get_line_vars(5)
+
       refute Map.has_key?(state.lines_to_env[7].versioned_vars, {:abc, nil})
+      assert [] = state |> get_line_vars(7)
     end
 
     test "receive pattern" do
@@ -155,11 +203,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
 
+      assert [
+               %VarInfo{name: :abc, positions: [{2, 3}]}
+             ] = state |> get_line_vars(3)
+
       assert Map.has_key?(state.lines_to_env[7].versioned_vars, {:x, nil})
       refute Map.has_key?(state.lines_to_env[7].versioned_vars, {:abc, nil})
 
+      assert [
+               %VarInfo{name: :x, positions: [{6, 5}]}
+             ] = state |> get_line_vars(7)
+
       refute Map.has_key?(state.lines_to_env[9].versioned_vars, {:x, nil})
       refute Map.has_key?(state.lines_to_env[9].versioned_vars, {:abc, nil})
+
+      assert [] = state |> get_line_vars(9)
     end
 
     test "with" do
@@ -181,29 +239,74 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       if Version.match?(System.version(), ">= 1.17.0-dev") do
         assert Map.keys(state.lines_to_env[1].versioned_vars) == []
+        assert [] = state |> get_line_vars(1)
         assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
 
+        assert [
+                 %VarInfo{name: :abc, positions: [{4, 5}]}
+               ] = state |> get_line_vars(2)
+
         assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:abc, nil}, {:cde, nil}]
+
+        assert [
+                 %VarInfo{name: :abc, positions: [{4, 5}]},
+                 %VarInfo{name: :cde, positions: [{4, 5}]}
+               ] = state |> get_line_vars(3)
 
         assert Map.keys(state.lines_to_env[5].versioned_vars) == [
                  {:abc, nil},
                  {:cde, nil},
                  {:z, nil}
                ]
+
+        assert [
+                 %VarInfo{name: :abc, positions: [{4, 5}]},
+                 %VarInfo{name: :cde, positions: [{4, 5}]},
+                 %VarInfo{name: :z, positions: [{4, 5}]}
+               ] = state |> get_line_vars(5)
 
         assert Map.keys(state.lines_to_env[9].versioned_vars) == [{:c, nil}, {:other, nil}]
+
+        assert [
+                 %VarInfo{name: :c, positions: [{4, 5}]},
+                 %VarInfo{name: :other, positions: [{4, 5}]}
+               ] = state |> get_line_vars(9)
+
         assert Map.keys(state.lines_to_env[11].versioned_vars) == []
+
+        assert [] = state |> get_line_vars(3)
       else
         assert Map.keys(state.lines_to_env[1].versioned_vars) == [{:abc, nil}]
+
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 6}]}
+               ] = state |> get_line_vars(1)
+
         assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}, {:cde, nil}]
 
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 6}]},
+                 %VarInfo{name: :cde, positions: [{2, 3}]}
+               ] = state |> get_line_vars(2)
+
         assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:abc, nil}, {:cde, nil}]
+
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 6}]},
+                 %VarInfo{name: :cde, positions: [{2, 3}]}
+               ] = state |> get_line_vars(3)
 
         assert Map.keys(state.lines_to_env[5].versioned_vars) == [
                  {:abc, nil},
                  {:cde, nil},
                  {:z, nil}
                ]
+
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 6}, {4, 7}]},
+                 %VarInfo{name: :cde, positions: [{2, 3}, {4, 13}]},
+                 %VarInfo{name: :z, positions: [{4, 3}]}
+               ] = state |> get_line_vars(5)
 
         # TODO this is quite wrong
         assert Map.keys(state.lines_to_env[9].versioned_vars) == [
@@ -213,7 +316,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  {:other, nil}
                ]
 
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 6}, {4, 7}]},
+                 %VarInfo{name: :c, positions: [{8, 5}]},
+                 %VarInfo{name: :cde, positions: [{2, 3}, {4, 13}]},
+                 %VarInfo{name: :other, positions: [{7, 3}]}
+               ] = state |> get_line_vars(9)
+
         assert Map.keys(state.lines_to_env[11].versioned_vars) == []
+        assert [] = state |> get_line_vars(11)
       end
     end
 
@@ -231,18 +342,41 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       if Version.match?(System.version(), ">= 1.17.0-dev") do
         assert Map.keys(state.lines_to_env[1].versioned_vars) == []
+        assert [] = state |> get_line_vars(3)
+
         assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
 
+        assert [
+                 %VarInfo{name: :abc, positions: [{4, 5}]}
+               ] = state |> get_line_vars(2)
+
         assert Map.keys(state.lines_to_env[4].versioned_vars) == [
                  {:abc, nil},
                  {:cde, nil},
                  {:z, nil}
                ]
 
+        assert [
+                 %VarInfo{name: :abc, positions: [{4, 5}]},
+                 %VarInfo{name: :cde, positions: [{4, 5}]},
+                 %VarInfo{name: :z, positions: [{4, 5}]}
+               ] = state |> get_line_vars(4)
+
         assert Map.keys(state.lines_to_env[6].versioned_vars) == []
+        assert [] = state |> get_line_vars(3)
       else
         assert Map.keys(state.lines_to_env[1].versioned_vars) == [{:abc, nil}]
+
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 5}]}
+               ] = state |> get_line_vars(1)
+
         assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}, {:cde, nil}]
+
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 5}]},
+                 %VarInfo{name: :cde, positions: [{2, 3}]}
+               ] = state |> get_line_vars(2)
 
         assert Map.keys(state.lines_to_env[4].versioned_vars) == [
                  {:abc, nil},
@@ -250,7 +384,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  {:z, nil}
                ]
 
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 5}]},
+                 %VarInfo{name: :cde, positions: [{2, 3}]},
+                 %VarInfo{name: :z, positions: [{3, 3}]}
+               ] = state |> get_line_vars(4)
+
         assert Map.keys(state.lines_to_env[6].versioned_vars) == []
+        assert [] = state |> get_line_vars(6)
       end
     end
 
@@ -266,6 +407,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           |> string_to_state
 
         assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:b, nil}, {:g, nil}, {:r, nil}]
+
+        assert [
+                 %VarInfo{name: :b, positions: [{4, 5}]},
+                 %VarInfo{name: :g, positions: [{4, 5}]},
+                 %VarInfo{name: :r, positions: [{4, 5}]}
+               ] = state |> get_line_vars(2)
       end
     end
 
@@ -284,6 +431,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:language, nil},
                {:parent, nil}
              ]
+
+      assert [
+               %VarInfo{name: :grandparent, positions: [{1, 38}]},
+               %VarInfo{name: :language, positions: [{1, 6}]},
+               %VarInfo{name: :parent, positions: [{1, 16}, {1, 62}]}
+             ] = state |> get_line_vars(2)
     end
 
     test "for opts wtf" do
@@ -296,6 +449,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:line, nil}]
+
+      assert [
+               %VarInfo{name: :line, positions: [{1, 5}]}
+             ] = state |> get_line_vars(2)
     end
 
     test "for opts" do
@@ -309,6 +466,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:line, nil}]
+
+      assert [
+               %VarInfo{name: :line, positions: [{1, 5}]}
+             ] = state |> get_line_vars(2)
     end
 
     test "for reduce" do
@@ -322,6 +483,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:acc, nil}, {:x, nil}]
+
+      assert [
+               %VarInfo{name: :acc, positions: [{2, 3}]},
+               %VarInfo{name: :x, positions: [{1, 7}, {1, 27}]}
+             ] = state |> get_line_vars(2)
     end
 
     test "fn" do
@@ -335,7 +501,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:x, nil}]
+
+      assert [
+               %VarInfo{name: :x, positions: [{1, 8}]}
+             ] = state |> get_line_vars(2)
+
       assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:a, nil}]
+
+      assert [
+               %VarInfo{name: :a, positions: [{1, 1}]}
+             ] = state |> get_line_vars(4)
     end
 
     test "fn multiple clauses" do
@@ -352,8 +527,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:x, nil}]
+
+      assert [
+               %VarInfo{name: :x, positions: [{2, 3}]}
+             ] = state |> get_line_vars(3)
+
       assert Map.keys(state.lines_to_env[5].versioned_vars) == [{:y, nil}, {:z, nil}]
+
+      assert [
+               %VarInfo{name: :y, positions: [{4, 3}]},
+               %VarInfo{name: :z, positions: [{4, 6}, {4, 24}]}
+             ] = state |> get_line_vars(5)
+
       assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:a, nil}]
+
+      assert [
+               %VarInfo{name: :a, positions: [{1, 1}]}
+             ] = state |> get_line_vars(7)
     end
 
     test "try" do
@@ -381,15 +571,36 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:a, nil}]
 
+      assert [
+               %VarInfo{name: :a, positions: [{2, 3}]}
+             ] = state |> get_line_vars(3)
+
       assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:e, nil}]
+
+      assert [
+               %VarInfo{name: :e, positions: [{5, 3}]}
+             ] = state |> get_line_vars(6)
 
       assert Map.keys(state.lines_to_env[9].versioned_vars) == [{:value, nil}]
 
+      assert [
+               %VarInfo{name: :value, positions: [{8, 3}, {9, 31}]}
+             ] = state |> get_line_vars(9)
+
       assert Map.keys(state.lines_to_env[12].versioned_vars) == [{:other, nil}]
+
+      assert [
+               %VarInfo{name: :other, positions: [{11, 3}, {12, 48}]}
+             ] = state |> get_line_vars(12)
 
       assert Map.keys(state.lines_to_env[15].versioned_vars) == [{:b, nil}]
 
+      assert [
+               %VarInfo{name: :b, positions: [{14, 3}]}
+             ] = state |> get_line_vars(15)
+
       assert Map.keys(state.lines_to_env[17].versioned_vars) == []
+      assert [] = state |> get_line_vars(17)
     end
 
     test "module body" do
@@ -405,7 +616,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:x, nil}, {:y, nil}]
+
+      assert [
+               %VarInfo{name: :x, positions: [{1, 1}]},
+               %VarInfo{name: :y, positions: [{3, 3}]}
+             ] = state |> get_line_vars(4)
+
       assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:x, nil}]
+
+      assert [
+               %VarInfo{name: :x, positions: [{1, 1}]}
+             ] = state |> get_line_vars(6)
     end
 
     test "def body" do
@@ -425,8 +646,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
       refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:x, nil})
 
+      assert [
+               %VarInfo{name: :abc, positions: [{4, 5}]}
+             ] = state |> get_line_vars(5)
+
       refute Map.has_key?(state.lines_to_env[7].versioned_vars, {:abc, nil})
       assert Map.has_key?(state.lines_to_env[7].versioned_vars, {:x, nil})
+
+      assert [
+               %VarInfo{name: :x, positions: [{2, 3}]}
+             ] = state |> get_line_vars(7)
     end
 
     test "def argument list" do
@@ -443,7 +672,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
 
+      assert [
+               %VarInfo{name: :abc, positions: [{2, 11}]}
+             ] = state |> get_line_vars(3)
+
       refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
+      assert [] = state |> get_line_vars(5)
     end
 
     test "def guard" do
@@ -460,6 +694,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
+
+      assert [
+               %VarInfo{name: :abc, positions: [{2, 11}]}
+             ] = state |> get_line_vars(3)
     end
   end
 
@@ -5785,175 +6023,173 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     refute Map.has_key?(state.mods_funs_to_positions, {My.Some, nil, nil})
   end
 
-  if @overridable_support do
-    describe "defoverridable" do
-      test "extract info about overridable defs" do
-        state =
-          """
-          defmodule My do
-            use ElixirSenseExample.OverridableFunctions
+  describe "defoverridable" do
+    test "extract info about overridable defs" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableFunctions
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {My, :required, 1} => %ModFunInfo{
+                 params: [[{:var, [{:line, 2} | _], _}]],
+                 positions: [{2, _}],
+                 target: nil,
+                 type: :defmacro,
+                 overridable: {true, ElixirSenseExample.OverridableFunctions}
+               },
+               {My, :test, 2} => %ModFunInfo{
+                 params: [[{:x, [{:line, 2} | _], _}, {:y, [{:line, 2} | _], _}]],
+                 positions: [{2, _}],
+                 target: nil,
+                 type: :def,
+                 overridable: {true, ElixirSenseExample.OverridableFunctions}
+               }
+             } = state.mods_funs_to_positions
+    end
+
+    test "extract info about overridable behaviour callbacks" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableImplementation
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {My, :foo, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, _}],
+                 target: nil,
+                 type: :def,
+                 overridable: {true, ElixirSenseExample.OverridableImplementation}
+               },
+               {My, :bar, 1} => %ModFunInfo{
+                 params: [[{:var, [{:line, 2} | _], _}]],
+                 positions: [{2, _}],
+                 target: nil,
+                 type: :defmacro,
+                 overridable: {true, ElixirSenseExample.OverridableImplementation}
+               }
+             } = state.mods_funs_to_positions
+    end
+
+    test "override defs" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableFunctions
+
+          def test(a, b) do
+            a * b
           end
-          """
-          |> string_to_state
 
-        assert %{
-                 {My, :required, 1} => %ModFunInfo{
-                   params: [[{:var, [{:line, 2} | _], _}]],
-                   positions: [{2, _}],
-                   target: nil,
-                   type: :defmacro,
-                   overridable: {true, ElixirSenseExample.OverridableFunctions}
-                 },
-                 {My, :test, 2} => %ModFunInfo{
-                   params: [[{:x, [{:line, 2} | _], _}, {:y, [{:line, 2} | _], _}]],
-                   positions: [{2, _}],
-                   target: nil,
-                   type: :def,
-                   overridable: {true, ElixirSenseExample.OverridableFunctions}
-                 }
-               } = state.mods_funs_to_positions
-      end
+          defmacro required(baz), do: baz
+        end
+        """
+        |> string_to_state
 
-      test "extract info about overridable behaviour callbacks" do
-        state =
-          """
-          defmodule My do
-            use ElixirSenseExample.OverridableImplementation
+      assert %{
+               {My, :required, 1} => %ModFunInfo{
+                 params: [
+                   [{:baz, [line: 8, column: 21], nil}],
+                   [{:var, [{:line, 2} | _], _}]
+                 ],
+                 positions: [{8, 3}, {2, _}],
+                 target: nil,
+                 type: :defmacro,
+                 overridable: {true, ElixirSenseExample.OverridableFunctions}
+               },
+               {My, :test, 2} => %ModFunInfo{
+                 params: [
+                   [{:a, [line: 4, column: 12], nil}, {:b, [line: 4, column: 15], nil}],
+                   [{:x, [{:line, 2} | _], _}, {:y, [{:line, 2} | _], _}]
+                 ],
+                 positions: [{4, 3}, {2, _}],
+                 target: nil,
+                 type: :def,
+                 overridable: {true, ElixirSenseExample.OverridableFunctions}
+               }
+             } = state.mods_funs_to_positions
+    end
+
+    test "override behaviour callbacks" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableImplementation
+
+          def foo do
+            ""
           end
-          """
-          |> string_to_state
 
-        assert %{
-                 {My, :foo, 0} => %ModFunInfo{
-                   params: [[]],
-                   positions: [{2, _}],
-                   target: nil,
-                   type: :def,
-                   overridable: {true, ElixirSenseExample.OverridableImplementation}
-                 },
-                 {My, :bar, 1} => %ModFunInfo{
-                   params: [[{:var, [{:line, 2} | _], _}]],
-                   positions: [{2, _}],
-                   target: nil,
-                   type: :defmacro,
-                   overridable: {true, ElixirSenseExample.OverridableImplementation}
-                 }
-               } = state.mods_funs_to_positions
-      end
+          defmacro bar(baz), do: baz
+        end
+        """
+        |> string_to_state
 
-      test "override defs" do
-        state =
-          """
-          defmodule My do
-            use ElixirSenseExample.OverridableFunctions
+      assert %{
+               {My, :foo, 0} => %ModFunInfo{
+                 params: [[], []],
+                 positions: [{4, 3}, {2, _}],
+                 target: nil,
+                 type: :def,
+                 overridable: {true, ElixirSenseExample.OverridableImplementation}
+               },
+               {My, :bar, 1} => %ModFunInfo{
+                 params: [
+                   [{:baz, [line: 8, column: 16], nil}],
+                   [{:var, [{:line, 2} | _], _}]
+                 ],
+                 positions: [{8, 3}, {2, _}],
+                 target: nil,
+                 type: :defmacro,
+                 overridable: {true, ElixirSenseExample.OverridableImplementation}
+               }
+             } = state.mods_funs_to_positions
+    end
 
-            def test(a, b) do
-              a * b
-            end
+    test "override defs changes type" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableFunctions
 
-            defmacro required(baz), do: baz
+          defp test(a, b) do
+            a * b
           end
-          """
-          |> string_to_state
 
-        assert %{
-                 {My, :required, 1} => %ModFunInfo{
-                   params: [
-                     [{:baz, [line: 8, column: 21], nil}],
-                     [{:var, [{:line, 2} | _], _}]
-                   ],
-                   positions: [{8, 3}, {2, _}],
-                   target: nil,
-                   type: :defmacro,
-                   overridable: {true, ElixirSenseExample.OverridableFunctions}
-                 },
-                 {My, :test, 2} => %ModFunInfo{
-                   params: [
-                     [{:a, [line: 4, column: 12], nil}, {:b, [line: 4, column: 15], nil}],
-                     [{:x, [{:line, 2} | _], _}, {:y, [{:line, 2} | _], _}]
-                   ],
-                   positions: [{4, 3}, {2, _}],
-                   target: nil,
-                   type: :def,
-                   overridable: {true, ElixirSenseExample.OverridableFunctions}
-                 }
-               } = state.mods_funs_to_positions
-      end
+          defmacrop required(baz), do: baz
+        end
+        """
+        |> string_to_state
 
-      test "override behaviour callbacks" do
-        state =
-          """
-          defmodule My do
-            use ElixirSenseExample.OverridableImplementation
-
-            def foo do
-              ""
-            end
-
-            defmacro bar(baz), do: baz
-          end
-          """
-          |> string_to_state
-
-        assert %{
-                 {My, :foo, 0} => %ModFunInfo{
-                   params: [[], []],
-                   positions: [{4, 3}, {2, _}],
-                   target: nil,
-                   type: :def,
-                   overridable: {true, ElixirSenseExample.OverridableImplementation}
-                 },
-                 {My, :bar, 1} => %ModFunInfo{
-                   params: [
-                     [{:baz, [line: 8, column: 16], nil}],
-                     [{:var, [{:line, 2} | _], _}]
-                   ],
-                   positions: [{8, 3}, {2, _}],
-                   target: nil,
-                   type: :defmacro,
-                   overridable: {true, ElixirSenseExample.OverridableImplementation}
-                 }
-               } = state.mods_funs_to_positions
-      end
-
-      test "override defs changes type" do
-        state =
-          """
-          defmodule My do
-            use ElixirSenseExample.OverridableFunctions
-
-            defp test(a, b) do
-              a * b
-            end
-
-            defmacrop required(baz), do: baz
-          end
-          """
-          |> string_to_state
-
-        assert %{
-                 {My, :required, 1} => %ModFunInfo{
-                   params: [
-                     [{:baz, [line: 8, column: 22], nil}],
-                     [{:var, [{:line, 2} | _], _}]
-                   ],
-                   positions: [{8, 3}, {2, _}],
-                   target: nil,
-                   type: :defmacrop,
-                   overridable: {true, ElixirSenseExample.OverridableFunctions}
-                 },
-                 {My, :test, 2} => %ModFunInfo{
-                   params: [
-                     [{:a, [line: 4, column: 13], nil}, {:b, [line: 4, column: 16], nil}],
-                     [{:x, [{:line, 2} | _], _}, {:y, [{:line, 2} | _], _}]
-                   ],
-                   positions: [{4, 3}, {2, _}],
-                   target: nil,
-                   type: :defp,
-                   overridable: {true, ElixirSenseExample.OverridableFunctions}
-                 }
-               } = state.mods_funs_to_positions
-      end
+      assert %{
+               {My, :required, 1} => %ModFunInfo{
+                 params: [
+                   [{:baz, [line: 8, column: 22], nil}],
+                   [{:var, [{:line, 2} | _], _}]
+                 ],
+                 positions: [{8, 3}, {2, _}],
+                 target: nil,
+                 type: :defmacrop,
+                 overridable: {true, ElixirSenseExample.OverridableFunctions}
+               },
+               {My, :test, 2} => %ModFunInfo{
+                 params: [
+                   [{:a, [line: 4, column: 13], nil}, {:b, [line: 4, column: 16], nil}],
+                   [{:x, [{:line, 2} | _], _}, {:y, [{:line, 2} | _], _}]
+                 ],
+                 positions: [{4, 3}, {2, _}],
+                 target: nil,
+                 type: :defp,
+                 overridable: {true, ElixirSenseExample.OverridableFunctions}
+               }
+             } = state.mods_funs_to_positions
     end
   end
 
