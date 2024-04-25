@@ -780,7 +780,7 @@ defmodule ElixirSense.Core.State do
 
   def make_overridable(
         %__MODULE__{} = state,
-        %__MODULE__.Env{} = env,
+        env,
         fa_list,
         overridable_module
       ) do

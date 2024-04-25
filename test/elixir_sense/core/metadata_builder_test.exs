@@ -17,7 +17,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @typespec_support Version.match?(System.version(), "< 1.17.0-dev")
   @record_support Version.match?(System.version(), "< 1.17.0-dev")
-  @overridable_support Version.match?(System.version(), "< 1.17.0-dev")
   @doc_support Version.match?(System.version(), "< 1.17.0-dev")
   @meta_support Version.match?(System.version(), "< 1.17.0-dev")
 
@@ -5533,15 +5532,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
         assert %{
                  {My, :required, 1} => %ModFunInfo{
-                   params: [[{:var, [line: 2, column: 3], nil}]],
-                   positions: [{2, 3}],
+                   params: [[{:var, [{:line, 2} | _], _}]],
+                   positions: [{2, _}],
                    target: nil,
                    type: :defmacro,
                    overridable: {true, ElixirSenseExample.OverridableFunctions}
                  },
                  {My, :test, 2} => %ModFunInfo{
-                   params: [[{:x, [line: 2, column: 3], nil}, {:y, [line: 2, column: 3], nil}]],
-                   positions: [{2, 3}],
+                   params: [[{:x, [{:line, 2} | _], _}, {:y, [{:line, 2} | _], _}]],
+                   positions: [{2, _}],
                    target: nil,
                    type: :def,
                    overridable: {true, ElixirSenseExample.OverridableFunctions}
@@ -5561,14 +5560,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert %{
                  {My, :foo, 0} => %ModFunInfo{
                    params: [[]],
-                   positions: [{2, 3}],
+                   positions: [{2, _}],
                    target: nil,
                    type: :def,
                    overridable: {true, ElixirSenseExample.OverridableImplementation}
                  },
                  {My, :bar, 1} => %ModFunInfo{
-                   params: [[{:var, [line: 2, column: 3], nil}]],
-                   positions: [{2, 3}],
+                   params: [[{:var, [{:line, 2} | _], _}]],
+                   positions: [{2, _}],
                    target: nil,
                    type: :defmacro,
                    overridable: {true, ElixirSenseExample.OverridableImplementation}
@@ -5595,9 +5594,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  {My, :required, 1} => %ModFunInfo{
                    params: [
                      [{:baz, [line: 8, column: 21], nil}],
-                     [{:var, [line: 2, column: 3], nil}]
+                     [{:var, [{:line, 2} | _], _}]
                    ],
-                   positions: [{8, 3}, {2, 3}],
+                   positions: [{8, 3}, {2, _}],
                    target: nil,
                    type: :defmacro,
                    overridable: {true, ElixirSenseExample.OverridableFunctions}
@@ -5605,9 +5604,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  {My, :test, 2} => %ModFunInfo{
                    params: [
                      [{:a, [line: 4, column: 12], nil}, {:b, [line: 4, column: 15], nil}],
-                     [{:x, [line: 2, column: 3], nil}, {:y, [line: 2, column: 3], nil}]
+                     [{:x, [{:line, 2} | _], _}, {:y, [{:line, 2} | _], _}]
                    ],
-                   positions: [{4, 3}, {2, 3}],
+                   positions: [{4, 3}, {2, _}],
                    target: nil,
                    type: :def,
                    overridable: {true, ElixirSenseExample.OverridableFunctions}
@@ -5633,7 +5632,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert %{
                  {My, :foo, 0} => %ModFunInfo{
                    params: [[], []],
-                   positions: [{4, 3}, {2, 3}],
+                   positions: [{4, 3}, {2, _}],
                    target: nil,
                    type: :def,
                    overridable: {true, ElixirSenseExample.OverridableImplementation}
@@ -5641,9 +5640,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  {My, :bar, 1} => %ModFunInfo{
                    params: [
                      [{:baz, [line: 8, column: 16], nil}],
-                     [{:var, [line: 2, column: 3], nil}]
+                     [{:var, [{:line, 2} | _], _}]
                    ],
-                   positions: [{8, 3}, {2, 3}],
+                   positions: [{8, 3}, {2, _}],
                    target: nil,
                    type: :defmacro,
                    overridable: {true, ElixirSenseExample.OverridableImplementation}
@@ -5670,9 +5669,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  {My, :required, 1} => %ModFunInfo{
                    params: [
                      [{:baz, [line: 8, column: 22], nil}],
-                     [{:var, [line: 2, column: 3], nil}]
+                     [{:var, [{:line, 2} | _], _}]
                    ],
-                   positions: [{8, 3}, {2, 3}],
+                   positions: [{8, 3}, {2, _}],
                    target: nil,
                    type: :defmacrop,
                    overridable: {true, ElixirSenseExample.OverridableFunctions}
@@ -5680,9 +5679,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  {My, :test, 2} => %ModFunInfo{
                    params: [
                      [{:a, [line: 4, column: 13], nil}, {:b, [line: 4, column: 16], nil}],
-                     [{:x, [line: 2, column: 3], nil}, {:y, [line: 2, column: 3], nil}]
+                     [{:x, [{:line, 2} | _], _}, {:y, [{:line, 2} | _], _}]
                    ],
-                   positions: [{4, 3}, {2, 3}],
+                   positions: [{4, 3}, {2, _}],
                    target: nil,
                    type: :defp,
                    overridable: {true, ElixirSenseExample.OverridableFunctions}
