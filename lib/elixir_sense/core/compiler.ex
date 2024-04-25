@@ -1,6 +1,7 @@
 defmodule ElixirSense.Core.Compiler do
   import ElixirSense.Core.State, except: [expand: 2, expand: 3, no_alias_expansion: 1]
   require Logger
+  alias ElixirSense.Core.Introspection
 
   @env :elixir_env.new()
   def env, do: @env
@@ -731,6 +732,38 @@ defmodule ElixirSense.Core.Compiler do
     
         {arg, state, env} = expand(arg, state, env)
         add_behaviour(arg, state, env)
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
+         :defoverridable,
+         [arg],
+         _callback,
+         state,
+         env
+       ) do
+    {arg, state, env} = expand(arg, state, env)
+
+    case arg do
+      keyword when is_list(keyword) ->
+        {nil, make_overridable(state, env, keyword, meta[:context]), env}
+
+      behaviour_module when is_atom(behaviour_module) ->
+        if Code.ensure_loaded?(behaviour_module) and
+             function_exported?(behaviour_module, :behaviour_info, 1) do
+          keyword =
+            behaviour_module.behaviour_info(:callbacks)
+            |> Enum.map(&Introspection.drop_macro_prefix/1)
+
+          {nil, make_overridable(state, env, keyword, meta[:context]), env}
+        else
+          {nil, state, env}
+        end
+
+      _ ->
+        {nil, state, env}
+    end
   end
 
   defp expand_macro(
