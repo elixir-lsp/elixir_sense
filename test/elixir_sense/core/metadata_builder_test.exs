@@ -11,7 +11,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
   @var_support Version.match?(System.version(), "< 1.17.0-dev")
   @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
-  @behaviour_support Version.match?(System.version(), "< 1.17.0-dev")
   @defdelegate_support Version.match?(System.version(), "< 1.17.0-dev")
   @first_alias_positions Version.match?(System.version(), "< 1.17.0-dev")
   @struct_support Version.match?(System.version(), "< 1.17.0-dev")
@@ -3718,106 +3717,104 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
-  if @behaviour_support do
-    describe "behaviour" do
-      test "behaviours" do
-        state =
-          """
+  describe "behaviour" do
+    test "behaviours" do
+      state =
+        """
+        IO.puts ""
+        defmodule OuterModule do
+          use Application
+          @behaviour SomeModule.SomeBehaviour
           IO.puts ""
-          defmodule OuterModule do
-            use Application
-            @behaviour SomeModule.SomeBehaviour
-            IO.puts ""
-            defmodule InnerModuleWithUse do
-              use GenServer
-              IO.puts ""
-            end
-            defmodule InnerModuleWithBh do
-              @behaviour SomeOtherBehaviour
-              IO.puts ""
-            end
-            defmodule InnerModuleWithoutBh do
-              IO.puts ""
-            end
+          defmodule InnerModuleWithUse do
+            use GenServer
             IO.puts ""
           end
-          """
-          |> string_to_state
-
-        assert get_line_behaviours(state, 1) == []
-        assert get_line_behaviours(state, 5) == [Application, SomeModule.SomeBehaviour]
-        assert get_line_behaviours(state, 8) == [GenServer]
-        assert get_line_behaviours(state, 12) == [SomeOtherBehaviour]
-        assert get_line_behaviours(state, 15) == []
-        assert get_line_behaviours(state, 17) == [Application, SomeModule.SomeBehaviour]
-      end
-
-      test "behaviour from erlang module" do
-        state =
-          """
-          defmodule OuterModule do
-            @behaviour :gen_server
+          defmodule InnerModuleWithBh do
+            @behaviour SomeOtherBehaviour
             IO.puts ""
           end
-          """
-          |> string_to_state
-
-        assert get_line_behaviours(state, 3) == [:gen_server]
-      end
-
-      test "behaviour from __MODULE__" do
-        state =
-          """
-          defmodule OuterModule do
-            @behaviour __MODULE__.Sub
+          defmodule InnerModuleWithoutBh do
             IO.puts ""
           end
-          """
-          |> string_to_state
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-        assert get_line_behaviours(state, 3) == [OuterModule.Sub]
-      end
+      assert get_line_behaviours(state, 1) == []
+      assert get_line_behaviours(state, 5) == [Application, SomeModule.SomeBehaviour]
+      assert get_line_behaviours(state, 8) == [GenServer]
+      assert get_line_behaviours(state, 12) == [SomeOtherBehaviour]
+      assert get_line_behaviours(state, 15) == []
+      assert get_line_behaviours(state, 17) == [Application, SomeModule.SomeBehaviour]
+    end
 
-      test "behaviour from atom module" do
-        state =
-          """
-          defmodule OuterModule do
-            @behaviour :"Elixir.My.Behavior"
-            IO.puts ""
-          end
-          """
-          |> string_to_state
+    test "behaviour from erlang module" do
+      state =
+        """
+        defmodule OuterModule do
+          @behaviour :gen_server
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-        assert get_line_behaviours(state, 3) == [My.Behavior]
-      end
+      assert get_line_behaviours(state, 3) == [:gen_server]
+    end
 
-      test "behaviour duplicated" do
-        state =
-          """
-          defmodule OuterModule do
-            @behaviour :gen_server
-            @behaviour :gen_server
-            IO.puts ""
-          end
-          """
-          |> string_to_state
+    test "behaviour from __MODULE__" do
+      state =
+        """
+        defmodule OuterModule do
+          @behaviour __MODULE__.Sub
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-        assert get_line_behaviours(state, 4) == [:gen_server]
-      end
+      assert get_line_behaviours(state, 3) == [OuterModule.Sub]
+    end
 
-      test "behaviour from aliased module" do
-        state =
-          """
-          defmodule OuterModule do
-            alias Some.Module, as: S
-            @behaviour S
-            IO.puts ""
-          end
-          """
-          |> string_to_state
+    test "behaviour from atom module" do
+      state =
+        """
+        defmodule OuterModule do
+          @behaviour :"Elixir.My.Behavior"
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-        assert get_line_behaviours(state, 4) == [Some.Module]
-      end
+      assert get_line_behaviours(state, 3) == [My.Behavior]
+    end
+
+    test "behaviour duplicated" do
+      state =
+        """
+        defmodule OuterModule do
+          @behaviour :gen_server
+          @behaviour :gen_server
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_behaviours(state, 4) == [:gen_server]
+    end
+
+    test "behaviour from aliased module" do
+      state =
+        """
+        defmodule OuterModule do
+          alias Some.Module, as: S
+          @behaviour S
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_behaviours(state, 4) == [Some.Module]
     end
   end
 
@@ -4184,9 +4181,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if @behaviour_support do
-        assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
-      end
+      assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
 
       # note that `use` causes `require` to be able to execute `__using__/1` macro
       assert get_line_requires(state, 4) ==
@@ -4234,183 +4229,185 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ]
       end
 
-      assert %{
-               {InheritMod, :handle_call, 3} => %ModFunInfo{
-                 params: [
-                   [
-                     {:msg, _, _},
-                     {:_from, _, _},
-                     {:state, _, _}
-                   ]
-                 ],
-                 positions: [{2, 3}],
-                 type: :def
-               },
-               {InheritMod, nil, nil} => %ModFunInfo{
-                 params: [nil],
-                 positions: [{1, 1}],
-                 type: :defmodule
-               },
-               {InheritMod, :private_func, 0} => %ModFunInfo{
-                 params: [[]],
-                 positions: [{2, 3}],
-                 type: :defp
-               },
-               {InheritMod, :private_func_arg, 1} => %ModFunInfo{
-                 params: [
-                   [{:a, _, _}],
-                   [{:\\, _, [{:a, _, _}, nil]}]
-                 ],
-                 positions: [{2, 3}, {2, 3}],
-                 type: :defp
-               },
-               {InheritMod, :private_guard, 0} => %ModFunInfo{
-                 params: [[]],
-                 positions: [{2, 3}],
-                 type: :defguardp
-               },
-               {InheritMod, :private_guard_arg, 1} => %ModFunInfo{
-                 params: [
-                   [
-                     {:a, _, _}
-                   ]
-                 ],
-                 positions: [{2, 3}],
-                 type: :defguardp
-               },
-               {InheritMod, :private_macro, 0} => %ModFunInfo{
-                 params: [[]],
-                 positions: [{2, 3}],
-                 type: :defmacrop
-               },
-               {InheritMod, :private_macro_arg, 1} => %ModFunInfo{
-                 params: [
-                   [
-                     {:a, _, _}
-                   ]
-                 ],
-                 positions: [{2, 3}],
-                 type: :defmacrop
-               },
-               {InheritMod, :public_func, 0} => %ModFunInfo{
-                 params: [[]],
-                 positions: [{2, 3}],
-                 type: :def,
-                 overridable: {true, ElixirSenseExample.ExampleBehaviour}
-               },
-               {InheritMod, :public_func_arg, 2} => %ModFunInfo{
-                 params: [
-                   [
-                     {:b, _, _},
-                     {:\\, _,
-                      [
-                        {:a, _, _},
-                        "def"
-                      ]}
-                   ]
-                 ],
-                 positions: [{2, 3}],
-                 type: :def
-               },
-               {InheritMod, :public_guard, 0} => %ModFunInfo{
-                 params: [[]],
-                 positions: [{2, 3}],
-                 type: :defguard
-               },
-               {InheritMod, :public_guard_arg, 1} => %ModFunInfo{
-                 params: [
-                   [
-                     {:a, _, _}
-                   ]
-                 ],
-                 positions: [{2, 3}],
-                 type: :defguard
-               },
-               {InheritMod, :public_macro, 0} => %ModFunInfo{
-                 params: [[]],
-                 positions: [{2, 3}],
-                 type: :defmacro
-               },
-               {InheritMod, :public_macro_arg, 1} => %ModFunInfo{
-                 params: [
-                   [
-                     {:a, _, _}
-                   ]
-                 ],
-                 positions: [{2, 3}],
-                 type: :defmacro
-               },
-               {InheritMod.Deeply.Nested, nil, nil} => %ModFunInfo{
-                 params: [nil],
-                 positions: [{2, 3}],
-                 type: :defmodule
-               },
-               {InheritMod.Nested, nil, nil} => %ModFunInfo{
-                 params: [nil],
-                 positions: [{2, 3}],
-                 type: :defmodule
-               },
-               {InheritMod.ProtocolEmbedded, nil, nil} => %ModFunInfo{
-                 params: [nil],
-                 positions: [{2, 3}],
-                 type: :defmodule
-               },
-               {InheritMod, :behaviour_info, 1} => %ModFunInfo{
-                 params: [[{:atom, [line: 2, column: 3], nil}]],
-                 positions: [{2, 3}],
-                 target: nil,
-                 type: :def
-               },
-               {InheritMod.ProtocolEmbedded, :module_info, 1} => %ModFunInfo{}
-             } = state.mods_funs_to_positions
+      if @protocol_support do
+        assert %{
+                 {InheritMod, :handle_call, 3} => %ModFunInfo{
+                   params: [
+                     [
+                       {:msg, _, _},
+                       {:_from, _, _},
+                       {:state, _, _}
+                     ]
+                   ],
+                   positions: [{2, 3}],
+                   type: :def
+                 },
+                 {InheritMod, nil, nil} => %ModFunInfo{
+                   params: [nil],
+                   positions: [{1, 1}],
+                   type: :defmodule
+                 },
+                 {InheritMod, :private_func, 0} => %ModFunInfo{
+                   params: [[]],
+                   positions: [{2, 3}],
+                   type: :defp
+                 },
+                 {InheritMod, :private_func_arg, 1} => %ModFunInfo{
+                   params: [
+                     [{:a, _, _}],
+                     [{:\\, _, [{:a, _, _}, nil]}]
+                   ],
+                   positions: [{2, 3}, {2, 3}],
+                   type: :defp
+                 },
+                 {InheritMod, :private_guard, 0} => %ModFunInfo{
+                   params: [[]],
+                   positions: [{2, 3}],
+                   type: :defguardp
+                 },
+                 {InheritMod, :private_guard_arg, 1} => %ModFunInfo{
+                   params: [
+                     [
+                       {:a, _, _}
+                     ]
+                   ],
+                   positions: [{2, 3}],
+                   type: :defguardp
+                 },
+                 {InheritMod, :private_macro, 0} => %ModFunInfo{
+                   params: [[]],
+                   positions: [{2, 3}],
+                   type: :defmacrop
+                 },
+                 {InheritMod, :private_macro_arg, 1} => %ModFunInfo{
+                   params: [
+                     [
+                       {:a, _, _}
+                     ]
+                   ],
+                   positions: [{2, 3}],
+                   type: :defmacrop
+                 },
+                 {InheritMod, :public_func, 0} => %ModFunInfo{
+                   params: [[]],
+                   positions: [{2, 3}],
+                   type: :def,
+                   overridable: {true, ElixirSenseExample.ExampleBehaviour}
+                 },
+                 {InheritMod, :public_func_arg, 2} => %ModFunInfo{
+                   params: [
+                     [
+                       {:b, _, _},
+                       {:\\, _,
+                        [
+                          {:a, _, _},
+                          "def"
+                        ]}
+                     ]
+                   ],
+                   positions: [{2, 3}],
+                   type: :def
+                 },
+                 {InheritMod, :public_guard, 0} => %ModFunInfo{
+                   params: [[]],
+                   positions: [{2, 3}],
+                   type: :defguard
+                 },
+                 {InheritMod, :public_guard_arg, 1} => %ModFunInfo{
+                   params: [
+                     [
+                       {:a, _, _}
+                     ]
+                   ],
+                   positions: [{2, 3}],
+                   type: :defguard
+                 },
+                 {InheritMod, :public_macro, 0} => %ModFunInfo{
+                   params: [[]],
+                   positions: [{2, 3}],
+                   type: :defmacro
+                 },
+                 {InheritMod, :public_macro_arg, 1} => %ModFunInfo{
+                   params: [
+                     [
+                       {:a, _, _}
+                     ]
+                   ],
+                   positions: [{2, 3}],
+                   type: :defmacro
+                 },
+                 {InheritMod.Deeply.Nested, nil, nil} => %ModFunInfo{
+                   params: [nil],
+                   positions: [{2, 3}],
+                   type: :defmodule
+                 },
+                 {InheritMod.Nested, nil, nil} => %ModFunInfo{
+                   params: [nil],
+                   positions: [{2, 3}],
+                   type: :defmodule
+                 },
+                 {InheritMod.ProtocolEmbedded, nil, nil} => %ModFunInfo{
+                   params: [nil],
+                   positions: [{2, 3}],
+                   type: :defmodule
+                 },
+                 {InheritMod, :behaviour_info, 1} => %ModFunInfo{
+                   params: [[{:atom, [line: 2, column: 3], nil}]],
+                   positions: [{2, 3}],
+                   target: nil,
+                   type: :def
+                 },
+                 {InheritMod.ProtocolEmbedded, :module_info, 1} => %ModFunInfo{}
+               } = state.mods_funs_to_positions
 
-      assert %{
-               {InheritMod, :my_opaque_type, 0} => %State.TypeInfo{
-                 args: [[]],
-                 kind: :opaque,
-                 name: :my_opaque_type,
-                 positions: [{2, 3}],
-                 specs: ["@opaque my_opaque_type :: any"]
-               },
-               {InheritMod, :my_priv_type, 0} => %State.TypeInfo{
-                 args: [[]],
-                 kind: :typep,
-                 name: :my_priv_type,
-                 positions: [{2, 3}],
-                 specs: ["@typep my_priv_type :: any"]
-               },
-               {InheritMod, :my_pub_type, 0} => %State.TypeInfo{
-                 args: [[]],
-                 kind: :type,
-                 name: :my_pub_type,
-                 positions: [{2, 3}],
-                 specs: ["@type my_pub_type :: any"]
-               },
-               {InheritMod, :my_pub_type_arg, 2} => %State.TypeInfo{
-                 args: [["a", "b"]],
-                 kind: :type,
-                 name: :my_pub_type_arg,
-                 positions: [{2, 3}],
-                 specs: ["@type my_pub_type_arg(a, b) :: {b, a}"]
-               }
-             } = state.types
+        assert %{
+                 {InheritMod, :my_opaque_type, 0} => %State.TypeInfo{
+                   args: [[]],
+                   kind: :opaque,
+                   name: :my_opaque_type,
+                   positions: [{2, 3}],
+                   specs: ["@opaque my_opaque_type :: any"]
+                 },
+                 {InheritMod, :my_priv_type, 0} => %State.TypeInfo{
+                   args: [[]],
+                   kind: :typep,
+                   name: :my_priv_type,
+                   positions: [{2, 3}],
+                   specs: ["@typep my_priv_type :: any"]
+                 },
+                 {InheritMod, :my_pub_type, 0} => %State.TypeInfo{
+                   args: [[]],
+                   kind: :type,
+                   name: :my_pub_type,
+                   positions: [{2, 3}],
+                   specs: ["@type my_pub_type :: any"]
+                 },
+                 {InheritMod, :my_pub_type_arg, 2} => %State.TypeInfo{
+                   args: [["a", "b"]],
+                   kind: :type,
+                   name: :my_pub_type_arg,
+                   positions: [{2, 3}],
+                   specs: ["@type my_pub_type_arg(a, b) :: {b, a}"]
+                 }
+               } = state.types
 
-      assert %{
-               {InheritMod, :private_func, 0} => %State.SpecInfo{
-                 args: [[]],
-                 kind: :spec,
-                 name: :private_func,
-                 positions: [{2, 3}],
-                 specs: ["@spec private_func() :: String.t()"]
-               },
-               {InheritMod, :some_callback, 1} => %State.SpecInfo{
-                 args: [["abc"]],
-                 kind: :callback,
-                 name: :some_callback,
-                 positions: [{2, 3}],
-                 specs: ["@callback some_callback(abc) :: :ok when abc: integer"]
-               }
-             } = state.specs
+        assert %{
+                 {InheritMod, :private_func, 0} => %State.SpecInfo{
+                   args: [[]],
+                   kind: :spec,
+                   name: :private_func,
+                   positions: [{2, 3}],
+                   specs: ["@spec private_func() :: String.t()"]
+                 },
+                 {InheritMod, :some_callback, 1} => %State.SpecInfo{
+                   args: [["abc"]],
+                   kind: :callback,
+                   name: :some_callback,
+                   positions: [{2, 3}],
+                   specs: ["@callback some_callback(abc) :: :ok when abc: integer"]
+                 }
+               } = state.specs
+      end
     end
 
     if @struct_support do
@@ -4464,82 +4461,76 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
     end
 
-    if @behaviour_support do
-      test "use multi notation" do
-        state =
-          """
-          defmodule InheritMod do
-            use ElixirSenseExample.{ExampleBehaviour}
-            # use Foo.{}
+    test "use multi notation" do
+      state =
+        """
+        defmodule InheritMod do
+          use ElixirSenseExample.{ExampleBehaviour}
+          # use Foo.{}
 
-            IO.puts("")
-          end
-          """
-          |> string_to_state
+          IO.puts("")
+        end
+        """
+        |> string_to_state
 
-        assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
-      end
+      assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
     end
 
-    if @behaviour_support do
-      test "use multi notation with atom module" do
-        state =
-          """
-          defmodule InheritMod do
-            use :"Elixir.ElixirSenseExample".{:"Elixir.ExampleBehaviour"}
+    test "use multi notation with atom module" do
+      state =
+        """
+        defmodule InheritMod do
+          use :"Elixir.ElixirSenseExample".{:"Elixir.ExampleBehaviour"}
 
-            IO.puts("")
-          end
-          """
-          |> string_to_state
+          IO.puts("")
+        end
+        """
+        |> string_to_state
 
-        assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
-      end
-
-      test "use with __MODULE__" do
-        state =
-          """
-          defmodule ElixirSenseExample do
-            use __MODULE__.ExampleBehaviour
-
-            IO.puts("")
-          end
-          """
-          |> string_to_state
-
-        assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
-      end
-
-      test "use aliased" do
-        state =
-          """
-          defmodule InheritMod do
-            alias ElixirSenseExample.ExampleBehaviour, as: S
-            use S
-
-            IO.puts("")
-          end
-          """
-          |> string_to_state
-
-        assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
-      end
+      assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
     end
 
-    if @behaviour_support do
-      test "use atom module" do
-        state =
-          """
-          defmodule InheritMod do
-            use :"Elixir.ElixirSenseExample.ExampleBehaviour"
+    test "use with __MODULE__" do
+      state =
+        """
+        defmodule ElixirSenseExample do
+          use __MODULE__.ExampleBehaviour
 
-            IO.puts("")
-          end
-          """
-          |> string_to_state
+          IO.puts("")
+        end
+        """
+        |> string_to_state
 
-        assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
-      end
+      assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
+    end
+
+    test "use aliased" do
+      state =
+        """
+        defmodule InheritMod do
+          alias ElixirSenseExample.ExampleBehaviour, as: S
+          use S
+
+          IO.puts("")
+        end
+        """
+        |> string_to_state
+
+      assert get_line_behaviours(state, 5) == [ElixirSenseExample.ExampleBehaviour]
+    end
+
+    test "use atom module" do
+      state =
+        """
+        defmodule InheritMod do
+          use :"Elixir.ElixirSenseExample.ExampleBehaviour"
+
+          IO.puts("")
+        end
+        """
+        |> string_to_state
+
+      assert get_line_behaviours(state, 4) == [ElixirSenseExample.ExampleBehaviour]
     end
   end
 

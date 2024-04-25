@@ -1284,7 +1284,7 @@ defmodule ElixirSense.Core.State do
 
   def add_behaviour(module, %__MODULE__{} = state, env) when is_atom(module) do
     state =
-      update_in(state.behaviours[get_current_module(state)], &Enum.uniq([module | &1 || []]))
+      update_in(state.behaviours[env.module], &Enum.uniq([module | &1 || []]))
 
     {module, state, env}
   end
