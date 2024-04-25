@@ -93,6 +93,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       {ast_after_pre, [state_after_pre | states]}
     rescue
       exception ->
+        # reraise(exception, __STACKTRACE__)
         warn(
           Exception.format(
             :error,
@@ -957,29 +958,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre({:defoverridable, meta, [arg]} = ast, state) do
-    env = get_current_env(state)
-
-    state =
-      case arg do
-        keyword when is_list(keyword) ->
-          State.make_overridable(state, env, keyword, meta[:context])
-
-        {:__aliases__, _meta, list} ->
-          # TODO check __MODULE__ and __MODULE__.Beh
-          behaviour_module = Module.concat(list)
-
-          if Code.ensure_loaded?(behaviour_module) and
-               function_exported?(behaviour_module, :behaviour_info, 1) do
-            keyword =
-              behaviour_module.behaviour_info(:callbacks)
-              |> Enum.map(&Introspection.drop_macro_prefix/1)
-
-            State.make_overridable(state, env, keyword, meta[:context])
-          else
-            state
-          end
-      end
-
+    {ast, state, _env} = expand(ast, state)
     {ast, state}
   end
 

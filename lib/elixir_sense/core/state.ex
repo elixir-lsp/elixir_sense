@@ -1501,6 +1501,30 @@ defmodule ElixirSense.Core.State do
     add_behaviour(arg, state, env)
   end
 
+  def expand({:defoverridable, meta, [arg]}, state, env) do
+    {arg, state, env} = expand(arg, state, env)
+
+    case arg do
+      keyword when is_list(keyword) ->
+        {nil, make_overridable(state, env, keyword, meta[:context]), env}
+
+      behaviour_module when is_atom(behaviour_module) ->
+        if Code.ensure_loaded?(behaviour_module) and
+             function_exported?(behaviour_module, :behaviour_info, 1) do
+          keyword =
+            behaviour_module.behaviour_info(:callbacks)
+            |> Enum.map(&Introspection.drop_macro_prefix/1)
+
+          {nil, make_overridable(state, env, keyword, meta[:context]), env}
+        else
+          {nil, state, env}
+        end
+
+      _ ->
+        {nil, state, env}
+    end
+  end
+
   def expand({form, meta, [{{:., _, [base, :{}]}, _, refs} | rest]}, state, env)
       when form in [:require, :alias, :import, :use] do
     case rest do
