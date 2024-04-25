@@ -1512,6 +1512,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp find_vars(state, ast, match_context \\ nil)
 
+  defp find_vars(_state, {var, _meta, nil}, _)
+       when var in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__] do
+    # TODO local calls?
+    []
+  end
+
   defp find_vars(_state, {var, meta, nil}, :rescue) when is_atom(var) do
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
@@ -1592,7 +1598,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
          {var, meta, nil} = ast,
          {vars, match_context}
        )
-       when is_atom(var) do
+       when is_atom(var) and
+              var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__] do
+    # TODO local calls?
+    # TODO {:__MODULE__, meta, nil} is not expanded here
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
 

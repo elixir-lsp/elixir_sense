@@ -20,196 +20,241 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @doc_support Version.match?(System.version(), "< 1.17.0-dev")
   @meta_support Version.match?(System.version(), "< 1.17.0-dev")
 
-  if Version.match?(System.version(), ">= 1.17.0-dev") and @var_support do
-    describe "vars" do
-      test "in block" do
-        state =
-          """
+  describe "versioned_vars" do
+    test "in block" do
+      state =
+        """
+        abc = 5
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[2].versioned_vars, {:abc, nil})
+    end
+
+    test "underscored" do
+      state =
+        """
+        _ = foo()
+        _abc = bar()
+        record_env()
+        """
+        |> string_to_state
+
+      refute Map.has_key?(state.lines_to_env[3].versioned_vars, {:_, nil})
+      assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:_abc, nil})
+    end
+
+    test "in if" do
+      state =
+        """
+        cde = "1"
+        if true do
           abc = 5
           record_env()
-          """
-          |> string_to_state
-
-        assert Map.has_key?(state.lines_to_env[2].vars, {:abc, nil})
-      end
-
-      test "underscored" do
-        state =
-          """
-          _ = foo()
-          _abc = bar()
+        else
+          xyz = 123
           record_env()
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        refute Map.has_key?(state.lines_to_env[3].vars, {:_, nil})
-        assert Map.has_key?(state.lines_to_env[3].vars, {:_abc, nil})
-      end
+      assert Map.has_key?(state.lines_to_env[4].versioned_vars, {:abc, nil})
+      assert Map.has_key?(state.lines_to_env[4].versioned_vars, {:cde, nil})
 
-      test "in if" do
-        state =
-          """
-          cde = "1"
-          if true do
-            abc = 5
+      assert Map.has_key?(state.lines_to_env[7].versioned_vars, {:xyz, nil})
+      assert Map.has_key?(state.lines_to_env[7].versioned_vars, {:cde, nil})
+      refute Map.has_key?(state.lines_to_env[7].versioned_vars, {:abc, nil})
+    end
+
+    test "does not leak outside if" do
+      state =
+        """
+        cde = "1"
+        if true do
+          abc = 5
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
+      assert Map.has_key?(state.lines_to_env[5].versioned_vars, {:cde, nil})
+    end
+
+    test "defined on if" do
+      state =
+        """
+        if cde = "1" do
+          abc = 5
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
+      assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:cde, nil})
+
+      refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
+      assert Map.has_key?(state.lines_to_env[5].versioned_vars, {:cde, nil})
+    end
+
+    test "case pattern" do
+      state =
+        """
+        case foo() do
+          abc ->
             record_env()
-          else
-            xyz = 123
+          _ ->
             record_env()
-          end
-          """
-          |> string_to_state
+        end
+        record_env()
+        """
+        |> string_to_state
 
-        assert Map.has_key?(state.lines_to_env[4].vars, {:abc, nil})
-        assert Map.has_key?(state.lines_to_env[4].vars, {:cde, nil})
+      assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
 
-        assert Map.has_key?(state.lines_to_env[7].vars, {:xyz, nil})
-        assert Map.has_key?(state.lines_to_env[7].vars, {:cde, nil})
-        refute Map.has_key?(state.lines_to_env[7].vars, {:abc, nil})
-      end
+      refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
+      refute Map.has_key?(state.lines_to_env[7].versioned_vars, {:abc, nil})
+    end
 
-      test "does not leak outside if" do
-        state =
-          """
-          cde = "1"
-          if true do
-            abc = 5
-          end
-          record_env()
-          """
-          |> string_to_state
-
-        refute Map.has_key?(state.lines_to_env[5].vars, {:abc, nil})
-        assert Map.has_key?(state.lines_to_env[5].vars, {:cde, nil})
-      end
-
-      test "defined on if" do
-        state =
-          """
-          if cde = "1" do
-            abc = 5
+    test "cond pattern" do
+      state =
+        """
+        cond do
+          abc = foo() ->
             record_env()
-          end
-          record_env()
-          """
-          |> string_to_state
-
-        assert Map.has_key?(state.lines_to_env[3].vars, {:abc, nil})
-        assert Map.has_key?(state.lines_to_env[3].vars, {:cde, nil})
-
-        refute Map.has_key?(state.lines_to_env[5].vars, {:abc, nil})
-        assert Map.has_key?(state.lines_to_env[5].vars, {:cde, nil})
-      end
-
-      test "case pattern" do
-        state =
-          """
-          case foo() do
-            abc ->
-              record_env()
-            _ ->
-              record_env()
-          end
-          record_env()
-          """
-          |> string_to_state
-
-        assert Map.has_key?(state.lines_to_env[3].vars, {:abc, nil})
-
-        refute Map.has_key?(state.lines_to_env[5].vars, {:abc, nil})
-        refute Map.has_key?(state.lines_to_env[7].vars, {:abc, nil})
-      end
-
-      test "cond pattern" do
-        state =
-          """
-          cond do
-            abc = foo() ->
-              record_env()
-            true ->
-              record_env()
-          end
-          record_env()
-          """
-          |> string_to_state
-
-        assert Map.has_key?(state.lines_to_env[3].vars, {:abc, nil})
-
-        refute Map.has_key?(state.lines_to_env[5].vars, {:abc, nil})
-        refute Map.has_key?(state.lines_to_env[7].vars, {:abc, nil})
-      end
-
-      test "receive pattern" do
-        state =
-          """
-          receive do
-            abc ->
-              record_env()
-          after
-            123 ->
-              x = foo()
-              record_env()
-          end
-          record_env()
-          """
-          |> string_to_state
-
-        assert Map.has_key?(state.lines_to_env[3].vars, {:abc, nil})
-
-        assert Map.has_key?(state.lines_to_env[7].vars, {:x, nil})
-        refute Map.has_key?(state.lines_to_env[7].vars, {:abc, nil})
-
-        refute Map.has_key?(state.lines_to_env[9].vars, {:x, nil})
-        refute Map.has_key?(state.lines_to_env[9].vars, {:abc, nil})
-      end
-
-      test "with" do
-        state =
-          """
-          with abc <- foo(),
-            cde = bar(),
-            xyz() do
-            z = abc + cde
+          true ->
             record_env()
-          else
-            other ->
-              c = 123
-              record_env()
-          end
-          record_env()
-          """
-          |> string_to_state
+        end
+        record_env()
+        """
+        |> string_to_state
 
-        assert Map.keys(state.lines_to_env[1].vars) == []
+      assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
 
-        assert Map.keys(state.lines_to_env[2].vars) == [{:abc, nil}]
-        assert Map.keys(state.lines_to_env[3].vars) == [{:abc, nil}, {:cde, nil}]
+      refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
+      refute Map.has_key?(state.lines_to_env[7].versioned_vars, {:abc, nil})
+    end
 
-        assert Map.keys(state.lines_to_env[5].vars) == [{:abc, nil}, {:cde, nil}, {:z, nil}]
-        assert Map.keys(state.lines_to_env[9].vars) == [{:c, nil}, {:other, nil}]
-        assert Map.keys(state.lines_to_env[11].vars) == []
-      end
-
-      test "for" do
-        state =
-          """
-          for abc <- foo(),
-            cde <- bar() do
-            z = 6
+    test "receive pattern" do
+      state =
+        """
+        receive do
+          abc ->
             record_env()
-          end
+        after
+          123 ->
+            x = foo()
+            record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
+
+      assert Map.has_key?(state.lines_to_env[7].versioned_vars, {:x, nil})
+      refute Map.has_key?(state.lines_to_env[7].versioned_vars, {:abc, nil})
+
+      refute Map.has_key?(state.lines_to_env[9].versioned_vars, {:x, nil})
+      refute Map.has_key?(state.lines_to_env[9].versioned_vars, {:abc, nil})
+    end
+
+    test "with" do
+      state =
+        """
+        with abc <- foo(),
+          cde = bar(),
+          xyz() do
+          z = abc + cde
           record_env()
-          """
-          |> string_to_state
+        else
+          other ->
+            c = 123
+            record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
 
-        assert Map.keys(state.lines_to_env[1].vars) == []
+      if Version.match?(System.version(), ">= 1.17.0-dev") do
+        assert Map.keys(state.lines_to_env[1].versioned_vars) == []
+        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
 
-        assert Map.keys(state.lines_to_env[2].vars) == [{:abc, nil}]
+        assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:abc, nil}, {:cde, nil}]
 
-        assert Map.keys(state.lines_to_env[4].vars) == [{:abc, nil}, {:cde, nil}, {:z, nil}]
-        assert Map.keys(state.lines_to_env[6].vars) == []
+        assert Map.keys(state.lines_to_env[5].versioned_vars) == [
+                 {:abc, nil},
+                 {:cde, nil},
+                 {:z, nil}
+               ]
+
+        assert Map.keys(state.lines_to_env[9].versioned_vars) == [{:c, nil}, {:other, nil}]
+        assert Map.keys(state.lines_to_env[11].versioned_vars) == []
+      else
+        assert Map.keys(state.lines_to_env[1].versioned_vars) == [{:abc, nil}]
+        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}, {:cde, nil}]
+
+        assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:abc, nil}, {:cde, nil}]
+
+        assert Map.keys(state.lines_to_env[5].versioned_vars) == [
+                 {:abc, nil},
+                 {:cde, nil},
+                 {:z, nil}
+               ]
+
+        # TODO this is quite wrong
+        assert Map.keys(state.lines_to_env[9].versioned_vars) == [
+                 {:abc, nil},
+                 {:c, nil},
+                 {:cde, nil},
+                 {:other, nil}
+               ]
+
+        assert Map.keys(state.lines_to_env[11].versioned_vars) == []
       end
+    end
 
+    test "for" do
+      state =
+        """
+        for abc <- foo(),
+          cde <- bar() do
+          z = 6
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      if Version.match?(System.version(), ">= 1.17.0-dev") do
+        assert Map.keys(state.lines_to_env[1].versioned_vars) == []
+        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
+
+        assert Map.keys(state.lines_to_env[4].versioned_vars) == [
+                 {:abc, nil},
+                 {:cde, nil},
+                 {:z, nil}
+               ]
+
+        assert Map.keys(state.lines_to_env[6].versioned_vars) == []
+      else
+        assert Map.keys(state.lines_to_env[1].versioned_vars) == [{:abc, nil}]
+        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}, {:cde, nil}]
+
+        assert Map.keys(state.lines_to_env[4].versioned_vars) == [
+                 {:abc, nil},
+                 {:cde, nil},
+                 {:z, nil}
+               ]
+
+        assert Map.keys(state.lines_to_env[6].versioned_vars) == []
+      end
+    end
+
+    if Version.match?(System.version(), ">= 1.17.0-dev") do
       test "for bitstring" do
         state =
           """
@@ -220,201 +265,201 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           """
           |> string_to_state
 
-        assert Map.keys(state.lines_to_env[2].vars) == [{:b, nil}, {:g, nil}, {:r, nil}]
+        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:b, nil}, {:g, nil}, {:r, nil}]
       end
+    end
 
-      test "for assignment" do
-        state =
-          """
-          for {language, parent} <- languages, grandparent = languages[parent] do
+    test "for assignment" do
+      state =
+        """
+        for {language, parent} <- languages, grandparent = languages[parent] do
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].versioned_vars) == [
+               {:grandparent, nil},
+               {:language, nil},
+               {:parent, nil}
+             ]
+    end
+
+    test "for opts wtf" do
+      state =
+        """
+        for line <- IO.stream(), into: IO.stream() do
+          record_env()
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:line, nil}]
+    end
+
+    test "for opts" do
+      state =
+        """
+        for line <- IO.stream(), into: IO.stream() do
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:line, nil}]
+    end
+
+    test "for reduce" do
+      state =
+        """
+        for <<x <- "AbCabCABc">>, x in ?a..?z, reduce: %{} do
+          acc -> record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:acc, nil}, {:x, nil}]
+    end
+
+    test "fn" do
+      state =
+        """
+        a = fn x ->
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:x, nil}]
+      assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:a, nil}]
+    end
+
+    test "fn multiple clauses" do
+      state =
+        """
+        a = fn
+          x, 1 ->
             record_env()
-          end
-          record_env()
-          """
-          |> string_to_state
-
-        assert Map.keys(state.lines_to_env[2].vars) == [
-                 {:grandparent, nil},
-                 {:language, nil},
-                 {:parent, nil}
-               ]
-      end
-
-      test "for opts wtf" do
-        state =
-          """
-          for line <- IO.stream(), into: IO.stream() do
+          y, z when is_integer(z) ->
             record_env()
-          end
-          """
-          |> string_to_state
+        end
+        record_env()
+        """
+        |> string_to_state
 
-        assert Map.keys(state.lines_to_env[2].vars) == [{:line, nil}]
-      end
+      assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:x, nil}]
+      assert Map.keys(state.lines_to_env[5].versioned_vars) == [{:y, nil}, {:z, nil}]
+      assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:a, nil}]
+    end
 
-      test "for opts" do
-        state =
-          """
-          for line <- IO.stream(), into: IO.stream() do
-            record_env()
-          end
+    test "try" do
+      state =
+        """
+        try do
+          a = 2
+          do_something_that_may_fail()
+        rescue
+          e in ArgumentError ->
+            IO.puts("Invalid argument given")
+        catch
+          value ->
+            IO.puts("Caught \#{inspect(value)}")
+        else
+          other ->
+            IO.puts("Success! The result was \#{inspect(other)}")
+        after
+          b = 2
+          IO.puts("This is printed regardless if it failed or succeeded")
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:a, nil}]
+
+      assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:e, nil}]
+
+      assert Map.keys(state.lines_to_env[9].versioned_vars) == [{:value, nil}]
+
+      assert Map.keys(state.lines_to_env[12].versioned_vars) == [{:other, nil}]
+
+      assert Map.keys(state.lines_to_env[15].versioned_vars) == [{:b, nil}]
+
+      assert Map.keys(state.lines_to_env[17].versioned_vars) == []
+    end
+
+    test "module body" do
+      state =
+        """
+        x = 1
+        defmodule My do
+          y = 2
           record_env()
-          """
-          |> string_to_state
+        end
+        record_env()
+        """
+        |> string_to_state
 
-        assert Map.keys(state.lines_to_env[2].vars) == [{:line, nil}]
-      end
+      assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:x, nil}, {:y, nil}]
+      assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:x, nil}]
+    end
 
-      test "for reduce" do
-        state =
-          """
-          for <<x <- "AbCabCABc">>, x in ?a..?z, reduce: %{} do
-            acc -> record_env()
-          end
-          record_env()
-          """
-          |> string_to_state
-
-        assert Map.keys(state.lines_to_env[2].vars) == [{:acc, nil}, {:x, nil}]
-      end
-
-      test "fn" do
-        state =
-          """
-          a = fn x ->
-            record_env()
-          end
-          record_env()
-          """
-          |> string_to_state
-
-        assert Map.keys(state.lines_to_env[2].vars) == [{:x, nil}]
-        assert Map.keys(state.lines_to_env[4].vars) == [{:a, nil}]
-      end
-
-      test "fn multiple clauses" do
-        state =
-          """
-          a = fn
-            x, 1 ->
-              record_env()
-            y, z when is_integer(z) ->
-              record_env()
-          end
-          record_env()
-          """
-          |> string_to_state
-
-        assert Map.keys(state.lines_to_env[3].vars) == [{:x, nil}]
-        assert Map.keys(state.lines_to_env[5].vars) == [{:y, nil}, {:z, nil}]
-        assert Map.keys(state.lines_to_env[7].vars) == [{:a, nil}]
-      end
-
-      test "try" do
-        state =
-          """
-          try do
-            a = 2
-            do_something_that_may_fail()
-          rescue
-            e in ArgumentError ->
-              IO.puts("Invalid argument given")
-          catch
-            value ->
-              IO.puts("Caught \#{inspect(value)}")
-          else
-            other ->
-              IO.puts("Success! The result was \#{inspect(other)}")
-          after
-            b = 2
-            IO.puts("This is printed regardless if it failed or succeeded")
-          end
-          record_env()
-          """
-          |> string_to_state
-
-        assert Map.keys(state.lines_to_env[3].vars) == [{:a, nil}]
-
-        assert Map.keys(state.lines_to_env[6].vars) == [{:e, nil}]
-
-        assert Map.keys(state.lines_to_env[9].vars) == [{:value, nil}]
-
-        assert Map.keys(state.lines_to_env[12].vars) == [{:other, nil}]
-
-        assert Map.keys(state.lines_to_env[15].vars) == [{:b, nil}]
-
-        assert Map.keys(state.lines_to_env[17].vars) == []
-      end
-
-      test "module body" do
-        state =
-          """
+    test "def body" do
+      state =
+        """
+        defmodule My do
           x = 1
-          defmodule My do
-            y = 2
+          def foo() do
+            abc = bar()
             record_env()
           end
           record_env()
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert Map.keys(state.lines_to_env[4].vars) == [{:x, nil}, {:y, nil}]
-        assert Map.keys(state.lines_to_env[6].vars) == [{:x, nil}]
-      end
+      assert Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
+      refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:x, nil})
 
-      test "def body" do
-        state =
-          """
-          defmodule My do
-            x = 1
-            def foo() do
-              abc = bar()
-              record_env()
-            end
+      refute Map.has_key?(state.lines_to_env[7].versioned_vars, {:abc, nil})
+      assert Map.has_key?(state.lines_to_env[7].versioned_vars, {:x, nil})
+    end
+
+    test "def argument list" do
+      state =
+        """
+        defmodule My do
+          def foo(abc) do
             record_env()
           end
-          """
-          |> string_to_state
+          record_env()
+        end
+        """
+        |> string_to_state
 
-        assert Map.has_key?(state.lines_to_env[5].vars, {:abc, nil})
-        refute Map.has_key?(state.lines_to_env[5].vars, {:x, nil})
+      assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
 
-        refute Map.has_key?(state.lines_to_env[7].vars, {:abc, nil})
-        assert Map.has_key?(state.lines_to_env[7].vars, {:x, nil})
-      end
+      refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
+    end
 
-      test "def argument list" do
-        state =
-          """
-          defmodule My do
-            def foo(abc) do
-              record_env()
-            end
+    test "def guard" do
+      state =
+        """
+        defmodule My do
+          def foo(abc)
+            when record_env() do
             record_env()
           end
-          """
-          |> string_to_state
+          record_env()
+        end
+        """
+        |> string_to_state
 
-        assert Map.has_key?(state.lines_to_env[3].vars, {:abc, nil})
-
-        refute Map.has_key?(state.lines_to_env[5].vars, {:abc, nil})
-      end
-
-      test "def guard" do
-        state =
-          """
-          defmodule My do
-            def foo(abc)
-              when record_env() do
-              record_env()
-            end
-            record_env()
-          end
-          """
-          |> string_to_state
-
-        assert Map.has_key?(state.lines_to_env[3].vars, {:abc, nil})
-      end
+      assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
     end
   end
 
@@ -770,6 +815,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ]
 
         assert [
+                 %VarInfo{
+                   name: :_var1,
+                   type: {:list_head, {:list_tail, {:attribute, :myattribute}}}
+                 },
+                 %VarInfo{
+                   name: :_var2,
+                   type: {:list_head, {:list_tail, {:list_tail, {:attribute, :myattribute}}}}
+                 },
                  %VarInfo{
                    name: :a,
                    type: {:list_head, {:attribute, :other}}
@@ -1524,6 +1577,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           |> string_to_state
 
         assert [
+                 %VarInfo{name: :_par5, positions: [{3, 57}], scope_id: 3},
                  %VarInfo{name: :par1, positions: [{3, 20}], scope_id: 3},
                  %VarInfo{name: :par2, positions: [{3, 33}], scope_id: 3},
                  %VarInfo{name: :par3, positions: [{3, 39}], scope_id: 3},
@@ -2064,6 +2118,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           |> string_to_state
 
         assert [
+                 %VarInfo{
+                   is_definition: true,
+                   name: :_my_other,
+                   positions: [{2, 24}],
+                   scope_id: 3
+                 },
                  %VarInfo{is_definition: true, name: :abc, positions: [{3, 6}], scope_id: 4},
                  %VarInfo{is_definition: true, name: :my_var, positions: [{2, 13}], scope_id: 3},
                  %VarInfo{

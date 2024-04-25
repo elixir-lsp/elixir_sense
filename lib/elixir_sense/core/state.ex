@@ -115,6 +115,7 @@ defmodule ElixirSense.Core.State do
             module: nil | module,
             function: nil | {atom, arity},
             protocol: nil | ElixirSense.Core.State.protocol_t(),
+            versioned_vars: %{optional({atom, atom}) => non_neg_integer},
             vars: list(ElixirSense.Core.State.VarInfo.t()),
             attributes: list(ElixirSense.Core.State.AttributeInfo.t()),
             behaviours: list(module),
@@ -130,6 +131,7 @@ defmodule ElixirSense.Core.State do
               function: nil,
               # NOTE for protocol implementation this will be the first variant
               protocol: nil,
+              versioned_vars: %{},
               vars: [],
               attributes: [],
               behaviours: [],
@@ -334,6 +336,13 @@ defmodule ElixirSense.Core.State do
         _ -> nil
       end
 
+    versioned_vars =
+      current_vars
+      |> Enum.map(&{&1.name, nil})
+      |> Enum.sort()
+      |> Enum.with_index()
+      |> Map.new()
+
     %Env{
       functions: current_functions,
       macros: current_macros,
@@ -343,6 +352,7 @@ defmodule ElixirSense.Core.State do
       function: current_function,
       typespec: current_typespec,
       vars: current_vars,
+      versioned_vars: versioned_vars,
       attributes: current_attributes,
       behaviours: current_behaviours,
       scope_id: current_scope_id,
@@ -1200,7 +1210,10 @@ defmodule ElixirSense.Core.State do
 
     vars_from_scope =
       case {is_definition and var_info.is_definition, is_var_defined, var_name_as_string} do
-        {_, _, "_" <> _} ->
+        {_, _, "__MODULE__"} ->
+          raise "foo"
+
+        {_, _, "_"} ->
           vars_from_scope
 
         {_, _, ^scope} ->
