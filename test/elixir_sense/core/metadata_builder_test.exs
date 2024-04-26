@@ -9,7 +9,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @moduledoc_support Version.match?(System.version(), "< 1.17.0-dev")
   @attribute_support Version.match?(System.version(), "< 1.17.0-dev")
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
-  @var_support true or Version.match?(System.version(), "< 1.17.0-dev")
   @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
   @defdelegate_support Version.match?(System.version(), "< 1.17.0-dev")
   @first_alias_positions Version.match?(System.version(), "< 1.17.0-dev")
@@ -33,6 +32,41 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :abc, positions: [{1, 1}]}
+             ] = state |> get_line_vars(2)
+    end
+
+    test "nested binding" do
+      state =
+        """
+        abc = cde = 5
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[2].versioned_vars, {:abc, nil})
+      assert Map.has_key?(state.lines_to_env[2].versioned_vars, {:cde, nil})
+
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}]},
+               %VarInfo{name: :cde, positions: [{1, 7}]}
+             ] = state |> get_line_vars(2)
+    end
+
+    test "nested binding repeated" do
+      state =
+        """
+        abc = cde = abc = 5
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[2].versioned_vars, {:abc, nil})
+      assert Map.has_key?(state.lines_to_env[2].versioned_vars, {:cde, nil})
+
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}]},
+               %VarInfo{name: :abc, positions: [{1, 13}]},
+               %VarInfo{name: :cde, positions: [{1, 7}]}
              ] = state |> get_line_vars(2)
     end
 
@@ -109,17 +143,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
-      # TODO shouldn't positions be [{2, 1}]?
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 1}, {2, 1}]}
-               ] = state |> get_line_vars(3)
-      else
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 1}]},
-                 %VarInfo{name: :abc, positions: [{2, 1}]}
-               ] = state |> get_line_vars(3)
-      end
+
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}]},
+               %VarInfo{name: :abc, positions: [{2, 1}]}
+             ] = state |> get_line_vars(3)
     end
 
     test "binding in function call" do
@@ -285,16 +313,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[6].versioned_vars, {:cde, nil})
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
-        # TODO we lost usage
-        assert [
-                 %VarInfo{name: :cde, positions: [{1, 1}]}
-               ] = state |> get_line_vars(6)
-      else
-        assert [
-                 %VarInfo{name: :cde, positions: [{1, 1}, {3, 7}]}
-               ] = state |> get_line_vars(6)
-      end
+      assert [
+               %VarInfo{name: :cde, positions: [{1, 1}, {3, 7}]}
+             ] = state |> get_line_vars(6)
     end
 
     test "rebinding in if" do
@@ -721,6 +742,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ] = state |> get_line_vars(4)
     end
 
+    test "fn argument usage" do
+      state =
+        """
+        fn x ->
+          foo(x)
+          record_env()
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:x, nil}]
+
+      assert [
+               %VarInfo{name: :x, positions: [{1, 4}, {2, 7}]}
+             ] = state |> get_line_vars(3)
+    end
+
     test "fn multiple clauses" do
       state =
         """
@@ -742,11 +780,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[5].versioned_vars) == [{:y, nil}, {:z, nil}]
 
-      # TODO sort in get_line_vars
+      # TODO sort?
+      # |> Enum.sort_by(& &1.name)
       assert [
                %VarInfo{name: :y, positions: [{4, 3}]},
                %VarInfo{name: :z, positions: [{4, 6}, {4, 24}]}
-             ] = state |> get_line_vars(5) |> Enum.sort_by(& &1.name)
+             ] = state |> get_line_vars(5)
 
       assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:a, nil}]
 
@@ -799,16 +838,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:abc, nil}]
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
-        # TODO we lost usage in closure
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 1}]}
-               ] = state |> get_line_vars(6)
-      else
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 1}, {3, 7}]}
-               ] = state |> get_line_vars(6)
-      end
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}, {3, 7}]}
+             ] = state |> get_line_vars(6)
     end
 
     test "fn closure rebinding" do
@@ -930,6 +962,34 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
     end
 
+    test "in quote unquote_splicing" do
+      state =
+        """
+        abc = foo()
+        quote do
+          unquote_splicing(abc)
+          {unquote_splicing(abc), unquote_splicing(abc)}
+          [1 | unquote_splicing(abc)]
+          [unquote_splicing(abc) | [1]]
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[8].versioned_vars, {:abc, nil})
+
+      if Version.match?(System.version(), ">= 1.17.0-dev") do
+        assert [
+                 %VarInfo{
+                   name: :abc,
+                   positions: [{1, 1}, {3, 20}, {4, 21}, {4, 44}, {5, 25}, {6, 21}]
+                 }
+               ] = state |> get_line_vars(8)
+      else
+        assert [%VarInfo{name: :abc, positions: [{1, 1}]}] = state |> get_line_vars(8)
+      end
+    end
+
     test "in capture" do
       state =
         """
@@ -947,13 +1007,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       if Version.match?(System.version(), ">= 1.17.0-dev") do
         assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:"&1", nil}, {:abc, nil}]
 
-        # TODO can we record &1 position?
-        # TODO cde is not defined here
         assert [
-                 %VarInfo{name: :"&1", positions: [{nil, nil}]},
-                 %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]},
-                 %VarInfo{name: :cde, positions: [{5, 3}]}
+                 %VarInfo{name: :"&1", positions: [{3, 3}]},
+                 %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]}
                ] = state |> get_line_vars(6)
+
+        assert Map.keys(state.lines_to_env[8].versioned_vars) == [{:abc, nil}]
+
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]}
+               ] = state |> get_line_vars(8)
       else
         assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:abc, nil}, {:cde, nil}]
 
@@ -994,6 +1057,31 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :x, positions: [{1, 1}]}
+             ] = state |> get_line_vars(6)
+    end
+
+    test "module body usage" do
+      state =
+        """
+        x = 1
+        defmodule My do
+          foo(x)
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:x, nil}]
+
+      assert [
+               %VarInfo{name: :x, positions: [{1, 1}, {3, 7}]}
+             ] = state |> get_line_vars(4)
+
+      assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:x, nil}]
+
+      assert [
+               %VarInfo{name: :x, positions: [{1, 1}, {3, 7}]}
              ] = state |> get_line_vars(6)
     end
 
@@ -1046,6 +1134,25 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       refute Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
       assert [] = state |> get_line_vars(5)
+    end
+
+    test "def argument usage" do
+      state =
+        """
+        defmodule My do
+          def foo(abc) do
+            foo(abc)
+            record_env()
+          end
+        end
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[4].versioned_vars, {:abc, nil})
+
+      assert [
+               %VarInfo{name: :abc, positions: [{2, 11}, {3, 9}]}
+             ] = state |> get_line_vars(4)
     end
 
     test "def guard" do
@@ -2279,693 +2386,789 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-  if @var_support do
-    describe "var" do
-      test "vars defined inside a module" do
-        state =
-          """
-          defmodule MyModule do
-            var_out1 = 1
-            def func do
+  describe "var" do
+    test "vars defined inside a module" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          def func do
+            var_in = 1
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[7].versioned_vars) == [
+               {:var_out1, nil},
+               {:var_out2, nil}
+             ]
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id},
+               %VarInfo{name: :var_out2, positions: [{6, 3}], scope_id: scope_id}
+             ] = state |> get_line_vars(7)
+    end
+
+    test "vars defined in a `for` comprehension" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          IO.puts ""
+          for var_on <- [1,2], var_on != 2, var_on1 = var_on + 1 do
+            var_in = 1
+            IO.puts ""
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:var_out1, nil}]
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}]}
+             ] = get_line_vars(state, 3)
+
+      assert Map.keys(state.lines_to_env[6].versioned_vars) == [
+               {:var_in, nil},
+               {:var_on, nil},
+               {:var_on1, nil},
+               {:var_out1, nil}
+             ]
+
+      assert ([
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_in,
+                  positions: [{5, 5}],
+                  scope_id: scope_id_3
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_on,
+                  positions: [{4, 7}, {4, 24}, {4, 47}],
+                  scope_id: scope_id_2
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_on1,
+                  positions: [{4, 37}],
+                  scope_id: scope_id_2
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_out1,
+                  positions: [{2, 3}],
+                  scope_id: scope_id_1
+                }
+              ]
+              when scope_id_2 > scope_id_1 and scope_id_3 > scope_id_2) = get_line_vars(state, 6)
+
+      assert Map.keys(state.lines_to_env[9].versioned_vars) == [
+               {:var_out1, nil},
+               {:var_out2, nil}
+             ]
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id},
+               %VarInfo{name: :var_out2, positions: [{8, 3}], scope_id: scope_id}
+             ] = get_line_vars(state, 9)
+    end
+
+    test "vars defined in a `with` expression" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          IO.puts ""
+          with var_on <- [1,2], var_on != 2, var_on1 = var_on + 1 do
+            var_in = 1
+            IO.puts ""
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:var_out1, nil}]
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}]}
+             ] = get_line_vars(state, 3)
+
+      assert Map.keys(state.lines_to_env[6].versioned_vars) == [
+               {:var_in, nil},
+               {:var_on, nil},
+               {:var_on1, nil},
+               {:var_out1, nil}
+             ]
+
+      assert ([
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_in,
+                  positions: [{5, 5}],
+                  scope_id: scope_id_3
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_on,
+                  positions: [{4, 8}, {4, 25}, {4, 48}],
+                  scope_id: scope_id_2
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_on1,
+                  positions: [{4, 38}],
+                  scope_id: scope_id_2
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_out1,
+                  positions: [{2, 3}],
+                  scope_id: scope_id_1
+                }
+              ]
+              when scope_id_2 > scope_id_1 and scope_id_3 > scope_id_2) = get_line_vars(state, 6)
+
+      assert Map.keys(state.lines_to_env[9].versioned_vars) == [
+               {:var_out1, nil},
+               {:var_out2, nil}
+             ]
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id},
+               %VarInfo{name: :var_out2, positions: [{8, 3}], scope_id: scope_id}
+             ] = get_line_vars(state, 9)
+    end
+
+    test "vars defined in a `if/else` expression" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          if var_on = true do
+            var_in_if = 1
+            IO.puts ""
+          else
+            var_in_else = 1
+            IO.puts x
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[5].versioned_vars) == [
+               {:var_in_if, nil},
+               {:var_on, nil},
+               {:var_out1, nil}
+             ]
+
+      assert ([
+                %VarInfo{name: :var_in_if, positions: [{4, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: scope_id_1},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 5)
+
+      assert Map.keys(state.lines_to_env[8].versioned_vars)
+             |> Enum.reject(&(&1 |> elem(1) != nil)) == [
+               {:var_in_else, nil},
+               {:var_on, nil},
+               {:var_out1, nil}
+             ]
+
+      assert ([
+                %VarInfo{name: :var_in_else, positions: [{7, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: scope_id_1},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 8)
+
+      assert Map.keys(state.lines_to_env[11].versioned_vars) == [
+               {:var_on, nil},
+               {:var_out1, nil},
+               {:var_out2, nil}
+             ]
+
+      assert [
+               %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: scope_id},
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id},
+               %VarInfo{name: :var_out2, positions: [{10, 3}], scope_id: scope_id}
+             ] = get_line_vars(state, 11)
+    end
+
+    test "vars defined inside a `fn`" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          fn var_on ->
+            var_in = 1
+            IO.puts ""
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[5].versioned_vars) == [
+               {:var_in, nil},
+               {:var_on, nil},
+               {:var_out1, nil}
+             ]
+
+      assert ([
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_in,
+                  positions: [{4, 5}],
+                  scope_id: scope_id_2
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_on,
+                  positions: [{3, 6}],
+                  scope_id: scope_id_2
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_out1,
+                  positions: [{2, 3}],
+                  scope_id: scope_id_1
+                }
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 5)
+
+      assert Map.keys(state.lines_to_env[8].versioned_vars) == [
+               {:var_out1, nil},
+               {:var_out2, nil}
+             ]
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id},
+               %VarInfo{name: :var_out2, positions: [{7, 3}], scope_id: scope_id}
+             ] = get_line_vars(state, 8)
+    end
+
+    test "vars defined inside a `case`" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          case var_on0 = var_out1 do
+            {var_on1} ->
+              var_in1 = 1
+              IO.puts ""
+            {var_on2} ->
+              var_in2 = 2
+              IO.puts ""
+            var_on3 -> IO.puts ""
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[6].versioned_vars) == [
+               {:var_in1, nil},
+               {:var_on0, nil},
+               {:var_on1, nil},
+               {:var_out1, nil}
+             ]
+
+      assert ([
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_in1,
+                  positions: [{5, 7}],
+                  scope_id: scope_id_2
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_on0,
+                  positions: [{3, 8}],
+                  scope_id: scope_id_1
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_on1,
+                  positions: [{4, 6}],
+                  scope_id: scope_id_2
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :var_out1,
+                  positions: [{2, 3}, {3, 18}],
+                  scope_id: scope_id_1
+                }
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 6)
+
+      assert Map.keys(state.lines_to_env[9].versioned_vars) == [
+               {:var_in2, nil},
+               {:var_on0, nil},
+               {:var_on2, nil},
+               {:var_out1, nil}
+             ]
+
+      assert ([
+                %VarInfo{name: :var_in2, positions: [{8, 7}], scope_id: scope_id_2},
+                %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: scope_id_1},
+                %VarInfo{name: :var_on2, positions: [{7, 6}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 9)
+
+      assert Map.keys(state.lines_to_env[10].versioned_vars) == [
+               {:var_on0, nil},
+               {:var_on3, nil},
+               {:var_out1, nil}
+             ]
+
+      assert ([
+                %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: scope_id_1},
+                %VarInfo{name: :var_on3, positions: [{10, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 10)
+
+      assert Map.keys(state.lines_to_env[13].versioned_vars) == [
+               {:var_on0, nil},
+               {:var_out1, nil},
+               {:var_out2, nil}
+             ]
+
+      assert [
+               %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: scope_id},
+               %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: scope_id},
+               %VarInfo{name: :var_out2, positions: [{12, 3}], scope_id: scope_id}
+             ] = get_line_vars(state, 13)
+    end
+
+    test "vars defined inside a `cond`" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          cond do
+            1 == 1 ->
               var_in = 1
-            end
-            var_out2 = 1
-            IO.puts ""
-          end
-          """
-          |> string_to_state
-
-        assert Map.keys(state.lines_to_env[7].versioned_vars) == [
-                 {:var_out1, nil},
-                 {:var_out2, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-                 %VarInfo{name: :var_out2, positions: [{6, 3}], scope_id: 2}
-               ] = state |> get_line_vars(7)
-      end
-
-      test "vars defined in a `for` comprehension" do
-        state =
-          """
-          defmodule MyModule do
-            var_out1 = 1
-            IO.puts ""
-            for var_on <- [1,2], var_on != 2, var_on1 = var_on + 1 do
-              var_in = 1
               IO.puts ""
-            end
-            var_out2 = 1
-            IO.puts ""
-          end
-          """
-          |> string_to_state
-
-        assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:var_out1, nil}]
-
-        assert [
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 3)
-
-        assert Map.keys(state.lines_to_env[6].versioned_vars) == [
-                 {:var_in, nil},
-                 {:var_on, nil},
-                 {:var_on1, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{is_definition: true, name: :var_in, positions: [{5, 5}], scope_id: 4},
-                 %VarInfo{
-                   is_definition: true,
-                   name: :var_on,
-                   positions: [{4, 7}, {4, 24}, {4, 47}],
-                   scope_id: 3
-                 },
-                 %VarInfo{is_definition: true, name: :var_on1, positions: [{4, 37}], scope_id: 3},
-                 %VarInfo{is_definition: true, name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 6)
-
-        assert Map.keys(state.lines_to_env[9].versioned_vars) == [
-                 {:var_out1, nil},
-                 {:var_out2, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-                 %VarInfo{name: :var_out2, positions: [{8, 3}], scope_id: 2}
-               ] = get_line_vars(state, 9)
-      end
-
-      test "vars defined in a `with` expression" do
-        state =
-          """
-          defmodule MyModule do
-            var_out1 = 1
-            IO.puts ""
-            with var_on <- [1,2], var_on != 2, var_on1 = var_on + 1 do
-              var_in = 1
+            var_in1 = Enum.find([], 1) ->
               IO.puts ""
-            end
-            var_out2 = 1
-            IO.puts ""
+            var_in2 = Enum.find([], 2) -> IO.puts ""
           end
-          """
-          |> string_to_state
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-        assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:var_out1, nil}]
+      assert Map.keys(state.lines_to_env[6].versioned_vars) == [
+               {:var_in, nil},
+               {:var_out1, nil}
+             ]
 
-        assert [
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 3)
+      assert ([
+                %VarInfo{name: :var_in, positions: [{5, 7}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 6)
 
-        assert Map.keys(state.lines_to_env[6].versioned_vars) == [
-                 {:var_in, nil},
-                 {:var_on, nil},
-                 {:var_on1, nil},
-                 {:var_out1, nil}
-               ]
+      assert Map.keys(state.lines_to_env[8].versioned_vars) == [
+               {:var_in1, nil},
+               {:var_out1, nil}
+             ]
 
-        assert [
-                 %VarInfo{is_definition: true, name: :var_in, positions: [{5, 5}], scope_id: 4},
-                 %VarInfo{
-                   is_definition: true,
-                   name: :var_on,
-                   positions: [{4, 8}, {4, 25}, {4, 48}],
-                   scope_id: 3
-                 },
-                 %VarInfo{is_definition: true, name: :var_on1, positions: [{4, 38}], scope_id: 3},
-                 %VarInfo{is_definition: true, name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 6)
+      assert ([
+                %VarInfo{name: :var_in1, positions: [{7, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 8)
 
-        assert Map.keys(state.lines_to_env[9].versioned_vars) == [
-                 {:var_out1, nil},
-                 {:var_out2, nil}
-               ]
+      assert Map.keys(state.lines_to_env[9].versioned_vars) == [
+               {:var_in2, nil},
+               {:var_out1, nil}
+             ]
 
-        assert [
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-                 %VarInfo{name: :var_out2, positions: [{8, 3}], scope_id: 2}
-               ] = get_line_vars(state, 9)
-      end
+      assert ([
+                %VarInfo{name: :var_in2, positions: [{9, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 9)
 
-      test "vars defined in a `if/else` expression" do
-        state =
-          """
-          defmodule MyModule do
-            var_out1 = 1
-            if var_on = true do
-              var_in_if = 1
+      assert Map.keys(state.lines_to_env[12].versioned_vars) == [
+               {:var_out1, nil},
+               {:var_out2, nil}
+             ]
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id},
+               %VarInfo{name: :var_out2, positions: [{11, 3}], scope_id: scope_id}
+             ] = get_line_vars(state, 12)
+    end
+
+    test "vars defined inside a `try`" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          try do
+            var_in_try = 1
+            IO.puts ""
+          rescue
+            e1 in ArgumentError -> IO.puts ""
+            e2 in KeyError ->
+              var_in_rescue = 0
               IO.puts ""
-            else
-              var_in_else = 1
+          catch
+            :exit, reason1 -> IO.puts ""
+            reason2 ->
+              var_in_catch = 0
               IO.puts ""
-            end
-            var_out2 = 1
-            IO.puts ""
-          end
-          """
-          |> string_to_state
-
-        assert Map.keys(state.lines_to_env[5].versioned_vars) == [
-                 {:var_in_if, nil},
-                 {:var_on, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_in_if, positions: [{4, 5}], scope_id: 3},
-                 %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 5)
-
-        assert Map.keys(state.lines_to_env[8].versioned_vars) == [
-                 {:var_in_else, nil},
-                 {:var_on, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_in_else, positions: [{7, 5}], scope_id: 4},
-                 %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 8)
-
-        assert Map.keys(state.lines_to_env[11].versioned_vars) == [
-                 {:var_on, nil},
-                 {:var_out1, nil},
-                 {:var_out2, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: 2},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-                 %VarInfo{name: :var_out2, positions: [{10, 3}], scope_id: 2}
-               ] = get_line_vars(state, 11)
-      end
-
-      test "vars defined inside a `fn`" do
-        state =
-          """
-          defmodule MyModule do
-            var_out1 = 1
-            fn var_on ->
-              var_in = 1
+          else
+            {:atom, var_on_else} -> IO.puts ""
+            :atom ->
+              var_in_else = 0
               IO.puts ""
-            end
-            var_out2 = 1
+          after
+            var_in_after = 0
             IO.puts ""
           end
-          """
-          |> string_to_state
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-        assert Map.keys(state.lines_to_env[5].versioned_vars) == [
-                 {:var_in, nil},
-                 {:var_on, nil},
-                 {:var_out1, nil}
-               ]
+      assert Map.keys(state.lines_to_env[5].versioned_vars) == [
+               {:var_in_try, nil},
+               {:var_out1, nil}
+             ]
 
-        assert [
-                 %VarInfo{is_definition: true, name: :var_in, positions: [{4, 5}], scope_id: 4},
-                 %VarInfo{is_definition: true, name: :var_on, positions: [{3, 6}], scope_id: 4},
-                 %VarInfo{is_definition: true, name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 5)
+      assert ([
+                %VarInfo{name: :var_in_try, positions: [{4, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 5)
 
-        assert Map.keys(state.lines_to_env[8].versioned_vars) == [
-                 {:var_out1, nil},
-                 {:var_out2, nil}
-               ]
+      assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:e1, nil}, {:var_out1, nil}]
 
-        assert [
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-                 %VarInfo{name: :var_out2, positions: [{7, 3}], scope_id: 2}
-               ] = get_line_vars(state, 8)
-      end
+      assert ([
+                %VarInfo{name: :e1, positions: [{7, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 7)
 
-      test "vars defined inside a `case`" do
-        state =
-          """
-          defmodule MyModule do
-            var_out1 = 1
-            case var_on0 = var_out1 do
-              {var_on1} ->
-                var_in1 = 1
-                IO.puts ""
-              {var_on2} ->
-                var_in2 = 2
-                IO.puts ""
-              var_on3 -> IO.puts ""
-            end
-            var_out2 = 1
-            IO.puts ""
-          end
-          """
-          |> string_to_state
+      assert Map.keys(state.lines_to_env[10].versioned_vars) == [
+               {:e2, nil},
+               {:var_in_rescue, nil},
+               {:var_out1, nil}
+             ]
 
-        assert Map.keys(state.lines_to_env[6].versioned_vars) == [
-                 {:var_in1, nil},
-                 {:var_on0, nil},
-                 {:var_on1, nil},
-                 {:var_out1, nil}
-               ]
+      assert ([
+                %VarInfo{name: :e2, positions: [{8, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_in_rescue, positions: [{9, 7}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 10)
 
-        assert [
-                 %VarInfo{is_definition: true, name: :var_in1, positions: [{5, 7}], scope_id: 4},
-                 %VarInfo{is_definition: true, name: :var_on0, positions: [{3, 8}], scope_id: 2},
-                 %VarInfo{is_definition: true, name: :var_on1, positions: [{4, 6}], scope_id: 4},
-                 %VarInfo{
-                   is_definition: true,
-                   name: :var_out1,
-                   positions: [{2, 3}, {3, 18}],
-                   scope_id: 2
-                 }
-               ] = get_line_vars(state, 6)
+      assert Map.keys(state.lines_to_env[12].versioned_vars) == [
+               {:reason1, nil},
+               {:var_out1, nil}
+             ]
 
-        assert Map.keys(state.lines_to_env[9].versioned_vars) == [
-                 {:var_in2, nil},
-                 {:var_on0, nil},
-                 {:var_on2, nil},
-                 {:var_out1, nil}
-               ]
+      assert ([
+                %VarInfo{name: :reason1, positions: [{12, 12}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 12)
 
-        assert [
-                 %VarInfo{name: :var_in2, positions: [{8, 7}], scope_id: 5},
-                 %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
-                 %VarInfo{name: :var_on2, positions: [{7, 6}], scope_id: 5},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2}
-               ] = get_line_vars(state, 9)
+      assert Map.keys(state.lines_to_env[15].versioned_vars) == [
+               {:reason2, nil},
+               {:var_in_catch, nil},
+               {:var_out1, nil}
+             ]
 
-        assert Map.keys(state.lines_to_env[10].versioned_vars) == [
-                 {:var_on0, nil},
-                 {:var_on3, nil},
-                 {:var_out1, nil}
-               ]
+      assert ([
+                %VarInfo{name: :reason2, positions: [{13, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_in_catch, positions: [{14, 7}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 15)
 
-        assert [
-                 %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
-                 %VarInfo{name: :var_on3, positions: [{10, 5}], scope_id: 6},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2}
-               ] = get_line_vars(state, 10)
+      assert Map.keys(state.lines_to_env[17].versioned_vars) == [
+               {:var_on_else, nil},
+               {:var_out1, nil}
+             ]
 
-        assert Map.keys(state.lines_to_env[13].versioned_vars) == [
-                 {:var_on0, nil},
-                 {:var_out1, nil},
-                 {:var_out2, nil}
-               ]
+      assert ([
+                %VarInfo{name: :var_on_else, positions: [{17, 13}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 17)
 
-        assert [
-                 %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: 2},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: 2},
-                 %VarInfo{name: :var_out2, positions: [{12, 3}], scope_id: 2}
-               ] = get_line_vars(state, 13)
-      end
+      assert Map.keys(state.lines_to_env[20].versioned_vars) == [
+               {:var_in_else, nil},
+               {:var_out1, nil}
+             ]
 
-      test "vars defined inside a `cond`" do
-        state =
-          """
-          defmodule MyModule do
-            var_out1 = 1
-            cond do
-              1 == 1 ->
-                var_in = 1
-                IO.puts ""
-              var_in1 = Enum.find([], 1) ->
-                IO.puts ""
-              var_in2 = Enum.find([], 2) -> IO.puts ""
-            end
-            var_out2 = 1
-            IO.puts ""
-          end
-          """
-          |> string_to_state
+      assert ([
+                %VarInfo{name: :var_in_else, positions: [{19, 7}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 20)
 
-        assert Map.keys(state.lines_to_env[6].versioned_vars) == [
-                 {:var_in, nil},
-                 {:var_out1, nil}
-               ]
+      assert Map.keys(state.lines_to_env[23].versioned_vars) == [
+               {:var_in_after, nil},
+               {:var_out1, nil}
+             ]
 
-        assert [
-                 %VarInfo{name: :var_in, positions: [{5, 7}], scope_id: 4},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 6)
+      assert ([
+                %VarInfo{name: :var_in_after, positions: [{22, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 23)
 
-        assert Map.keys(state.lines_to_env[8].versioned_vars) == [
-                 {:var_in1, nil},
-                 {:var_out1, nil}
-               ]
+      assert Map.keys(state.lines_to_env[26].versioned_vars) == [
+               {:var_out1, nil},
+               {:var_out2, nil}
+             ]
 
-        assert [
-                 %VarInfo{name: :var_in1, positions: [{7, 5}], scope_id: 5},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 8)
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id},
+               %VarInfo{name: :var_out2, positions: [{25, 3}], scope_id: scope_id}
+             ] = get_line_vars(state, 26)
+    end
 
-        assert Map.keys(state.lines_to_env[9].versioned_vars) == [
-                 {:var_in2, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_in2, positions: [{9, 5}], scope_id: 6},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 9)
-
-        assert Map.keys(state.lines_to_env[12].versioned_vars) == [
-                 {:var_out1, nil},
-                 {:var_out2, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-                 %VarInfo{name: :var_out2, positions: [{11, 3}], scope_id: 2}
-               ] = get_line_vars(state, 12)
-      end
-
-      test "vars defined inside a `try`" do
-        state =
-          """
-          defmodule MyModule do
-            var_out1 = 1
-            try do
-              var_in_try = 1
+    test "vars defined inside a `receive`" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          receive do
+            {:atom, msg1} -> IO.puts ""
+            :msg ->
+              var_in = 0
               IO.puts ""
-            rescue
-              e1 in ArgumentError -> IO.puts ""
-              e2 in KeyError ->
-                var_in_rescue = 0
-                IO.puts ""
-            catch
-              :exit, reason1 -> IO.puts ""
-              reason2 ->
-                var_in_catch = 0
-                IO.puts ""
-            else
-              {:atom, var_on_else} -> IO.puts ""
-              :atom ->
-                var_in_else = 0
-                IO.puts ""
-            after
+          after
+            300 ->
               var_in_after = 0
               IO.puts ""
-            end
-            var_out2 = 1
-            IO.puts ""
           end
-          """
-          |> string_to_state
-
-        assert Map.keys(state.lines_to_env[5].versioned_vars) == [
-                 {:var_in_try, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_in_try, positions: [{4, 5}], scope_id: 3},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 5)
-
-        assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:e1, nil}, {:var_out1, nil}]
-
-        assert [
-                 %VarInfo{name: :e1, positions: [{7, 5}], scope_id: 5},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 7)
-
-        assert Map.keys(state.lines_to_env[10].versioned_vars) == [
-                 {:e2, nil},
-                 {:var_in_rescue, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :e2, positions: [{8, 5}], scope_id: 6},
-                 %VarInfo{name: :var_in_rescue, positions: [{9, 7}], scope_id: 6},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 10)
-
-        assert Map.keys(state.lines_to_env[12].versioned_vars) == [
-                 {:reason1, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :reason1, positions: [{12, 12}], scope_id: 8},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 12)
-
-        assert Map.keys(state.lines_to_env[15].versioned_vars) == [
-                 {:reason2, nil},
-                 {:var_in_catch, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :reason2, positions: [{13, 5}], scope_id: 9},
-                 %VarInfo{name: :var_in_catch, positions: [{14, 7}], scope_id: 9},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 15)
-
-        assert Map.keys(state.lines_to_env[17].versioned_vars) == [
-                 {:var_on_else, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_on_else, positions: [{17, 13}], scope_id: 11},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 17)
-
-        assert Map.keys(state.lines_to_env[20].versioned_vars) == [
-                 {:var_in_else, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_in_else, positions: [{19, 7}], scope_id: 12},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 20)
-
-        assert Map.keys(state.lines_to_env[23].versioned_vars) == [
-                 {:var_in_after, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_in_after, positions: [{22, 5}], scope_id: 13},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 23)
-
-        assert Map.keys(state.lines_to_env[26].versioned_vars) == [
-                 {:var_out1, nil},
-                 {:var_out2, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-                 %VarInfo{name: :var_out2, positions: [{25, 3}], scope_id: 2}
-               ] = get_line_vars(state, 26)
-      end
-
-      test "vars defined inside a `receive`" do
-        state =
-          """
-          defmodule MyModule do
-            var_out1 = 1
-            receive do
-              {:atom, msg1} -> IO.puts ""
-              :msg ->
-                var_in = 0
-                IO.puts ""
-            after
-              300 ->
-                var_in_after = 0
-                IO.puts ""
-            end
-            var_out2 = 1
-            IO.puts ""
-          end
-          """
-          |> string_to_state
-
-        assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:msg1, nil}, {:var_out1, nil}]
-
-        assert [
-                 %VarInfo{name: :msg1, positions: [{4, 13}], scope_id: 4},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 4)
-
-        assert Map.keys(state.lines_to_env[7].versioned_vars) == [
-                 {:var_in, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_in, positions: [{6, 7}], scope_id: 5},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 7)
-
-        assert Map.keys(state.lines_to_env[11].versioned_vars) == [
-                 {:var_in_after, nil},
-                 {:var_out1, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_in_after, positions: [{10, 7}], scope_id: 7},
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 11)
-
-        assert Map.keys(state.lines_to_env[14].versioned_vars) == [
-                 {:var_out1, nil},
-                 {:var_out2, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: 2},
-                 %VarInfo{name: :var_out2, positions: [{13, 3}], scope_id: 2}
-               ] = get_line_vars(state, 14)
-      end
-
-      test "functions of arity 0 should not be in the vars list" do
-        state =
-          """
-          defmodule MyModule do
-            myself = self
-            mynode = node()
-            IO.puts ""
-          end
-          """
-          |> string_to_state
-
-        assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:mynode, nil}, {:myself, nil}]
-
-        assert [
-                 %VarInfo{name: :mynode, positions: [{3, 3}], scope_id: 2},
-                 %VarInfo{name: :myself, positions: [{2, 3}], scope_id: 2}
-               ] = get_line_vars(state, 3)
-      end
-
-      test "inherited vars" do
-        state =
-          """
-          top_level_var = 1
+          var_out2 = 1
           IO.puts ""
-          defmodule OuterModule do
-            outer_module_var = 1
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:msg1, nil}, {:var_out1, nil}]
+
+      assert ([
+                %VarInfo{name: :msg1, positions: [{4, 13}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 4)
+
+      assert Map.keys(state.lines_to_env[7].versioned_vars) == [
+               {:var_in, nil},
+               {:var_out1, nil}
+             ]
+
+      assert ([
+                %VarInfo{name: :var_in, positions: [{6, 7}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 7)
+
+      assert Map.keys(state.lines_to_env[11].versioned_vars) == [
+               {:var_in_after, nil},
+               {:var_out1, nil}
+             ]
+
+      assert ([
+                %VarInfo{name: :var_in_after, positions: [{10, 7}], scope_id: scope_id_2},
+                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 11)
+
+      assert Map.keys(state.lines_to_env[14].versioned_vars) == [
+               {:var_out1, nil},
+               {:var_out2, nil}
+             ]
+
+      assert [
+               %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id},
+               %VarInfo{name: :var_out2, positions: [{13, 3}], scope_id: scope_id}
+             ] = get_line_vars(state, 14)
+    end
+
+    test "functions of arity 0 should not be in the vars list" do
+      state =
+        """
+        defmodule MyModule do
+          myself = self
+          mynode = node()
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:mynode, nil}, {:myself, nil}]
+
+      assert [
+               %VarInfo{name: :mynode, positions: [{3, 3}], scope_id: scope_id},
+               %VarInfo{name: :myself, positions: [{2, 3}], scope_id: scope_id}
+             ] = get_line_vars(state, 4)
+    end
+
+    test "inherited vars" do
+      state =
+        """
+        top_level_var = 1
+        IO.puts ""
+        defmodule OuterModule do
+          outer_module_var = 1
+          IO.puts ""
+          defmodule InnerModule do
+            inner_module_var = 1
             IO.puts ""
-            defmodule InnerModule do
-              inner_module_var = 1
-              IO.puts ""
-              def func do
-                func_var = 1
-                IO.puts ""
-              end
+            def func do
+              func_var = 1
               IO.puts ""
             end
             IO.puts ""
           end
           IO.puts ""
-          """
-          |> string_to_state
+        end
+        IO.puts ""
+        """
+        |> string_to_state
 
-        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:top_level_var, nil}]
+      assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:top_level_var, nil}]
 
-        assert [
-                 %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
-               ] = get_line_vars(state, 2)
+      assert [
+               %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
+             ] = get_line_vars(state, 2)
 
-        assert Map.keys(state.lines_to_env[5].versioned_vars) == [
-                 {:outer_module_var, nil},
-                 {:top_level_var, nil}
-               ]
+      assert Map.keys(state.lines_to_env[5].versioned_vars) == [
+               {:outer_module_var, nil},
+               {:top_level_var, nil}
+             ]
 
-        assert [
-                 %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
-                 %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
-               ] = get_line_vars(state, 5)
+      assert ([
+                %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: scope_id_2},
+                %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 5)
 
-        assert Map.keys(state.lines_to_env[8].versioned_vars) == [
-                 {:inner_module_var, nil},
-                 {:outer_module_var, nil},
-                 {:top_level_var, nil}
-               ]
+      assert Map.keys(state.lines_to_env[8].versioned_vars) == [
+               {:inner_module_var, nil},
+               {:outer_module_var, nil},
+               {:top_level_var, nil}
+             ]
 
-        assert [
-                 %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: 4},
-                 %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
-                 %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
-               ] = get_line_vars(state, 8)
+      assert ([
+                %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: scope_id_3},
+                %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: scope_id_2},
+                %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1 and scope_id_3 > scope_id_2) = get_line_vars(state, 8)
 
-        assert Map.keys(state.lines_to_env[11].versioned_vars) == [{:func_var, nil}]
+      assert Map.keys(state.lines_to_env[11].versioned_vars) == [{:func_var, nil}]
 
-        assert [
-                 %VarInfo{name: :func_var, positions: [{10, 7}], scope_id: 6}
-               ] = get_line_vars(state, 11)
+      assert [
+               %VarInfo{name: :func_var, positions: [{10, 7}]}
+             ] = get_line_vars(state, 11)
 
-        assert Map.keys(state.lines_to_env[13].versioned_vars) == [
-                 {:inner_module_var, nil},
-                 {:outer_module_var, nil},
-                 {:top_level_var, nil}
-               ]
+      assert Map.keys(state.lines_to_env[13].versioned_vars) == [
+               {:inner_module_var, nil},
+               {:outer_module_var, nil},
+               {:top_level_var, nil}
+             ]
 
-        assert [
-                 %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: 4},
-                 %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
-                 %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
-               ] = get_line_vars(state, 13)
+      assert ([
+                %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: scope_id_3},
+                %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: scope_id_2},
+                %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1 and scope_id_3 > scope_id_2) = get_line_vars(state, 13)
 
-        assert Map.keys(state.lines_to_env[15].versioned_vars) == [
-                 outer_module_var: nil,
-                 top_level_var: nil
-               ]
+      assert Map.keys(state.lines_to_env[15].versioned_vars) == [
+               outer_module_var: nil,
+               top_level_var: nil
+             ]
 
-        assert [
-                 %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: 2},
-                 %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
-               ] = get_line_vars(state, 15)
+      assert ([
+                %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: scope_id_2},
+                %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 15)
 
-        assert Map.keys(state.lines_to_env[17].versioned_vars) == [{:top_level_var, nil}]
+      assert Map.keys(state.lines_to_env[17].versioned_vars) == [{:top_level_var, nil}]
 
-        assert [
-                 %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: 0}
-               ] = get_line_vars(state, 17)
-      end
+      assert [
+               %VarInfo{name: :top_level_var, positions: [{1, 1}]}
+             ] = get_line_vars(state, 17)
+    end
 
-      test "vars as a struct type" do
-        state =
-          """
-          defmodule MyModule do
-            def func(%my_var{}, %_my_other{}, %_{}, x) do
-              %abc{} = x
-              IO.puts ""
-            end
+    test "vars as a struct type" do
+      state =
+        """
+        defmodule MyModule do
+          def func(%my_var{}, %_my_other{}, %_{}, x) do
+            %abc{} = x
+            IO.puts ""
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert Map.keys(state.lines_to_env[4].versioned_vars) == [
-                 {:_my_other, nil},
-                 {:abc, nil},
-                 {:my_var, nil},
-                 {:x, nil}
-               ]
+      assert Map.keys(state.lines_to_env[4].versioned_vars) == [
+               {:_my_other, nil},
+               {:abc, nil},
+               {:my_var, nil},
+               {:x, nil}
+             ]
 
-        assert [
-                 %VarInfo{
-                   is_definition: true,
-                   name: :_my_other,
-                   positions: [{2, 24}],
-                   scope_id: 3
-                 },
-                 %VarInfo{is_definition: true, name: :abc, positions: [{3, 6}], scope_id: 4},
-                 %VarInfo{is_definition: true, name: :my_var, positions: [{2, 13}], scope_id: 3},
-                 %VarInfo{
-                   is_definition: true,
-                   name: :x,
-                   positions: [{2, 43}, {3, 14}],
-                   scope_id: 3
-                 }
-               ] = state |> get_line_vars(4)
-      end
+      assert ([
+                %VarInfo{
+                  is_definition: true,
+                  name: :_my_other,
+                  positions: [{2, 24}],
+                  scope_id: scope_id_1
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :abc,
+                  positions: [{3, 6}],
+                  scope_id: scope_id_2
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :my_var,
+                  positions: [{2, 13}],
+                  scope_id: scope_id_1
+                },
+                %VarInfo{
+                  is_definition: true,
+                  name: :x,
+                  positions: [{2, 43}, {3, 14}],
+                  scope_id: scope_id_1
+                }
+              ]
+              when scope_id_2 > scope_id_1) = state |> get_line_vars(4)
     end
   end
 

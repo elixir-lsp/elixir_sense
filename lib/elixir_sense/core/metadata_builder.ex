@@ -184,6 +184,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> apply_optional_callbacks(env)
     |> remove_attributes_scope
     |> remove_lexical_scope
+    |> maybe_move_vars_to_outer_scope
     |> remove_vars_scope
     |> remove_module
     |> remove_protocol_implementation
