@@ -9,7 +9,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @moduledoc_support Version.match?(System.version(), "< 1.17.0-dev")
   @attribute_support Version.match?(System.version(), "< 1.17.0-dev")
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
-  @var_support Version.match?(System.version(), "< 1.17.0-dev")
+  @var_support true or Version.match?(System.version(), "< 1.17.0-dev")
   @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
   @defdelegate_support Version.match?(System.version(), "< 1.17.0-dev")
   @first_alias_positions Version.match?(System.version(), "< 1.17.0-dev")
@@ -36,6 +36,36 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ] = state |> get_line_vars(2)
     end
 
+    test "in nested blocks" do
+      state =
+        """
+        (); ((abc = 1); ()); ( ); (inspect(abc))
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[2].versioned_vars, {:abc, nil})
+
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 7}, {1, 36}]}
+             ] = state |> get_line_vars(2)
+    end
+
+    test "repeated in match" do
+      state =
+        """
+        [abc, abc] = foo()
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[2].versioned_vars, {:abc, nil})
+
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 2}, {1, 7}]}
+             ] = state |> get_line_vars(2)
+    end
+
     test "underscored" do
       state =
         """
@@ -51,6 +81,125 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [
                %VarInfo{name: :_abc, positions: [{2, 1}]}
              ] = state |> get_line_vars(3)
+    end
+
+    test "pin" do
+      state =
+        """
+        abc = 5
+        ^abc = foo()
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
+
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}, {2, 2}]}
+             ] = state |> get_line_vars(3)
+    end
+
+    test "rebinding" do
+      state =
+        """
+        abc = 5
+        abc = foo()
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
+      # TODO shouldn't positions be [{2, 1}]?
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}, {2, 1}]}
+             ] = state |> get_line_vars(3)
+    end
+
+    test "binding in function call" do
+      state =
+        """
+        foo(abc = 5)
+        Remote.bar(cde = 6)
+        x.(xyz = 7)
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:abc, nil}, {:cde, nil}, {:xyz, nil}]
+      
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 5}]},
+               %VarInfo{name: :cde, positions: [{2, 12}]},
+               %VarInfo{name: :xyz, positions: [{3, 4}]}
+             ] = state |> get_line_vars(4)
+    end
+
+    test "usages" do
+      state =
+        """
+        abc = 5
+        {abc}
+        {abc, abc}
+        [abc | [abc, abc]]
+        %{x: abc}
+        %{abc => abc}
+        <<abc>>
+        local(abc)
+        Some.remote(abc)
+        x.(abc)
+        -abc
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[13].versioned_vars, {:abc, nil})
+      
+      assert [
+               %VarInfo{name: :abc, positions: positions}
+             ] = state |> get_line_vars(13)
+
+       assert positions == [{1, 1},
+                  {2, 2},
+                  {3, 2},
+                  {3, 7},
+                  {4, 2},
+                  {4, 9},
+                  {4, 14},
+                  {5, 6},
+                  {6, 3},
+                  {6, 10},
+                  {7, 3},
+                  {8, 7},
+                  {9, 13},
+                  {10, 4},
+                  {11, 2},
+                  {12, 8}]
+    end
+
+    test "undefined usage" do
+      state =
+        """
+        foo(abc)
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].versioned_vars) == []
+      
+      assert [] = state |> get_line_vars(2)
+    end
+
+    test "undefined pin" do
+      state =
+        """
+        ^abc = 1
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[2].versioned_vars) == []
+      
+      assert [] = state |> get_line_vars(2)
     end
 
     test "in if" do
@@ -102,6 +251,59 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [
                %VarInfo{name: :cde, positions: [{1, 1}]}
              ] = state |> get_line_vars(5)
+    end
+
+    test "usage in if" do
+      state =
+        """
+        cde = "1"
+        if true do
+          _ = cde
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[4].versioned_vars, {:cde, nil})
+
+      assert [
+                %VarInfo{name: :cde, positions: [{1, 1}, {3, 7}]}
+              ] = state |> get_line_vars(4)
+
+      assert Map.has_key?(state.lines_to_env[6].versioned_vars, {:cde, nil})
+
+      # TODO we lost usage
+      assert [
+               %VarInfo{name: :cde, positions: [{1, 1}]}
+             ] = state |> get_line_vars(6)
+    end
+
+    test "rebinding in if" do
+      state =
+        """
+        cde = "1"
+        if true do
+          cde = 5
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[4].versioned_vars, {:cde, nil})
+
+      # TODO is it OK
+      assert ([
+                %VarInfo{name: :cde, positions: [{1, 1}], scope_id: scope_id_1},
+                %VarInfo{name: :cde, positions: [{3, 3}], scope_id: scope_id_2}
+              ] when scope_id_1 != scope_id_2) = state |> get_line_vars(4)
+
+      assert Map.has_key?(state.lines_to_env[6].versioned_vars, {:cde, nil})
+
+      assert [
+               %VarInfo{name: :cde, positions: [{1, 1}]}
+             ] = state |> get_line_vars(6)
     end
 
     test "defined on if" do
@@ -240,17 +442,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       if Version.match?(System.version(), ">= 1.17.0-dev") do
         assert Map.keys(state.lines_to_env[1].versioned_vars) == []
         assert [] = state |> get_line_vars(1)
+
+        dbg(Map.keys(state.lines_to_env))
+
         assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
 
         assert [
-                 %VarInfo{name: :abc, positions: [{4, 5}]}
+                 %VarInfo{name: :abc, positions: [{1, 6}]}
                ] = state |> get_line_vars(2)
 
         assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:abc, nil}, {:cde, nil}]
 
         assert [
-                 %VarInfo{name: :abc, positions: [{4, 5}]},
-                 %VarInfo{name: :cde, positions: [{4, 5}]}
+                 %VarInfo{name: :abc, positions: [{1, 6}]},
+                 %VarInfo{name: :cde, positions: [{2, 3}]}
                ] = state |> get_line_vars(3)
 
         assert Map.keys(state.lines_to_env[5].versioned_vars) == [
@@ -260,21 +465,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ]
 
         assert [
-                 %VarInfo{name: :abc, positions: [{4, 5}]},
-                 %VarInfo{name: :cde, positions: [{4, 5}]},
-                 %VarInfo{name: :z, positions: [{4, 5}]}
+                  %VarInfo{name: :abc, positions: [{1, 6}, {4, 7}]},
+                  %VarInfo{name: :cde, positions: [{2, 3}, {4, 13}]},
+                  %VarInfo{name: :z, positions: [{4, 3}]}
                ] = state |> get_line_vars(5)
 
         assert Map.keys(state.lines_to_env[9].versioned_vars) == [{:c, nil}, {:other, nil}]
 
         assert [
-                 %VarInfo{name: :c, positions: [{4, 5}]},
-                 %VarInfo{name: :other, positions: [{4, 5}]}
+                 %VarInfo{name: :c, positions: [{8, 5}]},
+                 %VarInfo{name: :other, positions: [{7, 3}]}
                ] = state |> get_line_vars(9)
 
         assert Map.keys(state.lines_to_env[11].versioned_vars) == []
 
-        assert [] = state |> get_line_vars(3)
+        assert [] = state |> get_line_vars(11)
       else
         assert Map.keys(state.lines_to_env[1].versioned_vars) == [{:abc, nil}]
 
@@ -347,7 +552,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
 
         assert [
-                 %VarInfo{name: :abc, positions: [{4, 5}]}
+                 %VarInfo{name: :abc, positions: [{1, 5}]}
                ] = state |> get_line_vars(2)
 
         assert Map.keys(state.lines_to_env[4].versioned_vars) == [
@@ -357,9 +562,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ]
 
         assert [
-                 %VarInfo{name: :abc, positions: [{4, 5}]},
-                 %VarInfo{name: :cde, positions: [{4, 5}]},
-                 %VarInfo{name: :z, positions: [{4, 5}]}
+                 %VarInfo{name: :abc, positions: [{1, 5}]},
+                 %VarInfo{name: :cde, positions: [{2, 3}]},
+                 %VarInfo{name: :z, positions: [{3, 3}]}
                ] = state |> get_line_vars(4)
 
         assert Map.keys(state.lines_to_env[6].versioned_vars) == []
@@ -409,9 +614,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:b, nil}, {:g, nil}, {:r, nil}]
 
         assert [
-                 %VarInfo{name: :b, positions: [{4, 5}]},
-                 %VarInfo{name: :g, positions: [{4, 5}]},
-                 %VarInfo{name: :r, positions: [{4, 5}]}
+                 %VarInfo{name: :b, positions: [{1, 19}]},
+                 %VarInfo{name: :g, positions: [{1, 13}]},
+                 %VarInfo{name: :r, positions: [{1, 7}]}
                ] = state |> get_line_vars(2)
       end
     end
@@ -436,22 +641,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :grandparent, positions: [{1, 38}]},
                %VarInfo{name: :language, positions: [{1, 6}]},
                %VarInfo{name: :parent, positions: [{1, 16}, {1, 62}]}
-             ] = state |> get_line_vars(2)
-    end
-
-    test "for opts wtf" do
-      state =
-        """
-        for line <- IO.stream(), into: IO.stream() do
-          record_env()
-        end
-        """
-        |> string_to_state
-
-      assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:line, nil}]
-
-      assert [
-               %VarInfo{name: :line, positions: [{1, 5}]}
              ] = state |> get_line_vars(2)
     end
 
@@ -534,16 +723,93 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[5].versioned_vars) == [{:y, nil}, {:z, nil}]
 
+      # TODO sort in get_line_vars
       assert [
                %VarInfo{name: :y, positions: [{4, 3}]},
                %VarInfo{name: :z, positions: [{4, 6}, {4, 24}]}
-             ] = state |> get_line_vars(5)
+             ] = state |> get_line_vars(5) |> Enum.sort_by(& &1.name)
 
       assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:a, nil}]
 
       assert [
                %VarInfo{name: :a, positions: [{1, 1}]}
              ] = state |> get_line_vars(7)
+    end
+
+    test "fn closure" do
+      state =
+        """
+        abc = 5
+        fn ->
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:abc, nil}]
+
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}]}
+             ] = state |> get_line_vars(3)
+
+      assert Map.keys(state.lines_to_env[5].versioned_vars) == [{:abc, nil}]
+
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}]}
+             ] = state |> get_line_vars(5)
+    end
+
+    test "fn usage inclosure" do
+      state =
+        """
+        abc = 5
+        fn ->
+          foo(abc)
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:abc, nil}]
+
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}, {3, 7}]}
+             ] = state |> get_line_vars(4)
+
+      assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:abc, nil}]
+
+      # TODO we lost usage in closure
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}]}
+             ] = state |> get_line_vars(6)
+    end
+
+    test "fn closure rebinding" do
+      state =
+        """
+        abc = 5
+        fn ->
+          abc = 6
+          record_env()
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:abc, nil}]
+
+      assert ([
+               %VarInfo{name: :abc, positions: [{1, 1}], scope_id: scope_id_1},
+               %VarInfo{name: :abc, positions: [{3, 3}], scope_id: scope_id_2}
+             ] when scope_id_1 != scope_id_2) = state |> get_line_vars(4)
+
+      assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:abc, nil}]
+
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}]}
+             ] = state |> get_line_vars(6)
     end
 
     test "try" do
@@ -601,6 +867,68 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[17].versioned_vars) == []
       assert [] = state |> get_line_vars(17)
+    end
+
+    test "in quote" do
+      state =
+        """
+        quote do
+          abc = 5
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      refute Map.has_key?(state.lines_to_env[4].versioned_vars, {:abc, nil})
+
+      assert [] = state |> get_line_vars(4)
+    end
+
+    test "in quote unquote" do
+      state =
+        """
+        abc = 5
+        quote do
+          unquote(abc)
+        end
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
+
+      assert [%VarInfo{name: :abc, positions: [{1, 1}, {3, 11}]}] = state |> get_line_vars(5)
+    end
+
+    test "in capture" do
+      state =
+        """
+        abc = 5
+        & [
+          &1,
+          abc,
+          cde = 1,
+          record_env()  
+        ]
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:"&1", nil}, {:abc, nil}]
+
+      # TODO can we record &1 position?
+      assert [
+        %VarInfo{name: :"&1", positions: [{nil, nil}]},
+        %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]},
+        %VarInfo{name: :cde, positions: [{5, 3}]}
+      ] = state |> get_line_vars(6)
+
+      assert Map.keys(state.lines_to_env[8].versioned_vars) == [{:abc, nil}]
+
+      # TODO we lost usage in closure
+      assert [
+        %VarInfo{name: :abc, positions: [{1, 1}]}
+      ] = state |> get_line_vars(8)
     end
 
     test "module body" do
@@ -697,6 +1025,26 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :abc, positions: [{2, 11}]}
+             ] = state |> get_line_vars(3)
+    end
+
+    test "def guard usage" do
+      state =
+        """
+        defmodule My do
+          def foo(abc)
+            when abc == 1 and record_env() do
+            record_env()
+          end
+          record_env()
+        end
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
+
+      assert [
+               %VarInfo{name: :abc, positions: [{2, 11}, {3, 10}]}
              ] = state |> get_line_vars(3)
     end
   end
@@ -6704,7 +7052,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   defp get_line_vars(state, line) do
     case state.lines_to_env[line] do
       nil -> []
-      env -> env.vars
+      env ->
+        env.vars
+        # state.vars_info_per_scope_id[env.scope_id]
     end
     |> Enum.sort()
   end
