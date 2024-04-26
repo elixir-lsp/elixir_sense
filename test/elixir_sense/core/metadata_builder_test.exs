@@ -110,9 +110,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
       # TODO shouldn't positions be [{2, 1}]?
-      assert [
-               %VarInfo{name: :abc, positions: [{1, 1}, {2, 1}]}
-             ] = state |> get_line_vars(3)
+      if Version.match?(System.version(), ">= 1.17.0-dev") do
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 1}, {2, 1}]}
+               ] = state |> get_line_vars(3)
+      else
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 1}]},
+                 %VarInfo{name: :abc, positions: [{2, 1}]}
+               ] = state |> get_line_vars(3)
+      end
     end
 
     test "binding in function call" do
@@ -125,8 +132,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:abc, nil}, {:cde, nil}, {:xyz, nil}]
-      
+      assert Map.keys(state.lines_to_env[4].versioned_vars) == [
+               {:abc, nil},
+               {:cde, nil},
+               {:xyz, nil}
+             ]
+
       assert [
                %VarInfo{name: :abc, positions: [{1, 5}]},
                %VarInfo{name: :cde, positions: [{2, 12}]},
@@ -152,28 +163,29 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert Map.has_key?(state.lines_to_env[13].versioned_vars, {:abc, nil})
-      
+      assert Map.has_key?(state.lines_to_env[12].versioned_vars, {:abc, nil})
+
       assert [
                %VarInfo{name: :abc, positions: positions}
-             ] = state |> get_line_vars(13)
+             ] = state |> get_line_vars(12)
 
-       assert positions == [{1, 1},
-                  {2, 2},
-                  {3, 2},
-                  {3, 7},
-                  {4, 2},
-                  {4, 9},
-                  {4, 14},
-                  {5, 6},
-                  {6, 3},
-                  {6, 10},
-                  {7, 3},
-                  {8, 7},
-                  {9, 13},
-                  {10, 4},
-                  {11, 2},
-                  {12, 8}]
+      assert positions == [
+               {1, 1},
+               {2, 2},
+               {3, 2},
+               {3, 7},
+               {4, 2},
+               {4, 9},
+               {4, 14},
+               {5, 6},
+               {6, 3},
+               {6, 10},
+               {7, 3},
+               {8, 7},
+               {9, 13},
+               {10, 4},
+               {11, 2}
+             ]
     end
 
     test "undefined usage" do
@@ -185,7 +197,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.keys(state.lines_to_env[2].versioned_vars) == []
-      
+
       assert [] = state |> get_line_vars(2)
     end
 
@@ -198,7 +210,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.keys(state.lines_to_env[2].versioned_vars) == []
-      
+
       assert [] = state |> get_line_vars(2)
     end
 
@@ -268,15 +280,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.has_key?(state.lines_to_env[4].versioned_vars, {:cde, nil})
 
       assert [
-                %VarInfo{name: :cde, positions: [{1, 1}, {3, 7}]}
-              ] = state |> get_line_vars(4)
+               %VarInfo{name: :cde, positions: [{1, 1}, {3, 7}]}
+             ] = state |> get_line_vars(4)
 
       assert Map.has_key?(state.lines_to_env[6].versioned_vars, {:cde, nil})
 
-      # TODO we lost usage
-      assert [
-               %VarInfo{name: :cde, positions: [{1, 1}]}
-             ] = state |> get_line_vars(6)
+      if Version.match?(System.version(), ">= 1.17.0-dev") do
+        # TODO we lost usage
+        assert [
+                 %VarInfo{name: :cde, positions: [{1, 1}]}
+               ] = state |> get_line_vars(6)
+      else
+        assert [
+                 %VarInfo{name: :cde, positions: [{1, 1}, {3, 7}]}
+               ] = state |> get_line_vars(6)
+      end
     end
 
     test "rebinding in if" do
@@ -297,7 +315,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert ([
                 %VarInfo{name: :cde, positions: [{1, 1}], scope_id: scope_id_1},
                 %VarInfo{name: :cde, positions: [{3, 3}], scope_id: scope_id_2}
-              ] when scope_id_1 != scope_id_2) = state |> get_line_vars(4)
+              ]
+              when scope_id_1 != scope_id_2) = state |> get_line_vars(4)
 
       assert Map.has_key?(state.lines_to_env[6].versioned_vars, {:cde, nil})
 
@@ -465,9 +484,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ]
 
         assert [
-                  %VarInfo{name: :abc, positions: [{1, 6}, {4, 7}]},
-                  %VarInfo{name: :cde, positions: [{2, 3}, {4, 13}]},
-                  %VarInfo{name: :z, positions: [{4, 3}]}
+                 %VarInfo{name: :abc, positions: [{1, 6}, {4, 7}]},
+                 %VarInfo{name: :cde, positions: [{2, 3}, {4, 13}]},
+                 %VarInfo{name: :z, positions: [{4, 3}]}
                ] = state |> get_line_vars(5)
 
         assert Map.keys(state.lines_to_env[9].versioned_vars) == [{:c, nil}, {:other, nil}]
@@ -780,10 +799,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:abc, nil}]
 
-      # TODO we lost usage in closure
-      assert [
-               %VarInfo{name: :abc, positions: [{1, 1}]}
-             ] = state |> get_line_vars(6)
+      if Version.match?(System.version(), ">= 1.17.0-dev") do
+        # TODO we lost usage in closure
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 1}]}
+               ] = state |> get_line_vars(6)
+      else
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 1}, {3, 7}]}
+               ] = state |> get_line_vars(6)
+      end
     end
 
     test "fn closure rebinding" do
@@ -801,9 +826,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:abc, nil}]
 
       assert ([
-               %VarInfo{name: :abc, positions: [{1, 1}], scope_id: scope_id_1},
-               %VarInfo{name: :abc, positions: [{3, 3}], scope_id: scope_id_2}
-             ] when scope_id_1 != scope_id_2) = state |> get_line_vars(4)
+                %VarInfo{name: :abc, positions: [{1, 1}], scope_id: scope_id_1},
+                %VarInfo{name: :abc, positions: [{3, 3}], scope_id: scope_id_2}
+              ]
+              when scope_id_1 != scope_id_2) = state |> get_line_vars(4)
 
       assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:abc, nil}]
 
@@ -897,7 +923,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
 
-      assert [%VarInfo{name: :abc, positions: [{1, 1}, {3, 11}]}] = state |> get_line_vars(5)
+      if Version.match?(System.version(), ">= 1.17.0-dev") do
+        assert [%VarInfo{name: :abc, positions: [{1, 1}, {3, 11}]}] = state |> get_line_vars(5)
+      else
+        assert [%VarInfo{name: :abc, positions: [{1, 1}]}] = state |> get_line_vars(5)
+      end
     end
 
     test "in capture" do
@@ -914,21 +944,31 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:"&1", nil}, {:abc, nil}]
+      if Version.match?(System.version(), ">= 1.17.0-dev") do
+        assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:"&1", nil}, {:abc, nil}]
 
-      # TODO can we record &1 position?
-      assert [
-        %VarInfo{name: :"&1", positions: [{nil, nil}]},
-        %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]},
-        %VarInfo{name: :cde, positions: [{5, 3}]}
-      ] = state |> get_line_vars(6)
+        # TODO can we record &1 position?
+        # TODO cde is not defined here
+        assert [
+                 %VarInfo{name: :"&1", positions: [{nil, nil}]},
+                 %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]},
+                 %VarInfo{name: :cde, positions: [{5, 3}]}
+               ] = state |> get_line_vars(6)
+      else
+        assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:abc, nil}, {:cde, nil}]
 
-      assert Map.keys(state.lines_to_env[8].versioned_vars) == [{:abc, nil}]
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]},
+                 %VarInfo{name: :cde, positions: [{5, 3}]}
+               ] = state |> get_line_vars(6)
 
-      # TODO we lost usage in closure
-      assert [
-        %VarInfo{name: :abc, positions: [{1, 1}]}
-      ] = state |> get_line_vars(8)
+        assert Map.keys(state.lines_to_env[8].versioned_vars) == [{:abc, nil}, {:cde, nil}]
+
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]},
+                 %VarInfo{name: :cde, positions: [{5, 3}]}
+               ] = state |> get_line_vars(8)
+      end
     end
 
     test "module body" do
@@ -7051,7 +7091,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   defp get_line_vars(state, line) do
     case state.lines_to_env[line] do
-      nil -> []
+      nil ->
+        []
+
       env ->
         env.vars
         # state.vars_info_per_scope_id[env.scope_id]
