@@ -216,6 +216,25 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ]
     end
 
+    test "in bitstring modifier" do
+      state =
+        """
+        y = 1
+        <<1::size(y)>>
+        <<1::size(y)>> = <<>>
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[4].versioned_vars) == [
+               {:y, nil}
+             ]
+
+      assert [
+               %VarInfo{name: :y, positions: [{1, 1}, {2, 11}, {3, 11}]}
+             ] = state |> get_line_vars(4)
+    end
+
     test "undefined usage" do
       state =
         """
@@ -781,11 +800,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.keys(state.lines_to_env[5].versioned_vars) == [{:y, nil}, {:z, nil}]
 
       # TODO sort?
-      # |> Enum.sort_by(& &1.name)
       assert [
                %VarInfo{name: :y, positions: [{4, 3}]},
                %VarInfo{name: :z, positions: [{4, 6}, {4, 24}]}
-             ] = state |> get_line_vars(5)
+             ] = state |> get_line_vars(5) |> Enum.sort_by(& &1.name)
 
       assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:a, nil}]
 
@@ -818,7 +836,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ] = state |> get_line_vars(5)
     end
 
-    test "fn usage inclosure" do
+    test "fn usage in closure" do
       state =
         """
         abc = 5

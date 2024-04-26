@@ -121,6 +121,11 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         assert_expansion("<<x, rest::binary>> = \"\"")
       end
 
+      test "expands <<>> with modifier" do
+        assert_expansion("x = 1; y = 1; <<x::size(y)>>")
+        assert_expansion("x = 1; y = 1; <<x::size(y)>> = <<>>")
+      end
+
       test "expands __block__" do
         assert_expansion({:__block__, [], []}, true)
         assert_expansion({:__block__, [], [1]}, true)
@@ -416,6 +421,38 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
 
         assert_expansion("""
         for i <- [1, 2, 3], j <- [1, 2], true, into: %{}, do: {i, j}
+        """)
+      end
+
+      test "expands for with bitstring generator" do
+        assert_expansion("""
+        for <<r::8, g::8, b::8 <- "foo">> do
+          :ok
+        end
+        """)
+      end
+
+      test "expands for with reduce" do
+        assert_expansion("""
+        for <<x <- "AbCabCABc">>, x in ?a..?z, reduce: %{} do
+          acc -> acc
+        end
+        """)
+      end
+
+      test "expands for in block" do
+        assert_expansion("""
+        for i <- [1, 2, 3] do
+          i
+        end
+        :ok
+        """)
+
+        assert_expansion("""
+        _ = for i <- [1, 2, 3] do
+          i
+        end
+        :ok
         """)
       end
 

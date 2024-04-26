@@ -368,7 +368,7 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:&, meta, [{:super, super_meta, args} = expr]}, s, e) when is_list(args) do
     assert_no_match_or_guard_scope(e.context, "&")
 
-    case resolve_super(meta, length(args), e) do
+    case resolve_super(meta, length(args), s, e) do
       {kind, name, _} when kind in [:def, :defp] ->
         expand_fn_capture(meta, {name, super_meta, args}, s, e)
 
@@ -381,7 +381,7 @@ defmodule ElixirSense.Core.Compiler do
       when is_atom(context) and is_integer(arity) do
     assert_no_match_or_guard_scope(e.context, "&")
 
-    case resolve_super(meta, arity, e) do
+    case resolve_super(meta, arity, s, e) do
       {kind, name, _} when kind in [:def, :defp] ->
         {{:&, meta, [{:/, arity_meta, [{name, super_meta, context}, arity]}]}, s, e}
 
@@ -437,7 +437,7 @@ defmodule ElixirSense.Core.Compiler do
 
   defp do_expand({:super, meta, args}, s, e) when is_list(args) do
     assert_no_match_or_guard_scope(e.context, "super")
-    {kind, name, _} = resolve_super(meta, length(args), e)
+    {kind, name, _} = resolve_super(meta, length(args), s, e)
     {e_args, sa, ea} = expand_args(args, s, e)
     {{:super, [{:super, {kind, name}} | meta], e_args}, sa, ea}
   end
@@ -1204,8 +1204,6 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_block([{:for, _, [_ | _]} = h | t], acc, meta, s, e) do
     {eh, se, ee} = expand_for(h, s, e, false)
-    dbg(se.scope_vars_info)
-    dbg(se.vars_info_per_scope_id)
     {eh, se, ee} = expand_block(t, [eh | acc], meta, se, ee)
     {eh, se, ee}
   end
@@ -1262,33 +1260,39 @@ defmodule ElixirSense.Core.Compiler do
     map_fold(fun, state, env, refs)
   end
 
-  defp resolve_super(_meta, arity, e) do
-    _module = assert_module_scope(e)
+  defp overridable_name(name, count) when is_integer(count), do: :"#{name} (overridable #{count})"
+
+  defp resolve_super(_meta, arity, state, e) do
+    module = assert_module_scope(e)
     function = assert_function_scope(e)
 
     case function do
       {name, ^arity} ->
-        {:def, name, []}
+        state.mods_funs_to_positions |> dbg
 
-      # {kind, name, super_meta} = ElixirOverridable.super(meta, module, function, e)
-
-      # TODO actual resolve
-      # {{{def, {Name, Arity}}, Kind, Meta, File, _Check, {Defaults, _HasBody, _LastDefaults}}, Clauses} = Def,
-      # {FinalKind, FinalName, FinalArity, FinalClauses} =
-      # case Hidden of
-      #   false ->
-      #     {Kind, Name, Arity, Clauses};
-      #   true when Kind == defmacro; Kind == defmacrop ->
-      #     {defmacrop, name(Name, Count), Arity, Clauses};
-      #   true ->
-      #     {defp, name(Name, Count), Arity, Clauses}
-      # end,
-      # name(Name, Count) when is_integer(Count) ->
-      #   list_to_atom(atom_to_list(Name) ++ " (overridable " ++ integer_to_list(Count) ++ ")").
-
-      # {kind, name, super_meta} = ElixirOverridable.super(meta, module, function, e)
-      # maybe_warn_deprecated_super_in_gen_server_callback(meta, function, super_meta, e)
-      # {kind, name, super_meta}
+        case state.mods_funs_to_positions[{module, name, arity} |> dbg] do
+          %State.ModFunInfo{overridable: {true, _}} = info ->
+            kind = case info.type do
+              :defdelegate -> :def
+              :defguard -> :defmacro
+              :defguardp -> :defmacrop
+              other -> other
+            end
+            hidden = Map.get(info.meta |> dbg, :hidden, false)
+            # def meta is not used anyway so let's pass empty
+            meta = []
+            # TODO count 1 hardcoded but that's probably OK
+            count = 1
+            case hidden do
+              false ->
+                {kind, name, meta}
+              true when kind in [:defmacro, :defmacrop] ->
+                {:defmacrop, overridable_name(name, count), meta}
+              true ->
+                {:defp, overridable_name(name, count), meta}
+            end
+          nil -> raise "no_super"
+        end
       _ ->
         raise "wrong_number_of_args_for_super"
     end
@@ -1409,10 +1413,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_for_generator(x, s, e) do
-    dbg(s.scope_vars_info)
-    dbg(x)
     {x, s, e} = expand(x, s, e)
-    dbg(s.scope_vars_info)
     {x, s, e}
   end
 
@@ -1711,7 +1712,7 @@ defmodule ElixirSense.Core.Compiler do
     end
   end
 
-  # TODO probable we can remove it/hardcode, used only for generating error message
+  # TODO probably we can remove it/hardcode, used only for generating error message
   defp guard_context(%{prematch: {_, _, {:bitsize, _}}}), do: "bitstring size specifier"
   defp guard_context(_), do: "guard"
 
