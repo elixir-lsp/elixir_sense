@@ -383,6 +383,16 @@ defmodule ElixirSense.Core.State do
       |> elem(0)
       |> Map.new()
 
+    # TODO this is a hack that hides a problem somewhere
+    vars = state
+    |> get_current_vars()
+    |> Enum.filter(& Map.has_key?(elem(state.vars, 0), {&1.name, nil}))
+
+    dbg(vars)
+    dbg(state.vars)
+    dbg(state.scope_vars_info)
+    
+
     %Env{
       functions: macro_env.functions,
       macros: macro_env.macros,
@@ -390,7 +400,7 @@ defmodule ElixirSense.Core.State do
       aliases: macro_env.aliases,
       module: macro_env.module,
       function: macro_env.function,
-      vars: state |> get_current_vars(),
+      vars: vars,
       versioned_vars: versioned_vars,
       attributes: current_attributes,
       behaviours: current_behaviours,
@@ -945,6 +955,7 @@ defmodule ElixirSense.Core.State do
       |> List.flatten()
       |> reduce_vars(current_scope_reduced_vars, false)
       |> Enum.flat_map(fn {_var, scopes} -> scopes end)
+      # |> dbg
 
     Map.put(state.vars_info_per_scope_id, scope_id, vars_info)
   end
@@ -1253,6 +1264,7 @@ defmodule ElixirSense.Core.State do
         %VarInfo{name: var_name} = var_info,
         is_definition
       ) do
+        dbg(var_info)
     scope = hd(state.scopes)
     [vars_from_scope | other_vars] = state.vars_info
     is_var_defined = is_variable_defined(state, var_name)
@@ -1282,6 +1294,7 @@ defmodule ElixirSense.Core.State do
         _ ->
           vars_from_scope
       end
+      |> dbg
 
     %__MODULE__{
       state

@@ -293,6 +293,18 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         """)
       end
 
+      test "expands quote unquote_splicing in list" do
+        assert_expansion("""
+        a = [1, 2, 3]
+        quote do: [unquote_splicing(a) | [1]]
+        """)
+
+        assert_expansion("""
+        a = [1, 2, 3]
+        quote do: [1 | unquote_splicing(a)]
+        """)
+      end
+
       test "expands quote alias" do
         assert_expansion("quote do: Date")
         assert_expansion("quote do: Elixir.Date")
