@@ -369,13 +369,19 @@ defmodule ElixirSense.Core.State do
   end
 
   def get_current_env(%__MODULE__{} = state, macro_env) do
-    # current_vars = state |> get_current_vars()
     current_vars = state.vars |> elem(0)
     current_attributes = state |> get_current_attributes()
     current_behaviours = state.behaviours |> Map.get(macro_env.module, [])
 
     current_scope_id = hd(state.scope_ids)
     current_scope_protocol = hd(state.protocols)
+
+    # Macro.Env versioned_vars is not updated
+    # versioned_vars: macro_env.versioned_vars,
+    versioned_vars =
+      state.vars
+      |> elem(0)
+      |> Map.new()
 
     %Env{
       functions: macro_env.functions,
@@ -384,7 +390,8 @@ defmodule ElixirSense.Core.State do
       aliases: macro_env.aliases,
       module: macro_env.module,
       function: macro_env.function,
-      versioned_vars: current_vars,
+      vars: state |> get_current_vars(),
+      versioned_vars: versioned_vars,
       attributes: current_attributes,
       behaviours: current_behaviours,
       typespec: nil,
