@@ -748,6 +748,8 @@ defmodule ElixirSense.Core.Compiler do
          state,
          env
        ) do
+        assert_module_scope(env, :@, 1)
+        unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
         line = Keyword.fetch!(meta, :line)
 
         state =
@@ -761,12 +763,51 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_macro(
          meta,
          Kernel,
+         :@,
+         [{name, _meta, args}],
+         _callback,
+         state,
+         env
+       ) when is_atom(name) do
+        assert_module_scope(env, :@, 1)
+        unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
+        line = Keyword.fetch!(meta, :line)
+        column = Keyword.get(meta, :column, 1)
+
+        {is_definition, {e_args, state, env}} = case args do
+          arg when is_atom(arg) ->
+            # @attribute
+            {false, {nil, state, env}}
+          [] ->
+            # deprecated @attribute()
+            {false, {nil, state, env}}
+          [_] ->
+            # @attribute(arg)
+            if env.function, do: raise "cannot set attribute @#{name} inside function/macro"
+            if name == :behavior, do: raise "@behavior attribute is not supported"
+            {true, expand_args(args, state, env)}
+          _ -> raise "invalid @ call"
+        end
+
+        state =
+          state
+          |> add_attribute(name, nil, is_definition, {line, column})
+          |> add_current_env_to_line(line)
+    
+        
+        {e_args, state, env}
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
          :defoverridable,
          [arg],
          _callback,
          state,
          env
        ) do
+        assert_module_scope(env, :defoverridable, 1)
     {arg, state, env} = expand(arg, state, env)
 
     case arg do
@@ -846,6 +887,7 @@ defmodule ElixirSense.Core.Compiler do
           |> add_current_env_to_line(line, %{env | module: full})
           |> add_module_functions(%{env | module: full}, [], position, end_position)
           |> new_vars_scope
+          |> new_attributes_scope
           # TODO magic with ElixirEnv instead of new_vars_scope?
 
         {result, state, _env} = expand(block, state, %{env | module: full})
@@ -868,6 +910,7 @@ defmodule ElixirSense.Core.Compiler do
     state = %{state | vars: vars, unused: unused}
     |> maybe_move_vars_to_outer_scope
     |> remove_vars_scope
+    |> remove_attributes_scope
 
     # TODO hardcode expansion?
     # to result of require (a module atom) and :elixir_module.compile dot call in block

@@ -440,13 +440,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_module_attribute(ast, state, {line, _} = position, name, type, is_definition) do
-    state
-    |> add_attribute(name, type, is_definition, position)
-    |> add_current_env_to_line(line)
-    |> result(ast)
-  end
-
   defp pre_type(ast, state, meta, type_name, type_args, spec, kind) do
     spec = TypeInfo.typespec_to_string(kind, spec)
 
@@ -949,7 +942,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
             )
 
           new_ast = {:@, meta_attr, [{name, add_no_call(meta), params}]}
-          pre_module_attribute(new_ast, state, {line, column}, name, type, is_definition)
+
+          state
+          |> add_attribute(name, type, is_definition, {line, column})
+          |> add_current_env_to_line(line)
+          |> result(new_ast)
 
         _ ->
           {[], state}
