@@ -7,7 +7,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, ModFunInfo, AttributeInfo}
 
   @moduledoc_support Version.match?(System.version(), "< 1.17.0-dev")
-  @attribute_support Version.match?(System.version(), "< 1.17.0-dev")
+  @attribute_support true or Version.match?(System.version(), "< 1.17.0-dev")
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
   @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
   @defdelegate_support Version.match?(System.version(), "< 1.17.0-dev")
@@ -1289,7 +1289,61 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-  if @attribute_support do
+  test "module attributes" do
+    state =
+      """
+      defmodule MyModule do
+        @myattribute String
+        IO.puts @myattribute
+        defmodule InnerModule do
+          @inner_attr %{abc: nil}
+          @inner_attr_1 __MODULE__
+          IO.puts @inner_attr
+        end
+        IO.puts ""
+        @otherattribute Application.get_env(:elixir_sense, :some_attribute, InnerModule)
+      end
+      """
+      |> string_to_state
+
+    assert get_line_attributes(state, 10) == [
+             %ElixirSense.Core.State.AttributeInfo{
+               name: :myattribute,
+               positions: [{2, 3}, {3, 11}]
+             },
+             %AttributeInfo{
+               name: :otherattribute,
+               positions: [{10, 3}]
+             }
+           ]
+
+    assert get_line_attributes(state, 3) == [
+             %AttributeInfo{
+               name: :myattribute,
+               positions: [{2, 3}, {3, 11}]
+             }
+           ]
+
+    assert get_line_attributes(state, 7) == [
+             %AttributeInfo{
+               name: :inner_attr,
+               positions: [{5, 5}, {7, 13}]
+             },
+             %AttributeInfo{
+               name: :inner_attr_1,
+               positions: [{6, 5}]
+             }
+           ]
+
+    assert get_line_attributes(state, 9) == [
+             %AttributeInfo{
+               name: :myattribute,
+               positions: [{2, 3}, {3, 11}]
+             }
+           ]
+  end
+
+  if @attribute_binding_support do
     test "module attributes" do
       state =
         """
@@ -5335,11 +5389,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  {ProtocolEmbedded, InheritMod.ProtocolEmbedded}
                ])
 
-      if @attribute_support do
-        assert get_line_attributes(state, 4) == [
-                 %AttributeInfo{name: :my_attribute, positions: [{2, 3}]}
-               ]
-      end
+      assert [
+                %AttributeInfo{name: :my_attribute, positions: [{2, _}]}
+              ] = get_line_attributes(state, 4)
 
       if @protocol_support do
         assert %{
