@@ -7,10 +7,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, ModFunInfo, AttributeInfo}
 
   @moduledoc_support Version.match?(System.version(), "< 1.17.0-dev")
-  @attribute_support true or Version.match?(System.version(), "< 1.17.0-dev")
+  @attribute_binding_support Version.match?(System.version(), "< 1.17.0-dev")
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
   @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
-  @defdelegate_support Version.match?(System.version(), "< 1.17.0-dev")
   @first_alias_positions Version.match?(System.version(), "< 1.17.0-dev")
   @struct_support Version.match?(System.version(), "< 1.17.0-dev")
   @calls_support Version.match?(System.version(), "< 1.17.0-dev")
@@ -5221,7 +5220,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
-  if @defdelegate_support do
     test "registers delegated func" do
       state =
         """
@@ -5262,7 +5260,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
              } = state.mods_funs_to_positions
     end
-  end
 
   if @protocol_support do
     test "registers mods and func for protocols" do
