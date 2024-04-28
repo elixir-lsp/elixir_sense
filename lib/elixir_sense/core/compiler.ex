@@ -742,6 +742,48 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_macro(
          meta,
          Kernel,
+         :defdelegate,
+         [funs, opts],
+         callback,
+         state,
+         env
+       ) do
+        assert_no_match_or_guard_scope(env.context, :"def/2")
+        module = assert_module_scope(env, :def, 2)
+
+      {position, end_position} = extract_range(meta)
+      {line, _} = position
+
+      {opts, state, env} = expand(opts, state, env)
+      target = Kernel.Utils.defdelegate_all(funs, opts, env)
+      # TODO: Remove List.wrap when multiple funs are no longer supported
+      state = funs
+      |> List.wrap
+      |> Enum.reduce(state, fn fun, state ->
+        # TODO expand args?
+        {name, args, as, as_args} = Kernel.Utils.defdelegate_each(fun, opts)
+        arity = length(args)
+          state
+          |> add_current_env_to_line(line, %{env | context: nil, function: {name, arity}})
+          |> add_mod_fun_to_position(
+            {module, name, arity},
+            position,
+            end_position,
+            args,
+            :defdelegate,
+            "",
+            # doc,
+            %{delegate_to: {target, as, length(as_args)}},
+            # meta
+            [target: {target, as}]
+          )
+        end)
+      {[], state, env}
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
          :@,
          [{:behaviour, _meta, [arg]}],
          _callback,
