@@ -617,6 +617,11 @@ defmodule ElixirSense.Core.Compiler do
       {:macro, module, callback} ->
         # TODO there is a subtle difference - callback will call expander with state derrived from env via
         # :elixir_env.env_to_ex(env) possibly losing some details
+        line = Keyword.get(meta, :line, 0)
+        column = Keyword.get(meta, :column, nil)
+        # state = state
+        # |> add_call_to_line({module, fun, length(args)}, {line, column})
+        # |> add_current_env_to_line(line, env)
         expand_macro(meta, module, fun, args, callback, state, env)
 
       {:function, module, fun} ->
@@ -668,9 +673,24 @@ defmodule ElixirSense.Core.Compiler do
     assert_no_match_or_guard_scope(e.context, "anonymous call")
     {[e_expr | e_args], sa, ea} = expand_args([expr | args], s, e)
 
-    # if is_atom(e_expr) do
-    #   function_error(meta, e, __MODULE__, {:invalid_function_call, e_expr})
-    # end
+    sa = if is_atom(e_expr |> dbg) do
+      # function_error(meta, e, __MODULE__, {:invalid_function_call, e_expr})
+      sa
+    else
+      line = Keyword.get(dot_meta, :line, 0)
+      column = Keyword.get(dot_meta, :column, nil)
+      column = if column do
+        # for remote calls we emit position of right side of .
+        # to make it consistent we shift dot position here
+        column + 1
+      else
+        column
+      end
+
+      sa
+      |> add_call_to_line({nil, e_expr, length(e_args)}, {line, column})
+      |> add_current_env_to_line(line, e)
+    end
 
     {{{:., dot_meta, [e_expr]}, meta, e_args}, sa, ea}
   end
@@ -806,7 +826,7 @@ defmodule ElixirSense.Core.Compiler do
          meta,
          Kernel,
          :@,
-         [{name, _meta, args}],
+         [{name, name_meta, args}],
          _callback,
          state,
          env
@@ -837,7 +857,7 @@ defmodule ElixirSense.Core.Compiler do
           |> add_current_env_to_line(line)
     
         
-        {e_args, state, env}
+        {{:@, meta, [{name, name_meta, e_args}]}, state, env}
   end
 
   defp expand_macro(
@@ -1153,7 +1173,8 @@ defmodule ElixirSense.Core.Compiler do
     assert_no_clauses(right, meta, args, e)
 
     line = Keyword.get(meta, :line, 0)
-    # TODO register call
+    column = Keyword.get(meta, :column, nil)
+
     sl = if line > 0 do
       sl
       |> add_current_env_to_line(line, e)
@@ -1174,6 +1195,7 @@ defmodule ElixirSense.Core.Compiler do
       case rewrite(context, receiver, dot_meta, right, attached_meta, e_args, s) do
         {:ok, rewritten} ->
           s = __MODULE__.Env.close_write(sa, s)
+          |> add_call_to_line({receiver, right, length(e_args)}, {line, column})
           |> add_current_env_to_line(line, e)
           {rewritten, s, ea}
 
@@ -1217,12 +1239,12 @@ defmodule ElixirSense.Core.Compiler do
       raise "invalid_local_invocation"
     end
 
-    # A compiler may want to emit a :local_function trace in here.
-    # TODO register call
-    line = Keyword.fetch!(meta, :line)
+    line = Keyword.get(meta, :line, 0)
+    column = Keyword.get(meta, :column, nil)
 
     state =
       state
+      |> add_call_to_line({nil, fun, length(args)}, {line, column})
       |> add_current_env_to_line(line, env)
 
     # state = update_in(state.locals, &[{fun, length(args)} | &1])
@@ -1233,10 +1255,12 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_local(meta, fun, args, state, env) do
     # elixir compiler raises here
     # raise "undefined_function"
-    line = Keyword.fetch!(meta, :line)
+    line = Keyword.get(meta, :line, 0)
+    column = Keyword.get(meta, :column, nil)
 
     state =
       state
+      |> add_call_to_line({nil, fun, length(args)}, {line, column})
       |> add_current_env_to_line(line, env)
 
     {args, state, env} = expand_args(args, state, env)
@@ -1391,13 +1415,29 @@ defmodule ElixirSense.Core.Compiler do
         # end
         attached_meta = attach_runtime_module(remote, require_meta, s, e)
 
+        line = Keyword.get(attached_meta, :line, 0)
+        column = Keyword.get(attached_meta, :column, nil)
+
+        se = se
+        |> add_call_to_line({remote, fun, arity}, {line, column})
+        |> add_current_env_to_line(line, ee)
+
         {{:&, meta, [{:/, [], [{{:., dot_meta, [remote, fun]}, attached_meta, []}, arity]}]}, se,
          ee}
 
       {{:local, _fun, _arity}, _, _, _se, %{function: nil}} ->
+        # TODO register call?
         raise "undefined_local_capture"
 
       {{:local, fun, arity}, local_meta, _, se, ee} ->
+
+        line = Keyword.get(local_meta, :line, 0)
+        column = Keyword.get(local_meta, :column, nil)
+
+        se = se
+        |> add_call_to_line({nil, fun, arity}, {line, column})
+        |> add_current_env_to_line(line, ee)
+
         {{:&, meta, [{:/, [], [{fun, local_meta, nil}, arity]}]}, se, ee}
 
       {:expand, expr, se, ee} ->

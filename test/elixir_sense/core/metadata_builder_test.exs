@@ -12,7 +12,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
   @first_alias_positions Version.match?(System.version(), "< 1.17.0-dev")
   @struct_support Version.match?(System.version(), "< 1.17.0-dev")
-  @calls_support Version.match?(System.version(), "< 1.17.0-dev")
+  @calls_support true or Version.match?(System.version(), "< 1.17.0-dev")
   @typespec_support Version.match?(System.version(), "< 1.17.0-dev")
   @record_support Version.match?(System.version(), "< 1.17.0-dev")
   @doc_support Version.match?(System.version(), "< 1.17.0-dev")
@@ -5959,6 +5959,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         end
       end
 
+      if @typespec_support do
       test "registers typespec no parens calls" do
         state =
           """
@@ -5975,11 +5976,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  ]
                }
       end
+      end
 
       test "registers calls local no arg" do
         state =
           """
           defmodule NyModule do
+            def func_1, do: :ok
             def func do
               func_1()
             end
@@ -5988,7 +5991,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           |> string_to_state
 
         assert state.calls == %{
-                 3 => [%CallInfo{arity: 0, func: :func_1, position: {3, 5}, mod: nil}]
+                 4 => [%CallInfo{arity: 0, func: :func_1, position: {4, 5}, mod: nil}]
                }
       end
 
@@ -6266,7 +6269,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           """
           |> string_to_state
 
-        assert state.calls == %{
+        assert state.calls |> sort_calls == %{
                  3 => [
                    %CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod},
                    %CallInfo{arity: 1, position: {3, 37}, func: :other, mod: Other}
@@ -6285,7 +6288,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           """
           |> string_to_state
 
-        assert state.calls == %{
+        assert state.calls |> sort_calls == %{
                  3 => [
                    %CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil},
                    %CallInfo{arity: 1, position: {3, 32}, func: :other, mod: Some}
@@ -6424,6 +6427,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  12 => [%CallInfo{arity: 0, position: {12, 3}, func: :test, mod: nil}]
                }
       end
+    end
+
+    defp sort_calls(calls) do
+      calls |> Enum.map(fn {k, v} -> {k, Enum.sort(v)} end) |> Map.new
     end
   end
 

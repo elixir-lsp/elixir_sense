@@ -575,6 +575,15 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
     end
 
     describe "Kernel macros" do
+      test "@" do
+        assert_expansion_env("""
+        defmodule Abc do
+          @foo 1
+          @foo
+        end
+        """)
+      end
+
       test "defmodule" do
         assert_expansion_env("defmodule Abc, do: :ok")
 
