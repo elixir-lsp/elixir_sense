@@ -323,6 +323,17 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         assert_expansion("quote do: &inspect/1")
       end
 
+      test "expands quote bind_quoted" do
+        assert_expansion("""
+        kv = [a: 1]
+        quote bind_quoted: [kv: kv] do
+          Enum.each(kv, fn {k, v} ->
+            def unquote(k)(), do: unquote(v)
+          end)
+        end
+        """)
+      end
+
       test "expands &super" do
         assert_expansion_env("""
         defmodule Abc do

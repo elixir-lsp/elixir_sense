@@ -355,7 +355,7 @@ defmodule ElixirSense.Core.Compiler do
     # res |> elem(0) |> IO.inspect
     # res
     {q, prelude} =
-      __MODULE__.Quote.build(meta, line, file, context, unquote_opt, generated) |> dbg
+      __MODULE__.Quote.build(meta, line, file, context, unquote_opt, generated)
 
     quoted = __MODULE__.Quote.quote(meta, exprs |> dbg, binding, q, prelude, et) |> dbg
     expand(quoted, st, et)
@@ -3324,10 +3324,10 @@ defmodule ElixirSense.Core.Compiler do
 
       vars =
         Enum.map(binding, fn {k, v} ->
-          {:{}, [], {:=, [], {:{}, [], [k, meta, context]}, v}}
+          {:{}, [], [:=, [], [{:{}, [], [k, meta, context]}, v]]}
         end)
 
-      quoted = do_quote(expr, q, e) |> dbg
+      quoted = do_quote(expr, q, e)
 
       with_vars =
         case vars do
