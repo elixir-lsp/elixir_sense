@@ -12,7 +12,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
   @first_alias_positions Version.match?(System.version(), "< 1.17.0-dev")
   @struct_support Version.match?(System.version(), "< 1.17.0-dev")
-  @calls_support true or Version.match?(System.version(), "< 1.17.0-dev")
+  @macro_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @typespec_support Version.match?(System.version(), "< 1.17.0-dev")
   @record_support Version.match?(System.version(), "< 1.17.0-dev")
   @doc_support Version.match?(System.version(), "< 1.17.0-dev")
@@ -5840,8 +5840,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-  if @calls_support do
     describe "calls" do
+      defp sort_calls(calls) do
+        calls |> Enum.map(fn {k, v} -> {k, Enum.sort(v)} end) |> Map.new
+      end
+
       test "registers calls with __MODULE__" do
         state =
           """
@@ -6397,6 +6400,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
       end
 
+      if @macro_calls_support do
       test "registers calls on ex_unit DSL" do
         state =
           """
@@ -6427,12 +6431,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  12 => [%CallInfo{arity: 0, position: {12, 3}, func: :test, mod: nil}]
                }
       end
+      end
     end
-
-    defp sort_calls(calls) do
-      calls |> Enum.map(fn {k, v} -> {k, Enum.sort(v)} end) |> Map.new
-    end
-  end
 
   if @typespec_support do
     describe "typespec" do
