@@ -451,8 +451,21 @@ defmodule ElixirSense.Core.State do
     end
   end
 
+  # TODO remove this
   def add_call_to_line(%__MODULE__{} = state, {nil, :__block__, _}, _position), do: state
 
+  def add_call_to_line(%__MODULE__{} = state, {{:@, _meta, [{name, _name_meta, _args}]}, func, arity}, {_line, _column} = position) when is_atom(name) do
+    add_call_to_line(state, {{:attribute, name}, func, arity}, position)
+  end
+  def add_call_to_line(%__MODULE__{} = state, {{name, _name_meta, args}, func, arity}, {_line, _column} = position) when is_atom(args) do
+    add_call_to_line(state, {{:variable, name}, func, arity}, position)
+  end
+  def add_call_to_line(%__MODULE__{} = state, {nil, {:@, _meta, [{name, _name_meta, _args}]}, arity}, {_line, _column} = position) when is_atom(name) do
+    add_call_to_line(state, {nil, {:attribute, name}, arity}, position)
+  end
+  def add_call_to_line(%__MODULE__{} = state, {nil, {name, _name_meta, args}, arity}, {_line, _column} = position) when is_atom(args) do
+    add_call_to_line(state, {nil, {:variable, name}, arity}, position)
+  end
   def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, {line, _column} = position) do
     call = %CallInfo{mod: mod, func: func, arity: arity, position: position}
 
