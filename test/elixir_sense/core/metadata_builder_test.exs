@@ -5261,6 +5261,54 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              } = state.mods_funs_to_positions
     end
 
+    test "registers defs with unquote fragments" do
+      state =
+        """
+        defmodule MyModuleWithFuns do
+          def unquote(:foo)(), do: :ok
+          def bar(), do: unquote(:ok)
+          def baz(unquote(:abc)), do: unquote(:abc)
+        end
+        """
+        |> string_to_state
+
+      assert %{
+        {MyModuleWithFuns, :foo, 0} => %ModFunInfo{
+          params: [[]]
+        },
+        {MyModuleWithFuns, :bar, 0} => %ModFunInfo{
+          params: [[]]
+        },
+        {MyModuleWithFuns, :baz, 1} => %ModFunInfo{
+          params: [[:abc]]
+        }
+      } = state.mods_funs_to_positions
+  end
+
+  if @expand_eval do
+  test "registers defs with unquote fragments with binding" do
+    state =
+      """
+      defmodule MyModuleWithFuns do
+        kv = [foo: 1, bar: 2] |> IO.inspect
+        Enum.each(kv, fn {k, v} ->
+          def unquote(k)(), do: unquote(v)
+        end)
+      end
+      """
+      |> string_to_state
+
+    assert %{
+      {MyModuleWithFuns, :foo, 0} => %ModFunInfo{
+        params: [[]]
+      },
+      {MyModuleWithFuns, :bar, 0} => %ModFunInfo{
+        params: [[]]
+      }
+    } = state.mods_funs_to_positions
+  end
+  end
+
   if @protocol_support do
     test "registers mods and func for protocols" do
       state =

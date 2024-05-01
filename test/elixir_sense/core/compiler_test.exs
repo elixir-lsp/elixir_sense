@@ -323,7 +323,7 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         assert_expansion("quote do: &inspect/1")
       end
 
-      test "expands quote bind_quoted" do
+      test "expands quote with bind_quoted" do
         assert_expansion("""
         kv = [a: 1]
         quote bind_quoted: [kv: kv] do
@@ -331,6 +331,38 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
             def unquote(k)(), do: unquote(v)
           end)
         end
+        """)
+      end
+
+      test "expands quote with unquote false" do
+        assert_expansion("""
+        quote unquote: false do
+          unquote("hello")
+        end
+        """)
+      end
+
+      test "expands quote with file" do
+        assert_expansion("""
+        quote file: "some.ex", do: bar(1, 2, 3)
+        """)
+      end
+
+      test "expands quote with line" do
+        assert_expansion("""
+        quote line: 123, do: bar(1, 2, 3)
+        """)
+      end
+
+      test "expands quote with location: keep" do
+        assert_expansion("""
+        quote location: :keep, do: bar(1, 2, 3)
+        """)
+      end
+
+      test "expands quote with context" do
+        assert_expansion("""
+        quote context: Foo, do: abc = 3
         """)
       end
 

@@ -1001,6 +1001,26 @@ defmodule ElixirSense.Core.Compiler do
     # TODO store mod_fun_to_pos
     line = Keyword.fetch!(meta, :line)
 
+    unquoted_call = __MODULE__.Quote.has_unquotes(call)
+    unquoted_expr = __MODULE__.Quote.has_unquotes(expr)
+
+    {call, expr} =
+      if unquoted_expr or unquoted_call do
+        {call, expr} = __MODULE__.Quote.escape({call, expr}, :none, true)
+
+        try do
+          # TODO binding?
+          {{call, expr}, _} = Code.eval_quoted({call, expr}, [], env)
+          {call, expr}
+        rescue
+          _ -> raise "unable to eval"
+        end
+      else
+        {call, expr}
+      end
+      dbg(call)
+      dbg(expr)
+
     # state =
     #   state
     #   |> add_current_env_to_line(line, env)
@@ -1009,6 +1029,7 @@ defmodule ElixirSense.Core.Compiler do
     |> new_func_vars_scope
 
     {name_and_args, guards} = __MODULE__.Utils.extract_guards(call)
+    dbg(name_and_args)
 
     {name, _meta_1, args} =
       case name_and_args do
@@ -3258,6 +3279,42 @@ defmodule ElixirSense.Core.Compiler do
       {:&, [], [{:/, [], [{{:., [], [module, name]}, [{:no_parens, true}], []}, arity]}]}
     end
 
+    def has_unquotes(ast), do: has_unquotes(ast, 0)
+
+    def has_unquotes({:quote, _, [child]}, quote_level) do
+      has_unquotes(child, quote_level + 1)
+    end
+    def has_unquotes({:quote, _, [quote_opts, child]}, quote_level) do
+      case disables_unquote(quote_opts) do
+        true -> false
+        _ -> has_unquotes(child, quote_level + 1)
+      end
+    end
+    def has_unquotes({unquote, _, [child]}, quote_level)
+      when unquote in [:unquote, :unquote_splicing] do
+      case quote_level do
+        0 -> true
+        _ ->  has_unquotes(child, quote_level - 1)
+    end
+    end
+    def has_unquotes({{:., _, [_, :unquote]}, _, [_]}, _), do: true
+    def has_unquotes({var, _, ctx}, _) when is_atom(var) and is_atom(ctx), do: false
+    def has_unquotes({name, _, args}, quote_level) when is_list(args) do
+      has_unquotes(name) or Enum.any?(args, fn child -> has_unquotes(child, quote_level) end)
+    end
+    def has_unquotes({left, right}, quote_level) do
+      has_unquotes(left, quote_level) or has_unquotes(right, quote_level)
+    end
+    def has_unquotes(list, quote_level) when is_list(list) do
+      Enum.any?(list, fn child -> has_unquotes(child, quote_level) end)
+    end
+    def has_unquotes(_other, _), do: false
+
+    defp disables_unquote([{:unquote, false} | _]), do: true
+    defp disables_unquote([{:bind_quoted, _} | _]), do: true
+    defp disables_unquote([_h | t]), do: disables_unquote(t)
+    defp disables_unquote(_), do: false
+
     def build(meta, line, file, context, unquote, generated) do
       acc0 = []
 
@@ -3315,6 +3372,17 @@ defmodule ElixirSense.Core.Compiler do
     def is_valid(:context, context), do: is_atom(context) and context != nil
     def is_valid(:generated, generated), do: is_boolean(generated)
     def is_valid(:unquote, unquote), do: is_boolean(unquote)
+
+    def escape(expr, kind, unquote) do
+      do_quote(expr, %__MODULE__{
+        line: true,
+        file: nil,
+        vars_hygiene: false,
+        aliases_hygiene: false,
+        imports_hygiene: false,
+        unquote: unquote
+      }, kind)
+    end
 
     def quote(_meta, {:unquote_splicing, _, [_]}, _binding, %__MODULE__{unquote: true}, _, _),
       do: raise("unquote_splicing only works inside arguments and block contexts")
