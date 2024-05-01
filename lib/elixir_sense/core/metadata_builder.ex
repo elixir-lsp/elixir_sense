@@ -440,21 +440,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_type(ast, state, meta, type_name, type_args, spec, kind) do
-    spec = TypeInfo.typespec_to_string(kind, spec)
-
-    {position = {line, _column}, end_position} = extract_range(meta)
-    env = get_current_env(state)
-
-    state
-    |> add_type(env, type_name, type_args, spec, kind, position, end_position,
-      generated: state.generated
-    )
-    |> add_typespec_namespace(type_name, length(type_args))
-    |> add_current_env_to_line(line)
-    |> result(ast)
-  end
-
   defp pre_spec(ast, state, meta, type_name, type_args, spec, kind) do
     spec = TypeInfo.typespec_to_string(kind, spec)
 
@@ -835,15 +820,23 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when kind in [:type, :typep, :opaque] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
-    pre_type(
-      {:@, meta_attr, [{kind, add_no_call(kind_meta), kind_args}]},
-      state,
-      meta_attr,
-      name,
-      List.wrap(type_args),
-      expand_aliases_in_ast(state, spec),
-      kind
+
+    ast = {:@, meta_attr, [{kind, add_no_call(kind_meta), kind_args}]}
+    spec = expand_aliases_in_ast(state, spec)
+    type_args = List.wrap(type_args)
+
+    spec = TypeInfo.typespec_to_string(kind, spec)
+
+    {position = {line, _column}, end_position} = extract_range(meta_attr)
+    env = get_current_env(state)
+
+    state
+    |> add_type(env, name, type_args, spec, kind, position, end_position,
+      generated: state.generated
     )
+    |> add_typespec_namespace(name, length(type_args))
+    |> add_current_env_to_line(line)
+    |> result(ast)
   end
 
   defp pre(

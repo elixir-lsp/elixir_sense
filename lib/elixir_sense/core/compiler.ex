@@ -3,6 +3,7 @@ defmodule ElixirSense.Core.Compiler do
   alias ElixirSense.Core.State
   require Logger
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.TypeInfo
 
   @env :elixir_env.new()
   def env, do: @env
@@ -816,10 +817,98 @@ defmodule ElixirSense.Core.Compiler do
 
         state =
           state
-          |> add_current_env_to_line(line)
+          |> add_current_env_to_line(line, env)
     
         {arg, state, env} = expand(arg, state, env)
         add_behaviour(arg, state, env)
+  end
+
+  defp expand_macro(
+         attr_meta,
+         Kernel,
+         :@,
+         [{kind, kind_meta, [expr | _]}],
+         _callback,
+         state,
+         env
+       ) when kind in [:type, :typep, :opaque] do
+        assert_module_scope(env, :@, 1)
+        unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
+
+        {expr, state, env} = __MODULE__.Typespec.expand(expr, state, env)
+
+        case __MODULE__.Typespec.type_to_signature(expr) do
+          {name, [type_arg]} when name in [:required, :optional] ->
+            raise "type #{name}/#{1} is a reserved type and it cannot be defined"
+          
+          {name, type_args} ->
+            # TODO elixir does Macro.escape with unquote: true
+
+            spec = TypeInfo.typespec_to_string(kind, expr)
+
+            {position = {line, _column}, end_position} = extract_range(attr_meta)
+
+            state = state
+            |> add_type(env, name, type_args, spec, kind, position, end_position)
+            |> with_typespec({name, length(type_args)})
+            |> add_current_env_to_line(line, env)
+            |> with_typespec(nil)
+
+            {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
+          :error ->
+            {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
+        end
+  end
+
+  defp expand_macro(
+         attr_meta,
+         Kernel,
+         :@,
+         [{kind, kind_meta, [expr | _]}],
+         _callback,
+         state,
+         env
+       ) when kind in [:callback, :macrocallback, :spec] do
+        assert_module_scope(env, :@, 1)
+        unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
+
+        {expr, state, env} = __MODULE__.Typespec.expand(expr, state, env)
+
+        case __MODULE__.Typespec.spec_to_signature(expr) do
+          {name, type_args} ->
+            spec = TypeInfo.typespec_to_string(kind, expr)
+
+            {position = {line, _column}, end_position} = extract_range(attr_meta)
+
+            state =
+              if kind in [:callback, :macrocallback] do
+                state
+                |> add_func_to_index(
+                  env,
+                  :behaviour_info,
+                  [{:atom, attr_meta, nil}],
+                  position,
+                  end_position,
+                  :def,
+                  generated: true
+                )
+              else
+                state
+              end
+
+            state = state
+            |> add_spec(env, name, type_args, spec, kind, position, end_position,
+              generated: state.generated
+            )
+            |> with_typespec({name, length(type_args)})
+            |> add_current_env_to_line(line, env)
+            |> with_typespec(nil)
+
+            {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
+
+            :error ->
+              {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
+      end
   end
 
   defp expand_macro(
@@ -854,7 +943,7 @@ defmodule ElixirSense.Core.Compiler do
         state =
           state
           |> add_attribute(name, nil, is_definition, {line, column})
-          |> add_current_env_to_line(line)
+          |> add_current_env_to_line(line, env)
     
         
         {{:@, meta, [{name, name_meta, e_args}]}, state, env}
@@ -1130,7 +1219,7 @@ defmodule ElixirSense.Core.Compiler do
       {nil, nil}
     else
       position = {
-        Keyword.get(meta, :line, 0),
+        line,
         Keyword.get(meta, :column, 1)
       }
 
@@ -4180,6 +4269,40 @@ defmodule ElixirSense.Core.Compiler do
       for key <- keys, not Elixir.Map.has_key?(struct, key) do
         raise "unknown_key_for_struct"
       end
+    end
+  end
+
+  defmodule Typespec do
+    alias ElixirSense.Core.Compiler, as: ElixirExpand
+    def spec_to_signature({:when, _, [spec, _]}), do: type_to_signature(spec)
+    def spec_to_signature(other), do: type_to_signature(other)
+
+    def type_to_signature({:"::", _, [{name, _, context}, _]})
+        when is_atom(name) and name != :"::" and is_atom(context),
+        do: {name, []}
+
+    def type_to_signature({:"::", _, [{name, _, args}, _]}) when is_atom(name) and name != :"::",
+      do: {name, args}
+
+    def type_to_signature(_), do: :error
+
+    def expand(ast, state, env) do
+      {ast, {state, env}} =
+      # TODO this should handle remote calls, attributes unquotes?
+      {ast, {state, env}} = Macro.prewalk(ast, {state, env}, fn  
+        {:__aliases__, meta, list} = node, {state, env} when is_list(list) ->
+          {node, state, env} = ElixirExpand.expand(node, state, env)
+          {node, {state, env}}
+  
+        {:__MODULE__, meta, ctx} = node, {state, env} when is_atom(ctx) ->
+          {node, state, env} = ElixirExpand.expand(node, state, env)
+          {node, {state, env}}
+  
+        other, acc ->
+          {other, acc}
+      end)
+
+      {ast, state, env}
     end
   end
 end

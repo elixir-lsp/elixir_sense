@@ -61,7 +61,8 @@ defmodule ElixirSense.Core.State do
           optional_callbacks_context: list(),
           # TODO better type
           binding_context: list,
-          macro_env: list(Macro.Env.t())
+          macro_env: list(Macro.Env.t()),
+          typespec: nil | {atom, arity}
         }
 
   @auto_imported_functions :elixir_env.new().functions
@@ -108,7 +109,8 @@ defmodule ElixirSense.Core.State do
             typedoc_context: [[]],
             optional_callbacks_context: [[]],
             moduledoc_positions: %{},
-            macro_env: [:elixir_env.new()]
+            macro_env: [:elixir_env.new()],
+            typespec: nil
 
   defmodule Env do
     @moduledoc """
@@ -404,7 +406,7 @@ defmodule ElixirSense.Core.State do
       versioned_vars: versioned_vars,
       attributes: current_attributes,
       behaviours: current_behaviours,
-      typespec: nil,
+      typespec: state.typespec,
       scope_id: current_scope_id,
       protocol: current_scope_protocol
     }
@@ -425,6 +427,10 @@ defmodule ElixirSense.Core.State do
   def add_current_env_to_line(%__MODULE__{} = state, line, macro_env) when is_integer(line) do
     _previous_env = state.lines_to_env[line]
     current_env = get_current_env(state, macro_env)
+
+    if current_env.typespec do
+      dbg({line, current_env.typespec})
+    end
 
     # TODO
     # env = merge_env_vars(current_env, previous_env)
@@ -1145,7 +1151,7 @@ defmodule ElixirSense.Core.State do
 
   def add_type(
         %__MODULE__{} = state,
-        %__MODULE__.Env{} = env,
+        env,
         type_name,
         type_args,
         spec,
@@ -1219,7 +1225,7 @@ defmodule ElixirSense.Core.State do
 
   def add_spec(
         %__MODULE__{} = state,
-        %__MODULE__.Env{} = env,
+        env,
         type_name,
         type_args,
         spec,
@@ -1965,5 +1971,9 @@ defmodule ElixirSense.Core.State do
       # TODO macro_aliases
       # TODO versioned_vars
     }
+  end
+
+  def with_typespec(%__MODULE__{} = state, typespec) do
+    %{state | typespec: typespec}
   end
 end
