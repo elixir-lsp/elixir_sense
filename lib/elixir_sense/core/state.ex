@@ -60,7 +60,8 @@ defmodule ElixirSense.Core.State do
           typedoc_context: list(),
           optional_callbacks_context: list(),
           # TODO better type
-          binding_context: list
+          binding_context: list,
+          typespec: nil | {atom, arity}
         }
 
   @auto_imported_functions :elixir_env.new().functions
@@ -100,7 +101,8 @@ defmodule ElixirSense.Core.State do
             doc_context: [[]],
             typedoc_context: [[]],
             optional_callbacks_context: [[]],
-            moduledoc_positions: %{}
+            moduledoc_positions: %{},
+            typespec: nil
 
   defmodule Env do
     @moduledoc """
@@ -1084,7 +1086,7 @@ defmodule ElixirSense.Core.State do
 
   def add_type(
         %__MODULE__{} = state,
-        %__MODULE__.Env{} = env,
+        env,
         type_name,
         type_args,
         spec,
@@ -1158,7 +1160,7 @@ defmodule ElixirSense.Core.State do
 
   def add_spec(
         %__MODULE__{} = state,
-        %__MODULE__.Env{} = env,
+        env,
         type_name,
         type_args,
         spec,
@@ -1846,5 +1848,9 @@ defmodule ElixirSense.Core.State do
         generated: true
       )
     end)
+  end
+
+  def with_typespec(%__MODULE__{} = state, typespec) do
+    %{state | typespec: typespec}
   end
 end

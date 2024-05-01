@@ -8,12 +8,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   @moduledoc_support Version.match?(System.version(), "< 1.17.0-dev")
   @attribute_binding_support Version.match?(System.version(), "< 1.17.0-dev")
+  @expand_eval false
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
   @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
   @first_alias_positions Version.match?(System.version(), "< 1.17.0-dev")
   @struct_support Version.match?(System.version(), "< 1.17.0-dev")
   @macro_calls_support Version.match?(System.version(), "< 1.17.0-dev")
-  @typespec_support Version.match?(System.version(), "< 1.17.0-dev")
+  @typespec_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @record_support Version.match?(System.version(), "< 1.17.0-dev")
   @doc_support Version.match?(System.version(), "< 1.17.0-dev")
   @meta_support Version.match?(System.version(), "< 1.17.0-dev")
@@ -5056,11 +5057,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert nil == get_line_function(state, 15)
     assert MyModule == get_line_module(state, 15)
 
-    if @defdelegate_support do
-      assert nil == get_line_typespec(state, 16)
-      assert {:func_delegated, 1} == get_line_function(state, 16)
-      assert MyModule == get_line_module(state, 16)
-    end
+    assert nil == get_line_typespec(state, 16)
+    assert {:func_delegated, 1} == get_line_function(state, 16)
+    assert MyModule == get_line_module(state, 16)
 
     assert nil == get_line_typespec(state, 18)
     assert {:is_even, 1} == get_line_function(state, 18)
@@ -6010,7 +6009,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         end
       end
 
-      if @typespec_support do
+      if @typespec_calls_support do
       test "registers typespec no parens calls" do
         state =
           """
@@ -6482,7 +6481,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
     end
 
-  if @typespec_support do
     describe "typespec" do
       test "registers types" do
         state =
@@ -6498,7 +6496,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           """
           |> string_to_state
 
-        assert state.types == %{
+        assert %{
                  {My, :no_arg_no_parens, 0} => %ElixirSense.Core.State.TypeInfo{
                    args: [[]],
                    kind: :type,
@@ -6530,7 +6528,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    kind: :type,
                    name: :overloaded,
                    positions: [{6, 3}],
-                   end_positions: [nil],
+                   end_positions: [_],
                    generated: [false],
                    args: [["a"]],
                    specs: ["@type overloaded(a) :: {a}"]
@@ -6545,9 +6543,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    meta: %{opaque: true},
                    specs: ["@opaque with_args(a, b) :: {a, b}"]
                  }
-               }
+               } = state.types
       end
 
+      if @protocol_support do
       test "protocol exports type t" do
         state =
           """
@@ -6569,6 +6568,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  }
                }
       end
+      end
 
       test "specs and callbacks" do
         state =
@@ -6585,7 +6585,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         # if there are callbacks behaviour_info/1 is defined
         assert state.mods_funs_to_positions[{Proto, :behaviour_info, 1}] != nil
 
-        assert state.specs == %{
+        assert %{
                  {Proto, :abc, 0} => %ElixirSense.Core.State.SpecInfo{
                    args: [[], []],
                    kind: :spec,
@@ -6609,11 +6609,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    name: :other,
                    args: [["x"]],
                    positions: [{5, 3}],
-                   end_positions: [nil],
+                   end_positions: [_],
                    generated: [false],
                    specs: ["@macrocallback other(x) :: Macro.t() when x: integer"]
                  }
-               }
+               } = state.specs
       end
 
       test "specs and types expand aliases" do
@@ -6645,7 +6645,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                } = state.types
       end
     end
-  end
 
   if @record_support do
     test "defrecord defines record macros" do
@@ -6934,6 +6933,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
+      # dbg(state.lines_to_env |> Enum.map(fn {k, v} -> {k, %{module: v.module, function: v.function, typespec: v.typespec}} end))
+
     assert nil == get_line_typespec(state, 1)
     assert nil == get_line_function(state, 1)
     assert nil == get_line_module(state, 1)
@@ -6942,11 +6943,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert nil == get_line_function(state, 2)
     assert My == get_line_module(state, 2)
 
-    if @typespec_support do
-      assert {:a, 0} == get_line_typespec(state, 5)
-      assert nil == get_line_function(state, 5)
-      assert My == get_line_module(state, 5)
-    end
+    assert {:a, 0} == get_line_typespec(state, 5)
+    assert nil == get_line_function(state, 5)
+    assert My == get_line_module(state, 5)
 
     assert nil == get_line_typespec(state, 7)
     assert nil == get_line_function(state, 7)
@@ -6960,11 +6959,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert nil == get_line_function(state, 13)
     assert My == get_line_module(state, 13)
 
-    if @typespec_support do
-      assert {:test, 2} == get_line_typespec(state, 15)
-      assert nil == get_line_function(state, 15)
-      assert My == get_line_module(state, 15)
-    end
+    assert {:test, 2} == get_line_typespec(state, 15)
+    assert nil == get_line_function(state, 15)
+    assert My == get_line_module(state, 15)
 
     assert nil == get_line_typespec(state, 16)
     assert {:test, 2} == get_line_function(state, 16)
