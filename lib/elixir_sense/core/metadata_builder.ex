@@ -1042,8 +1042,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
           []
       end
 
+      env = get_current_env(state)
+
     state
-    |> add_struct_or_exception(type, fields, position, end_position)
+    |> add_struct_or_exception(env, type, fields, position, end_position)
     |> result(ast)
   end
 
@@ -1936,72 +1938,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp maybe_add_protocol_behaviour(_, state, env), do: {state, env}
-
-  defp add_struct_or_exception(state, type, fields, {line, column} = position, end_position) do
-    fields =
-      fields ++
-        if type == :defexception do
-          [__exception__: true]
-        else
-          []
-        end
-
-    options = [generated: true]
-    env = get_current_env(state)
-
-    state =
-      if type == :defexception do
-        {_, state, env} = add_behaviour(Exception, state, env)
-
-        if Keyword.has_key?(fields, :message) do
-          state
-          |> add_func_to_index(
-            env,
-            :exception,
-            [{:msg, [line: line, column: column], nil}],
-            position,
-            end_position,
-            :def,
-            options
-          )
-          |> add_func_to_index(
-            env,
-            :message,
-            [{:exception, [line: line, column: column], nil}],
-            position,
-            end_position,
-            :def,
-            options
-          )
-        else
-          state
-        end
-        |> add_func_to_index(
-          env,
-          :exception,
-          [{:args, [line: line, column: column], nil}],
-          position,
-          end_position,
-          :def,
-          options
-        )
-      else
-        state
-      end
-      |> add_func_to_index(env, :__struct__, [], position, end_position, :def, options)
-      |> add_func_to_index(
-        env,
-        :__struct__,
-        [{:kv, [line: line, column: column], nil}],
-        position,
-        end_position,
-        :def,
-        options
-      )
-
-    state
-    |> add_struct(env, type, fields)
-  end
 
   defp expand_aliases_in_ast(state, ast) do
     # TODO shouldn't that handle more cases?

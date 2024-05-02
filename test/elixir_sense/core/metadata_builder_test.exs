@@ -12,7 +12,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
   @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
   @first_alias_positions Version.match?(System.version(), "< 1.17.0-dev")
-  @struct_support Version.match?(System.version(), "< 1.17.0-dev")
   @macro_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @typespec_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @record_support Version.match?(System.version(), "< 1.17.0-dev")
@@ -5618,7 +5617,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
     end
 
-    if @struct_support do
       test "use defining struct" do
         state =
           """
@@ -5667,7 +5665,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  {MyError, :exception, 1} => %State.ModFunInfo{}
                } = state.mods_funs_to_positions
       end
-    end
 
     test "use multi notation" do
       state =
@@ -5742,7 +5739,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-  if @struct_support do
     describe "defstruct" do
       test "find struct" do
         state =
@@ -5781,6 +5777,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                } = state.mods_funs_to_positions
       end
 
+      if @expand_eval do
       test "find struct fields from expression" do
         state =
           """
@@ -5795,6 +5792,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert state.structs == %{
                  MyStruct => %StructInfo{type: :defstruct, fields: [__struct__: MyStruct]}
                }
+      end
       end
 
       test "find exception" do
@@ -5885,7 +5883,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                } = state.mods_funs_to_positions
       end
     end
-  end
 
     describe "calls" do
       defp sort_calls(calls) do
