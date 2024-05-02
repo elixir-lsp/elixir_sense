@@ -401,8 +401,11 @@ defmodule ElixirSense.Core.State do
         meta
       ) do
     module = env.module
+
     case Keyword.get(meta, :end_of_expression) do
-      nil -> state
+      nil ->
+        state
+
       end_of_expression ->
         line_to_insert_alias = Keyword.fetch!(end_of_expression, :line) + 1
         column = Keyword.get(meta, :column, 1)
@@ -415,37 +418,67 @@ defmodule ElixirSense.Core.State do
     end
   end
 
-  def add_first_alias_positions(%__MODULE__{} = state, env = %{module: module, function: nil}, meta) do
+  def add_first_alias_positions(
+        %__MODULE__{} = state,
+        env = %{module: module, function: nil},
+        meta
+      ) do
     # TODO shouldn't that look for end_of_expression
     line = Keyword.get(meta, :line, 0)
+
     if line > 0 do
       column = Keyword.get(meta, :column, 1)
+
       %__MODULE__{
         state
-        | first_alias_positions:
-          Map.put_new(state.first_alias_positions, module, {line, column})
+        | first_alias_positions: Map.put_new(state.first_alias_positions, module, {line, column})
       }
     else
       state
     end
   end
+
   def add_first_alias_positions(%__MODULE__{} = state, _env, _meta), do: state
 
   # TODO remove this
   def add_call_to_line(%__MODULE__{} = state, {nil, :__block__, _}, _position), do: state
 
-  def add_call_to_line(%__MODULE__{} = state, {{:@, _meta, [{name, _name_meta, _args}]}, func, arity}, {_line, _column} = position) when is_atom(name) do
+  def add_call_to_line(
+        %__MODULE__{} = state,
+        {{:@, _meta, [{name, _name_meta, _args}]}, func, arity},
+        {_line, _column} = position
+      )
+      when is_atom(name) do
     add_call_to_line(state, {{:attribute, name}, func, arity}, position)
   end
-  def add_call_to_line(%__MODULE__{} = state, {{name, _name_meta, args}, func, arity}, {_line, _column} = position) when is_atom(args) do
+
+  def add_call_to_line(
+        %__MODULE__{} = state,
+        {{name, _name_meta, args}, func, arity},
+        {_line, _column} = position
+      )
+      when is_atom(args) do
     add_call_to_line(state, {{:variable, name}, func, arity}, position)
   end
-  def add_call_to_line(%__MODULE__{} = state, {nil, {:@, _meta, [{name, _name_meta, _args}]}, arity}, {_line, _column} = position) when is_atom(name) do
+
+  def add_call_to_line(
+        %__MODULE__{} = state,
+        {nil, {:@, _meta, [{name, _name_meta, _args}]}, arity},
+        {_line, _column} = position
+      )
+      when is_atom(name) do
     add_call_to_line(state, {nil, {:attribute, name}, arity}, position)
   end
-  def add_call_to_line(%__MODULE__{} = state, {nil, {name, _name_meta, args}, arity}, {_line, _column} = position) when is_atom(args) do
+
+  def add_call_to_line(
+        %__MODULE__{} = state,
+        {nil, {name, _name_meta, args}, arity},
+        {_line, _column} = position
+      )
+      when is_atom(args) do
     add_call_to_line(state, {nil, {:variable, name}, arity}, position)
   end
+
   def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, {line, _column} = position) do
     call = %CallInfo{mod: mod, func: func, arity: arity, position: position}
 
