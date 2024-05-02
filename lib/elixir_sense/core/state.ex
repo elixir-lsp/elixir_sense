@@ -563,7 +563,7 @@ defmodule ElixirSense.Core.State do
     end)
   end
 
-  def add_struct(%__MODULE__{} = state, %__MODULE__.Env{} = env, type, fields) do
+  def add_struct(%__MODULE__{} = state, env, type, fields) do
     structs =
       state.structs
       |> Map.put(env.module, %StructInfo{type: type, fields: fields ++ [__struct__: env.module]})
@@ -1975,5 +1975,70 @@ defmodule ElixirSense.Core.State do
 
   def with_typespec(%__MODULE__{} = state, typespec) do
     %{state | typespec: typespec}
+  end
+
+  def add_struct_or_exception(state, env, type, fields, {line, column} = position, end_position) do
+    fields =
+      fields ++
+        if type == :defexception do
+          [__exception__: true]
+        else
+          []
+        end
+
+    options = [generated: true]
+
+    state =
+      if type == :defexception do
+        {_, state, env} = add_behaviour(Exception, state, env)
+
+        if Keyword.has_key?(fields, :message) do
+          state
+          |> add_func_to_index(
+            env,
+            :exception,
+            [{:msg, [line: line, column: column], nil}],
+            position,
+            end_position,
+            :def,
+            options
+          )
+          |> add_func_to_index(
+            env,
+            :message,
+            [{:exception, [line: line, column: column], nil}],
+            position,
+            end_position,
+            :def,
+            options
+          )
+        else
+          state
+        end
+        |> add_func_to_index(
+          env,
+          :exception,
+          [{:args, [line: line, column: column], nil}],
+          position,
+          end_position,
+          :def,
+          options
+        )
+      else
+        state
+      end
+      |> add_func_to_index(env, :__struct__, [], position, end_position, :def, options)
+      |> add_func_to_index(
+        env,
+        :__struct__,
+        [{:kv, [line: line, column: column], nil}],
+        position,
+        end_position,
+        :def,
+        options
+      )
+
+    state
+    |> add_struct(env, type, fields)
   end
 end

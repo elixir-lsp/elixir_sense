@@ -985,6 +985,48 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_macro(
          meta,
          Kernel,
+         type,
+         [fields],
+         _callback,
+         state,
+         env
+       ) when type in [:defstruct, :defexception] do
+        module = assert_module_scope(env, type, 1)
+        if Map.has_key?(state.structs, module) do
+          raise ArgumentError,
+            "defstruct has already been called for " <>
+              "#{inspect(module)}, defstruct can only be called once per module"
+        end
+        case fields do
+          fs when is_list(fs) ->
+            :ok
+    
+          other ->
+            raise ArgumentError, "struct fields definition must be list, got: #{inspect(other)}"
+        end
+
+        {position, end_position} = extract_range(meta)
+
+        fields = fields
+          |> Enum.filter(fn
+            field when is_atom(field) -> true
+            {field, _} when is_atom(field) -> true
+            _ -> false
+          end)
+          |> Enum.map(fn
+            field when is_atom(field) -> {field, nil}
+            {field, value} when is_atom(field) -> {field, value}
+          end)
+
+        state = state
+        |> add_struct_or_exception(env, type, fields, position, end_position)
+
+        {{type, meta, [fields]}, state, env}
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
          :defmodule,
          [alias, [do: block]] = _args,
          _callback,
