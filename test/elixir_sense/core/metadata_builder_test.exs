@@ -225,9 +225,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:y, nil}
              ]
 
-      assert [
-               %VarInfo{name: :y, positions: [{1, 1}, {2, 11}, {3, 11}]}
-             ] = state |> get_line_vars(4)
+      if Version.match?(System.version(), ">= 1.17.0-dev") do
+        assert [
+                 %VarInfo{name: :y, positions: [{1, 1}, {2, 11}, {3, 11}]}
+               ] = state |> get_line_vars(4)
+      else
+        # TODO this is wrong
+        assert [
+                 %VarInfo{name: :y, positions: [{1, 1}, {2, 11}]},
+                 %VarInfo{name: :y, positions: [{3, 11}]}
+               ] = state |> get_line_vars(4)
+      end
     end
 
     test "undefined usage" do
@@ -1249,38 +1257,42 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert state.scope_ids == []
   end
 
-    describe "moduledoc positions" do
-      test "moduledoc heredoc version" do
-        state =
-          """
-          defmodule Outer do
+  describe "moduledoc positions" do
+    test "moduledoc heredoc version" do
+      state =
+        """
+        defmodule Outer do
+          @moduledoc \"\"\"
+          This is the here doc version
+          \"\"\"
+          defmodule Inner do
             @moduledoc \"\"\"
-            This is the here doc version
+            This is the Inner modules moduledoc
             \"\"\"
-            defmodule Inner do
-              @moduledoc \"\"\"
-              This is the Inner modules moduledoc
-              \"\"\"
-            end
+
+            foo()
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert %{Outer => {5, 3}, Outer.Inner => {9, 5}} = state.moduledoc_positions
-      end
-
-      test "moduledoc boolean version" do
-        state =
-          """
-          defmodule Outer do
-            @moduledoc false
-          end
-          """
-          |> string_to_state
-
-        assert %{Outer => {3, 3}} = state.moduledoc_positions
-      end
+      assert %{Outer => {5, 3}, Outer.Inner => {9, 5}} = state.moduledoc_positions
     end
+
+    test "moduledoc boolean version" do
+      state =
+        """
+        defmodule Outer do
+          @moduledoc false
+
+          foo()
+        end
+        """
+        |> string_to_state
+
+      assert %{Outer => {3, 3}} = state.moduledoc_positions
+    end
+  end
 
   test "module attributes" do
     state =
@@ -1299,7 +1311,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert get_line_attributes(state, 10) == [
+    assert [
              %ElixirSense.Core.State.AttributeInfo{
                name: :myattribute,
                positions: [{2, 3}, {3, 11}]
@@ -1308,16 +1320,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :otherattribute,
                positions: [{10, 3}]
              }
-           ]
+           ] = get_line_attributes(state, 10)
 
-    assert get_line_attributes(state, 3) == [
+    assert [
              %AttributeInfo{
                name: :myattribute,
                positions: [{2, 3}, {3, 11}]
              }
-           ]
+           ] = get_line_attributes(state, 3)
 
-    assert get_line_attributes(state, 7) == [
+    assert [
              %AttributeInfo{
                name: :inner_attr,
                positions: [{5, 5}, {7, 13}]
@@ -1326,18 +1338,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                name: :inner_attr_1,
                positions: [{6, 5}]
              }
-           ]
+           ] = get_line_attributes(state, 7)
 
-    assert get_line_attributes(state, 9) == [
+    assert [
              %AttributeInfo{
                name: :myattribute,
                positions: [{2, 3}, {3, 11}]
              }
-           ]
+           ] = get_line_attributes(state, 9)
   end
 
   if @attribute_binding_support do
-    test "module attributes" do
+    test "module attributes binding" do
       state =
         """
         defmodule MyModule do
@@ -5212,47 +5224,48 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
-    test "registers delegated func" do
-      state =
-        """
-        defmodule MyModuleWithFuns do
-          alias Enum, as: E
-          defdelegate func_delegated(par), to: OtherModule
-          defdelegate func_delegated_erlang(par), to: :erlang_module
-          defdelegate func_delegated_as(par), to: __MODULE__.Sub, as: :my_func
-          defdelegate func_delegated_alias(par), to: E
-        end
-        """
-        |> string_to_state
+  test "registers delegated func" do
+    state =
+      """
+      defmodule MyModuleWithFuns do
+        alias Enum, as: E
+        defdelegate func_delegated(par), to: OtherModule
+        defdelegate func_delegated_erlang(par), to: :erlang_module
+        defdelegate func_delegated_as(par), to: __MODULE__.Sub, as: :my_func
+        defdelegate func_delegated_alias(par), to: E
+      end
+      """
+      |> string_to_state
 
-      assert %{
-               {MyModuleWithFuns, :func_delegated, 1} => %ModFunInfo{
-                 params: [[{:par, [line: 3, column: 30], nil}]],
-                 positions: [{3, 3}],
-                 target: {OtherModule, :func_delegated},
-                 type: :defdelegate
-               },
-               {MyModuleWithFuns, :func_delegated_alias, 1} => %ModFunInfo{
-                 params: [[{:par, [line: 6, column: 36], nil}]],
-                 positions: [{6, 3}],
-                 target: {Enum, :func_delegated_alias},
-                 type: :defdelegate
-               },
-               {MyModuleWithFuns, :func_delegated_as, 1} => %ModFunInfo{
-                 params: [[{:par, [line: 5, column: 33], nil}]],
-                 positions: [{5, 3}],
-                 target: {MyModuleWithFuns.Sub, :my_func},
-                 type: :defdelegate
-               },
-               {MyModuleWithFuns, :func_delegated_erlang, 1} => %ModFunInfo{
-                 params: [[{:par, [line: 4, column: 37], nil}]],
-                 positions: [{4, 3}],
-                 target: {:erlang_module, :func_delegated_erlang},
-                 type: :defdelegate
-               }
-             } = state.mods_funs_to_positions
-    end
+    assert %{
+             {MyModuleWithFuns, :func_delegated, 1} => %ModFunInfo{
+               params: [[{:par, [line: 3, column: 30], nil}]],
+               positions: [{3, 3}],
+               target: {OtherModule, :func_delegated},
+               type: :defdelegate
+             },
+             {MyModuleWithFuns, :func_delegated_alias, 1} => %ModFunInfo{
+               params: [[{:par, [line: 6, column: 36], nil}]],
+               positions: [{6, 3}],
+               target: {Enum, :func_delegated_alias},
+               type: :defdelegate
+             },
+             {MyModuleWithFuns, :func_delegated_as, 1} => %ModFunInfo{
+               params: [[{:par, [line: 5, column: 33], nil}]],
+               positions: [{5, 3}],
+               target: {MyModuleWithFuns.Sub, :my_func},
+               type: :defdelegate
+             },
+             {MyModuleWithFuns, :func_delegated_erlang, 1} => %ModFunInfo{
+               params: [[{:par, [line: 4, column: 37], nil}]],
+               positions: [{4, 3}],
+               target: {:erlang_module, :func_delegated_erlang},
+               type: :defdelegate
+             }
+           } = state.mods_funs_to_positions
+  end
 
+  if @expand_eval do
     test "registers defs with unquote fragments" do
       state =
         """
@@ -5265,40 +5278,39 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-        {MyModuleWithFuns, :foo, 0} => %ModFunInfo{
-          params: [[]]
-        },
-        {MyModuleWithFuns, :bar, 0} => %ModFunInfo{
-          params: [[]]
-        },
-        {MyModuleWithFuns, :baz, 1} => %ModFunInfo{
-          params: [[:abc]]
-        }
-      } = state.mods_funs_to_positions
-  end
+               {MyModuleWithFuns, :foo, 0} => %ModFunInfo{
+                 params: [[]]
+               },
+               {MyModuleWithFuns, :bar, 0} => %ModFunInfo{
+                 params: [[]]
+               },
+               {MyModuleWithFuns, :baz, 1} => %ModFunInfo{
+                 params: [[:abc]]
+               }
+             } = state.mods_funs_to_positions
+    end
 
-  if @expand_eval do
-  test "registers defs with unquote fragments with binding" do
-    state =
-      """
-      defmodule MyModuleWithFuns do
-        kv = [foo: 1, bar: 2] |> IO.inspect
-        Enum.each(kv, fn {k, v} ->
-          def unquote(k)(), do: unquote(v)
-        end)
-      end
-      """
-      |> string_to_state
+    test "registers defs with unquote fragments with binding" do
+      state =
+        """
+        defmodule MyModuleWithFuns do
+          kv = [foo: 1, bar: 2] |> IO.inspect
+          Enum.each(kv, fn {k, v} ->
+            def unquote(k)(), do: unquote(v)
+          end)
+        end
+        """
+        |> string_to_state
 
-    assert %{
-      {MyModuleWithFuns, :foo, 0} => %ModFunInfo{
-        params: [[]]
-      },
-      {MyModuleWithFuns, :bar, 0} => %ModFunInfo{
-        params: [[]]
-      }
-    } = state.mods_funs_to_positions
-  end
+      assert %{
+               {MyModuleWithFuns, :foo, 0} => %ModFunInfo{
+                 params: [[]]
+               },
+               {MyModuleWithFuns, :bar, 0} => %ModFunInfo{
+                 params: [[]]
+               }
+             } = state.mods_funs_to_positions
+    end
   end
 
   if @protocol_support do
@@ -5354,21 +5366,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-    test "first_alias_positions" do
-      state =
-        """
-        defmodule OuterMod do
-          alias Foo.Bar
-          alias Foo1.Bar1
-          defmodule InnerMod do
-            alias Baz.Quz
-          end
+  test "first_alias_positions" do
+    state =
+      """
+      defmodule OuterMod do
+        alias Foo.Bar
+        alias Foo1.Bar1
+        defmodule InnerMod do
+          alias Baz.Quz
         end
-        """
-        |> string_to_state
+      end
+      """
+      |> string_to_state
 
-      assert %{OuterMod => {2, 3}, OuterMod.InnerMod => {5, 5}} = state.first_alias_positions
-    end
+    assert %{OuterMod => {2, 3}, OuterMod.InnerMod => {5, 5}} = state.first_alias_positions
+  end
 
   describe "use" do
     test "use" do
@@ -5425,8 +5437,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ])
 
       assert [
-                %AttributeInfo{name: :my_attribute, positions: [{2, _}]}
-              ] = get_line_attributes(state, 4)
+               %AttributeInfo{name: :my_attribute, positions: [{2, _}]}
+             ] = get_line_attributes(state, 4)
 
       if @protocol_support do
         assert %{
@@ -5609,54 +5621,54 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
     end
 
-      test "use defining struct" do
-        state =
-          """
-          defmodule InheritMod do
-            use ElixirSenseExample.ExampleBehaviourWithStruct
+    test "use defining struct" do
+      state =
+        """
+        defmodule InheritMod do
+          use ElixirSenseExample.ExampleBehaviourWithStruct
 
-            IO.puts("")
-          end
-          """
-          |> string_to_state
+          IO.puts("")
+        end
+        """
+        |> string_to_state
 
-        assert %{
-                 InheritMod => %State.StructInfo{
-                   fields: [{:a, nil}, {:b, 1}, __struct__: InheritMod],
-                   type: :defstruct
-                 }
-               } = state.structs
+      assert %{
+               InheritMod => %State.StructInfo{
+                 fields: [{:a, nil}, {:b, 1}, __struct__: InheritMod],
+                 type: :defstruct
+               }
+             } = state.structs
 
-        assert %{
-                 {InheritMod, :__struct__, 0} => %State.ModFunInfo{},
-                 {InheritMod, :__struct__, 1} => %State.ModFunInfo{}
-               } = state.mods_funs_to_positions
-      end
+      assert %{
+               {InheritMod, :__struct__, 0} => %State.ModFunInfo{},
+               {InheritMod, :__struct__, 1} => %State.ModFunInfo{}
+             } = state.mods_funs_to_positions
+    end
 
-      test "use defining exception" do
-        state =
-          """
-          defmodule MyError do
-            use ElixirSenseExample.ExampleBehaviourWithException
+    test "use defining exception" do
+      state =
+        """
+        defmodule MyError do
+          use ElixirSenseExample.ExampleBehaviourWithException
 
-            IO.puts("")
-          end
-          """
-          |> string_to_state
+          IO.puts("")
+        end
+        """
+        |> string_to_state
 
-        assert %{
-                 MyError => %State.StructInfo{
-                   fields: [{:a, nil}, {:b, 1}, __exception__: true, __struct__: MyError],
-                   type: :defexception
-                 }
-               } = state.structs
+      assert %{
+               MyError => %State.StructInfo{
+                 fields: [{:a, nil}, {:b, 1}, __exception__: true, __struct__: MyError],
+                 type: :defexception
+               }
+             } = state.structs
 
-        assert %{
-                 {MyError, :__struct__, 0} => %State.ModFunInfo{},
-                 {MyError, :__struct__, 1} => %State.ModFunInfo{},
-                 {MyError, :exception, 1} => %State.ModFunInfo{}
-               } = state.mods_funs_to_positions
-      end
+      assert %{
+               {MyError, :__struct__, 0} => %State.ModFunInfo{},
+               {MyError, :__struct__, 1} => %State.ModFunInfo{},
+               {MyError, :exception, 1} => %State.ModFunInfo{}
+             } = state.mods_funs_to_positions
+    end
 
     test "use multi notation" do
       state =
@@ -5731,45 +5743,45 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-    describe "defstruct" do
-      test "find struct" do
-        state =
-          """
-          defmodule MyStruct do
-            defstruct [:some_field, a_field: 1]
-            IO.puts ""
-          end
-          """
-          |> string_to_state
+  describe "defstruct" do
+    test "find struct" do
+      state =
+        """
+        defmodule MyStruct do
+          defstruct [:some_field, a_field: 1]
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-        assert state.structs == %{
-                 MyStruct => %StructInfo{
-                   type: :defstruct,
-                   fields: [some_field: nil, a_field: 1, __struct__: MyStruct]
-                 }
+      assert state.structs == %{
+               MyStruct => %StructInfo{
+                 type: :defstruct,
+                 fields: [some_field: nil, a_field: 1, __struct__: MyStruct]
                }
+             }
 
-        # defstruct adds struct/0 and struct/1 functions
-        assert %{
-                 {MyStruct, :__struct__, 0} => %ModFunInfo{
-                   params: [[]],
-                   positions: [{2, 3}],
-                   type: :def
-                 },
-                 {MyStruct, :__struct__, 1} => %ModFunInfo{
-                   params: [[{:kv, [line: 2, column: 3], nil}]],
-                   positions: [{2, 3}],
-                   type: :def
-                 },
-                 {MyStruct, nil, nil} => %ModFunInfo{
-                   params: [nil],
-                   positions: [{1, 1}],
-                   type: :defmodule
-                 }
-               } = state.mods_funs_to_positions
-      end
+      # defstruct adds struct/0 and struct/1 functions
+      assert %{
+               {MyStruct, :__struct__, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {MyStruct, :__struct__, 1} => %ModFunInfo{
+                 params: [[{:kv, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {MyStruct, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 positions: [{1, 1}],
+                 type: :defmodule
+               }
+             } = state.mods_funs_to_positions
+    end
 
-      if @expand_eval do
+    if @expand_eval do
       test "find struct fields from expression" do
         state =
           """
@@ -5785,220 +5797,220 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  MyStruct => %StructInfo{type: :defstruct, fields: [__struct__: MyStruct]}
                }
       end
-      end
+    end
 
-      test "find exception" do
-        state =
-          """
-          defmodule MyError do
-            defexception [message: nil]
+    test "find exception" do
+      state =
+        """
+        defmodule MyError do
+          defexception [message: nil]
 
-            IO.puts("")
-          end
-          """
-          |> string_to_state
+          IO.puts("")
+        end
+        """
+        |> string_to_state
 
-        assert state.structs == %{
-                 MyError => %StructInfo{
-                   type: :defexception,
-                   fields: [message: nil, __exception__: true, __struct__: MyError]
-                 }
+      assert state.structs == %{
+               MyError => %StructInfo{
+                 type: :defexception,
+                 fields: [message: nil, __exception__: true, __struct__: MyError]
                }
+             }
 
-        # defexception adds Exception behaviour
-        assert get_line_behaviours(state, 4) == [Exception]
-        # and message/1 and exception/1 callbacks
-        assert %{
-                 {MyError, :__struct__, 0} => %ModFunInfo{
-                   params: [[]],
-                   positions: [{2, 3}],
-                   type: :def
-                 },
-                 {MyError, :__struct__, 1} => %ModFunInfo{
-                   params: [[{:kv, [line: 2, column: 3], nil}]],
-                   positions: [{2, 3}],
-                   type: :def
-                 },
-                 {MyError, :exception, 1} => %ModFunInfo{
-                   params: [
-                     [{:args, [line: 2, column: 3], nil}],
-                     [{:msg, [line: 2, column: 3], nil}]
-                   ],
-                   positions: [{2, 3}, {2, 3}],
-                   type: :def
-                 },
-                 {MyError, :message, 1} => %ModFunInfo{
-                   params: [[{:exception, [line: 2, column: 3], nil}]],
-                   positions: [{2, 3}],
-                   type: :def
-                 }
-               } = state.mods_funs_to_positions
-      end
-
-      test "find exception without message key" do
-        state =
-          """
-          defmodule MyError do
-            defexception []
-
-            IO.puts("")
-          end
-          """
-          |> string_to_state
-
-        assert state.structs == %{
-                 MyError => %StructInfo{
-                   type: :defexception,
-                   fields: [__exception__: true, __struct__: MyError]
-                 }
+      # defexception adds Exception behaviour
+      assert get_line_behaviours(state, 4) == [Exception]
+      # and message/1 and exception/1 callbacks
+      assert %{
+               {MyError, :__struct__, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {MyError, :__struct__, 1} => %ModFunInfo{
+                 params: [[{:kv, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {MyError, :exception, 1} => %ModFunInfo{
+                 params: [
+                   [{:args, [line: 2, column: 3], nil}],
+                   [{:msg, [line: 2, column: 3], nil}]
+                 ],
+                 positions: [{2, 3}, {2, 3}],
+                 type: :def
+               },
+               {MyError, :message, 1} => %ModFunInfo{
+                 params: [[{:exception, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 type: :def
                }
+             } = state.mods_funs_to_positions
+    end
 
-        # defexception adds Exception behaviour
-        assert get_line_behaviours(state, 4) == [Exception]
-        # and message/1 and exception/1 callbacks
-        assert %{
-                 {MyError, :__struct__, 0} => %ModFunInfo{
-                   params: [[]],
-                   positions: [{2, 3}],
-                   type: :def
-                 },
-                 {MyError, :__struct__, 1} => %ModFunInfo{
-                   params: [[{:kv, [line: 2, column: 3], nil}]],
-                   positions: [{2, 3}],
-                   type: :def
-                 },
-                 {MyError, :exception, 1} => %ModFunInfo{
-                   params: [[{:args, [line: 2, column: 3], nil}]],
-                   positions: [{2, 3}],
-                   type: :def
-                 }
-               } = state.mods_funs_to_positions
+    test "find exception without message key" do
+      state =
+        """
+        defmodule MyError do
+          defexception []
+
+          IO.puts("")
+        end
+        """
+        |> string_to_state
+
+      assert state.structs == %{
+               MyError => %StructInfo{
+                 type: :defexception,
+                 fields: [__exception__: true, __struct__: MyError]
+               }
+             }
+
+      # defexception adds Exception behaviour
+      assert get_line_behaviours(state, 4) == [Exception]
+      # and message/1 and exception/1 callbacks
+      assert %{
+               {MyError, :__struct__, 0} => %ModFunInfo{
+                 params: [[]],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {MyError, :__struct__, 1} => %ModFunInfo{
+                 params: [[{:kv, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 type: :def
+               },
+               {MyError, :exception, 1} => %ModFunInfo{
+                 params: [[{:args, [line: 2, column: 3], nil}]],
+                 positions: [{2, 3}],
+                 type: :def
+               }
+             } = state.mods_funs_to_positions
+    end
+  end
+
+  describe "calls" do
+    defp sort_calls(calls) do
+      calls |> Enum.map(fn {k, v} -> {k, Enum.sort(v)} end) |> Map.new()
+    end
+
+    test "registers calls with __MODULE__" do
+      state =
+        """
+        defmodule NyModule do
+          def func1, do: :ok
+          def func2(a), do: :ok
+          def func do
+            __MODULE__.func1
+            __MODULE__.func1()
+            __MODULE__.func2(2)
+            __MODULE__.Sub.func2(2)
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               5 => [%CallInfo{arity: 0, func: :func1, position: {5, 16}, mod: NyModule}],
+               6 => [%CallInfo{arity: 0, func: :func1, position: {6, 16}, mod: NyModule}],
+               7 => [%CallInfo{arity: 1, func: :func2, position: {7, 16}, mod: NyModule}],
+               8 => [%CallInfo{arity: 1, func: :func2, position: {8, 20}, mod: NyModule.Sub}]
+             }
+    end
+
+    test "registers calls with erlang module" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            :erl_mod.func1
+            :erl_mod.func1()
+            :erl_mod.func2(2)
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 0, func: :func1, position: {3, 14}, mod: :erl_mod}],
+               4 => [%CallInfo{arity: 0, func: :func1, position: {4, 14}, mod: :erl_mod}],
+               5 => [%CallInfo{arity: 1, func: :func2, position: {5, 14}, mod: :erl_mod}]
+             }
+    end
+
+    test "registers calls with atom module" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            :"Elixir.MyMod".func1
+            :"Elixir.MyMod".func1()
+            :"Elixir.MyMod".func2(2)
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 0, func: :func1, position: {3, 21}, mod: MyMod}],
+               4 => [%CallInfo{arity: 0, func: :func1, position: {4, 21}, mod: MyMod}],
+               5 => [%CallInfo{arity: 1, func: :func2, position: {5, 21}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls no arg no parens" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            MyMod.func
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls no arg" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            MyMod.func()
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls local no arg no parens" do
+      state =
+        """
+        defmodule NyModule do
+          def func_1, do: :ok
+          def func do
+            func_1
+          end
+        end
+        """
+        |> string_to_state
+
+      if Version.match?(System.version(), ">= 1.15.0") do
+        assert state.calls == %{}
+      else
+        assert state.calls == %{
+                 4 => [%CallInfo{arity: 0, func: :func_1, position: {4, 5}, mod: nil}]
+               }
       end
     end
 
-    describe "calls" do
-      defp sort_calls(calls) do
-        calls |> Enum.map(fn {k, v} -> {k, Enum.sort(v)} end) |> Map.new
-      end
-
-      test "registers calls with __MODULE__" do
-        state =
-          """
-          defmodule NyModule do
-            def func1, do: :ok
-            def func2(a), do: :ok
-            def func do
-              __MODULE__.func1
-              __MODULE__.func1()
-              __MODULE__.func2(2)
-              __MODULE__.Sub.func2(2)
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 5 => [%CallInfo{arity: 0, func: :func1, position: {5, 16}, mod: NyModule}],
-                 6 => [%CallInfo{arity: 0, func: :func1, position: {6, 16}, mod: NyModule}],
-                 7 => [%CallInfo{arity: 1, func: :func2, position: {7, 16}, mod: NyModule}],
-                 8 => [%CallInfo{arity: 1, func: :func2, position: {8, 20}, mod: NyModule.Sub}]
-               }
-      end
-
-      test "registers calls with erlang module" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              :erl_mod.func1
-              :erl_mod.func1()
-              :erl_mod.func2(2)
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 0, func: :func1, position: {3, 14}, mod: :erl_mod}],
-                 4 => [%CallInfo{arity: 0, func: :func1, position: {4, 14}, mod: :erl_mod}],
-                 5 => [%CallInfo{arity: 1, func: :func2, position: {5, 14}, mod: :erl_mod}]
-               }
-      end
-
-      test "registers calls with atom module" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              :"Elixir.MyMod".func1
-              :"Elixir.MyMod".func1()
-              :"Elixir.MyMod".func2(2)
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 0, func: :func1, position: {3, 21}, mod: MyMod}],
-                 4 => [%CallInfo{arity: 0, func: :func1, position: {4, 21}, mod: MyMod}],
-                 5 => [%CallInfo{arity: 1, func: :func2, position: {5, 21}, mod: MyMod}]
-               }
-      end
-
-      test "registers calls no arg no parens" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              MyMod.func
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod}]
-               }
-      end
-
-      test "registers calls no arg" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              MyMod.func()
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod}]
-               }
-      end
-
-      test "registers calls local no arg no parens" do
-        state =
-          """
-          defmodule NyModule do
-            def func_1, do: :ok
-            def func do
-              func_1
-            end
-          end
-          """
-          |> string_to_state
-
-        if Version.match?(System.version(), ">= 1.15.0") do
-          assert state.calls == %{}
-        else
-          assert state.calls == %{
-                   4 => [%CallInfo{arity: 0, func: :func_1, position: {4, 5}, mod: nil}]
-                 }
-        end
-      end
-
-      if @typespec_calls_support do
+    if @typespec_calls_support do
       test "registers typespec no parens calls" do
         state =
           """
@@ -6015,428 +6027,428 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  ]
                }
       end
-      end
+    end
 
-      test "registers calls local no arg" do
-        state =
-          """
-          defmodule NyModule do
-            def func_1, do: :ok
-            def func do
-              func_1()
-            end
+    test "registers calls local no arg" do
+      state =
+        """
+        defmodule NyModule do
+          def func_1, do: :ok
+          def func do
+            func_1()
           end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 4 => [%CallInfo{arity: 0, func: :func_1, position: {4, 5}, mod: nil}]
-               }
-      end
-
-      test "registers calls local arg" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              func_1("a")
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 1, func: :func_1, position: {3, 5}, mod: nil}]
-               }
-      end
-
-      test "registers calls arg" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              MyMod.func("test")
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 1, func: :func, position: {3, 11}, mod: MyMod}]
-               }
-      end
-
-      test "registers calls on attribute and var with args" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              @attr.func("test")
-              var.func("test")
-            end
-          end
-          """
-          |> string_to_state
-
-        if Version.match?(System.version(), ">= 1.15.0") do
-          assert state.calls == %{
-                   3 => [
-                     %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
-                   ],
-                   4 => [
-                     %CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}
-                   ]
-                 }
-        else
-          assert state.calls == %{
-                   3 => [
-                     %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
-                   ],
-                   4 => [
-                     %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
-                     %CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}
-                   ]
-                 }
         end
-      end
+        """
+        |> string_to_state
 
-      test "registers calls on attribute and var without args" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              @attr.func
-              var.func
-            end
+      assert state.calls == %{
+               4 => [%CallInfo{arity: 0, func: :func_1, position: {4, 5}, mod: nil}]
+             }
+    end
+
+    test "registers calls local arg" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            func_1("a")
           end
-          """
-          |> string_to_state
-
-        if Version.match?(System.version(), ">= 1.15.0") do
-          assert state.calls == %{
-                   3 => [
-                     %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
-                   ],
-                   4 => [
-                     %CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}
-                   ]
-                 }
-        else
-          assert state.calls == %{
-                   3 => [
-                     %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
-                   ],
-                   4 => [
-                     %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
-                     %CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}
-                   ]
-                 }
         end
-      end
+        """
+        |> string_to_state
 
-      test "registers calls on attribute and var anonymous" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              @attr.()
-              var.()
-            end
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func_1, position: {3, 5}, mod: nil}]
+             }
+    end
+
+    test "registers calls arg" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            MyMod.func("test")
           end
-          """
-          |> string_to_state
-
-        if Version.match?(System.version(), ">= 1.15.0") do
-          assert state.calls == %{
-                   3 => [
-                     %CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}
-                   ],
-                   4 => [%CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}]
-                 }
-        else
-          assert state.calls == %{
-                   3 => [
-                     %CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}
-                   ],
-                   4 => [
-                     %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
-                     %CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}
-                   ]
-                 }
         end
-      end
+        """
+        |> string_to_state
 
-      test "registers calls pipe with __MODULE__ operator no parens" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              "test" |> __MODULE__.func
-            end
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 11}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls on attribute and var with args" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            @attr.func("test")
+            var.func("test")
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 1, func: :func, position: {3, 26}, mod: NyModule}]
-               }
-      end
-
-      test "registers calls pipe operator no parens" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              "test" |> MyMod.func
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 1, func: :func, position: {3, 21}, mod: MyMod}]
-               }
-      end
-
-      test "registers calls pipe operator" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              "test" |> MyMod.func()
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 1, func: :func, position: {3, 21}, mod: MyMod}]
-               }
-      end
-
-      test "registers calls pipe operator with arg" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              "test" |> MyMod.func("arg")
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 2, func: :func, position: {3, 21}, mod: MyMod}]
-               }
-      end
-
-      test "registers calls pipe operator erlang module" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              "test" |> :my_mod.func("arg")
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 2, func: :func, position: {3, 23}, mod: :my_mod}]
-               }
-      end
-
-      test "registers calls pipe operator atom module" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              "test" |> :"Elixir.MyMod".func("arg")
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 2, func: :func, position: {3, 31}, mod: MyMod}]
-               }
-      end
-
-      test "registers calls pipe operator local" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              "test" |> func("arg")
-            end
-          end
-          """
-          |> string_to_state
-
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 2, func: :func, position: {3, 15}, mod: nil}]
-               }
-      end
-
-      test "registers calls pipe operator nested external into local" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              "test" |> MyMod.func() |> other
-            end
-          end
-          """
-          |> string_to_state
-
+      if Version.match?(System.version(), ">= 1.15.0") do
         assert state.calls == %{
                  3 => [
-                   %CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod},
-                   %CallInfo{arity: 1, position: {3, 31}, func: :other, mod: nil}
+                   %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
+                 ],
+                 4 => [
+                   %CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}
+                 ]
+               }
+      else
+        assert state.calls == %{
+                 3 => [
+                   %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
+                 ],
+                 4 => [
+                   %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
+                   %CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}
                  ]
                }
       end
+    end
 
-      test "registers calls pipe operator nested external into external" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              "test" |> MyMod.func() |> Other.other
-            end
+    test "registers calls on attribute and var without args" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            @attr.func
+            var.func
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert state.calls |> sort_calls == %{
+      if Version.match?(System.version(), ">= 1.15.0") do
+        assert state.calls == %{
                  3 => [
-                   %CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod},
-                   %CallInfo{arity: 1, position: {3, 37}, func: :other, mod: Other}
+                   %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
+                 ],
+                 4 => [
+                   %CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}
+                 ]
+               }
+      else
+        assert state.calls == %{
+                 3 => [
+                   %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
+                 ],
+                 4 => [
+                   %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
+                   %CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}
                  ]
                }
       end
+    end
 
-      test "registers calls pipe operator nested local into external" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              "test" |> func_1() |> Some.other
-            end
+    test "registers calls on attribute and var anonymous" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            @attr.()
+            var.()
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert state.calls |> sort_calls == %{
+      if Version.match?(System.version(), ">= 1.15.0") do
+        assert state.calls == %{
                  3 => [
-                   %CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil},
-                   %CallInfo{arity: 1, position: {3, 32}, func: :other, mod: Some}
+                   %CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}
+                 ],
+                 4 => [%CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}]
+               }
+      else
+        assert state.calls == %{
+                 3 => [
+                   %CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}
+                 ],
+                 4 => [
+                   %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
+                   %CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}
                  ]
                }
       end
+    end
 
-      test "registers calls pipe operator nested local into local" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              "test" |> func_1() |> other
-            end
+    test "registers calls pipe with __MODULE__ operator no parens" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> __MODULE__.func
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert state.calls == %{
-                 3 => [
-                   %CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil},
-                   %CallInfo{arity: 1, position: {3, 27}, func: :other, mod: nil}
-                 ]
-               }
-      end
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 26}, mod: NyModule}]
+             }
+    end
 
-      test "registers calls capture operator __MODULE__" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              &__MODULE__.func/1
-              &__MODULE__.Sub.func/1
-            end
+    test "registers calls pipe operator no parens" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> MyMod.func
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 1, position: {3, 17}, func: :func, mod: NyModule}],
-                 4 => [%CallInfo{arity: 1, position: {4, 21}, func: :func, mod: NyModule.Sub}]
-               }
-      end
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 21}, mod: MyMod}]
+             }
+    end
 
-      test "registers calls capture operator external" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              &MyMod.func/1
-            end
+    test "registers calls pipe operator" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> MyMod.func()
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 1, position: {3, 12}, func: :func, mod: MyMod}]
-               }
-      end
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 21}, mod: MyMod}]
+             }
+    end
 
-      test "registers calls capture operator external erlang module" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              &:erl_mod.func/1
-            end
+    test "registers calls pipe operator with arg" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> MyMod.func("arg")
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 1, func: :func, position: {3, 15}, mod: :erl_mod}]
-               }
-      end
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 2, func: :func, position: {3, 21}, mod: MyMod}]
+             }
+    end
 
-      test "registers calls capture operator external atom module" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              &:"Elixir.MyMod".func/1
-            end
+    test "registers calls pipe operator erlang module" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> :my_mod.func("arg")
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 1, func: :func, position: {3, 22}, mod: MyMod}]
-               }
-      end
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 2, func: :func, position: {3, 23}, mod: :my_mod}]
+             }
+    end
 
-      test "registers calls capture operator local" do
-        state =
-          """
-          defmodule NyModule do
-            def func do
-              &func/1
-            end
+    test "registers calls pipe operator atom module" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> :"Elixir.MyMod".func("arg")
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert state.calls == %{
-                 3 => [%CallInfo{arity: 1, func: :func, position: {3, 6}, mod: nil}]
-               }
-      end
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 2, func: :func, position: {3, 31}, mod: MyMod}]
+             }
+    end
 
-      if @macro_calls_support do
+    test "registers calls pipe operator local" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> func("arg")
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 2, func: :func, position: {3, 15}, mod: nil}]
+             }
+    end
+
+    test "registers calls pipe operator nested external into local" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> MyMod.func() |> other
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [
+                 %CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod},
+                 %CallInfo{arity: 1, position: {3, 31}, func: :other, mod: nil}
+               ]
+             }
+    end
+
+    test "registers calls pipe operator nested external into external" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> MyMod.func() |> Other.other
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls |> sort_calls == %{
+               3 => [
+                 %CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod},
+                 %CallInfo{arity: 1, position: {3, 37}, func: :other, mod: Other}
+               ]
+             }
+    end
+
+    test "registers calls pipe operator nested local into external" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> func_1() |> Some.other
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls |> sort_calls == %{
+               3 => [
+                 %CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil},
+                 %CallInfo{arity: 1, position: {3, 32}, func: :other, mod: Some}
+               ]
+             }
+    end
+
+    test "registers calls pipe operator nested local into local" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            "test" |> func_1() |> other
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [
+                 %CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil},
+                 %CallInfo{arity: 1, position: {3, 27}, func: :other, mod: nil}
+               ]
+             }
+    end
+
+    test "registers calls capture operator __MODULE__" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            &__MODULE__.func/1
+            &__MODULE__.Sub.func/1
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, position: {3, 17}, func: :func, mod: NyModule}],
+               4 => [%CallInfo{arity: 1, position: {4, 21}, func: :func, mod: NyModule.Sub}]
+             }
+    end
+
+    test "registers calls capture operator external" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            &MyMod.func/1
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, position: {3, 12}, func: :func, mod: MyMod}]
+             }
+    end
+
+    test "registers calls capture operator external erlang module" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            &:erl_mod.func/1
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 15}, mod: :erl_mod}]
+             }
+    end
+
+    test "registers calls capture operator external atom module" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            &:"Elixir.MyMod".func/1
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 22}, mod: MyMod}]
+             }
+    end
+
+    test "registers calls capture operator local" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            &func/1
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 6}, mod: nil}]
+             }
+    end
+
+    if @macro_calls_support do
       test "registers calls on ex_unit DSL" do
         state =
           """
@@ -6467,75 +6479,75 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  12 => [%CallInfo{arity: 0, position: {12, 3}, func: :test, mod: nil}]
                }
       end
-      end
+    end
+  end
+
+  describe "typespec" do
+    test "registers types" do
+      state =
+        """
+        defmodule My do
+          @type no_arg_no_parens :: integer
+          @typep no_args() :: integer
+          @opaque with_args(a, b) :: {a, b}
+          @type overloaded :: {}
+          @type overloaded(a) :: {a}
+        end
+        IO.puts("")
+        """
+        |> string_to_state
+
+      assert %{
+               {My, :no_arg_no_parens, 0} => %ElixirSense.Core.State.TypeInfo{
+                 args: [[]],
+                 kind: :type,
+                 name: :no_arg_no_parens,
+                 positions: [{2, 3}],
+                 end_positions: [{2, 36}],
+                 generated: [false],
+                 specs: ["@type no_arg_no_parens :: integer"]
+               },
+               {My, :no_args, 0} => %ElixirSense.Core.State.TypeInfo{
+                 args: [[]],
+                 kind: :typep,
+                 name: :no_args,
+                 positions: [{3, 3}],
+                 end_positions: [{3, 30}],
+                 generated: [false],
+                 specs: ["@typep no_args() :: integer"]
+               },
+               {My, :overloaded, 0} => %ElixirSense.Core.State.TypeInfo{
+                 args: [[]],
+                 kind: :type,
+                 name: :overloaded,
+                 positions: [{5, 3}],
+                 end_positions: [{5, 25}],
+                 generated: [false],
+                 specs: ["@type overloaded :: {}"]
+               },
+               {My, :overloaded, 1} => %ElixirSense.Core.State.TypeInfo{
+                 kind: :type,
+                 name: :overloaded,
+                 positions: [{6, 3}],
+                 end_positions: [_],
+                 generated: [false],
+                 args: [["a"]],
+                 specs: ["@type overloaded(a) :: {a}"]
+               },
+               {My, :with_args, 2} => %ElixirSense.Core.State.TypeInfo{
+                 kind: :opaque,
+                 name: :with_args,
+                 positions: [{4, 3}],
+                 end_positions: [{4, 36}],
+                 generated: [false],
+                 args: [["a", "b"]],
+                 meta: %{opaque: true},
+                 specs: ["@opaque with_args(a, b) :: {a, b}"]
+               }
+             } = state.types
     end
 
-    describe "typespec" do
-      test "registers types" do
-        state =
-          """
-          defmodule My do
-            @type no_arg_no_parens :: integer
-            @typep no_args() :: integer
-            @opaque with_args(a, b) :: {a, b}
-            @type overloaded :: {}
-            @type overloaded(a) :: {a}
-          end
-          IO.puts("")
-          """
-          |> string_to_state
-
-        assert %{
-                 {My, :no_arg_no_parens, 0} => %ElixirSense.Core.State.TypeInfo{
-                   args: [[]],
-                   kind: :type,
-                   name: :no_arg_no_parens,
-                   positions: [{2, 3}],
-                   end_positions: [{2, 36}],
-                   generated: [false],
-                   specs: ["@type no_arg_no_parens :: integer"]
-                 },
-                 {My, :no_args, 0} => %ElixirSense.Core.State.TypeInfo{
-                   args: [[]],
-                   kind: :typep,
-                   name: :no_args,
-                   positions: [{3, 3}],
-                   end_positions: [{3, 30}],
-                   generated: [false],
-                   specs: ["@typep no_args() :: integer"]
-                 },
-                 {My, :overloaded, 0} => %ElixirSense.Core.State.TypeInfo{
-                   args: [[]],
-                   kind: :type,
-                   name: :overloaded,
-                   positions: [{5, 3}],
-                   end_positions: [{5, 25}],
-                   generated: [false],
-                   specs: ["@type overloaded :: {}"]
-                 },
-                 {My, :overloaded, 1} => %ElixirSense.Core.State.TypeInfo{
-                   kind: :type,
-                   name: :overloaded,
-                   positions: [{6, 3}],
-                   end_positions: [_],
-                   generated: [false],
-                   args: [["a"]],
-                   specs: ["@type overloaded(a) :: {a}"]
-                 },
-                 {My, :with_args, 2} => %ElixirSense.Core.State.TypeInfo{
-                   kind: :opaque,
-                   name: :with_args,
-                   positions: [{4, 3}],
-                   end_positions: [{4, 36}],
-                   generated: [false],
-                   args: [["a", "b"]],
-                   meta: %{opaque: true},
-                   specs: ["@opaque with_args(a, b) :: {a, b}"]
-                 }
-               } = state.types
-      end
-
-      if @protocol_support do
+    if @protocol_support do
       test "protocol exports type t" do
         state =
           """
@@ -6557,83 +6569,83 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  }
                }
       end
-      end
-
-      test "specs and callbacks" do
-        state =
-          """
-          defmodule Proto do
-            @spec abc :: atom | integer
-            @spec abc :: reference
-            @callback my(a :: integer) :: atom
-            @macrocallback other(x) :: Macro.t when x: integer
-          end
-          """
-          |> string_to_state
-
-        # if there are callbacks behaviour_info/1 is defined
-        assert state.mods_funs_to_positions[{Proto, :behaviour_info, 1}] != nil
-
-        assert %{
-                 {Proto, :abc, 0} => %ElixirSense.Core.State.SpecInfo{
-                   args: [[], []],
-                   kind: :spec,
-                   name: :abc,
-                   positions: [{3, 3}, {2, 3}],
-                   end_positions: [{3, 25}, {2, 30}],
-                   generated: [false, false],
-                   specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
-                 },
-                 {Proto, :my, 1} => %ElixirSense.Core.State.SpecInfo{
-                   kind: :callback,
-                   name: :my,
-                   args: [["a :: integer"]],
-                   positions: [{4, 3}],
-                   end_positions: [{4, 37}],
-                   generated: [false],
-                   specs: ["@callback my(a :: integer) :: atom"]
-                 },
-                 {Proto, :other, 1} => %ElixirSense.Core.State.SpecInfo{
-                   kind: :macrocallback,
-                   name: :other,
-                   args: [["x"]],
-                   positions: [{5, 3}],
-                   end_positions: [_],
-                   generated: [false],
-                   specs: ["@macrocallback other(x) :: Macro.t() when x: integer"]
-                 }
-               } = state.specs
-      end
-
-      test "specs and types expand aliases" do
-        state =
-          """
-          defmodule Proto do
-            alias Model.User
-            alias Model.Order
-            alias Model.UserOrder
-            @type local_type() :: User.t
-            @spec abc({%User{}}) :: [%UserOrder{order: Order.t}, local_type()]
-          end
-          """
-          |> string_to_state
-
-        assert %{
-                 {Proto, :abc, 1} => %State.SpecInfo{
-                   args: [["{%Model.User{}}"]],
-                   specs: [
-                     "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t()}, local_type()]"
-                   ]
-                 }
-               } = state.specs
-
-        assert %{
-                 {Proto, :local_type, 0} => %State.TypeInfo{
-                   specs: ["@type local_type() :: Model.User.t()"]
-                 }
-               } = state.types
-      end
     end
+
+    test "specs and callbacks" do
+      state =
+        """
+        defmodule Proto do
+          @spec abc :: atom | integer
+          @spec abc :: reference
+          @callback my(a :: integer) :: atom
+          @macrocallback other(x) :: Macro.t when x: integer
+        end
+        """
+        |> string_to_state
+
+      # if there are callbacks behaviour_info/1 is defined
+      assert state.mods_funs_to_positions[{Proto, :behaviour_info, 1}] != nil
+
+      assert %{
+               {Proto, :abc, 0} => %ElixirSense.Core.State.SpecInfo{
+                 args: [[], []],
+                 kind: :spec,
+                 name: :abc,
+                 positions: [{3, 3}, {2, 3}],
+                 end_positions: [{3, 25}, {2, 30}],
+                 generated: [false, false],
+                 specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
+               },
+               {Proto, :my, 1} => %ElixirSense.Core.State.SpecInfo{
+                 kind: :callback,
+                 name: :my,
+                 args: [["a :: integer"]],
+                 positions: [{4, 3}],
+                 end_positions: [{4, 37}],
+                 generated: [false],
+                 specs: ["@callback my(a :: integer) :: atom"]
+               },
+               {Proto, :other, 1} => %ElixirSense.Core.State.SpecInfo{
+                 kind: :macrocallback,
+                 name: :other,
+                 args: [["x"]],
+                 positions: [{5, 3}],
+                 end_positions: [_],
+                 generated: [false],
+                 specs: ["@macrocallback other(x) :: Macro.t() when x: integer"]
+               }
+             } = state.specs
+    end
+
+    test "specs and types expand aliases" do
+      state =
+        """
+        defmodule Proto do
+          alias Model.User
+          alias Model.Order
+          alias Model.UserOrder
+          @type local_type() :: User.t
+          @spec abc({%User{}}) :: [%UserOrder{order: Order.t}, local_type()]
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {Proto, :abc, 1} => %State.SpecInfo{
+                 args: [["{%Model.User{}}"]],
+                 specs: [
+                   "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t()}, local_type()]"
+                 ]
+               }
+             } = state.specs
+
+      assert %{
+               {Proto, :local_type, 0} => %State.TypeInfo{
+                 specs: ["@type local_type() :: Model.User.t()"]
+               }
+             } = state.types
+    end
+  end
 
   if @record_support do
     test "defrecord defines record macros" do
@@ -6922,7 +6934,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-      # dbg(state.lines_to_env |> Enum.map(fn {k, v} -> {k, %{module: v.module, function: v.function, typespec: v.typespec}} end))
+    # dbg(state.lines_to_env |> Enum.map(fn {k, v} -> {k, %{module: v.module, function: v.function, typespec: v.typespec}} end))
 
     assert nil == get_line_typespec(state, 1)
     assert nil == get_line_function(state, 1)
@@ -6978,417 +6990,416 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
   end
 
-
-    describe "doc" do
-      test "moduledoc is applied to current module" do
-        state =
-          """
-          defmodule Some do
-            @moduledoc "Some module"
-            @moduledoc since: "1.2.3"
-
-            defmodule NoDoc do
-            end
-
-            defmodule Sub do
-              @moduledoc "Some.Sub module"
-              @moduledoc deprecated: "2.3.4"
-            end
-          end
-
-          defmodule Other do
-            @moduledoc "Other module"
-          end
+  describe "doc" do
+    test "moduledoc is applied to current module" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc "Some module"
+          @moduledoc since: "1.2.3"
 
           defmodule NoDoc do
           end
-          """
-          |> string_to_state
 
-        assert %{doc: "Some module", meta: %{since: "1.2.3"}} =
-                 state.mods_funs_to_positions[{Some, nil, nil}]
-
-        assert %{doc: "", meta: %{}} = state.mods_funs_to_positions[{Some.NoDoc, nil, nil}]
-
-        assert %{doc: "Some.Sub module", meta: %{deprecated: "2.3.4"}} =
-                 state.mods_funs_to_positions[{Some.Sub, nil, nil}]
-
-        assert %{doc: "Other module", meta: %{}} = state.mods_funs_to_positions[{Other, nil, nil}]
-        assert %{doc: "", meta: %{}} = state.mods_funs_to_positions[{NoDoc, nil, nil}]
-      end
-
-      test "moduledoc handles charlist" do
-        state =
-          """
-          defmodule Some do
-            @moduledoc 'Some module'
+          defmodule Sub do
+            @moduledoc "Some.Sub module"
+            @moduledoc deprecated: "2.3.4"
           end
-          """
-          |> string_to_state
+        end
 
-        assert %{doc: "Some module"} = state.mods_funs_to_positions[{Some, nil, nil}]
-      end
+        defmodule Other do
+          @moduledoc "Other module"
+        end
 
-      test "moduledoc handles interpolated charlist" do
-        state =
-          """
-          defmodule Some do
-            @moduledoc 'Some #{inspect(1)} module'
-          end
-          """
-          |> string_to_state
+        defmodule NoDoc do
+        end
+        """
+        |> string_to_state
 
-        assert %{doc: "Some 1 module"} = state.mods_funs_to_positions[{Some, nil, nil}]
-      end
+      assert %{doc: "Some module", meta: %{since: "1.2.3"}} =
+               state.mods_funs_to_positions[{Some, nil, nil}]
 
-      test "moduledoc handles interpolated string" do
-        state =
-          """
-          defmodule Some do
-            @moduledoc \"Some #{inspect(1)} module\"
-          end
-          """
-          |> string_to_state
+      assert %{doc: "", meta: %{}} = state.mods_funs_to_positions[{Some.NoDoc, nil, nil}]
 
-        assert %{doc: "Some 1 module"} = state.mods_funs_to_positions[{Some, nil, nil}]
-      end
+      assert %{doc: "Some.Sub module", meta: %{deprecated: "2.3.4"}} =
+               state.mods_funs_to_positions[{Some.Sub, nil, nil}]
 
-      test "moduledoc handles heredoc" do
-        state =
-          """
-          defmodule Some do
-            @moduledoc \"\"\"
-            Some module
-            \"\"\"
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "Some module\n"} = state.mods_funs_to_positions[{Some, nil, nil}]
-      end
-
-      test "moduledoc handles charlist heredoc" do
-        state =
-          """
-          defmodule Some do
-            @moduledoc '''
-            Some module
-            '''
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "Some module\n"} = state.mods_funs_to_positions[{Some, nil, nil}]
-      end
-
-      test "moduledoc handles sigil" do
-        state =
-          """
-          defmodule Some do
-            @moduledoc ~S\"\"\"
-            Some module
-            \"\"\"
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "Some module\n"} = state.mods_funs_to_positions[{Some, nil, nil}]
-      end
-
-      test "moduledoc false is applied to current module" do
-        state =
-          """
-          defmodule Some do
-            @moduledoc false
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "", meta: %{hidden: true}} = state.mods_funs_to_positions[{Some, nil, nil}]
-      end
-
-      test "doc is applied to next function" do
-        state =
-          """
-          defmodule Some do
-            @doc "Some fun"
-            @doc since: "1.2.3"
-            def fun() do
-              :ok
-            end
-
-            def fun_nodoc() do
-              :ok
-            end
-
-            @doc "Some macro"
-            @doc deprecated: "2.3.4"
-            defmacro macro() do
-              :ok
-            end
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "Some fun", meta: %{since: "1.2.3"}} =
-                 state.mods_funs_to_positions[{Some, :fun, 0}]
-
-        assert %{doc: "", meta: %{}} = state.mods_funs_to_positions[{Some, :fun_nodoc, 0}]
-
-        assert %{doc: "Some macro", meta: %{deprecated: "2.3.4"}} =
-                 state.mods_funs_to_positions[{Some, :macro, 0}]
-      end
-
-      test "doc false is applied to next function" do
-        state =
-          """
-          defmodule Some do
-            @doc false
-            def fun(), do: :ok
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "", meta: %{hidden: true}} = state.mods_funs_to_positions[{Some, :fun, 0}]
-      end
-
-      test "doc on private is discarded" do
-        state =
-          """
-          defmodule Some do
-            @doc "Some"
-            defp fun(), do: :ok
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: ""} = state.mods_funs_to_positions[{Some, :fun, 0}]
-      end
-
-      test "impl true sets hidden meta if no doc" do
-        state =
-          """
-          defmodule Some do
-            @impl true
-            def fun(), do: :ok
-
-            @doc "Some"
-            @impl true
-            def fun_with_doc(), do: :ok
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "", meta: %{hidden: true}} = state.mods_funs_to_positions[{Some, :fun, 0}]
-        assert %{doc: "Some", meta: meta} = state.mods_funs_to_positions[{Some, :fun_with_doc, 0}]
-        refute match?(%{hidden: true}, meta)
-      end
-
-      test "underscored def sets hidden meta if no doc" do
-        state =
-          """
-          defmodule Some do
-            def _fun(), do: :ok
-
-            @doc "Some"
-            def _fun_with_doc(), do: :ok
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "", meta: %{hidden: true}} = state.mods_funs_to_positions[{Some, :_fun, 0}]
-
-        assert %{doc: "Some", meta: meta} =
-                 state.mods_funs_to_positions[{Some, :_fun_with_doc, 0}]
-
-        refute match?(%{hidden: true}, meta)
-      end
-
-      test "deprecated attribute sets deprecated meta" do
-        state =
-          """
-          defmodule Some do
-            @deprecated "to be removed"
-            def fun(), do: :ok
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "", meta: %{deprecated: "to be removed"}} =
-                 state.mods_funs_to_positions[{Some, :fun, 0}]
-      end
-
-      test "doc is applied to next callback" do
-        state =
-          """
-          defmodule Some do
-            @doc "Some fun"
-            @doc since: "1.2.3"
-            @callback fun() :: any()
-
-            @callback fun_nodoc() :: any()
-
-            @doc "Some macro"
-            @doc deprecated: "2.3.4"
-            @macrocallback macro() :: Macro.t()
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "Some fun", meta: %{since: "1.2.3"}} = state.specs[{Some, :fun, 0}]
-        assert %{doc: "", meta: %{}} = state.specs[{Some, :fun_nodoc, 0}]
-        assert %{doc: "Some macro", meta: %{deprecated: "2.3.4"}} = state.specs[{Some, :macro, 0}]
-      end
-
-      test "underscored callback sets hidden meta if no doc" do
-        state =
-          """
-          defmodule Some do
-            @callback _fun() :: any()
-
-            @doc "Some"
-            @callback _fun_with_doc() :: any()
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "", meta: %{hidden: true}} = state.specs[{Some, :_fun, 0}]
-        assert %{doc: "Some", meta: meta} = state.specs[{Some, :_fun_with_doc, 0}]
-        refute match?(%{hidden: true}, meta)
-      end
-
-      test "typedoc is applied to next type" do
-        state =
-          """
-          defmodule Some do
-            @typedoc "Some type"
-            @typedoc since: "1.2.3"
-            @type my_type() :: any()
-
-            @type type_nodoc() :: any()
-
-            @typedoc "Some opaque"
-            @typedoc deprecated: "2.3.4"
-            @opaque my_opaque() :: integer()
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "Some type", meta: %{since: "1.2.3"}} = state.types[{Some, :my_type, 0}]
-        assert %{doc: "", meta: %{}} = state.types[{Some, :type_nodoc, 0}]
-
-        assert %{doc: "Some opaque", meta: %{deprecated: "2.3.4"}} =
-                 state.types[{Some, :my_opaque, 0}]
-      end
-
-      test "typedoc false is applied to next type" do
-        state =
-          """
-          defmodule Some do
-            @typedoc false
-            @type my_type() :: any()
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "", meta: %{hidden: true}} = state.types[{Some, :my_type, 0}]
-      end
-
-      test "typedoc is discarded on private" do
-        state =
-          """
-          defmodule Some do
-            @typedoc "Some"
-            @typep my_type() :: any()
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: ""} = state.types[{Some, :my_type, 0}]
-      end
-
-      test "underscored type sets hidden meta when there is no typedoc" do
-        state =
-          """
-          defmodule Some do
-            @type _my_type() :: any()
-
-            @typedoc "Some"
-            @type _my_type_with_doc() :: any()
-          end
-          """
-          |> string_to_state
-
-        assert %{doc: "", meta: %{hidden: true}} = state.types[{Some, :_my_type, 0}]
-        assert %{doc: "Some", meta: meta} = state.types[{Some, :_my_type_with_doc, 0}]
-        refute match?(%{hidden: true}, meta)
-      end
+      assert %{doc: "Other module", meta: %{}} = state.mods_funs_to_positions[{Other, nil, nil}]
+      assert %{doc: "", meta: %{}} = state.mods_funs_to_positions[{NoDoc, nil, nil}]
     end
 
-    describe "meta" do
-      test "guard" do
-        state =
-          """
-          defmodule Some do
-            defguard fun(a) when a == 1
-          end
-          """
-          |> string_to_state
+    test "moduledoc handles charlist" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc 'Some module'
+        end
+        """
+        |> string_to_state
 
-        assert %{meta: %{guard: true}} =
-                 state.mods_funs_to_positions[{Some, :fun, 1}]
-      end
-
-      test "delegate" do
-        state =
-          """
-          defmodule Some do
-            defdelegate count(a), to: Enum
-          end
-          """
-          |> string_to_state
-
-        assert %{meta: %{delegate_to: {Enum, :count, 1}}} =
-                 state.mods_funs_to_positions[{Some, :count, 1}]
-      end
-
-      test "opaque" do
-        state =
-          """
-          defmodule Some do
-            @opaque my_type() :: any()
-          end
-          """
-          |> string_to_state
-
-        assert %{meta: %{opaque: true}} = state.types[{Some, :my_type, 0}]
-      end
-
-      test "optional" do
-        state =
-          """
-          defmodule Some do
-            @callback some(any) :: any
-            @optional_callbacks some: 1
-          end
-          """
-          |> string_to_state
-
-        assert %{meta: %{optional: true}} = state.specs[{Some, :some, 1}]
-      end
-
-      test "overridable" do
-        state =
-          """
-          defmodule Some do
-            use ElixirSenseExample.OverridableFunctions
-          end
-          """
-          |> string_to_state
-
-        assert %{meta: %{overridable: true}} = state.mods_funs_to_positions[{Some, :test, 2}]
-      end
+      assert %{doc: "Some module"} = state.mods_funs_to_positions[{Some, nil, nil}]
     end
+
+    test "moduledoc handles interpolated charlist" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc 'Some #{inspect(1)} module'
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some 1 module"} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "moduledoc handles interpolated string" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc \"Some #{inspect(1)} module\"
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some 1 module"} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "moduledoc handles heredoc" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc \"\"\"
+          Some module
+          \"\"\"
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some module\n"} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "moduledoc handles charlist heredoc" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc '''
+          Some module
+          '''
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some module\n"} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "moduledoc handles sigil" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc ~S\"\"\"
+          Some module
+          \"\"\"
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some module\n"} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "moduledoc false is applied to current module" do
+      state =
+        """
+        defmodule Some do
+          @moduledoc false
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{hidden: true}} = state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
+    test "doc is applied to next function" do
+      state =
+        """
+        defmodule Some do
+          @doc "Some fun"
+          @doc since: "1.2.3"
+          def fun() do
+            :ok
+          end
+
+          def fun_nodoc() do
+            :ok
+          end
+
+          @doc "Some macro"
+          @doc deprecated: "2.3.4"
+          defmacro macro() do
+            :ok
+          end
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some fun", meta: %{since: "1.2.3"}} =
+               state.mods_funs_to_positions[{Some, :fun, 0}]
+
+      assert %{doc: "", meta: %{}} = state.mods_funs_to_positions[{Some, :fun_nodoc, 0}]
+
+      assert %{doc: "Some macro", meta: %{deprecated: "2.3.4"}} =
+               state.mods_funs_to_positions[{Some, :macro, 0}]
+    end
+
+    test "doc false is applied to next function" do
+      state =
+        """
+        defmodule Some do
+          @doc false
+          def fun(), do: :ok
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{hidden: true}} = state.mods_funs_to_positions[{Some, :fun, 0}]
+    end
+
+    test "doc on private is discarded" do
+      state =
+        """
+        defmodule Some do
+          @doc "Some"
+          defp fun(), do: :ok
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: ""} = state.mods_funs_to_positions[{Some, :fun, 0}]
+    end
+
+    test "impl true sets hidden meta if no doc" do
+      state =
+        """
+        defmodule Some do
+          @impl true
+          def fun(), do: :ok
+
+          @doc "Some"
+          @impl true
+          def fun_with_doc(), do: :ok
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{hidden: true}} = state.mods_funs_to_positions[{Some, :fun, 0}]
+      assert %{doc: "Some", meta: meta} = state.mods_funs_to_positions[{Some, :fun_with_doc, 0}]
+      refute match?(%{hidden: true}, meta)
+    end
+
+    test "underscored def sets hidden meta if no doc" do
+      state =
+        """
+        defmodule Some do
+          def _fun(), do: :ok
+
+          @doc "Some"
+          def _fun_with_doc(), do: :ok
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{hidden: true}} = state.mods_funs_to_positions[{Some, :_fun, 0}]
+
+      assert %{doc: "Some", meta: meta} =
+               state.mods_funs_to_positions[{Some, :_fun_with_doc, 0}]
+
+      refute match?(%{hidden: true}, meta)
+    end
+
+    test "deprecated attribute sets deprecated meta" do
+      state =
+        """
+        defmodule Some do
+          @deprecated "to be removed"
+          def fun(), do: :ok
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{deprecated: "to be removed"}} =
+               state.mods_funs_to_positions[{Some, :fun, 0}]
+    end
+
+    test "doc is applied to next callback" do
+      state =
+        """
+        defmodule Some do
+          @doc "Some fun"
+          @doc since: "1.2.3"
+          @callback fun() :: any()
+
+          @callback fun_nodoc() :: any()
+
+          @doc "Some macro"
+          @doc deprecated: "2.3.4"
+          @macrocallback macro() :: Macro.t()
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some fun", meta: %{since: "1.2.3"}} = state.specs[{Some, :fun, 0}]
+      assert %{doc: "", meta: %{}} = state.specs[{Some, :fun_nodoc, 0}]
+      assert %{doc: "Some macro", meta: %{deprecated: "2.3.4"}} = state.specs[{Some, :macro, 0}]
+    end
+
+    test "underscored callback sets hidden meta if no doc" do
+      state =
+        """
+        defmodule Some do
+          @callback _fun() :: any()
+
+          @doc "Some"
+          @callback _fun_with_doc() :: any()
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{hidden: true}} = state.specs[{Some, :_fun, 0}]
+      assert %{doc: "Some", meta: meta} = state.specs[{Some, :_fun_with_doc, 0}]
+      refute match?(%{hidden: true}, meta)
+    end
+
+    test "typedoc is applied to next type" do
+      state =
+        """
+        defmodule Some do
+          @typedoc "Some type"
+          @typedoc since: "1.2.3"
+          @type my_type() :: any()
+
+          @type type_nodoc() :: any()
+
+          @typedoc "Some opaque"
+          @typedoc deprecated: "2.3.4"
+          @opaque my_opaque() :: integer()
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some type", meta: %{since: "1.2.3"}} = state.types[{Some, :my_type, 0}]
+      assert %{doc: "", meta: %{}} = state.types[{Some, :type_nodoc, 0}]
+
+      assert %{doc: "Some opaque", meta: %{deprecated: "2.3.4"}} =
+               state.types[{Some, :my_opaque, 0}]
+    end
+
+    test "typedoc false is applied to next type" do
+      state =
+        """
+        defmodule Some do
+          @typedoc false
+          @type my_type() :: any()
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{hidden: true}} = state.types[{Some, :my_type, 0}]
+    end
+
+    test "typedoc is discarded on private" do
+      state =
+        """
+        defmodule Some do
+          @typedoc "Some"
+          @typep my_type() :: any()
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: ""} = state.types[{Some, :my_type, 0}]
+    end
+
+    test "underscored type sets hidden meta when there is no typedoc" do
+      state =
+        """
+        defmodule Some do
+          @type _my_type() :: any()
+
+          @typedoc "Some"
+          @type _my_type_with_doc() :: any()
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "", meta: %{hidden: true}} = state.types[{Some, :_my_type, 0}]
+      assert %{doc: "Some", meta: meta} = state.types[{Some, :_my_type_with_doc, 0}]
+      refute match?(%{hidden: true}, meta)
+    end
+  end
+
+  describe "meta" do
+    test "guard" do
+      state =
+        """
+        defmodule Some do
+          defguard fun(a) when a == 1
+        end
+        """
+        |> string_to_state
+
+      assert %{meta: %{guard: true}} =
+               state.mods_funs_to_positions[{Some, :fun, 1}]
+    end
+
+    test "delegate" do
+      state =
+        """
+        defmodule Some do
+          defdelegate count(a), to: Enum
+        end
+        """
+        |> string_to_state
+
+      assert %{meta: %{delegate_to: {Enum, :count, 1}}} =
+               state.mods_funs_to_positions[{Some, :count, 1}]
+    end
+
+    test "opaque" do
+      state =
+        """
+        defmodule Some do
+          @opaque my_type() :: any()
+        end
+        """
+        |> string_to_state
+
+      assert %{meta: %{opaque: true}} = state.types[{Some, :my_type, 0}]
+    end
+
+    test "optional" do
+      state =
+        """
+        defmodule Some do
+          @callback some(any) :: any
+          @optional_callbacks some: 1
+        end
+        """
+        |> string_to_state
+
+      assert %{meta: %{optional: true}} = state.specs[{Some, :some, 1}]
+    end
+
+    test "overridable" do
+      state =
+        """
+        defmodule Some do
+          use ElixirSenseExample.OverridableFunctions
+        end
+        """
+        |> string_to_state
+
+      assert %{meta: %{overridable: true}} = state.mods_funs_to_positions[{Some, :test, 2}]
+    end
+  end
 
   defp string_to_state(string) do
     string

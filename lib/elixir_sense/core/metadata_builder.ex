@@ -819,7 +819,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
        )
        when kind in [:type, :typep, :opaque] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
-
     ast = {:@, meta_attr, [{kind, add_no_call(kind_meta), kind_args}]}
     spec = expand_aliases_in_ast(state, spec)
     type_args = List.wrap(type_args)
@@ -1044,7 +1043,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
           []
       end
 
-      env = get_current_env(state)
+    env = get_current_env(state)
 
     state
     |> add_struct_or_exception(env, type, fields, position, end_position)
