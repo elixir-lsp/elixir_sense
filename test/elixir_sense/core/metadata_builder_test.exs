@@ -6,17 +6,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, ModFunInfo, AttributeInfo}
 
-  @moduledoc_support Version.match?(System.version(), "< 1.17.0-dev")
   @attribute_binding_support Version.match?(System.version(), "< 1.17.0-dev")
   @expand_eval false
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
   @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
-  @first_alias_positions Version.match?(System.version(), "< 1.17.0-dev")
   @macro_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @typespec_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @record_support Version.match?(System.version(), "< 1.17.0-dev")
-  @doc_support Version.match?(System.version(), "< 1.17.0-dev")
-  @meta_support Version.match?(System.version(), "< 1.17.0-dev")
 
   describe "versioned_vars" do
     test "in block" do
@@ -1253,7 +1249,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert state.scope_ids == []
   end
 
-  if @moduledoc_support do
     describe "moduledoc positions" do
       test "moduledoc heredoc version" do
         state =
@@ -1286,7 +1281,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert %{Outer => {3, 3}} = state.moduledoc_positions
       end
     end
-  end
 
   test "module attributes" do
     state =
@@ -5360,7 +5354,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-  if @first_alias_positions do
     test "first_alias_positions" do
       state =
         """
@@ -5376,7 +5369,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{OuterMod => {2, 3}, OuterMod.InnerMod => {5, 5}} = state.first_alias_positions
     end
-  end
 
   describe "use" do
     test "use" do
@@ -6986,7 +6978,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
   end
 
-  if @doc_support do
+
     describe "doc" do
       test "moduledoc is applied to current module" do
         state =
@@ -7332,9 +7324,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         refute match?(%{hidden: true}, meta)
       end
     end
-  end
 
-  if @meta_support do
     describe "meta" do
       test "guard" do
         state =
@@ -7399,7 +7389,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert %{meta: %{overridable: true}} = state.mods_funs_to_positions[{Some, :test, 2}]
       end
     end
-  end
 
   defp string_to_state(string) do
     string

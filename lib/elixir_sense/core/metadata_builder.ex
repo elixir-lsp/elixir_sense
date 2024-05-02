@@ -687,9 +687,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state
     |> add_moduledoc_positions(
-      [line: line, column: column],
-      [{:moduledoc, meta, [doc_arg]}],
-      line
+      env,
+      meta_attr
     )
     |> register_doc(env, :moduledoc, doc_arg)
     |> result(new_ast)
@@ -915,14 +914,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
       case binding do
         {type, is_definition} ->
-          state =
-            add_moduledoc_positions(
-              state,
-              [line: line, column: column],
-              [{name, meta, params}],
-              line
-            )
-
           new_ast = {:@, meta_attr, [{name, add_no_call(meta), params}]}
 
           state
