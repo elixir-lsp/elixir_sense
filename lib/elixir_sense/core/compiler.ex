@@ -127,6 +127,7 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
+      |> add_first_alias_positions(env, meta)
       |> add_current_env_to_line(Keyword.fetch!(meta, :line), env)
 
     # no need to call expand_without_aliases_report - we never report
@@ -824,6 +825,131 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_macro(
+         meta,
+         Kernel,
+         :@,
+         [{:moduledoc, doc_meta, [arg]}],
+         _callback,
+         state,
+         env
+       ) do
+        assert_module_scope(env, :@, 1)
+        unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
+        line = Keyword.fetch!(meta, :line)
+
+        state =
+          state
+          |> add_current_env_to_line(line, env)
+    
+        {arg, state, env} = expand(arg, state, env)
+
+        state = state
+        |> add_moduledoc_positions(
+          env,
+          meta
+        )
+        |> register_doc(env, :moduledoc, arg)
+        {{:@, meta, [{:moduledoc, doc_meta, [arg]}]}, state, env}
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
+         :@,
+         [{doc, doc_meta, [arg]}],
+         _callback,
+         state,
+         env
+       ) when doc in [:doc, :typedoc] do
+        assert_module_scope(env, :@, 1)
+        unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
+        line = Keyword.fetch!(meta, :line)
+
+        state =
+          state
+          |> add_current_env_to_line(line, env)
+    
+        {arg, state, env} = expand(arg, state, env)
+
+        state = state
+        |> register_doc(env, doc, arg)
+        {{:@, meta, [{doc, doc_meta, [arg]}]}, state, env}
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
+         :@,
+         [{:impl, doc_meta, [arg]}],
+         _callback,
+         state,
+         env
+       ) do
+        assert_module_scope(env, :@, 1)
+        unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
+        line = Keyword.fetch!(meta, :line)
+
+        state =
+          state
+          |> add_current_env_to_line(line, env)
+    
+        {arg, state, env} = expand(arg, state, env)
+
+        # impl adds sets :hidden by default
+        state = state
+        |> register_doc(env, :doc, :impl)
+        {{:@, meta, [{:impl, doc_meta, [arg]}]}, state, env}
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
+         :@,
+         [{:optional_callbacks, doc_meta, [arg]}],
+         _callback,
+         state,
+         env
+       ) do
+        assert_module_scope(env, :@, 1)
+        unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
+        line = Keyword.fetch!(meta, :line)
+
+        state =
+          state
+          |> add_current_env_to_line(line, env)
+    
+        {arg, state, env} = expand(arg, state, env)
+
+        state = state
+        |> register_optional_callbacks(arg)
+        {{:@, meta, [{:optional_callbacks, doc_meta, [arg]}]}, state, env}
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
+         :@,
+         [{:deprecated, doc_meta, [arg]}],
+         _callback,
+         state,
+         env
+       ) do
+        assert_module_scope(env, :@, 1)
+        unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
+        line = Keyword.fetch!(meta, :line)
+
+        state =
+          state
+          |> add_current_env_to_line(line, env)
+    
+        {arg, state, env} = expand(arg, state, env)
+
+        state = state
+        |> register_doc(env, :doc, deprecated: arg)
+        {{:@, meta, [{:deprecated, doc_meta, [arg]}]}, state, env}
+  end
+
+  defp expand_macro(
          attr_meta,
          Kernel,
          :@,
@@ -1084,6 +1210,10 @@ defmodule ElixirSense.Core.Compiler do
           # TODO magic with ElixirEnv instead of new_vars_scope?
 
         {result, state, _env} = expand(block, state, %{env | module: full})
+
+        state = state
+        |> apply_optional_callbacks(%{env | module: full})
+
         {result, state, env}
       else
         raise "unable to expand module alias"
@@ -1204,16 +1334,13 @@ defmodule ElixirSense.Core.Compiler do
     state =
       state
       |> add_current_env_to_line(line, %{g_env | context: nil, function: {name, arity}})
-      |> add_mod_fun_to_position(
-        {module, name, arity},
+      |> add_func_to_index(
+        env,
+        name,
+        args,
         position,
         end_position,
-        args,
-        def_kind,
-        "",
-        # doc,
-        %{}
-        # meta
+        def_kind
       )
 
     # expand_macro_callback(meta, Kernel, def_kind, [call, expr], callback, state, env)

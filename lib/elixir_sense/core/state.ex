@@ -461,61 +461,39 @@ defmodule ElixirSense.Core.State do
 
   def add_moduledoc_positions(
         %__MODULE__{} = state,
-        [line: line, column: column],
-        [{:moduledoc, _meta, [here_doc]}],
-        line
-      )
-      when is_integer(line) and is_binary(here_doc) do
-    module_name = get_current_module(state)
+        env,
+        meta
+      ) do
+    module = env.module
+    case Keyword.get(meta, :end_of_expression) do
+      nil -> state
+      end_of_expression ->
+        line_to_insert_alias = Keyword.fetch!(end_of_expression, :line) + 1
+        column = Keyword.get(meta, :column, 1)
 
-    new_line_count = here_doc |> String.split("\n") |> Enum.count()
-    line_to_insert_alias = new_line_count + line + 1
-
-    %__MODULE__{
-      state
-      | moduledoc_positions:
-          Map.put(state.moduledoc_positions, module_name, {line_to_insert_alias, column})
-    }
+        %__MODULE__{
+          state
+          | moduledoc_positions:
+              Map.put(state.moduledoc_positions, module, {line_to_insert_alias, column})
+        }
+    end
   end
 
-  def add_moduledoc_positions(
-        %__MODULE__{} = state,
-        [line: line, column: column],
-        [{:moduledoc, _meta, [params]}],
-        line
-      )
-      when is_integer(line) and is_boolean(params) do
-    module_name = get_current_module(state)
-
-    line_to_insert_alias = line + 1
-
-    %__MODULE__{
-      state
-      | moduledoc_positions:
-          Map.put(state.moduledoc_positions, module_name, {line_to_insert_alias, column})
-    }
-  end
-
-  def add_moduledoc_positions(state, _, _, _), do: state
-
-  def add_first_alias_positions(%__MODULE__{} = state, line, column)
-      when is_integer(line) and is_integer(column) do
-    current_scope = hd(state.scopes)
-
-    is_module? = is_atom(current_scope) and current_scope != nil
-
-    if is_module? do
-      module_name = get_current_module(state)
-
+  def add_first_alias_positions(%__MODULE__{} = state, env = %{module: module, function: nil}, meta) do
+    # TODO shouldn't that look for end_of_expression
+    line = Keyword.get(meta, :line, 0)
+    if line > 0 do
+      column = Keyword.get(meta, :column, 1)
       %__MODULE__{
         state
         | first_alias_positions:
-            Map.put_new(state.first_alias_positions, module_name, {line, column})
+          Map.put_new(state.first_alias_positions, module, {line, column})
       }
     else
       state
     end
   end
+  def add_first_alias_positions(%__MODULE__{} = state, _env, _meta), do: state
 
   # TODO remove this
   def add_call_to_line(%__MODULE__{} = state, {nil, :__block__, _}, _position), do: state
@@ -713,7 +691,7 @@ defmodule ElixirSense.Core.State do
     %{state | optional_callbacks_context: [list | rest]}
   end
 
-  def apply_optional_callbacks(%__MODULE__{} = state, %__MODULE__.Env{} = env) do
+  def apply_optional_callbacks(%__MODULE__{} = state, env) do
     [list | _rest] = state.optional_callbacks_context
     module = env.module
 
@@ -1386,7 +1364,7 @@ defmodule ElixirSense.Core.State do
 
   def add_behaviour(_module, %__MODULE__{} = state, env), do: {nil, state, env}
 
-  def register_doc(%__MODULE__{} = state, %__MODULE__.Env{} = env, :moduledoc, doc_arg) do
+  def register_doc(%__MODULE__{} = state, env, :moduledoc, doc_arg) do
     current_module = env.module
     doc_arg_formatted = format_doc_arg(doc_arg)
 
@@ -1405,13 +1383,13 @@ defmodule ElixirSense.Core.State do
     %{state | mods_funs_to_positions: mods_funs_to_positions}
   end
 
-  def register_doc(%__MODULE__{} = state, %__MODULE__.Env{}, :doc, doc_arg) do
+  def register_doc(%__MODULE__{} = state, _env, :doc, doc_arg) do
     [doc_context | doc_context_rest] = state.doc_context
 
     %{state | doc_context: [[doc_arg | doc_context] | doc_context_rest]}
   end
 
-  def register_doc(%__MODULE__{} = state, %__MODULE__.Env{}, :typedoc, doc_arg) do
+  def register_doc(%__MODULE__{} = state, _env, :typedoc, doc_arg) do
     [doc_context | doc_context_rest] = state.typedoc_context
 
     %{state | typedoc_context: [[doc_arg | doc_context] | doc_context_rest]}
@@ -1640,7 +1618,7 @@ defmodule ElixirSense.Core.State do
     expand({form, meta, [arg, []]}, state, env)
   end
 
-  def expand(module, %__MODULE__{} = state, %__MODULE__.Env{} = env) when is_atom(module) do
+  def expand(module, %__MODULE__{} = state, env) when is_atom(module) do
     {module, state, env}
   end
 
@@ -1652,7 +1630,7 @@ defmodule ElixirSense.Core.State do
     # options = expand(no_alias_opts(arg), state, env, env)
 
     if is_atom(arg) do
-      state = add_first_alias_positions(state, line, column)
+      state = add_first_alias_positions(state, env, meta)
 
       alias_tuple =
         case Keyword.get(opts, :as) do
@@ -1754,29 +1732,29 @@ defmodule ElixirSense.Core.State do
   def expand(
         {:__aliases__, _, [Elixir | _] = module},
         %__MODULE__{} = state,
-        %__MODULE__.Env{} = env
+        env
       ) do
     {Module.concat(module), state, env}
   end
 
-  def expand({:__MODULE__, _, nil}, %__MODULE__{} = state, %__MODULE__.Env{} = env) do
+  def expand({:__MODULE__, _, nil}, %__MODULE__{} = state, env) do
     {env.module, state, env}
   end
 
   def expand(
         {:__aliases__, _, [{:__MODULE__, _, nil} | rest]},
         %__MODULE__{} = state,
-        %__MODULE__.Env{} = env
+        env
       ) do
     {Module.concat([env.module | rest]), state, env}
   end
 
-  def expand({:__aliases__, _, module}, %__MODULE__{} = state, %__MODULE__.Env{} = env)
+  def expand({:__aliases__, _, module}, %__MODULE__{} = state, env)
       when is_list(module) do
     {Introspection.expand_alias(Module.concat(module), env.aliases), state, env}
   end
 
-  def expand(ast, %__MODULE__{} = state, %__MODULE__.Env{} = env) do
+  def expand(ast, %__MODULE__{} = state, env) do
     {ast, state, env}
   end
 
