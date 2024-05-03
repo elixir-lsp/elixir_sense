@@ -12,7 +12,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
   @macro_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @typespec_calls_support Version.match?(System.version(), "< 1.17.0-dev")
-  @record_support Version.match?(System.version(), "< 1.17.0-dev")
 
   describe "versioned_vars" do
     test "in block" do
@@ -6647,7 +6646,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-  if @record_support do
+  describe "defrecord" do
     test "defrecord defines record macros" do
       state =
         """
@@ -6664,26 +6663,58 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               {MyRecords, :user, 1} => %ModFunInfo{
-                 params: [[{:\\, [], [{:args, [], nil}, []]}]],
-                 positions: [{3, 9}],
-                 type: :defmacro
-               },
-               {MyRecords, :user, 2} => %ModFunInfo{
-                 params: [[{:record, [], nil}, {:args, [], nil}]],
-                 positions: [{3, 9}],
-                 type: :defmacro
-               },
-               {MyRecords, :userp, 1} => %ModFunInfo{type: :defmacrop},
-               {MyRecords, :my_rec, 1} => %ModFunInfo{type: :defmacro}
-             } = state.mods_funs_to_positions
+                {MyRecords, :user, 1} => %ModFunInfo{
+                  params: [[{:\\, [], [{:args, [], nil}, []]}]],
+                  positions: [{3, 10}],
+                  type: :defmacro
+                },
+                {MyRecords, :user, 2} => %ModFunInfo{
+                  params: [[{:record, [], nil}, {:args, [], nil}]],
+                  positions: [{3, 10}],
+                  type: :defmacro
+                },
+                {MyRecords, :userp, 1} => %ModFunInfo{type: :defmacrop},
+                {MyRecords, :my_rec, 1} => %ModFunInfo{type: :defmacro}
+              } = state.mods_funs_to_positions
 
       assert %{
-               {MyRecords, :user, 0} => %State.TypeInfo{
-                 name: :user,
-                 specs: ["@type user :: record(:user, name: String.t(), age: integer)"]
-               }
-             } = state.types
+                {MyRecords, :user, 0} => %State.TypeInfo{
+                  name: :user,
+                  specs: ["@type user :: record(:user, name: String.t(), age: integer)"]
+                }
+              } = state.types
+    end
+
+    test "defrecord imported defines record macros" do
+      state =
+        """
+        defmodule MyRecords do
+          import Record
+          defrecord(:user, name: "meg", age: "25")
+          @type user :: record(:user, name: String.t(), age: integer)
+        end
+        """
+        |> string_to_state
+
+      assert %{
+                {MyRecords, :user, 1} => %ModFunInfo{
+                  params: [[{:\\, [], [{:args, [], nil}, []]}]],
+                  positions: [{3, 3}],
+                  type: :defmacro
+                },
+                {MyRecords, :user, 2} => %ModFunInfo{
+                  params: [[{:record, [], nil}, {:args, [], nil}]],
+                  positions: [{3, 3}],
+                  type: :defmacro
+                }
+              } = state.mods_funs_to_positions
+
+      assert %{
+                {MyRecords, :user, 0} => %State.TypeInfo{
+                  name: :user,
+                  specs: ["@type user :: record(:user, name: String.t(), age: integer)"]
+                }
+              } = state.types
     end
   end
 

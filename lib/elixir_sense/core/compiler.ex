@@ -1152,6 +1152,53 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_macro(
          meta,
+         Record,
+         call,
+         [name, _] = args,
+         _callback,
+         state,
+         env
+       ) when call in [:defrecord, :defrecordp] do
+    assert_no_match_or_guard_scope(env.context, :"{call}/2")
+    module = assert_module_scope(env, call, 2)
+
+    {position = {line, column}, end_position} = extract_range(meta)
+
+    type =
+      case call do
+        :defrecord -> :defmacro
+        :defrecordp -> :defmacrop
+      end
+
+    options = [generated: true]
+
+    state = state
+    |> add_func_to_index(
+      env,
+      name,
+      [{:\\, [], [{:args, [], nil}, []]}],
+      position,
+      end_position,
+      type,
+      options
+    )
+    |> add_func_to_index(
+      env,
+      name,
+      [{:record, [], nil}, {:args, [], nil}],
+      position,
+      end_position,
+      type,
+      options
+    )
+    |> add_call_to_line({module, call, length(args)}, {line, column})
+    |> add_current_env_to_line(line)
+
+    {{{:., meta, [Record, call]}, meta, args}, state, env}
+  end
+
+  defp expand_macro(
+         meta,
          Kernel,
          :defmodule,
          [alias, [do: block]] = _args,
@@ -1241,10 +1288,10 @@ defmodule ElixirSense.Core.Compiler do
     {{:__block__, [], []}, state, env}
   end
 
-  defp expand_macro(meta, Kernel, def_kind, [call], _callback, state, env)
+  defp expand_macro(meta, Kernel, def_kind, [call], callback, state, env)
        when def_kind in [:defguard, :defguardp] do
     # transform guard to def with empty body
-    expand_macro(meta, Kernel, def_kind, [call, {:__block__, [], []}], _callback, state, env)
+    expand_macro(meta, Kernel, def_kind, [call, {:__block__, [], []}], callback, state, env)
   end
 
   defp expand_macro(meta, Kernel, def_kind, [call, expr], _callback, state, env)
@@ -1360,9 +1407,9 @@ defmodule ElixirSense.Core.Compiler do
     {{name, arity}, state, env}
   end
 
-  defp expand_macro(meta, module, fun, args, callback, state, env) do
-    expand_macro_callback(meta, module, fun, args, callback, state, env)
-  end
+  # defp expand_macro(meta, module, fun, args, callback, state, env) do
+  #   expand_macro_callback(meta, module, fun, args, callback, state, env)
+  # end
 
   defp expand_macro_callback(meta, module, fun, args, callback, state, env) do
     dbg({module, fun, args})

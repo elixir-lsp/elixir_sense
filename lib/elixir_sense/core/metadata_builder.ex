@@ -1109,8 +1109,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
               is_atom(name) do
     {position = {line, column}, end_position} = extract_range(meta1)
 
-    # TODO pass env
-    {module, state, _env} = expand(module_expression, state)
+    env = get_current_env(state)
+    {module, state, env} = expand(module_expression, state, env)
 
     type =
       case call do
@@ -1121,7 +1121,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
     options = [generated: true]
 
     shift = if state.generated, do: 0, else: 1
-    env = get_current_env(state)
 
     state
     |> new_named_func(name, 1)
