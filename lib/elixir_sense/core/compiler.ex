@@ -950,6 +950,64 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_macro(
+         meta,
+         Kernel,
+         :@,
+         [{:derive, doc_meta, [derived_protos]}],
+         _callback,
+         state,
+         env
+       ) do
+        current_module = assert_module_scope(env, :@, 1)
+        unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
+        
+        line = Keyword.fetch!(meta, :line)
+        column = Keyword.fetch!(meta, :column)
+
+        state = List.wrap(derived_protos)
+        |> Enum.map(fn
+          {proto, _opts} -> proto
+          proto -> proto
+        end)
+        |> Enum.reduce(state, fn proto, acc ->
+          case expand(proto, acc, env) do
+            {proto_module, acc, _env} when is_atom(proto_module) ->
+              # protocol implementation module for Any
+              mod_any = Module.concat(proto_module, Any)
+
+              # protocol implementation module built by @derive
+              mod = Module.concat(proto_module, current_module)
+
+              case acc.mods_funs_to_positions[{mod_any, nil, nil}] do
+                nil ->
+                  # implementation for: Any not detected (is in other file etc.)
+                  acc
+                  |> add_module_to_index(mod, {line, column}, nil, generated: true)
+
+                _any_mods_funs ->
+                  # copy implementation for: Any
+                  copied_mods_funs_to_positions =
+                    for {{module, fun, arity}, val} <- acc.mods_funs_to_positions,
+                        module == mod_any,
+                        into: %{},
+                        do: {{mod, fun, arity}, val}
+
+                  %{
+                    acc
+                    | mods_funs_to_positions:
+                        acc.mods_funs_to_positions |> Map.merge(copied_mods_funs_to_positions)
+                  }
+              end
+
+            :error ->
+              acc
+          end
+        end)
+
+        {{:@, meta, [{:derive, doc_meta, [derived_protos]}]}, state, env}
+  end
+
+  defp expand_macro(
          attr_meta,
          Kernel,
          :@,
@@ -1200,6 +1258,109 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_macro(
          meta,
          Kernel,
+         :defprotocol,
+         [alias, [do: block]] = args,
+         callback,
+         state,
+         env
+       ) do
+    {position, end_position} = extract_range(meta)
+    original_env = env
+    # expand the macro normally
+    {ast, state, env} = expand_macro_callback!(meta, Kernel, :defprotocol, args, callback, state, env)
+
+    [module] = env.context_modules -- original_env.context_modules
+    # add behaviour_info builtin
+    # generate callbacks as macro expansion currently fails
+    state = state
+    |> add_func_to_index(
+      %{env | module: module},
+      :behaviour_info,
+      [:atom],
+      position,
+      end_position,
+      :def,
+      [generated: true]
+    )
+    |> generate_protocol_callbacks(%{env | module: module})
+    {ast, state, env}
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
+         :defimpl,
+         [name, do_block],
+         callback,
+         state,
+         env
+       ) do
+       expand_macro(
+         meta,
+         Kernel,
+         :defimpl,
+         [name, [], do_block],
+         callback,
+         state,
+         env
+       )
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
+         :defimpl,
+         [name, opts, do_block],
+         callback,
+         state,
+         env
+       ) do
+    opts = Keyword.merge(opts, do_block)
+
+    {for, opts} =
+      Keyword.pop_lazy(opts, :for, fn ->
+        env.module ||
+          raise ArgumentError, "defimpl/3 expects a :for option when declared outside a module"
+      end)
+
+    # TODO elixir uses expand_literals here
+    {for, state, _env} = expand(for, state, %{env | module: env.module || Elixir, function: {:__impl__, 1}})
+    {protocol, state, _env} = expand(name, state, env)
+
+    impl = fn protocol, for, block, state, env ->
+      name = Module.concat(protocol, for)
+      expand_macro(
+         meta,
+         Kernel,
+         :defmodule,
+         [name, [do: block]],
+         callback,
+         state,
+         env
+       )
+    end
+
+    block = case opts do
+      [] -> raise ArgumentError, "defimpl expects a do-end block"
+      [do: block] -> block
+      _ -> raise ArgumentError, "unknown options given to defimpl, got: #{Macro.to_string(opts)}"
+    end
+
+    for_wrapped = for
+    |> List.wrap
+
+    {ast, state, env} = for_wrapped
+    |> Enum.reduce({[], state, env}, fn for, {acc, state, env} ->
+      {ast, state, env} = impl.(protocol, for, block, %{state | protocol: {protocol, for_wrapped}}, env)
+      {[ast | acc], state, env}
+    end)
+
+    {Enum.reverse(ast), %{state | protocol: nil}, env}
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
          :defmodule,
          [alias, [do: block]] = _args,
          _callback,
@@ -1247,14 +1408,21 @@ defmodule ElixirSense.Core.Compiler do
 
         line = Keyword.fetch!(meta, :line)
 
+        module_functions = case state.protocol do
+          nil -> []
+          _ -> [{:__impl__, [:atom], :def}]
+        end
+
         state =
           state
           |> add_module_to_index(full, position, end_position, [])
           |> add_current_env_to_line(line, %{env | module: full})
-          |> add_module_functions(%{env | module: full}, [], position, end_position)
+          |> add_module_functions(%{env | module: full}, module_functions, position, end_position)
           |> new_vars_scope
           |> new_attributes_scope
           # TODO magic with ElixirEnv instead of new_vars_scope?
+
+        {state, _env} = maybe_add_protocol_behaviour(state, %{env | module: full})
 
         {result, state, _env} = expand(block, state, %{env | module: full})
 
@@ -1263,7 +1431,7 @@ defmodule ElixirSense.Core.Compiler do
 
         {result, state, env}
       else
-        raise "unable to expand module alias"
+        raise "unable to expand module alias #{inspect(expanded)}"
         # alias |> dbg
         # keys = state |> Map.from_struct() |> Map.take([:vars, :unused])
         # keys |> dbg(limit: :infinity)
@@ -1288,8 +1456,14 @@ defmodule ElixirSense.Core.Compiler do
     {{:__block__, [], []}, state, env}
   end
 
+  defp expand_macro(meta, Protocol, :def, [{name, _, args = [_ | _]} = call], callback, state, env) when is_atom(name) do
+    # transform protocol def to def with empty body
+    {ast, state, env} = expand_macro(meta, Kernel, :def, [call, {:__block__, [], []}], callback, state, env)
+    {ast, state, env}
+  end
+
   defp expand_macro(meta, Kernel, def_kind, [call], callback, state, env)
-       when def_kind in [:defguard, :defguardp] do
+       when def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
     # transform guard to def with empty body
     expand_macro(meta, Kernel, def_kind, [call, {:__block__, [], []}], callback, state, env)
   end
@@ -1326,8 +1500,8 @@ defmodule ElixirSense.Core.Compiler do
       else
         {call, expr}
       end
-      dbg(call)
-      dbg(expr)
+      # dbg(call)
+      # dbg(expr)
 
     # state =
     #   state
@@ -1407,9 +1581,9 @@ defmodule ElixirSense.Core.Compiler do
     {{name, arity}, state, env}
   end
 
-  # defp expand_macro(meta, module, fun, args, callback, state, env) do
-  #   expand_macro_callback(meta, module, fun, args, callback, state, env)
-  # end
+  defp expand_macro(meta, module, fun, args, callback, state, env) do
+    expand_macro_callback(meta, module, fun, args, callback, state, env)
+  end
 
   defp expand_macro_callback(meta, module, fun, args, callback, state, env) do
     dbg({module, fun, args})
@@ -1426,6 +1600,13 @@ defmodule ElixirSense.Core.Compiler do
         {ast, state, env} = expand(ast, state, env)
         {ast, state, env}
     end
+  end
+
+  defp expand_macro_callback!(meta, module, fun, args, callback, state, env) do
+    dbg({module, fun, args})
+    ast = callback.(meta, args)
+    {ast, state, env} = expand(ast, state, env)
+    {ast, state, env}
   end
 
   defp extract_range(meta) do
@@ -2356,15 +2537,22 @@ defmodule ElixirSense.Core.Compiler do
 
       # TODO elixir does it like that, is it a bug? we lose state
       # end_s = %{after_s | prematch: prematch, unused: new_unused, vars: new_current}
-      end_s = %{s_expr | prematch: prematch, unused: new_unused, vars: new_current}
+      end_s = %{s_expr |
+      prematch: prematch, unused: new_unused, vars: new_current,
+      mods_funs_to_positions: after_s.mods_funs_to_positions,
+      types: after_s.types,
+      specs: after_s.specs,
+      structs: after_s.structs,
+      calls: after_s.calls
+      }
 
-      dbg(hd(before_s.scope_vars_info))
-      dbg(hd(after_s.scope_vars_info))
-      dbg(hd(end_s.scope_vars_info))
+      # dbg(hd(before_s.scope_vars_info))
+      # dbg(hd(after_s.scope_vars_info))
+      # dbg(hd(end_s.scope_vars_info))
 
-      dbg(current)
-      dbg(read)
-      dbg(new_current)
+      # dbg(current)
+      # dbg(read)
+      # dbg(new_current)
 
       # TODO I'm not sure this is correct
       merged_vars = (hd(end_s.scope_vars_info) -- hd(after_s.scope_vars_info))

@@ -9,7 +9,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @attribute_binding_support Version.match?(System.version(), "< 1.17.0-dev")
   @expand_eval false
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
-  @protocol_support Version.match?(System.version(), "< 1.17.0-dev")
   @macro_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @typespec_calls_support Version.match?(System.version(), "< 1.17.0-dev")
 
@@ -4063,6 +4062,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       {functions, _} = get_line_imports(state, 4)
       assert Keyword.has_key?(functions, Enum)
     end
+
+    test "imports inside protocol" do
+      state =
+        """
+        defprotocol OuterModule do
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      {_functions, macros} = get_line_imports(state, 2)
+      assert Keyword.keys(macros) == [Protocol, Kernel]
+      kernel_macros = Keyword.fetch!(macros, Kernel)
+      assert {:def, 1} not in kernel_macros
+      assert {:defmacro, 1} not in kernel_macros
+      assert {:defdelegate, 2} not in kernel_macros
+      assert {:def, 1} in Keyword.fetch!(macros, Protocol)
+    end
   end
 
   describe "require" do
@@ -4467,314 +4484,349 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert get_line_protocol(state, 16) == nil
     end
 
-    if @protocol_support do
-      test "current module and protocol implementation" do
-        state =
-          """
-          defprotocol My.Reversible do
-            def reverse(term)
-            IO.puts ""
-          end
-
-          defimpl My.Reversible, for: String do
-            def reverse(term), do: String.reverse(term)
-            IO.puts ""
-          end
-
-          defimpl My.Reversible, for: [Map, My.List] do
-            def reverse(term), do: Enum.reverse(term)
-            IO.puts ""
-
-            defmodule OuterModule do
-              IO.puts ""
-            end
-
-            defprotocol Other do
-              def other(term)
-              IO.puts ""
-            end
-
-            defimpl Other, for: [Map, My.Map] do
-              def other(term), do: nil
-              IO.inspect(__ENV__.module)
-            end
-          end
-          """
-          |> string_to_state
-
-        # protocol and implementations create modules
-        assert get_line_module(state, 3) == My.Reversible
-        assert get_line_protocol(state, 3) == nil
-        assert get_line_module(state, 8) == My.Reversible.String
-        assert get_line_protocol(state, 8) == {My.Reversible, [String]}
-        assert get_line_module(state, 13) == My.Reversible.Map
-        assert get_line_protocol(state, 13) == {My.Reversible, [Map, My.List]}
-
-        # implementation has behaviour
-        assert get_line_behaviours(state, 8) == [My.Reversible]
-
-        # multiple implementations create multiple modules
-        assert get_line_module(state, 16) == My.Reversible.Map.OuterModule
-
-        assert get_line_protocol(state, 16) == nil
-
-        # protocol and implementations inside protocol implementation creates a cross product
-        assert get_line_module(state, 21) == My.Reversible.Map.Other
-        assert get_line_protocol(state, 21) == nil
-
-        assert get_line_module(state, 26) == My.Reversible.Map.Other.Map
-
-        assert get_line_protocol(state, 26) == {My.Reversible.Map.Other, [Map, My.Map]}
-      end
-    end
-  end
-
-  if @protocol_support do
-    describe "protocol implementation" do
-      test "protocol implementation for atom modules" do
-        state =
-          """
-          defprotocol :my_reversible do
-            def reverse(term)
-            IO.puts ""
-          end
-
-          defimpl :my_reversible, for: [String, :my_str, :"Elixir.MyStr"] do
-            def reverse(term), do: String.reverse(term)
-            IO.puts ""
-          end
-
-          defprotocol :"Elixir.My.Reversible" do
-            def reverse(term)
-            IO.puts ""
-          end
-
-          defimpl :"Elixir.My.Reversible", for: [String, :my_str, :"Elixir.MyStr"] do
-            def reverse(term), do: String.reverse(term)
-            IO.puts ""
-          end
-          """
-          |> string_to_state
-
-        assert get_line_module(state, 3) == :my_reversible
-        assert get_line_protocol(state, 3) == nil
-
-        assert get_line_module(state, 8) == :"Elixir.my_reversible.String"
-
-        assert get_line_protocol(state, 8) == {:my_reversible, [String, :my_str, MyStr]}
-
-        assert get_line_module(state, 13) == My.Reversible
-        assert get_line_protocol(state, 13) == nil
-
-        assert get_line_module(state, 18) == My.Reversible.String
-
-        assert get_line_protocol(state, 18) == {My.Reversible, [String, :my_str, MyStr]}
-      end
-
-      test "protocol implementation module naming rules" do
-        state =
-          """
-          defprotocol NiceProto do
-            def reverse(term)
-          end
-
-          defmodule NiceProtoImplementations do
-            defimpl NiceProto, for: String do
-              def reverse(term), do: String.reverse(term)
-              def a3, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
-            end
-            def a3, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
-
-            defmodule Some do
-              defstruct [a: nil]
-            end
-
-            defimpl NiceProto, for: Some do
-              def reverse(term), do: String.reverse(term)
-              IO.inspect(__ENV__.module)
-            end
-
-            alias Enumerable.Date.Range, as: R
-            alias NiceProto, as: N
-
-            defimpl N, for: R do
-              def reverse(term), do: String.reverse(term)
-              IO.puts ""
-            end
-          end
-          """
-          |> string_to_state
-
-        # protocol implementation module name does not inherit enclosing module, only protocol
-        assert get_line_module(state, 8) == NiceProto.String
-        assert get_line_protocol(state, 8) == {NiceProto, [String]}
-        assert get_line_aliases(state, 8) == []
-        assert get_line_aliases(state, 10) == []
-
-        # properly gets implementation name inherited from enclosing module
-        assert get_line_module(state, 18) == NiceProto.NiceProtoImplementations.Some
-        assert get_line_protocol(state, 18) == {NiceProto, [NiceProtoImplementations.Some]}
-
-        # aliases are expanded on protocol and implementation
-        assert get_line_module(state, 24) == NiceProto.Enumerable.Date.Range
-        assert get_line_protocol(state, 24) == {NiceProto, [Enumerable.Date.Range]}
-      end
-
-      test "protocol implementation using __MODULE__" do
-        state =
-          """
-          defprotocol NiceProto do
-            def reverse(term)
-          end
-
-          defmodule MyStruct do
-            defstruct [a: nil]
-
-            defimpl NiceProto, for: __MODULE__ do
-              def reverse(term), do: String.reverse(term)
-            end
-          end
-          """
-          |> string_to_state
-
-        # protocol implementation module name does not inherit enclosing module, only protocol
-        assert get_line_module(state, 8) == NiceProto.MyStruct
-        assert get_line_protocol(state, 8) == {NiceProto, [MyStruct]}
-      end
-
-      test "protocol implementation using __MODULE__ 2" do
-        state =
-          """
-          defmodule Nice do
-            defprotocol Proto do
-              def reverse(term)
-            end
-
-            defimpl __MODULE__.Proto, for: String do
-              def reverse(term), do: String.reverse(term)
-            end
-          end
-          """
-          |> string_to_state
-
-        assert get_line_module(state, 7) == Nice.Proto.String
-        assert get_line_protocol(state, 7) == {Nice.Proto, [String]}
-      end
-
-      test "protocol implementation for structs does not require for" do
-        state =
-          """
-          defprotocol Proto do
-            def reverse(term)
-          end
-
-          defmodule MyStruct do
-            defstruct [:field]
-
-            defimpl Proto do
-              def reverse(term), do: String.reverse(term)
-            end
-          end
-          """
-          |> string_to_state
-
-        assert get_line_module(state, 9) == Proto.MyStruct
-        assert get_line_protocol(state, 9) == {Proto, [MyStruct]}
-      end
-
-      test "protocol implementation by deriving" do
-        state =
-          """
-          defprotocol Proto do
-            def reverse(term)
-          end
-
-          defimpl Proto, for: Any do
-            def reverse(term), do: term
-          end
-
-          defmodule MyStruct do
-            @derive Proto
-            defstruct [:field]
-            IO.puts ""
-          end
-          IO.puts ""
-
-          defmodule MyOtherStruct do
-            @derive [{Proto, opt: 1}, Enumerable]
-            defstruct [:field]
-          end
-          """
-          |> string_to_state
-
-        assert %{
-                 {Enumerable.MyOtherStruct, nil, nil} => %ModFunInfo{
-                   params: [nil],
-                   type: :defmodule
-                 },
-                 {Proto.Any, nil, nil} => %ModFunInfo{
-                   params: [nil],
-                   type: :defmodule
-                 },
-                 {Proto.MyOtherStruct, nil, nil} => %ModFunInfo{
-                   params: [nil],
-                   type: :defmodule
-                 },
-                 {Proto.MyOtherStruct, :reverse, 1} => %ModFunInfo{
-                   params: [[{:term, [line: 6, column: 15], nil}]],
-                   type: :def
-                 },
-                 {Proto.MyStruct, nil, nil} => %ModFunInfo{
-                   params: [nil],
-                   type: :defmodule
-                 },
-                 {Proto.MyStruct, :reverse, 1} => %ModFunInfo{
-                   params: [[{:term, [line: 6, column: 15], nil}]],
-                   type: :def
-                 }
-               } = state.mods_funs_to_positions
-      end
-    end
-
-    test "protocol registers callbacks from specs or generate dummy callbacks" do
+    test "current module and protocol" do
       state =
         """
-        defprotocol Proto do
-          @spec with_spec(t, integer) :: String.t
-          @spec with_spec(t, boolean) :: number
-          def with_spec(t, integer)
-
-          def without_spec(t, integer)
+        defprotocol My.Reversible do
+          def reverse(term)
+          IO.puts ""
         end
         """
         |> string_to_state
 
-      assert state.specs == %{
-               {Proto, :with_spec, 2} => %ElixirSense.Core.State.SpecInfo{
-                 args: [["t", "boolean"], ["t", "integer"]],
-                 kind: :callback,
-                 name: :with_spec,
-                 positions: [{3, 3}, {2, 3}],
-                 end_positions: [{3, 40}, {2, 42}],
-                 generated: [false, false],
-                 specs: [
-                   "@callback with_spec(t, boolean) :: number",
-                   "@callback with_spec(t, integer) :: String.t()",
-                   "@spec with_spec(t, boolean) :: number",
-                   "@spec with_spec(t, integer) :: String.t()"
-                 ]
-               },
-               {Proto, :without_spec, 2} => %ElixirSense.Core.State.SpecInfo{
-                 args: [["t", "integer"]],
-                 kind: :callback,
-                 name: :without_spec,
-                 positions: [{6, 3}],
-                 end_positions: [nil],
-                 generated: [true],
-                 specs: ["@callback without_spec(t, integer) :: term"]
-               }
-             }
+      # protocol and implementations create modules
+      assert get_line_module(state, 3) == My.Reversible
+      assert get_line_protocol(state, 3) == nil
     end
+
+    test "current module and protocol implementation - simple case" do
+      state = """
+      defimpl Inspect, for: Atom do
+        IO.puts("")
+      end
+      """
+      |> string_to_state
+
+      assert get_line_module(state, 2) == Inspect.Atom
+      assert get_line_protocol(state, 2) == {Inspect, [Atom]}
+    end
+
+    test "current module and protocol implementation" do
+      state =
+        """
+        defprotocol My.Reversible do
+          def reverse(term)
+          IO.puts ""
+        end
+
+        defimpl My.Reversible, for: String do
+          def reverse(term), do: String.reverse(term)
+          IO.puts ""
+        end
+
+        defimpl My.Reversible, for: [Map, My.List] do
+          def reverse(term), do: Enum.reverse(term)
+          IO.puts ""
+
+          defmodule OuterModule do
+            IO.puts ""
+          end
+
+          defprotocol Other do
+            def other(term)
+            IO.puts ""
+          end
+
+          defimpl Other, for: [Map, My.Map] do
+            def other(term), do: nil
+            IO.inspect(__ENV__.module)
+          end
+        end
+        """
+        |> string_to_state
+
+      # protocol and implementations create modules
+      assert get_line_module(state, 3) == My.Reversible
+      assert get_line_protocol(state, 3) == nil
+      assert get_line_module(state, 8) == My.Reversible.String
+      assert get_line_protocol(state, 8) == {My.Reversible, [String]}
+      assert get_line_module(state, 13) == My.Reversible.My.List
+      assert get_line_protocol(state, 13) == {My.Reversible, [Map, My.List]}
+
+      # implementation has behaviour
+      assert get_line_behaviours(state, 8) == [My.Reversible]
+
+      # multiple implementations create multiple modules
+      assert get_line_module(state, 16) == My.Reversible.My.List.OuterModule
+
+      assert get_line_protocol(state, 16) == nil
+
+      # protocol and implementations inside protocol implementation creates a cross product
+      assert get_line_module(state, 21) == My.Reversible.Map.Other
+      assert get_line_protocol(state, 21) == nil
+
+      assert get_line_module(state, 26) == My.Reversible.My.List.Other.My.Map
+
+      assert get_line_protocol(state, 26) == {My.Reversible.My.List.Other, [Map, My.Map]}
+    end
+  end
+
+  describe "protocol implementation" do
+    test "protocol implementation for atom modules" do
+      state =
+        """
+        defprotocol :my_reversible do
+          def reverse(term)
+          IO.puts ""
+        end
+
+        defimpl :my_reversible, for: [String, :my_str, :"Elixir.MyStr"] do
+          def reverse(term), do: String.reverse(term)
+          IO.puts ""
+        end
+
+        defprotocol :"Elixir.My.Reversible" do
+          def reverse(term)
+          IO.puts ""
+        end
+
+        defimpl :"Elixir.My.Reversible", for: [String, :my_str, :"Elixir.MyStr"] do
+          def reverse(term), do: String.reverse(term)
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_module(state, 3) == :my_reversible
+      assert get_line_protocol(state, 3) == nil
+
+      assert get_line_module(state, 8) == :"Elixir.my_reversible.MyStr"
+
+      assert get_line_protocol(state, 8) == {:my_reversible, [String, :my_str, MyStr]}
+
+      assert get_line_module(state, 13) == My.Reversible
+      assert get_line_protocol(state, 13) == nil
+
+      assert get_line_module(state, 18) == My.Reversible.MyStr
+
+      assert get_line_protocol(state, 18) == {My.Reversible, [String, :my_str, MyStr]}
+    end
+
+    test "protocol implementation module naming rules" do
+      state =
+        """
+        defprotocol NiceProto do
+          def reverse(term)
+        end
+
+        defmodule NiceProtoImplementations do
+          defimpl NiceProto, for: String do
+            def reverse(term), do: String.reverse(term)
+            def a3, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
+          end
+          def a3, do: IO.puts "OuterModule " <> inspect(__ENV__.aliases)
+
+          defmodule Some do
+            defstruct [a: nil]
+          end
+
+          defimpl NiceProto, for: Some do
+            def reverse(term), do: String.reverse(term)
+            IO.inspect(__ENV__.module)
+          end
+
+          alias Enumerable.Date.Range, as: R
+          alias NiceProto, as: N
+
+          defimpl N, for: R do
+            def reverse(term), do: String.reverse(term)
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      # protocol implementation module name does not inherit enclosing module, only protocol
+      assert get_line_module(state, 8) == NiceProto.String
+      assert get_line_protocol(state, 8) == {NiceProto, [String]}
+      assert get_line_aliases(state, 8) == []
+      assert get_line_aliases(state, 10) == []
+
+      # properly gets implementation name inherited from enclosing module
+      assert get_line_module(state, 18) == NiceProto.NiceProtoImplementations.Some
+      assert get_line_protocol(state, 18) == {NiceProto, [NiceProtoImplementations.Some]}
+
+      # aliases are expanded on protocol and implementation
+      assert get_line_module(state, 24) == NiceProto.Enumerable.Date.Range
+      assert get_line_protocol(state, 24) == {NiceProto, [Enumerable.Date.Range]}
+    end
+
+    test "protocol implementation using __MODULE__" do
+      state =
+        """
+        defprotocol NiceProto do
+          def reverse(term)
+        end
+
+        defmodule MyStruct do
+          defstruct [a: nil]
+
+          defimpl NiceProto, for: __MODULE__ do
+            def reverse(term), do: String.reverse(term)
+          end
+        end
+        """
+        |> string_to_state
+
+      # protocol implementation module name does not inherit enclosing module, only protocol
+      assert get_line_module(state, 8) == NiceProto.MyStruct
+      assert get_line_protocol(state, 8) == {NiceProto, [MyStruct]}
+    end
+
+    test "protocol implementation using __MODULE__ 2" do
+      state =
+        """
+        defmodule Nice do
+          defprotocol Proto do
+            def reverse(term)
+          end
+
+          defimpl __MODULE__.Proto, for: String do
+            def reverse(term), do: String.reverse(term)
+          end
+        end
+        """
+        |> string_to_state
+
+      assert get_line_module(state, 7) == Nice.Proto.String
+      assert get_line_protocol(state, 7) == {Nice.Proto, [String]}
+    end
+
+    test "protocol implementation for structs does not require for" do
+      state =
+        """
+        defprotocol Proto do
+          def reverse(term)
+        end
+
+        defmodule MyStruct do
+          defstruct [:field]
+
+          defimpl Proto do
+            def reverse(term), do: String.reverse(term)
+          end
+        end
+        """
+        |> string_to_state
+
+      assert get_line_module(state, 9) == Proto.MyStruct
+      assert get_line_protocol(state, 9) == {Proto, [MyStruct]}
+    end
+
+    test "protocol implementation by deriving" do
+      state =
+        """
+        defprotocol Proto do
+          def reverse(term)
+        end
+
+        defimpl Proto, for: Any do
+          def reverse(term), do: term
+        end
+
+        defmodule MyStruct do
+          @derive Proto
+          defstruct [:field]
+          IO.puts ""
+        end
+        IO.puts ""
+
+        defmodule MyOtherStruct do
+          @derive [{Proto, opt: 1}, Enumerable]
+          defstruct [:field]
+        end
+        """
+        |> string_to_state
+
+      assert %{
+                {Enumerable.MyOtherStruct, nil, nil} => %ModFunInfo{
+                  params: [nil],
+                  type: :defmodule
+                },
+                {Proto.Any, nil, nil} => %ModFunInfo{
+                  params: [nil],
+                  type: :defmodule
+                },
+                {Proto.MyOtherStruct, nil, nil} => %ModFunInfo{
+                  params: [nil],
+                  type: :defmodule
+                },
+                {Proto.MyOtherStruct, :reverse, 1} => %ModFunInfo{
+                  params: [[{:term, [line: 6, column: 15], nil}]],
+                  type: :def
+                },
+                {Proto.MyStruct, nil, nil} => %ModFunInfo{
+                  params: [nil],
+                  type: :defmodule
+                },
+                {Proto.MyStruct, :reverse, 1} => %ModFunInfo{
+                  params: [[{:term, [line: 6, column: 15], nil}]],
+                  type: :def
+                }
+              } = state.mods_funs_to_positions
+    end
+  end
+
+  test "protocol registers callbacks from specs or generate dummy callbacks" do
+    state =
+      """
+      defprotocol Proto do
+        @spec with_spec(t, integer) :: String.t
+        @spec with_spec(t, boolean) :: number
+        def with_spec(t, integer)
+
+        def without_spec(t, integer)
+      end
+      """
+      |> string_to_state
+
+    assert %{
+              {Proto, :with_spec, 2} => %ElixirSense.Core.State.SpecInfo{
+                args: [["t", "boolean"], ["t", "integer"]],
+                kind: :callback,
+                name: :with_spec,
+                positions: [{3, 3}, {2, 3}],
+                end_positions: [{3, 40}, {2, 42}],
+                generated: [false, false],
+                specs: [
+                  "@callback with_spec(t, boolean) :: number",
+                  "@callback with_spec(t, integer) :: String.t()",
+                  "@spec with_spec(t, boolean) :: number",
+                  "@spec with_spec(t, integer) :: String.t()"
+                ]
+              },
+              {Proto, :without_spec, 2} => %ElixirSense.Core.State.SpecInfo{
+                args: [["t", "integer"]],
+                kind: :callback,
+                name: :without_spec,
+                positions: [{6, 3}],
+                end_positions: [nil],
+                generated: [true],
+                specs: ["@callback without_spec(t, integer) :: term"]
+              },
+              {Proto, :__protocol__, 1} => %ElixirSense.Core.State.SpecInfo{
+              kind: :spec,
+              specs: ["@spec __protocol__(:impls) :: :not_consolidated | {:consolidated, [module]}", "@spec __protocol__(:consolidated?) :: boolean", "@spec __protocol__(:functions) :: unquote(Protocol.__functions_spec__(@__functions__))", "@spec __protocol__(:module) :: Proto"]
+              },
+              {Proto, :impl_for, 1} => %ElixirSense.Core.State.SpecInfo{
+              kind: :spec,
+              specs: ["@spec impl_for(term) :: atom | nil"]
+              },
+              {Proto, :impl_for!, 1} => %ElixirSense.Core.State.SpecInfo{
+              kind: :spec,
+              specs: ["@spec impl_for!(term) :: atom"]
+              }
+            } = state.specs
   end
 
   test "registers positions" do
@@ -4813,54 +4865,86 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
-  if @protocol_support do
-    test "registers positions in protocol implementation" do
-      state =
-        """
-        defprotocol Reversible do
-          def reverse(term)
+  test "registers def positions in protocol" do
+    state =
+      """
+      defprotocol Reversible do
+        def reverse(term)
+        IO.puts ""
+      end
+      """
+      |> string_to_state
+
+    assert %{
+              {Reversible, :reverse, 1} => %ModFunInfo{
+                params: [[{:term, [line: 2, column: 15], nil}]],
+                positions: [{2, 3}],
+                type: :def
+              }
+            } = state.mods_funs_to_positions
+  end
+
+  test "registers def positions in protocol implementation" do
+    state =
+      """
+      defprotocol Reversible do
+        def reverse(term)
+        IO.puts ""
+      end
+
+      defimpl Reversible, for: String do
+        def reverse(term), do: String.reverse(term)
+        IO.puts ""
+      end
+
+      defmodule Impls do
+        alias Reversible, as: R
+        alias My.List, as: Ml
+        defimpl R, for: [Map, Ml] do
+          def reverse(term), do: Enum.reverse(term)
           IO.puts ""
         end
+      end
+      """
+      |> string_to_state
 
-        defimpl Reversible, for: String do
-          def reverse(term), do: String.reverse(term)
-          IO.puts ""
-        end
+    assert %{
+              {Impls, nil, nil} => %ModFunInfo{
+                params: [nil],
+                positions: [{11, 1}],
+                type: :defmodule
+              },
+              {Reversible.String, :__impl__, 1} => %ElixirSense.Core.State.ModFunInfo{
+                params: [[{:atom, [line: 6, column: 1], nil}]],
+                positions: [{6, 1}],
+                type: :def
+              }
+            } = state.mods_funs_to_positions
+  end
 
-        defmodule Impls do
-          alias Reversible, as: R
-          alias My.List, as: Ml
-          defimpl R, for: [Map, Ml] do
-            def reverse(term), do: Enum.reverse(term)
-            IO.puts ""
-          end
-        end
-        """
-        |> string_to_state
+  test "functions head" do
+    state =
+      """
+      defmodule OuterModule do
+        def abc(a \\\\ nil)
+        def abc(1), do: :ok
+        def abc(nil), do: :error
+        IO.puts ""
+      end
+      """
+      |> string_to_state
 
-      assert %{
-               {Impls, nil, nil} => %ModFunInfo{
-                 params: [nil],
-                 positions: [{11, 1}],
-                 type: :defmodule
-               },
-               {Reversible, :reverse, 1} => %ModFunInfo{
-                 params: [[{:term, [line: 2, column: 15], nil}]],
-                 positions: [{2, 3}],
-                 type: :def
-               },
-               {Reversible.String, :__impl__, 1} => %ElixirSense.Core.State.ModFunInfo{
-                 params: [[{:atom, [line: 6, column: 1], nil}]],
-                 positions: [{6, 1}],
-                 type: :def
-               },
-               {Reversible, :behaviour_info, 1} => %ElixirSense.Core.State.ModFunInfo{
-                 params: [[{:atom, [line: 1, column: 1], nil}]],
-                 positions: [{1, 1}],
-                 type: :def
-               }
-             } = state.mods_funs_to_positions
-    end
+    assert %{
+             {OuterModule, :abc, 1} => %ModFunInfo{
+               params: [
+                 [nil],
+                 [1],
+                 [
+                  {:\\, [line: 2, column: 13], [{:a, [line: 2, column: 11], nil}, nil]},
+                 ]
+               ]
+             }
+           } = state.mods_funs_to_positions
   end
 
   test "functions with default args" do
@@ -5081,15 +5165,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert nil == get_line_function(state, 31)
     assert Reversible == get_line_module(state, 31)
 
-    if @protocol_support do
-      assert nil == get_line_typespec(state, 35)
-      assert nil == get_line_function(state, 35)
-      assert Reversible.Map == get_line_module(state, 35)
+    assert nil == get_line_typespec(state, 35)
+    assert nil == get_line_function(state, 35)
+    assert Reversible.My.List == get_line_module(state, 35)
 
-      assert nil == get_line_typespec(state, 37)
-      assert {:reverse, 1} == get_line_function(state, 37)
-      assert Reversible.Map == get_line_module(state, 37)
-    end
+    assert nil == get_line_typespec(state, 37)
+    assert {:reverse, 1} == get_line_function(state, 37)
+    assert Reversible.My.List == get_line_module(state, 37)
   end
 
   test "finds positions for guards" do
@@ -5312,57 +5394,74 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-  if @protocol_support do
-    test "registers mods and func for protocols" do
-      state =
-        """
-        defmodule MyModuleWithoutFuns do
-        end
-        defmodule MyModuleWithFuns do
-          def func do
-            IO.puts ""
-          end
-          defp funcp do
-            IO.puts ""
-          end
-          defmacro macro1(ast) do
-            IO.puts ""
-          end
-          defmacrop macro1p(ast) do
-            IO.puts ""
-          end
-          defguard is_even(value) when is_integer(value) and rem(value, 2) == 0
-          defguardp is_evenp(value) when is_integer(value) and rem(value, 2) == 0
-          defdelegate func_delegated(par), to: OtherModule
-          defmodule Nested do
-          end
-        end
+  test "registers builtin functions for protocols" do
+    state =
+      """
+      defprotocol Reversible do
+        def reverse(term)
+        IO.puts ""
+      end
+      """
+      |> string_to_state
 
-        defprotocol Reversible do
-          def reverse(term)
+    assert Map.has_key?(state.mods_funs_to_positions, {Reversible, :__protocol__, 1})
+    assert Map.has_key?(state.mods_funs_to_positions, {Reversible, :impl_for, 1})
+    assert Map.has_key?(state.mods_funs_to_positions, {Reversible, :impl_for!, 1})
+    assert Map.has_key?(state.mods_funs_to_positions, {Reversible, :impl_for!, 1})
+    assert Map.has_key?(state.mods_funs_to_positions, {Reversible, :__info__, 1})
+    assert Map.has_key?(state.mods_funs_to_positions, {Reversible, :module_info, 0})
+    assert Map.has_key?(state.mods_funs_to_positions, {Reversible, :module_info, 1})
+    assert Map.has_key?(state.mods_funs_to_positions, {Reversible, :behaviour_info, 1})
+  end
+
+  test "registers builtin functions for protocol implementations" do
+    state =
+      """
+      defmodule MyModuleWithoutFuns do
+      end
+      defmodule MyModuleWithFuns do
+        def func do
           IO.puts ""
         end
-
-        defimpl Reversible, for: String do
-          def reverse(term), do: String.reverse(term)
+        defp funcp do
           IO.puts ""
         end
-
-        defmodule Impls do
-          alias Reversible, as: R
-          alias My.List, as: Ml
-          defimpl R, for: [Ml, Map] do
-            def reverse(term), do: Enum.reverse(term)
-            IO.puts ""
-          end
+        defmacro macro1(ast) do
+          IO.puts ""
         end
-        """
-        |> string_to_state
+        defmacrop macro1p(ast) do
+          IO.puts ""
+        end
+        defguard is_even(value) when is_integer(value) and rem(value, 2) == 0
+        defguardp is_evenp(value) when is_integer(value) and rem(value, 2) == 0
+        defdelegate func_delegated(par), to: OtherModule
+        defmodule Nested do
+        end
+      end
 
-      assert Map.has_key?(state.mods_funs_to_positions, {Impls, :__info__, 1})
-      assert Map.has_key?(state.mods_funs_to_positions, {Reversible, :__protocol__, 1})
-      assert Map.has_key?(state.mods_funs_to_positions, {Reversible.My.List, :__impl__, 1})
-    end
+      defprotocol Reversible do
+        def reverse(term)
+        IO.puts ""
+      end
+
+      defimpl Reversible, for: String do
+        def reverse(term), do: String.reverse(term)
+        IO.puts ""
+      end
+
+      defmodule Impls do
+        alias Reversible, as: R
+        alias My.List, as: Ml
+        defimpl R, for: [Ml, Map] do
+          def reverse(term), do: Enum.reverse(term)
+          IO.puts ""
+        end
+      end
+      """
+      |> string_to_state
+
+    assert Map.has_key?(state.mods_funs_to_positions, {Impls, :__info__, 1})
+    assert Map.has_key?(state.mods_funs_to_positions, {Reversible.My.List, :__impl__, 1})
   end
 
   test "first_alias_positions" do
@@ -5439,7 +5538,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{name: :my_attribute, positions: [{2, _}]}
              ] = get_line_attributes(state, 4)
 
-      if @protocol_support do
         assert %{
                  {InheritMod, :handle_call, 3} => %ModFunInfo{
                    params: [
@@ -5449,17 +5547,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                        {:state, _, _}
                      ]
                    ],
-                   positions: [{2, 3}],
                    type: :def
                  },
                  {InheritMod, nil, nil} => %ModFunInfo{
-                   params: [nil],
-                   positions: [{1, 1}],
                    type: :defmodule
                  },
                  {InheritMod, :private_func, 0} => %ModFunInfo{
                    params: [[]],
-                   positions: [{2, 3}],
                    type: :defp
                  },
                  {InheritMod, :private_func_arg, 1} => %ModFunInfo{
@@ -5467,12 +5561,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                      [{:a, _, _}],
                      [{:\\, _, [{:a, _, _}, nil]}]
                    ],
-                   positions: [{2, 3}, {2, 3}],
                    type: :defp
                  },
                  {InheritMod, :private_guard, 0} => %ModFunInfo{
                    params: [[]],
-                   positions: [{2, 3}],
                    type: :defguardp
                  },
                  {InheritMod, :private_guard_arg, 1} => %ModFunInfo{
@@ -5481,12 +5573,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                        {:a, _, _}
                      ]
                    ],
-                   positions: [{2, 3}],
                    type: :defguardp
                  },
                  {InheritMod, :private_macro, 0} => %ModFunInfo{
                    params: [[]],
-                   positions: [{2, 3}],
                    type: :defmacrop
                  },
                  {InheritMod, :private_macro_arg, 1} => %ModFunInfo{
@@ -5495,12 +5585,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                        {:a, _, _}
                      ]
                    ],
-                   positions: [{2, 3}],
                    type: :defmacrop
                  },
                  {InheritMod, :public_func, 0} => %ModFunInfo{
                    params: [[]],
-                   positions: [{2, 3}],
                    type: :def,
                    overridable: {true, ElixirSenseExample.ExampleBehaviour}
                  },
@@ -5515,12 +5603,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                         ]}
                      ]
                    ],
-                   positions: [{2, 3}],
                    type: :def
                  },
                  {InheritMod, :public_guard, 0} => %ModFunInfo{
                    params: [[]],
-                   positions: [{2, 3}],
                    type: :defguard
                  },
                  {InheritMod, :public_guard_arg, 1} => %ModFunInfo{
@@ -5529,12 +5615,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                        {:a, _, _}
                      ]
                    ],
-                   positions: [{2, 3}],
                    type: :defguard
                  },
                  {InheritMod, :public_macro, 0} => %ModFunInfo{
                    params: [[]],
-                   positions: [{2, 3}],
                    type: :defmacro
                  },
                  {InheritMod, :public_macro_arg, 1} => %ModFunInfo{
@@ -5543,28 +5627,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                        {:a, _, _}
                      ]
                    ],
-                   positions: [{2, 3}],
                    type: :defmacro
                  },
                  {InheritMod.Deeply.Nested, nil, nil} => %ModFunInfo{
-                   params: [nil],
-                   positions: [{2, 3}],
                    type: :defmodule
                  },
                  {InheritMod.Nested, nil, nil} => %ModFunInfo{
-                   params: [nil],
-                   positions: [{2, 3}],
                    type: :defmodule
                  },
                  {InheritMod.ProtocolEmbedded, nil, nil} => %ModFunInfo{
-                   params: [nil],
-                   positions: [{2, 3}],
                    type: :defmodule
                  },
                  {InheritMod, :behaviour_info, 1} => %ModFunInfo{
-                   params: [[{:atom, [line: 2, column: 3], nil}]],
-                   positions: [{2, 3}],
-                   target: nil,
+                   params: [[{:atom, _, nil}]],
                    type: :def
                  },
                  {InheritMod.ProtocolEmbedded, :module_info, 1} => %ModFunInfo{}
@@ -5575,28 +5650,28 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    args: [[]],
                    kind: :opaque,
                    name: :my_opaque_type,
-                   positions: [{2, 3}],
+                  #  positions: [{2, 3}],
                    specs: ["@opaque my_opaque_type :: any"]
                  },
                  {InheritMod, :my_priv_type, 0} => %State.TypeInfo{
                    args: [[]],
                    kind: :typep,
                    name: :my_priv_type,
-                   positions: [{2, 3}],
+                  #  positions: [{2, 3}],
                    specs: ["@typep my_priv_type :: any"]
                  },
                  {InheritMod, :my_pub_type, 0} => %State.TypeInfo{
                    args: [[]],
                    kind: :type,
                    name: :my_pub_type,
-                   positions: [{2, 3}],
+                  #  positions: [{2, 3}],
                    specs: ["@type my_pub_type :: any"]
                  },
                  {InheritMod, :my_pub_type_arg, 2} => %State.TypeInfo{
                    args: [["a", "b"]],
                    kind: :type,
                    name: :my_pub_type_arg,
-                   positions: [{2, 3}],
+                  #  positions: [{2, 3}],
                    specs: ["@type my_pub_type_arg(a, b) :: {b, a}"]
                  }
                } = state.types
@@ -5606,18 +5681,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    args: [[]],
                    kind: :spec,
                    name: :private_func,
-                   positions: [{2, 3}],
+                  #  positions: [{2, 3}],
                    specs: ["@spec private_func() :: String.t()"]
                  },
                  {InheritMod, :some_callback, 1} => %State.SpecInfo{
                    args: [["abc"]],
                    kind: :callback,
                    name: :some_callback,
-                   positions: [{2, 3}],
+                  #  positions: [{2, 3}],
                    specs: ["@callback some_callback(abc) :: :ok when abc: integer"]
                  }
                } = state.specs
-      end
     end
 
     test "use defining struct" do
@@ -6546,28 +6620,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              } = state.types
     end
 
-    if @protocol_support do
-      test "protocol exports type t" do
-        state =
-          """
-          defprotocol Proto do
-            def reverse(term)
-          end
-          """
-          |> string_to_state
+    test "protocol exports type t" do
+      state =
+        """
+        defprotocol Proto do
+          def reverse(term)
+        end
+        """
+        |> string_to_state
 
-        assert state.types == %{
-                 {Proto, :t, 0} => %ElixirSense.Core.State.TypeInfo{
-                   args: [[]],
-                   kind: :type,
-                   name: :t,
-                   positions: [{1, 1}],
-                   end_positions: [{3, 4}],
-                   generated: [true],
-                   specs: ["@type t :: term"]
-                 }
-               }
-      end
+      assert %{
+                {Proto, :t, 0} => %ElixirSense.Core.State.TypeInfo{
+                  args: [[]],
+                  kind: :type,
+                  name: :t,
+                  specs: ["@type t :: term"],
+                  doc: "All the types that implement this protocol" <> _
+                }
+              } = state.types
     end
 
     test "specs and callbacks" do

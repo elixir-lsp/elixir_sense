@@ -4,6 +4,7 @@ defmodule ElixirSense.Core.State do
   """
 
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.BuiltinFunctions
   require Logger
 
   @type fun_arity :: {atom, non_neg_integer}
@@ -62,7 +63,8 @@ defmodule ElixirSense.Core.State do
           # TODO better type
           binding_context: list,
           macro_env: list(Macro.Env.t()),
-          typespec: nil | {atom, arity}
+          typespec: nil | {atom, arity},
+          protocol: nil | {atom, [atom]}
         }
 
   @auto_imported_functions :elixir_env.new().functions
@@ -110,7 +112,8 @@ defmodule ElixirSense.Core.State do
             optional_callbacks_context: [[]],
             moduledoc_positions: %{},
             macro_env: [:elixir_env.new()],
-            typespec: nil
+            typespec: nil,
+            protocol: nil
 
   defmodule Env do
     @moduledoc """
@@ -376,7 +379,6 @@ defmodule ElixirSense.Core.State do
     current_behaviours = state.behaviours |> Map.get(macro_env.module, [])
 
     current_scope_id = hd(state.scope_ids)
-    current_scope_protocol = hd(state.protocols)
 
     # Macro.Env versioned_vars is not updated
     # versioned_vars: macro_env.versioned_vars,
@@ -393,6 +395,15 @@ defmodule ElixirSense.Core.State do
     # dbg(vars)
     # dbg(state.vars)
     # dbg(state.scope_vars_info)
+
+    current_protocol = case state.protocol do
+      nil -> nil
+      {protocol, for_list} ->
+        # check wether we are in implementation or implementation child module
+        if Enum.any?(for_list, fn for -> macro_env.module == Module.concat(protocol, for) end) do
+          {protocol, for_list}
+        end
+    end
     
 
     %Env{
@@ -408,7 +419,7 @@ defmodule ElixirSense.Core.State do
       behaviours: current_behaviours,
       typespec: state.typespec,
       scope_id: current_scope_id,
-      protocol: current_scope_protocol
+      protocol: current_protocol
     }
   end
 
@@ -2051,4 +2062,83 @@ defmodule ElixirSense.Core.State do
     state
     |> add_struct(env, type, fields)
   end
+
+  def generate_protocol_callbacks(state, env) do
+    # turn specs into callbacks or create dummy callbacks
+    builtins = BuiltinFunctions.all() |> Keyword.keys()
+
+    current_module = env.module
+
+    keys =
+      state.mods_funs_to_positions
+      |> Map.keys()
+      |> Enum.filter(fn
+        {^current_module, name, _arity} when not is_nil(name) ->
+          name not in builtins
+
+        _ ->
+          false
+      end)
+
+    new_specs =
+      for key = {_mod, name, _arity} <- keys,
+          into: %{},
+          do:
+            (
+              new_spec =
+                case state.specs[key] do
+                  nil ->
+                    %ModFunInfo{positions: positions, params: params} =
+                      state.mods_funs_to_positions[key]
+
+                    args =
+                      for param_variant <- params do
+                        param_variant
+                        |> Enum.map(&Macro.to_string/1)
+                      end
+
+                    specs =
+                      for arg <- args do
+                        joined = Enum.join(arg, ", ")
+                        "@callback #{name}(#{joined}) :: term"
+                      end
+
+                    %SpecInfo{
+                      name: name,
+                      args: args,
+                      specs: specs,
+                      kind: :callback,
+                      positions: positions,
+                      end_positions: Enum.map(positions, fn _ -> nil end),
+                      generated: Enum.map(positions, fn _ -> true end)
+                    }
+
+                  spec = %SpecInfo{specs: specs} ->
+                    %SpecInfo{
+                      spec
+                      | # TODO :spec will get replaced here, refactor into array
+                        kind: :callback,
+                        specs:
+                          specs
+                          |> Enum.map(fn s ->
+                            String.replace_prefix(s, "@spec", "@callback")
+                          end)
+                          |> Kernel.++(specs)
+                    }
+                end
+
+              {key, new_spec}
+            )
+
+    specs = Map.merge(state.specs, new_specs)
+
+    %{state | specs: specs}
+  end
+
+  def maybe_add_protocol_behaviour(%{protocol: {protocol, _}} = state, env) do
+    {_, state, env} = add_behaviour(protocol, state, env)
+    {state, env}
+  end
+
+  def maybe_add_protocol_behaviour(state, env), do: {state, env}
 end
