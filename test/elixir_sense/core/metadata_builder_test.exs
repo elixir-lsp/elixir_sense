@@ -4748,7 +4748,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.specs == %{
+      assert %{
                {Proto, :with_spec, 2} => %ElixirSense.Core.State.SpecInfo{
                  args: [["t", "boolean"], ["t", "integer"]],
                  kind: :callback,
@@ -4758,9 +4758,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  generated: [false, false],
                  specs: [
                    "@callback with_spec(t, boolean) :: number",
-                   "@callback with_spec(t, integer) :: String.t()",
+                   "@callback with_spec(t, integer) :: String.t" <> _,
                    "@spec with_spec(t, boolean) :: number",
-                   "@spec with_spec(t, integer) :: String.t()"
+                   "@spec with_spec(t, integer) :: String.t" <> _
                  ]
                },
                {Proto, :without_spec, 2} => %ElixirSense.Core.State.SpecInfo{
@@ -4772,7 +4772,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  generated: [true],
                  specs: ["@callback without_spec(t, integer) :: term"]
                }
-             }
+             } = state.specs
     end
   end
 
@@ -6584,35 +6584,67 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       # if there are callbacks behaviour_info/1 is defined
       assert state.mods_funs_to_positions[{Proto, :behaviour_info, 1}] != nil
 
-      assert %{
-               {Proto, :abc, 0} => %ElixirSense.Core.State.SpecInfo{
-                 args: [[], []],
-                 kind: :spec,
-                 name: :abc,
-                 positions: [{3, 3}, {2, 3}],
-                 end_positions: [{3, 25}, {2, 30}],
-                 generated: [false, false],
-                 specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
-               },
-               {Proto, :my, 1} => %ElixirSense.Core.State.SpecInfo{
-                 kind: :callback,
-                 name: :my,
-                 args: [["a :: integer"]],
-                 positions: [{4, 3}],
-                 end_positions: [{4, 37}],
-                 generated: [false],
-                 specs: ["@callback my(a :: integer) :: atom"]
-               },
-               {Proto, :other, 1} => %ElixirSense.Core.State.SpecInfo{
-                 kind: :macrocallback,
-                 name: :other,
-                 args: [["x"]],
-                 positions: [{5, 3}],
-                 end_positions: [_],
-                 generated: [false],
-                 specs: ["@macrocallback other(x) :: Macro.t() when x: integer"]
-               }
-             } = state.specs
+      if Version.match?(System.version(), ">= 1.13.0") do
+        assert %{
+                 {Proto, :abc, 0} => %ElixirSense.Core.State.SpecInfo{
+                   args: [[], []],
+                   kind: :spec,
+                   name: :abc,
+                   positions: [{3, 3}, {2, 3}],
+                   end_positions: [{3, 25}, {2, 30}],
+                   generated: [false, false],
+                   specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
+                 },
+                 {Proto, :my, 1} => %ElixirSense.Core.State.SpecInfo{
+                   kind: :callback,
+                   name: :my,
+                   args: [["a :: integer"]],
+                   positions: [{4, 3}],
+                   end_positions: [{4, 37}],
+                   generated: [false],
+                   specs: ["@callback my(a :: integer) :: atom"]
+                 },
+                 {Proto, :other, 1} => %ElixirSense.Core.State.SpecInfo{
+                   kind: :macrocallback,
+                   name: :other,
+                   args: [["x"]],
+                   positions: [{5, 3}],
+                   end_positions: [_],
+                   generated: [false],
+                   specs: ["@macrocallback other(x) :: Macro.t() when x: integer"]
+                 }
+               } = state.specs
+      else
+        assert %{
+                 {Proto, :abc, 0} => %ElixirSense.Core.State.SpecInfo{
+                   args: [[], []],
+                   kind: :spec,
+                   name: :abc,
+                   positions: [{3, 3}, {2, 3}],
+                   end_positions: [{3, 25}, {2, 30}],
+                   generated: [false, false],
+                   specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
+                 },
+                 {Proto, :my, 1} => %ElixirSense.Core.State.SpecInfo{
+                   kind: :callback,
+                   name: :my,
+                   args: [["a :: integer"]],
+                   positions: [{4, 3}],
+                   end_positions: [{4, 37}],
+                   generated: [false],
+                   specs: ["@callback my(a :: integer) :: atom"]
+                 },
+                 {Proto, :other, 1} => %ElixirSense.Core.State.SpecInfo{
+                   kind: :macrocallback,
+                   name: :other,
+                   args: [["x"]],
+                   positions: [{5, 3}],
+                   end_positions: [_],
+                   generated: [false],
+                   specs: ["@macrocallback other(x) :: Macro.t when x: integer"]
+                 }
+               } = state.specs
+      end
     end
 
     test "specs and types expand aliases" do
@@ -6628,20 +6660,39 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert %{
-               {Proto, :abc, 1} => %State.SpecInfo{
-                 args: [["{%Model.User{}}"]],
-                 specs: [
-                   "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t()}, local_type()]"
-                 ]
-               }
-             } = state.specs
+      if Version.match?(System.version(), ">= 1.13.0") do
+        assert %{
+                 {Proto, :abc, 1} => %State.SpecInfo{
+                   args: [["{%Model.User{}}"]],
+                   specs: [
+                     "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t()}, local_type()]"
+                   ]
+                 }
+               } = state.specs
+      else
+        assert %{
+                 {Proto, :abc, 1} => %State.SpecInfo{
+                   args: [["{%Model.User{}}"]],
+                   specs: [
+                     "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t}, local_type()]"
+                   ]
+                 }
+               } = state.specs
+      end
 
-      assert %{
-               {Proto, :local_type, 0} => %State.TypeInfo{
-                 specs: ["@type local_type() :: Model.User.t()"]
-               }
-             } = state.types
+      if Version.match?(System.version(), ">= 1.13.0") do
+        assert %{
+                 {Proto, :local_type, 0} => %State.TypeInfo{
+                   specs: ["@type local_type() :: Model.User.t()"]
+                 }
+               } = state.types
+      else
+        assert %{
+                 {Proto, :local_type, 0} => %State.TypeInfo{
+                   specs: ["@type local_type() :: Model.User.t"]
+                 }
+               } = state.types
+      end
     end
   end
 
