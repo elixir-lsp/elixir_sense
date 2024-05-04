@@ -1783,8 +1783,17 @@ defmodule ElixirSense.Core.State do
   def no_alias_expansion(other), do: other
 
   # defmodule Elixir.Alias
-  def alias_defmodule({:__aliases__, _, [Elixir, _ | _]}, module, state, env),
-    do: {module, state, env}
+  def alias_defmodule({:__aliases__, _, [Elixir, _]}, module, state, env) do
+    {module, state, env}
+  end
+
+  if Version.match?(System.version(), ">= 1.16.0-dev") do
+    # on elixir >= 1.16 no unaliasing is happening
+    # https://github.com/elixir-lang/elixir/issues/12456
+    def alias_defmodule({:__aliases__, _, [Elixir, _ | _]}, module, state, env) do
+      {module, state, env}
+    end
+  end
 
   # defmodule Alias in root
   def alias_defmodule({:__aliases__, _, _}, module, state, %{module: nil} = env),
