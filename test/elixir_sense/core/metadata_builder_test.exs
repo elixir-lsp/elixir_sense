@@ -505,8 +505,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert Map.keys(state.lines_to_env[1].versioned_vars) == []
         assert [] = state |> get_line_vars(1)
 
-        dbg(Map.keys(state.lines_to_env))
-
         assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
 
         assert [
