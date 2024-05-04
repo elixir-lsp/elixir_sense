@@ -16,13 +16,13 @@ jobs:
         include:
           - elixir: 1.12.x
             otp: 22.x
-            tests_may_fail: true
+            tests_may_fail: false
           - elixir: 1.12.x
             otp: 23.x
-            tests_may_fail: true
+            tests_may_fail: false
           - elixir: 1.12.x
             otp: 24.x
-            tests_may_fail: true
+            tests_may_fail: false
           - elixir: 1.13.x
             otp: 22.x
             tests_may_fail: false
@@ -87,15 +87,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - elixir: 1.12.x
-          #   otp: 22.x
-          #   tests_may_fail: true
-          # - elixir: 1.12.x
-          #   otp: 23.x
-          #   tests_may_fail: true
-          # - elixir: 1.12.x
-          #   otp: 24.x
-          #   tests_may_fail: true
+          - elixir: 1.12.x
+            otp: 22.x
+            tests_may_fail: false
+          - elixir: 1.12.x
+            otp: 23.x
+            tests_may_fail: false
+          - elixir: 1.12.x
+            otp: 24.x
+            tests_may_fail: false
           - elixir: 1.13.x
             otp: 22.x
             tests_may_fail: false
@@ -165,7 +165,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - elixir: 1.15.x
+          - elixir: 1.16.x
             otp: 26.x
     steps:
       - uses: actions/checkout@v4
