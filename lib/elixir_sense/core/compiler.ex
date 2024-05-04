@@ -359,7 +359,7 @@ defmodule ElixirSense.Core.Compiler do
     {q, prelude} =
       __MODULE__.Quote.build(meta, line, file, context, unquote_opt, generated)
 
-    quoted = __MODULE__.Quote.quote(meta, exprs |> dbg, binding, q, prelude, et) |> dbg
+    quoted = __MODULE__.Quote.quote(meta, exprs, binding, q, prelude, et)
     expand(quoted, st, et)
   end
 
@@ -487,9 +487,9 @@ defmodule ElixirSense.Core.Compiler do
       vars: {read, write}
     } = s
 
-    pair = {name, var_context(meta, kind)} |> dbg
+    pair = {name, var_context(meta, kind)}
 
-    case read |> dbg do
+    case read do
       # Variable was already overridden
       %{^pair => var_version} when var_version >= prematch_version ->
         # maybe_warn_underscored_var_repeat(meta, name, kind, e)
@@ -558,7 +558,7 @@ defmodule ElixirSense.Core.Compiler do
           prematch
       end
 
-    case result |> dbg do
+    case result do
       {:ok, pair_version} ->
         # maybe_warn_underscored_var_access(meta, name, kind, e)
         var = {name, [{:version, pair_version} | meta], kind}
@@ -675,7 +675,7 @@ defmodule ElixirSense.Core.Compiler do
     assert_no_match_or_guard_scope(e.context, "anonymous call")
     {[e_expr | e_args], sa, ea} = expand_args([expr | args], s, e)
 
-    sa = if is_atom(e_expr |> dbg) do
+    sa = if is_atom(e_expr) do
       # function_error(meta, e, __MODULE__, {:invalid_function_call, e_expr})
       sa
     else
@@ -1470,8 +1470,8 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_macro(meta, Kernel, def_kind, [call, expr], _callback, state, env)
        when def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
-    dbg(call)
-    dbg(expr)
+    # dbg(call)
+    # dbg(expr)
     assert_no_match_or_guard_scope(env.context, :"{def_kind}/2")
     module = assert_module_scope(env, def_kind, 2)
 
@@ -1511,7 +1511,7 @@ defmodule ElixirSense.Core.Compiler do
     |> new_func_vars_scope
 
     {name_and_args, guards} = __MODULE__.Utils.extract_guards(call)
-    dbg(name_and_args)
+    # dbg(name_and_args)
 
     {name, _meta_1, args} =
       case name_and_args do
@@ -1586,7 +1586,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_macro_callback(meta, module, fun, args, callback, state, env) do
-    dbg({module, fun, args})
+    # dbg({module, fun, args})
     try do
       callback.(meta, args)
     catch
@@ -1603,7 +1603,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_macro_callback!(meta, module, fun, args, callback, state, env) do
-    dbg({module, fun, args})
+    # dbg({module, fun, args})
     ast = callback.(meta, args)
     {ast, state, env} = expand(ast, state, env)
     {ast, state, env}
@@ -1884,9 +1884,9 @@ defmodule ElixirSense.Core.Compiler do
 
     case function do
       {name, ^arity} ->
-        state.mods_funs_to_positions |> dbg
+        state.mods_funs_to_positions
 
-        case state.mods_funs_to_positions[{module, name, arity} |> dbg] do
+        case state.mods_funs_to_positions[{module, name, arity}] do
           %State.ModFunInfo{overridable: {true, _}} = info ->
             kind = case info.type do
               :defdelegate -> :def
@@ -1894,7 +1894,7 @@ defmodule ElixirSense.Core.Compiler do
               :defguardp -> :defmacrop
               other -> other
             end
-            hidden = Map.get(info.meta |> dbg, :hidden, false)
+            hidden = Map.get(info.meta, :hidden, false)
             # def meta is not used anyway so let's pass empty
             meta = []
             # TODO count 1 hardcoded but that's probably OK
@@ -4115,7 +4115,7 @@ defmodule ElixirSense.Core.Compiler do
            buffer,
            acc
          ) do
-      runtime = do_runtime_list(meta, :list, [expr, do_list_concat(buffer, acc)]) |> dbg
+      runtime = do_runtime_list(meta, :list, [expr, do_list_concat(buffer, acc)])
       do_quote_splice(t, q, e, [], runtime)
     end
 

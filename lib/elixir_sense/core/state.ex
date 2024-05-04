@@ -439,10 +439,6 @@ defmodule ElixirSense.Core.State do
     _previous_env = state.lines_to_env[line]
     current_env = get_current_env(state, macro_env)
 
-    if current_env.typespec do
-      dbg({line, current_env.typespec})
-    end
-
     # TODO
     # env = merge_env_vars(current_env, previous_env)
     env = current_env
@@ -1304,7 +1300,7 @@ defmodule ElixirSense.Core.State do
         %VarInfo{name: var_name} = var_info,
         is_definition
       ) do
-        dbg(var_info)
+        # dbg(var_info)
     scope = hd(state.scopes)
     [vars_from_scope | other_vars] = state.vars_info
     is_var_defined = is_variable_defined(state, var_name)
@@ -1334,7 +1330,6 @@ defmodule ElixirSense.Core.State do
         _ ->
           vars_from_scope
       end
-      |> dbg
 
     %__MODULE__{
       state
