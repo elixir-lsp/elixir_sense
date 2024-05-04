@@ -1782,22 +1782,22 @@ defmodule ElixirSense.Core.State do
 
   def no_alias_expansion(other), do: other
 
-  # defmodule Elixir.Alias
-  def alias_defmodule({:__aliases__, _, [Elixir, _]}, module, state, env) do
-    {module, state, env}
-  end
-
-  if Version.match?(System.version(), ">= 1.16.0-dev") do
-    # on elixir >= 1.16 no unaliasing is happening
-    # https://github.com/elixir-lang/elixir/issues/12456
-    def alias_defmodule({:__aliases__, _, [Elixir, _ | _]}, module, state, env) do
+  def alias_defmodule({:__aliases__, _, [Elixir, h | t]}, module, state, env) do
+    if t == [] and Version.match?(System.version(), "< 1.16.0-dev") do
+      # on elixir < 1.16 unaliasing is happening
+      # https://github.com/elixir-lang/elixir/issues/12456
+      alias = String.to_atom("Elixir." <> Atom.to_string(h))
+      state = add_alias(state, {alias, module})
+      {module, state, env}
+    else
       {module, state, env}
     end
   end
 
   # defmodule Alias in root
-  def alias_defmodule({:__aliases__, _, _}, module, state, %{module: nil} = env),
-    do: {module, state, env}
+  def alias_defmodule({:__aliases__, _, _}, module, state, %{module: nil} = env) do
+    {module, state, env}
+  end
 
   # defmodule Alias nested
   def alias_defmodule({:__aliases__, _meta, [h | t]}, _module, state, env) when is_atom(h) do
