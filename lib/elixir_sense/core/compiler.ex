@@ -4,6 +4,7 @@ defmodule ElixirSense.Core.Compiler do
   require Logger
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Core.TypeInference
 
   @env :elixir_env.new()
   def env, do: @env
@@ -1124,9 +1125,14 @@ defmodule ElixirSense.Core.Compiler do
           _ -> raise "invalid @ call"
         end
 
+        inferred_type = case e_args do
+          nil -> nil
+          [arg] -> TypeInference.get_binding_type(state, arg)
+        end
+
         state =
           state
-          |> add_attribute(name, nil, is_definition, {line, column})
+          |> add_attribute(name, inferred_type, is_definition, {line, column})
           |> add_current_env_to_line(line, env)
     
         
@@ -1836,28 +1842,28 @@ defmodule ElixirSense.Core.Compiler do
     expand_block(t, [eh | acc], meta, se, ee)
   end
 
-  defp expand_quote(ast, state, env) do
-    {_, {state, env}} =
-      Macro.prewalk(ast, {state, env}, fn
-        # We need to traverse inside unquotes
-        {unquote, _, [expr]}, {state, env} when unquote in [:unquote, :unquote_splicing] ->
-          {_expr, state, env} = expand(expr, state, env)
-          {:ok, {state, env}}
+  # defp expand_quote(ast, state, env) do
+  #   {_, {state, env}} =
+  #     Macro.prewalk(ast, {state, env}, fn
+  #       # We need to traverse inside unquotes
+  #       {unquote, _, [expr]}, {state, env} when unquote in [:unquote, :unquote_splicing] ->
+  #         {_expr, state, env} = expand(expr, state, env)
+  #         {:ok, {state, env}}
 
-        # If we find a quote inside a quote, we stop traversing it
-        {:quote, _, [_]}, acc ->
-          {:ok, acc}
+  #       # If we find a quote inside a quote, we stop traversing it
+  #       {:quote, _, [_]}, acc ->
+  #         {:ok, acc}
 
-        {:quote, _, [_, _]}, acc ->
-          {:ok, acc}
+  #       {:quote, _, [_, _]}, acc ->
+  #         {:ok, acc}
 
-        # Otherwise we go on
-        node, acc ->
-          {node, acc}
-      end)
+  #       # Otherwise we go on
+  #       node, acc ->
+  #         {node, acc}
+  #     end)
 
-    {ast, state, env}
-  end
+  #   {ast, state, env}
+  # end
 
   defp expand_multi_alias_call(kind, meta, base, refs, opts, state, env) do
     {base_ref, state, env} = expand(base, state, env)
@@ -4693,7 +4699,7 @@ defmodule ElixirSense.Core.Compiler do
     def expand(ast, state, env) do
       {ast, {state, env}} =
       # TODO this should handle remote calls, attributes unquotes?
-      {ast, {state, env}} = Macro.prewalk(ast, {state, env}, fn  
+      {ast, {_state, _env}} = Macro.prewalk(ast, {state, env}, fn  
         {:__aliases__, meta, list} = node, {state, env} when is_list(list) ->
           {node, state, env} = ElixirExpand.expand(node, state, env)
           {node, {state, env}}

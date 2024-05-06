@@ -6,7 +6,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, ModFunInfo, AttributeInfo}
 
-  @attribute_binding_support Version.match?(System.version(), "< 1.17.0-dev")
+  @attribute_binding_support true or Version.match?(System.version(), "< 1.17.0-dev")
   @expand_eval false
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
   @macro_calls_support Version.match?(System.version(), "< 1.17.0-dev")
@@ -1345,8 +1345,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              }
            ] = get_line_attributes(state, 9)
   end
-
-  if @attribute_binding_support do
+  
+  describe "binding" do
     test "module attributes binding" do
       state =
         """
@@ -1363,113 +1363,120 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         end
         """
         |> string_to_state
-
+  
       assert get_line_attributes(state, 10) == [
-               %ElixirSense.Core.State.AttributeInfo{
-                 name: :myattribute,
-                 positions: [{2, 3}, {3, 11}],
-                 type: {:atom, String}
-               },
-               %AttributeInfo{
-                 name: :otherattribute,
-                 positions: [{10, 3}],
-                 type:
-                   {:call, {:atom, Application}, :get_env,
+                %ElixirSense.Core.State.AttributeInfo{
+                  name: :myattribute,
+                  positions: [{2, 3}, {3, 11}],
+                  type: {:atom, String}
+                },
+                %AttributeInfo{
+                  name: :otherattribute,
+                  positions: [{10, 3}],
+                  type:
+                    {:call, {:atom, Application}, :get_env,
                     [atom: :elixir_sense, atom: :some_attribute, atom: MyModule.InnerModule]}
-               }
-             ]
+                }
+              ]
+  
+      assert get_line_attributes(state, 3) == [
+                %AttributeInfo{
+                  name: :myattribute,
+                  positions: [{2, 3}, {3, 11}],
+                  type: {:atom, String}
+                }
+              ]
+  
+      assert get_line_attributes(state, 7) == [
+                %AttributeInfo{
+                  name: :inner_attr,
+                  positions: [{5, 5}, {7, 13}],
+                  type: {:map, [abc: {:atom, nil}], nil}
+                },
+                %AttributeInfo{
+                  name: :inner_attr_1,
+                  positions: [{6, 5}],
+                  type: {:atom, MyModule.InnerModule}
+                }
+              ]
+  
+      assert get_line_attributes(state, 9) == [
+                %AttributeInfo{
+                  name: :myattribute,
+                  positions: [{2, 3}, {3, 11}],
+                  type: {:atom, String}
+                }
+              ]
+    end
+
+    test "module attributes rebinding" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute String
+          IO.puts ""
+          @myattribute List
+          @myattribute
+          IO.puts ""
+          def a do
+            @myattribute
+          end
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
       assert get_line_attributes(state, 3) == [
-               %AttributeInfo{
-                 name: :myattribute,
-                 positions: [{2, 3}, {3, 11}],
-                 type: {:atom, String}
-               }
-             ]
+          %AttributeInfo{
+            name: :myattribute,
+            positions: [{2, 3}],
+            type: {:atom, String}
+          }
+        ]
 
-      assert get_line_attributes(state, 7) == [
-               %AttributeInfo{
-                 name: :inner_attr,
-                 positions: [{5, 5}, {7, 13}],
-                 type: {:map, [abc: {:atom, nil}], nil}
-               },
-               %AttributeInfo{
-                 name: :inner_attr_1,
-                 positions: [{6, 5}],
-                 type: {:atom, MyModule.InnerModule}
-               }
-             ]
+      assert get_line_attributes(state, 6) == [
+                %AttributeInfo{
+                  name: :myattribute,
+                  positions: [{2, 3}, {4, 3}, {5, 3}],
+                  type: {:atom, List}
+                }
+              ]
 
-      assert get_line_attributes(state, 9) == [
-               %AttributeInfo{
-                 name: :myattribute,
-                 positions: [{2, 3}, {3, 11}],
-                 type: {:atom, String}
-               }
-             ]
+      assert get_line_attributes(state, 10) == [
+                %AttributeInfo{
+                  name: :myattribute,
+                  positions: [{2, 3}, {4, 3}, {5, 3}, {8, 5}],
+                  type: {:atom, List}
+                }
+              ]
     end
-  end
 
-  if @binding_support do
-    describe "binding" do
-      test "module attributes rebinding" do
-        state =
-          """
-          defmodule MyModule do
-            @myattribute String
-            @myattribute List
-            @myattribute
-            IO.puts ""
-            def a do
-              @myattribute
-            end
-            IO.puts ""
-          end
-          """
-          |> string_to_state
+    test "module attributes value binding" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute %{abc: String}
+          @some_attr @myattribute
+          IO.puts ""
+        end
+        """
+        |> string_to_state
 
-        assert get_line_attributes(state, 5) == [
-                 %AttributeInfo{
-                   name: :myattribute,
-                   positions: [{2, 3}, {3, 3}, {4, 3}],
-                   type: {:atom, List}
-                 }
-               ]
+      assert get_line_attributes(state, 4) == [
+                %AttributeInfo{
+                  name: :myattribute,
+                  positions: [{2, 3}, {3, 14}],
+                  type: {:map, [abc: {:atom, String}], nil}
+                },
+                %AttributeInfo{
+                  name: :some_attr,
+                  positions: [{3, 3}],
+                  type: {:attribute, :myattribute}
+                }
+              ]
+    end
 
-        assert get_line_attributes(state, 9) == [
-                 %AttributeInfo{
-                   name: :myattribute,
-                   positions: [{2, 3}, {3, 3}, {4, 3}, {7, 5}],
-                   type: {:atom, List}
-                 }
-               ]
-      end
-
-      test "module attributes value binding" do
-        state =
-          """
-          defmodule MyModule do
-            @myattribute %{abc: String}
-            @some_attr @myattribute
-            IO.puts ""
-          end
-          """
-          |> string_to_state
-
-        assert get_line_attributes(state, 4) == [
-                 %AttributeInfo{
-                   name: :myattribute,
-                   positions: [{2, 3}, {3, 14}],
-                   type: {:map, [abc: {:atom, String}], nil}
-                 },
-                 %AttributeInfo{
-                   name: :some_attr,
-                   positions: [{3, 3}],
-                   type: {:attribute, :myattribute}
-                 }
-               ]
-      end
-
+    if @binding_support do
       test "module attributes value binding to and from variables" do
         state =
           """
@@ -2434,34 +2441,34 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  type: {:map, [b: {:variable, :b}], nil}
                } = Enum.find(vars, &(&1.name == :a2))
       end
-
-      test "rebinding vars" do
-        state =
-          """
-          defmodule MyModule do
-            var1 = 1
-            def func(%{var: var1, key: [_|[_, var1]]}) do
-              var1 = 1
-              var1 = 2
-              IO.puts ""
-            end
-            var1 = 1
-          end
-          """
-          |> string_to_state
-
-        vars = state |> get_line_vars(6)
-
-        assert [
-                 %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}], scope_id: 3},
-                 %VarInfo{name: :var1, positions: [{4, 5}], scope_id: 4},
-                 %VarInfo{name: :var1, positions: [{5, 5}], scope_id: 4}
-               ] = vars
-      end
     end
   end
 
   describe "var" do
+    test "rebinding vars" do
+      state =
+        """
+        defmodule MyModule do
+          var1 = 1
+          def func(%{var: var1, key: [_|[_, var1]]}) do
+            var1 = 1
+            var1 = 2
+            IO.puts ""
+          end
+          var1 = 1
+        end
+        """
+        |> string_to_state
+
+      vars = state |> get_line_vars(6)
+
+      assert ([
+               %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}], scope_id: scope_id_1},
+               %VarInfo{name: :var1, positions: [{4, 5}], scope_id: scope_id_2},
+               %VarInfo{name: :var1, positions: [{5, 5}], scope_id: scope_id_2}
+             ] when scope_id_2 > scope_id_1) = vars
+    end
+
     test "vars defined inside a module" do
       state =
         """

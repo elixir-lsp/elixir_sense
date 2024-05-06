@@ -5,7 +5,7 @@ defmodule ElixirSense.Core.Guard do
 
   import ElixirSense.Core.State
 
-  alias ElixirSense.Core.MetadataBuilder
+  alias ElixirSense.Core.TypeInference
 
   # A guard expression can be in either these form:
   #        :and                          :or
@@ -116,7 +116,7 @@ defmodule ElixirSense.Core.Guard do
 
   defp guard_predicate_type(:is_map_key, [var, key], state) do
     type =
-      case MetadataBuilder.get_binding_type(state, key) do
+      case TypeInference.get_binding_type(state, key) do
         {:atom, key} -> {:map, [{key, nil}], nil}
         nil when is_binary(key) -> {:map, [{key, nil}], nil}
         _ -> {:map, [], nil}
