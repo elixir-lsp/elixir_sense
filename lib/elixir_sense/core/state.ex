@@ -1387,6 +1387,7 @@ defmodule ElixirSense.Core.State do
   defp format_doc_arg(binary) when is_binary(binary), do: binary
 
   defp format_doc_arg(list) when is_list(list) do
+    # TODO pass env and expand metadata
     if Keyword.keyword?(list) do
       {:meta, Map.new(list)}
     else
@@ -1399,6 +1400,7 @@ defmodule ElixirSense.Core.State do
 
   defp format_doc_arg(quoted) do
     try do
+      # TODO pass env to eval
       case Code.eval_quoted(quoted) do
         {binary, _} when is_binary(binary) ->
           binary
