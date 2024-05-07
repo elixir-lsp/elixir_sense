@@ -7450,6 +7450,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
+  test "no endless loop on use variable" do
+    state =
+      """
+      defmodule Some do
+        use
+        @spec my(number()) :: number()
+        def my(abc) do
+          abc + 1
+        end
+      end
+      """
+      |> string_to_state
+  end
+
   defp string_to_state(string) do
     string
     |> Code.string_to_quoted(columns: true, token_metadata: true)

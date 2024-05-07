@@ -1676,7 +1676,7 @@ defmodule ElixirSense.Core.State do
     {ast, state, env}
   end
 
-  def expand({:use, meta, _} = ast, state, env) do
+  def expand({:use, meta, [_ | _]} = ast, state, env) do
     alias ElixirSense.Core.MacroExpander
     line = Keyword.fetch!(meta, :line)
 
