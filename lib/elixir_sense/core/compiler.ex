@@ -2541,15 +2541,12 @@ defmodule ElixirSense.Core.Compiler do
       call_e = Map.put(e, :context, :match)
       {e_expr, %{vars: new_current, unused: new_unused} = s_expr, ee} = fun.(expr, call_s, call_e)
 
-      # TODO elixir does it like that, is it a bug? we lose state
-      # end_s = %{after_s | prematch: prematch, unused: new_unused, vars: new_current}
-      end_s = %{s_expr |
-      prematch: prematch, unused: new_unused, vars: new_current,
-      mods_funs_to_positions: after_s.mods_funs_to_positions,
-      types: after_s.types,
-      specs: after_s.specs,
-      structs: after_s.structs,
-      calls: after_s.calls
+      dbg(s_expr.vars)
+
+      # TODO merge after_s.calls with s_expr.calls - we loose calls on the left side of =
+
+      end_s = %{after_s |
+      prematch: prematch, unused: new_unused, vars: new_current
       }
 
       # dbg(hd(before_s.scope_vars_info))
@@ -2561,14 +2558,14 @@ defmodule ElixirSense.Core.Compiler do
       # dbg(new_current)
 
       # TODO I'm not sure this is correct
-      merged_vars = (hd(end_s.scope_vars_info) -- hd(after_s.scope_vars_info))
+      merged_vars = (hd(s_expr.scope_vars_info) -- hd(after_s.scope_vars_info))
       |> merge_same_name_vars()
       
       merged_vars = merged_vars ++ hd(after_s.scope_vars_info)
 
       end_s = %{end_s |
       scope_vars_info: [merged_vars | tl(end_s.scope_vars_info)],
-      lines_to_env: Map.merge(after_s.lines_to_env, end_s.lines_to_env)
+      lines_to_env: Map.merge(after_s.lines_to_env, s_expr.lines_to_env)
       }
 
       # dbg(Map.keys(end_s.lines_to_env))
@@ -2608,7 +2605,7 @@ defmodule ElixirSense.Core.Compiler do
             {e_args, sa, ea} = ElixirExpand.expand_args(args, sm, em)
 
             {e_guard, sg, eg} =
-              guard(guard, %{sa | prematch: prematch}, Map.put(ea, :context, :guard))
+              guard(guard, %{sa | prematch: prematch}, %{ea | context: :guard})
 
             {{e_args, e_guard}, sg, eg}
           end,
@@ -2920,7 +2917,7 @@ defmodule ElixirSense.Core.Compiler do
 
     # rescue Alias => _ in [Alias]
     defp expand_rescue({:__aliases__, _, [_ | _]} = alias, s, e) do
-      expand_rescue({:in, [], [{:_, [], Map.get(e, :module)}, alias]}, s, e)
+      expand_rescue({:in, [], [{:_, [], e.module}, alias]}, s, e)
     end
 
     # rescue var in _
@@ -2953,7 +2950,7 @@ defmodule ElixirSense.Core.Compiler do
     # rescue expr() => rescue expanded_expr()
     defp expand_rescue({_meta, meta, _} = arg, s, e) do
       # TODO wut?
-      case Macro.expand_once(arg, Map.put(e, :line, line(meta))) do
+      case Macro.expand_once(arg, %{e | line: line(meta)}) do
         ^arg -> false
         new_arg -> expand_rescue(new_arg, s, e)
       end
@@ -2961,7 +2958,7 @@ defmodule ElixirSense.Core.Compiler do
 
     # rescue list() or atom() => _ in (list() or atom())
     defp expand_rescue(arg, s, e) do
-      expand_rescue({:in, [], [{:_, [], Map.get(e, :module)}, arg]}, s, e)
+      expand_rescue({:in, [], [{:_, [], e.module}, arg]}, s, e)
     end
 
     defp normalize_rescue(atom) when is_atom(atom) do

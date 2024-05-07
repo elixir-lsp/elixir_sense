@@ -1477,6 +1477,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
 
     if @binding_support do
+      test "variable binding simple case" do
+        state =
+          """
+          var = :my_var
+          IO.puts("")
+          """
+          |> string_to_state
+  
+        assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(2)
+      end
+      
       test "module attributes value binding to and from variables" do
         state =
           """
