@@ -7,7 +7,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   import ElixirSense.Log
 
   alias ElixirSense.Core.BuiltinFunctions
-  alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.VarInfo
@@ -680,8 +679,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
          {:@, meta_attr, [{:moduledoc, meta, [doc_arg]}]},
          state
        ) do
-    line = Keyword.fetch!(meta_attr, :line)
-    column = Keyword.fetch!(meta_attr, :column)
     new_ast = {:@, meta_attr, [{:moduledoc, add_no_call(meta), [doc_arg]}]}
     env = get_current_env(state)
 
@@ -938,7 +935,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, state}
   end
 
-  defp pre({:defoverridable, meta, [arg]} = ast, state) do
+  defp pre({:defoverridable, _meta, [_arg]} = ast, state) do
     {ast, state, _env} = expand(ast, state)
     {ast, state}
   end

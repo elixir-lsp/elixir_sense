@@ -13,6 +13,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @macro_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @typespec_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @record_support Version.match?(System.version(), "< 1.17.0-dev")
+  @compiler Code.ensure_loaded?(ElixirSense.Core.Compiler)
 
   describe "versioned_vars" do
     test "in block" do
@@ -225,7 +226,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:y, nil}
              ]
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
         assert [
                  %VarInfo{name: :y, positions: [{1, 1}, {2, 11}, {3, 11}]}
                ] = state |> get_line_vars(4)
@@ -501,7 +502,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
         assert Map.keys(state.lines_to_env[1].versioned_vars) == []
         assert [] = state |> get_line_vars(1)
 
@@ -605,7 +606,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
         assert Map.keys(state.lines_to_env[1].versioned_vars) == []
         assert [] = state |> get_line_vars(3)
 
@@ -660,7 +661,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
     end
 
-    if Version.match?(System.version(), ">= 1.17.0-dev") do
+    if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
       test "for bitstring" do
         state =
           """
@@ -974,7 +975,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
         assert [%VarInfo{name: :abc, positions: [{1, 1}, {3, 11}]}] = state |> get_line_vars(5)
       else
         assert [%VarInfo{name: :abc, positions: [{1, 1}]}] = state |> get_line_vars(5)
@@ -997,7 +998,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[8].versioned_vars, {:abc, nil})
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
         assert [
                  %VarInfo{
                    name: :abc,
@@ -1023,7 +1024,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
         assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:"&1", nil}, {:abc, nil}]
 
         assert [
@@ -7462,6 +7463,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
       """
       |> string_to_state
+
+    assert state
   end
 
   defp string_to_state(string) do

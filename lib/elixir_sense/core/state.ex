@@ -420,7 +420,7 @@ defmodule ElixirSense.Core.State do
 
   def add_first_alias_positions(
         %__MODULE__{} = state,
-        env = %{module: module, function: nil},
+        _env = %{module: module, function: nil},
         meta
       ) do
     # TODO shouldn't that look for end_of_expression
@@ -1592,7 +1592,6 @@ defmodule ElixirSense.Core.State do
 
   def expand({:alias, meta, [arg, opts]}, state, env) do
     line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
 
     {arg, state, env} = expand(arg, state, env)
     # options = expand(no_alias_opts(arg), state, env, env)
