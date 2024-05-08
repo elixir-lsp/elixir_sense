@@ -27,7 +27,7 @@ defmodule ElixirSense.Core.Compiler do
     # dbg(sr)
     # dbg(e_right)
     {e_left, sl, el} = __MODULE__.Clauses.match(&expand/3, left, sr, s, er)
-    # IO.inspect(sl.scope_vars_info, label: "left")
+    # IO.inspect(sl.vars_info, label: "left")
     # dbg(e_left)
     # dbg(el.versioned_vars)
     # dbg(sl.vars)
@@ -454,10 +454,8 @@ defmodule ElixirSense.Core.Compiler do
     no_match_s = %{s | prematch: :pin, vars: {prematch, write}}
 
     case expand(arg, no_match_s, %{e | context: nil}) do
-      {{name, var_meta, kind} = var, %{unused: unused}, _} when is_atom(name) and is_atom(kind) ->
-        line = var_meta[:line]
-        column = var_meta[:column]
-        s = if kind == nil, do: add_var(s, %State.VarInfo{name: name, is_definition: false, positions: [{line, column}]}, false), else: s
+      {{name, _var_meta, kind} = var, %{unused: unused}, _} when is_atom(name) and is_atom(kind) ->
+        s = add_var_read(s, var)
         {{:^, meta, [var]}, %{s | unused: unused}, e}
 
       _ ->
@@ -484,7 +482,7 @@ defmodule ElixirSense.Core.Compiler do
       when is_atom(name) and is_atom(kind) do
     %{
       prematch: {_, prematch_version, _},
-      unused: {unused, version},
+      unused: version,
       vars: {read, write}
     } = s
 
@@ -493,40 +491,31 @@ defmodule ElixirSense.Core.Compiler do
     case read do
       # Variable was already overridden
       %{^pair => var_version} when var_version >= prematch_version ->
-        # maybe_warn_underscored_var_repeat(meta, name, kind, e)
-        new_unused = var_used(meta, pair, var_version, unused)
         var = {name, [{:version, var_version} | meta], kind}
-        line = meta[:line]
-        column = meta[:column]
-        s = if kind == nil, do: add_var(s, %State.VarInfo{name: name, is_definition: true, positions: [{line, column}]}, true), else: s
-        {var, %{s | unused: {new_unused, version}}, e}
+        # it's a write but for simplicity treat it as read
+        s = add_var_read(s, var)
+        {var, %{s | unused: version}, e}
 
       # Variable is being overridden now
       %{^pair => _} ->
-        new_unused = var_unused(pair, meta, version, unused, true)
         new_read = Map.put(read, pair, version)
         new_write = if write != false, do: Map.put(write, pair, version), else: write
         var = {name, [{:version, version} | meta], kind}
-        line = meta[:line]
-        column = meta[:column]
-        s = if kind == nil, do: add_var(s, %State.VarInfo{name: name, is_definition: true, positions: [{line, column}]}, true), else: s
-        {var, %{s | vars: {new_read, new_write}, unused: {new_unused, version + 1}}, e}
+        s = add_var_write(s, var)
+        {var, %{s | vars: {new_read, new_write}, unused: version + 1}, e}
 
       # Variable defined for the first time
       _ ->
-        new_unused = var_unused(pair, meta, version, unused, false)
         new_read = Map.put(read, pair, version)
         new_write = if write != false, do: Map.put(write, pair, version), else: write
         var = {name, [{:version, version} | meta], kind}
-        line = meta[:line]
-        column = meta[:column]
-        s = if kind == nil, do: add_var(s, %State.VarInfo{name: name, is_definition: true, positions: [{line, column}]}, true), else: s
-        {var, %{s | vars: {new_read, new_write}, unused: {new_unused, version + 1}}, e}
+        s = add_var_write(s, var)
+        {var, %{s | vars: {new_read, new_write}, unused: version + 1}, e}
     end
   end
 
   defp do_expand({name, meta, kind}, s, e) when is_atom(name) and is_atom(kind) do
-    %{vars: {read, _write}, unused: {unused, version}, prematch: prematch} = s
+    %{vars: {read, _write}, unused: version, prematch: prematch} = s
     pair = {name, var_context(meta, kind)}
 
     result =
@@ -561,12 +550,9 @@ defmodule ElixirSense.Core.Compiler do
 
     case result do
       {:ok, pair_version} ->
-        # maybe_warn_underscored_var_access(meta, name, kind, e)
         var = {name, [{:version, pair_version} | meta], kind}
-        line = meta[:line]
-        column = meta[:column]
-        s = if kind == nil, do: add_var(s, %State.VarInfo{name: name, is_definition: false, positions: [{line, column}]}, false), else: s
-        {var, %{s | unused: {var_used(meta, pair, pair_version, unused), version}}, e}
+        s = add_var_read(s, var)
+        {var, %{s | unused: version}, e}
 
       error ->
         case Keyword.fetch(meta, :if_undefined) do
@@ -620,8 +606,8 @@ defmodule ElixirSense.Core.Compiler do
       {:macro, module, callback} ->
         # TODO there is a subtle difference - callback will call expander with state derrived from env via
         # :elixir_env.env_to_ex(env) possibly losing some details
-        line = Keyword.get(meta, :line, 0)
-        column = Keyword.get(meta, :column, nil)
+        # line = Keyword.get(meta, :line, 0)
+        # column = Keyword.get(meta, :column, nil)
         # state = state
         # |> add_call_to_line({module, fun, length(args)}, {line, column})
         # |> add_current_env_to_line(line, env)
@@ -767,7 +753,7 @@ defmodule ElixirSense.Core.Compiler do
          Kernel,
          :defdelegate,
          [funs, opts],
-         callback,
+         _callback,
          state,
          env
        ) do
@@ -1023,7 +1009,7 @@ defmodule ElixirSense.Core.Compiler do
         {expr, state, env} = __MODULE__.Typespec.expand(expr, state, env)
 
         case __MODULE__.Typespec.type_to_signature(expr) do
-          {name, [type_arg]} when name in [:required, :optional] ->
+          {name, [_type_arg]} when name in [:required, :optional] ->
             raise "type #{name}/#{1} is a reserved type and it cannot be defined"
           
           {name, type_args} ->
@@ -1256,7 +1242,7 @@ defmodule ElixirSense.Core.Compiler do
       options
     )
     |> add_call_to_line({module, call, length(args)}, {line, column})
-    |> add_current_env_to_line(line)
+    |> add_current_env_to_line(line, env)
 
     {{{:., meta, [Record, call]}, meta, args}, state, env}
   end
@@ -1265,7 +1251,7 @@ defmodule ElixirSense.Core.Compiler do
          meta,
          Kernel,
          :defprotocol,
-         [alias, [do: block]] = args,
+         [_alias, [do: _block]] = args,
          callback,
          state,
          env
@@ -1462,7 +1448,7 @@ defmodule ElixirSense.Core.Compiler do
     {{:__block__, [], []}, state, env}
   end
 
-  defp expand_macro(meta, Protocol, :def, [{name, _, args = [_ | _]} = call], callback, state, env) when is_atom(name) do
+  defp expand_macro(meta, Protocol, :def, [{name, _, _args = [_ | _]} = call], callback, state, env) when is_atom(name) do
     # transform protocol def to def with empty body
     {ast, state, env} = expand_macro(meta, Kernel, :def, [call, {:__block__, [], []}], callback, state, env)
     {ast, state, env}
@@ -1479,7 +1465,7 @@ defmodule ElixirSense.Core.Compiler do
     # dbg(call)
     # dbg(expr)
     assert_no_match_or_guard_scope(env.context, :"{def_kind}/2")
-    module = assert_module_scope(env, def_kind, 2)
+    _module = assert_module_scope(env, def_kind, 2)
 
     %{vars: vars, unused: unused} = state
 
@@ -1513,7 +1499,7 @@ defmodule ElixirSense.Core.Compiler do
     #   state
     #   |> add_current_env_to_line(line, env)
 
-    state = %{state | vars: {%{}, false}, unused: {%{}, 0}}
+    state = %{state | vars: {%{}, false}, unused: 0}
     |> new_func_vars_scope
 
     {name_and_args, guards} = __MODULE__.Utils.extract_guards(call)
@@ -1578,8 +1564,8 @@ defmodule ElixirSense.Core.Compiler do
       expand(expr, state, %{g_env | context: nil, function: {name, arity}})
 
     # restore vars from outer scope
-    # TODO maybe_move_vars_to_outer_scope?
     state = %{state | vars: vars, unused: unused}
+    |> maybe_move_vars_to_outer_scope
     |> remove_vars_scope
     |> remove_func_vars_scope
 
@@ -1598,7 +1584,7 @@ defmodule ElixirSense.Core.Compiler do
     catch
       # TODO raise?
       # For language servers, if expanding the macro fails, we just give up.
-      kind, payload ->
+      _kind, _payload ->
         # IO.inspect(payload, label: inspect(fun))
         {{{:., meta, [module, fun]}, meta, args}, state, env}
     else
@@ -1608,7 +1594,7 @@ defmodule ElixirSense.Core.Compiler do
     end
   end
 
-  defp expand_macro_callback!(meta, module, fun, args, callback, state, env) do
+  defp expand_macro_callback!(meta, _module, _fun, args, callback, state, env) do
     # dbg({module, fun, args})
     ast = callback.(meta, args)
     {ast, state, env} = expand(ast, state, env)
@@ -1969,7 +1955,7 @@ defmodule ElixirSense.Core.Compiler do
         nil -> raise "missing_option"
       end
 
-    {e_opts, so, eo} = expand(opts, __MODULE__.Env.reset_unused_vars(s), e)
+    {e_opts, so, eo} = expand(opts, __MODULE__.Env.reset_vars(s), e)
     {e_cases, sc, ec} = map_fold(&expand_for_generator/3, so, eo, cases)
     assert_generator_start(meta, e_cases, e)
 
@@ -1990,7 +1976,7 @@ defmodule ElixirSense.Core.Compiler do
       end
 
     {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]},
-     __MODULE__.Env.merge_and_check_unused_vars(se, s, ee), e}
+     __MODULE__.Env.merge_vars(se, s, ee), e}
   end
 
   defp expand_for_do_block(_meta, [{:->, _, _} | _], _s, _e, false),
@@ -2001,12 +1987,12 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_for_do_block(meta, [{:->, _, _} | _] = clauses, s, e, {:reduce, _}) do
     transformer = fn
       {_, _, [[_], _]} = clause, sa ->
-        s_reset = __MODULE__.Env.reset_unused_vars(sa)
+        s_reset = __MODULE__.Env.reset_vars(sa)
 
         {e_clause, s_acc, e_acc} =
           __MODULE__.Clauses.clause(meta, :fn, &__MODULE__.Clauses.head/3, clause, s_reset, e)
 
-        {e_clause, __MODULE__.Env.merge_and_check_unused_vars(s_acc, sa, e_acc)}
+        {e_clause, __MODULE__.Env.merge_vars(s_acc, sa, e_acc)}
 
       _, _ ->
         raise "for_with_reduce_bad_block"
@@ -2105,7 +2091,6 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp validate_for_options([], false, {:uniq, true}, false, false, meta, e, acc) do
-    # file_warn(meta, e, __MODULE__, :for_with_unused_uniq)
     acc_without_uniq = Keyword.delete(acc, :uniq)
     validate_for_options([], false, false, false, false, meta, e, acc_without_uniq)
   end
@@ -2317,32 +2302,6 @@ defmodule ElixirSense.Core.Compiler do
 
   defp refute_parallel_bitstring_match_map_field(_args1, _args2, _e, _parallel), do: :ok
 
-  defp var_unused({_, kind} = pair, meta, version, unused, override) do
-    if kind == nil and should_warn(meta) do
-      Map.put(unused, {pair, version}, {meta, override})
-    else
-      unused
-    end
-  end
-
-  defp var_used(meta, {_, kind} = pair, version, unused) do
-    keep_unused = Keyword.has_key?(meta, :keep_unused)
-
-    if keep_unused do
-      unused
-    else
-      if is_atom(kind) do
-        Map.put(unused, {pair, version}, false)
-      else
-        unused
-      end
-    end
-  end
-
-  defp should_warn(meta) do
-    Keyword.get(meta, :generated) != true
-  end
-
   defp var_context(meta, kind) do
     case Keyword.fetch(meta, :counter) do
       {:ok, counter} -> counter
@@ -2399,8 +2358,8 @@ defmodule ElixirSense.Core.Compiler do
   defmodule Env do
     alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
 
-    def reset_unused_vars(%{unused: {_unused, version}} = s) do
-      %{s | unused: {%{}, version}} |> new_vars_scope
+    def reset_vars(s) do
+      s |> new_vars_scope
     end
 
     def reset_read(%{vars: {_, write}} = s, %{vars: {read, _}}) do
@@ -2411,11 +2370,11 @@ defmodule ElixirSense.Core.Compiler do
       %{s | vars: {read, read}}
     end
 
-    def close_write(%{vars: {_read, write}} = s, %{vars: {_, false}} = s1) do
+    def close_write(%{vars: {_read, write}} = s, %{vars: {_, false}}) do
       %{s | vars: {write, false}}
     end
 
-    def close_write(%{vars: {_read, write}} = s, %{vars: {_, upper_write}} = s1) do
+    def close_write(%{vars: {_read, write}} = s, %{vars: {_, upper_write}}) do
       %{s | vars: {write, merge_vars(upper_write, write)}}
     end
 
@@ -2434,42 +2393,16 @@ defmodule ElixirSense.Core.Compiler do
       )
     end
 
-    def merge_and_check_unused_vars(s, s1 = %{vars: {read, write}, unused: {unused, _version}}, e) do
-      %{unused: {clause_unused, version}} = s
-      new_unused = merge_and_check_unused_vars(read, unused, clause_unused, e)
-      # dbg(s.scope_vars_info)
+    def merge_vars(s, %{vars: {read, write}}, _e) do
+      # dbg(s.vars_info)
       # dbg({read, write})
-      s = %{s | unused: {new_unused, version}, vars: {read, write}}
+      s = %{s | vars: {read, write}}
       |> maybe_move_vars_to_outer_scope
       |> remove_vars_scope
 
-      # dbg(s.scope_vars_info)
+      # dbg(s.vars_info)
       # dbg(s.vars_info_per_scope_id)
       s
-    end
-
-    def merge_and_check_unused_vars(current, unused, clause_unused, _e) do
-      :maps.fold(
-        fn
-          {var, count} = key, false, acc ->
-            case Map.fetch(current, var) do
-              {:ok, current_count} when count <= current_count ->
-                Map.put(acc, key, false)
-
-              _ ->
-                acc
-            end
-
-          {{_name, _kind}, _count}, {_meta, _overridden}, acc ->
-            # if kind == nil and is_unused_var(name) do
-            #   warn = {:unused_var, name, overridden}
-            #   file_warn(meta, e, __MODULE__, warn)
-            # end
-            acc
-        end,
-        unused,
-        clause_unused
-      )
     end
 
     def calculate_span(meta, name) do
@@ -2533,48 +2466,30 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     def match(fun, expr, after_s, before_s, e) do
-      %{vars: current, unused: {_counter, unused} = unused_tuple} = after_s
+      %{vars: current, unused: unused} = after_s
       %{vars: {read, _write}, prematch: prematch} = before_s
 
-      call_s = %{before_s | prematch: {read, unused, :none}, unused: unused_tuple, vars: current}
+      call_s = %{before_s |
+      prematch: {read, unused, :none},
+      unused: unused,
+      vars: current,
+      calls: after_s.calls,
+      lines_to_env: after_s.lines_to_env,
+      vars_info: after_s.vars_info
+      }
 
       call_e = Map.put(e, :context, :match)
       {e_expr, %{vars: new_current, unused: new_unused} = s_expr, ee} = fun.(expr, call_s, call_e)
 
-      dbg(s_expr.vars)
-
-      # TODO merge after_s.calls with s_expr.calls - we loose calls on the left side of =
 
       end_s = %{after_s |
-      prematch: prematch, unused: new_unused, vars: new_current
+      prematch: prematch,
+      unused: new_unused,
+      vars: new_current,
+      calls: s_expr.calls,
+      lines_to_env: s_expr.lines_to_env,
+      vars_info: s_expr.vars_info
       }
-
-      # dbg(hd(before_s.scope_vars_info))
-      # dbg(hd(after_s.scope_vars_info))
-      # dbg(hd(end_s.scope_vars_info))
-
-      # dbg(current)
-      # dbg(read)
-      # dbg(new_current)
-
-      # TODO I'm not sure this is correct
-      merged_vars = (hd(s_expr.scope_vars_info) -- hd(after_s.scope_vars_info))
-      |> merge_same_name_vars()
-      
-      merged_vars = merged_vars ++ hd(after_s.scope_vars_info)
-
-      end_s = %{end_s |
-      scope_vars_info: [merged_vars | tl(end_s.scope_vars_info)],
-      lines_to_env: Map.merge(after_s.lines_to_env, s_expr.lines_to_env)
-      }
-
-      # dbg(Map.keys(end_s.lines_to_env))
-      # dbg(Map.keys(after_s.lines_to_env))
-      # dbg(Map.keys(before_s.lines_to_env))
-      # dbg(Map.keys(before_s.lines_to_env))
-      # dbg(before_s.scope_vars_info)
-      # dbg(after_s.scope_vars_info)
-      # dbg(end_s.scope_vars_info)
 
       end_e = Map.put(ee, :context, Map.get(e, :context))
       {e_expr, end_s, end_e}
@@ -2752,7 +2667,7 @@ defmodule ElixirSense.Core.Compiler do
 
     def with(meta, args, s, e) do
       {exprs, opts0} = ElixirUtils.split_opts(args)
-      s0 = ElixirEnv.reset_unused_vars(s)
+      s0 = ElixirEnv.reset_vars(s)
       {e_exprs, {s1, e1, has_match}} = Enum.map_reduce(exprs, {s0, e, false}, &expand_with/2)
       {e_do, opts1, s2} = expand_with_do(meta, opts0, s, s1, e1)
       {e_opts, opts2, s3} = expand_with_else(meta, opts1, s2, e, has_match)
@@ -2799,7 +2714,7 @@ defmodule ElixirSense.Core.Compiler do
           s_acc = s_acc
           |> maybe_move_vars_to_outer_scope
           |> remove_vars_scope
-          {e_expr, rest_opts, ElixirEnv.merge_and_check_unused_vars(s_acc, s, e_acc)}
+          {e_expr, rest_opts, ElixirEnv.merge_vars(s_acc, s, e_acc)}
       end
     end
 
@@ -2851,13 +2766,13 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp expand_try(_meta, {:do, expr}, s, e) do
-      {e_expr, se, ee} = ElixirExpand.expand(expr, ElixirEnv.reset_unused_vars(s), e)
-      {{:do, e_expr}, ElixirEnv.merge_and_check_unused_vars(se, s, ee)}
+      {e_expr, se, ee} = ElixirExpand.expand(expr, ElixirEnv.reset_vars(s), e)
+      {{:do, e_expr}, ElixirEnv.merge_vars(se, s, ee)}
     end
 
     defp expand_try(_meta, {:after, expr}, s, e) do
-      {e_expr, se, ee} = ElixirExpand.expand(expr, ElixirEnv.reset_unused_vars(s), e)
-      {{:after, e_expr}, ElixirEnv.merge_and_check_unused_vars(se, s, ee)}
+      {e_expr, se, ee} = ElixirExpand.expand(expr, ElixirEnv.reset_vars(s), e)
+      {{:after, e_expr}, ElixirEnv.merge_vars(se, s, ee)}
     end
 
     defp expand_try(meta, {:else, _} = else_clause, s, e) do
@@ -3000,9 +2915,9 @@ defmodule ElixirSense.Core.Compiler do
     defp expand_clauses_origin(meta, kind, fun, {key, [_ | _] = clauses}, s, e) do
       transformer = fn clause, sa ->
         {e_clause, s_acc, e_acc} =
-          clause(meta, {kind, key}, fun, clause, ElixirEnv.reset_unused_vars(sa), e)
+          clause(meta, {kind, key}, fun, clause, ElixirEnv.reset_vars(sa), e)
 
-        {e_clause, ElixirEnv.merge_and_check_unused_vars(s_acc, sa, e_acc)}
+        {e_clause, ElixirEnv.merge_vars(s_acc, sa, e_acc)}
       end
 
       {values, se} = Enum.map_reduce(clauses, s, transformer)
@@ -3556,12 +3471,12 @@ defmodule ElixirSense.Core.Compiler do
           if Enum.any?(left, &is_invalid_arg/1) do
             raise "defaults_in_args"
           else
-            s_reset = ElixirEnv.reset_unused_vars(sa)
+            s_reset = ElixirEnv.reset_vars(sa)
 
             {e_clause, s_acc, e_acc} =
               ElixirClauses.clause(meta, :fn, &ElixirClauses.head/3, clause, s_reset, e)
 
-            {e_clause, ElixirEnv.merge_and_check_unused_vars(s_acc, sa, e_acc)}
+            {e_clause, ElixirEnv.merge_vars(s_acc, sa, e_acc)}
           end
       end
 
@@ -4694,14 +4609,13 @@ defmodule ElixirSense.Core.Compiler do
     def type_to_signature(_), do: :error
 
     def expand(ast, state, env) do
-      {ast, {state, env}} =
       # TODO this should handle remote calls, attributes unquotes?
-      {ast, {_state, _env}} = Macro.prewalk(ast, {state, env}, fn  
-        {:__aliases__, meta, list} = node, {state, env} when is_list(list) ->
+      {ast, {state, env}} = Macro.prewalk(ast, {state, env}, fn  
+        {:__aliases__, _meta, list} = node, {state, env} when is_list(list) ->
           {node, state, env} = ElixirExpand.expand(node, state, env)
           {node, {state, env}}
   
-        {:__MODULE__, meta, ctx} = node, {state, env} when is_atom(ctx) ->
+        {:__MODULE__, _meta, ctx} = node, {state, env} when is_atom(ctx) ->
           {node, state, env} = ElixirExpand.expand(node, state, env)
           {node, {state, env}}
   

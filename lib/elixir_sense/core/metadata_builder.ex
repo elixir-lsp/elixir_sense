@@ -10,20 +10,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.VarInfo
-  alias ElixirSense.Core.TypeInfo
+  # alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Guard
   alias ElixirSense.Core.Compiler
 
   @scope_keywords [:for, :fn, :with]
   @block_keywords [:do, :else, :rescue, :catch, :after]
   @defs [:def, :defp, :defmacro, :defmacrop, :defdelegate, :defguard, :defguardp]
-  @protocol_types [{:t, [], :type, "@type t :: term"}]
-  @protocol_functions [
-    {:__protocol__, [:atom], :def},
-    {:impl_for, [:data], :def},
-    {:impl_for!, [:data], :def},
-    {:behaviour_info, [:atom], :def}
-  ]
 
   defguardp is_call(call, params)
             when is_atom(call) and is_list(params) and
@@ -145,77 +138,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
     end
   end
 
-  defp pre_module(ast, state, meta, alias, types \\ [], functions \\ [], options \\ []) do
-    {position, end_position} = extract_range(meta)
-
-    {full, module, state} =
-      case Keyword.get(options, :for) do
-        nil ->
-          {module, state, env} = expand(alias, state)
-          {full, state, _env} = alias_defmodule(alias, module, state, env)
-
-          {full, module, state}
-
-        implementations ->
-          {implementation_alias(alias, implementations), {alias, implementations}, state}
-      end
-
-    state =
-      state
-      |> maybe_add_protocol_implementation(module)
-      |> add_module(full)
-      |> add_current_module_to_index(position, end_position, generated: state.generated)
-      |> new_lexical_scope
-      |> new_attributes_scope
-      |> new_vars_scope
-
-    env = get_current_env(state)
-    {state, env} = maybe_add_protocol_behaviour(module, state, env)
-
-    state =
-      types
-      |> Enum.reduce(state, fn {type_name, type_args, spec, kind}, acc ->
-        acc
-        |> add_type(env, type_name, type_args, kind, spec, position, end_position,
-          generated: true
-        )
-      end)
-
-    state = add_module_functions(state, env, functions, position, end_position)
-
-    state
-    |> result(ast)
-  end
-
-  defp post_module(ast, state) do
-    env = get_current_env(state)
-
-    state
-    |> apply_optional_callbacks(env)
-    |> remove_attributes_scope
-    |> remove_lexical_scope
-    |> maybe_move_vars_to_outer_scope
-    |> remove_vars_scope
-    |> remove_module
-    |> remove_protocol_implementation
-    |> result(ast)
-  end
-
-  def pre_protocol(ast, state, meta, module) do
-    # protocol defines a type `@type t :: term`
-    # and functions __protocol__/1, impl_for/1, impl_for!/1
-
-    pre_module(ast, state, meta, module, @protocol_types, @protocol_functions)
-  end
-
   defp pre_func({type, meta, ast_args}, state, meta, name, params, options \\ [])
        when is_atom(name) do
     vars =
       state
       |> find_vars(params)
-      |> merge_same_name_vars()
 
-    vars =
+    _vars =
       if options[:guards],
         do: infer_type_from_guards(options[:guards], vars, state),
         else: vars
@@ -226,15 +155,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     ast = {type, Keyword.put(meta, :func, true), ast_args}
 
-    env = get_current_env(state)
+    env = nil
 
     state
     |> new_named_func(name, length(params || []))
     |> add_func_to_index(env, name, params || [], position, end_position, type, options)
     |> new_lexical_scope
     |> new_func_vars_scope
-    |> add_vars(vars, true)
-    |> add_current_env_to_line(Keyword.fetch!(meta, :line))
+    # |> add_vars(vars, true)
+    # |> add_current_env_to_line(Keyword.fetch!(meta, :line))
     |> result(ast)
   end
 
@@ -277,7 +206,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_scope_keyword(ast, state, line) do
+  defp pre_scope_keyword(ast, state, _line) do
     state =
       case ast do
         {:for, _, _} ->
@@ -288,7 +217,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       end
 
     state
-    |> add_current_env_to_line(line)
+    # |> add_current_env_to_line(line)
     |> new_vars_scope
     |> result(ast)
   end
@@ -342,19 +271,18 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_clause({_clause, meta, _} = ast, state, lhs) do
-    line = meta |> Keyword.fetch!(:line)
+  defp pre_clause({_clause, _meta, _} = ast, state, lhs) do
 
-    vars =
+
+    _vars =
       state
       |> find_vars(lhs, Enum.at(state.binding_context, 0))
-      |> merge_same_name_vars()
 
     state
     |> new_lexical_scope
     |> new_vars_scope
-    |> add_vars(vars, true)
-    |> add_current_env_to_line(line)
+    # |> add_vars(vars, true)
+    # |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -366,97 +294,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
     |> result(ast)
   end
 
-  defp pre_spec(ast, state, meta, type_name, type_args, spec, kind) do
-    spec = TypeInfo.typespec_to_string(kind, spec)
-
-    {position = {line, _column}, end_position} = extract_range(meta)
-    env = get_current_env(state)
-
-    state =
-      if kind in [:callback, :macrocallback] do
-        state
-        |> add_func_to_index(
-          env,
-          :behaviour_info,
-          [{:atom, meta, nil}],
-          position,
-          end_position,
-          :def,
-          generated: true
-        )
-      else
-        state
-      end
-
-    state
-    |> add_spec(env, type_name, type_args, spec, kind, position, end_position,
-      generated: state.generated
-    )
-    |> add_typespec_namespace(type_name, length(type_args))
-    |> add_current_env_to_line(line)
-    |> result(ast)
-  end
-
-  defp post_string_literal(ast, state, line, str) do
+  defp post_string_literal(ast, _state, _line, str) do
     str
     |> Source.split_lines()
     |> Enum.with_index()
-    |> Enum.reduce(state, fn {_s, i}, acc -> add_current_env_to_line(acc, line + i) end)
+    # |> Enum.reduce(state, fn {_s, i}, acc -> add_current_env_to_line(acc, line + i) end)
     |> result(ast)
-  end
-
-  defp pre(
-         {:defmodule, meta, [module, _]} = ast,
-         state
-       ) do
-    pre_module(ast, state, meta, module)
-  end
-
-  defp pre(
-         {:defprotocol, meta, [protocol, _]} = ast,
-         state
-       ) do
-    pre_protocol(ast, state, meta, protocol)
-  end
-
-  defp pre(
-         {:defimpl, meta, [protocol, impl_args | _]} = ast,
-         state
-       ) do
-    pre_protocol_implementation(ast, state, meta, protocol, impl_args)
-  end
-
-  defp pre(
-         {:defdelegate, meta, [{name, meta2, params}, body]},
-         state
-       )
-       when is_atom(name) and is_list(body) do
-    ast_without_params = {:defdelegate, meta, [{name, add_no_call(meta2), []}, body]}
-    target_module = body |> Keyword.get(:to)
-
-    target_function =
-      case body |> Keyword.get(:as) do
-        nil -> {:ok, name}
-        as when is_atom(as) -> {:ok, as}
-        _ -> :error
-      end
-
-    options =
-      with mod = target_module,
-           {:ok, target_function} <- target_function do
-        [target: {mod, target_function}]
-      else
-        _ -> []
-      end
-
-    pre_func(ast_without_params, state, meta, name, params, options)
-  end
-
-  # quote do
-  # quote options do
-  defp pre({:quote, _meta, list}, state) when is_list(list) do
-    # replace with an empty AST node
-    {[], state}
   end
 
   # ex_unit describe
@@ -473,7 +316,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
       |> add_call_to_line({nil, :describe, 2}, {line, column})
 
     %{state | context: Map.put(state.context, :ex_unit_describe, name)}
-    |> add_current_env_to_line(line)
+    # |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -613,271 +456,23 @@ defmodule ElixirSense.Core.MetadataBuilder do
     pre_func(ast_without_params, state, meta, name, params)
   end
 
-  defp pre(
-         {:@, meta_attr, [{:moduledoc, meta, [doc_arg]}]},
-         state
-       ) do
-    line = Keyword.fetch!(meta_attr, :line)
-    column = Keyword.fetch!(meta_attr, :column)
-    new_ast = {:@, meta_attr, [{:moduledoc, add_no_call(meta), [doc_arg]}]}
-    env = get_current_env(state)
-
-    state
-    |> add_moduledoc_positions(
-      env,
-      meta_attr
-    )
-    |> register_doc(env, :moduledoc, doc_arg)
-    |> result(new_ast)
-  end
-
-  defp pre(
-         {:@, meta_attr, [{doc, meta, [doc_arg]}]},
-         state
-       )
-       when doc in [:doc, :typedoc] do
-    new_ast = {:@, meta_attr, [{doc, add_no_call(meta), [doc_arg]}]}
-    env = get_current_env(state)
-
-    state
-    |> register_doc(env, doc, doc_arg)
-    |> result(new_ast)
-  end
-
-  defp pre(
-         {:@, meta_attr, [{:impl, meta, [impl_arg]}]},
-         state
-       ) do
-    new_ast = {:@, meta_attr, [{:impl, add_no_call(meta), [impl_arg]}]}
-    env = get_current_env(state)
-    # impl adds sets :hidden by default
-    state
-    |> register_doc(env, :doc, :impl)
-    |> result(new_ast)
-  end
-
-  defp pre(
-         {:@, meta_attr, [{:optional_callbacks, meta, [args]}]},
-         state
-       ) do
-    new_ast = {:@, meta_attr, [{:optional_callbacks, add_no_call(meta), [args]}]}
-
-    state
-    |> register_optional_callbacks(args)
-    |> result(new_ast)
-  end
-
-  defp pre(
-         {:@, meta_attr, [{:deprecated, meta, [deprecated_arg]}]},
-         state
-       ) do
-    new_ast = {:@, meta_attr, [{:deprecated, add_no_call(meta), [deprecated_arg]}]}
-    env = get_current_env(state)
-    # treat @deprecated message as @doc deprecated: message
-    state
-    |> register_doc(env, :doc, deprecated: deprecated_arg)
-    |> result(new_ast)
-  end
-
-  defp pre({:@, _meta, [{:behaviour, _, [_arg]}]} = ast, state) do
-    {ast, state, _env} = expand(ast, state)
-    {ast, state}
-  end
-
-  # protocol derive
-  defp pre(
-         {:@, meta, [{:derive, _, [derived_protos]}]} = ast,
-         state
-       ) do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-    current_module = state |> get_current_module
-
-    List.wrap(derived_protos)
-    |> Enum.map(fn
-      {proto, _opts} -> proto
-      proto -> proto
-    end)
-    |> Enum.reduce(state, fn proto, acc ->
-      case expand(proto, acc) do
-        {proto_module, acc, _env} when is_atom(proto_module) ->
-          # protocol implementation module for Any
-          mod_any = Module.concat(proto_module, Any)
-
-          # protocol implementation module built by @derive
-          mod = Module.concat(proto_module, current_module)
-
-          case acc.mods_funs_to_positions[{mod_any, nil, nil}] do
-            nil ->
-              # implementation for: Any not detected (is in other file etc.)
-              acc
-              |> add_module_to_index(mod, {line, column}, nil, generated: true)
-
-            _any_mods_funs ->
-              # copy implementation for: Any
-              copied_mods_funs_to_positions =
-                for {{module, fun, arity}, val} <- acc.mods_funs_to_positions,
-                    module == mod_any,
-                    into: %{},
-                    do: {{mod, fun, arity}, val}
-
-              %{
-                acc
-                | mods_funs_to_positions:
-                    acc.mods_funs_to_positions |> Map.merge(copied_mods_funs_to_positions)
-              }
-          end
-
-        :error ->
-          acc
-      end
-    end)
-    |> result(ast)
-  end
-
-  defp pre(
-         {:@, meta_attr,
-          [
-            {kind, kind_meta,
-             [{:"::", _meta, _params = [{name, _, type_args}, _type_def]} = spec] = kind_args}
-          ]},
-         state
-       )
-       when kind in [:type, :typep, :opaque] and is_atom(name) and
-              (is_nil(type_args) or is_list(type_args)) do
-    ast = {:@, meta_attr, [{kind, add_no_call(kind_meta), kind_args}]}
-    spec = expand_aliases_in_ast(state, spec)
-    type_args = List.wrap(type_args)
-
-    spec = TypeInfo.typespec_to_string(kind, spec)
-
-    {position = {line, _column}, end_position} = extract_range(meta_attr)
-    env = get_current_env(state)
-
-    state
-    |> add_type(env, name, type_args, spec, kind, position, end_position,
-      generated: state.generated
-    )
-    |> add_typespec_namespace(name, length(type_args))
-    |> add_current_env_to_line(line)
-    |> result(ast)
-  end
-
-  defp pre(
-         {:@, meta_attr,
-          [
-            {kind, kind_meta,
-             [{:when, _, [{:"::", _meta, _params = [{name, _, type_args}, _type_def]}, _]} = spec] =
-               kind_args}
-          ]},
-         state
-       )
-       when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
-              (is_nil(type_args) or is_list(type_args)) do
-    pre_spec(
-      {:@, meta_attr,
-       [
-         {kind, add_no_call(kind_meta), kind_args}
-       ]},
-      state,
-      meta_attr,
-      name,
-      expand_aliases_in_ast(state, List.wrap(type_args)),
-      expand_aliases_in_ast(state, spec),
-      kind
-    )
-  end
-
-  defp pre(
-         {:@, meta_attr,
-          [
-            {kind, meta_kind,
-             [{:"::", _meta, _params = [{name, _, type_args}, _type_def]} = spec] = kind_args}
-          ]},
-         state
-       )
-       when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
-              (is_nil(type_args) or is_list(type_args)) do
-    pre_spec(
-      {:@, meta_attr, [{kind, add_no_call(meta_kind), kind_args}]},
-      state,
-      meta_attr,
-      name,
-      expand_aliases_in_ast(state, List.wrap(type_args)),
-      expand_aliases_in_ast(state, spec),
-      kind
-    )
-  end
-
   # incomplete spec
   # @callback my(integer)
   defp pre(
-         {:@, meta_attr, [{kind, meta_kind, [{name, meta_name, type_args}]} = spec]},
-         state
+         {:@, _meta_attr, [{kind, _meta_kind, [{name, _meta_name, type_args}]} = _spec]},
+         _state
        )
        when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
               (is_nil(type_args) or is_list(type_args)) do
-    pre_spec(
-      {:@, meta_attr, [{kind, add_no_call(meta_kind), [{name, meta_name, type_args}]}]},
-      state,
-      meta_attr,
-      name,
-      expand_aliases_in_ast(state, List.wrap(type_args)),
-      expand_aliases_in_ast(state, spec),
-      kind
-    )
-  end
-
-  defp pre({:@, meta_attr, [{name, meta, params}]}, state) when is_atom(name) do
-    name_string = Atom.to_string(name)
-
-    if String.match?(name_string, ~r/^[_\p{Ll}\p{Lo}][\p{L}\p{N}_]*[?!]?$/u) and
-         not String.starts_with?(name_string, "__atom_elixir_marker_") do
-      line = Keyword.fetch!(meta_attr, :line)
-      column = Keyword.fetch!(meta_attr, :column)
-
-      binding =
-        case List.wrap(params) do
-          [] ->
-            {nil, false}
-
-          [param] ->
-            {get_binding_type(state, param), true}
-
-          _ ->
-            :error
-        end
-
-      case binding do
-        {type, is_definition} ->
-          new_ast = {:@, meta_attr, [{name, add_no_call(meta), params}]}
-
-          state
-          |> add_attribute(name, type, is_definition, {line, column})
-          |> add_current_env_to_line(line)
-          |> result(new_ast)
-
-        _ ->
-          {[], state}
-      end
-    else
-      # most likely not an attribute
-      {[], state}
-    end
-  end
-
-  defp pre(
-         {directive, _meta, _args} = ast,
-         state
-       )
-       when directive in [:alias, :require, :import, :use] do
-    {ast, state, _env} = expand(ast, state)
-    {ast, state}
-  end
-
-  defp pre({:defoverridable, meta, [arg]} = ast, state) do
-    {ast, state, _env} = expand(ast, state)
-    {ast, state}
+    # pre_spec(
+    #   {:@, meta_attr, [{kind, add_no_call(meta_kind), [{name, meta_name, type_args}]}]},
+    #   state,
+    #   meta_attr,
+    #   name,
+    #   expand_aliases_in_ast(state, List.wrap(type_args)),
+    #   expand_aliases_in_ast(state, spec),
+    #   kind
+    # )
   end
 
   defp pre({atom, meta, [_ | _]} = ast, state)
@@ -907,103 +502,14 @@ defmodule ElixirSense.Core.MetadataBuilder do
     result(state, {atom, meta, [lhs, rhs]})
   end
 
-  defp pre({var_or_call, meta, nil} = ast, state)
-       when is_atom(var_or_call) and var_or_call != :__MODULE__ do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-
-    if Enum.any?(get_current_vars(state), &(&1.name == var_or_call)) do
-      vars =
-        state
-        |> find_vars(ast)
-        |> merge_same_name_vars()
-
-      add_vars(state, vars, false)
-    else
-      # pre Elixir 1.4 local call syntax
-      # TODO can we remove when we require elixir 1.15+?
-      # it's only legal inside typespecs
-      # credo:disable-for-next-line
-      if not Keyword.get(meta, :no_call, false) and
-           (Version.match?(System.version(), "< 1.15.0-dev") or
-              match?([{:typespec, _, _} | _], state.scopes)) do
-        add_call_to_line(state, {nil, var_or_call, 0}, {line, column})
-      else
-        state
-      end
-    end
-    |> add_current_env_to_line(line)
-    |> result(ast)
-  end
-
   defp pre({:when, meta, [lhs, rhs]}, state) do
-    vars =
+    _vars =
       state
       |> find_vars(lhs)
-      |> merge_same_name_vars()
 
     state
-    |> add_vars(vars, true)
+    # |> add_vars(vars, true)
     |> result({:when, meta, [:_, rhs]})
-  end
-
-  defp pre({type, meta, fields} = ast, state)
-       when type in [:defstruct, :defexception] do
-    {position, end_position} = extract_range(meta)
-
-    fields =
-      case fields do
-        [fields] when is_list(fields) ->
-          fields
-          |> Enum.filter(fn
-            field when is_atom(field) -> true
-            {field, _} when is_atom(field) -> true
-            _ -> false
-          end)
-          |> Enum.map(fn
-            field when is_atom(field) -> {field, nil}
-            {field, value} when is_atom(field) -> {field, value}
-          end)
-
-        _ ->
-          []
-      end
-
-    env = get_current_env(state)
-
-    state
-    |> add_struct_or_exception(env, type, fields, position, end_position)
-    |> result(ast)
-  end
-
-  # transform `a |> b(c)` calls into `b(a, c)`
-  defp pre({:|>, _, [params_1, {call, meta, params_rest}]}, state) do
-    params = [params_1 | params_rest || []]
-    pre({call, meta, params}, state)
-  end
-
-  # transform external and local func capture into fake call
-  defp pre({:&, _, [{:/, _, [fun, arity]}]}, state) when is_integer(arity) do
-    fake_params =
-      if arity == 0 do
-        []
-      else
-        for _ <- 1..arity, do: nil
-      end
-
-    call =
-      case fun do
-        {func, position, nil} ->
-          {func, position, fake_params}
-
-        {{:., _, [_ | _]} = ast_part, position, []} ->
-          {ast_part, position, fake_params}
-
-        _ ->
-          nil
-      end
-
-    pre(call, state)
   end
 
   defp pre(
@@ -1022,55 +528,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     state
     |> push_binding_context(get_binding_type(state, condition_ast))
     |> add_call_to_line({nil, :case, 2}, {line, column})
-    |> add_current_env_to_line(line)
-    |> result(ast)
-  end
-
-  defp pre(
-         {{:., meta1, [{:__aliases__, _, [:Record]} = module_expression, call]}, _meta,
-          params = [name, _]} = ast,
-         state
-       )
-       when is_call(call, params) and call in [:defrecord, :defrecordp] and
-              is_atom(name) do
-    {position = {line, column}, end_position} = extract_range(meta1)
-
-    env = get_current_env(state)
-    {module, state, env} = expand(module_expression, state, env)
-
-    type =
-      case call do
-        :defrecord -> :defmacro
-        :defrecordp -> :defmacrop
-      end
-
-    options = [generated: true]
-
-    shift = if state.generated, do: 0, else: 1
-
-    state
-    |> new_named_func(name, 1)
-    |> add_func_to_index(
-      env,
-      name,
-      [{:\\, [], [{:args, [], nil}, []]}],
-      position,
-      end_position,
-      type,
-      options
-    )
-    |> new_named_func(name, 2)
-    |> add_func_to_index(
-      env,
-      name,
-      [{:record, [], nil}, {:args, [], nil}],
-      position,
-      end_position,
-      type,
-      options
-    )
-    |> add_call_to_line({module, call, length(params)}, {line, column + shift})
-    |> add_current_env_to_line(line)
+    # |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -1091,7 +549,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
       state
       |> add_call_to_line({module, call, length(params)}, {line, column + shift})
-      |> add_current_env_to_line(line)
+      # |> add_current_env_to_line(line)
       |> result(ast)
     rescue
       _ ->
@@ -1113,7 +571,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state
     |> add_call_to_line({module, call, length(params)}, {line, column + shift})
-    |> add_current_env_to_line(line)
+    # |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -1129,7 +587,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state
     |> add_call_to_line({{:attribute, attribute}, call, length(params)}, {line, column + shift})
-    |> add_current_env_to_line(line)
+    # |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -1145,7 +603,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state
     |> add_call_to_line({nil, {:attribute, attribute}, length(params)}, {line, column + shift})
-    |> add_current_env_to_line(line)
+    # |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -1161,7 +619,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state
     |> add_call_to_line({nil, {:variable, variable}, length(params)}, {line, column + shift})
-    |> add_current_env_to_line(line)
+    # |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -1177,7 +635,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state
     |> add_call_to_line({{:variable, variable}, call, length(params)}, {line, column + shift})
-    |> add_current_env_to_line(line)
+    # |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -1193,7 +651,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state
     |> add_call_to_line({module, call, length(params)}, {line, column + shift})
-    |> add_current_env_to_line(line)
+    # |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -1218,11 +676,11 @@ defmodule ElixirSense.Core.MetadataBuilder do
             end
 
           state
-          |> add_current_env_to_line(line)
+          # |> add_current_env_to_line(line)
           |> result(ast)
         else
           state
-          |> add_current_env_to_line(line)
+          # |> add_current_env_to_line(line)
           |> result(ast)
         end
     end
@@ -1234,38 +692,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
       nil ->
         {ast, state}
 
-      line ->
+      _line ->
         state
-        |> add_current_env_to_line(line)
+        # |> add_current_env_to_line(line)
         |> result(ast)
     end
   end
 
   defp pre(ast, state) do
     {ast, state}
-  end
-
-  defp post(
-         {:defmodule, _meta, [_module, _]} = ast,
-         state
-       ) do
-    post_module(ast, state)
-  end
-
-  defp post(
-         {:defprotocol, _meta, [_protocol, _]} = ast,
-         state
-       ) do
-    env = get_current_env(state)
-    state = generate_protocol_callbacks(state, env)
-    post_module(ast, state)
-  end
-
-  defp post(
-         {:defimpl, _meta, [_protocol, _impl_args | _]} = ast,
-         state
-       ) do
-    post_module(ast, state)
   end
 
   # ex_unit describe
@@ -1374,7 +809,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp post({atom, meta, [lhs, rhs]} = ast, state)
        when atom in [:=, :<-] do
-    line = Keyword.fetch!(meta, :line)
+    _line = Keyword.fetch!(meta, :line)
     match_context_r = get_binding_type(state, rhs)
 
     match_context_r =
@@ -1386,7 +821,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     vars_l = find_vars(state, lhs, match_context_r)
 
-    vars =
+    _vars =
       case rhs do
         {:=, _, [nested_lhs, _nested_rhs]} ->
           match_context_l = get_binding_type(state, lhs)
@@ -1397,17 +832,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
         _ ->
           vars_l
       end
-      |> merge_same_name_vars()
-
-    # Variables and calls were added for the left side of the assignment in `pre` call, but without
-    # the context of an assignment. Thus, they have to be removed here. On their place there will
-    # be added new variables having types merged with types of corresponding deleted variables.
-    remove_positions = Enum.flat_map(vars, fn %VarInfo{positions: positions} -> positions end)
 
     state
-    |> remove_calls(remove_positions)
-    |> merge_new_vars(vars, remove_positions)
-    |> add_current_env_to_line(line)
+    # |> remove_calls(remove_positions)
+    # |> add_current_env_to_line(line)
     |> result(ast)
   end
 
@@ -1657,62 +1085,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp add_no_call(meta) do
     [{:no_call, true} | meta]
-  end
-
-  defp pre_protocol_implementation(
-         ast,
-         state,
-         meta,
-         protocol,
-         for_expression
-       ) do
-    # TODO pass env
-    {protocol, state, _env} = expand(protocol, state)
-    implementations = get_implementations_from_for_expression(state, for_expression)
-
-    pre_module(ast, state, meta, protocol, [], [{:__impl__, [:atom], :def}], for: implementations)
-  end
-
-  defp get_implementations_from_for_expression(state, for: for_expression) do
-    # TODO fold state?
-    for_expression
-    |> List.wrap()
-    |> Enum.map(fn alias ->
-      {module, _state, _env} = expand(alias, state)
-      module
-    end)
-  end
-
-  defp get_implementations_from_for_expression(state, _other) do
-    [state |> get_current_module]
-  end
-
-  defp maybe_add_protocol_behaviour({protocol, _}, state, env) do
-    {_, state, env} = add_behaviour(protocol, state, env)
-    {state, env}
-  end
-
-  defp maybe_add_protocol_behaviour(_, state, env), do: {state, env}
-
-  defp expand_aliases_in_ast(state, ast) do
-    # TODO shouldn't that handle more cases?
-    Macro.prewalk(ast, fn
-      {:__aliases__, meta, [Elixir]} ->
-        {:__aliases__, meta, [Elixir]}
-
-      {:__aliases__, meta, _list} = module ->
-        {module, _state, _env} = expand(module, state)
-        list = module |> Module.split() |> Enum.map(&String.to_atom/1)
-        {:__aliases__, meta, list}
-
-      {:__MODULE__, meta, nil} = module ->
-        {module, _state, _env} = expand(module, state)
-        list = module |> Module.split() |> Enum.map(&String.to_atom/1)
-        {:__aliases__, meta, list}
-
-      other ->
-        other
-    end)
   end
 
   defp ex_unit_test_name(state, name) do

@@ -25,7 +25,7 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
              caller: caller,
              prematch: prematch,
              stacktrace: stacktrace,
-             unused: unused,
+             unused: {_, unused},
              runtime_modules: runtime_modules,
              vars: vars
            )
@@ -549,10 +549,27 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         """)
       end
 
-      test "expands var" do
+      test "expands underscored var write" do
         assert_expansion("_ = 5")
+      end
+
+      test "expands var write" do
         assert_expansion("a = 5")
+      end
+
+      test "expands var read" do
         assert_expansion("a = 5; a")
+      end
+
+      test "expands var overwrite" do
+        assert_expansion("a = 5; a = 6")
+      end
+
+      test "expands var overwrite already overwritten" do
+        assert_expansion("[a, a] = [5, 5]")
+      end
+
+      test "expands var pin" do
         assert_expansion("a = 5; ^a = 6")
       end
 

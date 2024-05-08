@@ -800,11 +800,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[5].versioned_vars) == [{:y, nil}, {:z, nil}]
 
-      # TODO sort?
       assert [
                %VarInfo{name: :y, positions: [{4, 3}]},
                %VarInfo{name: :z, positions: [{4, 6}, {4, 24}]}
-             ] = state |> get_line_vars(5) |> Enum.sort_by(& &1.name)
+             ] = state |> get_line_vars(5)
 
       assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:a, nil}]
 
@@ -1251,7 +1250,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert state.protocols == []
     assert state.scope_attributes == []
     assert state.vars_info == []
-    assert state.scope_vars_info == []
     assert state.scope_ids == []
   end
 
@@ -1487,7 +1485,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   
         assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(2)
       end
-      
+
       test "module attributes value binding to and from variables" do
         state =
           """
@@ -4580,7 +4578,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert get_line_protocol(state, 16) == nil
 
       # protocol and implementations inside protocol implementation creates a cross product
-      assert get_line_module(state, 21) == My.Reversible.Map.Other
+      assert get_line_module(state, 21) == My.Reversible.My.List.Other
       assert get_line_protocol(state, 21) == nil
 
       assert get_line_module(state, 26) == My.Reversible.My.List.Other.My.Map
@@ -5527,8 +5525,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  MyMacros.Nested,
                  MyMacros.One,
                  MyMacros.Two.Three,
-                 #  TODO why isn't this required?
-                 #  Some.List,
                  :ets,
                  :lists
                ]
