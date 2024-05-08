@@ -566,13 +566,10 @@ defmodule ElixirSense.Core.State do
     Module.concat(protocol, first)
   end
 
-  def add_module(%__MODULE__{} = state, module) do
-    # TODO refactor to allow {:implementation, protocol, [implementations]} in scope
+  def add_module(%__MODULE__{} = state) do
     %__MODULE__{
       state
-      | module: [module | state.module],
-        scopes: [module | state.scopes],
-        doc_context: [[] | state.doc_context],
+      | doc_context: [[] | state.doc_context],
         typedoc_context: [[] | state.typedoc_context],
         optional_callbacks_context: [[] | state.optional_callbacks_context]
     }
@@ -581,9 +578,7 @@ defmodule ElixirSense.Core.State do
   def remove_module(%__MODULE__{} = state) do
     %{
       state
-      | module: tl(state.module),
-        scopes: tl(state.scopes),
-        doc_context: tl(state.doc_context),
+      | doc_context: tl(state.doc_context),
         typedoc_context: tl(state.typedoc_context),
         optional_callbacks_context: tl(state.optional_callbacks_context)
     }

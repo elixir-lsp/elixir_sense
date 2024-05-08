@@ -1408,6 +1408,7 @@ defmodule ElixirSense.Core.Compiler do
         state =
           state
           |> add_module_to_index(full, position, end_position, [])
+          |> add_module
           |> add_current_env_to_line(line, %{env | module: full})
           |> add_module_functions(%{env | module: full}, module_functions, position, end_position)
           |> new_vars_scope
@@ -1441,6 +1442,7 @@ defmodule ElixirSense.Core.Compiler do
     |> maybe_move_vars_to_outer_scope
     |> remove_vars_scope
     |> remove_attributes_scope
+    |> remove_module
 
     # TODO hardcode expansion?
     # to result of require (a module atom) and :elixir_module.compile dot call in block
