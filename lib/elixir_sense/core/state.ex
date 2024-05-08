@@ -1255,6 +1255,7 @@ defmodule ElixirSense.Core.State do
   defp format_doc_arg(binary) when is_binary(binary), do: binary
 
   defp format_doc_arg(list) when is_list(list) do
+    # TODO pass env and expand metadata
     if Keyword.keyword?(list) do
       {:meta, Map.new(list)}
     else
@@ -1267,6 +1268,7 @@ defmodule ElixirSense.Core.State do
 
   defp format_doc_arg(quoted) do
     try do
+      # TODO pass env to eval
       case Code.eval_quoted(quoted) do
         {binary, _} when is_binary(binary) ->
           binary
@@ -1460,7 +1462,7 @@ defmodule ElixirSense.Core.State do
     {ast, state, env}
   end
 
-  def expand({:use, meta, _} = ast, state, env) do
+  def expand({:use, meta, [_ | _]} = ast, state, env) do
     alias ElixirSense.Core.MacroExpander
     line = Keyword.fetch!(meta, :line)
 
@@ -1527,13 +1529,22 @@ defmodule ElixirSense.Core.State do
 
   def no_alias_expansion(other), do: other
 
-  # defmodule Elixir.Alias
-  def alias_defmodule({:__aliases__, _, [Elixir, _ | _]}, module, state, env),
-    do: {module, state, env}
+  def alias_defmodule({:__aliases__, _, [Elixir, h | t]}, module, state, env) do
+    if t == [] and Version.match?(System.version(), "< 1.16.0-dev") do
+      # on elixir < 1.16 unaliasing is happening
+      # https://github.com/elixir-lang/elixir/issues/12456
+      alias = String.to_atom("Elixir." <> Atom.to_string(h))
+      state = add_alias(state, {alias, module})
+      {module, state, env}
+    else
+      {module, state, env}
+    end
+  end
 
   # defmodule Alias in root
-  def alias_defmodule({:__aliases__, _, _}, module, state, %{module: nil} = env),
-    do: {module, state, env}
+  def alias_defmodule({:__aliases__, _, _}, module, state, %{module: nil} = env) do
+    {module, state, env}
+  end
 
   # defmodule Alias nested
   def alias_defmodule({:__aliases__, _meta, [h | t]}, _module, state, env) when is_atom(h) do

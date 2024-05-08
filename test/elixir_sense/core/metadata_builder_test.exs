@@ -11,6 +11,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
   @macro_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @typespec_calls_support Version.match?(System.version(), "< 1.17.0-dev")
+  @compiler Code.ensure_loaded?(ElixirSense.Core.Compiler)
 
   describe "versioned_vars" do
     test "in block" do
@@ -223,7 +224,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:y, nil}
              ]
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
         assert [
                  %VarInfo{name: :y, positions: [{1, 1}, {2, 11}, {3, 11}]}
                ] = state |> get_line_vars(4)
@@ -499,11 +500,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
         assert Map.keys(state.lines_to_env[1].versioned_vars) == []
         assert [] = state |> get_line_vars(1)
-
-        dbg(Map.keys(state.lines_to_env))
 
         assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
 
@@ -605,7 +604,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
         assert Map.keys(state.lines_to_env[1].versioned_vars) == []
         assert [] = state |> get_line_vars(3)
 
@@ -660,7 +659,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
     end
 
-    if Version.match?(System.version(), ">= 1.17.0-dev") do
+    if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
       test "for bitstring" do
         state =
           """
@@ -973,7 +972,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
         assert [%VarInfo{name: :abc, positions: [{1, 1}, {3, 11}]}] = state |> get_line_vars(5)
       else
         assert [%VarInfo{name: :abc, positions: [{1, 1}]}] = state |> get_line_vars(5)
@@ -996,7 +995,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[8].versioned_vars, {:abc, nil})
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
         assert [
                  %VarInfo{
                    name: :abc,
@@ -1022,7 +1021,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
         assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:"&1", nil}, {:abc, nil}]
 
         assert [
@@ -6669,35 +6668,67 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       # if there are callbacks behaviour_info/1 is defined
       assert state.mods_funs_to_positions[{Proto, :behaviour_info, 1}] != nil
 
-      assert %{
-               {Proto, :abc, 0} => %ElixirSense.Core.State.SpecInfo{
-                 args: [[], []],
-                 kind: :spec,
-                 name: :abc,
-                 positions: [{3, 3}, {2, 3}],
-                 end_positions: [{3, 25}, {2, 30}],
-                 generated: [false, false],
-                 specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
-               },
-               {Proto, :my, 1} => %ElixirSense.Core.State.SpecInfo{
-                 kind: :callback,
-                 name: :my,
-                 args: [["a :: integer"]],
-                 positions: [{4, 3}],
-                 end_positions: [{4, 37}],
-                 generated: [false],
-                 specs: ["@callback my(a :: integer) :: atom"]
-               },
-               {Proto, :other, 1} => %ElixirSense.Core.State.SpecInfo{
-                 kind: :macrocallback,
-                 name: :other,
-                 args: [["x"]],
-                 positions: [{5, 3}],
-                 end_positions: [_],
-                 generated: [false],
-                 specs: ["@macrocallback other(x) :: Macro.t() when x: integer"]
-               }
-             } = state.specs
+      if Version.match?(System.version(), ">= 1.13.0") do
+        assert %{
+                 {Proto, :abc, 0} => %ElixirSense.Core.State.SpecInfo{
+                   args: [[], []],
+                   kind: :spec,
+                   name: :abc,
+                   positions: [{3, 3}, {2, 3}],
+                   end_positions: [{3, 25}, {2, 30}],
+                   generated: [false, false],
+                   specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
+                 },
+                 {Proto, :my, 1} => %ElixirSense.Core.State.SpecInfo{
+                   kind: :callback,
+                   name: :my,
+                   args: [["a :: integer"]],
+                   positions: [{4, 3}],
+                   end_positions: [{4, 37}],
+                   generated: [false],
+                   specs: ["@callback my(a :: integer) :: atom"]
+                 },
+                 {Proto, :other, 1} => %ElixirSense.Core.State.SpecInfo{
+                   kind: :macrocallback,
+                   name: :other,
+                   args: [["x"]],
+                   positions: [{5, 3}],
+                   end_positions: [_],
+                   generated: [false],
+                   specs: ["@macrocallback other(x) :: Macro.t() when x: integer"]
+                 }
+               } = state.specs
+      else
+        assert %{
+                 {Proto, :abc, 0} => %ElixirSense.Core.State.SpecInfo{
+                   args: [[], []],
+                   kind: :spec,
+                   name: :abc,
+                   positions: [{3, 3}, {2, 3}],
+                   end_positions: [{3, 25}, {2, 30}],
+                   generated: [false, false],
+                   specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
+                 },
+                 {Proto, :my, 1} => %ElixirSense.Core.State.SpecInfo{
+                   kind: :callback,
+                   name: :my,
+                   args: [["a :: integer"]],
+                   positions: [{4, 3}],
+                   end_positions: [{4, 37}],
+                   generated: [false],
+                   specs: ["@callback my(a :: integer) :: atom"]
+                 },
+                 {Proto, :other, 1} => %ElixirSense.Core.State.SpecInfo{
+                   kind: :macrocallback,
+                   name: :other,
+                   args: [["x"]],
+                   positions: [{5, 3}],
+                   end_positions: [_],
+                   generated: [false],
+                   specs: ["@macrocallback other(x) :: Macro.t when x: integer"]
+                 }
+               } = state.specs
+      end
     end
 
     test "specs and types expand aliases" do
@@ -6713,20 +6744,39 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert %{
-               {Proto, :abc, 1} => %State.SpecInfo{
-                 args: [["{%Model.User{}}"]],
-                 specs: [
-                   "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t()}, local_type()]"
-                 ]
-               }
-             } = state.specs
+      if Version.match?(System.version(), ">= 1.13.0") do
+        assert %{
+                 {Proto, :abc, 1} => %State.SpecInfo{
+                   args: [["{%Model.User{}}"]],
+                   specs: [
+                     "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t()}, local_type()]"
+                   ]
+                 }
+               } = state.specs
+      else
+        assert %{
+                 {Proto, :abc, 1} => %State.SpecInfo{
+                   args: [["{%Model.User{}}"]],
+                   specs: [
+                     "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t}, local_type()]"
+                   ]
+                 }
+               } = state.specs
+      end
 
-      assert %{
-               {Proto, :local_type, 0} => %State.TypeInfo{
-                 specs: ["@type local_type() :: Model.User.t()"]
-               }
-             } = state.types
+      if Version.match?(System.version(), ">= 1.13.0") do
+        assert %{
+                 {Proto, :local_type, 0} => %State.TypeInfo{
+                   specs: ["@type local_type() :: Model.User.t()"]
+                 }
+               } = state.types
+      else
+        assert %{
+                 {Proto, :local_type, 0} => %State.TypeInfo{
+                   specs: ["@type local_type() :: Model.User.t"]
+                 }
+               } = state.types
+      end
     end
   end
 
@@ -7514,6 +7564,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{meta: %{overridable: true}} = state.mods_funs_to_positions[{Some, :test, 2}]
     end
+  end
+
+  test "no endless loop on use variable" do
+    state =
+      """
+      defmodule Some do
+        use
+        @spec my(number()) :: number()
+        def my(abc) do
+          abc + 1
+        end
+      end
+      """
+      |> string_to_state
+
+    assert state
   end
 
   defp string_to_state(string) do
