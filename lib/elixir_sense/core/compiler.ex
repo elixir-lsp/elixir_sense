@@ -1739,6 +1739,27 @@ defmodule ElixirSense.Core.Compiler do
     {:ok, :elixir_rewrite.rewrite(receiver, dot_meta, right, meta, e_args)}
   end
 
+  # This fixes exactly 1 test...
+  defp expand_local(meta, :when, [_, _] = args, state, env = %{context: nil}) do
+    # naked when, try to transform into a case
+    ast = {:case, meta,
+      [
+        {:_, meta, nil},
+        [
+          do: [
+            {:->, meta,
+            [
+              [
+                {:when, meta, args}
+              ],
+              :ok
+            ]}
+          ]
+        ]
+      ]}
+    expand(ast, state, env)
+  end
+
   defp expand_local(meta, fun, args, state, env = %{function: function}) when function != nil do
     assert_no_clauses(fun, meta, args, env)
 
