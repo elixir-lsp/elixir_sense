@@ -4373,24 +4373,24 @@ defmodule ElixirSense.Core.Compiler do
     alias ElixirSense.Core.Compiler, as: ElixirExpand
 
     def expand_struct(meta, left, {:%{}, map_meta, map_args}, s, %{context: context} = e) do
-      clean_map_args = clean_struct_key_from_map_args(meta, map_args, e)
+      clean_map_args = clean_struct_key_from_map_args(map_args)
 
       {[e_left, e_right], se, ee} =
         ElixirExpand.expand_args([left, {:%{}, map_meta, clean_map_args}], s, e)
 
       case validate_struct(e_left, context) do
         true when is_atom(e_left) ->
-          case extract_struct_assocs(meta, e_right, e) do
+          case extract_struct_assocs(e_right) do
             {:expand, map_meta, assocs} when context != :match ->
               assoc_keys = Enum.map(assocs, fn {k, _} -> k end)
-              struct = load_struct(meta, e_left, [assocs], assoc_keys, se, ee)
+              struct = load_struct(e_left, [assocs], se, ee)
               keys = [:__struct__ | assoc_keys]
               without_keys = Elixir.Map.drop(struct, keys)
               # TODO is escape safe?
               struct_assocs = Macro.escape(Enum.sort(Elixir.Map.to_list(without_keys)))
               {{:%, meta, [e_left, {:%{}, map_meta, struct_assocs ++ assocs}]}, se, ee}
 
-            {_, _, assocs} ->
+            {_, _, _assocs} ->
               # we don't need to validate keys
               # _ = load_struct(meta, e_left, [], Enum.map(assocs, fn {k, _} -> k end), se, ee)
               {{:%, meta, [e_left, e_right]}, se, ee}
@@ -4398,9 +4398,6 @@ defmodule ElixirSense.Core.Compiler do
 
         true ->
           {{:%, meta, [e_left, e_right]}, se, ee}
-
-        false when context == :match ->
-          raise "invalid_struct_name_in_match"
 
         false ->
           raise "invalid_struct_name"
@@ -4411,7 +4408,7 @@ defmodule ElixirSense.Core.Compiler do
 
     def expand_map(meta, [{:|, update_meta, [left, right]}], s, %{context: nil} = e) do
       {[e_left | e_right], se, ee} = ElixirExpand.expand_args([left | right], s, e)
-      validate_kv(meta, e_right, right, e)
+      e_right = sanitize_kv(e_right, e)
       {{:%{}, meta, [{:|, update_meta, [e_left, e_right]}]}, se, ee}
     end
 
@@ -4421,103 +4418,60 @@ defmodule ElixirSense.Core.Compiler do
 
     def expand_map(meta, args, s, e) do
       {e_args, se, ee} = ElixirExpand.expand_args(args, s, e)
-      validate_kv(meta, e_args, args, e)
+      e_args = sanitize_kv(e_args, e)
       {{:%{}, meta, e_args}, se, ee}
     end
 
-    defp clean_struct_key_from_map_args(meta, [{:|, pipe_meta, [left, map_assocs]}], e) do
-      [{:|, pipe_meta, [left, clean_struct_key_from_map_assocs(meta, map_assocs, e)]}]
+    defp clean_struct_key_from_map_args([{:|, pipe_meta, [left, map_assocs]}]) do
+      [{:|, pipe_meta, [left, delete_struct_key(map_assocs)]}]
     end
 
-    defp clean_struct_key_from_map_args(meta, map_assocs, e) do
-      clean_struct_key_from_map_assocs(meta, map_assocs, e)
+    defp clean_struct_key_from_map_args(map_assocs) do
+      delete_struct_key(map_assocs)
     end
 
-    defp clean_struct_key_from_map_assocs(_meta, assocs, _e) do
-      case Keyword.pop(assocs, :__struct__) do
-        {nil, cleaned_assocs} ->
-          cleaned_assocs
-
-        {_struct_value, cleaned_assocs} ->
-          # file_warn(meta, Map.get(e, :file), __MODULE__, :ignored_struct_key_in_struct)
-          cleaned_assocs
-      end
-    end
-
-    defp validate_kv(meta, kv, _original, %{context: context} = e) do
-      Enum.reduce(kv, {1, %{}}, fn
-        {k, _v}, {index, used} ->
+    defp sanitize_kv(kv, %{context: context}) do
+      Enum.filter(kv, fn
+        {k, _v} ->
           if context == :match do
-            validate_match_key(meta, k, e)
+            validate_match_key(k)
+          else
+            true
           end
-
-          new_used = validate_not_repeated(meta, k, used, e)
-          {index + 1, new_used}
-
-        _, {_index, _used} ->
-          raise "not_kv_pair"
+        _ ->
+          false
       end)
     end
 
-    defp validate_not_repeated(_meta, key, used, e) do
-      if is_literal(key) and Elixir.Map.has_key?(used, key) do
-        case e do
-          %{context: :match} ->
-            # raise "repeated_key"
-            # function_error(meta, Map.get(e, :file), __MODULE__, {:repeated_key, key})
-            :ok
-
-          _ ->
-            # file_warn(meta, Map.get(e, :file), __MODULE__, {:repeated_key, key})
-            :ok
-        end
-
-        used
-      else
-        Elixir.Map.put(used, key, true)
-      end
-    end
-
-    defp validate_match_key(_meta, {name, _, context}, _e)
+    defp validate_match_key({name, _, context})
          when is_atom(name) and is_atom(context) do
-      raise "invalid_variable_in_map_key_match"
+      # invalid_variable_in_map_key_match
+      false
     end
 
-    defp validate_match_key(meta, {:"::", _, [left, _]}, e) do
-      validate_match_key(meta, left, e)
+    defp validate_match_key({:"::", _, [left, _]}) do
+      validate_match_key(left)
     end
 
-    defp validate_match_key(_, {:^, _, [{name, _, context}]}, _)
+    defp validate_match_key({:^, _, [{name, _, context}]})
          when is_atom(name) and is_atom(context),
-         do: :ok
+         do: true
 
-    defp validate_match_key(_, {:%{}, _, [_ | _]}, _), do: :ok
+    defp validate_match_key({:%{}, _, [_ | _]}), do: true
 
-    defp validate_match_key(meta, {left, _, right}, e) do
-      validate_match_key(meta, left, e)
-      validate_match_key(meta, right, e)
+    defp validate_match_key({left, _, right}) do
+      validate_match_key(left) and validate_match_key(right)
     end
 
-    defp validate_match_key(meta, {left, right}, e) do
-      validate_match_key(meta, left, e)
-      validate_match_key(meta, right, e)
+    defp validate_match_key({left, right}) do
+      validate_match_key(left) and validate_match_key(right)
     end
 
-    defp validate_match_key(meta, list, e) when is_list(list) do
-      for each <- list do
-        validate_match_key(meta, each, e)
-      end
+    defp validate_match_key(list) when is_list(list) do
+      Enum.all?(list, &validate_match_key/1)
     end
 
-    defp validate_match_key(_, _, _), do: :ok
-
-    defp is_literal({_, _, _}), do: false
-
-    defp is_literal({left, right}), do: is_literal(left) and is_literal(right)
-
-    defp is_literal(list) when is_list(list), do: Enum.all?(list, &is_literal/1)
-
-    defp is_literal(_), do: true
+    defp validate_match_key(_), do: true
 
     defp validate_struct({:^, _, [{var, _, ctx}]}, :match) when is_atom(var) and is_atom(ctx),
       do: true
@@ -4526,15 +4480,15 @@ defmodule ElixirSense.Core.Compiler do
     defp validate_struct(atom, _) when is_atom(atom), do: true
     defp validate_struct(_, _), do: false
 
-    defp extract_struct_assocs(_, {:%{}, meta, [{:|, _, [_, assocs]}]}, _) do
+    defp extract_struct_assocs({:%{}, meta, [{:|, _, [_, assocs]}]}) do
       {:update, meta, delete_struct_key(assocs)}
     end
 
-    defp extract_struct_assocs(_, {:%{}, meta, assocs}, _) do
+    defp extract_struct_assocs({:%{}, meta, assocs}) do
       {:expand, meta, delete_struct_key(assocs)}
     end
 
-    defp extract_struct_assocs(_meta, _other, _e) do
+    defp extract_struct_assocs(_other) do
       raise "non_map_after_struct"
     end
 
@@ -4542,7 +4496,7 @@ defmodule ElixirSense.Core.Compiler do
       Keyword.delete(assocs, :__struct__)
     end
 
-    defp load_struct(meta, name, args, keys, s, e) do
+    defp load_struct(name, args, s, _e) do
       case s.structs[name] do
         nil ->
           try do
