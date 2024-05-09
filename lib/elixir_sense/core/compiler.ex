@@ -111,9 +111,8 @@ defmodule ElixirSense.Core.Compiler do
         expand_multi_alias_call(form, meta, base, refs, [], state, env)
 
       [opts] ->
-        if Keyword.has_key?(opts, :as) do
-          raise "as_in_multi_alias_call"
-        end
+        # elixir raises if there is :as in opts, we omit it
+        opts = Keyword.delete(opts, :as)
 
         expand_multi_alias_call(form, meta, base, refs, opts, state, env)
     end
@@ -144,10 +143,12 @@ defmodule ElixirSense.Core.Compiler do
           {arg, state, env}
 
         {:error, _} ->
-          raise "elixir_aliases"
+          # elixir_aliases
+          {arg, state, env}
       end
     else
-      raise "expected_compile_time_module"
+      # expected_compile_time_module
+      {arg, state, env}
     end
   end
 
@@ -186,7 +187,8 @@ defmodule ElixirSense.Core.Compiler do
               {arg, state, env}
 
             {:error, _} ->
-              raise "elixir_aliases"
+              # elixir_aliases
+              {arg, state, env}
           end
         else
           {arg, state, env}
@@ -203,11 +205,13 @@ defmodule ElixirSense.Core.Compiler do
             {arg, state, env}
 
           {:error, _} ->
-            raise "elixir_aliases"
+            # elixir_aliases
+            {arg, state, env}
         end
 
       :error ->
-        raise "expected_compile_time_module"
+        # expected_compile_time_module
+        {arg, state, env}
     end
   end
 
@@ -231,10 +235,12 @@ defmodule ElixirSense.Core.Compiler do
         {arg, state, env}
       else
         _ ->
-          raise "elixir_import"
+          # elixir_import
+          {arg, state, env}
       end
     else
-      raise "expected_compile_time_module"
+      # expected_compile_time_module
+      {arg, state, env}
     end
   end
 
@@ -1771,7 +1777,7 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_opts(meta, kind, allowed, opts, s, e) do
     {e_opts, se, ee} = expand(opts, s, e)
-    validate_opts(meta, kind, allowed, e_opts, ee)
+    e_opts = sanitize_opts(allowed, e_opts)
     {e_opts, se, ee}
   end
 
@@ -1863,8 +1869,10 @@ defmodule ElixirSense.Core.Compiler do
       ref, state, env when is_atom(ref) ->
         expand({kind, meta, [Module.concat([base_ref, ref]), opts]}, state, env)
 
-      _other, _s, _e ->
-        raise "expected_compile_time_module"
+      other, s, e ->
+        # elixir raises here
+        # expected_compile_time_module
+        {other, s, e}
     end
 
     map_fold(fun, state, env, refs)
@@ -1949,7 +1957,7 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_for({:for, meta, [_ | _] = args}, s, e, return) do
     assert_no_match_or_guard_scope(e.context, "for")
     {cases, block} = __MODULE__.Utils.split_opts(args)
-    validate_opts(meta, :for, [:do, :into, :uniq, :reduce], block, e)
+    block = sanitize_opts([:do, :into, :uniq, :reduce], block)
 
     {expr, opts} =
       case Keyword.pop(block, :do) do
@@ -2101,13 +2109,11 @@ defmodule ElixirSense.Core.Compiler do
     {:ok, reduce, Enum.reverse(acc)}
   end
 
-  defp validate_opts(_meta, _kind, allowed, opts, _e) when is_list(opts) do
-    for {key, _} <- opts, not Enum.member?(allowed, key), do: raise("unsupported_option")
+  defp sanitize_opts(allowed, opts) when is_list(opts) do
+    for {key, value} <- opts, Enum.member?(allowed, key), do: {key, value}
   end
 
-  defp validate_opts(_meta, _kind, _allowed, _opts, _e) do
-    raise "options_are_not_keyword"
-  end
+  defp sanitize_opts(_allowed, _opts), do: []
 
   defp escape_env_entries(meta, %{vars: {read, _}}, env) do
     env =
