@@ -30,6 +30,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   def build(ast) do
     if Version.match?(System.version(), ">= 1.17.0-dev") do
       {_ast, state, _env} = Compiler.expand(ast, %State{}, Compiler.env())
+
       state
       |> remove_attributes_scope
       |> remove_lexical_scope
@@ -272,8 +273,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_clause({_clause, _meta, _} = ast, state, lhs) do
-
-
     _vars =
       state
       |> find_vars(lhs, Enum.at(state.binding_context, 0))

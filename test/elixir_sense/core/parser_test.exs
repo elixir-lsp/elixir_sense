@@ -254,22 +254,23 @@ defmodule ElixirSense.Core.ParserTest do
     # assert_received {:result, result}
 
     assert (%Metadata{
-             error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{
-                 module: MyModule,
-                 scope_id: scope_id_1
-               },
-               3 => %Env{
-                 module: MyModule,
-                 requires: _,
-                 scope_id: scope_id_2,
-                 vars: [
-                   %VarInfo{name: :x}
-                 ]
-               }
-             }
-           } when scope_id_2 > scope_id_1) = result
+              error: {:error, :parse_error},
+              lines_to_env: %{
+                1 => %Env{
+                  module: MyModule,
+                  scope_id: scope_id_1
+                },
+                3 => %Env{
+                  module: MyModule,
+                  requires: _,
+                  scope_id: scope_id_2,
+                  vars: [
+                    %VarInfo{name: :x}
+                  ]
+                }
+              }
+            }
+            when scope_id_2 > scope_id_1) = result
   end
 
   test "parse_string with missing terminator \"end\" attempts to insert `end` at correct indentation" do

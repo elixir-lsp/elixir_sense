@@ -43,7 +43,8 @@ defmodule ElixirSense.Core.State do
           scope_attributes: list(list(atom)),
           behaviours: %{optional(module) => [module]},
           specs: specs_t,
-          vars_info: list(%{optional({atom, non_neg_integer}) => ElixirSense.Core.State.VarInfo.t()}),
+          vars_info:
+            list(%{optional({atom, non_neg_integer}) => ElixirSense.Core.State.VarInfo.t()}),
           scope_id_count: non_neg_integer,
           scope_ids: list(scope_id_t),
           vars_info_per_scope_id: vars_info_per_scope_id_t,
@@ -337,18 +338,22 @@ defmodule ElixirSense.Core.State do
 
     # vars_info has both read and write vars
     # filter to return only read
-    vars = hd(state.vars_info) |> Map.values
-    |> Enum.filter(& Map.has_key?(elem(state.vars, 0), {&1.name, nil}))
+    vars =
+      hd(state.vars_info)
+      |> Map.values()
+      |> Enum.filter(&Map.has_key?(elem(state.vars, 0), {&1.name, nil}))
 
-    current_protocol = case state.protocol do
-      nil -> nil
-      {protocol, for_list} ->
-        # check wether we are in implementation or implementation child module
-        if Enum.any?(for_list, fn for -> macro_env.module == Module.concat(protocol, for) end) do
-          {protocol, for_list}
-        end
-    end
-    
+    current_protocol =
+      case state.protocol do
+        nil ->
+          nil
+
+        {protocol, for_list} ->
+          # check wether we are in implementation or implementation child module
+          if Enum.any?(for_list, fn for -> macro_env.module == Module.concat(protocol, for) end) do
+            {protocol, for_list}
+          end
+      end
 
     %Env{
       functions: macro_env.functions,
@@ -418,6 +423,7 @@ defmodule ElixirSense.Core.State do
       state
     end
   end
+
   def add_first_alias_positions(%__MODULE__{} = state, _env, _meta), do: state
 
   def add_call_to_line(
@@ -842,7 +848,7 @@ defmodule ElixirSense.Core.State do
     [scope_id | _other_scope_ids] = state.scope_ids
     [current_scope_vars | _other_scope_vars] = state.vars_info
 
-    Map.put(state.vars_info_per_scope_id, scope_id, current_scope_vars |> Map.values)
+    Map.put(state.vars_info_per_scope_id, scope_id, current_scope_vars |> Map.values())
   end
 
   def remove_attributes_scope(%__MODULE__{} = state) do
@@ -1099,7 +1105,13 @@ defmodule ElixirSense.Core.State do
     line = meta[:line]
     column = meta[:column]
     scope_id = hd(state.scope_ids)
-    info = %VarInfo{name: name, is_definition: true, positions: [{line, column}], scope_id: scope_id}
+
+    info = %VarInfo{
+      name: name,
+      is_definition: true,
+      positions: [{line, column}],
+      scope_id: scope_id
+    }
 
     [vars_from_scope | other_vars] = state.vars_info
     vars_from_scope = Map.put(vars_from_scope, {name, version}, info)
@@ -1109,6 +1121,7 @@ defmodule ElixirSense.Core.State do
       | vars_info: [vars_from_scope | other_vars]
     }
   end
+
   def add_var_write(%__MODULE__{} = state, _), do: state
 
   def add_var_read(%__MODULE__{} = state, {name, meta, nil}) when name != :_ do
@@ -1119,7 +1132,7 @@ defmodule ElixirSense.Core.State do
     [vars_from_scope | other_vars] = state.vars_info
     info = Map.fetch!(vars_from_scope, {name, version})
 
-    info = %VarInfo{info | positions: (info.positions ++ [{line, column}]) |> Enum.uniq}
+    info = %VarInfo{info | positions: (info.positions ++ [{line, column}]) |> Enum.uniq()}
     vars_from_scope = Map.put(vars_from_scope, {name, version}, info)
 
     %__MODULE__{
@@ -1127,6 +1140,7 @@ defmodule ElixirSense.Core.State do
       | vars_info: [vars_from_scope | other_vars]
     }
   end
+
   def add_var_read(%__MODULE__{} = state, _), do: state
 
   @builtin_attributes ElixirSense.Core.BuiltinAttributes.all()
@@ -1507,15 +1521,20 @@ defmodule ElixirSense.Core.State do
     {ast, state, env}
   end
 
-  def maybe_move_vars_to_outer_scope(%__MODULE__{vars_info: [current_scope_vars, outer_scope_vars | other_scopes_vars]} = state) do
-    outer_scope_vars = for {key, _} <- outer_scope_vars, into: %{}, do: (
-      # TODO merge type?
-      {key, current_scope_vars[key]}
-    )
+  def maybe_move_vars_to_outer_scope(
+        %__MODULE__{vars_info: [current_scope_vars, outer_scope_vars | other_scopes_vars]} = state
+      ) do
+    outer_scope_vars =
+      for {key, _} <- outer_scope_vars,
+          into: %{},
+          # TODO merge type?
+          do: {key, current_scope_vars[key]}
+
     vars_info = [current_scope_vars, outer_scope_vars | other_scopes_vars]
 
     %__MODULE__{state | vars_info: vars_info}
   end
+
   def maybe_move_vars_to_outer_scope(state), do: state
 
   def no_alias_expansion({:__aliases__, _, [h | t]} = _aliases) when is_atom(h) do
@@ -1611,7 +1630,7 @@ defmodule ElixirSense.Core.State do
       )
     end)
   end
-  
+
   def macro_env(%__MODULE__{} = state, meta \\ []) do
     function =
       case hd(hd(state.scopes)) do

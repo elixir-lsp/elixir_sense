@@ -9,7 +9,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @attribute_binding_support true or Version.match?(System.version(), "< 1.17.0-dev")
   @expand_eval false
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
-  @macro_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @typespec_calls_support Version.match?(System.version(), "< 1.17.0-dev")
   @compiler Code.ensure_loaded?(ElixirSense.Core.Compiler)
 
@@ -1340,7 +1339,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              }
            ] = get_line_attributes(state, 9)
   end
-  
+
   describe "binding" do
     test "module attributes binding" do
       state =
@@ -1358,50 +1357,50 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         end
         """
         |> string_to_state
-  
+
       assert get_line_attributes(state, 10) == [
-                %ElixirSense.Core.State.AttributeInfo{
-                  name: :myattribute,
-                  positions: [{2, 3}, {3, 11}],
-                  type: {:atom, String}
-                },
-                %AttributeInfo{
-                  name: :otherattribute,
-                  positions: [{10, 3}],
-                  type:
-                    {:call, {:atom, Application}, :get_env,
+               %ElixirSense.Core.State.AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 11}],
+                 type: {:atom, String}
+               },
+               %AttributeInfo{
+                 name: :otherattribute,
+                 positions: [{10, 3}],
+                 type:
+                   {:call, {:atom, Application}, :get_env,
                     [atom: :elixir_sense, atom: :some_attribute, atom: MyModule.InnerModule]}
-                }
-              ]
-  
+               }
+             ]
+
       assert get_line_attributes(state, 3) == [
-                %AttributeInfo{
-                  name: :myattribute,
-                  positions: [{2, 3}, {3, 11}],
-                  type: {:atom, String}
-                }
-              ]
-  
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 11}],
+                 type: {:atom, String}
+               }
+             ]
+
       assert get_line_attributes(state, 7) == [
-                %AttributeInfo{
-                  name: :inner_attr,
-                  positions: [{5, 5}, {7, 13}],
-                  type: {:map, [abc: {:atom, nil}], nil}
-                },
-                %AttributeInfo{
-                  name: :inner_attr_1,
-                  positions: [{6, 5}],
-                  type: {:atom, MyModule.InnerModule}
-                }
-              ]
-  
+               %AttributeInfo{
+                 name: :inner_attr,
+                 positions: [{5, 5}, {7, 13}],
+                 type: {:map, [abc: {:atom, nil}], nil}
+               },
+               %AttributeInfo{
+                 name: :inner_attr_1,
+                 positions: [{6, 5}],
+                 type: {:atom, MyModule.InnerModule}
+               }
+             ]
+
       assert get_line_attributes(state, 9) == [
-                %AttributeInfo{
-                  name: :myattribute,
-                  positions: [{2, 3}, {3, 11}],
-                  type: {:atom, String}
-                }
-              ]
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 11}],
+                 type: {:atom, String}
+               }
+             ]
     end
 
     test "module attributes rebinding" do
@@ -1422,28 +1421,28 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert get_line_attributes(state, 3) == [
-          %AttributeInfo{
-            name: :myattribute,
-            positions: [{2, 3}],
-            type: {:atom, String}
-          }
-        ]
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}],
+                 type: {:atom, String}
+               }
+             ]
 
       assert get_line_attributes(state, 6) == [
-                %AttributeInfo{
-                  name: :myattribute,
-                  positions: [{2, 3}, {4, 3}, {5, 3}],
-                  type: {:atom, List}
-                }
-              ]
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {4, 3}, {5, 3}],
+                 type: {:atom, List}
+               }
+             ]
 
       assert get_line_attributes(state, 10) == [
-                %AttributeInfo{
-                  name: :myattribute,
-                  positions: [{2, 3}, {4, 3}, {5, 3}, {8, 5}],
-                  type: {:atom, List}
-                }
-              ]
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {4, 3}, {5, 3}, {8, 5}],
+                 type: {:atom, List}
+               }
+             ]
     end
 
     test "module attributes value binding" do
@@ -1458,17 +1457,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert get_line_attributes(state, 4) == [
-                %AttributeInfo{
-                  name: :myattribute,
-                  positions: [{2, 3}, {3, 14}],
-                  type: {:map, [abc: {:atom, String}], nil}
-                },
-                %AttributeInfo{
-                  name: :some_attr,
-                  positions: [{3, 3}],
-                  type: {:attribute, :myattribute}
-                }
-              ]
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 14}],
+                 type: {:map, [abc: {:atom, String}], nil}
+               },
+               %AttributeInfo{
+                 name: :some_attr,
+                 positions: [{3, 3}],
+                 type: {:attribute, :myattribute}
+               }
+             ]
     end
 
     if @binding_support do
@@ -1479,7 +1478,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           IO.puts("")
           """
           |> string_to_state
-  
+
         assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(2)
       end
 
@@ -2469,10 +2468,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       vars = state |> get_line_vars(6)
 
       assert ([
-               %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}], scope_id: scope_id_1},
-               %VarInfo{name: :var1, positions: [{4, 5}], scope_id: scope_id_2},
-               %VarInfo{name: :var1, positions: [{5, 5}], scope_id: scope_id_2}
-             ] when scope_id_2 > scope_id_1) = vars
+                %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}], scope_id: scope_id_1},
+                %VarInfo{name: :var1, positions: [{4, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var1, positions: [{5, 5}], scope_id: scope_id_2}
+              ]
+              when scope_id_2 > scope_id_1) = vars
     end
 
     test "vars defined inside a module" do
@@ -4513,12 +4513,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
 
     test "current module and protocol implementation - simple case" do
-      state = """
-      defimpl Inspect, for: Atom do
-        IO.puts("")
-      end
-      """
-      |> string_to_state
+      state =
+        """
+        defimpl Inspect, for: Atom do
+          IO.puts("")
+        end
+        """
+        |> string_to_state
 
       assert get_line_module(state, 2) == Inspect.Atom
       assert get_line_protocol(state, 2) == {Inspect, [Atom]}
@@ -4762,31 +4763,31 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-                {Enumerable.MyOtherStruct, nil, nil} => %ModFunInfo{
-                  params: [nil],
-                  type: :defmodule
-                },
-                {Proto.Any, nil, nil} => %ModFunInfo{
-                  params: [nil],
-                  type: :defmodule
-                },
-                {Proto.MyOtherStruct, nil, nil} => %ModFunInfo{
-                  params: [nil],
-                  type: :defmodule
-                },
-                {Proto.MyOtherStruct, :reverse, 1} => %ModFunInfo{
-                  params: [[{:term, [line: 6, column: 15], nil}]],
-                  type: :def
-                },
-                {Proto.MyStruct, nil, nil} => %ModFunInfo{
-                  params: [nil],
-                  type: :defmodule
-                },
-                {Proto.MyStruct, :reverse, 1} => %ModFunInfo{
-                  params: [[{:term, [line: 6, column: 15], nil}]],
-                  type: :def
-                }
-              } = state.mods_funs_to_positions
+               {Enumerable.MyOtherStruct, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 type: :defmodule
+               },
+               {Proto.Any, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 type: :defmodule
+               },
+               {Proto.MyOtherStruct, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 type: :defmodule
+               },
+               {Proto.MyOtherStruct, :reverse, 1} => %ModFunInfo{
+                 params: [[{:term, [line: 6, column: 15], nil}]],
+                 type: :def
+               },
+               {Proto.MyStruct, nil, nil} => %ModFunInfo{
+                 params: [nil],
+                 type: :defmodule
+               },
+               {Proto.MyStruct, :reverse, 1} => %ModFunInfo{
+                 params: [[{:term, [line: 6, column: 15], nil}]],
+                 type: :def
+               }
+             } = state.mods_funs_to_positions
     end
   end
 
@@ -4804,42 +4805,47 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert %{
-              {Proto, :with_spec, 2} => %ElixirSense.Core.State.SpecInfo{
-                args: [["t", "boolean"], ["t", "integer"]],
-                kind: :callback,
-                name: :with_spec,
-                positions: [{3, 3}, {2, 3}],
-                end_positions: [{3, 40}, {2, 42}],
-                generated: [false, false],
-                specs: [
-                  "@callback with_spec(t, boolean) :: number",
-                  "@callback with_spec(t, integer) :: String.t()",
-                  "@spec with_spec(t, boolean) :: number",
-                  "@spec with_spec(t, integer) :: String.t()"
-                ]
-              },
-              {Proto, :without_spec, 2} => %ElixirSense.Core.State.SpecInfo{
-                args: [["t", "integer"]],
-                kind: :callback,
-                name: :without_spec,
-                positions: [{6, 3}],
-                end_positions: [nil],
-                generated: [true],
-                specs: ["@callback without_spec(t, integer) :: term"]
-              },
-              {Proto, :__protocol__, 1} => %ElixirSense.Core.State.SpecInfo{
-              kind: :spec,
-              specs: ["@spec __protocol__(:impls) :: :not_consolidated | {:consolidated, [module]}", "@spec __protocol__(:consolidated?) :: boolean", "@spec __protocol__(:functions) :: unquote(Protocol.__functions_spec__(@__functions__))", "@spec __protocol__(:module) :: Proto"]
-              },
-              {Proto, :impl_for, 1} => %ElixirSense.Core.State.SpecInfo{
-              kind: :spec,
-              specs: ["@spec impl_for(term) :: atom | nil"]
-              },
-              {Proto, :impl_for!, 1} => %ElixirSense.Core.State.SpecInfo{
-              kind: :spec,
-              specs: ["@spec impl_for!(term) :: atom"]
-              }
-            } = state.specs
+             {Proto, :with_spec, 2} => %ElixirSense.Core.State.SpecInfo{
+               args: [["t", "boolean"], ["t", "integer"]],
+               kind: :callback,
+               name: :with_spec,
+               positions: [{3, 3}, {2, 3}],
+               end_positions: [{3, 40}, {2, 42}],
+               generated: [false, false],
+               specs: [
+                 "@callback with_spec(t, boolean) :: number",
+                 "@callback with_spec(t, integer) :: String.t()",
+                 "@spec with_spec(t, boolean) :: number",
+                 "@spec with_spec(t, integer) :: String.t()"
+               ]
+             },
+             {Proto, :without_spec, 2} => %ElixirSense.Core.State.SpecInfo{
+               args: [["t", "integer"]],
+               kind: :callback,
+               name: :without_spec,
+               positions: [{6, 3}],
+               end_positions: [nil],
+               generated: [true],
+               specs: ["@callback without_spec(t, integer) :: term"]
+             },
+             {Proto, :__protocol__, 1} => %ElixirSense.Core.State.SpecInfo{
+               kind: :spec,
+               specs: [
+                 "@spec __protocol__(:impls) :: :not_consolidated | {:consolidated, [module]}",
+                 "@spec __protocol__(:consolidated?) :: boolean",
+                 "@spec __protocol__(:functions) :: unquote(Protocol.__functions_spec__(@__functions__))",
+                 "@spec __protocol__(:module) :: Proto"
+               ]
+             },
+             {Proto, :impl_for, 1} => %ElixirSense.Core.State.SpecInfo{
+               kind: :spec,
+               specs: ["@spec impl_for(term) :: atom | nil"]
+             },
+             {Proto, :impl_for!, 1} => %ElixirSense.Core.State.SpecInfo{
+               kind: :spec,
+               specs: ["@spec impl_for!(term) :: atom"]
+             }
+           } = state.specs
   end
 
   test "registers positions" do
@@ -4889,12 +4895,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert %{
-              {Reversible, :reverse, 1} => %ModFunInfo{
-                params: [[{:term, [line: 2, column: 15], nil}]],
-                positions: [{2, 3}],
-                type: :def
-              }
-            } = state.mods_funs_to_positions
+             {Reversible, :reverse, 1} => %ModFunInfo{
+               params: [[{:term, [line: 2, column: 15], nil}]],
+               positions: [{2, 3}],
+               type: :def
+             }
+           } = state.mods_funs_to_positions
   end
 
   test "registers def positions in protocol implementation" do
@@ -4922,17 +4928,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert %{
-              {Impls, nil, nil} => %ModFunInfo{
-                params: [nil],
-                positions: [{11, 1}],
-                type: :defmodule
-              },
-              {Reversible.String, :__impl__, 1} => %ElixirSense.Core.State.ModFunInfo{
-                params: [[{:atom, [line: 6, column: 1], nil}]],
-                positions: [{6, 1}],
-                type: :def
-              }
-            } = state.mods_funs_to_positions
+             {Impls, nil, nil} => %ModFunInfo{
+               params: [nil],
+               positions: [{11, 1}],
+               type: :defmodule
+             },
+             {Reversible.String, :__impl__, 1} => %ElixirSense.Core.State.ModFunInfo{
+               params: [[{:atom, [line: 6, column: 1], nil}]],
+               positions: [{6, 1}],
+               type: :def
+             }
+           } = state.mods_funs_to_positions
   end
 
   test "functions head" do
@@ -4953,7 +4959,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  [nil],
                  [1],
                  [
-                  {:\\, [line: 2, column: 13], [{:a, [line: 2, column: 11], nil}, nil]},
+                   {:\\, [line: 2, column: 13], [{:a, [line: 2, column: 11], nil}, nil]}
                  ]
                ]
              }
@@ -5549,160 +5555,160 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{name: :my_attribute, positions: [{2, _}]}
              ] = get_line_attributes(state, 4)
 
-        assert %{
-                 {InheritMod, :handle_call, 3} => %ModFunInfo{
-                   params: [
-                     [
-                       {:msg, _, _},
-                       {:_from, _, _},
-                       {:state, _, _}
-                     ]
-                   ],
-                   type: :def
-                 },
-                 {InheritMod, nil, nil} => %ModFunInfo{
-                   type: :defmodule
-                 },
-                 {InheritMod, :private_func, 0} => %ModFunInfo{
-                   params: [[]],
-                   type: :defp
-                 },
-                 {InheritMod, :private_func_arg, 1} => %ModFunInfo{
-                   params: [
-                     [{:a, _, _}],
-                     [{:\\, _, [{:a, _, _}, nil]}]
-                   ],
-                   type: :defp
-                 },
-                 {InheritMod, :private_guard, 0} => %ModFunInfo{
-                   params: [[]],
-                   type: :defguardp
-                 },
-                 {InheritMod, :private_guard_arg, 1} => %ModFunInfo{
-                   params: [
-                     [
-                       {:a, _, _}
-                     ]
-                   ],
-                   type: :defguardp
-                 },
-                 {InheritMod, :private_macro, 0} => %ModFunInfo{
-                   params: [[]],
-                   type: :defmacrop
-                 },
-                 {InheritMod, :private_macro_arg, 1} => %ModFunInfo{
-                   params: [
-                     [
-                       {:a, _, _}
-                     ]
-                   ],
-                   type: :defmacrop
-                 },
-                 {InheritMod, :public_func, 0} => %ModFunInfo{
-                   params: [[]],
-                   type: :def,
-                   overridable: {true, ElixirSenseExample.ExampleBehaviour}
-                 },
-                 {InheritMod, :public_func_arg, 2} => %ModFunInfo{
-                   params: [
-                     [
-                       {:b, _, _},
-                       {:\\, _,
-                        [
-                          {:a, _, _},
-                          "def"
-                        ]}
-                     ]
-                   ],
-                   type: :def
-                 },
-                 {InheritMod, :public_guard, 0} => %ModFunInfo{
-                   params: [[]],
-                   type: :defguard
-                 },
-                 {InheritMod, :public_guard_arg, 1} => %ModFunInfo{
-                   params: [
-                     [
-                       {:a, _, _}
-                     ]
-                   ],
-                   type: :defguard
-                 },
-                 {InheritMod, :public_macro, 0} => %ModFunInfo{
-                   params: [[]],
-                   type: :defmacro
-                 },
-                 {InheritMod, :public_macro_arg, 1} => %ModFunInfo{
-                   params: [
-                     [
-                       {:a, _, _}
-                     ]
-                   ],
-                   type: :defmacro
-                 },
-                 {InheritMod.Deeply.Nested, nil, nil} => %ModFunInfo{
-                   type: :defmodule
-                 },
-                 {InheritMod.Nested, nil, nil} => %ModFunInfo{
-                   type: :defmodule
-                 },
-                 {InheritMod.ProtocolEmbedded, nil, nil} => %ModFunInfo{
-                   type: :defmodule
-                 },
-                 {InheritMod, :behaviour_info, 1} => %ModFunInfo{
-                   params: [[{:atom, _, nil}]],
-                   type: :def
-                 },
-                 {InheritMod.ProtocolEmbedded, :module_info, 1} => %ModFunInfo{}
-               } = state.mods_funs_to_positions
+      assert %{
+               {InheritMod, :handle_call, 3} => %ModFunInfo{
+                 params: [
+                   [
+                     {:msg, _, _},
+                     {:_from, _, _},
+                     {:state, _, _}
+                   ]
+                 ],
+                 type: :def
+               },
+               {InheritMod, nil, nil} => %ModFunInfo{
+                 type: :defmodule
+               },
+               {InheritMod, :private_func, 0} => %ModFunInfo{
+                 params: [[]],
+                 type: :defp
+               },
+               {InheritMod, :private_func_arg, 1} => %ModFunInfo{
+                 params: [
+                   [{:a, _, _}],
+                   [{:\\, _, [{:a, _, _}, nil]}]
+                 ],
+                 type: :defp
+               },
+               {InheritMod, :private_guard, 0} => %ModFunInfo{
+                 params: [[]],
+                 type: :defguardp
+               },
+               {InheritMod, :private_guard_arg, 1} => %ModFunInfo{
+                 params: [
+                   [
+                     {:a, _, _}
+                   ]
+                 ],
+                 type: :defguardp
+               },
+               {InheritMod, :private_macro, 0} => %ModFunInfo{
+                 params: [[]],
+                 type: :defmacrop
+               },
+               {InheritMod, :private_macro_arg, 1} => %ModFunInfo{
+                 params: [
+                   [
+                     {:a, _, _}
+                   ]
+                 ],
+                 type: :defmacrop
+               },
+               {InheritMod, :public_func, 0} => %ModFunInfo{
+                 params: [[]],
+                 type: :def,
+                 overridable: {true, ElixirSenseExample.ExampleBehaviour}
+               },
+               {InheritMod, :public_func_arg, 2} => %ModFunInfo{
+                 params: [
+                   [
+                     {:b, _, _},
+                     {:\\, _,
+                      [
+                        {:a, _, _},
+                        "def"
+                      ]}
+                   ]
+                 ],
+                 type: :def
+               },
+               {InheritMod, :public_guard, 0} => %ModFunInfo{
+                 params: [[]],
+                 type: :defguard
+               },
+               {InheritMod, :public_guard_arg, 1} => %ModFunInfo{
+                 params: [
+                   [
+                     {:a, _, _}
+                   ]
+                 ],
+                 type: :defguard
+               },
+               {InheritMod, :public_macro, 0} => %ModFunInfo{
+                 params: [[]],
+                 type: :defmacro
+               },
+               {InheritMod, :public_macro_arg, 1} => %ModFunInfo{
+                 params: [
+                   [
+                     {:a, _, _}
+                   ]
+                 ],
+                 type: :defmacro
+               },
+               {InheritMod.Deeply.Nested, nil, nil} => %ModFunInfo{
+                 type: :defmodule
+               },
+               {InheritMod.Nested, nil, nil} => %ModFunInfo{
+                 type: :defmodule
+               },
+               {InheritMod.ProtocolEmbedded, nil, nil} => %ModFunInfo{
+                 type: :defmodule
+               },
+               {InheritMod, :behaviour_info, 1} => %ModFunInfo{
+                 params: [[{:atom, _, nil}]],
+                 type: :def
+               },
+               {InheritMod.ProtocolEmbedded, :module_info, 1} => %ModFunInfo{}
+             } = state.mods_funs_to_positions
 
-        assert %{
-                 {InheritMod, :my_opaque_type, 0} => %State.TypeInfo{
-                   args: [[]],
-                   kind: :opaque,
-                   name: :my_opaque_type,
-                  #  positions: [{2, 3}],
-                   specs: ["@opaque my_opaque_type :: any"]
-                 },
-                 {InheritMod, :my_priv_type, 0} => %State.TypeInfo{
-                   args: [[]],
-                   kind: :typep,
-                   name: :my_priv_type,
-                  #  positions: [{2, 3}],
-                   specs: ["@typep my_priv_type :: any"]
-                 },
-                 {InheritMod, :my_pub_type, 0} => %State.TypeInfo{
-                   args: [[]],
-                   kind: :type,
-                   name: :my_pub_type,
-                  #  positions: [{2, 3}],
-                   specs: ["@type my_pub_type :: any"]
-                 },
-                 {InheritMod, :my_pub_type_arg, 2} => %State.TypeInfo{
-                   args: [["a", "b"]],
-                   kind: :type,
-                   name: :my_pub_type_arg,
-                  #  positions: [{2, 3}],
-                   specs: ["@type my_pub_type_arg(a, b) :: {b, a}"]
-                 }
-               } = state.types
+      assert %{
+               {InheritMod, :my_opaque_type, 0} => %State.TypeInfo{
+                 args: [[]],
+                 kind: :opaque,
+                 name: :my_opaque_type,
+                 #  positions: [{2, 3}],
+                 specs: ["@opaque my_opaque_type :: any"]
+               },
+               {InheritMod, :my_priv_type, 0} => %State.TypeInfo{
+                 args: [[]],
+                 kind: :typep,
+                 name: :my_priv_type,
+                 #  positions: [{2, 3}],
+                 specs: ["@typep my_priv_type :: any"]
+               },
+               {InheritMod, :my_pub_type, 0} => %State.TypeInfo{
+                 args: [[]],
+                 kind: :type,
+                 name: :my_pub_type,
+                 #  positions: [{2, 3}],
+                 specs: ["@type my_pub_type :: any"]
+               },
+               {InheritMod, :my_pub_type_arg, 2} => %State.TypeInfo{
+                 args: [["a", "b"]],
+                 kind: :type,
+                 name: :my_pub_type_arg,
+                 #  positions: [{2, 3}],
+                 specs: ["@type my_pub_type_arg(a, b) :: {b, a}"]
+               }
+             } = state.types
 
-        assert %{
-                 {InheritMod, :private_func, 0} => %State.SpecInfo{
-                   args: [[]],
-                   kind: :spec,
-                   name: :private_func,
-                  #  positions: [{2, 3}],
-                   specs: ["@spec private_func() :: String.t()"]
-                 },
-                 {InheritMod, :some_callback, 1} => %State.SpecInfo{
-                   args: [["abc"]],
-                   kind: :callback,
-                   name: :some_callback,
-                  #  positions: [{2, 3}],
-                   specs: ["@callback some_callback(abc) :: :ok when abc: integer"]
-                 }
-               } = state.specs
+      assert %{
+               {InheritMod, :private_func, 0} => %State.SpecInfo{
+                 args: [[]],
+                 kind: :spec,
+                 name: :private_func,
+                 #  positions: [{2, 3}],
+                 specs: ["@spec private_func() :: String.t()"]
+               },
+               {InheritMod, :some_callback, 1} => %State.SpecInfo{
+                 args: [["abc"]],
+                 kind: :callback,
+                 name: :some_callback,
+                 #  positions: [{2, 3}],
+                 specs: ["@callback some_callback(abc) :: :ok when abc: integer"]
+               }
+             } = state.specs
     end
 
     test "use defining struct" do
@@ -6341,9 +6347,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
-               3 => [%CallInfo{arity: 1, func: :func, position: {3, 26}, mod: NyModule}]
-             }
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 1, position: {3, 26}, func: :func, mod: NyModule}, &1)
+             )
     end
 
     test "registers calls pipe operator no parens" do
@@ -6357,9 +6364,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
-               3 => [%CallInfo{arity: 1, func: :func, position: {3, 21}, mod: MyMod}]
-             }
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod}, &1)
+             )
     end
 
     test "registers calls pipe operator" do
@@ -6373,9 +6381,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
-               3 => [%CallInfo{arity: 1, func: :func, position: {3, 21}, mod: MyMod}]
-             }
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod}, &1)
+             )
     end
 
     test "registers calls pipe operator with arg" do
@@ -6389,9 +6398,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
-               3 => [%CallInfo{arity: 2, func: :func, position: {3, 21}, mod: MyMod}]
-             }
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 2, position: {3, 21}, func: :func, mod: MyMod}, &1)
+             )
     end
 
     test "registers calls pipe operator erlang module" do
@@ -6405,9 +6415,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
-               3 => [%CallInfo{arity: 2, func: :func, position: {3, 23}, mod: :my_mod}]
-             }
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 2, position: {3, 23}, func: :func, mod: :my_mod}, &1)
+             )
     end
 
     test "registers calls pipe operator atom module" do
@@ -6421,9 +6432,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
-               3 => [%CallInfo{arity: 2, func: :func, position: {3, 31}, mod: MyMod}]
-             }
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 2, position: {3, 31}, func: :func, mod: MyMod}, &1)
+             )
     end
 
     test "registers calls pipe operator local" do
@@ -6437,9 +6449,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
-               3 => [%CallInfo{arity: 2, func: :func, position: {3, 15}, mod: nil}]
-             }
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 2, position: {3, 15}, func: :func, mod: nil}, &1)
+             )
     end
 
     test "registers calls pipe operator nested external into local" do
@@ -6453,12 +6466,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
-               3 => [
-                 %CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod},
-                 %CallInfo{arity: 1, position: {3, 31}, func: :other, mod: nil}
-               ]
-             }
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod}, &1)
+             )
+
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 1, position: {3, 31}, func: :other, mod: nil}, &1)
+             )
     end
 
     test "registers calls pipe operator nested external into external" do
@@ -6472,12 +6488,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls |> sort_calls == %{
-               3 => [
-                 %CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod},
-                 %CallInfo{arity: 1, position: {3, 37}, func: :other, mod: Other}
-               ]
-             }
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 1, position: {3, 21}, func: :func, mod: MyMod}, &1)
+             )
+
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 1, position: {3, 37}, func: :other, mod: Other}, &1)
+             )
     end
 
     test "registers calls pipe operator nested local into external" do
@@ -6491,12 +6510,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls |> sort_calls == %{
-               3 => [
-                 %CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil},
-                 %CallInfo{arity: 1, position: {3, 32}, func: :other, mod: Some}
-               ]
-             }
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil}, &1)
+             )
+
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 1, position: {3, 32}, func: :other, mod: Some}, &1)
+             )
     end
 
     test "registers calls pipe operator nested local into local" do
@@ -6510,12 +6532,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
-               3 => [
-                 %CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil},
-                 %CallInfo{arity: 1, position: {3, 27}, func: :other, mod: nil}
-               ]
-             }
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil}, &1)
+             )
+
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 1, position: {3, 27}, func: :other, mod: nil}, &1)
+             )
     end
 
     test "registers calls capture operator __MODULE__" do
@@ -6600,37 +6625,49 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              }
     end
 
-    if @macro_calls_support do
-      test "registers calls on ex_unit DSL" do
-        state =
-          """
-          defmodule MyModuleTest do
-            use ExUnit.Case
+    test "registers calls on ex_unit DSL" do
+      state =
+        """
+        defmodule MyModuleTest do
+          use ExUnit.Case
 
-            describe "describe1" do
-              test "test1" do
-              end
+          describe "describe1" do
+            test "test1" do
             end
-
-            test "test2", %{some: param} do
-            end
-
-            test "not implemented"
           end
-          """
-          |> string_to_state
 
-        assert state.calls == %{
-                 2 => [
-                   %CallInfo{arity: 2, position: {2, 3}, func: :__register__, mod: ExUnit.Case},
-                   %CallInfo{arity: 2, position: {2, 3}, func: :unless, mod: nil}
-                 ],
-                 4 => [%CallInfo{arity: 2, position: {4, 3}, func: :describe, mod: nil}],
-                 5 => [%CallInfo{arity: 2, position: {5, 5}, func: :test, mod: nil}],
-                 9 => [%CallInfo{arity: 3, position: {9, 3}, func: :test, mod: nil}],
-                 12 => [%CallInfo{arity: 0, position: {12, 3}, func: :test, mod: nil}]
-               }
-      end
+          test "test2", %{some: param} do
+          end
+
+          test "not implemented"
+        end
+        """
+        |> string_to_state
+
+      assert Enum.any?(
+               state.calls[2],
+               &match?(%CallInfo{arity: 2, position: {2, _}, func: :__register__}, &1)
+             )
+
+      assert Enum.any?(
+               state.calls[4],
+               &match?(%CallInfo{arity: 2, position: {4, 3}, func: :describe}, &1)
+             )
+
+      assert Enum.any?(
+               state.calls[5],
+               &match?(%CallInfo{arity: 2, position: {5, 5}, func: :test}, &1)
+             )
+
+      assert Enum.any?(
+               state.calls[9],
+               &match?(%CallInfo{arity: 3, position: {9, 3}, func: :test}, &1)
+             )
+
+      assert Enum.any?(
+               state.calls[12],
+               &match?(%CallInfo{arity: 1, position: {12, 3}, func: :test}, &1)
+             )
     end
   end
 
@@ -6709,14 +6746,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-                {Proto, :t, 0} => %ElixirSense.Core.State.TypeInfo{
-                  args: [[]],
-                  kind: :type,
-                  name: :t,
-                  specs: ["@type t :: term"],
-                  doc: "All the types that implement this protocol" <> _
-                }
-              } = state.types
+               {Proto, :t, 0} => %ElixirSense.Core.State.TypeInfo{
+                 args: [[]],
+                 kind: :type,
+                 name: :t,
+                 specs: ["@type t :: term"],
+                 doc: "All the types that implement this protocol" <> _
+               }
+             } = state.types
     end
 
     test "specs and callbacks" do
@@ -6863,26 +6900,26 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-                {MyRecords, :user, 1} => %ModFunInfo{
-                  params: [[{:\\, [], [{:args, [], nil}, []]}]],
-                  positions: [{3, 10}],
-                  type: :defmacro
-                },
-                {MyRecords, :user, 2} => %ModFunInfo{
-                  params: [[{:record, [], nil}, {:args, [], nil}]],
-                  positions: [{3, 10}],
-                  type: :defmacro
-                },
-                {MyRecords, :userp, 1} => %ModFunInfo{type: :defmacrop},
-                {MyRecords, :my_rec, 1} => %ModFunInfo{type: :defmacro}
-              } = state.mods_funs_to_positions
+               {MyRecords, :user, 1} => %ModFunInfo{
+                 params: [[{:\\, [], [{:args, [], nil}, []]}]],
+                 positions: [{3, 10}],
+                 type: :defmacro
+               },
+               {MyRecords, :user, 2} => %ModFunInfo{
+                 params: [[{:record, [], nil}, {:args, [], nil}]],
+                 positions: [{3, 10}],
+                 type: :defmacro
+               },
+               {MyRecords, :userp, 1} => %ModFunInfo{type: :defmacrop},
+               {MyRecords, :my_rec, 1} => %ModFunInfo{type: :defmacro}
+             } = state.mods_funs_to_positions
 
       assert %{
-                {MyRecords, :user, 0} => %State.TypeInfo{
-                  name: :user,
-                  specs: ["@type user :: record(:user, name: String.t(), age: integer)"]
-                }
-              } = state.types
+               {MyRecords, :user, 0} => %State.TypeInfo{
+                 name: :user,
+                 specs: ["@type user :: record(:user, name: String.t(), age: integer)"]
+               }
+             } = state.types
     end
 
     test "defrecord imported defines record macros" do
@@ -6897,24 +6934,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-                {MyRecords, :user, 1} => %ModFunInfo{
-                  params: [[{:\\, [], [{:args, [], nil}, []]}]],
-                  positions: [{3, 3}],
-                  type: :defmacro
-                },
-                {MyRecords, :user, 2} => %ModFunInfo{
-                  params: [[{:record, [], nil}, {:args, [], nil}]],
-                  positions: [{3, 3}],
-                  type: :defmacro
-                }
-              } = state.mods_funs_to_positions
+               {MyRecords, :user, 1} => %ModFunInfo{
+                 params: [[{:\\, [], [{:args, [], nil}, []]}]],
+                 positions: [{3, 3}],
+                 type: :defmacro
+               },
+               {MyRecords, :user, 2} => %ModFunInfo{
+                 params: [[{:record, [], nil}, {:args, [], nil}]],
+                 positions: [{3, 3}],
+                 type: :defmacro
+               }
+             } = state.mods_funs_to_positions
 
       assert %{
-                {MyRecords, :user, 0} => %State.TypeInfo{
-                  name: :user,
-                  specs: ["@type user :: record(:user, name: String.t(), age: integer)"]
-                }
-              } = state.types
+               {MyRecords, :user, 0} => %State.TypeInfo{
+                 name: :user,
+                 specs: ["@type user :: record(:user, name: String.t(), age: integer)"]
+               }
+             } = state.types
     end
   end
 
