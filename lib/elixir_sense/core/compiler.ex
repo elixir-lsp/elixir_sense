@@ -3575,8 +3575,15 @@ defmodule ElixirSense.Core.Compiler do
       raise "capture_arg_outside_of_capture"
     end
 
-    def capture(_meta, _arg, _s, _e) do
-      raise "invalid_args_for_capture"
+    def capture(meta, arg, s, e) do
+      # elixir raises invalid_args_for_capture
+      # we try to transform the capture to local fun capture
+      case arg do
+        {var, _, context} when is_atom(var) and is_atom(context) ->
+          capture(meta, {:/, meta, [arg, 0]}, s, e)
+        _ ->
+          raise "invalid_args_for_capture #{inspect(arg)}"
+      end
     end
 
     defp capture_import({atom, import_meta, args} = expr, s, e, sequential) do
@@ -3627,8 +3634,11 @@ defmodule ElixirSense.Core.Compiler do
 
     defp capture_expr(meta, expr, s, e, escaped, sequential) do
       case escape(expr, e, escaped) do
-        {_, []} when not sequential ->
-          raise "invalid_args_for_capture"
+        {e_expr, []} when not sequential ->
+          # elixir raises here invalid_args_for_capture
+          # we emit fn without args
+          fn_expr = {:fn, meta, [{:->, meta, [[], e_expr]}]}
+          {:expand, fn_expr, s, e}
 
         {e_expr, e_dict} ->
           e_vars = validate(meta, e_dict, 1, e)
