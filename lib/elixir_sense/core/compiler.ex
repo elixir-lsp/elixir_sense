@@ -4383,14 +4383,16 @@ defmodule ElixirSense.Core.Compiler do
           case extract_struct_assocs(meta, e_right, e) do
             {:expand, map_meta, assocs} when context != :match ->
               assoc_keys = Enum.map(assocs, fn {k, _} -> k end)
-              struct = load_struct(meta, e_left, [assocs], assoc_keys, ee)
+              struct = load_struct(meta, e_left, [assocs], assoc_keys, se, ee)
               keys = [:__struct__ | assoc_keys]
               without_keys = Elixir.Map.drop(struct, keys)
+              # TODO is escape safe?
               struct_assocs = Macro.escape(Enum.sort(Elixir.Map.to_list(without_keys)))
               {{:%, meta, [e_left, {:%{}, map_meta, struct_assocs ++ assocs}]}, se, ee}
 
             {_, _, assocs} ->
-              _ = load_struct(meta, e_left, [], Enum.map(assocs, fn {k, _} -> k end), ee)
+              # we don't need to validate keys
+              # _ = load_struct(meta, e_left, [], Enum.map(assocs, fn {k, _} -> k end), se, ee)
               {{:%, meta, [e_left, e_right]}, se, ee}
           end
 
@@ -4540,58 +4542,24 @@ defmodule ElixirSense.Core.Compiler do
       Keyword.delete(assocs, :__struct__)
     end
 
-    defp load_struct(meta, name, args, keys, e) do
-      module = e.module
-      in_context = name in [module | e.context_modules]
-
-      _arity = length(args)
-      # TODO
-      # or (not ensure_loaded(name) and wait_for_struct(name))
-      external = in_context
-
-      try do
-        # TODO the condition includes
-        # and ElixirDef.external_for(meta, name, :__struct__, arity, [:def])
-        case external do
-          false when module == name ->
-            raise UndefinedFunctionError
-
-          false ->
+    defp load_struct(meta, name, args, keys, s, e) do
+      case s.structs[name] do
+        nil ->
+          try do
             apply(name, :__struct__, args)
-
-          external_fun ->
-            try do
-              apply(external_fun, args)
-            rescue
-              UndefinedFunctionError -> apply(name, :__struct__, args)
-            end
-        end
-      rescue
-        UndefinedFunctionError ->
-          cond do
-            in_context and e.function == nil ->
-              raise "inaccessible_struct"
-
-            true ->
-              raise "undefined_struct"
+          else
+            %{:__struct__ => ^name} = struct ->
+              struct
+            _ ->
+              # recover from invalid return value
+              [__struct__: name] |> Keyword.merge(hd(args)) |> Elixir.Map.new
+          rescue
+            _ ->
+              # recover from error by building the fake struct
+              [__struct__: name] |> Keyword.merge(hd(args)) |> Elixir.Map.new
           end
-      else
-        %{:__struct__ => struct_name} = struct when is_atom(struct_name) ->
-          assert_struct_keys(meta, name, struct, keys, e)
-          # ElixirEnv.trace({:struct_expansion, meta, name, keys}, e)
-          struct
-
-        %{:__struct__ => struct_name} when is_atom(struct_name) ->
-          raise "struct_name_mismatch"
-
-        _other ->
-          raise "invalid_struct_return_value"
-      end
-    end
-
-    defp assert_struct_keys(_meta, _name, struct, keys, _e) do
-      for key <- keys, not Elixir.Map.has_key?(struct, key) do
-        raise "unknown_key_for_struct"
+        info ->
+          info.fields |> Keyword.merge(hd(args)) |> Elixir.Map.new
       end
     end
   end

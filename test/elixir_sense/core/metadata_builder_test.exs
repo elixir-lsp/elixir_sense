@@ -5970,6 +5970,74 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
              } = state.mods_funs_to_positions
     end
+
+    test "expands local struct" do
+      state =
+        """
+        defmodule MyStruct do
+          defstruct [:some_field, a_field: 1]
+          var = %MyStruct{some_field: 3}
+          var = %MyStruct{}
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert state.structs == %{
+               MyStruct => %StructInfo{
+                 type: :defstruct,
+                 fields: [some_field: nil, a_field: 1, __struct__: MyStruct]
+               }
+             }
+    end
+
+    test "expands local not existing struct" do
+      state =
+        """
+        defmodule MyStruct do
+          var = %MyStruct{some_field: 3}
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert state.structs == %{}
+    end
+
+    test "expands remote not existing struct" do
+      state =
+        """
+        defmodule MyStruct do
+          var = %FooStruct{some_field: 3}
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert state.structs == %{}
+    end
+
+    test "expands local struct defined in other module" do
+      state =
+        """
+        defmodule MyStruct do
+          defstruct [:some_field, a_field: 1]
+        end
+
+        defmodule Foo do
+          var = %MyStruct{some_field: 3}
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert state.structs == %{
+               MyStruct => %StructInfo{
+                 type: :defstruct,
+                 fields: [some_field: nil, a_field: 1, __struct__: MyStruct]
+               }
+             }
+    end
   end
 
   describe "calls" do

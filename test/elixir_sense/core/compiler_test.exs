@@ -105,14 +105,16 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         assert_expansion("%{a: a} = %{}")
         assert_expansion("%{1 => a} = %{}")
         assert_expansion("%{%{a: 1} | a: 2}")
+        assert_expansion("%{%{\"a\" => 1} | \"a\" => 2}")
       end
 
       test "expands %" do
         assert_expansion("%Date{year: 2024, month: 2, day: 18}")
         assert_expansion("%Date{calendar: Calendar.ISO, year: 2024, month: 2, day: 18}")
         assert_expansion("%{year: x} = %Date{year: 2024, month: 2, day: 18}")
+        assert_expansion("%Date{year: x} = %Date{year: 2024, month: 2, day: 18}")
         assert_expansion("%Date{%Date{year: 2024, month: 2, day: 18} | day: 1}")
-        assert_expansion("%{%Date{year: 2024, month: 2, day: 18} | day: 1}")
+        assert_expansion("%x{} = %Date{year: 2024, month: 2, day: 18}")
       end
 
       test "expands <<>>" do
@@ -608,6 +610,7 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         assert_expansion("[1, 2]")
         assert_expansion("[1 | [2]]")
         assert_expansion("[a | b] = [1, 2, 3]")
+        assert_expansion("[a] ++ [b] = [1, 2]")
       end
 
       test "expands function" do
