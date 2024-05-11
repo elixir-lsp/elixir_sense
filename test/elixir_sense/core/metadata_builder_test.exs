@@ -9,7 +9,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   @attribute_binding_support true or Version.match?(System.version(), "< 1.17.0-dev")
   @expand_eval false
   @binding_support Version.match?(System.version(), "< 1.17.0-dev")
-  @typespec_calls_support Version.match?(System.version(), "< 1.17.0-dev")
+  @typespec_calls_support true or Version.match?(System.version(), "< 1.17.0-dev")
   @compiler Code.ensure_loaded?(ElixirSense.Core.Compiler)
 
   describe "versioned_vars" do
@@ -1209,6 +1209,63 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [
                %VarInfo{name: :abc, positions: [{2, 11}, {3, 10}]}
              ] = state |> get_line_vars(3)
+    end
+  end
+
+  describe "typespec vars" do
+    test "registers type parameters" do
+      state =
+        """
+        defmodule A do
+          @type some(p) :: {p, list(p), integer}
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :p, positions: [{2, 14}, {2, 21}, {2, 29}]}
+             ] = state.vars_info_per_scope_id[2]
+    end
+
+    test "registers spec parameters" do
+      state =
+        """
+        defmodule A do
+          @callback some(p) :: {p, list(p), integer, q} when p: integer, q: {p}
+        end
+        """
+        |> string_to_state
+
+      # no position in guard, elixir parses guards as keyword list so p is an atom with no metadata
+      # we use when meta instead so the position is not exact...
+      assert [
+               %VarInfo{name: :p, positions: [{2, 49}, {2, 18}, {2, 25}, {2, 33}, {2, 70}]},
+               %VarInfo{name: :q, positions: [{2, 49}, {2, 46}]}
+             ] = state.vars_info_per_scope_id[2]
+    end
+
+    test "does not register annotated spec params as type variables" do
+      state =
+        """
+        defmodule A do
+          @callback some(p :: integer) :: integer
+        end
+        """
+        |> string_to_state
+
+      assert [] == state.vars_info_per_scope_id[2]
+    end
+
+    test "does not register annotated type elements as variables" do
+      state =
+        """
+        defmodule A do
+          @type color :: {red :: integer, green :: integer, blue :: integer}
+        end
+        """
+        |> string_to_state
+
+      assert [] == state.vars_info_per_scope_id[2]
     end
   end
 
@@ -4806,44 +4863,45 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert %{
              {Proto, :with_spec, 2} => %ElixirSense.Core.State.SpecInfo{
-               args: [["t", "boolean"], ["t", "integer"]],
+               args: [["t()", "boolean()"], ["t()", "integer()"]],
                kind: :callback,
                name: :with_spec,
                positions: [{3, 3}, {2, 3}],
                end_positions: [{3, 40}, {2, 42}],
                generated: [false, false],
                specs: [
-                 "@callback with_spec(t, boolean) :: number",
-                 "@callback with_spec(t, integer) :: String.t()",
-                 "@spec with_spec(t, boolean) :: number",
-                 "@spec with_spec(t, integer) :: String.t()"
+                 "@callback with_spec(t(), boolean()) :: number()",
+                 "@callback with_spec(t(), integer()) :: String.t()",
+                 "@spec with_spec(t(), boolean()) :: number()",
+                 "@spec with_spec(t(), integer()) :: String.t()"
                ]
              },
              {Proto, :without_spec, 2} => %ElixirSense.Core.State.SpecInfo{
-               args: [["t", "integer"]],
+               args: [["t()", "term()"]],
                kind: :callback,
                name: :without_spec,
                positions: [{6, 3}],
                end_positions: [nil],
                generated: [true],
-               specs: ["@callback without_spec(t, integer) :: term"]
+               specs: ["@callback without_spec(t(), term()) :: term()"]
              },
+            #  TODO there is raw unquote in spec
              {Proto, :__protocol__, 1} => %ElixirSense.Core.State.SpecInfo{
                kind: :spec,
                specs: [
-                 "@spec __protocol__(:impls) :: :not_consolidated | {:consolidated, [module]}",
-                 "@spec __protocol__(:consolidated?) :: boolean",
-                 "@spec __protocol__(:functions) :: unquote(Protocol.__functions_spec__(@__functions__))",
+                 "@spec __protocol__(:impls) :: :not_consolidated | {:consolidated, [module()]}",
+                 "@spec __protocol__(:consolidated?) :: boolean()",
+                 "@spec __protocol__(:functions) :: unquote(Protocol.__functions_spec__(@__functions__()))",
                  "@spec __protocol__(:module) :: Proto"
                ]
              },
              {Proto, :impl_for, 1} => %ElixirSense.Core.State.SpecInfo{
                kind: :spec,
-               specs: ["@spec impl_for(term) :: atom | nil"]
+               specs: ["@spec impl_for(term()) :: atom() | nil"]
              },
              {Proto, :impl_for!, 1} => %ElixirSense.Core.State.SpecInfo{
                kind: :spec,
-               specs: ["@spec impl_for!(term) :: atom"]
+               specs: ["@spec impl_for!(term()) :: atom()"]
              }
            } = state.specs
   end
@@ -5668,21 +5726,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  kind: :opaque,
                  name: :my_opaque_type,
                  #  positions: [{2, 3}],
-                 specs: ["@opaque my_opaque_type :: any"]
+                 specs: ["@opaque my_opaque_type() :: any()"]
                },
                {InheritMod, :my_priv_type, 0} => %State.TypeInfo{
                  args: [[]],
                  kind: :typep,
                  name: :my_priv_type,
                  #  positions: [{2, 3}],
-                 specs: ["@typep my_priv_type :: any"]
+                 specs: ["@typep my_priv_type() :: any()"]
                },
                {InheritMod, :my_pub_type, 0} => %State.TypeInfo{
                  args: [[]],
                  kind: :type,
                  name: :my_pub_type,
                  #  positions: [{2, 3}],
-                 specs: ["@type my_pub_type :: any"]
+                 specs: ["@type my_pub_type() :: any()"]
                },
                {InheritMod, :my_pub_type_arg, 2} => %State.TypeInfo{
                  args: [["a", "b"]],
@@ -5706,7 +5764,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  kind: :callback,
                  name: :some_callback,
                  #  positions: [{2, 3}],
-                 specs: ["@callback some_callback(abc) :: :ok when abc: integer"]
+                 specs: ["@callback some_callback(abc) :: :ok when abc: integer()"]
                }
              } = state.specs
     end
@@ -6168,23 +6226,116 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
     end
 
-    if @typespec_calls_support do
-      test "registers typespec no parens calls" do
-        state =
-          """
-          defmodule NyModule do
-            @type a :: integer
-          end
-          """
-          |> string_to_state
+    test "registers typespec no parens calls" do
+      state =
+        """
+        defmodule NyModule do
+          @type a :: integer
+        end
+        """
+        |> string_to_state
 
-        assert state.calls == %{
-                 2 => [
-                   %CallInfo{arity: 0, func: :integer, position: {2, 14}, mod: nil},
-                   %CallInfo{arity: 0, func: :a, position: {2, 9}, mod: nil}
-                 ]
-               }
-      end
+      assert state.calls == %{
+                2 => [
+                  %CallInfo{arity: 0, func: :integer, position: {2, 14}, mod: nil}
+                ]
+              }
+    end
+
+    test "registers typespec parens calls" do
+      state =
+        """
+        defmodule NyModule do
+          @type a() :: integer()
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+                2 => [
+                  %CallInfo{arity: 0, func: :integer, position: {2, 16}, mod: nil}
+                ]
+              }
+    end
+
+    test "registers typespec no parens remote calls" do
+      state =
+        """
+        defmodule NyModule do
+          @type a :: Enum.t
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+                2 => [
+                  %CallInfo{arity: 0, func: :t, position: {2, 19}, mod: Enum}
+                ]
+              }
+    end
+
+    test "registers typespec parens remote calls" do
+      state =
+        """
+        defmodule NyModule do
+          @type a() :: Enum.t()
+          @type a(x) :: {Enum.t(), x}
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+                2 => [
+                  %CallInfo{arity: 0, func: :t, position: {2, 21}, mod: Enum}
+                ],
+                3 => [
+                %CallInfo{arity: 0, func: :t, position: {3, 23}, mod: Enum}
+                ]
+              }
+    end
+
+    test "registers typespec calls in specs with when guard" do
+      state =
+        """
+        defmodule NyModule do
+          @callback a(b, c, d) :: {b, integer(), c} when b: map(), c: var, d: pos_integer
+        end
+        """
+        |> string_to_state
+
+      # NOTE var is not a type but a special variable
+      assert state.calls == %{
+                2 => [
+                  %CallInfo{arity: 0, func: :pos_integer, position: {2, 71}, mod: nil},
+                  %CallInfo{arity: 0, func: :map, position: {2, 53}, mod: nil},
+                  %CallInfo{arity: 0, func: :integer, position: {2, 31}, mod: nil}
+                ]
+              }
+    end
+
+    test "registers typespec calls in typespec with named args" do
+      state =
+        """
+        defmodule NyModule do
+          @callback days_since_epoch(year :: integer, month :: integer, day :: integer) :: integer
+          @type color :: {red :: integer, green :: integer, blue :: integer}
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+                2 => [
+                  %CallInfo{arity: 0, func: :integer, position: {2, 84}, mod: nil},
+                  %CallInfo{arity: 0, func: :integer, position: {2, 72}, mod: nil},
+                  %CallInfo{arity: 0, func: :integer, position: {2, 56}, mod: nil},
+                  %CallInfo{arity: 0, func: :integer, position: {2, 38}, mod: nil},
+                ],
+                3 => [
+                %CallInfo{arity: 0, func: :integer, position: {3, 61}, mod: nil},
+                %CallInfo{arity: 0, func: :integer, position: {3, 44}, mod: nil},
+                %CallInfo{arity: 0, func: :integer, position: {3, 26}, mod: nil},
+              ]
+              }
     end
 
     test "registers calls local no arg" do
@@ -6694,7 +6845,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  positions: [{2, 3}],
                  end_positions: [{2, 36}],
                  generated: [false],
-                 specs: ["@type no_arg_no_parens :: integer"]
+                 specs: ["@type no_arg_no_parens() :: integer()"]
                },
                {My, :no_args, 0} => %ElixirSense.Core.State.TypeInfo{
                  args: [[]],
@@ -6703,7 +6854,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  positions: [{3, 3}],
                  end_positions: [{3, 30}],
                  generated: [false],
-                 specs: ["@typep no_args() :: integer"]
+                 specs: ["@typep no_args() :: integer()"]
                },
                {My, :overloaded, 0} => %ElixirSense.Core.State.TypeInfo{
                  args: [[]],
@@ -6712,7 +6863,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  positions: [{5, 3}],
                  end_positions: [{5, 25}],
                  generated: [false],
-                 specs: ["@type overloaded :: {}"]
+                 specs: ["@type overloaded() :: {}"]
                },
                {My, :overloaded, 1} => %ElixirSense.Core.State.TypeInfo{
                  kind: :type,
@@ -6750,7 +6901,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  args: [[]],
                  kind: :type,
                  name: :t,
-                 specs: ["@type t :: term"],
+                 specs: ["@type t() :: term()"],
                  doc: "All the types that implement this protocol" <> _
                }
              } = state.types
@@ -6780,16 +6931,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    positions: [{3, 3}, {2, 3}],
                    end_positions: [{3, 25}, {2, 30}],
                    generated: [false, false],
-                   specs: ["@spec abc :: reference", "@spec abc :: atom | integer"]
+                   specs: ["@spec abc() :: reference()", "@spec abc() :: atom() | integer()"]
                  },
                  {Proto, :my, 1} => %ElixirSense.Core.State.SpecInfo{
                    kind: :callback,
                    name: :my,
-                   args: [["a :: integer"]],
+                   args: [["a :: integer()"]],
                    positions: [{4, 3}],
                    end_positions: [{4, 37}],
                    generated: [false],
-                   specs: ["@callback my(a :: integer) :: atom"]
+                   specs: ["@callback my(a :: integer()) :: atom()"]
                  },
                  {Proto, :other, 1} => %ElixirSense.Core.State.SpecInfo{
                    kind: :macrocallback,
@@ -6798,7 +6949,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    positions: [{5, 3}],
                    end_positions: [_],
                    generated: [false],
-                   specs: ["@macrocallback other(x) :: Macro.t() when x: integer"]
+                   specs: ["@macrocallback other(x) :: Macro.t() when x: integer()"]
                  }
                } = state.specs
       else
@@ -6917,7 +7068,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{
                {MyRecords, :user, 0} => %State.TypeInfo{
                  name: :user,
-                 specs: ["@type user :: record(:user, name: String.t(), age: integer)"]
+                 specs: ["@type user() :: record(:user, name: String.t(), age: integer())"]
                }
              } = state.types
     end
@@ -6949,7 +7100,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{
                {MyRecords, :user, 0} => %State.TypeInfo{
                  name: :user,
-                 specs: ["@type user :: record(:user, name: String.t(), age: integer)"]
+                 specs: ["@type user() :: record(:user, name: String.t(), age: integer())"]
                }
              } = state.types
     end
@@ -7690,6 +7841,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     |> Code.string_to_quoted(columns: true, token_metadata: true)
     |> (fn {:ok, ast} -> ast end).()
     |> MetadataBuilder.build()
+  end
+
+  defp get_scope_vars(state, line) do
+    case state.lines_to_env[line] do
+      nil ->
+        []
+
+      env ->
+        dbg(state)
+        state.vars_info_per_scope_id[env.scope_id]
+    end
+    |> Enum.sort()
   end
 
   defp get_line_vars(state, line) do

@@ -135,7 +135,7 @@ defmodule ElixirSense.Core.Compiler do
 
     # no need to call expand_without_aliases_report - we never report
     {arg, state, env} = expand(arg, state, env)
-    {opts, state, env} = expand_opts(meta, :alias, [:as, :warn], no_alias_opts(opts), state, env)
+    {opts, state, env} = expand_opts([:as, :warn], no_alias_opts(opts), state, env)
 
     if is_atom(arg) do
       # TODO check difference with
@@ -167,7 +167,7 @@ defmodule ElixirSense.Core.Compiler do
     {arg, state, env} = expand(arg, state, env)
 
     {opts, state, env} =
-      expand_opts(meta, :require, [:as, :warn], no_alias_opts(opts), state, env)
+      expand_opts([:as, :warn], no_alias_opts(opts), state, env)
 
     case Keyword.fetch(meta, :defined) do
       {:ok, mod} when is_atom(mod) ->
@@ -227,7 +227,7 @@ defmodule ElixirSense.Core.Compiler do
 
     # no need to call expand_without_aliases_report - we never report
     {arg, state, env} = expand(arg, state, env)
-    {opts, state, env} = expand_opts(meta, :import, [:only, :except, :warn], opts, state, env)
+    {opts, state, env} = expand_opts([:only, :except, :warn], opts, state, env)
 
     if is_atom(arg) do
       # TODO check difference
@@ -336,7 +336,7 @@ defmodule ElixirSense.Core.Compiler do
       end
 
     valid_opts = [:context, :location, :line, :file, :unquote, :bind_quoted, :generated]
-    {e_opts, st, et} = expand_opts(meta, :quote, valid_opts, opts, s, e)
+    {e_opts, st, et} = expand_opts(valid_opts, opts, s, e)
 
     context = Keyword.get(e_opts, :context, e.module || :"Elixir")
 
@@ -1039,13 +1039,16 @@ defmodule ElixirSense.Core.Compiler do
     assert_module_scope(env, :@, 1)
     unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
 
-    {expr, state, env} = __MODULE__.Typespec.expand(expr, state, env)
+    {expr, state, env} = __MODULE__.Typespec.expand_type(expr, state, env)
 
     case __MODULE__.Typespec.type_to_signature(expr) do
       {name, [_type_arg]} when name in [:required, :optional] ->
         raise "type #{name}/#{1} is a reserved type and it cannot be defined"
 
       {name, type_args} ->
+        if __MODULE__.Typespec.built_in_type?(name, length(type_args)) do
+          raise"type #{name}/#{length(type_args)} is a built-in type and it cannot be redefined"
+        end
         # TODO elixir does Macro.escape with unquote: true
 
         spec = TypeInfo.typespec_to_string(kind, expr)
@@ -1079,7 +1082,7 @@ defmodule ElixirSense.Core.Compiler do
     assert_module_scope(env, :@, 1)
     unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
 
-    {expr, state, env} = __MODULE__.Typespec.expand(expr, state, env)
+    {expr, state, env} = __MODULE__.Typespec.expand_spec(expr, state, env)
 
     case __MODULE__.Typespec.spec_to_signature(expr) do
       {name, type_args} ->
@@ -1894,7 +1897,7 @@ defmodule ElixirSense.Core.Compiler do
     {{fun, meta, args}, state, env}
   end
 
-  defp expand_opts(meta, kind, allowed, opts, s, e) do
+  defp expand_opts(allowed, opts, s, e) do
     {e_opts, se, ee} = expand(opts, s, e)
     e_opts = sanitize_opts(allowed, e_opts)
     {e_opts, se, ee}
@@ -4694,15 +4697,139 @@ defmodule ElixirSense.Core.Compiler do
         when is_atom(name) and name != :"::" and is_atom(context),
         do: {name, []}
 
-    def type_to_signature({:"::", _, [{name, _, args}, _]}) when is_atom(name) and name != :"::",
+    def type_to_signature({:"::", _, [{name, _, args}, _]})
+        when is_atom(name) and name != :"::",
       do: {name, args}
 
     def type_to_signature(_), do: :error
 
-    def expand(ast, state, env) do
+    def expand_spec(ast, state, env) do
+      # TODO not sure this is correct. Are module vars accessible?
+      state = state
+      |> new_func_vars_scope
+
+      {ast, state, env} = do_expand_spec(ast, state, env)
+
+      state = state
+      |> remove_func_vars_scope
+
+      {ast, state, env}
+    end
+
+    defp do_expand_spec({:when, meta, [spec, guard]}, state, env) when is_list(guard) do
+      {spec, guard, state, env} = do_expand_spec(spec, guard, meta, state, env)
+      {{:when, meta, [spec, guard]}, state, env}
+    end
+    defp do_expand_spec(spec, state, env) do
+      {spec, guard, state, env} = do_expand_spec(spec, [], [], state, env)
+      {spec, state, env}
+    end
+
+    defp do_expand_spec({:"::", meta, [{name, name_meta, args}, return]}, guard, guard_meta, state, env)
+      when is_atom(name) and name != :"::" do
+        args = if is_atom(args) do
+          []
+        else
+          args
+        end
+        |> sanitize_args()
+
+      guard = if Keyword.keyword?(guard), do: guard, else: []
+
+      state = Enum.reduce(guard, state, fn {name, val}, state ->
+        # guard is a keyword list so we don't have exact meta on keys
+        add_var_write(state, {name, guard_meta, nil})
+      end)
+
+      {args_reverse, state, env} = Enum.reduce(args, {[], state, env}, fn arg, {acc, state, env} ->
+        {arg, state, env} = expand_typespec(arg, state, env)
+        {[arg | acc], state, env}
+      end)
+      args = Enum.reverse(args_reverse)
+
+      {return, state, env} = expand_typespec(return, state, env)
+
+      {guard_reverse, state, env} = Enum.reduce(guard, {[], state, env}, fn
+        {_name, {:var, _, context}} = pair, {acc, state, env} when is_atom(context) ->
+          # special type var
+          {[pair | acc], state, env}
+        {name, type}, {acc, state, env} ->
+          {type, state, env} = expand_typespec(type, state, env)
+          {[{name, type} | acc], state, env}
+      end)
+      guard = Enum.reverse(guard_reverse)
+
+      {{:"::", meta, [{name, name_meta, args}, return]}, guard, state, env}
+    end
+
+    defp do_expand_spec(other, guard, _guard_meta, state, env) do
+      # invalid or incomplete spec
+      {other, guard, state, env}
+    end
+
+    defp sanitize_args(args) do
+      Enum.map(args, fn
+        {:"::", meta, [left, right]} ->
+          {:"::", meta, [remove_default(left), remove_default(right)]}
+  
+        other ->
+          remove_default(other)
+      end)
+    end
+  
+    defp remove_default({:\\, _, [left, _]}), do: left
+    defp remove_default(other), do: other
+
+
+    def expand_type(ast, state, env) do
+      state = state
+      |> new_func_vars_scope
+
+      {ast, state, env} = do_expand_type(ast, state, env)
+
+      state = state
+      |> remove_func_vars_scope
+
+      {ast, state, env}
+    end
+
+    defp do_expand_type({:"::", meta, [{name, name_meta, args}, definition]}, state, env) do
+      args = if is_atom(args) do
+        []
+      else
+        args
+      end
+
+      state = Enum.reduce(args, state, fn
+        {name, meta, context}, state when is_atom(name) and is_atom(context) and name != :_ ->
+          add_var_write(state, {name, meta, context})
+         _, state ->
+          # silently skip invalid typespec params
+          state
+      end)
+
+      {definition, state, env} = expand_typespec(definition, state, env)
+      {{:"::", meta, [{name, name_meta, args}, definition]}, state, env}
+    end
+
+    defp do_expand_type(other, state, env) do
+      {other, state, env}
+    end
+
+    @special_forms [
+      :|, :<<>>, :%{}, :%, :.., :->, :"::", :+, :-, :., :{}, :__block__, :...
+    ]
+
+    defp expand_typespec(ast, state, env) do
       # TODO this should handle remote calls, attributes unquotes?
+      # TODO attribute remote call should expand attribute
+      # {{:., meta, [{:@, _, [{attr, _, _}]}, name]}, _, args}
+      # TODO remote call should expand remote
+      # {{:., meta, [remote, name]}, _, args}
+      # TODO expand struct module
+      # {:%, _, [name, {:%{}, meta, fields}]}
       {ast, {state, env}} =
-        Macro.prewalk(ast, {state, env}, fn
+        Macro.traverse(ast, {state, env}, fn
           {:__aliases__, _meta, list} = node, {state, env} when is_list(list) ->
             {node, state, env} = ElixirExpand.expand(node, state, env)
             {node, {state, env}}
@@ -4710,12 +4837,64 @@ defmodule ElixirSense.Core.Compiler do
           {:__MODULE__, _meta, ctx} = node, {state, env} when is_atom(ctx) ->
             {node, state, env} = ElixirExpand.expand(node, state, env)
             {node, {state, env}}
+          
+          {:"::", meta, [{var_name, var_meta, context}, expr]}, {state, env} when is_atom(var_name) and is_atom(context) ->
+            # mark as annotation
+          {{:"::", meta, [{var_name, [{:annotation, true} | var_meta], context}, expr]}, {state, env}}
 
+          {name, meta, args}, {state, env} when is_atom(name) and is_atom(args) and name not in @special_forms and hd(meta) != {:annotation, true} ->
+            [vars_from_scope | _other_vars] = state.vars_info
+            ast = case Elixir.Map.get(vars_from_scope, {name, nil}) do
+              nil ->
+                # add parens to no parens local call
+                {name, meta, []}
+              _ ->
+                {name, meta, args}
+            end
+
+            {ast, {state, env}}
+
+          other, acc ->
+            {other, acc}
+        end, fn
+          {{:., dot_meta, [remote, name]}, meta, args}, {state, env} when is_atom(remote) ->
+            line = Keyword.get(meta, :line, 0)
+            column = Keyword.get(meta, :column, nil)
+            args = if is_atom(args) do
+              []
+            else
+              args
+            end
+
+            state = add_call_to_line(state, {remote, name, length(args)}, {line, column})
+
+            {{{:., dot_meta, [remote, name]}, meta, args}, {state, env}}
+
+          {name, meta, args}, {state, env} when is_atom(name) and is_list(args) and name not in @special_forms ->
+            line = Keyword.get(meta, :line, 0)
+            column = Keyword.get(meta, :column, nil)
+
+            state = add_call_to_line(state, {nil, name, length(args)}, {line, column})
+
+            {{name, meta, args}, {state, env}}
+          {name, meta, context} = var, {state, env} when is_atom(name) and is_atom(context) and hd(meta) != {:annotation, true} ->
+            state = add_var_read(state, var)
+            {var, {state, env}}
           other, acc ->
             {other, acc}
         end)
 
       {ast, state, env}
     end
+      # TODO: Remove char_list type by v2.0
+    def built_in_type?(:char_list, 0), do: true
+    def built_in_type?(:charlist, 0), do: true
+    def built_in_type?(:as_boolean, 1), do: true
+    def built_in_type?(:struct, 0), do: true
+    def built_in_type?(:nonempty_charlist, 0), do: true
+    def built_in_type?(:keyword, 0), do: true
+    def built_in_type?(:keyword, 1), do: true
+    def built_in_type?(:var, 0), do: true
+    def built_in_type?(name, arity), do: :erl_internal.is_type(name, arity)
   end
 end

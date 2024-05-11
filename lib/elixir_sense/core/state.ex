@@ -1100,7 +1100,7 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | specs: specs}
   end
 
-  def add_var_write(%__MODULE__{} = state, {name, meta, nil}) when name != :_ do
+  def add_var_write(%__MODULE__{} = state, {name, meta, _}) when name != :_ do
     version = meta[:version]
     line = meta[:line]
     column = meta[:column]
@@ -1124,7 +1124,7 @@ defmodule ElixirSense.Core.State do
 
   def add_var_write(%__MODULE__{} = state, _), do: state
 
-  def add_var_read(%__MODULE__{} = state, {name, meta, nil}) when name != :_ do
+  def add_var_read(%__MODULE__{} = state, {name, meta, _}) when name != :_ do
     version = meta[:version]
     line = meta[:line]
     column = meta[:column]
@@ -1778,16 +1778,17 @@ defmodule ElixirSense.Core.State do
                     %ModFunInfo{positions: positions, params: params} =
                       state.mods_funs_to_positions[key]
 
-                    args =
-                      for param_variant <- params do
-                        param_variant
-                        |> Enum.map(&Macro.to_string/1)
+                    args = for param_variant <- params do
+                      case tl(param_variant) do
+                        [] -> ["t()"]
+                        other -> ["t()" | Enum.map(other, fn _ -> "term()" end)]
                       end
+                    end
 
                     specs =
                       for arg <- args do
                         joined = Enum.join(arg, ", ")
-                        "@callback #{name}(#{joined}) :: term"
+                        "@callback #{name}(#{joined}) :: term()"
                       end
 
                     %SpecInfo{
