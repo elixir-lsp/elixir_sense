@@ -2832,61 +2832,47 @@ defmodule ElixirSense.Core.Compiler do
 
     def with(meta, args, s, e) do
       {exprs, opts0} = ElixirUtils.split_opts(args)
+      opts0 = sanitize_opts(opts0, [:do, :else])
       s0 = ElixirEnv.reset_vars(s)
-      {e_exprs, {s1, e1, has_match}} = Enum.map_reduce(exprs, {s0, e, false}, &expand_with/2)
+      {e_exprs, {s1, e1}} = Enum.map_reduce(exprs, {s0, e}, &expand_with/2)
       {e_do, opts1, s2} = expand_with_do(meta, opts0, s, s1, e1)
-      {e_opts, opts2, s3} = expand_with_else(meta, opts1, s2, e, has_match)
-
-      case opts2 do
-        [{_key, _} | _] ->
-          raise "unexpected_option"
-
-        [] ->
-          :ok
-      end
+      {e_opts, opts2, s3} = expand_with_else(meta, opts1, s2, e)
 
       {{:with, meta, e_exprs ++ [[{:do, e_do} | e_opts]]}, s3, e}
     end
 
-    defp expand_with({:<-, meta, [left, right]}, {s, e, has_match}) do
+    defp expand_with({:<-, meta, [left, right]}, {s, e}) do
       {e_right, sr, er} = ElixirExpand.expand(right, s, e)
       sm = ElixirEnv.reset_read(sr, s)
       {[e_left], sl, el} = head([left], sm, er)
 
-      new_has_match =
-        case e_left do
-          {var, _, ctx} when is_atom(var) and is_atom(ctx) -> has_match
-          _ -> true
-        end
-
-      {{:<-, meta, [e_left, e_right]}, {sl, el, new_has_match}}
+      {{:<-, meta, [e_left, e_right]}, {sl, el}}
     end
 
-    defp expand_with(expr, {s, e, has_match}) do
+    defp expand_with(expr, {s, e}) do
       {e_expr, se, ee} = ElixirExpand.expand(expr, s, e)
-      {e_expr, {se, ee, has_match}}
+      {e_expr, {se, ee}}
     end
 
     defp expand_with_do(_meta, opts, s, acc, e) do
-      case Keyword.pop(opts, :do) do
-        {nil, _} ->
-          raise "missing_option"
+      {expr, rest_opts} = Keyword.pop(opts, :do)
+      # elixir raises here missing_option
+          # we return empty expression
+      expr = expr || []
 
-        {expr, rest_opts} ->
-          # TODO not sure new vars scope is needed
-          acc = acc |> new_vars_scope
-          {e_expr, s_acc, e_acc} = ElixirExpand.expand(expr, acc, e)
+      # TODO not sure new vars scope is needed
+      acc = acc |> new_vars_scope
+      {e_expr, s_acc, e_acc} = ElixirExpand.expand(expr, acc, e)
 
-          s_acc =
-            s_acc
-            |> maybe_move_vars_to_outer_scope
-            |> remove_vars_scope
+      s_acc =
+        s_acc
+        |> maybe_move_vars_to_outer_scope
+        |> remove_vars_scope
 
-          {e_expr, rest_opts, ElixirEnv.merge_vars(s_acc, s, e_acc)}
-      end
+      {e_expr, rest_opts, ElixirEnv.merge_vars(s_acc, s, e_acc)}
     end
 
-    defp expand_with_else(meta, opts, s, e, _has_match) do
+    defp expand_with_else(meta, opts, s, e) do
       case Keyword.pop(opts, :else) do
         {nil, _} ->
           {[], opts, s}

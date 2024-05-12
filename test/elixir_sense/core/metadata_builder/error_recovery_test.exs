@@ -6,6 +6,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
 
   defp get_cursor_env(code) do
     {:ok, ast} = NormalizedCode.Fragment.container_cursor_to_quoted(code, [columns: true, token_metadata: true])
+    # dbg(ast)
     state = MetadataBuilder.build(ast)
     state.cursor_env
   end
@@ -357,6 +358,85 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         bar()
       after
         \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+  end
+
+  describe "incomplete with" do
+    test "cursor in match expressions" do
+      code = """
+      x = foo()
+      with \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in match expressions guard" do
+      code = """
+      with x when \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in match expressions - right side" do
+      code = """
+      x = foo()
+      with 1 <- \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in match expressions - right side next expression" do
+      code = """
+      with x <- foo(), \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in do block" do
+      code = """
+      with x <- foo() do
+        \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in else clause left side" do
+      code = """
+      x = foo()
+      with 1 <- foo() do
+        :ok
+      else
+        \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in else clause left side guard" do
+      code = """
+      with 1 <- foo() do
+        :ok
+      else
+        x when \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in else clause right side" do
+      code = """
+      with 1 <- foo() do
+        :ok
+      else
+        x -> \
       """
       assert {meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, & &1.name == :x)
