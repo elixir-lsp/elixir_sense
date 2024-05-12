@@ -199,7 +199,11 @@ defmodule ElixirSense.Core.Metadata do
           predicate.(var)
       end)
 
-    %{env | vars: env.vars ++ scope_vars_missing_in_env}
+    env_vars = for var <- env.vars do
+      scope_vars |> Enum.find(& &1.name == var.name && &1.scope_id == var.scope_id)
+    end
+
+    %{env | vars: env_vars ++ scope_vars_missing_in_env}
   end
 
   @spec at_module_body?(State.Env.t()) :: boolean()
