@@ -331,17 +331,14 @@ defmodule ElixirSense.Core.State do
 
     # Macro.Env versioned_vars is not updated
     # versioned_vars: macro_env.versioned_vars,
-    versioned_vars =
-      state.vars
-      |> elem(0)
-      |> Map.new()
+    {versioned_vars, _} = state.vars
 
     # vars_info has both read and write vars
     # filter to return only read
-    vars =
-      hd(state.vars_info)
-      |> Map.values()
-      |> Enum.filter(&Map.has_key?(elem(state.vars, 0), {&1.name, nil}))
+    [current_vars_info | _] = state.vars_info
+    vars = for {{name, context}, version} <- versioned_vars, context == nil do
+      Map.fetch!(current_vars_info, {name, version})
+    end
 
     current_protocol =
       case state.protocol do
