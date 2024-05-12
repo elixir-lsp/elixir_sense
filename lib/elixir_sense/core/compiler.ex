@@ -459,6 +459,14 @@ defmodule ElixirSense.Core.Compiler do
     __MODULE__.Clauses.with(meta, args, s, e)
   end
 
+  # Cursor
+
+  defp do_expand({:__cursor__, meta, []}, s, e) do
+    s = s
+    |> add_cursor_env(meta, e)
+    {{:__cursor__, meta, []}, s, e}
+  end
+
   # Super
 
   defp do_expand({:super, meta, args}, s, e) when is_list(args) do
@@ -1593,7 +1601,7 @@ defmodule ElixirSense.Core.Compiler do
           {{call, expr}, _} = Code.eval_quoted({call, expr}, [], env)
           {call, expr}
         rescue
-          _ -> raise "unable to eval"
+          _ -> raise "unable to eval #{inspect({call, expr})}"
         end
       else
         {call, expr}
@@ -2639,7 +2647,8 @@ defmodule ElixirSense.Core.Compiler do
           vars: current,
           calls: after_s.calls,
           lines_to_env: after_s.lines_to_env,
-          vars_info: after_s.vars_info
+          vars_info: after_s.vars_info,
+          cursor_env: after_s.cursor_env
       }
 
       call_e = Map.put(e, :context, :match)
@@ -2652,7 +2661,8 @@ defmodule ElixirSense.Core.Compiler do
           vars: new_current,
           calls: s_expr.calls,
           lines_to_env: s_expr.lines_to_env,
-          vars_info: s_expr.vars_info
+          vars_info: s_expr.vars_info,
+          cursor_env: s_expr.cursor_env
       }
 
       end_e = Map.put(ee, :context, Map.get(e, :context))

@@ -64,7 +64,8 @@ defmodule ElixirSense.Core.State do
           binding_context: list,
           macro_env: list(Macro.Env.t()),
           typespec: nil | {atom, arity},
-          protocol: nil | {atom, [atom]}
+          protocol: nil | {atom, [atom]},
+          cursor_env: nil | {keyword, ElixirSense.Core.State.Env.t()}
         }
 
   @auto_imported_functions :elixir_env.new().functions
@@ -112,7 +113,8 @@ defmodule ElixirSense.Core.State do
             moduledoc_positions: %{},
             macro_env: [:elixir_env.new()],
             typespec: nil,
-            protocol: nil
+            protocol: nil,
+            cursor_env: nil
 
   defmodule Env do
     @moduledoc """
@@ -371,6 +373,11 @@ defmodule ElixirSense.Core.State do
 
   def get_current_module(%__MODULE__{} = state) do
     state.module |> hd
+  end
+
+  def add_cursor_env(%__MODULE__{} = state, meta, macro_env) do
+    env = get_current_env(state, macro_env)
+    %__MODULE__{state | cursor_env: {meta, env}}
   end
 
   def add_current_env_to_line(%__MODULE__{} = state, line, macro_env) when is_integer(line) do
