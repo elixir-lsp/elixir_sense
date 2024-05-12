@@ -233,6 +233,7 @@ defmodule ElixirSense.Core.Compiler do
       # TODO check difference
       # elixir_aliases:ensure_loaded(Meta, ERef, ET)
       # elixir_import:import(Meta, ERef, EOpts, ET, true, true)
+      # TODO this does not work for context modules
       with true <- Code.ensure_loaded?(arg),
            {:ok, env} <- Macro.Env.define_import(env, meta, arg, [trace: false] ++ opts) do
         {arg, state, env}
@@ -399,6 +400,15 @@ defmodule ElixirSense.Core.Compiler do
 
     case resolve_super(meta, arity, s, e) do
       {kind, name, _} when kind in [:def, :defp] ->
+
+        line = Keyword.get(super_meta, :line, 0)
+        column = Keyword.get(super_meta, :column, nil)
+
+        s =
+          s
+          |> add_call_to_line({nil, name, arity}, {line, column})
+          |> add_current_env_to_line(line, e)
+
         {{:&, meta, [{:/, arity_meta, [{name, super_meta, context}, arity]}]}, s, e}
 
       _ ->
@@ -453,8 +463,18 @@ defmodule ElixirSense.Core.Compiler do
 
   defp do_expand({:super, meta, args}, s, e) when is_list(args) do
     assert_no_match_or_guard_scope(e.context, "super")
-    {kind, name, _} = resolve_super(meta, length(args), s, e)
+    arity = length(args)
+    {kind, name, _} = resolve_super(meta, arity, s, e)
     {e_args, sa, ea} = expand_args(args, s, e)
+    
+    line = Keyword.get(meta, :line, 0)
+    column = Keyword.get(meta, :column, nil)
+
+    sa =
+      sa
+      |> add_call_to_line({nil, name, arity}, {line, column})
+      |> add_current_env_to_line(line, ea)
+
     {{:super, [{:super, {kind, name}} | meta], e_args}, sa, ea}
   end
 
@@ -4769,6 +4789,7 @@ defmodule ElixirSense.Core.Compiler do
 
     defp do_expand_spec(other, guard, _guard_meta, state, env) do
       # invalid or incomplete spec
+      # TODO try to wrap in :: expression
       {other, guard, state, env}
     end
 
@@ -4818,6 +4839,8 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp do_expand_type(other, state, env) do
+      # invalid or incomplete spec
+      # TODO try to wrap in :: expression
       {other, state, env}
     end
 

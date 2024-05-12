@@ -6694,6 +6694,54 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              )
     end
 
+    test "registers super call" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableFunctions
+
+          def test(a, b) do
+            super(a, b)
+          end
+        end
+        """
+        |> string_to_state
+
+        assert state.calls[5] == [%CallInfo{arity: 2, position: {5, 5}, func: :test, mod: nil}]
+    end
+
+    test "registers super capture expression" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableFunctions
+
+          def test(a, b) do
+            a |> Enum.map(&super(&1, b))
+          end
+        end
+        """
+        |> string_to_state
+
+        assert [_, %CallInfo{arity: 2, position: {5, 20}, func: :test, mod: nil}, _] = state.calls[5]
+    end
+
+    test "registers super capture" do
+      state =
+        """
+        defmodule My do
+          use ElixirSenseExample.OverridableFunctions
+
+          def test(a, b) do
+            a |> Enum.map_reduce([], &super/2)
+          end
+        end
+        """
+        |> string_to_state
+
+        assert [_, %CallInfo{arity: 2, position: {5, 31}, func: :test, mod: nil}, _] = state.calls[5]
+    end
+
     test "registers calls capture operator __MODULE__" do
       state =
         """
@@ -6725,6 +6773,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert state.calls == %{
                3 => [%CallInfo{arity: 1, position: {3, 12}, func: :func, mod: MyMod}]
+             }
+    end
+
+    test "registers calls capture expression external" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            &MyMod.func(1, &1)
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 2, position: {3, 12}, func: :func, mod: MyMod}]
              }
     end
 
@@ -6766,13 +6830,31 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         defmodule NyModule do
           def func do
             &func/1
+            &func/0
           end
         end
         """
         |> string_to_state
 
       assert state.calls == %{
-               3 => [%CallInfo{arity: 1, func: :func, position: {3, 6}, mod: nil}]
+               3 => [%CallInfo{arity: 1, func: :func, position: {3, 6}, mod: nil}],
+               4 => [%CallInfo{arity: 0, func: :func, position: {4, 6}, mod: nil}]
+             }
+    end
+
+    test "registers calls capture expression local" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            &func(1, &1)
+          end
+        end
+        """
+        |> string_to_state
+
+      assert state.calls == %{
+               3 => [%CallInfo{arity: 2, func: :func, position: {3, 6}, mod: nil}]
              }
     end
 
