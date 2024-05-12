@@ -3649,14 +3649,14 @@ defmodule ElixirSense.Core.Compiler do
 
     def capture(meta, {:/, _, [{{:., _, [_m, f]} = dot, require_meta, []}, a]}, s, e)
         when is_atom(f) and is_integer(a) do
-      args = args_from_arity(meta, a, e)
+      args = args_from_arity(meta, a)
       # handle_capture_possible_warning(meta, require_meta, m, f, a, e)
       capture_require({dot, require_meta, args}, s, e, true)
     end
 
     def capture(meta, {:/, _, [{f, import_meta, c}, a]}, s, e)
         when is_atom(f) and is_integer(a) and is_atom(c) do
-      args = args_from_arity(meta, a, e)
+      args = args_from_arity(meta, a)
       capture_import({f, import_meta, args}, s, e, true)
     end
 
@@ -3812,12 +3812,17 @@ defmodule ElixirSense.Core.Compiler do
       {other, dict}
     end
 
-    defp args_from_arity(_meta, a, _e) when is_integer(a) and a >= 0 and a <= 255 do
-      Enum.map(1..a, fn x -> {:&, [], [x]} end)
+    defp args_from_arity(_meta, 0), do: []
+
+    defp args_from_arity(meta, a) when is_integer(a) and a >= 1 and a <= 255 do
+      for x <- 1..a do
+        {:&, meta, [x]}
+      end
     end
 
-    defp args_from_arity(_meta, _a, _e) do
-      raise "invalid_arity_for_capture"
+    defp args_from_arity(_meta, _a) do
+      # elixir raises invalid_arity_for_capture
+      []
     end
 
     defp is_sequential_and_not_empty([]), do: false
