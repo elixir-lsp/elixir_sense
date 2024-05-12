@@ -2680,8 +2680,10 @@ defmodule ElixirSense.Core.Compiler do
       {{:->, meta, [e_left, e_right]}, sr, er}
     end
 
-    def clause(_meta, _kind, _fun, _, _, _e) do
-      raise ArgumentError, "bad_or_missing_clauses"
+    def clause(meta, kind, fun, expr, s, e) do
+      # try to recover from error by wrapping the expression in clause
+      # elixir raises here bad_or_missing_clauses
+      clause(meta, kind, fun, {:->, meta, [[expr], :ok]}, s, e)
     end
 
     def head([{:when, meta, [_ | _] = all}], s, e) do
@@ -2734,10 +2736,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     def case(meta, opts, s, e) do
-      :ok =
-        assert_at_most_once(:do, opts, 0, fn _key ->
-          raise ArgumentError, "duplicated_clauses"
-        end)
+      opts = sanitize_opts(opts, [:do])
 
       {case_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
@@ -2752,10 +2751,6 @@ defmodule ElixirSense.Core.Compiler do
       expand_clauses(meta, :case, fun, do_clause, s, e)
     end
 
-    defp expand_case(_meta, {_key, _}, _s, _e) do
-      raise ArgumentError, "unexpected_option"
-    end
-
     # cond
 
     def cond(_meta, [], _s, _e) do
@@ -2767,10 +2762,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     def cond(meta, opts, s, e) do
-      :ok =
-        assert_at_most_once(:do, opts, 0, fn _key ->
-          raise ArgumentError, "duplicated_clauses"
-        end)
+      opts = sanitize_opts(opts, [:do])
 
       {cond_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
@@ -2785,10 +2777,6 @@ defmodule ElixirSense.Core.Compiler do
       expand_clauses(meta, :cond, fun, do_clause, s, e)
     end
 
-    defp expand_cond(_meta, {_key, _}, _s, _e) do
-      raise ArgumentError, "unexpected_option"
-    end
-
     # receive
 
     def receive(_meta, [], _s, _e) do
@@ -2800,12 +2788,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     def receive(meta, opts, s, e) do
-      raise_error = fn _key ->
-        raise ArgumentError, "duplicated_clauses"
-      end
-
-      :ok = assert_at_most_once(:do, opts, 0, raise_error)
-      :ok = assert_at_most_once(:after, opts, 0, raise_error)
+      opts = sanitize_opts(opts, [:do, :after])
 
       {receive_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
@@ -2829,12 +2812,20 @@ defmodule ElixirSense.Core.Compiler do
       expand_clauses(meta, :receive, fun, after_clause, s, e)
     end
 
-    defp expand_receive(_meta, {:after, _}, _s, _e) do
-      raise ArgumentError, "multiple_after_clauses_in_receive"
-    end
-
-    defp expand_receive(_meta, {_key, _}, _s, _e) do
-      raise ArgumentError, "unexpected_option"
+    defp expand_receive(meta, {:after, expr}, s, e) when not is_list(expr) do
+      # elixir raises here multiple_after_clauses_in_receive
+      case expr do
+        expr when not is_list(expr) ->
+          # try to recover from error by wrapping the expression in list
+          expand_receive(meta, {:after, [expr]}, s, e)
+        [first | _] ->
+          # try to recover from error by taking first clause only
+          # TODO maybe search for clause with cursor?
+          expand_receive(meta, {:after, [first]}, s, e)
+        [] ->
+          # try to recover from error by inserting a fake clause
+          expand_receive(meta, {:after, [{:->, meta, [[0], :ok]}]}, s, e)
+      end
     end
 
     # with
@@ -2911,28 +2902,10 @@ defmodule ElixirSense.Core.Compiler do
     # try
 
     def try(_meta, [], _s, _e), do: raise("missing_option")
-    def try(_meta, [{:do, _}], _s, _e), do: raise("missing_option")
     def try(_meta, opts, _s, _e) when not is_list(opts), do: raise("invalid_args")
 
     def try(meta, opts, s, e) do
-      # TODO: Make this an error on v2.0
-      # case opts do
-      #   [{:do, _}, {:else, _}] ->
-      #     file_warn(meta, Map.get(e, :file), __MODULE__, {:try_with_only_else_clause, origin(meta, :try)})
-      #   _ ->
-      #     :ok
-      # end
-
-      raise_error = fn _key ->
-        raise "duplicated_clauses"
-      end
-
-      :ok = assert_at_most_once(:do, opts, 0, raise_error)
-      :ok = assert_at_most_once(:rescue, opts, 0, raise_error)
-      :ok = assert_at_most_once(:catch, opts, 0, raise_error)
-      :ok = assert_at_most_once(:else, opts, 0, raise_error)
-      :ok = assert_at_most_once(:after, opts, 0, raise_error)
-      # :ok = warn_catch_before_rescue(opts, meta, e, false)
+      opts = sanitize_opts(opts, [:do, :rescue, :catch, :else, :after])
 
       {try_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
@@ -2965,10 +2938,6 @@ defmodule ElixirSense.Core.Compiler do
       expand_clauses_with_stacktrace(meta, &expand_rescue/4, rescue_clause, s, e)
     end
 
-    defp expand_try(_meta, {_key, _}, _s, _e) do
-      raise ArgumentError, "unexpected_option"
-    end
-
     defp expand_clauses_with_stacktrace(meta, fun, clauses, s, e) do
       old_stacktrace = s.stacktrace
       ss = %{s | stacktrace: true}
@@ -2984,22 +2953,22 @@ defmodule ElixirSense.Core.Compiler do
       head(args, s, e)
     end
 
-    defp expand_catch(_meta, _, _, _e) do
-      raise ArgumentError, "wrong_number_of_args_for_clause"
+    defp expand_catch(meta, [a1, a2 | _], s, e) do
+      # attempt to recover from error by taking 2 first args
+      # elixir raises here wrong_number_of_args_for_clause
+      expand_catch(meta, [a1, a2], s, e)
     end
 
     defp expand_rescue(_meta, [arg], s, e) do
-      case expand_rescue(arg, s, e) do
-        {e_arg, sa, ea} ->
-          {[e_arg], sa, ea}
-
-        false ->
-          raise ArgumentError, "invalid_rescue_clause"
-      end
+      # elixir is strict here and raises invalid_rescue_clause on invalid args
+      {e_arg, sa, ea} = expand_rescue(arg, s, e)
+      {[e_arg], sa, ea}
     end
 
-    defp expand_rescue(_meta, _, _, _e) do
-      raise ArgumentError, "wrong_number_of_args_for_clause"
+    defp expand_rescue(meta, [a1 | _], s, e) do
+      # try to recover from error by taking first argument only
+      # elixir raises here wrong_number_of_args_for_clause
+      expand_rescue(meta, [a1], s, e)
     end
 
     # rescue var
@@ -3029,21 +2998,22 @@ defmodule ElixirSense.Core.Compiler do
 
       case e_left do
         {name, _, atom} when is_atom(name) and is_atom(atom) ->
-          case normalize_rescue(e_right) do
-            false -> false
-            other -> {{:in, meta, [e_left, other]}, sr, er}
-          end
+          {{:in, meta, [e_left, normalize_rescue(e_right, e)]}, sr, er}
 
         _ ->
-          false
+          # elixir rejects this case, we normalize to underscore
+          {{:in, meta, [{:_, [], e.module}, normalize_rescue(e_right, e)]}, sr, er}
       end
     end
 
     # rescue expr() => rescue expanded_expr()
-    defp expand_rescue({_meta, meta, _} = arg, s, e) do
+    defp expand_rescue({_, meta, _} = arg, s, e) do
       # TODO wut?
       case Macro.expand_once(arg, %{e | line: line(meta)}) do
-        ^arg -> false
+        ^arg ->
+          # elixir rejects this case
+          # try to recover from error by generating fake expression
+          expand_rescue({:in, meta, [arg, {:_, [], e.module}]}, s, e)
         new_arg -> expand_rescue(new_arg, s, e)
       end
     end
@@ -3053,24 +3023,35 @@ defmodule ElixirSense.Core.Compiler do
       expand_rescue({:in, [], [{:_, [], e.module}, arg]}, s, e)
     end
 
-    defp normalize_rescue(atom) when is_atom(atom) do
+    defp normalize_rescue(atom, _e) when is_atom(atom) do
       [atom]
     end
 
-    defp normalize_rescue(other) do
-      if is_list(other) and Enum.all?(other, &is_atom/1), do: other, else: false
+    defp normalize_rescue(other, e) do
+      # elixir is strict here, we reject invalid nodes
+      res = if is_list(other) do
+        Enum.filter(other, &is_atom/1)
+      else
+        []
+      end
+
+      if res == [] do
+        [{:_, [], e.module}]
+      else
+        res
+      end
     end
 
     defp expand_head(_meta, _kind, _key) do
       fn
-        [{:when, _, [_, _, _ | _]}], _, _e ->
-          raise ArgumentError, "wrong_number_of_args_for_clause"
+        [{:when, _, [args, _, _ | _]}], _, _e ->
+          raise ArgumentError, "wrong_number_of_args_for_clause #{inspect(args)}"
 
         [_] = args, s, e ->
           head(args, s, e)
 
-        _, _, _e ->
-          raise ArgumentError, "wrong_number_of_args_for_clause"
+        args, _, _e ->
+          raise ArgumentError, "wrong_number_of_args_for_clause #{inspect(args)}"
       end
     end
 
@@ -3101,24 +3082,24 @@ defmodule ElixirSense.Core.Compiler do
       {{key, values}, se}
     end
 
-    defp expand_clauses_origin(_meta, _kind, _fun, {_key, _}, _, _e) do
-      raise ArgumentError, "bad_or_missing_clauses"
+    defp expand_clauses_origin(meta, kind, fun, {key, expr}, s, e) do
+      # try to recover from error by wrapping the expression in a clauses list
+      # elixir raises here bad_or_missing_clauses
+      expand_clauses_origin(meta, kind, fun, {key, [expr]}, s, e)
     end
 
     # helpers
 
-    defp assert_at_most_once(_kind, [], _count, _fun), do: :ok
-
-    defp assert_at_most_once(kind, [{kind, _} | _], 1, error_fun) do
-      error_fun.(kind)
+    defp sanitize_opt(opts, opt) do
+      # TODO look for opt with cursor?
+      case Keyword.fetch(opts, opt) do
+        :error -> []
+        {:ok, value} -> [{opt, value}]
+      end
     end
 
-    defp assert_at_most_once(kind, [{kind, _} | rest], count, fun) do
-      assert_at_most_once(kind, rest, count + 1, fun)
-    end
-
-    defp assert_at_most_once(kind, [_ | rest], count, fun) do
-      assert_at_most_once(kind, rest, count, fun)
+    defp sanitize_opts(opts, allowed) do
+      Enum.flat_map(allowed, fn opt -> sanitize_opt(opts, opt) end)
     end
 
     defp origin(meta, default) do
