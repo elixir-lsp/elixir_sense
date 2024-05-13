@@ -494,6 +494,13 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         """)
 
         assert_expansion("""
+        for i <- [1, 2, 3], uniq: true do
+          i
+        end
+        :ok
+        """)
+
+        assert_expansion("""
         _ = for i <- [1, 2, 3] do
           i
         end
