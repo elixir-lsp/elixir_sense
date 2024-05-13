@@ -2120,62 +2120,73 @@ defmodule ElixirSense.Core.Compiler do
 
     {expr, opts} =
       case Keyword.pop(block, :do) do
+        {nil, do_opts} ->
+          # elixir raises missing_option here
+          {[], do_opts}
         {do_expr, do_opts} -> {do_expr, do_opts}
-        nil -> raise "missing_option"
       end
 
     {e_opts, so, eo} = expand(opts, __MODULE__.Env.reset_vars(s), e)
     {e_cases, sc, ec} = map_fold(&expand_for_generator/3, so, eo, cases)
-    assert_generator_start(meta, e_cases, e)
+    # elixir raises here for_generator_start on invalid start generator
 
-    {{e_expr, se, ee}, normalized_opts} =
-      case validate_for_options(e_opts, false, false, false, return, meta, e, []) do
-        {:ok, maybe_reduce, nopts} ->
-          # TODO not sure new vars scope is actually needed
-          sc = sc |> new_vars_scope
-          {ed, sd, envd} = expand_for_do_block(meta, expr, sc, ec, maybe_reduce)
+    {maybe_reduce, normalized_opts} = sanitize_for_options(e_opts, false, false, false, return, meta, e, [])
 
-          sd =
-            sd
-            |> maybe_move_vars_to_outer_scope
-            |> remove_vars_scope
+     # TODO not sure new vars scope is actually needed
+     sc = sc |> new_vars_scope
+     {e_expr, se, ee} = expand_for_do_block(meta, expr, sc, ec, maybe_reduce)
 
-          {{ed, sd, envd}, nopts}
-
-        {:error, _error} ->
-          # {file_error(meta, e, __MODULE__, error), e_opts}
-          raise "invalid_option"
-      end
+     se =
+      se
+       |> maybe_move_vars_to_outer_scope
+       |> remove_vars_scope
 
     {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]},
      __MODULE__.Env.merge_vars(se, s, ee), e}
   end
 
-  defp expand_for_do_block(_meta, [{:->, _, _} | _], _s, _e, false),
-    do: raise("for_without_reduce_bad_block")
+  defp expand_for_do_block(meta, [{:->, _, _} | _] = clauses, s, e, false) do
+    # elixir raises here for_without_reduce_bad_block
+    # try to recover from error by emitting fake reduce
+    expand_for_do_block(meta, clauses, s, e, {:reduce, []})
+  end
 
   defp expand_for_do_block(_meta, expr, s, e, false), do: expand(expr, s, e)
 
   defp expand_for_do_block(meta, [{:->, _, _} | _] = clauses, s, e, {:reduce, _}) do
     transformer = fn
-      {_, _, [[_], _]} = clause, sa ->
+      {:->, clause_meta, [args, right]} = clause, sa ->
+        # elixir checks here that clause has exactly 1 arg by matching against {_, _, [[_], _]}
+        # we drop excessive or generate a fake arg
+        # TODO check if there is cursor in dropped arg?
+        args = case args do
+          [] -> [{:_, [], e.module}]
+          [head | _] -> [head]
+        end
+        clause = {:->, clause_meta, [args, right]}
         s_reset = __MODULE__.Env.reset_vars(sa)
 
         {e_clause, s_acc, e_acc} =
           __MODULE__.Clauses.clause(meta, :fn, &__MODULE__.Clauses.head/3, clause, s_reset, e)
 
         {e_clause, __MODULE__.Env.merge_vars(s_acc, sa, e_acc)}
-
-      _, _ ->
-        raise "for_with_reduce_bad_block"
     end
 
     {do_expr, sa} = Enum.map_reduce(clauses, s, transformer)
     {do_expr, sa, e}
   end
 
-  defp expand_for_do_block(_meta, _expr, _s, _e, {:reduce, _}),
-    do: raise("for_with_reduce_bad_block")
+  defp expand_for_do_block(meta, expr, s, e, {:reduce, _} = reduce) do
+    # elixir raises here for_with_reduce_bad_block
+    case expr do
+      [] ->
+        # try to recover from error by emitting a fake clause
+        expand_for_do_block(meta, [{:->, meta, [[{:_, [], e.module}], :ok]}], s, e, reduce)
+      _ ->
+        # try to recover from error by wrapping the expression in clause
+        expand_for_do_block(meta, [{:->, meta, [[expr], :ok]}], s, e, reduce)
+    end
+  end
 
   defp expand_for_generator({:<-, meta, [left, right]}, s, e) do
     {e_right, sr, er} = expand(right, s, e)
@@ -2213,16 +2224,12 @@ defmodule ElixirSense.Core.Compiler do
     {x, s, e}
   end
 
-  defp assert_generator_start(_, [{:<-, _, [_, _]} | _], _), do: :ok
-  defp assert_generator_start(_, [{:<<>>, _, [{:<-, _, [_, _]}]} | _], _), do: :ok
-  defp assert_generator_start(_meta, _, _e), do: raise("for_generator_start")
-
-  defp validate_for_options([{:into, _} = pair | opts], _into, uniq, reduce, return, meta, e, acc) do
-    validate_for_options(opts, pair, uniq, reduce, return, meta, e, [pair | acc])
+  defp sanitize_for_options([{:into, _} = pair | opts], _into, uniq, reduce, return, meta, e, acc) do
+    sanitize_for_options(opts, pair, uniq, reduce, return, meta, e, [pair | acc])
   end
 
-  defp validate_for_options(
-         [{:uniq, boolean} = pair | opts],
+  defp sanitize_for_options(
+         [{:uniq, _} = pair | opts],
          into,
          _uniq,
          reduce,
@@ -2230,16 +2237,13 @@ defmodule ElixirSense.Core.Compiler do
          meta,
          e,
          acc
-       )
-       when is_boolean(boolean) do
-    validate_for_options(opts, into, pair, reduce, return, meta, e, [pair | acc])
+       ) do
+    # elixir checks if uniq value is boolean
+    # we do not care - there may be cursor in it
+    sanitize_for_options(opts, into, pair, reduce, return, meta, e, [pair | acc])
   end
 
-  defp validate_for_options([{:uniq, value} | _], _, _, _, _, _, _, _) do
-    {:error, {:for_invalid_uniq, value}}
-  end
-
-  defp validate_for_options(
+  defp sanitize_for_options(
          [{:reduce, _} = pair | opts],
          into,
          uniq,
@@ -2249,26 +2253,23 @@ defmodule ElixirSense.Core.Compiler do
          e,
          acc
        ) do
-    validate_for_options(opts, into, uniq, pair, return, meta, e, [pair | acc])
+    # elixir raises for_conflicting_reduce_into_uniq when reduce, uniq and true is enabled
+    sanitize_for_options(opts, into, uniq, pair, return, meta, e, [pair | acc])
   end
 
-  defp validate_for_options([], into, uniq, {:reduce, _}, _return, _meta, _e, _acc)
-       when into != false or uniq != false do
-    {:error, :for_conflicting_reduce_into_uniq}
-  end
-
-  defp validate_for_options([], false, uniq, false, true, meta, e, acc) do
+  defp sanitize_for_options([], false, uniq, false, true, meta, e, acc) do
     pair = {:into, []}
-    validate_for_options([pair], pair, uniq, false, true, meta, e, acc)
+    sanitize_for_options([pair], pair, uniq, false, true, meta, e, acc)
   end
 
-  defp validate_for_options([], false, {:uniq, true}, false, false, meta, e, acc) do
+  defp sanitize_for_options([], false, {:uniq, true}, false, false, meta, e, acc) do
+    # TODO check if there is cursor  in dropped unique
     acc_without_uniq = Keyword.delete(acc, :uniq)
-    validate_for_options([], false, false, false, false, meta, e, acc_without_uniq)
+    sanitize_for_options([], false, false, false, false, meta, e, acc_without_uniq)
   end
 
-  defp validate_for_options([], _into, _uniq, reduce, _return, _meta, _e, acc) do
-    {:ok, reduce, Enum.reverse(acc)}
+  defp sanitize_for_options([], _into, _uniq, reduce, _return, _meta, _e, acc) do
+    {reduce, Enum.reverse(acc)}
   end
 
   defp sanitize_opts(allowed, opts) when is_list(opts) do

@@ -442,4 +442,171 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert Enum.any?(env.vars, & &1.name == :x)
     end
   end
+
+  describe "incomplete for" do
+    test "cursor in generator match expressions" do
+      code = """
+      x = foo()
+      for \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in generator match expression guard" do
+      code = """
+      for x when \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in generator match expression right side" do
+      code = """
+      x = foo()
+      for a <- \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in generator match expressions bitstring" do
+      code = """
+      x = foo()
+      for <<\
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in generator match expression guard bitstring" do
+      code = """
+      for <<x when \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in generator match expression right side bitstring" do
+      code = """
+      x = foo()
+      for <<a <- \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in generator next match expression" do
+      code = """
+      for x <- [], \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in into option" do
+      code = """
+      x = foo()
+      for x <- [], into: \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in uniq option" do
+      code = """
+      x = foo()
+      for x <- [], uniq: \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in reduce option" do
+      code = """
+      x = foo()
+      for x <- [], reduce: \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in do block" do
+      code = """
+      x = foo()
+      for x <- [], do: \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in do block reduce left side of clause" do
+      code = """
+      x = foo()
+      for x <- [], reduce: %{} do
+        \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in do block reduce left side of clause guard" do
+      code = """
+      for x <- [], reduce: %{} do
+        y when \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, & &1.name == :y)
+    end
+
+    test "cursor in do block reduce left side of clause too many args" do
+      code = """
+      for x <- [], reduce: %{} do
+        y, \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, & &1.name == :y)
+    end
+
+    test "cursor in do block reduce right side of clause" do
+      code = """
+      for x <- [], reduce: %{} do
+        y -> \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, & &1.name == :y)
+    end
+
+    test "cursor in do block reduce right side of clause too many args" do
+      code = """
+      for x <- [], reduce: %{} do
+        y, z -> \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, & &1.name == :y)
+    end
+
+    test "cursor in do block reduce right side of clause too little args" do
+      code = """
+      for x <- [], reduce: %{} do
+        -> \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "cursor in do block right side of clause without reduce" do
+      code = """
+      for x <- [] do
+        y -> \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, & &1.name == :y)
+    end
+  end
 end
