@@ -955,4 +955,27 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert {meta, env} = get_cursor_env(code)
     end
   end
+
+  describe "map" do
+    test "invalid key in match" do
+      code = """
+      %{foo => x} = x\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "update in match" do
+      code = """
+      %{a | x: __cursor__()} = x\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "cursor in place of key value pair" do
+      code = """
+      %{a: "123", \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+  end
 end

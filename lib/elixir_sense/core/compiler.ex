@@ -4596,14 +4596,11 @@ defmodule ElixirSense.Core.Compiler do
 
     def expand_struct(_meta, _left, _right, _s, _e), do: raise("non_map_after_struct")
 
-    def expand_map(meta, [{:|, update_meta, [left, right]}], s, %{context: nil} = e) do
+    def expand_map(meta, [{:|, update_meta, [left, right]}], s, e) do
+      # elixir raises update_syntax_in_wrong_context if e.context is not nil
       {[e_left | e_right], se, ee} = ElixirExpand.expand_args([left | right], s, e)
       e_right = sanitize_kv(e_right, e)
       {{:%{}, meta, [{:|, update_meta, [e_left, e_right]}]}, se, ee}
-    end
-
-    def expand_map(_meta, [{:|, _, [_, _]}] = _args, _s, _e) do
-      raise "update_syntax_in_wrong_context"
     end
 
     def expand_map(meta, args, s, e) do
