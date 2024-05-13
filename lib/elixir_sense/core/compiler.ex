@@ -462,8 +462,13 @@ defmodule ElixirSense.Core.Compiler do
   # Cursor
 
   defp do_expand({:__cursor__, meta, []}, s, e) do
-    s = s
-    |> add_cursor_env(meta, e)
+    s = unless s.cursor_env do
+      s
+      |> add_cursor_env(meta, e)
+    else
+      s
+    end
+
     {{:__cursor__, meta, []}, s, e}
   end
 
