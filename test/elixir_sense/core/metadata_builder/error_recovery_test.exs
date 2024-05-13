@@ -939,4 +939,20 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert {meta, env} = get_cursor_env(code)
     end
   end
+
+  describe "pin" do
+    test "outside of match" do
+      code = """
+      ^\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "cursor in match" do
+      code = """
+      ^__cursor__() = x\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+  end
 end

@@ -499,21 +499,23 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:^, meta, [arg]}, %{prematch: {prematch, _, _}, vars: {_, write}} = s, e) do
     no_match_s = %{s | prematch: :pin, vars: {prematch, write}}
 
-    case expand(arg, no_match_s, %{e | context: nil}) do
+    case expand(arg, no_match_s, %{e | context: nil}) |> dbg do
       {{name, _var_meta, kind} = var, %{unused: unused}, _}
       when is_atom(name) and is_atom(kind) ->
         s = add_var_read(s, var)
         {{:^, meta, [var]}, %{s | unused: unused}, e}
 
-      _ ->
-        # function_error(meta, e, __MODULE__, {:invalid_arg_for_pin, arg})
+      {arg, s, _e} ->
+        # elixir raises here invalid_arg_for_pin
+        # we may have cursor in arg
         {{:^, meta, [arg]}, s, e}
     end
   end
 
   defp do_expand({:^, meta, [arg]}, s, e) do
-    # function_error(meta, e, __MODULE__, {:pin_outside_of_match, arg})
-    {{:^, meta, [arg]}, s, e}
+    # elixir raises here pin_outside_of_match
+    # try to recover from error by dropping the pin and expanding arg
+    expand(arg, s, e)
   end
 
   defp do_expand({:_, _meta, kind} = var, s, %{context: _context} = e) when is_atom(kind) do
