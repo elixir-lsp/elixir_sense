@@ -664,4 +664,279 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert Enum.any?(env.vars, & &1.name == :x)
     end
   end
+
+  describe "capture" do
+    test "empty" do
+      code = """
+      &\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "local" do
+      code = """
+      &foo\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "local slash no arity" do
+      code = """
+      &foo/\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "local slash arity" do
+      code = """
+      &foo/1\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "local slash invalid arity" do
+      code = """
+      &foo/1000; \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "local dot" do
+      code = """
+      &foo.\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "local dot call" do
+      code = """
+      &foo.(\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "local dot call closed" do
+      code = """
+      &foo.()\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "local dot right" do
+      code = """
+      &foo.bar\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "remote" do
+      code = """
+      &Foo\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "remote dot" do
+      code = """
+      &Foo.\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "remote dot right" do
+      code = """
+      &Foo.bar\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "remote dot right no arity" do
+      code = """
+      &Foo.bar/\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "remote dot right arity" do
+      code = """
+      &Foo.bar/1\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "remote dot call" do
+      code = """
+      &Foo.bar(\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "remote dot call closed" do
+      code = """
+      &Foo.bar()\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "tuple" do
+      code = """
+      &{\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "tuple closed" do
+      code = """
+      &{}\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "list" do
+      code = """
+      &[\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "list closed" do
+      code = """
+      &[]\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "bitstring" do
+      code = """
+      &<<\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "bitstring closed" do
+      code = """
+      &<<>>\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "map no braces" do
+      code = """
+      &%\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "map" do
+      code = """
+      &%{\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "map closed" do
+      code = """
+      &%{}\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "struct no braces" do
+      code = """
+      &%Foo\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "struct" do
+      code = """
+      &%Foo{\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "struct closed" do
+      code = """
+      &%Foo{}\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "block" do
+      code = """
+      & (\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "block multiple expressions" do
+      code = """
+      & (:ok; \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "arg var incomplete" do
+      code = """
+      & &\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "arg var" do
+      code = """
+      & &2\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "arg var in list" do
+      code = """
+      &[&1, \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "arg var in list without predecessor" do
+      code = """
+      &[&2, \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "no arg" do
+      code = """
+      &{}; \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "invalid arg nuber" do
+      code = """
+      & &0; \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "outside of capture" do
+      code = """
+      &1; \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "invalid arg local" do
+      code = """
+      &foo; \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "invalid arg" do
+      code = """
+      &"foo"; \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+  end
 end

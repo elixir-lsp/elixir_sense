@@ -2631,6 +2631,21 @@ defmodule ElixirSense.Core.Compiler do
 
     def extract_or_guards({:when, _, [left, right]}), do: [left | extract_or_guards(right)]
     def extract_or_guards(term), do: [term]
+
+    def select_with_cursor(ast_list) do
+      Enum.find(ast_list, &has_cursor?/1)
+    end
+
+    def has_cursor?(ast) do
+      # TODO rewrite to lazy prewalker
+      {_, result} = Macro.prewalk(ast, false, fn
+        {:__cursor__, _, list} = node, state when is_list(list) ->
+          {node, true}
+        node, state ->
+          {node, state}
+      end)
+      result
+    end
   end
 
   defmodule Clauses do
@@ -3614,6 +3629,7 @@ defmodule ElixirSense.Core.Compiler do
     alias ElixirSense.Core.Compiler.Env, as: ElixirEnv
     alias ElixirSense.Core.Compiler.Clauses, as: ElixirClauses
     alias ElixirSense.Core.Compiler.Dispatch, as: ElixirDispatch
+    alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
 
     def expand(meta, clauses, s, e) when is_list(clauses) do
       transformer = fn
@@ -3643,7 +3659,7 @@ defmodule ElixirSense.Core.Compiler do
     def capture(meta, {:/, _, [{{:., _, [_m, f]} = dot, require_meta, []}, a]}, s, e)
         when is_atom(f) and is_integer(a) do
       args = args_from_arity(meta, a)
-      # handle_capture_possible_warning(meta, require_meta, m, f, a, e)
+
       capture_require({dot, require_meta, args}, s, e, true)
     end
 
@@ -3666,8 +3682,16 @@ defmodule ElixirSense.Core.Compiler do
       capture(meta, expr, s, e)
     end
 
-    def capture(_meta, {:__block__, _, _} = _expr, _s, _e) do
-      raise "block_expr_in_capture"
+    def capture(meta, {:__block__, _, expr}, s, e) do
+      # elixir raises block_expr_in_capture
+      # try to recover from error
+      expr = case expr do
+        [] -> {:"&1", meta, e.module}
+        list ->
+          ElixirUtils.select_with_cursor(list) || hd(list)
+      end
+
+      capture(meta, expr, s, e)
     end
 
     def capture(_meta, {atom, _, args} = expr, s, e) when is_atom(atom) and is_list(args) do
@@ -3682,8 +3706,10 @@ defmodule ElixirSense.Core.Compiler do
       capture_expr(meta, list, s, e, is_sequential_and_not_empty(list))
     end
 
-    def capture(_meta, integer, _s, _e) when is_integer(integer) do
-      raise "capture_arg_outside_of_capture"
+    def capture(meta, integer, s, e) when is_integer(integer) do
+      # elixir raises here capture_arg_outside_of_capture
+      # emit fake capture
+      capture(meta, [{:&, meta, [1]}], s, e)
     end
 
     def capture(meta, arg, s, e) do
@@ -3694,7 +3720,8 @@ defmodule ElixirSense.Core.Compiler do
           capture(meta, {:/, meta, [arg, 0]}, s, e)
 
         _ ->
-          raise "invalid_args_for_capture #{inspect(arg)}"
+          # try to wrap it in list
+          capture(meta, [arg], s, e)
       end
     end
 
@@ -3705,7 +3732,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp capture_require({{:., dot_meta, [left, right]}, require_meta, args}, s, e, sequential) do
-      case escape(left, e, []) do
+      case escape(left, []) do
         {esc_left, []} ->
           {e_left, se, ee} = ElixirExpand.expand(esc_left, s, e)
 
@@ -3745,7 +3772,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp capture_expr(meta, expr, s, e, escaped, sequential) do
-      case escape(expr, e, escaped) do
+      case escape(expr, escaped) do
         {e_expr, []} when not sequential ->
           # elixir raises here invalid_args_for_capture
           # we emit fn without args
@@ -3753,23 +3780,15 @@ defmodule ElixirSense.Core.Compiler do
           {:expand, fn_expr, s, e}
 
         {e_expr, e_dict} ->
-          e_vars = validate(meta, e_dict, 1, e)
+          # elixir raises capture_arg_without_predecessor here
+          # if argument vars are not consecutive
+          e_vars = Enum.map(e_dict, & elem(&1, 1))
           fn_expr = {:fn, meta, [{:->, meta, [e_vars, e_expr]}]}
           {:expand, fn_expr, s, e}
       end
     end
 
-    defp validate(meta, [{pos, var} | t], pos, e) do
-      [var | validate(meta, t, pos + 1, e)]
-    end
-
-    defp validate(_meta, [{_pos, _} | _], _expected, _e) do
-      raise "capture_arg_without_predecessor"
-    end
-
-    defp validate(_meta, [], _pos, _e), do: []
-
-    defp escape({:&, meta, [pos]}, _e, dict) when is_integer(pos) and pos > 0 do
+    defp escape({:&, meta, [pos]}, dict) when is_integer(pos) and pos > 0 do
       # Using a nil context here to emit warnings when variable is unused.
       # This might pollute user space but is unlikely because variables
       # named :"&1" are not valid syntax.
@@ -3777,31 +3796,35 @@ defmodule ElixirSense.Core.Compiler do
       {var, :orddict.store(pos, var, dict)}
     end
 
-    defp escape({:&, _meta, [pos]}, _e, _dict) when is_integer(pos) do
-      raise "invalid_arity_for_capture"
+    defp escape({:&, meta, [pos]}, dict) when is_integer(pos) do
+      # elixir raises here invalid_arity_for_capture
+      # we substitute arg number
+      escape({:&, meta, [1]}, dict)
     end
 
-    defp escape({:&, _meta, _} = _arg, _e, _dict) do
-      raise "nested_capture"
+    defp escape({:&, _meta, args}, dict) do
+      # elixir raises here nested_capture
+      # try to recover from error by dropping &
+      escape(args, dict)
     end
 
-    defp escape({left, meta, right}, e, dict0) do
-      {t_left, dict1} = escape(left, e, dict0)
-      {t_right, dict2} = escape(right, e, dict1)
+    defp escape({left, meta, right}, dict0) do
+      {t_left, dict1} = escape(left, dict0)
+      {t_right, dict2} = escape(right, dict1)
       {{t_left, meta, t_right}, dict2}
     end
 
-    defp escape({left, right}, e, dict0) do
-      {t_left, dict1} = escape(left, e, dict0)
-      {t_right, dict2} = escape(right, e, dict1)
+    defp escape({left, right}, dict0) do
+      {t_left, dict1} = escape(left, dict0)
+      {t_right, dict2} = escape(right, dict1)
       {{t_left, t_right}, dict2}
     end
 
-    defp escape(list, e, dict) when is_list(list) do
-      Enum.map_reduce(list, dict, fn x, acc -> escape(x, e, acc) end)
+    defp escape(list, dict) when is_list(list) do
+      Enum.map_reduce(list, dict, fn x, acc -> escape(x, acc) end)
     end
 
-    defp escape(other, _e, dict) do
+    defp escape(other, dict) do
       {other, dict}
     end
 
@@ -3813,14 +3836,14 @@ defmodule ElixirSense.Core.Compiler do
       end
     end
 
-    defp args_from_arity(_meta, _a) do
+    defp args_from_arity(_meta, a) do
       # elixir raises invalid_arity_for_capture
       []
     end
 
     defp is_sequential_and_not_empty([]), do: false
     defp is_sequential_and_not_empty(list), do: is_sequential(list, 1)
-
+    # TODO need to understand if we need it
     defp is_sequential([{:&, _, [int]} | t], int), do: is_sequential(t, int + 1)
     defp is_sequential([], _int), do: true
     defp is_sequential(_, _int), do: false
