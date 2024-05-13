@@ -609,4 +609,59 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert Enum.any?(env.vars, & &1.name == :y)
     end
   end
+
+  describe "invalid fn" do
+    # unfortunately container_cursor_to_quoted cannot handle fn
+    test "different clause arities" do
+      code = """
+      fn
+        _ -> :ok
+        x, _ -> __cursor__()
+      end
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "default args in clause" do
+      code = """
+      fn
+        x \\\\ nil -> __cursor__()
+      end
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "incomplete clause left side" do
+      code = """
+      x = foo()
+      fn
+        __cursor__()
+      end
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "incomplete clause left side guard" do
+      code = """
+      fn
+        x when __cursor__()
+      end
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "incomplete clause right side" do
+      code = """
+      fn
+        x -> __cursor__()
+      end
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+  end
 end

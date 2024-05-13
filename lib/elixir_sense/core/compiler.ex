@@ -2863,7 +2863,7 @@ defmodule ElixirSense.Core.Compiler do
     defp expand_with_do(_meta, opts, s, acc, e) do
       {expr, rest_opts} = Keyword.pop(opts, :do)
       # elixir raises here missing_option
-          # we return empty expression
+      # we return empty expression
       expr = expr || []
 
       # TODO not sure new vars scope is needed
@@ -3618,35 +3618,25 @@ defmodule ElixirSense.Core.Compiler do
     def expand(meta, clauses, s, e) when is_list(clauses) do
       transformer = fn
         {:->, _, [left, _right]} = clause, sa ->
-          if Enum.any?(left, &is_invalid_arg/1) do
-            raise "defaults_in_args"
-          else
-            s_reset = ElixirEnv.reset_vars(sa)
+          # elixir raises defaults_in_args
+          left = sanitize_fn_arg(left)
 
-            {e_clause, s_acc, e_acc} =
-              ElixirClauses.clause(meta, :fn, &ElixirClauses.head/3, clause, s_reset, e)
+          s_reset = ElixirEnv.reset_vars(sa)
 
-            {e_clause, ElixirEnv.merge_vars(s_acc, sa, e_acc)}
-          end
+          {e_clause, s_acc, e_acc} =
+            ElixirClauses.clause(meta, :fn, &ElixirClauses.head/3, clause, s_reset, e)
+
+          {e_clause, ElixirEnv.merge_vars(s_acc, sa, e_acc)}
       end
 
       {e_clauses, se} = Enum.map_reduce(clauses, s, transformer)
-      e_arities = Enum.map(e_clauses, fn {:->, _, [args, _]} -> fn_arity(args) end)
 
-      case Enum.uniq(e_arities) do
-        [_] ->
-          {{:fn, meta, e_clauses}, se, e}
-
-        _ ->
-          raise "clauses_with_different_arities"
-      end
+      {{:fn, meta, e_clauses}, se, e}
     end
 
-    defp is_invalid_arg({:"\\\\", _, _}), do: true
-    defp is_invalid_arg(_), do: false
-
-    defp fn_arity([{:when, _, args}]), do: length(args) - 1
-    defp fn_arity(args), do: length(args)
+    # TODO check if there is cursor in default
+    defp sanitize_fn_arg({:"\\\\", _, [value, _default]}), do: value
+    defp sanitize_fn_arg(value), do: value
 
     # Capture
 
@@ -4621,7 +4611,7 @@ defmodule ElixirSense.Core.Compiler do
 
     defp validate_match_key({name, _, context})
          when is_atom(name) and is_atom(context) do
-      # invalid_variable_in_map_key_match
+      # elixir raises here invalid_variable_in_map_key_match
       false
     end
 
