@@ -499,7 +499,7 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:^, meta, [arg]}, %{prematch: {prematch, _, _}, vars: {_, write}} = s, e) do
     no_match_s = %{s | prematch: :pin, vars: {prematch, write}}
 
-    case expand(arg, no_match_s, %{e | context: nil}) |> dbg do
+    case expand(arg, no_match_s, %{e | context: nil}) do
       {{name, _var_meta, kind} = var, %{unused: unused}, _}
       when is_atom(name) and is_atom(kind) ->
         s = add_var_read(s, var)
@@ -4573,7 +4573,7 @@ defmodule ElixirSense.Core.Compiler do
           case extract_struct_assocs(e_right) do
             {:expand, map_meta, assocs} when context != :match ->
               assoc_keys = Enum.map(assocs, fn {k, _} -> k end)
-              struct = load_struct(e_left, [assocs], se, ee)
+              struct = load_struct(e_left, assocs, se, ee)
               keys = [:__struct__ | assoc_keys]
               without_keys = Elixir.Map.drop(struct, keys)
               # TODO is escape safe?
@@ -4581,20 +4581,36 @@ defmodule ElixirSense.Core.Compiler do
               {{:%, meta, [e_left, {:%{}, map_meta, struct_assocs ++ assocs}]}, se, ee}
 
             {_, _, _assocs} ->
+              # elixir validates assocs against struct keys
               # we don't need to validate keys
-              # _ = load_struct(meta, e_left, [], Enum.map(assocs, fn {k, _} -> k end), se, ee)
               {{:%, meta, [e_left, e_right]}, se, ee}
           end
 
-        true ->
+        _ ->
+          # elixir raises invalid_struct_name if validate_struct returns false
           {{:%, meta, [e_left, e_right]}, se, ee}
-
-        false ->
-          raise "invalid_struct_name #{inspect(e_left)}"
       end
     end
 
-    def expand_struct(_meta, _left, _right, _s, _e), do: raise("non_map_after_struct")
+    def expand_struct(meta, left, right, s, e) do
+      # elixir raises here non_map_after_struct
+      # try to recover from error by wrapping the expression in map
+      expand_struct(meta, left, wrap_in_fake_map(right), s, e)
+    end
+
+    defp wrap_in_fake_map(right) do
+      map_args = case right do
+        list when is_list(list) ->
+          if Keyword.keyword?(list) do
+            list
+          else
+            [__fake_key__: list]
+          end
+        _ ->
+          [__fake_key__: right]
+      end
+      {:%{}, [], map_args}
+    end
 
     def expand_map(meta, [{:|, update_meta, [left, right]}], s, e) do
       # elixir raises update_syntax_in_wrong_context if e.context is not nil
@@ -4668,42 +4684,48 @@ defmodule ElixirSense.Core.Compiler do
     defp validate_struct(atom, _) when is_atom(atom), do: true
     defp validate_struct(_, _), do: false
 
+    defp sanitize_assocs(list) do
+      Enum.filter(list, &match?({k, _} when is_atom(k), &1))
+    end
+
     defp extract_struct_assocs({:%{}, meta, [{:|, _, [_, assocs]}]}) do
-      {:update, meta, delete_struct_key(assocs)}
+      {:update, meta, delete_struct_key(sanitize_assocs(assocs))}
     end
 
     defp extract_struct_assocs({:%{}, meta, assocs}) do
-      {:expand, meta, delete_struct_key(assocs)}
+      {:expand, meta, delete_struct_key(sanitize_assocs(assocs))}
     end
 
-    defp extract_struct_assocs(_other) do
-      raise "non_map_after_struct"
+    defp extract_struct_assocs(right) do
+      # elixir raises here non_map_after_struct
+      # try to recover from error by wrapping the expression in map
+      extract_struct_assocs(wrap_in_fake_map(right))
     end
 
     defp delete_struct_key(assocs) do
       Keyword.delete(assocs, :__struct__)
     end
 
-    defp load_struct(name, args, s, _e) do
+    defp load_struct(name, assocs, s, _e) do
       case s.structs[name] do
         nil ->
           try do
-            apply(name, :__struct__, args)
+            apply(name, :__struct__, [assocs])
           else
             %{:__struct__ => ^name} = struct ->
               struct
 
             _ ->
               # recover from invalid return value
-              [__struct__: name] |> Keyword.merge(hd(args)) |> Elixir.Map.new()
+              [__struct__: name] |> Keyword.merge(assocs) |> Elixir.Map.new()
           rescue
             _ ->
               # recover from error by building the fake struct
-              [__struct__: name] |> Keyword.merge(hd(args)) |> Elixir.Map.new()
+              [__struct__: name] |> Keyword.merge(assocs) |> Elixir.Map.new()
           end
 
         info ->
-          info.fields |> Keyword.merge(hd(args)) |> Elixir.Map.new()
+          info.fields |> Keyword.merge(assocs) |> Elixir.Map.new()
       end
     end
   end

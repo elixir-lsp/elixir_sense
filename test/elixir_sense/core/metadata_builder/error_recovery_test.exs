@@ -978,4 +978,27 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert {meta, env} = get_cursor_env(code)
     end
   end
+
+  describe "struct" do
+    test "no map" do
+      code = """
+      %\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "invalid map name" do
+      code = """
+      %foo{\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "invalid key" do
+      code = """
+      %Foo{"asd" => [\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+  end
 end
