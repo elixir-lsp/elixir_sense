@@ -3139,13 +3139,7 @@ defmodule ElixirSense.Core.Compiler do
           {e_args, alignment, {sa, _}, ea} =
             expand(meta, &expand_match/3, args, [], {s, s}, e, 0, require_size)
 
-          case find_match(e_args) do
-            false ->
-              :ok
-
-            _match ->
-              raise "nested_match"
-          end
+          # elixir validates if there is no nested match
 
           {{:<<>>, [{:alignment, alignment} | meta], e_args}, sa, ea}
 
@@ -3241,8 +3235,10 @@ defmodule ElixirSense.Core.Compiler do
 
     defp expand_expr(_meta, component, fun, s, e) do
       case fun.(component, s, e) do
-        {e_component, _, _error_e} when is_list(e_component) or is_atom(e_component) ->
-          raise "invalid_literal"
+        {e_component, s, e} when is_list(e_component) or is_atom(e_component) ->
+          # elixir raises here invalid_literal
+          # try to recover from error by replacing it with ""
+          {"", s, e}
 
         expanded ->
           expanded
@@ -3256,9 +3252,11 @@ defmodule ElixirSense.Core.Compiler do
       {specs, ss, es} =
         expand_each_spec(meta, unpack_specs(info, []), default, s, original_s, e)
 
-      merged_type = type(meta, expr_type, specs.type, e)
-      validate_size_required(meta, expect_size, expr_type, merged_type, specs.size, es)
-      size_and_unit = size_and_unit(meta, expr_type, specs.size, specs.unit, es)
+      merged_type = type(expr_type, specs.type)
+
+      # elixir validates if unsized binary is not on the end
+
+      size_and_unit = size_and_unit(expr_type, specs.size, specs.unit)
       alignment = compute_alignment(merged_type, specs.size, specs.unit)
 
       maybe_inferred_size =
@@ -3275,65 +3273,51 @@ defmodule ElixirSense.Core.Compiler do
 
       [h | t] =
         build_spec(
-          meta,
           specs.size,
           specs.unit,
           merged_type,
           specs.endianness,
           specs.sign,
-          maybe_inferred_size,
-          es
+          maybe_inferred_size
         )
 
       {Enum.reduce(t, h, fn i, acc -> {:-, meta, [acc, i]} end), alignment, ss, es}
     end
 
-    defp type(_, :default, :default, _), do: :integer
-    defp type(_, expr_type, :default, _), do: expr_type
-
-    defp type(_, :binary, type, _) when type in [:binary, :bitstring, :utf8, :utf16, :utf32],
+    defp type(:default, :default), do: :integer
+    defp type(expr_type, :default), do: expr_type
+    defp type(:binary, type) when type in [:binary, :bitstring, :utf8, :utf16, :utf32],
       do: type
 
-    defp type(_, :bitstring, type, _) when type in [:binary, :bitstring], do: type
+    defp type(:bitstring, type) when type in [:binary, :bitstring], do: type
 
-    defp type(_, :integer, type, _) when type in [:integer, :float, :utf8, :utf16, :utf32],
+    defp type(:integer, type) when type in [:integer, :float, :utf8, :utf16, :utf32],
       do: type
 
-    defp type(_, :float, :float, _), do: :float
-    defp type(_, :default, type, _), do: type
+    defp type(:float, :float), do: :float
+    defp type(:default, type), do: type
 
-    defp type(_meta, _other, type, _e) do
-      # function_error(meta, e, __MODULE__, {:bittype_mismatch, type, other, :type})
-      type
+    defp type(_other, _type) do
+      # elixir raises here bittype_mismatch
+      type(:default, :default)
     end
 
+    defp expand_each_spec(meta, [{:__cursor__, _, args} = h | t], map, s, original_s, e) when is_list(args) do
+      {_, s, e} = ElixirExpand.expand(h, s, e)
+      expand_each_spec(meta, t, map, s, original_s, e)
+    end
     defp expand_each_spec(meta, [{expr, meta_e, args} = h | t], map, s, original_s, e)
          when is_atom(expr) do
       case validate_spec(expr, args) do
         {key, arg} ->
-          # if args != [], do: :ok, else: file_warn(meta, e, __MODULE__, {:parens_bittype, expr})
-
           {value, se, ee} = expand_spec_arg(arg, s, original_s, e)
-          validate_spec_arg(meta, key, value, se, original_s, ee)
-
-          case Map.get(map, key, :default) do
-            :default ->
-              :ok
-
-            ^value ->
-              :ok
-
-            _other ->
-              # function_error(meta, e, __MODULE__, {:bittype_mismatch, value, _other, key})
-              :ok
-          end
-
+          # elixir validates spec arg here
+          # elixir raises bittype_mismatch in some cases
           expand_each_spec(meta, t, Map.put(map, key, value), se, original_s, ee)
 
         :none ->
           ha =
             if args == nil do
-              # file_warn(meta, e, __MODULE__, {:unknown_bittype, expr})
               {expr, meta_e, []}
             else
               h
@@ -3342,7 +3326,8 @@ defmodule ElixirSense.Core.Compiler do
           # TODO not call it here
           case Macro.expand(ha, Map.put(e, :line, ElixirUtils.get_line(meta))) do
             ^ha ->
-              # function_error(meta, e, __MODULE__, {:undefined_bittype, h})
+              # elixir raises here undefined_bittype
+              # we omit the spec
               expand_each_spec(meta, t, map, s, original_s, e)
 
             new_types ->
@@ -3352,7 +3337,8 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp expand_each_spec(meta, [_expr | tail], map, s, original_s, e) do
-      # function_error(meta, e, __MODULE__, {:undefined_bittype, expr})
+      # elixir raises undefined_bittype
+      # we skip it
       expand_each_spec(meta, tail, map, s, original_s, e)
     end
 
@@ -3405,31 +3391,14 @@ defmodule ElixirSense.Core.Compiler do
            e,
            require_size
          ) do
-      case e do
-        %{context: :match} when require_size ->
-          case List.last(parts) do
-            {:"::", _spec_meta, [bin, {:binary, _, nil}]} when not is_binary(bin) ->
-              # function_error(spec_meta, e, __MODULE__, :unsized_binary)
-              :ok
-
-            {:"::", _spec_meta, [_, {:bitstring, _, nil}]} ->
-              # function_error(spec_meta, e, __MODULE__, :unsized_binary)
-              :ok
-
-            _ ->
-              :ok
-          end
-
-        _ ->
-          :ok
-      end
+      # elixir raises unsized_binary in some cases
 
       case e_right do
         {:binary, _, nil} ->
           {alignment, alignment} = Keyword.fetch!(parts_meta, :alignment)
 
-          if is_integer(alignment) and alignment != 0 do
-            # function_error(meta, e, __MODULE__, {:unaligned_binary, e_left})
+          if is_integer(alignment) do
+            # elixir raises unaligned_binary if alignment != 0
             Enum.reverse(parts, acc)
           else
             [{:"::", meta, [e_left, e_right]} | acc]
@@ -3505,74 +3474,36 @@ defmodule ElixirSense.Core.Compiler do
       ElixirExpand.expand(expr, ElixirEnv.reset_read(s, original_s), e)
     end
 
-    defp validate_spec_arg(_meta, :unit, value, _s, _original_s, _e) when not is_integer(value) do
-      # function_error(meta, e, __MODULE__, {:bad_unit_argument, value})
-      :ok
+    defp size_and_unit(type, size, unit)
+         when type in [:bitstring, :binary] and (size != :default or unit != :default) do
+      # elixir raises here bittype_literal_bitstring or bittype_literal_string
+      # we don't care
+      size_and_unit(type, :default, :default)
     end
 
-    defp validate_spec_arg(_meta, _key, _value, _s, _original_s, _e), do: :ok
-
-    defp validate_size_required(_meta, :required, :default, type, :default, _e)
-         when type in [:binary, :bitstring] do
-      # function_error(meta, e, __MODULE__, :unsized_binary)
-      :ok
-    end
-
-    defp validate_size_required(_, _, _, _, _, _), do: :ok
-
-    defp size_and_unit(_meta, :bitstring, size, unit, _e)
-         when size != :default or unit != :default do
-      # function_error(meta, e, __MODULE__, :bittype_literal_bitstring)
-      []
-    end
-
-    defp size_and_unit(_meta, :binary, size, unit, _e)
-         when size != :default or unit != :default do
-      # function_error(meta, e, __MODULE__, :bittype_literal_string)
-      []
-    end
-
-    defp size_and_unit(_meta, _expr_type, size, unit, _e) do
+    defp size_and_unit(_expr_type, size, unit) do
       add_arg(:unit, unit, add_arg(:size, size, []))
     end
 
-    defp build_spec(_meta, size, unit, type, endianness, sign, spec, _e)
+    defp build_spec(size, unit, type, endianness, sign, spec)
          when type in [:utf8, :utf16, :utf32] do
-      cond do
-        size != :default or unit != :default ->
-          # function_error(meta, e, __MODULE__, :bittype_utf)
-          :ok
-
-        sign != :default ->
-          # function_error(meta, e, __MODULE__, :bittype_signed)
-          :ok
-
-        true ->
-          :ok
-      end
+      # elixir raises bittype_signed if signed
+      # elixir raises bittype_utf if size specified
+      # we don't care
 
       add_spec(type, add_spec(endianness, spec))
     end
 
-    defp build_spec(_meta, _size, unit, type, _endianness, sign, spec, _e)
+    defp build_spec(_size, unit, type, _endianness, sign, spec)
          when type in [:binary, :bitstring] do
-      cond do
-        type == :bitstring and unit != :default and unit != 1 ->
-          # function_error(meta, e, __MODULE__, {:bittype_mismatch, unit, 1, :unit})
-          :ok
-
-        sign != :default ->
-          # function_error(meta, e, __MODULE__, :bittype_signed)
-          :ok
-
-        true ->
-          :ok
-      end
+      # elixir raises bittype_signed if signed
+      # elixir raises bittype_mismatch if bitstring unit != 1 or default
+      # we don't care
 
       add_spec(type, spec)
     end
 
-    defp build_spec(_meta, size, unit, type, endianness, sign, spec, _e)
+    defp build_spec(size, unit, type, endianness, sign, spec)
          when type in [:integer, :float] do
       number_size = number_size(size, unit)
 
@@ -3581,13 +3512,15 @@ defmodule ElixirSense.Core.Compiler do
           if valid_float_size(number_size) do
             add_spec(type, add_spec(endianness, add_spec(sign, spec)))
           else
-            # function_error(meta, e, __MODULE__, {:bittype_float_size, number_size})
-            []
+            # elixir raises here bittype_float_size
+            # we fall back to 64
+            build_spec(64, :default, type, endianness, sign, spec)
           end
 
         size == :default and unit != :default ->
-          # function_error(meta, e, __MODULE__, :bittype_unit)
-          []
+          # elixir raises here bittype_unit
+          # we fall back to default
+          build_spec(size, :default, type, endianness, sign, spec)
 
         true ->
           add_spec(type, add_spec(endianness, add_spec(sign, spec)))
@@ -3611,19 +3544,6 @@ defmodule ElixirSense.Core.Compiler do
 
     defp is_match_size([_ | _], %{context: :match}), do: true
     defp is_match_size(_, _), do: false
-
-    defp find_match([{:=, _, [_left, _right]} = expr | _rest]), do: expr
-
-    defp find_match([{_, _, args} | rest]) when is_list(args) do
-      case find_match(args) do
-        false -> find_match(rest)
-        match -> match
-      end
-    end
-
-    defp find_match([_arg | rest]), do: find_match(rest)
-
-    defp find_match([]), do: false
   end
 
   defmodule Fn do

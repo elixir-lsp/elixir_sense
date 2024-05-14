@@ -1001,4 +1001,146 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert {meta, env} = get_cursor_env(code)
     end
   end
+
+  describe "bitstring" do
+    test "no size specifier with unit" do
+      code = """
+      <<x::unit(8), \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "invalid float size" do
+      code = """
+      <<12.3::32*4, \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "signed binary" do
+      code = """
+      <<x::binary-signed, \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "signed utf" do
+      code = """
+      <<x::utf8-signed, \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "utf with size" do
+      code = """
+      <<x::utf8-size(1), \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "conflicting type" do
+      code = """
+      <<"foo"::integer, \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "conflicting endianness" do
+      code = """
+      <<1::little-big, \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "conflicting unit" do
+      code = """
+      <<x::bitstring-unit(2), \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "binary literal with unit" do
+      code = """
+      <<"foo"::32, \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "bitstring literal with unit" do
+      code = """
+      <<(<<>>)::32, \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "unsized" do
+      code = """
+      <<x::binary, "foo" >> = \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "bad argument" do
+      code = """
+      <<"foo"::size(8)-unit(:oops), \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "undefined" do
+      code = """
+      <<1::unknown(), \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "unknown" do
+      code = """
+      <<1::refb_spec, \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "invalid literal" do
+      code = """
+      <<:ok, \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "nested match" do
+      code = """
+      <<bar = baz>> = \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "incomplete" do
+      code = """
+      <<\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "incomplete ::" do
+      code = """
+      <<1::\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "incomplete -" do
+      code = """
+      <<1::binary-\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "incomplete open parens" do
+      code = """
+      <<1::size(\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+  end
 end
