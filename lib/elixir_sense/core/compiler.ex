@@ -597,9 +597,7 @@ defmodule ElixirSense.Core.Compiler do
                   {:ok, current_version}
 
                 Map.has_key?(pre, pair) ->
-                  # TODO: Enable this warning on Elixir v1.19
-                  # TODO: Remove me on Elixir 2.0
-                  # warn about unpinned bitsize var
+                  # elixir plans to remove this case on 2.0
                   {:ok, current_version}
 
                 not Map.has_key?(original, pair) ->
@@ -629,17 +627,15 @@ defmodule ElixirSense.Core.Compiler do
             # TODO check if this can happen
             expand({name, meta, []}, s, e)
 
-          # TODO: Remove this clause on v2.0 as we will raise by default
+          # elixir plans to remove this clause on v2.0
           {:ok, :raise} ->
             # TODO is it worth registering var access
             # function_error(meta, e, __MODULE__, {:undefined_var, name, kind})
             {{name, meta, kind}, s, e}
 
-          # TODO: Remove this clause on v2.0 as we will no longer support warn
+          # elixir plans to remove this clause on v2.0
           _ when error == :warn ->
-            # TODO is it worth registering var access
-            # Warn about undefined var to call
-            # elixir_errors:file_warn(Meta, E, ?MODULE, {undefined_var_to_call, Name}),
+            # TODO is it worth registering var access?
             expand({name, [{:if_undefined, :warn} | meta], []}, s, e)
 
           _ when error == :pin ->
@@ -799,16 +795,10 @@ defmodule ElixirSense.Core.Compiler do
         {pid, s, e}
 
       _function ->
-        # TODO: Make me an error on v2.0
-        # ElixirErrors.file_warn([], e, __MODULE__, {:invalid_pid_in_function, pid, function})
+        # elixir plans to error here invalid_pid_in_function on 2.0
         {pid, s, e}
     end
   end
-
-  # defp do_expand(0.0 = zero, s, %{context: :match} = e) when is_float(zero) do
-  #   # ElixirErrors.file_warn([], e, __MODULE__, :invalid_match_on_zero_float)
-  #   {zero, s, e}
-  # end
 
   defp do_expand(other, s, e) when is_number(other) or is_atom(other) or is_binary(other) do
     {other, s, e}
@@ -2765,7 +2755,6 @@ defmodule ElixirSense.Core.Compiler do
 
     def guard(guard, s, e) do
       {e_guard, sg, eg} = ElixirExpand.expand(guard, s, e)
-      # warn_zero_length_guard(e_guard, eg)
       {e_guard, sg, eg}
     end
 
@@ -3732,7 +3721,6 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp escape({:&, meta, [pos]}, dict) when is_integer(pos) and pos > 0 do
-      # Using a nil context here to emit warnings when variable is unused.
       # This might pollute user space but is unlikely because variables
       # named :"&1" are not valid syntax.
       var = {:"&#{pos}", meta, nil}
