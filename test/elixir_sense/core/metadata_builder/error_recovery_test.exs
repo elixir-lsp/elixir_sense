@@ -1143,4 +1143,129 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert {meta, env} = get_cursor_env(code)
     end
   end
+
+  describe "quote/unquote/unquote_splicing" do
+    test "invalid bind quoted" do
+      code = """
+      quote [bind_quoted: 123] do\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "incomplete 1" do
+      code = """
+      quote \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "incomplete 2" do
+      code = """
+      quote [\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "incomplete 3" do
+      code = """
+      quote [bind_quoted: \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "incomplete 4" do
+      code = """
+      quote [bind_quoted: [\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "incomplete 5" do
+      code = """
+      quote [bind_quoted: [asd: \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "incomplete 6" do
+      code = """
+      quote [bind_quoted: [asd: 1]], \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "incomplete 7" do
+      code = """
+      quote [bind_quoted: [asd: 1]], [\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "incomplete 8" do
+      code = """
+      quote :foo, [\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "in do block" do
+      code = """
+      quote do
+        \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "in do block unquote" do
+      code = """
+      quote do
+        unquote(\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "in do block unquote_splicing" do
+      code = """
+      quote do
+        unquote_splicing(\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "in do block unquote with bind_quoted" do
+      code = """
+      quote bind_quoted: [a: 1] do
+        unquote(\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "unquote without quote" do
+      code = """
+      unquote(\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "invalid compile option" do
+      code = """
+      quote [file: 1] do\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "invalid runtime option" do
+      code = """
+      quote [unquote: 1] do\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "unquote_splicing not in block" do
+      code = """
+      quote do: unquote_splicing(\
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+  end
 end

@@ -312,9 +312,13 @@ defmodule ElixirSense.Core.Compiler do
 
   # Quote
 
-  defp do_expand({unquote_call, _meta, [_]}, _s, _e)
-       when unquote_call in [:unquote, :unquote_splicing],
-       do: raise("unquote_outside_quote")
+  defp do_expand({unquote_call, meta, [arg]}, s, e)
+       when unquote_call in [:unquote, :unquote_splicing] do
+    # elixir raises here unquote_outside_quote
+    # we may have cursor there
+    {arg, s, e} = expand(arg, s, e)
+    {{unquote_call, meta, [arg]}, s, e}
+  end
 
   defp do_expand({:quote, meta, [opts]}, s, e) when is_list(opts) do
     case Keyword.fetch(opts, :do) do
@@ -323,17 +327,27 @@ defmodule ElixirSense.Core.Compiler do
         expand({:quote, meta, [new_opts, [{:do, do_block}]]}, s, e)
 
       :error ->
-        raise "missing_option"
+        # elixir raises here missing_option
+        # generate a fake do block
+        expand({:quote, meta, [opts, [{:do, {:__block__, [], []}}]]}, s, e)
     end
   end
 
-  defp do_expand({:quote, _meta, [_]}, _s, _e), do: raise("invalid_args")
+  defp do_expand({:quote, meta, [arg]}, s, e) do
+    # elixir raises here invalid_args
+    # we may have cursor there
+    {arg, s, e} = expand(arg, s, e)
+    {{:quote, meta, [arg]}, s, e}
+  end
 
   defp do_expand({:quote, meta, [opts, do_block]}, s, e) when is_list(do_block) do
     exprs =
       case Keyword.fetch(do_block, :do) do
         {:ok, expr} -> expr
-        :error -> raise "missing_option"
+        :error ->
+          # elixir raises here missing_option
+          # try to recover from error by generating a fake do block
+          {:__block__, [], [do_block]}
       end
 
     valid_opts = [:context, :location, :line, :file, :unquote, :bind_quoted, :generated]
@@ -350,10 +364,12 @@ defmodule ElixirSense.Core.Compiler do
     {binding, default_unquote} =
       case Keyword.fetch(e_opts, :bind_quoted) do
         {:ok, bq} ->
-          if is_list(bq) and Enum.all?(bq, &match?({key, _} when is_atom(key), &1)) do
+          if is_list(bq) do
+            # TODO check if there's cursor?
+            bq = Enum.filter(bq, &match?({key, _} when is_atom(key), &1))
             {bq, false}
           else
-            raise "invalid_bind_quoted_for_quote"
+            {[], false}
           end
 
         :error ->
@@ -374,7 +390,11 @@ defmodule ElixirSense.Core.Compiler do
     expand(quoted, st, et)
   end
 
-  defp do_expand({:quote, _meta, [_, _]}, _s, _e), do: raise("invalid_args")
+  defp do_expand({:quote, meta, [arg1, arg2]}, s, e) do
+    # elixir raises here invalid_args
+    # try to recover from error by wrapping arg in a do block
+    expand({:quote, meta, [arg1, [{:do, {:__block__, [], [arg2]}}]]}, s, e)
+  end
 
   # Functions
 
@@ -2280,6 +2300,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp sanitize_opts(allowed, opts) when is_list(opts) do
+    # TODO check if there's cursor
     for {key, value} <- opts, Enum.member?(allowed, key), do: {key, value}
   end
 
@@ -3841,8 +3862,8 @@ defmodule ElixirSense.Core.Compiler do
       {e_file, acc2} = validate_compile(meta, :file, file, acc1)
       {e_context, acc3} = validate_compile(meta, :context, context, acc2)
 
-      validate_runtime(:unquote, unquote)
-      validate_runtime(:generated, generated)
+      unquote = validate_runtime(:unquote, unquote)
+      generated = validate_runtime(:generated, generated)
 
       q = %__MODULE__{
         line: e_line,
@@ -3881,8 +3902,8 @@ defmodule ElixirSense.Core.Compiler do
           value
 
         false ->
-          raise ArgumentError,
-                "invalid runtime value for option :#{Atom.to_string(key)} in quote, got: #{inspect(value)}"
+          # elixir raises here invalid runtime value for option
+          default(key)
       end
     end
 
@@ -3891,6 +3912,8 @@ defmodule ElixirSense.Core.Compiler do
     def is_valid(:context, context), do: is_atom(context) and context != nil
     def is_valid(:generated, generated), do: is_boolean(generated)
     def is_valid(:unquote, unquote), do: is_boolean(unquote)
+    defp default(:unquote), do: true
+    defp default(:generated), do: false
 
     def escape(expr, kind, unquote) do
       do_quote(
@@ -3907,8 +3930,11 @@ defmodule ElixirSense.Core.Compiler do
       )
     end
 
-    def quote(_meta, {:unquote_splicing, _, [_]}, _binding, %__MODULE__{unquote: true}, _, _),
-      do: raise("unquote_splicing only works inside arguments and block contexts")
+    def quote(meta, {:unquote_splicing, _, [_]} = expr, binding, %__MODULE__{unquote: true} = q, prelude, e) do
+      # elixir raises here unquote_splicing only works inside arguments and block contexts
+      # try to recover from error by wrapping it in block
+      quote(meta, {:__block__, [], [expr]}, binding, q, prelude, e)
+    end
 
     def quote(meta, expr, binding, q, prelude, e) do
       context = q.context
@@ -3993,6 +4019,17 @@ defmodule ElixirSense.Core.Compiler do
         end
 
       {:{}, [], [name, meta(import_meta, q), q.context]}
+    end
+
+    # cursor
+
+    defp do_quote(
+           {:__cursor__, meta, args},
+           %__MODULE__{unquote: _} = q,
+           e
+         ) when is_list(args) do
+      # emit cursor as is regardless of unquote
+      {:__cursor__, meta, args}
     end
 
     # Unquote
@@ -4287,11 +4324,15 @@ defmodule ElixirSense.Core.Compiler do
           fun_to_quoted(fun)
 
         _ ->
-          raise ArgumentError
+          # elixir raises here ArgumentError
+          nil
       end
     end
 
-    defp do_escape(_other, _, _), do: raise(ArgumentError)
+    defp do_escape(_other, _, _) do
+      # elixir raises here ArgumentError
+      nil
+    end
 
     defp reverse_improper([h | t], acc), do: reverse_improper(t, [h | acc])
     defp reverse_improper([], acc), do: acc
