@@ -1241,63 +1241,63 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote [bind_quoted: 123] do\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "incomplete 1" do
       code = """
       quote \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "incomplete 2" do
       code = """
       quote [\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "incomplete 3" do
       code = """
       quote [bind_quoted: \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "incomplete 4" do
       code = """
       quote [bind_quoted: [\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "incomplete 5" do
       code = """
       quote [bind_quoted: [asd: \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "incomplete 6" do
       code = """
       quote [bind_quoted: [asd: 1]], \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "incomplete 7" do
       code = """
       quote [bind_quoted: [asd: 1]], [\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "incomplete 8" do
       code = """
       quote :foo, [\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "in do block" do
@@ -1305,7 +1305,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       quote do
         \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "in do block unquote" do
@@ -1313,7 +1313,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       quote do
         unquote(\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "in do block unquote_splicing" do
@@ -1321,7 +1321,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       quote do
         unquote_splicing(\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "in do block unquote with bind_quoted" do
@@ -1329,35 +1329,119 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       quote bind_quoted: [a: 1] do
         unquote(\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "unquote without quote" do
       code = """
       unquote(\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "invalid compile option" do
       code = """
       quote [file: 1] do\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "invalid runtime option" do
       code = """
       quote [unquote: 1] do\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "unquote_splicing not in block" do
       code = """
       quote do: unquote_splicing(\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
+    end
+  end
+
+  describe "calls" do
+    test "invalid anonymous call" do
+      code = """
+      :foo.(a, \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "anonymous call in match" do
+      code = """
+      a.() = \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "anonymous call in guard" do
+      code = """
+      case x do
+        y when a.() -> \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "parens map lookup guard" do
+      code = """
+      case x do
+        y when map.field() -> \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "remote call in match" do
+      code = """
+      Foo.bar() = \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "invalid remote call" do
+      code = """
+      __ENV__.line.foo \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "clause in remote call" do
+      code = """
+      Foo.foo do
+        a -> \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "invalid local call" do
+      code = """
+      1.foo \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "ambiguous local call" do
+      code = """
+      a = 1
+      a -1 .. \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "clause in local call" do
+      code = """
+      foo do
+        a -> \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "local call in match" do
+      code = """
+      bar() = \
+      """
+      assert get_cursor_env(code)
     end
   end
 end

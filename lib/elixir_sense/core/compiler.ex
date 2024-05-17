@@ -61,7 +61,10 @@ defmodule ElixirSense.Core.Compiler do
     __MODULE__.Bitstring.expand(meta, args, state, env, false)
   end
 
-  defp do_expand({:->, _meta, [_, _]}, _s, _e), do: raise("unhandled_arrow_op")
+  defp do_expand({:->, meta, [left, right]}, s, e) do
+    # elixir raises here unhandled_arrow_op
+    expand({:"__->__", meta, [left, right]}, s, e)
+  end
 
   defp do_expand({:"::", _meta, [_, _]}, _s, _e), do: raise("unhandled_type_op")
 
@@ -532,7 +535,7 @@ defmodule ElixirSense.Core.Compiler do
     end
   end
 
-  defp do_expand({:^, meta, [arg]}, s, e) do
+  defp do_expand({:^, _meta, [arg]}, s, e) do
     # elixir raises here pin_outside_of_match
     # try to recover from error by dropping the pin and expanding arg
     expand(arg, s, e)
@@ -656,7 +659,7 @@ defmodule ElixirSense.Core.Compiler do
 
   defp do_expand({fun, meta, args}, state, env)
        when is_atom(fun) and is_list(meta) and is_list(args) do
-    assert_no_ambiguous_op(fun, meta, args, state, env)
+    # elixir checks here id fall is not ambiguous
     arity = length(args)
 
     # TODO check if it works in our case
@@ -724,38 +727,35 @@ defmodule ElixirSense.Core.Compiler do
   # Anonymous calls
 
   defp do_expand({{:., dot_meta, [expr]}, meta, args}, s, e) when is_list(args) do
-    assert_no_match_or_guard_scope(e.context, "anonymous call")
     {[e_expr | e_args], sa, ea} = expand_args([expr | args], s, e)
 
-    sa =
-      if is_atom(e_expr) do
-        # function_error(meta, e, __MODULE__, {:invalid_function_call, e_expr})
-        sa
+    # elixir validates if e_expr is not atom and raises invalid_function_call
+
+    line = Keyword.get(dot_meta, :line, 0)
+    column = Keyword.get(dot_meta, :column, nil)
+
+    column =
+      if column do
+        # for remote calls we emit position of right side of .
+        # to make it consistent we shift dot position here
+        column + 1
       else
-        line = Keyword.get(dot_meta, :line, 0)
-        column = Keyword.get(dot_meta, :column, nil)
-
-        column =
-          if column do
-            # for remote calls we emit position of right side of .
-            # to make it consistent we shift dot position here
-            column + 1
-          else
-            column
-          end
-
-        sa
-        |> add_call_to_line({nil, e_expr, length(e_args)}, {line, column})
-        |> add_current_env_to_line(line, e)
+        column
       end
+
+    sa = sa
+    |> add_call_to_line({nil, e_expr, length(e_args)}, {line, column})
+    |> add_current_env_to_line(line, e)
 
     {{{:., dot_meta, [e_expr]}, meta, e_args}, sa, ea}
   end
 
   # Invalid calls
 
-  defp do_expand({_, meta, args} = invalid, _s, _e) when is_list(meta) and is_list(args) do
-    raise "invalid_call #{inspect(invalid)}"
+  defp do_expand({other, meta, args}, s, e) when is_list(meta) and is_list(args) do
+    # elixir raises invalid_call
+    {args, s, e} = expand_args(args, s, e)
+    {{other, meta, args}, s, e}
   end
 
   # Literals
@@ -1818,8 +1818,6 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_remote(receiver, dot_meta, right, meta, args, s, sl, %{context: context} = e)
        when is_atom(receiver) or is_tuple(receiver) do
-    assert_no_clauses(right, meta, args, e)
-
     line = Keyword.get(meta, :line, 0)
     column = Keyword.get(meta, :column, nil)
 
@@ -1832,10 +1830,8 @@ defmodule ElixirSense.Core.Compiler do
       end
 
     if context == :guard and is_tuple(receiver) do
-      if Keyword.get(meta, :no_parens) != true do
-        raise "parens_map_lookup"
-      end
-
+      # elixir raises parens_map_lookup unless no_parens is set in meta
+      # TODO there may be cursor in discarded args
       {{{:., dot_meta, [receiver, right]}, meta, []}, sl, e}
     else
       attached_meta = attach_runtime_module(receiver, meta, s, e)
@@ -1851,13 +1847,29 @@ defmodule ElixirSense.Core.Compiler do
           {rewritten, s, ea}
 
         {:error, _error} ->
-          raise "elixir_rewrite"
+          # elixir raises here elixir_rewrite
+          s =
+            __MODULE__.Env.close_write(sa, s)
+            |> add_call_to_line({receiver, right, length(e_args)}, {line, column})
+            |> add_current_env_to_line(line, e)
+          {{{:., dot_meta, [receiver, right]}, attached_meta, e_args}, s, ea}
       end
     end
   end
 
-  defp expand_remote(receiver, dot_meta, right, meta, args, _, _, _e),
-    do: raise("invalid_call remote #{inspect({{:., dot_meta, [receiver, right]}, meta, args})}")
+  defp expand_remote(receiver, dot_meta, right, meta, args, s, sl, e) do
+    # elixir raises here invalid_call
+    {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {sl, s}, e, args)
+
+    line = Keyword.get(meta, :line, 0)
+    column = Keyword.get(meta, :column, nil)
+
+    s =
+            __MODULE__.Env.close_write(sa, s)
+            |> add_call_to_line({receiver, right, length(e_args)}, {line, column})
+            |> add_current_env_to_line(line, e)
+          {{{:., dot_meta, [receiver, right]}, meta, e_args}, s, ea}
+  end
 
   defp attach_runtime_module(receiver, meta, s, _e) do
     if receiver in s.runtime_modules do
@@ -1883,7 +1895,6 @@ defmodule ElixirSense.Core.Compiler do
     {:ok, :elixir_rewrite.rewrite(receiver, dot_meta, right, meta, e_args)}
   end
 
-  # This fixes exactly 1 test...
   defp expand_local(meta, :when, [_, _] = args, state, env = %{context: nil}) do
     # naked when, try to transform into a case
     ast =
@@ -1906,29 +1917,10 @@ defmodule ElixirSense.Core.Compiler do
     expand(ast, state, env)
   end
 
-  defp expand_local(meta, fun, args, state, env = %{function: function}) when function != nil do
-    assert_no_clauses(fun, meta, args, env)
-
-    if env.context in [:match, :guard] do
-      raise "invalid_local_invocation"
-    end
-
-    line = Keyword.get(meta, :line, 0)
-    column = Keyword.get(meta, :column, nil)
-
-    state =
-      state
-      |> add_call_to_line({nil, fun, length(args)}, {line, column})
-      |> add_current_env_to_line(line, env)
-
-    # state = update_in(state.locals, &[{fun, length(args)} | &1])
-    {args, state, env} = expand_args(args, state, env)
-    {{fun, meta, args}, state, env}
-  end
-
   defp expand_local(meta, fun, args, state, env) do
-    # elixir compiler raises here
-    # raise "undefined_function"
+    # elixir check if there are no clauses
+    # elixir raises here invalid_local_invocation if context is match or guard
+    # elixir compiler raises here undefined_function if env.function is nil
     line = Keyword.get(meta, :line, 0)
     column = Keyword.get(meta, :column, nil)
 
@@ -1938,7 +1930,6 @@ defmodule ElixirSense.Core.Compiler do
       |> add_current_env_to_line(line, env)
 
     {args, state, env} = expand_args(args, state, env)
-
     {{fun, meta, args}, state, env}
   end
 
@@ -2172,7 +2163,7 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_for_do_block(meta, [{:->, _, _} | _] = clauses, s, e, {:reduce, _}) do
     transformer = fn
-      {:->, clause_meta, [args, right]} = clause, sa ->
+      {:->, clause_meta, [args, right]}, sa ->
         # elixir checks here that clause has exactly 1 arg by matching against {_, _, [[_], _]}
         # we drop excessive or generate a fake arg
         # TODO check if there is cursor in dropped arg?
@@ -2319,24 +2310,6 @@ defmodule ElixirSense.Core.Compiler do
 
   defp map_fold(_fun, s, e, [], acc), do: {Enum.reverse(acc), s, e}
 
-  defp assert_no_clauses(_name, _meta, [], _e), do: :ok
-
-  defp assert_no_clauses(name, meta, args, e) do
-    assert_arg_with_no_clauses(name, meta, List.last(args), e)
-  end
-
-  defp assert_arg_with_no_clauses(name, meta, [{key, value} | rest], e) when is_atom(key) do
-    case value do
-      [{:->, _, _} | _] ->
-        raise "invalid_clauses"
-
-      _ ->
-        assert_arg_with_no_clauses(name, meta, rest, e)
-    end
-  end
-
-  defp assert_arg_with_no_clauses(_name, _meta, _arg, _e), do: :ok
-
   defp assert_module_scope(env, fun, arity) do
     case env.module do
       nil -> raise ArgumentError, "cannot invoke #{fun}/#{arity} outside module"
@@ -2403,26 +2376,6 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp assert_no_underscore_clause_in_cond(_other, _e), do: :ok
-
-  defp assert_no_ambiguous_op(name, meta, [_arg], s, _e) do
-    case Keyword.fetch(meta, :ambiguous_op) do
-      {:ok, kind} ->
-        pair = {name, kind}
-
-        case Map.get(s.vars, pair) do
-          nil ->
-            :ok
-
-          _ ->
-            raise "op_ambiguity"
-        end
-
-      _ ->
-        :ok
-    end
-  end
-
-  defp assert_no_ambiguous_op(_atom, _meta, _args, _s, _e), do: :ok
 
   defp refute_parallel_bitstring_match({:<<>>, _, _}, {:<<>>, _meta, _} = _arg, _e, true) do
     # file_error(meta, e, __MODULE__, {:parallel_bitstring_match, arg})
@@ -2652,7 +2605,7 @@ defmodule ElixirSense.Core.Compiler do
     def has_cursor?(ast) do
       # TODO rewrite to lazy prewalker
       {_, result} = Macro.prewalk(ast, false, fn
-        {:__cursor__, _, list} = node, state when is_list(list) ->
+        {:__cursor__, _, list} = node, _state when is_list(list) ->
           {node, true}
         node, state ->
           {node, state}
@@ -2881,7 +2834,7 @@ defmodule ElixirSense.Core.Compiler do
       s0 = ElixirEnv.reset_vars(s)
       {e_exprs, {s1, e1}} = Enum.map_reduce(exprs, {s0, e}, &expand_with/2)
       {e_do, opts1, s2} = expand_with_do(meta, opts0, s, s1, e1)
-      {e_opts, opts2, s3} = expand_with_else(meta, opts1, s2, e)
+      {e_opts, _opts2, s3} = expand_with_else(meta, opts1, s2, e)
 
       {{:with, meta, e_exprs ++ [[{:do, e_do} | e_opts]]}, s3, e}
     end
@@ -3212,7 +3165,7 @@ defmodule ElixirSense.Core.Compiler do
       {e_right, e_alignment, ss, es} =
         expand_specs(e_type, meta, right, sl, original_s, el, expect_size)
 
-      e_acc = concat_or_prepend_bitstring(meta, e_left, e_right, acc, es, match_or_require_size)
+      e_acc = concat_or_prepend_bitstring(meta, e_left, e_right, acc)
 
       expand(
         bitstr_meta,
@@ -3230,7 +3183,6 @@ defmodule ElixirSense.Core.Compiler do
       meta = extract_meta(h, bitstr_meta)
       {e_left, {ss, original_s}, es} = expand_expr(meta, h, fun, s, e)
 
-      match_or_require_size = require_size or is_match_size(t, es)
       e_type = expr_type(e_left)
       e_right = infer_spec(e_type, meta)
 
@@ -3241,9 +3193,7 @@ defmodule ElixirSense.Core.Compiler do
           inferred_meta,
           e_left,
           e_right,
-          acc,
-          es,
-          match_or_require_size
+          acc
         )
 
       expand(meta, fun, t, e_acc, {ss, original_s}, es, alignment, require_size)
@@ -3410,16 +3360,14 @@ defmodule ElixirSense.Core.Compiler do
     defp expr_type({:<<>>, _, _}), do: :bitstring
     defp expr_type(_), do: :default
 
-    defp concat_or_prepend_bitstring(_meta, {:<<>>, _, []}, _e_right, acc, _e, _require_size),
+    defp concat_or_prepend_bitstring(_meta, {:<<>>, _, []}, _e_right, acc),
       do: acc
 
     defp concat_or_prepend_bitstring(
            meta,
            {:<<>>, parts_meta, parts} = e_left,
            e_right,
-           acc,
-           e,
-           require_size
+           acc
          ) do
       # elixir raises unsized_binary in some cases
 
@@ -3439,7 +3387,7 @@ defmodule ElixirSense.Core.Compiler do
       end
     end
 
-    defp concat_or_prepend_bitstring(meta, e_left, e_right, acc, _e, _require_size) do
+    defp concat_or_prepend_bitstring(meta, e_left, e_right, acc) do
       [{:"::", meta, [e_left, e_right]} | acc]
     end
 
@@ -3515,7 +3463,7 @@ defmodule ElixirSense.Core.Compiler do
       add_arg(:unit, unit, add_arg(:size, size, []))
     end
 
-    defp build_spec(size, unit, type, endianness, sign, spec)
+    defp build_spec(_size, _unit, type, endianness, _sign, spec)
          when type in [:utf8, :utf16, :utf32] do
       # elixir raises bittype_signed if signed
       # elixir raises bittype_utf if size specified
@@ -3524,7 +3472,7 @@ defmodule ElixirSense.Core.Compiler do
       add_spec(type, add_spec(endianness, spec))
     end
 
-    defp build_spec(_size, unit, type, _endianness, sign, spec)
+    defp build_spec(_size, _unit, type, _endianness, _sign, spec)
          when type in [:binary, :bitstring] do
       # elixir raises bittype_signed if signed
       # elixir raises bittype_mismatch if bitstring unit != 1 or default
@@ -3585,10 +3533,8 @@ defmodule ElixirSense.Core.Compiler do
 
     def expand(meta, clauses, s, e) when is_list(clauses) do
       transformer = fn
-        {:->, _, [left, _right]} = clause, sa ->
+        {:->, _, [_left, _right]} = clause, sa ->
           # elixir raises defaults_in_args
-          left = sanitize_fn_arg(left)
-
           s_reset = ElixirEnv.reset_vars(sa)
 
           {e_clause, s_acc, e_acc} =
@@ -3601,10 +3547,6 @@ defmodule ElixirSense.Core.Compiler do
 
       {{:fn, meta, e_clauses}, se, e}
     end
-
-    # TODO check if there is cursor in default
-    defp sanitize_fn_arg({:"\\\\", _, [value, _default]}), do: value
-    defp sanitize_fn_arg(value), do: value
 
     # Capture
 
@@ -3787,7 +3729,7 @@ defmodule ElixirSense.Core.Compiler do
       end
     end
 
-    defp args_from_arity(_meta, a) do
+    defp args_from_arity(_meta, _a) do
       # elixir raises invalid_arity_for_capture
       []
     end
@@ -4033,8 +3975,8 @@ defmodule ElixirSense.Core.Compiler do
 
     defp do_quote(
            {:__cursor__, meta, args},
-           %__MODULE__{unquote: _} = q,
-           e
+           %__MODULE__{unquote: _},
+           _e
          ) when is_list(args) do
       # emit cursor as is regardless of unquote
       {:__cursor__, meta, args}
@@ -4732,7 +4674,7 @@ defmodule ElixirSense.Core.Compiler do
       {{:when, meta, [spec, guard]}, state, env}
     end
     defp do_expand_spec(spec, state, env) do
-      {spec, guard, state, env} = do_expand_spec(spec, [], [], state, env)
+      {spec, _guard, state, env} = do_expand_spec(spec, [], [], state, env)
       {spec, state, env}
     end
 
@@ -4747,7 +4689,7 @@ defmodule ElixirSense.Core.Compiler do
 
       guard = if Keyword.keyword?(guard), do: guard, else: []
 
-      state = Enum.reduce(guard, state, fn {name, val}, state ->
+      state = Enum.reduce(guard, state, fn {name, _val}, state ->
         # guard is a keyword list so we don't have exact meta on keys
         add_var_write(state, {name, guard_meta, nil})
       end)
