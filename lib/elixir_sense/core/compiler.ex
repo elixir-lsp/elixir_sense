@@ -66,9 +66,15 @@ defmodule ElixirSense.Core.Compiler do
     expand({:"__->__", meta, [left, right]}, s, e)
   end
 
-  defp do_expand({:"::", _meta, [_, _]}, _s, _e), do: raise("unhandled_type_op")
+  defp do_expand({:"::", meta, [left, right]}, s, e) do
+    # elixir raises here unhandled_type_op
+    expand({:"__::__", meta, [left, right]}, s, e)
+  end
 
-  defp do_expand({:|, _meta, [_, _]}, _s, _e), do: raise("unhandled_cons_op")
+  defp do_expand({:|, meta, [left, right]}, s, e) do
+    # elixir raises here unhandled_cons_op
+    expand({:"__|__", meta, [left, right]}, s, e)
+  end
 
   # __block__
 
@@ -102,8 +108,8 @@ defmodule ElixirSense.Core.Compiler do
           # A compiler may want to emit a :local_function trace in here.
           {Module.concat([head | tail]), state, env}
         else
-          raise "invalid_alias"
-          # {{:__aliases__, meta, [head | tail]}, state, env}
+          # elixir raises here invalid_alias
+          {{:__aliases__, meta, [head | tail]}, state, env}
         end
     end
   end
@@ -784,8 +790,9 @@ defmodule ElixirSense.Core.Compiler do
       {{:type, :external}, {:env, []}} ->
         {__MODULE__.Quote.fun_to_quoted(function), s, e}
 
-      other ->
-        raise "invalid_quoted_expr when expanding fun #{inspect(other)}"
+      _other ->
+        # elixir raises here invalid_quoted_expr
+        {nil, s, e}
     end
   end
 
@@ -804,8 +811,9 @@ defmodule ElixirSense.Core.Compiler do
     {other, s, e}
   end
 
-  defp do_expand(other, _s, _e) do
-    raise "invalid_quoted_expr #{inspect(other)}"
+  defp do_expand(_other, s, e) do
+    # elixir raises here invalid_quoted_expr
+    {nil, s, e}
   end
 
   # Macro handling
@@ -3826,15 +3834,15 @@ defmodule ElixirSense.Core.Compiler do
       {q, acc3}
     end
 
-    def validate_compile(_meta, :line, value, acc) when is_boolean(value) do
+    defp validate_compile(_meta, :line, value, acc) when is_boolean(value) do
       {value, acc}
     end
 
-    def validate_compile(_meta, :file, nil, acc) do
+    defp validate_compile(_meta, :file, nil, acc) do
       {nil, acc}
     end
 
-    def validate_compile(meta, key, value, acc) do
+    defp validate_compile(meta, key, value, acc) do
       case is_valid(key, value) do
         true ->
           {value, acc}
@@ -3846,7 +3854,7 @@ defmodule ElixirSense.Core.Compiler do
       end
     end
 
-    def validate_runtime(key, value) do
+    defp validate_runtime(key, value) do
       case is_valid(key, value) do
         true ->
           value
@@ -3857,11 +3865,11 @@ defmodule ElixirSense.Core.Compiler do
       end
     end
 
-    def is_valid(:line, line), do: is_integer(line)
-    def is_valid(:file, file), do: is_binary(file)
-    def is_valid(:context, context), do: is_atom(context) and context != nil
-    def is_valid(:generated, generated), do: is_boolean(generated)
-    def is_valid(:unquote, unquote), do: is_boolean(unquote)
+    defp is_valid(:line, line), do: is_integer(line)
+    defp is_valid(:file, file), do: is_binary(file)
+    defp is_valid(:context, context), do: is_atom(context) and context != nil
+    defp is_valid(:generated, generated), do: is_boolean(generated)
+    defp is_valid(:unquote, unquote), do: is_boolean(unquote)
     defp default(:unquote), do: true
     defp default(:generated), do: false
 

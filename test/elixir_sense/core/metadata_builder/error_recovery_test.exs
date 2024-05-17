@@ -1444,4 +1444,14 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert get_cursor_env(code)
     end
   end
+
+  describe "alias/import/require" do
+    test "invalid alias" do
+      code = """
+      foo = :foo
+      foo.Foo.a(\
+      """
+      assert get_cursor_env(code)
+    end
+  end
 end
