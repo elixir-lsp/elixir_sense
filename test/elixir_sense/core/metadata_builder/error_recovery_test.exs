@@ -12,7 +12,30 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
   end
 
   describe "incomplete case" do
-    test "cursor in argument" do
+    test "no arg 1" do
+      code = """
+      case []
+      \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "no arg 2" do
+      code = """
+      case [], []
+      \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "cursor in argument 1" do
+      code = """
+      case [], \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "cursor in argument 2" do
       code = """
       x = 5
       case \
@@ -70,6 +93,23 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
   end
 
   describe "incomplete cond" do
+    test "no arg" do
+      code = """
+      cond []
+      \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "cursor in arg" do
+      code = """
+      x = foo()
+      cond \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
     test "cursor in clause left side" do
       code = """
       x = foo()
@@ -111,6 +151,23 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
   end
 
   describe "incomplete receive" do
+    test "no arg" do
+      code = """
+      receive []
+      \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "cursor in arg" do
+      code = """
+      x = foo()
+      receive \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
     test "cursor in clause left side" do
       code = """
       x = foo()
@@ -193,6 +250,23 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
   end
 
   describe "incomplete try" do
+    test "no arg" do
+      code = """
+      try []
+      \
+      """
+      assert {meta, env} = get_cursor_env(code)
+    end
+
+    test "cursor in arg" do
+      code = """
+      x = foo()
+      try \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
     test "cursor in do block" do
       code = """
       x = foo()
@@ -365,6 +439,15 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
   end
 
   describe "incomplete with" do
+    test "cursor in arg" do
+      code = """
+      x = foo()
+      with [], \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
     test "cursor in match expressions" do
       code = """
       x = foo()
@@ -444,6 +527,15 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
   end
 
   describe "incomplete for" do
+    test "cursor in arg" do
+      code = """
+      x = foo()
+      for [], \
+      """
+      assert {meta, env} = get_cursor_env(code)
+      assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
     test "cursor in generator match expressions" do
       code = """
       x = foo()

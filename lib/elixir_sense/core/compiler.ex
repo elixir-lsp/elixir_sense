@@ -2760,12 +2760,16 @@ defmodule ElixirSense.Core.Compiler do
 
     # case
 
-    def case(_meta, [], _s, _e) do
-      raise ArgumentError, "missing_option"
+    def case(meta, [], s, e) do
+      # elixir raises here missing_option
+      # emit a fake do block
+      case(meta, [do: []], s, e)
     end
 
-    def case(_meta, opts, _s, _e) when not is_list(opts) do
-      raise ArgumentError, "invalid_args"
+    def case(_meta, opts, s, e) when not is_list(opts) do
+      # elixir raises here invalid_args
+      # there may be cursor
+      ElixirExpand.expand(opts, s, e)
     end
 
     def case(meta, opts, s, e) do
@@ -2786,12 +2790,16 @@ defmodule ElixirSense.Core.Compiler do
 
     # cond
 
-    def cond(_meta, [], _s, _e) do
-      raise ArgumentError, "missing_option"
+    def cond(meta, [], s, e) do
+      # elixir raises here missing_option
+      # emit a fake do block
+      cond(meta, [do: []], s, e)
     end
 
-    def cond(_meta, opts, _s, _e) when not is_list(opts) do
-      raise ArgumentError, "invalid_args"
+    def cond(_meta, opts, s, e) when not is_list(opts) do
+      # elixir raises here invalid_args
+      # there may be cursor
+      ElixirExpand.expand(opts, s, e)
     end
 
     def cond(meta, opts, s, e) do
@@ -2812,12 +2820,16 @@ defmodule ElixirSense.Core.Compiler do
 
     # receive
 
-    def receive(_meta, [], _s, _e) do
-      raise ArgumentError, "missing_option"
+    def receive(meta, [], s, e) do
+      # elixir raises here missing_option
+      # emit a fake do block
+      receive(meta, [do: []], s, e)
     end
 
-    def receive(_meta, opts, _s, _e) when not is_list(opts) do
-      raise ArgumentError, "invalid_args"
+    def receive(_meta, opts, s, e) when not is_list(opts) do
+      # elixir raises here invalid_args
+      # there may be cursor
+      ElixirExpand.expand(opts, s, e)
     end
 
     def receive(meta, opts, s, e) do
@@ -2920,8 +2932,16 @@ defmodule ElixirSense.Core.Compiler do
 
     # try
 
-    def try(_meta, [], _s, _e), do: raise("missing_option")
-    def try(_meta, opts, _s, _e) when not is_list(opts), do: raise("invalid_args")
+    def try(meta, [], s, e) do
+      # elixir raises here missing_option
+      # emit a fake do block
+      try(meta, [do: []], s, e)
+    end
+    def try(_meta, opts, s, e) when not is_list(opts) do
+      # elixir raises here invalid_args
+      # there may be cursor
+      ElixirExpand.expand(opts, s, e)
+    end
 
     def try(meta, opts, s, e) do
       opts = sanitize_opts(opts, [:do, :rescue, :catch, :else, :after])
