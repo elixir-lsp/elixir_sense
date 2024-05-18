@@ -4360,14 +4360,14 @@ defmodule ElixirSense.Core.Compiler do
             function = e.function
 
             # TODO the condition has this at the end
-            # and not ElixirDef.local_for(meta, name, arity, [:defmacro, :defmacrop], e)
+            # and ElixirDef.local_for(meta, name, arity, [:defmacro, :defmacrop], e)
             if function != nil and function != tuple do
+              false
+            else
               # ElixirEnv.trace({:local_function, meta, name, arity}, e)
               # ElixirLocals.record_local(tuple, e.module, function, meta, false)
               # TODO we may want to record
               {:local, name, arity}
-            else
-              false
             end
           end
       end
@@ -4376,19 +4376,15 @@ defmodule ElixirSense.Core.Compiler do
     def require_function(meta, receiver, name, arity, e) do
       required = receiver in e.requires
 
-      case is_macro(name, arity, receiver, required) do
-        true ->
-          false
-
-        false ->
-          # ElixirEnv.trace({:remote_function, meta, receiver, name, arity}, e)
-          remote_function(meta, receiver, name, arity, e)
+      if is_macro(name, arity, receiver, required) do
+        false
+      else
+        # ElixirEnv.trace({:remote_function, meta, receiver, name, arity}, e)
+        remote_function(meta, receiver, name, arity, e)
       end
     end
 
     defp remote_function(_meta, receiver, name, arity, _e) do
-      # check_deprecated(:function, meta, receiver, name, arity, e)
-
       # TODO rewrite is safe to use as it does not emit traces and does not have side effects
       # but we may need to translate it anyway
       case :elixir_rewrite.inline(receiver, name, arity) do
