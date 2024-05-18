@@ -762,273 +762,273 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "local" do
       code = """
       &foo\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "local slash no arity" do
       code = """
       &foo/\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "local slash arity" do
       code = """
       &foo/1\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "local slash invalid arity" do
       code = """
       &foo/1000; \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "local dot" do
       code = """
       &foo.\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "local dot call" do
       code = """
       &foo.(\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "local dot call closed" do
       code = """
       &foo.()\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "local dot right" do
       code = """
       &foo.bar\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "remote" do
       code = """
       &Foo\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "remote dot" do
       code = """
       &Foo.\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "remote dot right" do
       code = """
       &Foo.bar\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "remote dot right no arity" do
       code = """
       &Foo.bar/\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "remote dot right arity" do
       code = """
       &Foo.bar/1\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "remote dot call" do
       code = """
       &Foo.bar(\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "remote dot call closed" do
       code = """
       &Foo.bar()\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "tuple" do
       code = """
       &{\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "tuple closed" do
       code = """
       &{}\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "list" do
       code = """
       &[\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "list closed" do
       code = """
       &[]\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "bitstring" do
       code = """
       &<<\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "bitstring closed" do
       code = """
       &<<>>\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "map no braces" do
       code = """
       &%\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "map" do
       code = """
       &%{\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "map closed" do
       code = """
       &%{}\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "struct no braces" do
       code = """
       &%Foo\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "struct" do
       code = """
       &%Foo{\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "struct closed" do
       code = """
       &%Foo{}\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "block" do
       code = """
       & (\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "block multiple expressions" do
       code = """
       & (:ok; \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "arg var incomplete" do
       code = """
       & &\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "arg var" do
       code = """
       & &2\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "arg var in list" do
       code = """
       &[&1, \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "arg var in list without predecessor" do
       code = """
       &[&2, \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "no arg" do
       code = """
       &{}; \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
-    test "invalid arg nuber" do
+    test "invalid arg number" do
       code = """
       & &0; \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "outside of capture" do
       code = """
       &1; \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "invalid arg local" do
       code = """
       &foo; \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "invalid arg" do
       code = """
       &"foo"; \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
   end
 
@@ -1037,14 +1037,14 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       ^\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "cursor in match" do
       code = """
       ^__cursor__() = x\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
   end
 
@@ -1053,21 +1053,21 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       %{foo => x} = x\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "update in match" do
       code = """
       %{a | x: __cursor__()} = x\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "cursor in place of key value pair" do
       code = """
       %{a: "123", \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
   end
 
@@ -1076,21 +1076,21 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       %\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "invalid map name" do
       code = """
       %foo{\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "invalid key" do
       code = """
       %Foo{"asd" => [\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
   end
 
@@ -1106,133 +1106,133 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<12.3::32*4, \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "signed binary" do
       code = """
       <<x::binary-signed, \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "signed utf" do
       code = """
       <<x::utf8-signed, \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "utf with size" do
       code = """
       <<x::utf8-size(1), \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "conflicting type" do
       code = """
       <<"foo"::integer, \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "conflicting endianness" do
       code = """
       <<1::little-big, \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "conflicting unit" do
       code = """
       <<x::bitstring-unit(2), \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "binary literal with unit" do
       code = """
       <<"foo"::32, \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "bitstring literal with unit" do
       code = """
       <<(<<>>)::32, \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "unsized" do
       code = """
       <<x::binary, "foo" >> = \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "bad argument" do
       code = """
       <<"foo"::size(8)-unit(:oops), \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "undefined" do
       code = """
       <<1::unknown(), \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "unknown" do
       code = """
       <<1::refb_spec, \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "invalid literal" do
       code = """
       <<:ok, \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "nested match" do
       code = """
       <<bar = baz>> = \
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "incomplete" do
       code = """
       <<\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "incomplete ::" do
       code = """
       <<1::\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "incomplete -" do
       code = """
       <<1::binary-\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
 
     test "incomplete open parens" do
       code = """
       <<1::size(\
       """
-      assert {meta, env} = get_cursor_env(code)
+      assert get_cursor_env(code)
     end
   end
 
@@ -1446,10 +1446,150 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
   end
 
   describe "alias/import/require" do
-    test "invalid alias" do
+    test "invalid alias expansion" do
       code = """
       foo = :foo
       foo.Foo.a(\
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "incomplete" do
+      code = """
+      alias \
+      """
+      assert get_cursor_env(code)
+
+      code = """
+      require \
+      """
+      assert get_cursor_env(code)
+
+      code = """
+      import \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "invalid" do
+      code = """
+      alias A.a\
+      """
+      assert get_cursor_env(code)
+
+      code = """
+      require A.a\
+      """
+      assert get_cursor_env(code)
+
+      code = """
+      import A.a\
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "in options" do
+      code = """
+      alias A.B, \
+      """
+      assert get_cursor_env(code)
+
+      code = """
+      require A.B, \
+      """
+      assert get_cursor_env(code)
+
+      code = """
+      import A.B, \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "in option" do
+      code = """
+      alias A.B, warn: \
+      """
+      assert get_cursor_env(code)
+
+      code = """
+      require A.B, warn: \
+      """
+      assert get_cursor_env(code)
+
+      code = """
+      import A.B, warn: \
+      """
+      assert get_cursor_env(code)
+    end
+  end
+
+  describe "super" do
+    test "call outside module" do
+      code = """
+      super(\
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "call outside function" do
+      code = """
+      defmodule A do
+        super(\
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "call in match" do
+      code = """
+      super() = \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "capture expression outside module" do
+      code = """
+      & super(&1, \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "capture outside module" do
+      code = """
+      &super\
+      """
+      assert get_cursor_env(code)
+
+      code = """
+      &super/\
+      """
+      assert get_cursor_env(code)
+
+      code = """
+      &super/1 \
+      """
+      assert get_cursor_env(code)
+
+      code = """
+      (&super/1) +\
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "call wrong args" do
+      code = """
+      defmodule A do
+        def a do
+          super(\
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "call no super" do
+      code = """
+      defmodule A do
+        def a(1), do: :ok
+        def a(x) do
+          super(x) +\
       """
       assert get_cursor_env(code)
     end

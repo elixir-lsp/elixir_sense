@@ -135,8 +135,6 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp do_expand({:alias, meta, [arg, opts]}, state, env) do
-    assert_no_match_or_guard_scope(env.context, "alias")
-
     state =
       state
       |> add_first_alias_positions(env, meta)
@@ -165,7 +163,6 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp do_expand({:require, meta, [arg, opts]}, state, env) do
-    assert_no_match_or_guard_scope(env.context, "require")
     original_env = env
 
     state =
@@ -228,8 +225,6 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp do_expand({:import, meta, [arg, opts]}, state, env) do
-    assert_no_match_or_guard_scope(env.context, "import")
-
     state =
       state
       |> add_current_env_to_line(Keyword.fetch!(meta, :line), env)
@@ -504,20 +499,24 @@ defmodule ElixirSense.Core.Compiler do
   # Super
 
   defp do_expand({:super, meta, args}, s, e) when is_list(args) do
-    assert_no_match_or_guard_scope(e.context, "super")
     arity = length(args)
-    {kind, name, _} = resolve_super(meta, arity, s, e)
-    {e_args, sa, ea} = expand_args(args, s, e)
-    
-    line = Keyword.get(meta, :line, 0)
-    column = Keyword.get(meta, :column, nil)
+    case resolve_super(meta, arity, s, e) do
+      {kind, name, _} ->
+        {e_args, sa, ea} = expand_args(args, s, e)
+        
+        line = Keyword.get(meta, :line, 0)
+        column = Keyword.get(meta, :column, nil)
 
-    sa =
-      sa
-      |> add_call_to_line({nil, name, arity}, {line, column})
-      |> add_current_env_to_line(line, ea)
+        sa =
+          sa
+          |> add_call_to_line({nil, name, arity}, {line, column})
+          |> add_current_env_to_line(line, ea)
 
-    {{:super, [{:super, {kind, name}} | meta], e_args}, sa, ea}
+        {{:super, [{:super, {kind, name}} | meta], e_args}, sa, ea}
+      _ ->
+        # elixir does not allow this branch
+        expand_local(meta, :super, args, s, e)
+    end
   end
 
   # Vars
@@ -2046,10 +2045,11 @@ defmodule ElixirSense.Core.Compiler do
 
   defp overridable_name(name, count) when is_integer(count), do: :"#{name} (overridable #{count})"
 
-  defp resolve_super(_meta, arity, state, e) do
-    module = assert_module_scope(e)
-    function = assert_function_scope(e)
-
+  defp resolve_super(_meta, _arity, _state, %{module: module, function: function}) when module == nil or function == nil do
+    # elixir asserts scope is function
+    nil
+  end
+  defp resolve_super(_meta, arity, state, %{module: module, function: function}) do
     case function do
       {name, ^arity} ->
         state.mods_funs_to_positions
@@ -2081,12 +2081,14 @@ defmodule ElixirSense.Core.Compiler do
                 {:defp, overridable_name(name, count), meta}
             end
 
-          nil ->
-            raise "no_super"
+          _ ->
+            # elixir raises here no_super
+            nil
         end
 
       _ ->
-        raise "wrong_number_of_args_for_super"
+        # elixir raises here wrong_number_of_args_for_super
+        nil
     end
   end
 
@@ -2324,11 +2326,6 @@ defmodule ElixirSense.Core.Compiler do
       mod -> mod
     end
   end
-
-  defp assert_module_scope(%{module: nil}), do: raise("invalid_expr_in_scope")
-  defp assert_module_scope(%{module: module}), do: module
-  defp assert_function_scope(%{function: nil}), do: raise("invalid_expr_in_scope")
-  defp assert_function_scope(%{function: function}), do: function
 
   defp assert_no_match_scope(context, _exp) do
     case context do
