@@ -4074,7 +4074,7 @@ defmodule ElixirSense.Core.Compiler do
     defp do_quote(other, _, _), do: other
 
     defp import_meta(meta, name, arity, q, e) do
-      case Keyword.get(meta, :import, false) == false &&
+      case Keyword.get(meta, :imports, false) == false &&
              ElixirDispatch.find_imports(meta, name, e) do
         [] ->
           case arity == 1 && Keyword.fetch(meta, :ambiguous_op) do
