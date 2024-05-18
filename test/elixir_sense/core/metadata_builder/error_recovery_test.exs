@@ -1038,6 +1038,15 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
       assert get_cursor_env(code)
     end
+
+    test "ambiguous local" do
+      code = """
+      defmodule Kernel.ErrorsTest.FunctionImportConflict do
+        import :erlang, only: [exit: 1], warn: false
+        def foo, do: (&exit/1) +\
+      """
+      assert get_cursor_env(code)
+    end
   end
 
   describe "pin" do
@@ -1448,6 +1457,15 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
     test "local call in match" do
       code = """
       bar() = \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "ambiguous call" do
+      code = """
+      defmodule Kernel.ErrorsTest.FunctionImportConflict do
+        import :erlang, only: [exit: 1], warn: false
+        def foo, do: exit(\
       """
       assert get_cursor_env(code)
     end

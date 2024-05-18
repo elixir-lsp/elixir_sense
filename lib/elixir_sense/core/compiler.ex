@@ -671,6 +671,8 @@ defmodule ElixirSense.Core.Compiler do
     # If we are inside a function, we support reading from locals.
     allow_locals = match?({n, a} when fun != n or arity != a, env.function)
 
+    # TODO this crashes with CompileError ambiguous_call
+    dbg({meta, fun, arity})
     case Macro.Env.expand_import(env, meta, fun, arity,
            trace: false,
            allow_locals: allow_locals,
@@ -3562,7 +3564,7 @@ defmodule ElixirSense.Core.Compiler do
     def capture(meta, {:/, _, [{f, import_meta, c}, a]}, s, e)
         when is_atom(f) and is_integer(a) and is_atom(c) do
       args = args_from_arity(meta, a)
-      capture_import({f, import_meta, args}, s, e, true)
+      capture_import({f |> dbg, import_meta, args}, s, e, true)
     end
 
     def capture(_meta, {{:., _, [_, fun]}, _, args} = expr, s, e)
@@ -4403,7 +4405,8 @@ defmodule ElixirSense.Core.Compiler do
           find_imports_by_name(name, imports, Map.put(acc, arity, mod), mod, meta, e)
 
         _other_mod ->
-          raise "ambiguous_call"
+          # elixir raises here ambiguous_call
+          find_imports_by_name(name, imports, acc, mod, meta, e)
       end
     end
 
@@ -4435,8 +4438,10 @@ defmodule ElixirSense.Core.Compiler do
             {[], []} ->
               false
 
-            _ ->
-              raise "ambiguous_call"
+            {_, [receiver]} ->
+              # elixir raises ambiguous_call
+              # we prefer macro
+              {:macro, receiver}
           end
       end
     end
