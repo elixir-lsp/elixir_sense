@@ -2111,11 +2111,8 @@ defmodule ElixirSense.Core.Compiler do
         {{:&, meta, [{:/, [], [{{:., dot_meta, [remote, fun]}, attached_meta, []}, arity]}]}, se,
          ee}
 
-      {{:local, _fun, _arity}, _, _, _se, %{function: nil}} ->
-        # TODO register call?
-        raise "undefined_local_capture"
-
       {{:local, fun, arity}, local_meta, _, se, ee} ->
+        # elixir raises undefined_local_capture if ee.function is nil
         line = Keyword.get(local_meta, :line, 0)
         column = Keyword.get(local_meta, :column, nil)
 

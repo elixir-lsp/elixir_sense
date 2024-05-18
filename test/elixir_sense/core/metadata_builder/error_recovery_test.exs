@@ -1030,6 +1030,14 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
       assert get_cursor_env(code)
     end
+
+    test "undefined local capture" do
+      code = """
+      defmodule A do
+        (&asdf/1) +\
+      """
+      assert get_cursor_env(code)
+    end
   end
 
   describe "pin" do
