@@ -2616,8 +2616,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp expand_case(meta, {:do, _} = do_clause, s, e) do
-      fun = expand_head(meta, :case, :do)
-      expand_clauses(meta, :case, fun, do_clause, s, e)
+      expand_clauses(meta, :case, &head/3, do_clause, s, e)
     end
 
     # cond
@@ -2646,8 +2645,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp expand_cond(meta, {:do, _} = do_clause, s, e) do
-      fun = expand_one(meta, :cond, :do, &ElixirExpand.expand_args/3)
-      expand_clauses(meta, :cond, fun, do_clause, s, e)
+      expand_clauses(meta, :cond, &ElixirExpand.expand_args/3, do_clause, s, e)
     end
 
     # receive
@@ -2680,13 +2678,11 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp expand_receive(meta, {:do, _} = do_clause, s, e) do
-      fun = expand_head(meta, :receive, :do)
-      expand_clauses(meta, :receive, fun, do_clause, s, e)
+      expand_clauses(meta, :receive, &head/3, do_clause, s, e)
     end
 
-    defp expand_receive(meta, {:after, [_]} = after_clause, s, e) do
-      fun = expand_one(meta, :receive, :after, &ElixirExpand.expand_args/3)
-      expand_clauses(meta, :receive, fun, after_clause, s, e)
+    defp expand_receive(meta, {:after, [_ | _]} = after_clause, s, e) do
+      expand_clauses(meta, :receive, &ElixirExpand.expand_args/3, after_clause, s, e)
     end
 
     defp expand_receive(meta, {:after, expr}, s, e) when not is_list(expr) do
@@ -2756,8 +2752,7 @@ defmodule ElixirSense.Core.Compiler do
 
         {expr, rest_opts} ->
           pair = {:else, expr}
-          fun = expand_head(meta, :with, :else)
-          {e_pair, se} = expand_clauses(meta, :with, fun, pair, s, e)
+          {e_pair, se} = expand_clauses(meta, :with, &head/3, pair, s, e)
           {[e_pair], rest_opts, se}
       end
     end
@@ -2797,8 +2792,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp expand_try(meta, {:else, _} = else_clause, s, e) do
-      fun = expand_head(meta, :try, :else)
-      expand_clauses(meta, :try, fun, else_clause, s, e)
+      expand_clauses(meta, :try, &head/3, else_clause, s, e)
     end
 
     defp expand_try(meta, {:catch, _} = catch_clause, s, e) do
@@ -2910,29 +2904,6 @@ defmodule ElixirSense.Core.Compiler do
         [{:_, [], e.module}]
       else
         res
-      end
-    end
-
-    defp expand_head(_meta, _kind, _key) do
-      fn
-        [{:when, _, [args, _, _ | _]}], _, _e ->
-          raise ArgumentError, "wrong_number_of_args_for_clause #{inspect(args)}"
-
-        [_] = args, s, e ->
-          head(args, s, e)
-
-        args, _, _e ->
-          raise ArgumentError, "wrong_number_of_args_for_clause #{inspect(args)}"
-      end
-    end
-
-    defp expand_one(_meta, _kind, _key, fun) do
-      fn
-        [_] = args, s, e ->
-          fun.(args, s, e)
-
-        _, _, _e ->
-          raise ArgumentError, "wrong_number_of_args_for_clause"
       end
     end
 
@@ -4318,10 +4289,15 @@ defmodule ElixirSense.Core.Compiler do
             {[], []} ->
               false
 
-            {_, [receiver]} ->
+            {_, [receiver | _]} ->
               # elixir raises ambiguous_call
               # we prefer macro
               {:macro, receiver}
+
+            {[receiver | _], _} ->
+              # elixir raises ambiguous_call
+              # we prefer macro
+              {:function, receiver}
           end
       end
     end

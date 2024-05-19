@@ -90,6 +90,20 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert {meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, & &1.name == :x)
     end
+
+    test "invalid number of args with when" do
+      code = """
+      case nil do 0, z when not is_nil(z) -> \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "invalid number of args" do
+      code = """
+      case nil do 0, z -> \
+      """
+      assert get_cursor_env(code)
+    end
   end
 
   describe "incomplete cond" do
@@ -147,6 +161,13 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
       assert {meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "invalid number of args" do
+      code = """
+      cond do 0, z -> \
+      """
+      assert get_cursor_env(code)
     end
   end
 
@@ -246,6 +267,27 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
       assert {meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, & &1.name == :x)
+    end
+
+    test "invalid number of args in after" do
+      code = """
+      receive do
+        a -> :ok
+      after
+        0, z -> \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "invalid number of clauses in after" do
+      code = """
+      receive do
+        a -> :ok
+      after
+        0 -> :ok
+        1 -> \
+      """
+      assert get_cursor_env(code)
     end
   end
 
