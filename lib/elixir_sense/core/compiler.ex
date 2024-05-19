@@ -808,10 +808,8 @@ defmodule ElixirSense.Core.Compiler do
          [funs, opts],
          _callback,
          state,
-         env
-       ) do
-    module = assert_module_scope(env, :def, 2)
-
+         env = %{module: module}
+       ) when module != nil do
     {position, end_position} = extract_range(meta)
     {line, _} = position
 
@@ -852,9 +850,8 @@ defmodule ElixirSense.Core.Compiler do
          [{:behaviour, _meta, [arg]}],
          _callback,
          state,
-         env
-       ) do
-    assert_module_scope(env, :@, 1)
+         env = %{module: module}
+       ) when module != nil do
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -872,9 +869,8 @@ defmodule ElixirSense.Core.Compiler do
          [{:moduledoc, doc_meta, [arg]}],
          _callback,
          state,
-         env
-       ) do
-    assert_module_scope(env, :@, 1)
+         env = %{module: module}
+       ) when module != nil do
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -901,10 +897,9 @@ defmodule ElixirSense.Core.Compiler do
          [{doc, doc_meta, [arg]}],
          _callback,
          state,
-         env
+         env = %{module: module}
        )
-       when doc in [:doc, :typedoc] do
-    assert_module_scope(env, :@, 1)
+       when doc in [:doc, :typedoc] and module != nil do
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -927,9 +922,8 @@ defmodule ElixirSense.Core.Compiler do
          [{:impl, doc_meta, [arg]}],
          _callback,
          state,
-         env
-       ) do
-    assert_module_scope(env, :@, 1)
+         env = %{module: module}
+       ) when module != nil do
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -953,9 +947,8 @@ defmodule ElixirSense.Core.Compiler do
          [{:optional_callbacks, doc_meta, [arg]}],
          _callback,
          state,
-         env
-       ) do
-    assert_module_scope(env, :@, 1)
+         env = %{module: module}
+       ) when module != nil do
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -978,9 +971,8 @@ defmodule ElixirSense.Core.Compiler do
          [{:deprecated, doc_meta, [arg]}],
          _callback,
          state,
-         env
-       ) do
-    assert_module_scope(env, :@, 1)
+         env = %{module: module}
+       ) when module != nil do
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -1003,10 +995,8 @@ defmodule ElixirSense.Core.Compiler do
          [{:derive, doc_meta, [derived_protos]}],
          _callback,
          state,
-         env
-       ) do
-    current_module = assert_module_scope(env, :@, 1)
-
+         env = %{module: module}
+       ) when module != nil do
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
 
@@ -1023,7 +1013,7 @@ defmodule ElixirSense.Core.Compiler do
             mod_any = Module.concat(proto_module, Any)
 
             # protocol implementation module built by @derive
-            mod = Module.concat(proto_module, current_module)
+            mod = Module.concat(proto_module, module)
 
             case acc.mods_funs_to_positions[{mod_any, nil, nil}] do
               nil ->
@@ -1061,11 +1051,9 @@ defmodule ElixirSense.Core.Compiler do
          [{kind, kind_meta, [expr | _]}],
          _callback,
          state,
-         env
+         env = %{module: module}
        )
-       when kind in [:type, :typep, :opaque] do
-    assert_module_scope(env, :@, 1)
-
+       when kind in [:type, :typep, :opaque] and module != nil do
     {expr, state, env} = __MODULE__.Typespec.expand_type(expr, state, env)
 
     case __MODULE__.Typespec.type_to_signature(expr) do
@@ -1103,11 +1091,9 @@ defmodule ElixirSense.Core.Compiler do
          [{kind, kind_meta, [expr | _]}],
          _callback,
          state,
-         env
+         env = %{module: module}
        )
-       when kind in [:callback, :macrocallback, :spec] do
-    assert_module_scope(env, :@, 1)
-
+       when kind in [:callback, :macrocallback, :spec] and module != nil do
     {expr, state, env} = __MODULE__.Typespec.expand_spec(expr, state, env)
 
     case __MODULE__.Typespec.spec_to_signature(expr) do
@@ -1155,10 +1141,9 @@ defmodule ElixirSense.Core.Compiler do
          [{name, name_meta, args}],
          _callback,
          state,
-         env
+         env = %{module: module}
        )
-       when is_atom(name) do
-    assert_module_scope(env, :@, 1)
+       when is_atom(name) and module != nil do
     line = Keyword.fetch!(meta, :line)
     column = Keyword.get(meta, :column, 1)
 
@@ -1203,9 +1188,8 @@ defmodule ElixirSense.Core.Compiler do
          [arg],
          _callback,
          state,
-         env
-       ) do
-    assert_module_scope(env, :defoverridable, 1)
+         env = %{module: module}
+       ) when module != nil do
     {arg, state, env} = expand(arg, state, env)
 
     case arg do
@@ -1236,11 +1220,9 @@ defmodule ElixirSense.Core.Compiler do
          [fields],
          _callback,
          state,
-         env
+         env = %{module: module}
        )
-       when type in [:defstruct, :defexception] do
-    module = assert_module_scope(env, type, 1)
-
+       when type in [:defstruct, :defexception] and module != nil do
     if Map.has_key?(state.structs, module) do
       raise ArgumentError,
             "defstruct has already been called for " <>
@@ -1283,11 +1265,9 @@ defmodule ElixirSense.Core.Compiler do
          [name, _] = args,
          _callback,
          state,
-         env
+         env = %{module: module}
        )
-       when call in [:defrecord, :defrecordp] do
-    module = assert_module_scope(env, call, 2)
-
+       when call in [:defrecord, :defrecordp] and module != nil do
     {position = {line, column}, end_position} = extract_range(meta)
 
     type =
@@ -1569,11 +1549,10 @@ defmodule ElixirSense.Core.Compiler do
     expand_macro(meta, Kernel, def_kind, [call, {:__block__, [], []}], callback, state, env)
   end
 
-  defp expand_macro(meta, Kernel, def_kind, [call, expr], _callback, state, env)
+  defp expand_macro(meta, Kernel, def_kind, [call, expr], _callback, state, env = %{module: module}) when module != nil
        when def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
     # dbg(call)
     # dbg(expr)
-    _module = assert_module_scope(env, def_kind, 2)
 
     %{vars: vars, unused: unused} = state
 
@@ -2285,13 +2264,6 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp map_fold(_fun, s, e, [], acc), do: {Enum.reverse(acc), s, e}
-
-  defp assert_module_scope(env, fun, arity) do
-    case env.module do
-      nil -> raise ArgumentError, "cannot invoke #{fun}/#{arity} outside module"
-      mod -> mod
-    end
-  end
 
   defp var_context(meta, kind) do
     case Keyword.fetch(meta, :counter) do
