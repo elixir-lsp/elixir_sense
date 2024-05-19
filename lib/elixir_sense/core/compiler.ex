@@ -672,14 +672,13 @@ defmodule ElixirSense.Core.Compiler do
     allow_locals = match?({n, a} when fun != n or arity != a, env.function)
 
     # TODO this crashes with CompileError ambiguous_call
-    dbg({meta, fun, arity})
     case Macro.Env.expand_import(env, meta, fun, arity,
            trace: false,
            allow_locals: allow_locals,
            check_deprecations: false
          ) do
       {:macro, module, callback} ->
-        # TODO there is a subtle difference - callback will call expander with state derrived from env via
+        # TODO there is a subtle difference - callback will call expander with state derived from env via
         # :elixir_env.env_to_ex(env) possibly losing some details
         # line = Keyword.get(meta, :line, 0)
         # column = Keyword.get(meta, :column, nil)
@@ -3564,7 +3563,7 @@ defmodule ElixirSense.Core.Compiler do
     def capture(meta, {:/, _, [{f, import_meta, c}, a]}, s, e)
         when is_atom(f) and is_integer(a) and is_atom(c) do
       args = args_from_arity(meta, a)
-      capture_import({f |> dbg, import_meta, args}, s, e, true)
+      capture_import({f, import_meta, args}, s, e, true)
     end
 
     def capture(_meta, {{:., _, [_, fun]}, _, args} = expr, s, e)
@@ -3624,29 +3623,34 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp capture_import({atom, import_meta, args} = expr, s, e, sequential) do
-      # TODO check similarity to macro expand_import
-      res = sequential && ElixirDispatch.import_function(import_meta, atom, length(args), e)
+      res = if sequential do
+        ElixirDispatch.import_function(import_meta, atom, length(args), e)
+      else
+        false
+      end
+      |> dbg
       handle_capture(res, import_meta, import_meta, expr, s, e, sequential)
     end
 
-    defp capture_require({{:., dot_meta, [left, right]}, require_meta, args}, s, e, sequential) do
+    defp capture_require({{:., dot_meta, [left, right]}, require_meta, args} = o, s, e, sequential) do
       case escape(left, []) do
         {esc_left, []} ->
           {e_left, se, ee} = ElixirExpand.expand(esc_left, s, e)
 
-          res =
-            sequential &&
-              case e_left do
-                {name, _, context} when is_atom(name) and is_atom(context) ->
-                  {:remote, e_left, right, length(args)}
+          res = if sequential do
+            case e_left do
+              {name, _, context} when is_atom(name) and is_atom(context) ->
+                {:remote, e_left, right, length(args)}
 
-                _ when is_atom(e_left) ->
-                  # TODO check similarity to macro expand_require
-                  ElixirDispatch.require_function(require_meta, e_left, right, length(args), ee)
+              _ when is_atom(e_left) ->
+                ElixirDispatch.require_function(require_meta, e_left, right, length(args), ee)
 
-                _ ->
-                  false
-              end
+              _ ->
+                false
+            end
+          else
+            false
+          end
 
           dot = {{:., dot_meta, [e_left, right]}, require_meta, args}
           handle_capture(res, require_meta, dot_meta, dot, se, ee, sequential)
@@ -3740,7 +3744,7 @@ defmodule ElixirSense.Core.Compiler do
 
     defp is_sequential_and_not_empty([]), do: false
     defp is_sequential_and_not_empty(list), do: is_sequential(list, 1)
-    # TODO need to understand if we need it
+
     defp is_sequential([{:&, _, [int]} | t], int), do: is_sequential(t, int + 1)
     defp is_sequential([], _int), do: true
     defp is_sequential(_, _int), do: false

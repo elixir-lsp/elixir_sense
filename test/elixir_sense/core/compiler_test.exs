@@ -61,7 +61,7 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         {expanded, state, env} = expand(ast)
         dbg(expanded)
 
-        assert expanded == elixir_expanded
+        assert clean_capture_arg_position(expanded) == elixir_expanded
         assert env == elixir_env
         assert state_to_map(state) == elixir_ex_to_map(elixir_state)
       end
@@ -397,6 +397,11 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         assert_expansion("&[&1 | &2]")
         assert_expansion("&inspect/1")
         assert_expansion("&Enum.count/1")
+        assert_expansion("a = %{}; &a.b(&1)")
+        assert_expansion("&Enum.count(&1)")
+        assert_expansion("&inspect(&1)")
+        assert_expansion("&Enum.map(&2, &1)")
+        assert_expansion("&inspect([&2, &1])")
       end
 
       test "expands fn" do
@@ -748,6 +753,21 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         # assert expanded == elixir_expanded
         # assert env == elixir_env
       end
+    end
+
+    defp clean_capture_arg_position(ast) do
+      {ast, _} = Macro.prewalk(ast, nil, fn
+        {atom, meta, nil} = node, state when is_atom(atom) ->
+          # elixir does not store position meta, we need to clean it to make tests pass
+          meta = with "&" <> int <- to_string(atom), {_, ""} <- Integer.parse(int) do
+            meta |> Keyword.delete(:line) |> Keyword.delete(:column)
+          else
+            _ -> meta
+          end
+          {{atom, meta, nil}, state}
+        node, state -> {node, state}
+      end)
+      ast
     end
   end
 end

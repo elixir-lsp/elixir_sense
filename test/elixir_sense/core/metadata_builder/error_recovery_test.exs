@@ -1469,6 +1469,19 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
       assert get_cursor_env(code)
     end
+
+    # this is not crashing because we don't support local macros yet
+    test "conflicting macro" do
+      code = """
+      defmodule Kernel.ErrorsTest.MacroLocalConflict do
+        def hello, do: 1 || 2
+        defmacro _ || _, do: :ok
+
+        defmacro _ && _, do: :error
+        def world, do: 1 && \
+      """
+      assert get_cursor_env(code)
+    end
   end
 
   describe "alias/import/require" do
