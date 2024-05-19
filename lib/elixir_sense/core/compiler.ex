@@ -30,11 +30,13 @@ defmodule ElixirSense.Core.Compiler do
     # dbg(sr)
     # dbg(e_right)
     {e_left, sl, el} = __MODULE__.Clauses.match(&expand/3, left, sr, s, er)
+
+    # elixir raises parallel_bitstring_match if detected
+
     # IO.inspect(sl.vars_info, label: "left")
     # dbg(e_left)
     # dbg(el.versioned_vars)
     # dbg(sl.vars)
-    refute_parallel_bitstring_match(e_left, e_right, e, Map.get(e, :context) == :match)
     # {{:=, meta, [e_left, e_right]}, sl, el |> Map.from_struct()} |> dbg(limit: :infinity)
     # el = el |> :elixir_env.with_vars(sl.vars |> elem(0))
     # sl = sl |> add_current_env_to_line(Keyword.fetch!(meta, :line), el)
@@ -454,7 +456,7 @@ defmodule ElixirSense.Core.Compiler do
 
   defp do_expand({:cond, meta, [opts]}, s, e) do
     assert_no_match_or_guard_scope(e.context, "cond")
-    assert_no_underscore_clause_in_cond(opts, e)
+    # elixir raises underscore_in_cond if the last clause is _
     {e_clauses, sc, ec} = __MODULE__.Clauses.cond(meta, opts, s, e)
     {{:cond, meta, [e_clauses]}, sc, ec}
   end
@@ -2350,7 +2352,9 @@ defmodule ElixirSense.Core.Compiler do
   defp assert_no_match_or_guard_scope(context, exp) do
     case context do
       :match ->
-        invalid_match!(exp)
+        raise ArgumentError,
+          "invalid expression in match, #{exp} is not allowed in patterns " <>
+            "such as function clauses, case clauses or on the left side of the = operator"
 
       :guard ->
         raise ArgumentError,
@@ -2361,91 +2365,6 @@ defmodule ElixirSense.Core.Compiler do
         :ok
     end
   end
-
-  defp invalid_match!(exp) do
-    raise ArgumentError,
-          "invalid expression in match, #{exp} is not allowed in patterns " <>
-            "such as function clauses, case clauses or on the left side of the = operator"
-  end
-
-  defp assert_no_underscore_clause_in_cond([{:do, clauses}], _e) when is_list(clauses) do
-    case List.last(clauses) do
-      {:->, _meta, [[{:_, _, atom}], _]} when is_atom(atom) ->
-        raise ArgumentError, "underscore_in_cond"
-
-      _other ->
-        :ok
-    end
-  end
-
-  defp assert_no_underscore_clause_in_cond(_other, _e), do: :ok
-
-  defp refute_parallel_bitstring_match({:<<>>, _, _}, {:<<>>, _meta, _} = _arg, _e, true) do
-    # file_error(meta, e, __MODULE__, {:parallel_bitstring_match, arg})
-    raise ArgumentError, "parallel_bitstring_match"
-  end
-
-  defp refute_parallel_bitstring_match(left, {:=, _meta, [match_left, match_right]}, e, parallel) do
-    refute_parallel_bitstring_match(left, match_left, e, true)
-    refute_parallel_bitstring_match(left, match_right, e, parallel)
-  end
-
-  defp refute_parallel_bitstring_match(left = [_ | _], right = [_ | _], e, parallel) do
-    refute_parallel_bitstring_match_each(left, right, e, parallel)
-  end
-
-  defp refute_parallel_bitstring_match({left1, left2}, {right1, right2}, e, parallel) do
-    refute_parallel_bitstring_match_each([left1, left2], [right1, right2], e, parallel)
-  end
-
-  defp refute_parallel_bitstring_match({:tuple, _, args1}, {:tuple, _, args2}, e, parallel) do
-    refute_parallel_bitstring_match_each(args1, args2, e, parallel)
-  end
-
-  defp refute_parallel_bitstring_match({:%{}, _, args1}, {:%{}, _, args2}, e, parallel) do
-    refute_parallel_bitstring_match_map_field(Enum.sort(args1), Enum.sort(args2), e, parallel)
-  end
-
-  defp refute_parallel_bitstring_match({:%, _, [_, args]}, right, e, parallel) do
-    refute_parallel_bitstring_match(args, right, e, parallel)
-  end
-
-  defp refute_parallel_bitstring_match(left, {:%, _, [_, args]}, e, parallel) do
-    refute_parallel_bitstring_match(left, args, e, parallel)
-  end
-
-  defp refute_parallel_bitstring_match(_left, _right, _e, _parallel), do: :ok
-
-  defp refute_parallel_bitstring_match_each([arg1 | rest1], [arg2 | rest2], e, parallel) do
-    refute_parallel_bitstring_match(arg1, arg2, e, parallel)
-    refute_parallel_bitstring_match_each(rest1, rest2, e, parallel)
-  end
-
-  defp refute_parallel_bitstring_match_each(_list1, _list2, _e, _parallel), do: :ok
-
-  defp refute_parallel_bitstring_match_map_field(
-         [{key, val1} | rest1],
-         [{key, val2} | rest2],
-         e,
-         parallel
-       ) do
-    refute_parallel_bitstring_match(val1, val2, e, parallel)
-    refute_parallel_bitstring_match_map_field(rest1, rest2, e, parallel)
-  end
-
-  defp refute_parallel_bitstring_match_map_field(
-         [field1 | rest1] = args1,
-         [field2 | rest2] = args2,
-         e,
-         parallel
-       ) do
-    cond do
-      field1 > field2 -> refute_parallel_bitstring_match_map_field(args1, rest2, e, parallel)
-      true -> refute_parallel_bitstring_match_map_field(rest1, args2, e, parallel)
-    end
-  end
-
-  defp refute_parallel_bitstring_match_map_field(_args1, _args2, _e, _parallel), do: :ok
 
   defp var_context(meta, kind) do
     case Keyword.fetch(meta, :counter) do

@@ -1633,4 +1633,29 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert get_cursor_env(code)
     end
   end
+
+  describe "var" do
+    test "_ in cond" do
+      code = """
+      cond do
+        x -> x
+        _ -> \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "_ outside of match" do
+      code = """
+      {1, _, [\
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "parallel bitstring match" do
+      code = """
+      <<foo>> = <<baz>> = \
+      """
+      assert get_cursor_env(code)
+    end
+  end
 end
