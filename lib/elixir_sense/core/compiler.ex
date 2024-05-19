@@ -405,8 +405,6 @@ defmodule ElixirSense.Core.Compiler do
   # Functions
 
   defp do_expand({:&, meta, [{:super, super_meta, args} = expr]}, s, e) when is_list(args) do
-    assert_no_match_or_guard_scope(e.context, "&")
-
     case resolve_super(meta, length(args), s, e) do
       {kind, name, _} when kind in [:def, :defp] ->
         expand_fn_capture(meta, {name, super_meta, args}, s, e)
@@ -422,8 +420,6 @@ defmodule ElixirSense.Core.Compiler do
          e
        )
        when is_atom(context) and is_integer(arity) do
-    assert_no_match_or_guard_scope(e.context, "&")
-
     case resolve_super(meta, arity, s, e) do
       {kind, name, _} when kind in [:def, :defp] ->
 
@@ -443,37 +439,31 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp do_expand({:&, meta, [arg]}, s, e) do
-    assert_no_match_or_guard_scope(e.context, "&")
     expand_fn_capture(meta, arg, s, e)
   end
 
   defp do_expand({:fn, meta, pairs}, s, e) do
-    assert_no_match_or_guard_scope(e.context, "fn")
     __MODULE__.Fn.expand(meta, pairs, s, e)
   end
 
   # case/cond/try/receive
 
   defp do_expand({:cond, meta, [opts]}, s, e) do
-    assert_no_match_or_guard_scope(e.context, "cond")
     # elixir raises underscore_in_cond if the last clause is _
     {e_clauses, sc, ec} = __MODULE__.Clauses.cond(meta, opts, s, e)
     {{:cond, meta, [e_clauses]}, sc, ec}
   end
 
   defp do_expand({:case, meta, [expr, options]}, s, e) do
-    assert_no_match_or_guard_scope(e.context, "case")
     expand_case(meta, expr, options, s, e)
   end
 
   defp do_expand({:receive, meta, [opts]}, s, e) do
-    assert_no_match_or_guard_scope(e.context, "receive")
     {e_clauses, sc, ec} = __MODULE__.Clauses.receive(meta, opts, s, e)
     {{:receive, meta, [e_clauses]}, sc, ec}
   end
 
   defp do_expand({:try, meta, [opts]}, s, e) do
-    assert_no_match_or_guard_scope(e.context, "try")
     {e_clauses, sc, ec} = __MODULE__.Clauses.try(meta, opts, s, e)
     {{:try, meta, [e_clauses]}, sc, ec}
   end
@@ -481,7 +471,6 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:for, _, [_ | _]} = expr, s, e), do: expand_for(expr, s, e, true)
 
   defp do_expand({:with, meta, [_ | _] = args}, s, e) do
-    assert_no_match_or_guard_scope(e.context, "with")
     __MODULE__.Clauses.with(meta, args, s, e)
   end
 
@@ -829,7 +818,6 @@ defmodule ElixirSense.Core.Compiler do
          state,
          env
        ) do
-    assert_no_match_or_guard_scope(env.context, :"def/2")
     module = assert_module_scope(env, :def, 2)
 
     {position, end_position} = extract_range(meta)
@@ -875,7 +863,6 @@ defmodule ElixirSense.Core.Compiler do
          env
        ) do
     assert_module_scope(env, :@, 1)
-    unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -896,7 +883,6 @@ defmodule ElixirSense.Core.Compiler do
          env
        ) do
     assert_module_scope(env, :@, 1)
-    unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -927,7 +913,6 @@ defmodule ElixirSense.Core.Compiler do
        )
        when doc in [:doc, :typedoc] do
     assert_module_scope(env, :@, 1)
-    unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -953,7 +938,6 @@ defmodule ElixirSense.Core.Compiler do
          env
        ) do
     assert_module_scope(env, :@, 1)
-    unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -980,7 +964,6 @@ defmodule ElixirSense.Core.Compiler do
          env
        ) do
     assert_module_scope(env, :@, 1)
-    unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -1006,7 +989,6 @@ defmodule ElixirSense.Core.Compiler do
          env
        ) do
     assert_module_scope(env, :@, 1)
-    unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -1032,7 +1014,6 @@ defmodule ElixirSense.Core.Compiler do
          env
        ) do
     current_module = assert_module_scope(env, :@, 1)
-    unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
 
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
@@ -1092,7 +1073,6 @@ defmodule ElixirSense.Core.Compiler do
        )
        when kind in [:type, :typep, :opaque] do
     assert_module_scope(env, :@, 1)
-    unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
 
     {expr, state, env} = __MODULE__.Typespec.expand_type(expr, state, env)
 
@@ -1135,7 +1115,6 @@ defmodule ElixirSense.Core.Compiler do
        )
        when kind in [:callback, :macrocallback, :spec] do
     assert_module_scope(env, :@, 1)
-    unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
 
     {expr, state, env} = __MODULE__.Typespec.expand_spec(expr, state, env)
 
@@ -1188,7 +1167,6 @@ defmodule ElixirSense.Core.Compiler do
        )
        when is_atom(name) do
     assert_module_scope(env, :@, 1)
-    unless env.function, do: assert_no_match_or_guard_scope(env.context, "@/1")
     line = Keyword.fetch!(meta, :line)
     column = Keyword.get(meta, :column, 1)
 
@@ -1316,7 +1294,6 @@ defmodule ElixirSense.Core.Compiler do
          env
        )
        when call in [:defrecord, :defrecordp] do
-    assert_no_match_or_guard_scope(env.context, :"{call}/2")
     module = assert_module_scope(env, call, 2)
 
     {position = {line, column}, end_position} = extract_range(meta)
@@ -1485,7 +1462,6 @@ defmodule ElixirSense.Core.Compiler do
        ) do
     %{vars: vars, unused: unused} = state
     original_env = env
-    assert_no_match_or_guard_scope(env.context, "defmodule/2")
 
     {expanded, _state, _env} = expand(alias, state, env)
 
@@ -1605,7 +1581,6 @@ defmodule ElixirSense.Core.Compiler do
        when def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
     # dbg(call)
     # dbg(expr)
-    assert_no_match_or_guard_scope(env.context, :"{def_kind}/2")
     _module = assert_module_scope(env, def_kind, 2)
 
     %{vars: vars, unused: unused} = state
@@ -2132,7 +2107,6 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_for({:for, meta, [_ | _] = args}, s, e, return) do
-    assert_no_match_or_guard_scope(e.context, "for")
     {cases, block} = __MODULE__.Utils.split_opts(args)
     block = sanitize_opts([:do, :into, :uniq, :reduce], block)
 
@@ -2339,23 +2313,6 @@ defmodule ElixirSense.Core.Compiler do
 
   defp assert_no_guard_scope(context, exp) do
     case context do
-      :guard ->
-        raise ArgumentError,
-              "invalid expression in guard, #{exp} is not allowed in guards. " <>
-                "To learn more about guards, visit: https://hexdocs.pm/elixir/patterns-and-guards.html"
-
-      _ ->
-        :ok
-    end
-  end
-
-  defp assert_no_match_or_guard_scope(context, exp) do
-    case context do
-      :match ->
-        raise ArgumentError,
-          "invalid expression in match, #{exp} is not allowed in patterns " <>
-            "such as function clauses, case clauses or on the left side of the = operator"
-
       :guard ->
         raise ArgumentError,
               "invalid expression in guard, #{exp} is not allowed in guards. " <>
@@ -3547,11 +3504,11 @@ defmodule ElixirSense.Core.Compiler do
       else
         false
       end
-      |> dbg
+
       handle_capture(res, import_meta, import_meta, expr, s, e, sequential)
     end
 
-    defp capture_require({{:., dot_meta, [left, right]}, require_meta, args} = o, s, e, sequential) do
+    defp capture_require({{:., dot_meta, [left, right]}, require_meta, args}, s, e, sequential) do
       case escape(left, []) do
         {esc_left, []} ->
           {e_left, se, ee} = ElixirExpand.expand(esc_left, s, e)
