@@ -1699,5 +1699,20 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
       assert get_cursor_env(code)
     end
+
+    test "match in guard" do
+      code = """
+      cond do
+        x when x = \
+      """
+      assert get_cursor_env(code)
+    end
+
+    test "stacktrace in match" do
+      code = """
+      __STACKTRACE__ = \
+      """
+      assert get_cursor_env(code)
+    end
   end
 end

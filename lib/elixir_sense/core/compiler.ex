@@ -25,7 +25,7 @@ defmodule ElixirSense.Core.Compiler do
   # =/2
 
   defp do_expand({:=, meta, [left, right]}, s, e) do
-    assert_no_guard_scope(e.context, "=/2")
+    # elixir validates we are not in guard context
     {e_right, sr, er} = expand(right, s, e)
     # dbg(sr)
     # dbg(e_right)
@@ -271,10 +271,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp do_expand({:__CALLER__, meta, ctx} = caller, s, e) when is_atom(ctx) do
-    assert_no_match_scope(e.context, "__CALLER__")
-    # unless s.caller do
-    #   function_error(meta, e, __MODULE__, :caller_not_allowed)
-    # end
+    # elixir checks if context is not match and if caller is allowed
     line = Keyword.get(meta, :line, 0)
     s = if line > 0, do: add_current_env_to_line(s, line, e), else: s
 
@@ -282,10 +279,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp do_expand({:__STACKTRACE__, meta, ctx} = stacktrace, s, e) when is_atom(ctx) do
-    assert_no_match_scope(e.context, "__STACKTRACE__")
-    # unless s.stacktrace do
-    #   function_error(meta, e, __MODULE__, :stacktrace_not_allowed)
-    # end
+    # elixir checks if context is not match and if stacktrace is allowed
     line = Keyword.get(meta, :line, 0)
     s = if line > 0, do: add_current_env_to_line(s, line, e), else: s
 
@@ -293,8 +287,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp do_expand({:__ENV__, meta, ctx}, s, e) when is_atom(ctx) do
-    assert_no_match_scope(e.context, "__ENV__")
-
+    # elixir checks if context is not match
     line = Keyword.get(meta, :line, 0)
     s = if line > 0, do: add_current_env_to_line(s, line, e), else: s
 
@@ -303,8 +296,7 @@ defmodule ElixirSense.Core.Compiler do
 
   defp do_expand({{:., dot_meta, [{:__ENV__, meta, atom}, field]}, call_meta, []}, s, e)
        when is_atom(atom) and is_atom(field) do
-    assert_no_match_scope(e.context, "__ENV__")
-
+    # elixir checks if context is not match
     line = Keyword.get(call_meta, :line, 0)
     s = if line > 0, do: add_current_env_to_line(s, line, e), else: s
 
@@ -1182,8 +1174,8 @@ defmodule ElixirSense.Core.Compiler do
 
         [_] ->
           # @attribute(arg)
-          if env.function, do: raise("cannot set attribute @#{name} inside function/macro")
-          if name == :behavior, do: raise("@behavior attribute is not supported")
+          if env.function, do: raise "cannot set attribute @#{name} inside function/macro"
+          if name == :behavior, do: raise "@behavior attribute is not supported"
           {true, expand_args(args, state, env)}
 
         args ->
@@ -2298,28 +2290,6 @@ defmodule ElixirSense.Core.Compiler do
     case env.module do
       nil -> raise ArgumentError, "cannot invoke #{fun}/#{arity} outside module"
       mod -> mod
-    end
-  end
-
-  defp assert_no_match_scope(context, _exp) do
-    case context do
-      :match ->
-        raise "invalid_pattern_in_match"
-
-      _ ->
-        :ok
-    end
-  end
-
-  defp assert_no_guard_scope(context, exp) do
-    case context do
-      :guard ->
-        raise ArgumentError,
-              "invalid expression in guard, #{exp} is not allowed in guards. " <>
-                "To learn more about guards, visit: https://hexdocs.pm/elixir/patterns-and-guards.html"
-
-      _ ->
-        :ok
     end
   end
 
