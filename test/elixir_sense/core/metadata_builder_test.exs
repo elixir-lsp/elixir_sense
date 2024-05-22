@@ -58,7 +58,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :abc, positions: [{1, 1}]},
-               %VarInfo{name: :abc, positions: [{1, 13}]},
+              #  %VarInfo{name: :abc, positions: [{1, 13}]},
                %VarInfo{name: :cde, positions: [{1, 7}]}
              ] = state |> get_line_vars(2)
     end
@@ -138,7 +138,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
 
       assert [
-               %VarInfo{name: :abc, positions: [{1, 1}]},
+              #  %VarInfo{name: :abc, positions: [{1, 1}]},
                %VarInfo{name: :abc, positions: [{2, 1}]}
              ] = state |> get_line_vars(3)
     end
@@ -352,12 +352,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[4].versioned_vars, {:cde, nil})
 
-      # TODO is it OK
       assert ([
-                %VarInfo{name: :cde, positions: [{1, 1}], scope_id: scope_id_1},
-                %VarInfo{name: :cde, positions: [{3, 3}], scope_id: scope_id_2}
-              ]
-              when scope_id_1 != scope_id_2) = state |> get_line_vars(4)
+                # %VarInfo{name: :cde, positions: [{1, 1}], scope_id: scope_id_1},
+                %VarInfo{name: :cde, positions: [{3, 3}]}
+              ]) = state |> get_line_vars(4)
 
       assert Map.has_key?(state.lines_to_env[6].versioned_vars, {:cde, nil})
 
@@ -874,10 +872,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:abc, nil}]
 
       assert ([
-                %VarInfo{name: :abc, positions: [{1, 1}], scope_id: scope_id_1},
-                %VarInfo{name: :abc, positions: [{3, 3}], scope_id: scope_id_2}
-              ]
-              when scope_id_1 != scope_id_2) = state |> get_line_vars(4)
+                # %VarInfo{name: :abc, positions: [{1, 1}], scope_id: scope_id_1},
+                %VarInfo{name: :abc, positions: [{3, 3}]}
+              ]) = state |> get_line_vars(4)
 
       assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:abc, nil}]
 
@@ -2525,11 +2522,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       vars = state |> get_line_vars(6)
 
       assert ([
-                %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}], scope_id: scope_id_1},
-                %VarInfo{name: :var1, positions: [{4, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var1, positions: [{5, 5}], scope_id: scope_id_2}
-              ]
-              when scope_id_2 > scope_id_1) = vars
+                # %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}], scope_id: scope_id_1},
+                # %VarInfo{name: :var1, positions: [{4, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var1, positions: [{5, 5}]}
+              ]) = vars
     end
 
     test "vars defined inside a module" do

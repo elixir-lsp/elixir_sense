@@ -674,8 +674,13 @@ defmodule ElixirSense.Core.Compiler do
         # Transform to remote call - we may need to do rewrites
         expand({{:., meta, [module, fun]}, meta, args}, state, env)
 
-      :error ->
+      {:error, :not_found} ->
         expand_local(meta, fun, args, state, env)
+      
+      {:error, {:conflict, _module}} ->
+        raise "conflict"
+      {:error, {:ambiguous, _module}} ->
+        raise "ambiguous"
     end
   end
 
@@ -1550,9 +1555,10 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_macro(meta, Kernel, def_kind, [call, expr], _callback, state, env = %{module: module}) when module != nil
-       when def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
+       and def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
     # dbg(call)
     # dbg(expr)
+    # dbg(def_kind)
 
     %{vars: vars, unused: unused} = state
 
@@ -1598,7 +1604,7 @@ defmodule ElixirSense.Core.Compiler do
       case name_and_args do
         {n, m, a} when is_atom(n) and is_atom(a) -> {n, m, []}
         {n, m, a} when is_atom(n) and is_list(a) -> {n, m, a}
-        _ -> raise "invalid_def"
+        _ -> raise "invalid_def #{inspect(name_and_args)}"
       end
 
     {_e_args, state, a_env} =
