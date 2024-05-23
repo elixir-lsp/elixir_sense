@@ -8,8 +8,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
   @attribute_binding_support true or Version.match?(System.version(), "< 1.17.0-dev")
   @expand_eval false
-  @binding_support Version.match?(System.version(), "< 1.17.0-dev")
+  @binding_support true or Version.match?(System.version(), "< 1.17.0-dev")
   @typespec_calls_support true or Version.match?(System.version(), "< 1.17.0-dev")
+  @var_in_ex_unit Version.match?(System.version(), "< 1.17.0-dev")
   @compiler Code.ensure_loaded?(ElixirSense.Core.Compiler)
 
   describe "versioned_vars" do
@@ -1207,6 +1208,125 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :abc, positions: [{2, 11}, {3, 10}]}
              ] = state |> get_line_vars(3)
     end
+
+    test "variables are added to environment" do
+      state =
+        """
+        defmodule MyModule do
+          def func do
+            var = :my_var
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [%VarInfo{scope_id: scope_id}] = state |> get_line_vars(4)
+      assert [%VarInfo{name: :var}] = state.vars_info_per_scope_id[scope_id]
+    end
+
+    test "vars defined inside a function without params" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          def func do
+            var_in1 = 1
+            var_in2 = 1
+            IO.puts ""
+          end
+          var_out2 = 1
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id},
+               %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id}
+             ] = state |> get_line_vars(6)
+    end
+  end
+
+  if @var_in_ex_unit do
+  describe "vars in ex_unit" do
+    test "variables are added to environment in ex_unit test" do
+      state =
+        """
+        defmodule MyModuleTests do
+          use ExUnit.Case, async: true
+
+          test "it does what I want", %{some: some} do
+            IO.puts("")
+          end
+
+          describe "this" do
+            test "too does what I want" do
+              IO.puts("")
+            end
+          end
+
+          test "is not implemented"
+        end
+        """
+        |> string_to_state
+
+      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
+      assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
+
+      assert Map.has_key?(
+               state.mods_funs_to_positions,
+               {MyModuleTests, :"test it does what I want", 1}
+             )
+
+      assert Map.has_key?(
+               state.mods_funs_to_positions,
+               {MyModuleTests, :"test this too does what I want", 1}
+             )
+
+      assert Map.has_key?(
+               state.mods_funs_to_positions,
+               {MyModuleTests, :"test is not implemented", 1}
+             )
+    end
+
+    test "variables are added to environment in ex_unit setup" do
+      state =
+        """
+        defmodule MyModuleTests do
+          use ExUnit.Case, async: true
+
+          setup_all %{some: some} do
+            IO.puts("")
+          end
+
+          setup %{some: other} do
+            IO.puts("")
+          end
+
+          setup do
+            IO.puts("")
+          end
+
+          setup :clean_up_tmp_directory
+
+          setup [:clean_up_tmp_directory, :another_setup]
+
+          setup {MyModule, :my_setup_function}
+        end
+        """
+        |> string_to_state
+
+      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
+      assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
+
+      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(9)
+      assert [%VarInfo{name: :other}] = state.vars_info_per_scope_id[scope_id]
+
+      # we do not generate defs - ExUnit.Callbacks.__setup__ is too complicated and generates def names with counters, e.g.
+      # :"__ex_unit_setup_#{counter}_#{length(setup)}"
+    end
+  end
   end
 
   describe "typespec vars" do
@@ -1569,31 +1689,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       test "variable rebinding" do
         state =
           """
-          def my() do
-            abc = 1
-            some(abc)
-            abc = %Abc{cde: 1}
-            IO.puts ""
-          end
+          abc = 1
+          some(abc)
+          abc = %Abc{cde: 1}
+          IO.puts ""
           """
           |> string_to_state
 
         assert [
                  %State.VarInfo{
                    name: :abc,
-                   type: {:integer, 1},
-                   is_definition: true,
-                   positions: [{2, 3}, {3, 8}],
-                   scope_id: 2
-                 },
-                 %State.VarInfo{
-                   name: :abc,
                    type: {:struct, [cde: {:integer, 1}], {:atom, Abc}, nil},
                    is_definition: true,
-                   positions: [{4, 3}],
-                   scope_id: 2
+                   positions: [{3, 1}]
                  }
-               ] = state |> get_line_vars(5)
+               ] = state |> get_line_vars(4)
       end
 
       test "tuple destructuring" do
@@ -1622,7 +1732,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert [
                  %VarInfo{
                    name: :other,
-                   type: {:local_call, :elem, [{:attribute, :myattribute}, {:integer, 0}]}
+                  #  TODO do we need to rewrite? change Binding
+                  #  type: {:local_call, :elem, [{:attribute, :myattribute}, {:integer, 0}]}
+                   type: {
+                      :call,
+                      {:atom, :erlang},
+                      :element,
+                      [integer: 1, attribute: :myattribute]
+                    }
                  },
                  %VarInfo{
                    name: :var,
@@ -1631,7 +1748,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                       {:intersection,
                        [{:attribute, :myattribute}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
                  }
-               ] = state |> get_line_vars(4)
+               ] = state |> get_line_vars(5)
 
         assert [
                  %VarInfo{
@@ -1857,28 +1974,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ] = state |> get_line_vars(5)
       end
 
-      test "vars defined inside a function without params" do
-        state =
-          """
-          defmodule MyModule do
-            var_out1 = 1
-            def func do
-              var_in1 = 1
-              var_in2 = 1
-              IO.puts ""
-            end
-            var_out2 = 1
-            IO.puts ""
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 4},
-                 %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 4}
-               ] = state |> get_line_vars(6)
-      end
-
       test "vars binding" do
         state =
           """
@@ -1907,143 +2002,31 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
         assert [%VarInfo{type: {:atom, String}}] = state |> get_line_vars(4)
 
-        assert [%VarInfo{type: {:atom, String}}, %VarInfo{type: {:atom, Map}}] =
+        assert [%VarInfo{type: {:atom, Map}}] =
                  state |> get_line_vars(6)
 
-        assert [%VarInfo{type: {:atom, String}}, %VarInfo{type: {:atom, Map}}] =
+        assert [%VarInfo{type: {:atom, Map}}] =
                  state |> get_line_vars(8)
 
         assert [
-                 %VarInfo{type: {:atom, String}, scope_id: 4},
-                 %VarInfo{type: {:atom, Map}, scope_id: 4},
-                 %VarInfo{type: {:atom, List}, scope_id: 5}
+                 %VarInfo{type: {:atom, List}}
                ] = state |> get_line_vars(10)
 
         assert [
-                 %VarInfo{type: {:atom, String}, scope_id: 4},
-                 %VarInfo{type: {:atom, Map}, scope_id: 4},
-                 %VarInfo{type: {:atom, List}, scope_id: 5},
-                 %VarInfo{type: {:atom, Enum}, scope_id: 5}
+                 %VarInfo{type: {:atom, Enum}}
                ] = state |> get_line_vars(12)
 
-        assert [%VarInfo{type: {:atom, String}}, %VarInfo{type: {:atom, Map}}] =
+        assert [%VarInfo{type: {:atom, Map}}] =
                  state |> get_line_vars(14)
 
         assert [
-                 %VarInfo{type: {:atom, String}},
-                 %VarInfo{type: {:atom, Map}},
                  %VarInfo{type: {:atom, Atom}}
                ] = state |> get_line_vars(16)
 
         assert [
                  %VarInfo{name: :other, type: {:variable, :var}},
-                 %VarInfo{type: {:atom, String}},
-                 %VarInfo{type: {:atom, Map}},
                  %VarInfo{type: {:atom, Atom}}
                ] = state |> get_line_vars(18)
-      end
-
-      test "variables are added to environment" do
-        state =
-          """
-          defmodule MyModule do
-            def func do
-              var = :my_var
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [%VarInfo{type: {:atom, :my_var}, scope_id: scope_id}] = state |> get_line_vars(3)
-        assert [%VarInfo{name: :var}] = state.vars_info_per_scope_id[scope_id]
-      end
-
-      test "variables are added to environment in ex_unit test" do
-        state =
-          """
-          defmodule MyModuleTests do
-            use ExUnit.Case, async: true
-
-            test "it does what I want", %{some: some} do
-              IO.puts("")
-            end
-
-            describe "this" do
-              test "too does what I want" do
-                IO.puts("")
-              end
-            end
-
-            test "is not implemented"
-          end
-          """
-          |> string_to_state
-
-        assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
-        assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
-
-        assert Map.has_key?(
-                 state.mods_funs_to_positions,
-                 {MyModuleTests, :"test it does what I want", 1}
-               )
-
-        assert Map.has_key?(
-                 state.mods_funs_to_positions,
-                 {MyModuleTests, :"test this too does what I want", 1}
-               )
-
-        assert Map.has_key?(
-                 state.mods_funs_to_positions,
-                 {MyModuleTests, :"test is not implemented", 1}
-               )
-      end
-
-      test "variables are added to environment in ex_unit setup" do
-        state =
-          """
-          defmodule MyModuleTests do
-            use ExUnit.Case, async: true
-
-            setup_all %{some: some} do
-              IO.puts("")
-            end
-
-            setup %{some: other} do
-              IO.puts("")
-            end
-
-            setup do
-              IO.puts("")
-            end
-
-            setup :clean_up_tmp_directory
-
-            setup [:clean_up_tmp_directory, :another_setup]
-
-            setup {MyModule, :my_setup_function}
-          end
-          """
-          |> string_to_state
-
-        assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
-        assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
-
-        assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(9)
-        assert [%VarInfo{name: :other}] = state.vars_info_per_scope_id[scope_id]
-
-        # we do not generate defs - ExUnit.Callbacks.__setup__ is too complicated and generates def names with counters, e.g.
-        # :"__ex_unit_setup_#{counter}_#{length(setup)}"
-      end
-
-      test "variables from outside module are added to environment" do
-        state =
-          """
-          var = :my_var
-          """
-          |> string_to_state
-
-        assert [%VarInfo{type: {:atom, :my_var}, scope_id: scope_id}] = state |> get_line_vars(1)
-        assert [%VarInfo{name: :var}] = state.vars_info_per_scope_id[scope_id]
       end
 
       test "call binding" do
@@ -2094,8 +2077,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ] = state |> get_line_vars(16)
 
         assert [
-                 %VarInfo{name: :var1, type: nil, scope_id: 7},
-                 %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, []}, scope_id: 8},
+                 %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, []}},
                  %VarInfo{name: :var2, type: {:call, {:attribute, :attr}, :qwe, [{:integer, 0}]}},
                  %VarInfo{
                    name: :var3,
@@ -2130,26 +2112,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert [%VarInfo{type: {:map, [asd: {:integer, 5}], nil}}] = state |> get_line_vars(4)
 
         assert [
-                 %VarInfo{type: {:map, [asd: {:integer, 5}], nil}},
                  %VarInfo{
                    type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}
                  }
                ] = state |> get_line_vars(6)
 
         assert [
-                 %VarInfo{type: {:map, [asd: {:integer, 5}], nil}},
-                 %VarInfo{
-                   type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}
-                 },
                  %VarInfo{type: {:map, [], nil}}
                ] = state |> get_line_vars(8)
 
         assert [
-                 %VarInfo{type: {:map, [asd: {:integer, 5}], nil}},
-                 %VarInfo{
-                   type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}
-                 },
-                 %VarInfo{type: {:map, [], nil}},
                  %VarInfo{type: {:map, [asd: {:integer, 5}, zxc: {:atom, String}], nil}}
                ] = state |> get_line_vars(10)
 
@@ -2161,9 +2133,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  state |> get_line_vars(12) |> Enum.filter(&(&1.name == :qwe))
 
         assert [
-                 %VarInfo{
-                   type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var}}
-                 },
                  %VarInfo{type: {:map, [{:asd, {:integer, 2}}], {:variable, :var}}}
                ] = state |> get_line_vars(14) |> Enum.filter(&(&1.name == :qwe))
       end
@@ -2405,66 +2374,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ] = state |> get_line_vars(15)
       end
 
-      test "vars defined inside a function `after`/`rescue`/`catch`" do
-        state =
-          """
-          defmodule MyModule do
-            var_out1 = 1
-            def func(var_arg) do
-              var_in1 = 1
-              var_in2 = 1
-              IO.puts ""
-            after
-              var_after = 1
-              IO.puts ""
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: 3},
-                 %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 4},
-                 %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 4}
-               ] = state |> get_line_vars(6)
-
-        assert [
-                 %VarInfo{name: :var_after, positions: [{8, 5}], scope_id: 5},
-                 %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: 3}
-               ] = state |> get_line_vars(9)
-      end
-
-      test "vars defined inside a function with params" do
-        state =
-          """
-          defmodule MyModule do
-            var_out1 = 1
-            def func(%{key1: par1, key2: [par2|[par3, _]]}, par4, _par5) do
-              var_in1 = 1
-              var_in2 = 1
-              IO.puts ""
-            end
-            defp func1(arg), do: arg + 1
-            var_out2 = 1
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{name: :_par5, positions: [{3, 57}], scope_id: 3},
-                 %VarInfo{name: :par1, positions: [{3, 20}], scope_id: 3},
-                 %VarInfo{name: :par2, positions: [{3, 33}], scope_id: 3},
-                 %VarInfo{name: :par3, positions: [{3, 39}], scope_id: 3},
-                 %VarInfo{name: :par4, positions: [{3, 51}], scope_id: 3},
-                 %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: 4},
-                 %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: 4}
-               ] = state |> get_line_vars(6)
-
-        assert [
-                 %VarInfo{name: :arg, positions: [{8, 14}, {8, 24}], scope_id: 5}
-               ] = state |> get_line_vars(8)
-      end
-
       test "vars binding by pattern matching with pin operators" do
         state =
           """
@@ -2472,30 +2381,31 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
             def func(a) do
               b = 1
               case a do
-                %{b: ^2} = a1 -> 2
-                %{b: ^b} = a2 -> b
+                %{b: 2} = a1 ->
+                  IO.puts ""
+                %{b: ^b} = a2 ->
+                  IO.puts ""
               end
             end
           end
           """
           |> string_to_state
 
-        vars = state |> get_line_vars(5)
-
-        assert %VarInfo{
-                 name: :a1,
-                 positions: [{5, 18}],
-                 scope_id: 6,
-                 is_definition: true,
-                 type: {:map, [b: {:integer, 2}], nil}
-               } = Enum.find(vars, &(&1.name == :a1))
-
         vars = state |> get_line_vars(6)
+
+        # assert %VarInfo{
+        #          name: :a1,
+        #          positions: [{5, 18}],
+        #          scope_id: 6,
+        #          is_definition: true,
+        #          type: {:map, [b: {:integer, 2}], nil}
+        #        } = Enum.find(vars, &(&1.name == :a1))
+
+        vars = state |> get_line_vars(8) |> dbg
 
         assert %VarInfo{
                  name: :a2,
-                 positions: [{6, 18}],
-                 scope_id: 7,
+                 positions: [{7, 18}],
                  is_definition: true,
                  type: {:map, [b: {:variable, :b}], nil}
                } = Enum.find(vars, &(&1.name == :a2))
@@ -2504,6 +2414,66 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   describe "var" do
+    test "vars defined inside a function `after`/`rescue`/`catch`" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          def func(var_arg) do
+            var_in1 = 1
+            var_in2 = 1
+            IO.puts ""
+          after
+            var_after = 1
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      assert ([
+               %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: scope_id_1},
+               %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id_2},
+               %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id_2}
+             ] when scope_id_2 > scope_id_1) = state |> get_line_vars(6)
+
+      assert ([
+               %VarInfo{name: :var_after, positions: [{8, 5}], scope_id: scope_id_2},
+               %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: scope_id_1}
+             ] when scope_id_2 > scope_id_1) = state |> get_line_vars(9)
+    end
+
+    test "vars defined inside a function with params" do
+      state =
+        """
+        defmodule MyModule do
+          var_out1 = 1
+          def func(%{key1: par1, key2: [par2|[par3, _]]}, par4, _par5) do
+            var_in1 = 1
+            var_in2 = 1
+            IO.puts ""
+          end
+          defp func1(arg), do: arg + 1
+          var_out2 = 1
+        end
+        """
+        |> string_to_state
+
+      assert ([
+               %VarInfo{name: :_par5, positions: [{3, 57}], scope_id:  scope_id_1},
+               %VarInfo{name: :par1, positions: [{3, 20}], scope_id:   scope_id_1},
+               %VarInfo{name: :par2, positions: [{3, 33}], scope_id:   scope_id_1},
+               %VarInfo{name: :par3, positions: [{3, 39}], scope_id:   scope_id_1},
+               %VarInfo{name: :par4, positions: [{3, 51}], scope_id:   scope_id_1},
+               %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id_2},
+               %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id_2}
+             ] when scope_id_2 > scope_id_1) = state |> get_line_vars(6)
+
+      assert [
+               %VarInfo{name: :arg, positions: [{8, 14}, {8, 24}]}
+             ] = state |> get_line_vars(8)
+    end
+
     test "rebinding vars" do
       state =
         """

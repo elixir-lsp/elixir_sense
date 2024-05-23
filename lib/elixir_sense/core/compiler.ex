@@ -27,9 +27,24 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:=, meta, [left, right]}, s, e) do
     # elixir validates we are not in guard context
     {e_right, sr, er} = expand(right, s, e)
+    match_context_r = TypeInference.get_binding_type(sr, e_right) |> dbg
     # dbg(sr)
     # dbg(e_right)
     {e_left, sl, el} = __MODULE__.Clauses.match(&expand/3, left, sr, s, er)
+    vars_l_with_infered_types = TypeInference.find_vars(sl, e_left, match_context_r)
+    vars_r_with_infered_types = case e.context do
+      :match ->
+        match_context_l = TypeInference.get_binding_type(sl, e_left)
+        TypeInference.find_vars(sr, e_right, match_context_l)
+      _ -> %{}
+    end
+
+    [h | t] = sl.vars_info
+
+    h = h |> Map.merge(vars_r_with_infered_types) |> Map.merge(vars_l_with_infered_types)
+
+    sl = %{sl | vars_info: [Map.merge(h, vars_l_with_infered_types) | t]}
+    # match_context_l = TypeInference.get_binding_type(sl, e_left) |> dbg
 
     # elixir raises parallel_bitstring_match if detected
 

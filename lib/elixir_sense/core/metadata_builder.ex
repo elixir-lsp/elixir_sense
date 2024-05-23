@@ -143,7 +143,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
        when is_atom(name) do
     vars =
       state
-      |> find_vars(params)
+      |> find_vars(params, nil)
 
     _vars =
       if options[:guards],
@@ -504,7 +504,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp pre({:when, meta, [lhs, rhs]}, state) do
     _vars =
       state
-      |> find_vars(lhs)
+      |> find_vars(lhs, nil)
 
     state
     # |> add_vars(vars, true)
@@ -858,217 +858,22 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {ast, state}
   end
 
-  defp find_vars(state, ast, match_context \\ nil)
+  # defp find_vars(state, ast, match_context \\ nil)
 
-  defp find_vars(_state, {var, _meta, nil}, _)
-       when var in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__] do
-    # TODO local calls?
-    []
-  end
+  # defp find_vars(_state, {var, _meta, nil}, _)
+  #      when var in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__] do
+  #   # TODO local calls?
+  #   []
+  # end
 
-  defp find_vars(_state, {var, meta, nil}, :rescue) when is_atom(var) do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-    match_context = {:struct, [], {:atom, Exception}, nil}
-    [%VarInfo{name: var, positions: [{line, column}], type: match_context, is_definition: true}]
-  end
+  # defp find_vars(_state, {var, meta, nil}, :rescue) when is_atom(var) do
+  #   line = Keyword.fetch!(meta, :line)
+  #   column = Keyword.fetch!(meta, :column)
+  #   match_context = {:struct, [], {:atom, Exception}, nil}
+  #   [%VarInfo{name: var, positions: [{line, column}], type: match_context, is_definition: true}]
+  # end
 
-  defp find_vars(state, ast, match_context) do
-    {_ast, {vars, _match_context}} =
-      Macro.prewalk(ast, {[], match_context}, &match_var(state, &1, &2))
-
-    vars
-  end
-
-  defp match_var(
-         state,
-         {:in, _meta,
-          [
-            left,
-            right
-          ]},
-         {vars, _match_context}
-       ) do
-    exception_type =
-      case right do
-        [elem] ->
-          get_binding_type(state, elem)
-
-        list when is_list(list) ->
-          types = for elem <- list, do: get_binding_type(state, elem)
-          if Enum.all?(types, &match?({:atom, _}, &1)), do: {:atom, Exception}
-
-        elem ->
-          get_binding_type(state, elem)
-      end
-
-    match_context =
-      case exception_type do
-        {:atom, atom} -> {:struct, [], {:atom, atom}, nil}
-        _ -> nil
-      end
-
-    match_var(state, left, {vars, match_context})
-  end
-
-  defp match_var(
-         state,
-         {:=, _meta,
-          [
-            left,
-            right
-          ]},
-         {vars, _match_context}
-       ) do
-    {_ast, {vars, _match_context}} =
-      match_var(state, left, {vars, get_binding_type(state, right)})
-
-    {_ast, {vars, _match_context}} =
-      match_var(state, right, {vars, get_binding_type(state, left)})
-
-    {[], {vars, nil}}
-  end
-
-  defp match_var(
-         _state,
-         {:^, _meta, [{var, meta, nil}]},
-         {vars, match_context} = ast
-       )
-       when is_atom(var) do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-    var_info = %VarInfo{name: var, positions: [{line, column}], type: match_context}
-    {ast, {[var_info | vars], nil}}
-  end
-
-  defp match_var(
-         _state,
-         {var, meta, nil} = ast,
-         {vars, match_context}
-       )
-       when is_atom(var) and
-              var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__] do
-    # TODO local calls?
-    # TODO {:__MODULE__, meta, nil} is not expanded here
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-
-    var_info = %VarInfo{
-      name: var,
-      positions: [{line, column}],
-      type: match_context,
-      is_definition: true
-    }
-
-    {ast, {[var_info | vars], nil}}
-  end
-
-  # drop right side of guard expression as guards cannot define vars
-  defp match_var(state, {:when, _, [left, _right]}, {vars, _match_context}) do
-    match_var(state, left, {vars, nil})
-  end
-
-  defp match_var(state, {:%, _, [type_ast, {:%{}, _, ast}]}, {vars, match_context})
-       when not is_nil(match_context) do
-    {_ast, {type_vars, _match_context}} = match_var(state, type_ast, {[], nil})
-
-    destructured_vars =
-      ast
-      |> Enum.flat_map(fn {key, value_ast} ->
-        key_type = get_binding_type(state, key)
-
-        {_ast, {new_vars, _match_context}} =
-          match_var(state, value_ast, {[], {:map_key, match_context, key_type}})
-
-        new_vars
-      end)
-
-    {ast, {vars ++ destructured_vars ++ type_vars, nil}}
-  end
-
-  defp match_var(state, {:%{}, _, ast}, {vars, match_context}) when not is_nil(match_context) do
-    destructured_vars =
-      ast
-      |> Enum.flat_map(fn {key, value_ast} ->
-        key_type = get_binding_type(state, key)
-
-        {_ast, {new_vars, _match_context}} =
-          match_var(state, value_ast, {[], {:map_key, match_context, key_type}})
-
-        new_vars
-      end)
-
-    {ast, {vars ++ destructured_vars, nil}}
-  end
-
-  # regular tuples use {:{}, [], [field_1, field_2]} ast
-  # two element use `{field_1, field_2}` ast (probably as an optimization)
-  # detect and convert to regular
-  defp match_var(state, ast, {vars, match_context})
-       when is_tuple(ast) and tuple_size(ast) == 2 do
-    match_var(state, {:{}, [], ast |> Tuple.to_list()}, {vars, match_context})
-  end
-
-  defp match_var(state, {:{}, _, ast}, {vars, match_context}) when not is_nil(match_context) do
-    indexed = ast |> Enum.with_index()
-    total = length(ast)
-
-    destructured_vars =
-      indexed
-      |> Enum.flat_map(fn {nth_elem_ast, n} ->
-        bond =
-          {:tuple, total,
-           indexed |> Enum.map(&if(n != elem(&1, 1), do: get_binding_type(state, elem(&1, 0))))}
-
-        match_context =
-          if match_context != bond do
-            {:intersection, [match_context, bond]}
-          else
-            match_context
-          end
-
-        {_ast, {new_vars, _match_context}} =
-          match_var(state, nth_elem_ast, {[], {:tuple_nth, match_context, n}})
-
-        new_vars
-      end)
-
-    {ast, {vars ++ destructured_vars, nil}}
-  end
-
-  # two element tuples on the left of `->` are encoded as list `[field1, field2]`
-  # detect and convert to regular
-  defp match_var(state, {:->, meta, [[left], right]}, {vars, match_context}) do
-    match_var(state, {:->, meta, [left, right]}, {vars, match_context})
-  end
-
-  defp match_var(state, list, {vars, match_context})
-       when not is_nil(match_context) and is_list(list) do
-    match_var_list = fn head, tail ->
-      {_ast, {new_vars_head, _match_context}} =
-        match_var(state, head, {[], {:list_head, match_context}})
-
-      {_ast, {new_vars_tail, _match_context}} =
-        match_var(state, tail, {[], {:list_tail, match_context}})
-
-      {list, {vars ++ new_vars_head ++ new_vars_tail, nil}}
-    end
-
-    case list do
-      [] ->
-        {list, {vars, nil}}
-
-      [{:|, _, [head, tail]}] ->
-        match_var_list.(head, tail)
-
-      [head | tail] ->
-        match_var_list.(head, tail)
-    end
-  end
-
-  defp match_var(_state, ast, {vars, match_context}) do
-    {ast, {vars, match_context}}
-  end
+  
 
   def infer_type_from_guards(guard_ast, vars, state) do
     type_info = Guard.type_information_from_guards(guard_ast, state)
