@@ -237,8 +237,6 @@ defmodule ElixirSense.Core.TypeInference do
        )
        when is_atom(var) and is_atom(context) and
        var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
     version = meta |> Keyword.fetch!(:version)
     var_info = state.vars_info |> hd |> Map.fetch!({var, version})
 
@@ -249,19 +247,12 @@ defmodule ElixirSense.Core.TypeInference do
 
   defp match_var(
          state,
-         {var, meta, context} = ast,
+         {var, meta, context},
          {vars, match_context}
        )
        when is_atom(var) and is_atom(context) and
               var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
     # TODO local calls?
-    # TODO {:__MODULE__, meta, nil} is not expanded here
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-
-    dbg(state.vars)
-    dbg(state.vars_info)
-
     version = meta |> Keyword.fetch!(:version)
     var_info = state.vars_info |> hd |> Map.fetch!({var, version})
 

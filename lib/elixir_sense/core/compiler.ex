@@ -544,12 +544,8 @@ defmodule ElixirSense.Core.Compiler do
     expand(arg, s, e)
   end
 
-  defp do_expand({:_, _meta, kind} = var, s, %{context: _context} = e) when is_atom(kind) do
-    # if context != :match, do: function_error(meta, e, __MODULE__, :unbound_underscore)
-    {var, s, e}
-  end
-
-  defp do_expand({:_, _meta, kind} = var, s, %{context: :match} = e) when is_atom(kind) do
+  defp do_expand({:_, _meta, kind} = var, s, e) when is_atom(kind) do
+    # elixir raises unbound_underscore if context is not match
     {var, s, e}
   end
 
@@ -1565,7 +1561,7 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_macro(meta, Kernel, def_kind, [call], callback, state, env)
        when def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
-    # transform guard to def with empty body
+    # transform guard and function head to def with empty body
     expand_macro(meta, Kernel, def_kind, [call, {:__block__, [], []}], callback, state, env)
   end
 
@@ -1601,19 +1597,7 @@ defmodule ElixirSense.Core.Compiler do
         {call, expr}
       end
 
-    # dbg(call)
-    # dbg(expr)
-
-    # state =
-    #   state
-    #   |> add_current_env_to_line(line, env)
-
-    state =
-      %{state | vars: {%{}, false}, unused: 0}
-      |> new_func_vars_scope
-
     {name_and_args, guards} = __MODULE__.Utils.extract_guards(call)
-    # dbg(name_and_args)
 
     {name, _meta_1, args} =
       case name_and_args do
@@ -1622,41 +1606,35 @@ defmodule ElixirSense.Core.Compiler do
         _ -> raise "invalid_def #{inspect(name_and_args)}"
       end
 
-    {_e_args, state, a_env} =
-      expand_args(args, %{state | prematch: {%{}, 0, :none}}, %{env | context: :match})
+    arity = length(args)
 
-    {_e_guard, state, g_env} =
+    # based on :elixir_def.env_for_expansion
+    state = %{state | 
+        vars: {%{}, false},
+        unused: 0,
+        caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
+      }
+      |> new_func_vars_scope
+    env_for_expand = %{env | function: {name, arity}}
+
+    # based on :elixir_clauses.def
+    {_e_args, state, env_for_expand} =
+      expand_args(args, %{state | prematch: {%{}, 0, :none}}, %{env_for_expand | context: :match})
+
+    {_e_guard, state, env_for_expand} =
       __MODULE__.Clauses.guard(
         guards,
         %{state | prematch: :raise},
-        Map.put(a_env, :context, :guard)
+        %{env_for_expand | context: :guard}
       )
 
-    # The env inside the block is discarded.
-    # TODO name_arity from call
-    # TODO expand call
-    # TODO what should it be for macros?
-    # TODO how to handle guards?
-    # {call, e_call, state, env} = case call do
-    #   {:when, meta_2, [call, guard]} ->
-    #     {name, meta_1, args} = call
-    #     {e_args, state, env} = expand_args(args, %{state | prematch: {%{}, 0, :none}}, %{env | context: :match})
-    #     {e_guard, state, env} = expand(guard, state, %{env | context: :guard})
-    #     {{name, meta_1, e_args}, {:when, meta_2, [{name, meta_1, e_args}, e_guard]}, state, env}
-    #   call ->
-    #     {name, meta_1, args} = call
-    #     {e_args, state, _env} = expand_args(args, %{state | prematch: {%{}, 0, :none}}, %{env | context: :match})
-    #     {{name, meta_1, e_args}, {name, meta_1, e_args}, state, env}
-    # end
-
-    # {name, _meta_1, args} = call
-    arity = length(args)
+    env_for_expand = %{env_for_expand | context: nil}
 
     {position, end_position} = extract_range(meta)
 
     state =
       state
-      |> add_current_env_to_line(line, %{g_env | context: nil, function: {name, arity}})
+      |> add_current_env_to_line(line, env_for_expand)
       |> add_func_to_index(
         env,
         name,
@@ -1666,17 +1644,15 @@ defmodule ElixirSense.Core.Compiler do
         def_kind
       )
 
-    # expand_macro_callback(meta, Kernel, def_kind, [call, expr], callback, state, env)
-    # %{state | prematch: :warn}
     # TODO not sure vars scope is needed
     state = state |> new_vars_scope
 
-    {_e_body, state, _env} =
-      expand(expr, state, %{g_env | context: nil, function: {name, arity}})
+    {_e_body, state, _env_for_expand} =
+      expand(expr, state, env_for_expand)
 
     # restore vars from outer scope
     state =
-      %{state | vars: vars, unused: unused}
+      %{state | vars: vars, unused: unused, caller: false}
       |> maybe_move_vars_to_outer_scope
       |> remove_vars_scope
       |> remove_func_vars_scope
@@ -2535,6 +2511,8 @@ defmodule ElixirSense.Core.Compiler do
           e
         )
 
+      # TODO infer type from guard here
+
       {[{:when, meta, e_args ++ [e_guard]}], sg, eg}
     end
 
@@ -2802,6 +2780,7 @@ defmodule ElixirSense.Core.Compiler do
     # rescue var
     defp expand_rescue({name, _, atom} = var, s, e) when is_atom(name) and is_atom(atom) do
       match(&ElixirExpand.expand/3, var, s, s, e)
+      # TODO infer type to Exception here
     end
 
     # rescue Alias => _ in [Alias]
@@ -2817,6 +2796,7 @@ defmodule ElixirSense.Core.Compiler do
          )
          when is_atom(name) and is_atom(var_context) and is_atom(underscore_context) do
       match(&ElixirExpand.expand/3, var, s, s, e)
+      # TODO infer type to Exception here
     end
 
     # rescue var in (list() or atom())
@@ -2827,6 +2807,7 @@ defmodule ElixirSense.Core.Compiler do
       case e_left do
         {name, _, atom} when is_atom(name) and is_atom(atom) ->
           {{:in, meta, [e_left, normalize_rescue(e_right, e)]}, sr, er}
+          # TODO infer type
 
         _ ->
           # elixir rejects this case, we normalize to underscore

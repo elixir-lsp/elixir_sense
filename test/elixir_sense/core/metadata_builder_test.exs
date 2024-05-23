@@ -29,6 +29,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ] = state |> get_line_vars(2)
     end
 
+    test "call does not create a scope" do
+      state =
+        """
+        inspect(abc = 5)
+        record_env()
+        """
+        |> string_to_state
+
+      assert Map.has_key?(state.lines_to_env[2].versioned_vars, {:abc, nil})
+
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 9}]}
+             ] = state |> get_line_vars(2)
+    end
+
     test "nested binding" do
       state =
         """
@@ -1654,6 +1669,45 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           |> string_to_state
 
         assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(2)
+      end
+
+      test "variable binding simple case match context" do
+        state =
+          """
+          case x do
+            var = :my_var ->
+              IO.puts("")
+          end
+          """
+          |> string_to_state
+
+        assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
+      end
+
+      test "variable binding simple case match context reverse order" do
+        state =
+          """
+          case x do
+            :my_var = var ->
+              IO.puts("")
+          end
+          """
+          |> string_to_state
+
+        assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
+      end
+
+      test "variable binding simple case match context guard" do
+        state =
+          """
+          case x do
+            var when is_map(var) ->
+              IO.puts("")
+          end
+          """
+          |> string_to_state
+
+        assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
       end
 
       test "module attributes value binding to and from variables" do

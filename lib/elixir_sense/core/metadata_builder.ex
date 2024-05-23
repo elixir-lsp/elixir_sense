@@ -9,7 +9,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
-  alias ElixirSense.Core.State.VarInfo
   # alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Guard
   alias ElixirSense.Core.Compiler
