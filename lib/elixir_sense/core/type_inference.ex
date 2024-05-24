@@ -252,7 +252,6 @@ defmodule ElixirSense.Core.TypeInference do
        )
        when is_atom(var) and is_atom(context) and
               var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
-    # TODO local calls?
     version = meta |> Keyword.fetch!(:version)
     var_info = state.vars_info |> hd |> Map.fetch!({var, version})
 
@@ -262,12 +261,14 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   # drop right side of guard expression as guards cannot define vars
-  defp match_var(state, {:when, _, [left, _right]}, {vars, _match_context}) do
-    match_var(state, left, {vars, nil})
+  defp match_var(state, {:when, _, [left, _right]}, {vars, match_context}) do
+    # TODO should we infer from guard here?
+    match_var(state, left, {vars, match_context})
   end
 
   defp match_var(state, {:%, _, [type_ast, {:%{}, _, ast}]}, {vars, match_context})
        when not is_nil(match_context) do
+    # TODO pass mach_context here as map __struct__ key access
     {_ast, {type_vars, _match_context}} = match_var(state, type_ast, {[], nil})
 
     destructured_vars =

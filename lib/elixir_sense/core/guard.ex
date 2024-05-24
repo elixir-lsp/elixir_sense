@@ -35,6 +35,8 @@ defmodule ElixirSense.Core.Guard do
     end)
   end
 
+  # TODO does it handle nested when?
+
   def type_information_from_guards(guard_ast, state) do
     {_, acc} =
       Macro.prewalk(guard_ast, [], fn

@@ -27,23 +27,20 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:=, meta, [left, right]}, s, e) do
     # elixir validates we are not in guard context
     {e_right, sr, er} = expand(right, s, e)
-    match_context_r = TypeInference.get_binding_type(sr, e_right) |> dbg
     # dbg(sr)
     # dbg(e_right)
     {e_left, sl, el} = __MODULE__.Clauses.match(&expand/3, left, sr, s, er)
-    vars_l_with_infered_types = TypeInference.find_vars(sl, e_left, match_context_r)
-    vars_r_with_infered_types = case e.context do
+
+    match_context_r = TypeInference.get_binding_type(sr, e_right)
+    vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context_r)
+    vars_r_with_inferred_types = case e.context do
       :match ->
         match_context_l = TypeInference.get_binding_type(sl, e_left)
         TypeInference.find_vars(sr, e_right, match_context_l)
       _ -> %{}
     end
 
-    [h | t] = sl.vars_info
-
-    h = h |> Map.merge(vars_r_with_infered_types) |> Map.merge(vars_l_with_infered_types)
-
-    sl = %{sl | vars_info: [Map.merge(h, vars_l_with_infered_types) | t]}
+    sl = annotate_vars_with_inferred_types(sl, Map.merge(vars_l_with_inferred_types, vars_r_with_inferred_types))
     # match_context_l = TypeInference.get_binding_type(sl, e_left) |> dbg
 
     # elixir raises parallel_bitstring_match if detected
@@ -2126,6 +2123,7 @@ defmodule ElixirSense.Core.Compiler do
         clause = {:->, clause_meta, [args, right]}
         s_reset = __MODULE__.Env.reset_vars(sa)
 
+        # no point in doing type inference here, we are only certain of the initial value of the accumulator
         {e_clause, s_acc, e_acc} =
           __MODULE__.Clauses.clause(meta, :fn, &__MODULE__.Clauses.head/3, clause, s_reset, e)
 
@@ -2152,6 +2150,12 @@ defmodule ElixirSense.Core.Compiler do
     {e_right, sr, er} = expand(right, s, e)
     sm = __MODULE__.Env.reset_read(sr, s)
     {[e_left], sl, el} = __MODULE__.Clauses.head([left], sm, er)
+
+    match_context_r = TypeInference.get_binding_type(sr, e_right) |> dbg
+    vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left |> dbg, {:for_expression, match_context_r}) |> dbg
+
+    sl = State.annotate_vars_with_inferred_types(sl, vars_l_with_inferred_types)
+
     {{:<-, meta, [e_left, e_right]}, sl, el}
   end
 
@@ -2171,6 +2175,7 @@ defmodule ElixirSense.Core.Compiler do
             sm,
             er
           )
+        # no point in doing type inference here, we're only going to find integers and binaries
 
         {{:<<>>, meta, [{:<-, op_meta, [e_left, e_right]}]}, sl, el}
 
@@ -2287,7 +2292,7 @@ defmodule ElixirSense.Core.Compiler do
     #   opts
     # end
 
-    {e_opts, so, eo} = __MODULE__.Clauses.case(meta, r_opts, se, ee)
+    {e_opts, so, eo} = __MODULE__.Clauses.case(meta, e_expr, r_opts, se, ee)
     {{:case, meta, [e_expr, e_opts]}, so, eo}
   end
 
@@ -2436,6 +2441,8 @@ defmodule ElixirSense.Core.Compiler do
     alias ElixirSense.Core.Compiler, as: ElixirExpand
     alias ElixirSense.Core.Compiler.Env, as: ElixirEnv
     alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
+    alias ElixirSense.Core.State
+    alias ElixirSense.Core.TypeInference
 
     def match(fun, expr, after_s, _before_s, %{context: :match} = e) do
       fun.(expr, after_s, e)
@@ -2533,31 +2540,42 @@ defmodule ElixirSense.Core.Compiler do
 
     # case
 
-    def case(meta, [], s, e) do
+    def case(meta, e_expr, [], s, e) do
       # elixir raises here missing_option
       # emit a fake do block
-      case(meta, [do: []], s, e)
+      case(meta, e_expr, [do: []], s, e)
     end
 
-    def case(_meta, opts, s, e) when not is_list(opts) do
+    def case(_meta, _e_expr, opts, s, e) when not is_list(opts) do
       # elixir raises here invalid_args
       # there may be cursor
       ElixirExpand.expand(opts, s, e)
     end
 
-    def case(meta, opts, s, e) do
+    def case(meta, e_expr, opts, s, e) do
       opts = sanitize_opts(opts, [:do])
+
+      match_context = TypeInference.get_binding_type(s, e_expr)
 
       {case_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
-          expand_case(meta, x, sa, e)
+          expand_case(meta, x, match_context, sa, e)
         end)
 
       {case_clauses, sa, e}
     end
 
-    defp expand_case(meta, {:do, _} = do_clause, s, e) do
-      expand_clauses(meta, :case, &head/3, do_clause, s, e)
+    defp expand_case(meta, {:do, _} = do_clause, match_context, s, e) do
+      expand_clauses(meta, :case, fn c, s, e ->
+        case head(c, s, e) do
+          {[h | _] = c, s, e} ->
+            clause_vars_with_inferred_types = TypeInference.find_vars(s, h, match_context)
+            s = State.annotate_vars_with_inferred_types(s, clause_vars_with_inferred_types)
+
+            {c, s, e}
+          other -> other
+        end
+      end, do_clause, s, e)
     end
 
     # cond
@@ -2619,6 +2637,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp expand_receive(meta, {:do, _} = do_clause, s, e) do
+      # no point in doing type inference here, we have no idea what message we may get
       expand_clauses(meta, :receive, &head/3, do_clause, s, e)
     end
 
@@ -2660,6 +2679,11 @@ defmodule ElixirSense.Core.Compiler do
       sm = ElixirEnv.reset_read(sr, s)
       {[e_left], sl, el} = head([left], sm, er)
 
+      match_context_r = TypeInference.get_binding_type(sr, e_right) |> dbg
+      vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left |> dbg, match_context_r) |> dbg
+
+      sl = State.annotate_vars_with_inferred_types(sl, vars_l_with_inferred_types)
+
       {{:<-, meta, [e_left, e_right]}, {sl, el}}
     end
 
@@ -2693,6 +2717,7 @@ defmodule ElixirSense.Core.Compiler do
 
         {expr, rest_opts} ->
           pair = {:else, expr}
+          # no point in doing type inference here, we have no idea what data we are matching against
           {e_pair, se} = expand_clauses(meta, :with, &head/3, pair, s, e)
           {[e_pair], rest_opts, se}
       end
@@ -2733,6 +2758,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp expand_try(meta, {:else, _} = else_clause, s, e) do
+      # TODO we could try to infer type from last try block expression
       expand_clauses(meta, :try, &head/3, else_clause, s, e)
     end
 
@@ -2752,10 +2778,12 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp expand_catch(_meta, args = [_], s, e) do
+      # no point in doing type inference here, we have no idea what throw we caught
       head(args, s, e)
     end
 
     defp expand_catch(_meta, args = [_, _], s, e) do
+      # TODO is it worth to infer type of the first arg? :error | :exit | :throw | {:EXIT, pid()}
       head(args, s, e)
     end
 
@@ -3331,6 +3359,7 @@ defmodule ElixirSense.Core.Compiler do
           # elixir raises defaults_in_args
           s_reset = ElixirEnv.reset_vars(sa)
 
+          # no point in doing type inference here, we have no idea what the fn will be called with
           {e_clause, s_acc, e_acc} =
             ElixirClauses.clause(meta, :fn, &ElixirClauses.head/3, clause, s_reset, e)
 

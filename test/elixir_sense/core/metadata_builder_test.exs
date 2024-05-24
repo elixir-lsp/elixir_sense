@@ -1700,14 +1700,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       test "variable binding simple case match context guard" do
         state =
           """
-          case x do
-            var when is_map(var) ->
+          receive do
+            [v = :ok, var] when is_map(var) ->
               IO.puts("")
           end
           """
           |> string_to_state
 
-        assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
+        assert [%VarInfo{type: {:atom, :ok}}, %VarInfo{type: {:map, [], []}}] = state |> get_line_vars(3)
       end
 
       test "module attributes value binding to and from variables" do
@@ -2026,6 +2026,65 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  %VarInfo{name: :a, type: {:attribute, :myattribute}},
                  %VarInfo{name: :b, type: {:variable, :a}}
                ] = state |> get_line_vars(5)
+      end
+
+      test "binding in with expression more complex" do
+        state =
+          """
+          defmodule MyModule do
+            @myattribute [:ok, :error, :other]
+            with a <- @myattribute,
+              b = Date.utc_now(),
+              [c | _] <- a do
+              IO.puts
+            end
+          end
+          """
+          |> string_to_state
+
+        assert [
+                 %VarInfo{name: :a, type: {:attribute, :myattribute}},
+                 %VarInfo{name: :b, type: {:call, {:atom, Date}, :utc_now, []}},
+                 %VarInfo{name: :c, type: {:list_head, {:variable, :a}}},
+               ] = state |> get_line_vars(6)
+      end
+
+      test "binding in with expression with guard" do
+        state =
+          """
+          defmodule MyModule do
+            @myattribute [:ok, :error, :other]
+            with [a | _] when is_atom(a) <- @myattribute do
+              IO.puts
+            end
+          end
+          """
+          |> string_to_state
+
+        assert [
+                 %VarInfo{name: :a, type: {:list_head, {:attribute, :myattribute}}},                 
+               ] = state |> get_line_vars(4)
+      end
+
+      test "binding in with expression else" do
+        state =
+          """
+          defmodule MyModule do
+            @myattribute [:ok, :error, :other]
+            with a <- @myattribute do
+              b = a
+              IO.puts
+            else
+              a = :ok ->
+                IO.puts
+            end
+          end
+          """
+          |> string_to_state
+
+        assert [
+                 %VarInfo{name: :a, type: {:atom, :ok}}
+               ] = state |> get_line_vars(8)
       end
 
       test "vars binding" do

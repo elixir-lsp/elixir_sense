@@ -1833,4 +1833,10 @@ defmodule ElixirSense.Core.State do
   end
 
   def maybe_add_protocol_behaviour(state, env), do: {state, env}
+
+  def annotate_vars_with_inferred_types(state, vars_with_inferred_types) do
+    [h | t] = state.vars_info
+    h = Map.merge(h, vars_with_inferred_types)
+    %{state | vars_info: [h | t]}
+  end
 end
