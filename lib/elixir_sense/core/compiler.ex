@@ -5,6 +5,7 @@ defmodule ElixirSense.Core.Compiler do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.TypeInference
+  alias ElixirSense.Core.Guard
 
   @env :elixir_env.new()
   def env, do: @env
@@ -1618,12 +1619,16 @@ defmodule ElixirSense.Core.Compiler do
     {_e_args, state, env_for_expand} =
       expand_args(args, %{state | prematch: {%{}, 0, :none}}, %{env_for_expand | context: :match})
 
-    {_e_guard, state, env_for_expand} =
+    {e_guard, state, env_for_expand} =
       __MODULE__.Clauses.guard(
         guards,
         %{state | prematch: :raise},
         %{env_for_expand | context: :guard}
       )
+
+    type_info = Guard.type_information_from_guards(e_guard |> dbg, state) |> dbg
+
+    state = merge_inferred_types(state, type_info)
 
     env_for_expand = %{env_for_expand | context: nil}
 
@@ -2509,6 +2514,10 @@ defmodule ElixirSense.Core.Compiler do
 
             {e_guard, sg, eg} =
               guard(guard, %{sa | prematch: prematch}, %{ea | context: :guard})
+
+            type_info = Guard.type_information_from_guards(e_guard |> dbg, sg) |> dbg
+
+            sg = merge_inferred_types(sg, type_info)
 
             {{e_args, e_guard}, sg, eg}
           end,

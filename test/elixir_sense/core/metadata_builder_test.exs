@@ -1707,7 +1707,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           """
           |> string_to_state
 
-        assert [%VarInfo{type: {:atom, :ok}}, %VarInfo{type: {:map, [], []}}] = state |> get_line_vars(3)
+        assert [%VarInfo{type: {:atom, :ok}}, %VarInfo{type: {:map, [], nil}}] = state |> get_line_vars(3)
       end
 
       test "module attributes value binding to and from variables" do
@@ -3402,7 +3402,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         defmodule MyModule do
           def func(x) when #{guard} do
-            x
+            IO.puts ""
           end
         end
         """
@@ -3433,6 +3433,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert %VarInfo{name: :x, type: :bitstring} = var_with_guards("is_bitstring(x)")
         assert %VarInfo{name: :x, type: :bitstring} = var_with_guards("bit_size(x) == 1")
         assert %VarInfo{name: :x, type: :bitstring} = var_with_guards("byte_size(x) == 1")
+      end
+
+      test "multiple guards" do
+        assert %VarInfo{name: :x, type: {:union, [:bitstring, :number]}} = var_with_guards("is_bitstring(x) when is_integer(x)")
       end
 
       test "list guards" do
@@ -3482,7 +3486,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    alias URI, as: MyURI
 
                    def func(x) when is_struct(x, MyURI) do
-                     x
+                     IO.puts ""
                    end
                  end
                  """

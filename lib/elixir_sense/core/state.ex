@@ -1839,4 +1839,21 @@ defmodule ElixirSense.Core.State do
     h = Map.merge(h, vars_with_inferred_types)
     %{state | vars_info: [h | t]}
   end
+
+  def merge_inferred_types(state, []), do: state
+  def merge_inferred_types(state, inferred_types) do
+    [h | t] = state.vars_info
+
+    h = for {{var, version}, type} <- inferred_types, reduce: h do
+      acc ->
+        updated_var = case acc[{var, version}] do
+          %VarInfo{type: nil} = v -> %{v | type: type}
+          %VarInfo{type: ^type} = v -> v
+          %VarInfo{type: old_type} = v -> %{v | type: {:intersection, [type, old_type]}}
+        end
+        Map.put(acc, {var, version}, updated_var)
+    end
+
+    %{state | vars_info: [h | t]}
+  end
 end

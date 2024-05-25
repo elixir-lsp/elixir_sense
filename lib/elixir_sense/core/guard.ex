@@ -14,6 +14,27 @@ defmodule ElixirSense.Core.Guard do
   #
   # type information from :and subtrees are mergeable
   # type information from :or subtrees are discarded
+  def type_information_from_guards(list, state) when is_list(list) do
+    for expr <- list, reduce: %{} do
+      acc ->
+        right = type_information_from_guards(expr, state)
+        Map.merge(acc, right, fn _k, v1, v2 ->
+          case {v1, v2} do
+            {{:union, types_1}, {:union, types_2}} -> {:union, types_1 ++ types_2}
+            {{:union, types}, _} -> {:union, types ++ [v2]}
+            {_, {:union, types}} -> {:union, [v1 | types]}
+            _ -> {:union, [v1, v2]}
+          end
+        end)
+    end
+  end
+  def type_information_from_guards({{:., _, [:erlang, :andalso]}, _, [guard_l, guard_r]}, state) do
+    left = type_information_from_guards(guard_l, state)
+    right = type_information_from_guards(guard_r, state)
+
+    Map.merge(left, right, fn _k, v1, v2 -> {:intersection, [v1, v2]} end)
+  end
+  # TODO remove?
   def type_information_from_guards({:and, _, [guard_l, guard_r]}, state) do
     left = type_information_from_guards(guard_l, state)
     right = type_information_from_guards(guard_r, state)
@@ -21,6 +42,21 @@ defmodule ElixirSense.Core.Guard do
     Keyword.merge(left, right, fn _k, v1, v2 -> {:intersection, [v1, v2]} end)
   end
 
+  def type_information_from_guards({{:., _, [:erlang, :orelse]}, _, [guard_l, guard_r]}, state) do
+    left = type_information_from_guards(guard_l, state)
+    right = type_information_from_guards(guard_r, state)
+
+    Map.merge(left, right, fn _k, v1, v2 ->
+      case {v1, v2} do
+        {{:union, types_1}, {:union, types_2}} -> {:union, types_1 ++ types_2}
+        {{:union, types}, _} -> {:union, types ++ [v2]}
+        {_, {:union, types}} -> {:union, [v1 | types]}
+        _ -> {:union, [v1, v2]}
+      end
+    end)
+  end
+
+  # TODO remove
   def type_information_from_guards({:or, _, [guard_l, guard_r]}, state) do
     left = type_information_from_guards(guard_l, state)
     right = type_information_from_guards(guard_r, state)
@@ -39,17 +75,32 @@ defmodule ElixirSense.Core.Guard do
 
   def type_information_from_guards(guard_ast, state) do
     {_, acc} =
-      Macro.prewalk(guard_ast, [], fn
+      Macro.prewalk(guard_ast, %{}, fn
         # Standalone variable: func my_func(x) when x
-        {var, _, nil} = node, acc ->
-          {node, [{var, :boolean} | acc]}
+        {var, meta, context} = node, acc when is_atom(var) and is_atom(context) ->
+          version = Keyword.fetch!(meta, :version)
+          {node, Map.put(acc, {var, version}, :boolean)}
 
+        {{:., _dot_meta, [:erlang, fun]}, _call_meta, params} = node, acc when is_atom(fun) ->
+          case guard_predicate_type(fun, params, state) do
+            {type, binding} ->
+              {var, meta, _context} = binding
+              # If we found the predicate type, we can prematurely exit traversing the subtree
+              version = Keyword.fetch!(meta, :version)
+              {[], Map.put(acc, {var, version}, type)}
+
+            nil ->
+              {node, acc}
+          end
+
+        # TODO can we drop this clause?
         {guard_predicate, _, params} = node, acc ->
           case guard_predicate_type(guard_predicate, params, state) do
             {type, binding} ->
-              {var, _, nil} = binding
+              {var, meta, _context} = binding
               # If we found the predicate type, we can prematurely exit traversing the subtree
-              {[], [{var, type} | acc]}
+              version = Keyword.fetch!(meta, :version)
+              {[], Map.put(acc, {var, version}, type)}
 
             nil ->
               {node, acc}
