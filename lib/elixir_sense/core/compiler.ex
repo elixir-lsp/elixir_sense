@@ -332,15 +332,13 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp do_expand({:quote, meta, [opts]}, s, e) when is_list(opts) do
-    case Keyword.fetch(opts, :do) do
-      {:ok, do_block} ->
-        new_opts = Keyword.delete(opts, :do)
-        expand({:quote, meta, [new_opts, [{:do, do_block}]]}, s, e)
-
-      :error ->
+    case Keyword.pop(opts, :do) do
+      {nil, _} ->
         # elixir raises here missing_option
         # generate a fake do block
         expand({:quote, meta, [opts, [{:do, {:__block__, [], []}}]]}, s, e)
+      {do_block, new_opts} ->
+        expand({:quote, meta, [new_opts, [{:do, do_block}]]}, s, e)
     end
   end
 
@@ -368,7 +366,7 @@ defmodule ElixirSense.Core.Compiler do
 
     {file, line} =
       case Keyword.fetch(e_opts, :location) do
-        {:ok, :keep} -> {e.file, false}
+        {:ok, :keep} -> {e.file, true}
         :error -> {Keyword.get(e_opts, :file, nil), Keyword.get(e_opts, :line, false)}
       end
 
@@ -394,11 +392,27 @@ defmodule ElixirSense.Core.Compiler do
     # res = expand_quote(exprs, st, et)
     # res |> elem(0) |> IO.inspect
     # res
-    {q, prelude} =
-      __MODULE__.Quote.build(meta, line, file, context, unquote_opt, generated)
+    {q, q_context, q_prelude} =
+      __MODULE__.Quote.build(meta, line, file, context, unquote_opt, generated, et)
 
-    quoted = __MODULE__.Quote.quote(meta, exprs, binding, q, prelude, et)
-    expand(quoted, st, et)
+    {e_prelude, sp, ep} = expand(q_prelude, st, et)
+    {e_context, sc, ec} = expand(q_context, sp, ep)
+    quoted = __MODULE__.Quote.quote(exprs, q)
+    {e_quoted, es, eq} = expand(quoted, sc, ec)
+
+    e_binding = for {k, v} <- binding do
+      {:{}, [], [:=, [], [{:{}, [], [k, meta, e_context]}, v]]}
+    end
+
+    e_binding_quoted = case e_binding do
+      [] -> e_quoted
+      _ -> {:{}, [], [:__block__, [], e_binding ++ [e_quoted]]}
+    end
+
+    case e_prelude do
+      [] -> {e_binding_quoted, es, eq}
+      _ -> {{:__block__, [], e_prelude ++ [e_binding_quoted]}, es, eq}
+    end
   end
 
   defp do_expand({:quote, meta, [arg1, arg2]}, s, e) do
@@ -3587,9 +3601,9 @@ defmodule ElixirSense.Core.Compiler do
     defstruct line: false,
               file: nil,
               context: nil,
-              vars_hygiene: true,
-              aliases_hygiene: true,
-              imports_hygiene: true,
+              op: :none,
+              aliases_hygiene: nil,
+              imports_hygiene: nil,
               unquote: true,
               generated: false
 
@@ -3644,25 +3658,28 @@ defmodule ElixirSense.Core.Compiler do
     defp disables_unquote([_h | t]), do: disables_unquote(t)
     defp disables_unquote(_), do: false
 
-    def build(meta, line, file, context, unquote, generated) do
+    def build(meta, line, file, context, unquote, generated, e) do
       acc0 = []
 
-      {e_line, acc1} = validate_compile(meta, :line, line, acc0)
-      {e_file, acc2} = validate_compile(meta, :file, file, acc1)
-      {e_context, acc3} = validate_compile(meta, :context, context, acc2)
+      {v_line, acc1} = validate_compile(meta, :line, line, acc0)
+      {v_file, acc2} = validate_compile(meta, :file, file, acc1)
+      {v_context, acc3} = validate_compile(meta, :context, context, acc2)
 
       unquote = validate_runtime(:unquote, unquote)
       generated = validate_runtime(:generated, generated)
 
       q = %__MODULE__{
-        line: e_line,
-        file: e_file,
+        op: :add_context,
+        aliases_hygiene: e,
+        imports_hygiene: e,
+        line: v_line,
+        file: v_file,
         unquote: unquote,
-        context: e_context,
+        context: v_context,
         generated: generated
       }
 
-      {q, acc3}
+      {q, v_context, acc3}
     end
 
     defp validate_compile(_meta, :line, value, acc) when is_boolean(value) do
@@ -3704,57 +3721,36 @@ defmodule ElixirSense.Core.Compiler do
     defp default(:unquote), do: true
     defp default(:generated), do: false
 
-    def escape(expr, kind, unquote) do
+    def escape(expr, op, unquote) do
       do_quote(
         expr,
         %__MODULE__{
           line: true,
           file: nil,
-          vars_hygiene: false,
-          aliases_hygiene: false,
-          imports_hygiene: false,
+          op: op,
           unquote: unquote
-        },
-        kind
+        }
       )
     end
 
-    def quote(meta, {:unquote_splicing, _, [_]} = expr, binding, %__MODULE__{unquote: true} = q, prelude, e) do
+    def quote({:unquote_splicing, _, [_]} = expr, %__MODULE__{unquote: true} = q) do
       # elixir raises here unquote_splicing only works inside arguments and block contexts
       # try to recover from error by wrapping it in block
-      quote(meta, {:__block__, [], [expr]}, binding, q, prelude, e)
+      __MODULE__.quote({:__block__, [], [expr]}, q)
     end
 
-    def quote(meta, expr, binding, q, prelude, e) do
-      context = q.context
-
-      vars =
-        Enum.map(binding, fn {k, v} ->
-          {:{}, [], [:=, [], [{:{}, [], [k, meta, context]}, v]]}
-        end)
-
-      quoted = do_quote(expr, q, e)
-
-      with_vars =
-        case vars do
-          [] -> quoted
-          _ -> {:{}, [], [:__block__, [], vars ++ [quoted]]}
-        end
-
-      case prelude do
-        [] -> with_vars
-        _ -> {:__block__, [], prelude ++ [with_vars]}
-      end
+    def quote(expr, q) do
+      do_quote(expr, q)
     end
 
     # quote/unquote
 
-    defp do_quote({:quote, meta, [arg]}, q, e) do
-      t_arg = do_quote(arg, %__MODULE__{q | unquote: false}, e)
+    defp do_quote({:quote, meta, [arg]}, q) when is_list(meta) do
+      t_arg = do_quote(arg, %__MODULE__{q | unquote: false})
 
       new_meta =
         case q do
-          %__MODULE__{vars_hygiene: true, context: context} ->
+          %__MODULE__{op: :add_context, context: context} ->
             keystore(:context, meta, context)
 
           _ ->
@@ -3764,13 +3760,13 @@ defmodule ElixirSense.Core.Compiler do
       {:{}, [], [:quote, meta(new_meta, q), [t_arg]]}
     end
 
-    defp do_quote({:quote, meta, [opts, arg]}, q, e) do
-      t_opts = do_quote(opts, q, e)
-      t_arg = do_quote(arg, %__MODULE__{q | unquote: false}, e)
+    defp do_quote({:quote, meta, [opts, arg]}, q) when is_list(meta) do
+      t_opts = do_quote(opts, q)
+      t_arg = do_quote(arg, %__MODULE__{q | unquote: false})
 
       new_meta =
         case q do
-          %__MODULE__{vars_hygiene: true, context: context} ->
+          %__MODULE__{op: :add_context, context: context} ->
             keystore(:context, meta, context)
 
           _ ->
@@ -3780,12 +3776,12 @@ defmodule ElixirSense.Core.Compiler do
       {:{}, [], [:quote, meta(new_meta, q), [t_opts, t_arg]]}
     end
 
-    defp do_quote({:unquote, _meta, [expr]}, %__MODULE__{unquote: true}, _), do: expr
+    defp do_quote({:unquote, meta, [expr]}, %__MODULE__{unquote: true}) when is_list(meta), do: expr
 
     # Aliases
 
-    defp do_quote({:__aliases__, meta, [h | t] = list}, %__MODULE__{aliases_hygiene: true} = q, e)
-         when is_atom(h) and h != :"Elixir" do
+    defp do_quote({:__aliases__, meta, [h | t] = list}, %__MODULE__{aliases_hygiene: e = %{}} = q)
+         when is_atom(h) and h != :"Elixir" and is_list(meta) do
       annotation =
         case Macro.Env.expand_alias(e, meta, list, trace: false) do
           {:alias, atom} -> atom
@@ -3793,18 +3789,17 @@ defmodule ElixirSense.Core.Compiler do
         end
 
       alias_meta = keystore(:alias, Keyword.delete(meta, :counter), annotation)
-      do_quote_tuple(:__aliases__, alias_meta, [h | t], q, e)
+      do_quote_tuple(:__aliases__, alias_meta, [h | t], q)
     end
 
     # Vars
 
-    defp do_quote({name, meta, nil}, %__MODULE__{vars_hygiene: true} = q, e)
+    defp do_quote({name, meta, nil}, %__MODULE__{op: :add_context} = q)
          when is_atom(name) and is_list(meta) do
       import_meta =
-        if q.imports_hygiene do
-          import_meta(meta, name, 0, q, e)
-        else
-          meta
+        case q.imports_hygiene do
+          nil -> meta
+          e -> import_meta(meta, name, 0, q, e)
         end
 
       {:{}, [], [name, meta(import_meta, q), q.context]}
@@ -3814,8 +3809,7 @@ defmodule ElixirSense.Core.Compiler do
 
     defp do_quote(
            {:__cursor__, meta, args},
-           %__MODULE__{unquote: _},
-           _e
+           %__MODULE__{unquote: _}
          ) when is_list(args) do
       # emit cursor as is regardless of unquote
       {:__cursor__, meta, args}
@@ -3825,24 +3819,22 @@ defmodule ElixirSense.Core.Compiler do
 
     defp do_quote(
            {{{:., meta, [left, :unquote]}, _, [expr]}, _, args},
-           %__MODULE__{unquote: true} = q,
-           e
-         ) do
-      do_quote_call(left, meta, expr, args, q, e)
+           %__MODULE__{unquote: true} = q
+         ) when is_list(meta) do
+      do_quote_call(left, meta, expr, args, q)
     end
 
-    defp do_quote({{:., meta, [left, :unquote]}, _, [expr]}, %__MODULE__{unquote: true} = q, e) do
-      do_quote_call(left, meta, expr, nil, q, e)
+    defp do_quote({{:., meta, [left, :unquote]}, _, [expr]}, %__MODULE__{unquote: true} = q) when is_list(meta) do
+      do_quote_call(left, meta, expr, nil, q)
     end
 
     # Imports
 
     defp do_quote(
            {:&, meta, [{:/, _, [{f, _, c}, a]}] = args},
-           %__MODULE__{imports_hygiene: true} = q,
-           e
+           %__MODULE__{imports_hygiene: e = %{}} = q
          )
-         when is_atom(f) and is_integer(a) and is_atom(c) do
+         when is_atom(f) and is_integer(a) and is_atom(c) and is_list(meta) do
       new_meta =
         case ElixirDispatch.find_import(meta, f, a, e) do
           false ->
@@ -3852,10 +3844,10 @@ defmodule ElixirSense.Core.Compiler do
             keystore(:context, keystore(:imports, meta, [{a, receiver}]), q.context)
         end
 
-      do_quote_tuple(:&, new_meta, args, q, e)
+      do_quote_tuple(:&, new_meta, args, q)
     end
 
-    defp do_quote({name, meta, args_or_context}, %__MODULE__{imports_hygiene: true} = q, e)
+    defp do_quote({name, meta, args_or_context}, %__MODULE__{imports_hygiene: e = %{}} = q)
          when is_atom(name) and is_list(meta) and
                 (is_list(args_or_context) or is_atom(args_or_context)) do
       arity =
@@ -3866,46 +3858,46 @@ defmodule ElixirSense.Core.Compiler do
 
       import_meta = import_meta(meta, name, arity, q, e)
       annotated = annotate({name, import_meta, args_or_context}, q.context)
-      do_quote_tuple(annotated, q, e)
+      do_quote_tuple(annotated, q)
     end
 
     # Two-element tuples
 
-    defp do_quote({left, right}, %__MODULE__{unquote: true} = q, e)
+    defp do_quote({left, right}, %__MODULE__{unquote: true} = q)
          when is_tuple(left) and elem(left, 0) == :unquote_splicing and
                 is_tuple(right) and elem(right, 0) == :unquote_splicing do
-      do_quote({:{}, [], [left, right]}, q, e)
+      do_quote({:{}, [], [left, right]}, q)
     end
 
-    defp do_quote({left, right}, q, e) do
-      t_left = do_quote(left, q, e)
-      t_right = do_quote(right, q, e)
+    defp do_quote({left, right}, q) do
+      t_left = do_quote(left, q)
+      t_right = do_quote(right, q)
       {t_left, t_right}
     end
 
     # Everything else
 
-    defp do_quote(other, q, e) when is_atom(e) do
-      do_escape(other, q, e)
+    defp do_quote(other, q = %{op: op}) when op != :add_context do
+      do_escape(other, q)
     end
 
-    defp do_quote({_, _, _} = tuple, q, e) do
+    defp do_quote({_, _, _} = tuple, q) do
       annotated = annotate(tuple, q.context)
-      do_quote_tuple(annotated, q, e)
+      do_quote_tuple(annotated, q)
     end
 
-    defp do_quote([], _, _), do: []
+    defp do_quote([], _), do: []
 
-    defp do_quote([h | t], %__MODULE__{unquote: false} = q, e) do
-      head_quoted = do_quote(h, q, e)
-      do_quote_simple_list(t, head_quoted, q, e)
+    defp do_quote([h | t], %__MODULE__{unquote: false} = q) do
+      head_quoted = do_quote(h, q)
+      do_quote_simple_list(t, head_quoted, q)
     end
 
-    defp do_quote([h | t], q, e) do
-      do_quote_tail(:lists.reverse(t, [h]), q, e)
+    defp do_quote([h | t], q) do
+      do_quote_tail(:lists.reverse(t, [h]), q)
     end
 
-    defp do_quote(other, _, _), do: other
+    defp do_quote(other, _), do: other
 
     defp import_meta(meta, name, arity, q, e) do
       case Keyword.get(meta, :imports, false) == false &&
@@ -3923,63 +3915,61 @@ defmodule ElixirSense.Core.Compiler do
       end
     end
 
-    defp do_quote_call(left, meta, expr, args, q, e) do
+    defp do_quote_call(left, meta, expr, args, q) do
       all = [left, {:unquote, meta, [expr]}, args, q.context]
-      tall = Enum.map(all, fn x -> do_quote(x, q, e) end)
+      tall = Enum.map(all, fn x -> do_quote(x, q) end)
       {{:., meta, [:elixir_quote, :dot]}, meta, [meta(meta, q) | tall]}
     end
 
-    defp do_quote_tuple({left, meta, right}, q, e) do
-      do_quote_tuple(left, meta, right, q, e)
+    defp do_quote_tuple({left, meta, right}, q) do
+      do_quote_tuple(left, meta, right, q)
     end
 
-    defp do_quote_tuple(left, meta, right, q, e) do
-      t_left = do_quote(left, q, e)
-      t_right = do_quote(right, q, e)
+    defp do_quote_tuple(left, meta, right, q) do
+      t_left = do_quote(left, q)
+      t_right = do_quote(right, q)
       {:{}, [], [t_left, meta(meta, q), t_right]}
     end
 
-    defp do_quote_simple_list([], prev, _, _), do: [prev]
+    defp do_quote_simple_list([], prev, _), do: [prev]
 
-    defp do_quote_simple_list([h | t], prev, q, e) do
-      [prev | do_quote_simple_list(t, do_quote(h, q, e), q, e)]
+    defp do_quote_simple_list([h | t], prev, q) do
+      [prev | do_quote_simple_list(t, do_quote(h, q), q)]
     end
 
-    defp do_quote_simple_list(other, prev, q, e) do
-      [{:|, [], [prev, do_quote(other, q, e)]}]
+    defp do_quote_simple_list(other, prev, q) do
+      [{:|, [], [prev, do_quote(other, q)]}]
     end
 
     defp do_quote_tail(
            [{:|, meta, [{:unquote_splicing, _, [left]}, right]} | t],
-           %__MODULE__{unquote: true} = q,
-           e
+           %__MODULE__{unquote: true} = q
          ) do
-      tt = do_quote_splice(t, q, e, [], [])
-      tr = do_quote(right, q, e)
+      tt = do_quote_splice(t, q, [], [])
+      tr = do_quote(right, q)
       do_runtime_list(meta, :tail_list, [left, tr, tt])
     end
 
-    defp do_quote_tail(list, q, e) do
-      do_quote_splice(list, q, e, [], [])
+    defp do_quote_tail(list, q) do
+      do_quote_splice(list, q, [], [])
     end
 
     defp do_quote_splice(
            [{:unquote_splicing, meta, [expr]} | t],
            %__MODULE__{unquote: true} = q,
-           e,
            buffer,
            acc
          ) do
       runtime = do_runtime_list(meta, :list, [expr, do_list_concat(buffer, acc)])
-      do_quote_splice(t, q, e, [], runtime)
+      do_quote_splice(t, q, [], runtime)
     end
 
-    defp do_quote_splice([h | t], q, e, buffer, acc) do
-      th = do_quote(h, q, e)
-      do_quote_splice(t, q, e, [th | buffer], acc)
+    defp do_quote_splice([h | t], q, buffer, acc) do
+      th = do_quote(h, q)
+      do_quote_splice(t, q, [th | buffer], acc)
     end
 
-    defp do_quote_splice([], _q, _e, buffer, acc) do
+    defp do_quote_splice([], _q, buffer, acc) do
       do_list_concat(buffer, acc)
     end
 
@@ -4005,7 +3995,7 @@ defmodule ElixirSense.Core.Compiler do
       line(meta, line)
     end
 
-    defp keep(meta, %__MODULE__{file: file}) do
+    defp keep(meta, %__MODULE__{file: file, line: true}) do
       case Keyword.pop(meta, :line) do
         {nil, _} ->
           [{:keep, {file, 0}} | meta]
@@ -4013,6 +4003,14 @@ defmodule ElixirSense.Core.Compiler do
         {line, meta_no_line} ->
           [{:keep, {file, line}} | meta_no_line]
       end
+    end
+
+    defp keep(meta, %__MODULE__{file: file, line: false}) do
+      [{:keep, {file, 0}} | Keyword.delete(meta, :line)]
+    end
+
+    defp keep(meta, %__MODULE__{file: file, line: line}) do
+      [{:keep, {file, line}} | Keyword.delete(meta, :line)]
     end
 
     defp line(meta, true), do: meta
@@ -4053,19 +4051,19 @@ defmodule ElixirSense.Core.Compiler do
 
     defp annotate_def(other, _context), do: other
 
-    defp do_escape({left, meta, right}, q, e = :prune_metadata) do
+    defp do_escape({left, meta, right}, q = %{op: :prune_metadata}) when is_list(meta) do
       tm = for {k, v} <- meta, k == :no_parens or k == :line, do: {k, v}
-      tl = do_quote(left, q, e)
-      tr = do_quote(right, q, e)
+      tl = do_quote(left, q)
+      tr = do_quote(right, q)
       {:{}, [], [tl, tm, tr]}
     end
 
-    defp do_escape(tuple, q, e) when is_tuple(tuple) do
-      tt = do_quote(Tuple.to_list(tuple), q, e)
+    defp do_escape(tuple, q) when is_tuple(tuple) do
+      tt = do_quote(Tuple.to_list(tuple), q)
       {:{}, [], tt}
     end
 
-    defp do_escape(bitstring, _, _) when is_bitstring(bitstring) do
+    defp do_escape(bitstring, _) when is_bitstring(bitstring) do
       case Bitwise.band(bit_size(bitstring), 7) do
         0 ->
           bitstring
@@ -4078,35 +4076,35 @@ defmodule ElixirSense.Core.Compiler do
       end
     end
 
-    defp do_escape(map, q, e) when is_map(map) do
-      tt = do_quote(Enum.sort(Map.to_list(map)), q, e)
+    defp do_escape(map, q) when is_map(map) do
+      tt = do_quote(Enum.sort(Map.to_list(map)), q)
       {:%{}, [], tt}
     end
 
-    defp do_escape([], _, _), do: []
+    defp do_escape([], _), do: []
 
-    defp do_escape([h | t], %__MODULE__{unquote: false} = q, e) do
-      do_quote_simple_list(t, do_quote(h, q, e), q, e)
+    defp do_escape([h | t], %__MODULE__{unquote: false} = q) do
+      do_quote_simple_list(t, do_quote(h, q), q)
     end
 
-    defp do_escape([h | t], q, e) do
+    defp do_escape([h | t], q) do
       # The improper case is inefficient, but improper lists are rare.
       try do
         l = Enum.reverse(t, [h])
-        do_quote_tail(l, q, e)
+        do_quote_tail(l, q)
       catch
         _ ->
           {l, r} = reverse_improper(t, [h])
-          tl = do_quote_splice(l, q, e, [], [])
-          tr = do_quote(r, q, e)
+          tl = do_quote_splice(l, q, [], [])
+          tr = do_quote(r, q)
           update_last(tl, fn x -> {:|, [], [x, tr]} end)
       end
     end
 
-    defp do_escape(other, _, _) when is_number(other) or is_pid(other) or is_atom(other),
+    defp do_escape(other, _) when is_number(other) or is_pid(other) or is_atom(other),
       do: other
 
-    defp do_escape(fun, _, _) when is_function(fun) do
+    defp do_escape(fun, _) when is_function(fun) do
       case {Function.info(fun, :env), Function.info(fun, :type)} do
         {{:env, []}, {:type, :external}} ->
           fun_to_quoted(fun)
@@ -4117,7 +4115,7 @@ defmodule ElixirSense.Core.Compiler do
       end
     end
 
-    defp do_escape(_other, _, _) do
+    defp do_escape(_other, _) do
       # elixir raises here ArgumentError
       nil
     end
