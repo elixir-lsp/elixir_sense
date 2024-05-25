@@ -232,32 +232,40 @@ defmodule ElixirSense.Core.TypeInference do
 
   defp match_var(
          state,
-         {:^, _meta, [{var, meta, context}]},
+         {:^, _meta, [{var, meta, context}]} = ast,
          {vars, match_context}
        )
        when is_atom(var) and is_atom(context) and
        var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
-    version = meta |> Keyword.fetch!(:version)
-    var_info = state.vars_info |> hd |> Map.fetch!({var, version})
+      case Keyword.fetch(meta, :version) do
+        {:ok, version} ->
+          var_info = state.vars_info |> hd |> Map.fetch!({var, version})
 
-    var_info = %VarInfo{var_info | type: match_context}
+          var_info = %VarInfo{var_info | type: match_context}
 
-    {nil, {[{{var, version}, var_info} | vars], nil}}
+          {nil, {[{{var, version}, var_info} | vars], nil}}
+        _ ->
+          {ast, {vars, match_context}}
+        end
   end
 
   defp match_var(
          state,
-         {var, meta, context},
+         {var, meta, context} = ast,
          {vars, match_context}
        )
        when is_atom(var) and is_atom(context) and
               var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
-    version = meta |> Keyword.fetch!(:version)
-    var_info = state.vars_info |> hd |> Map.fetch!({var, version})
+    case Keyword.fetch(meta, :version) do
+      {:ok, version} ->
+        var_info = state.vars_info |> hd |> Map.fetch!({var, version})
 
-    var_info = %VarInfo{var_info | type: match_context}
+        var_info = %VarInfo{var_info | type: match_context}
 
-    {nil, {[{{var, version}, var_info} | vars], nil}}
+        {nil, {[{{var, version}, var_info} | vars], nil}}
+      _ ->
+        {ast, {vars, match_context}}
+     end
   end
 
   # drop right side of guard expression as guards cannot define vars

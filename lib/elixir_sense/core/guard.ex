@@ -78,32 +78,33 @@ defmodule ElixirSense.Core.Guard do
       Macro.prewalk(guard_ast, %{}, fn
         # Standalone variable: func my_func(x) when x
         {var, meta, context} = node, acc when is_atom(var) and is_atom(context) ->
-          version = Keyword.fetch!(meta, :version)
-          {node, Map.put(acc, {var, version}, :boolean)}
+          case Keyword.fetch(meta, :version) do
+            {:ok, version} ->
+              {node, Map.put(acc, {var, version}, :boolean)}
+            _ ->
+              {node, acc}
+          end
 
         {{:., _dot_meta, [:erlang, fun]}, _call_meta, params} = node, acc when is_atom(fun) ->
-          case guard_predicate_type(fun, params, state) do
-            {type, binding} ->
-              {var, meta, _context} = binding
+          with {type, binding} <- guard_predicate_type(fun, params, state),
+            {var, meta, context} when is_atom(var) and is_atom(context) <- binding,
+            {:ok, version} <- Keyword.fetch(meta, :version) do
               # If we found the predicate type, we can prematurely exit traversing the subtree
-              version = Keyword.fetch!(meta, :version)
               {[], Map.put(acc, {var, version}, type)}
-
-            nil ->
-              {node, acc}
+          else
+            _ -> {node, acc}
           end
 
         # TODO can we drop this clause?
         {guard_predicate, _, params} = node, acc ->
-          case guard_predicate_type(guard_predicate, params, state) do
-            {type, binding} ->
-              {var, meta, _context} = binding
+          with {type, binding} <- guard_predicate_type(guard_predicate, params, state),
+            {var, meta, context} when is_atom(var) and is_atom(context) <- binding,
+            {:ok, version} <- Keyword.fetch(meta, :version) do
               # If we found the predicate type, we can prematurely exit traversing the subtree
-              version = Keyword.fetch!(meta, :version)
               {[], Map.put(acc, {var, version}, type)}
 
-            nil ->
-              {node, acc}
+          else
+            _ -> {node, acc}
           end
 
         node, acc ->
