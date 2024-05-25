@@ -3910,7 +3910,9 @@ defmodule ElixirSense.Core.Compiler do
     defp import_meta(meta, name, arity, q, e) do
       case Keyword.get(meta, :imports, false) == false &&
              ElixirDispatch.find_imports(meta, name, e) do
-        [] ->
+        [_ | _] = imports ->
+          keystore(:imports, keystore(:context, meta, q.context), imports)
+        _ ->
           case arity == 1 && Keyword.fetch(meta, :ambiguous_op) do
             {:ok, nil} ->
               keystore(:ambiguous_op, meta, q.context)
@@ -3918,9 +3920,6 @@ defmodule ElixirSense.Core.Compiler do
             _ ->
               meta
           end
-
-        imports ->
-          keystore(:imports, keystore(:context, meta, q.context), imports)
       end
     end
 
@@ -4147,13 +4146,19 @@ defmodule ElixirSense.Core.Compiler do
 
       case find_import_by_name_arity(meta, tuple, [], e) do
         {:function, receiver} ->
+          # TODO trace call?
           # ElixirEnv.trace({:imported_function, meta, receiver, name, arity}, e)
           receiver
 
         {:macro, receiver} ->
+          # TODO trace call?
           # ElixirEnv.trace({:imported_macro, meta, receiver, name, arity}, e)
           receiver
 
+        {:ambiguous, [head | _]} ->
+          # elixir raises here, we choose first one
+          # TODO trace call?
+          head
         _ ->
           false
       end
@@ -4186,6 +4191,9 @@ defmodule ElixirSense.Core.Compiler do
 
         {:import, receiver} ->
           require_function(meta, receiver, name, arity, e)
+
+        {:ambiguous, ambiguous} ->
+          raise "ambiguous #{inspect(ambiguous)}"
 
         false ->
           if Macro.special_form?(name, arity) do
@@ -4273,15 +4281,7 @@ defmodule ElixirSense.Core.Compiler do
             {[], []} ->
               false
 
-            {_, [receiver | _]} ->
-              # elixir raises ambiguous_call
-              # we prefer macro
-              {:macro, receiver}
-
-            {[receiver | _], _} ->
-              # elixir raises ambiguous_call
-              # we prefer macro
-              {:function, receiver}
+            _ -> {:ambiguous, fun_match ++ mac_match}
           end
       end
     end
@@ -4291,7 +4291,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp is_import(meta, arity) do
-      with {:ok, imports} <- Keyword.fetch(meta, :imports),
+      with {:ok, imports = [_ | _]} <- Keyword.fetch(meta, :imports),
            {:ok, _} <- Keyword.fetch(meta, :context),
            {:ok, receiver} <- Keyword.fetch(imports, arity) do
         {:import, receiver}
