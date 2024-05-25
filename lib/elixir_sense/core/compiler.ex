@@ -2832,8 +2832,14 @@ defmodule ElixirSense.Core.Compiler do
 
     # rescue var
     defp expand_rescue({name, _, atom} = var, s, e) when is_atom(name) and is_atom(atom) do
-      match(&ElixirExpand.expand/3, var, s, s, e)
-      # TODO infer type to Exception here
+      {e_left, sl, el} = match(&ElixirExpand.expand/3, var, s, s, e)
+      
+      match_context = {:struct, [], {:atom, Exception}, nil}
+
+      vars_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context)
+      sl = State.annotate_vars_with_inferred_types(sl, vars_with_inferred_types)
+      
+      {e_left, sl, el}
     end
 
     # rescue Alias => _ in [Alias]
@@ -2848,8 +2854,14 @@ defmodule ElixirSense.Core.Compiler do
            e
          )
          when is_atom(name) and is_atom(var_context) and is_atom(underscore_context) do
-      match(&ElixirExpand.expand/3, var, s, s, e)
-      # TODO infer type to Exception here
+      {e_left, sl, el} = match(&ElixirExpand.expand/3, var, s, s, e)
+
+      match_context = {:struct, [], {:atom, Exception}, nil}
+
+      vars_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context)
+      sl = State.annotate_vars_with_inferred_types(sl, vars_with_inferred_types)
+      
+      {e_left, sl, el}
     end
 
     # rescue var in (list() or atom())
@@ -2859,8 +2871,24 @@ defmodule ElixirSense.Core.Compiler do
 
       case e_left do
         {name, _, atom} when is_atom(name) and is_atom(atom) ->
-          {{:in, meta, [e_left, normalize_rescue(e_right, e)]}, sr, er}
-          # TODO infer type
+          normalized = normalize_rescue(e_right, e)
+
+          match_context = for exception <- normalized, reduce: nil do
+            nil -> {:struct, [], {:atom, exception}, nil}
+            other -> {:union, [other, {:struct, [], {:atom, exception}, nil}]}
+          end
+
+          match_context = if match_context == nil do
+            {:struct, [], {:atom, Exception}, nil}
+          else
+            match_context
+          end
+
+          vars_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context)
+          sr = State.annotate_vars_with_inferred_types(sr, vars_with_inferred_types)
+
+          {{:in, meta, [e_left, normalized]}, sr, er}
+
 
         _ ->
           # elixir rejects this case, we normalize to underscore

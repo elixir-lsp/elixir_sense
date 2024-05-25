@@ -2435,16 +2435,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                 Some.call()
               rescue
                 e0 in ArgumentError ->
-                  :ok
+                  IO.puts ""
                 e1 in [ArgumentError] ->
-                  :ok
+                  IO.puts ""
                 e2 in [RuntimeError, Enum.EmptyError] ->
-                  :ok
-                e3 ->
-                  :ok
+                  IO.puts ""
+                e3 in _ ->
+                  IO.puts ""
+                e4 ->
+                  IO.puts ""
               else
                 a ->
-                  :ok
+                  IO.puts ""
               end
             end
           end
@@ -2456,35 +2458,48 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    name: :e0,
                    type: {:struct, [], {:atom, ArgumentError}, nil}
                  }
-               ] = state |> get_line_vars(6)
+               ] = state |> get_line_vars(7)
 
         assert [
                  %VarInfo{
                    name: :e1,
                    type: {:struct, [], {:atom, ArgumentError}, nil}
                  }
-               ] = state |> get_line_vars(8)
+               ] = state |> get_line_vars(9)
 
         assert [
                  %VarInfo{
                    name: :e2,
-                   type: {:struct, [], {:atom, Exception}, nil}
+                   type: {
+                    :union,
+                    [
+                      {:struct, [], {:atom, RuntimeError}, nil},
+                      {:struct, [], {:atom, Enum.EmptyError}, nil}
+                    ]
+                  }
                  }
-               ] = state |> get_line_vars(10)
+               ] = state |> get_line_vars(11)
 
         assert [
                  %VarInfo{
                    name: :e3,
                    type: {:struct, [], {:atom, Exception}, nil}
                  }
-               ] = state |> get_line_vars(12)
+               ] = state |> get_line_vars(13)
+
+               assert [
+                %VarInfo{
+                  name: :e4,
+                  type: {:struct, [], {:atom, Exception}, nil}
+                }
+              ] = state |> get_line_vars(15)
 
         assert [
                  %VarInfo{
                    name: :a,
                    type: nil
                  }
-               ] = state |> get_line_vars(15)
+               ] = state |> get_line_vars(18)
       end
 
       test "vars binding by pattern matching with pin operators" do
