@@ -680,8 +680,13 @@ defmodule ElixirSense.Core.Compiler do
         expand_macro(meta, module, fun, args, callback, state, env)
 
       {:function, module, fun} ->
-        # Transform to remote call - we may need to do rewrites
-        expand({{:., meta, [module, fun]}, meta, args}, state, env)
+        {ar, af} = case :elixir_rewrite.inline(module, fun, arity) do
+          {ar, an} ->
+            {ar, an}
+          false ->
+            {module, fun}
+        end
+        expand_remote(ar, meta, af, meta, args, state, __MODULE__.Env.prepare_write(state), env)
 
       {:error, :not_found} ->
         expand_local(meta, fun, args, state, env)
@@ -2043,9 +2048,6 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_fn_capture(meta, arg, s, e) do
     case __MODULE__.Fn.capture(meta, arg, s, e) do
       {{:remote, remote, fun, arity}, require_meta, dot_meta, se, ee} ->
-        # if is_atom(remote) do
-        #   ElixirEnv.trace({:remote_function, require_meta, remote, fun, arity}, e)
-        # end
         attached_meta = attach_runtime_module(remote, require_meta, s, e)
 
         line = Keyword.get(attached_meta, :line, 0)
