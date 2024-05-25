@@ -2287,23 +2287,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert [
                  %VarInfo{
                    name: :asd,
-                   type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}
-                 },
-                 %VarInfo{
-                   name: :asd,
                    type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
                  }
                ] = state |> get_line_vars(11) |> Enum.filter(&(&1.name == :asd))
 
         assert [
-                 %VarInfo{
-                   name: :asd,
-                   type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}
-                 },
-                 %VarInfo{
-                   name: :asd,
-                   type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
-                 },
                  %VarInfo{
                    name: :asd,
                    type: {:map, [{:other, {:integer, 123}}], {:variable, :asd}}
