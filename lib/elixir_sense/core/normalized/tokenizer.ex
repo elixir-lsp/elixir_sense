@@ -24,15 +24,20 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
       end
 
     case result do
+      # < 1.17
       {:ok, _line, _column, _warning, tokens} ->
         Enum.reverse(tokens)
+
+      # >= 1.17
+      {:ok, _line, _column, _warning, tokens, _terminators} ->
+        tokens
 
       {:error, _, _, _, sofar} ->
         sofar
     end
   rescue
     e ->
-      if Version.match?(System.version(), ">= 1.16.0-dev") do
+      if Version.match?(System.version(), ">= 1.17.0-dev") do
         Logger.error(
           ":elixir_tokenizer.tokenize raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
         )
