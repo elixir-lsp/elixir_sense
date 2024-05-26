@@ -694,7 +694,7 @@ defmodule ElixirSense.Core.Compiler do
         expand_macro(meta, module, fun, args, callback, state, env)
 
       {:function, module, fun} ->
-        {ar, af} = case :elixir_rewrite.inline(module, fun, arity) do
+        {ar, af} = case __MODULE__.Rewrite.inline(module, fun, arity) do
           {ar, an} ->
             {ar, an}
           false ->
@@ -722,7 +722,7 @@ defmodule ElixirSense.Core.Compiler do
     arity = length(args)
 
     if is_atom(module) do
-      case :elixir_rewrite.inline(module, fun, arity) do
+      case __MODULE__.Rewrite.inline(module, fun, arity) do
         {ar, an} ->
           expand_remote(ar, dot_meta, an, meta, args, state, state_l, env)
 
@@ -1811,7 +1811,7 @@ defmodule ElixirSense.Core.Compiler do
       attached_meta = attach_runtime_module(receiver, meta, s, e)
       {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {sl, s}, e, args)
 
-      case rewrite(context, receiver, dot_meta, right, attached_meta, e_args, s) do
+      case __MODULE__.Rewrite.rewrite(context, receiver, dot_meta, right, attached_meta, e_args, s) do
         {:ok, rewritten} ->
           s =
             __MODULE__.Env.close_write(sa, s)
@@ -1851,22 +1851,6 @@ defmodule ElixirSense.Core.Compiler do
     else
       meta
     end
-  end
-
-  defp rewrite(_, :erlang, _, :+, _, [arg], _s) when is_number(arg), do: {:ok, arg}
-
-  defp rewrite(_, :erlang, _, :-, _, [arg], _s) when is_number(arg), do: {:ok, -arg}
-
-  defp rewrite(:match, receiver, dot_meta, right, meta, e_args, _s) do
-    :elixir_rewrite.match_rewrite(receiver, dot_meta, right, meta, e_args)
-  end
-
-  defp rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
-    :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args, guard_context(s))
-  end
-
-  defp rewrite(_, receiver, dot_meta, right, meta, e_args, _s) do
-    {:ok, :elixir_rewrite.rewrite(receiver, dot_meta, right, meta, e_args)}
   end
 
   defp expand_local(meta, :when, [_, _] = args, state, env = %{context: nil}) do
@@ -2294,10 +2278,6 @@ defmodule ElixirSense.Core.Compiler do
       :error -> kind
     end
   end
-
-  # TODO probably we can remove it/hardcode, used only for generating error message
-  defp guard_context(%{prematch: {_, _, {:bitsize, _}}}), do: "bitstring size specifier"
-  defp guard_context(_), do: "guard"
 
   defp expand_case(meta, expr, opts, s, e) do
     {e_expr, se, ee} = expand(expr, s, e)
@@ -4165,6 +4145,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defmodule Dispatch do
+    alias ElixirSense.Core.Compiler.Rewrite, as: ElixirRewrite
     import :ordsets, only: [is_element: 2]
 
     def find_import(meta, name, arity, e) do
@@ -4253,9 +4234,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp remote_function(_meta, receiver, name, arity, _e) do
-      # TODO rewrite is safe to use as it does not emit traces and does not have side effects
-      # but we may need to translate it anyway
-      case :elixir_rewrite.inline(receiver, name, arity) do
+      case ElixirRewrite.inline(receiver, name, arity) do
         {ar, an} -> {:remote, ar, an, arity}
         false -> {:remote, receiver, name, arity}
       end
@@ -4721,5 +4700,43 @@ defmodule ElixirSense.Core.Compiler do
     def built_in_type?(:keyword, 1), do: true
     def built_in_type?(:var, 0), do: true
     def built_in_type?(name, arity), do: :erl_internal.is_type(name, arity)
+  end
+
+  defmodule Rewrite do
+    def inline(module, fun, arity) do
+      if Application.get_env(:elixir_sense, :compiler_rewrite) do
+        :elixir_rewrite.inline(module, fun, arity)
+      else
+        false
+      end
+    end
+
+    def rewrite(context, receiver, dot_meta, right, meta, e_args, s) do
+      if Application.get_env(:elixir_sense, :compiler_rewrite) do
+        do_rewrite(context, receiver, dot_meta, right, meta, e_args, s)
+      else
+        {:ok, {{:., dot_meta, [receiver, right]}, meta, e_args}}
+      end
+    end
+
+    defp do_rewrite(_, :erlang, _, :+, _, [arg], _s) when is_number(arg), do: {:ok, arg}
+
+    defp do_rewrite(_, :erlang, _, :-, _, [arg], _s) when is_number(arg), do: {:ok, -arg}
+
+    defp do_rewrite(:match, receiver, dot_meta, right, meta, e_args, _s) do
+      :elixir_rewrite.match_rewrite(receiver, dot_meta, right, meta, e_args)
+    end
+
+    defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
+      :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args, guard_context(s))
+    end
+
+    defp do_rewrite(_, receiver, dot_meta, right, meta, e_args, _s) do
+      {:ok, :elixir_rewrite.rewrite(receiver, dot_meta, right, meta, e_args)}
+    end
+
+    # TODO probably we can remove it/hardcode, used only for generating error message
+    defp guard_context(%{prematch: {_, _, {:bitsize, _}}}), do: "bitstring size specifier"
+    defp guard_context(_), do: "guard"
   end
 end

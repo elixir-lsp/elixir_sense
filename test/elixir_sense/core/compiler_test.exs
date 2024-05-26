@@ -82,6 +82,14 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
       end
     end
 
+    setup do
+      Application.put_env(:elixir_sense, :compiler_rewrite, true)
+      on_exit(fn ->
+        Application.put_env(:elixir_sense, :compiler_rewrite, false)
+      end)
+      {:ok, %{}}
+    end
+
     test "initial" do
       elixir_env = :elixir_env.new()
       assert Compiler.env() == elixir_env
