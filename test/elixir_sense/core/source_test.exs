@@ -224,12 +224,21 @@ defmodule ElixirSense.Core.SourceTest do
     end
 
     test "inside fn body" do
-      assert %{
-               candidate: {Enum, :map},
-               elixir_prefix: false,
-               npar: 1,
-               pos: {{1, 11}, {1, nil}}
-             } = which_func("var = Enum.map([1,2], fn(i) -> i*")
+      if Version.match?(System.version(), ">= 1.17.0-rc.0") do
+        assert %{
+                 candidate: {nil, :*},
+                 elixir_prefix: false,
+                 npar: 1,
+                 pos: {{1, 33}, {1, nil}}
+               } = which_func("var = Enum.map([1,2], fn(i) -> i*")
+      else
+        assert %{
+                 candidate: {Enum, :map},
+                 elixir_prefix: false,
+                 npar: 1,
+                 pos: {{1, 11}, {1, nil}}
+               } = which_func("var = Enum.map([1,2], fn(i) -> i*")
+      end
     end
 
     test "inside a list" do
