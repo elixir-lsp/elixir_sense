@@ -29,10 +29,11 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   # pipe
-  def get_binding_type(state, {:|>, _, [params_1, {call, meta, params_rest}]}) do
-    params = [params_1 | params_rest || []]
-    get_binding_type(state, {call, meta, params})
-  end
+  # TODO no pipes in expanded code
+  # def get_binding_type(state, {:|>, _, [params_1, {call, meta, params_rest}]}) do
+  #   params = [params_1 | params_rest || []]
+  #   get_binding_type(state, {call, meta, params})
+  # end
 
   # remote call
   def get_binding_type(state, {{:., _, [target, fun]}, _, args})
@@ -41,12 +42,14 @@ defmodule ElixirSense.Core.TypeInference do
     {:call, target, fun, Enum.map(args, &get_binding_type(state, &1))}
   end
 
+  # TODO no __MODULE__ in expanded code
   # # current module
   # def get_binding_type(state, {:__MODULE__, _, nil} = module) do
   #   {module, _state, _env} = expand(module, state)
   #   {:atom, module}
   # end
 
+  # TODO no expandable __aliases__ in expanded code
   # # elixir module
   # def get_binding_type(state, {:__aliases__, _, list} = module) when is_list(list) do
   #   try do
@@ -58,11 +61,13 @@ defmodule ElixirSense.Core.TypeInference do
   # end
 
   # variable or local no parens call
-  def get_binding_type(_state, {var, _, nil}) when is_atom(var) do
+  # TODO version?
+  def get_binding_type(_state, {var, _, context}) when is_atom(var) and is_atom(context) do
     {:variable, var}
   end
 
   # attribute
+  # expanded attribute reference has nil arg
   def get_binding_type(_state, {:@, _, [{attribute, _, nil}]})
       when is_atom(attribute) do
     {:attribute, attribute}
@@ -296,13 +301,17 @@ defmodule ElixirSense.Core.TypeInference do
   defp match_var(state, {:%{}, _, ast}, {vars, match_context}) when not is_nil(match_context) do
     destructured_vars =
       ast
-      |> Enum.flat_map(fn {key, value_ast} ->
-        key_type = get_binding_type(state, key)
+      |> Enum.flat_map(fn
+        {:|, _, [_left, _right]} ->
+          # map update is forbidden in match, we're in invalid code
+          []
+        {key, value_ast} ->
+          key_type = get_binding_type(state, key)
 
-        {_ast, {new_vars, _match_context}} =
-          match_var(state, value_ast, {[], {:map_key, match_context, key_type}})
+          {_ast, {new_vars, _match_context}} =
+            match_var(state, value_ast, {[], {:map_key, match_context, key_type}})
 
-        new_vars
+          new_vars
       end)
 
     {ast, {vars ++ destructured_vars, nil}}
