@@ -83,7 +83,7 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
     end
 
     setup do
-      Application.put_env(:elixir_sense, :compiler_rewrite, true)
+      # Application.put_env(:elixir_sense, :compiler_rewrite, true)
       on_exit(fn ->
         Application.put_env(:elixir_sense, :compiler_rewrite, false)
       end)
@@ -761,6 +761,33 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         # assert expanded == elixir_expanded
         # assert env == elixir_env
       end
+    end
+
+    defmodule Foo do
+      defguard my(a) when is_integer(a) and a > 1
+      defmacro aaa(a) do
+        quote do
+          is_integer(unquote(a)) and unquote(a) > 1
+        end
+      end
+    end
+
+    test "guard" do
+      code = """
+      require ElixirSense.Core.CompilerTest.Foo, as: Foo
+      Foo.my(5)
+      """
+
+      assert_expansion(code)
+    end
+
+    test "macro" do
+      code = """
+      require ElixirSense.Core.CompilerTest.Foo, as: Foo
+      Foo.aaa(5)
+      """
+
+      assert_expansion(code)
     end
 
     defp clean_capture_arg_position(ast) do

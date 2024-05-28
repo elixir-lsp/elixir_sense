@@ -106,6 +106,104 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "introspection struct from guard" do
+      assert {:struct, [__struct__: nil], nil, nil} ==
+               Binding.expand(
+                 @env,
+                 {
+                  :intersection,
+                  [
+                    {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                    {:struct, [], nil, nil}
+                  ]
+                }
+               )
+
+               assert {
+                :struct,
+                [
+                  {:__struct__, {:atom, URI}},
+                  {:port, nil},
+                  {:scheme, nil},
+                  {:path, nil},
+                  {:host, nil},
+                  {:userinfo, nil},
+                  {:fragment, nil},
+                  {:query, nil},
+                  {:authority, nil}
+                ],
+                {:atom, URI},
+                nil
+              } ==
+               Binding.expand(
+                 @env,
+                 {
+                  :intersection,
+                  [
+                    {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                    {:struct, [], {:atom, URI}, nil}
+                  ]
+                }
+               )
+
+               assert {:struct, [__struct__: nil, __exception__: {:atom, true}], nil, nil} ==
+               Binding.expand(
+                 @env,
+                 {
+                  :intersection,
+                  [
+                    {
+                      :intersection,
+                      [
+                        {
+                          :intersection,
+                          [
+                            {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                            {:struct, [], nil, nil}
+                          ]
+                        },
+                        {:map, [{:__exception__, nil}], nil}
+                      ]
+                    },
+                    {:map, [{:__exception__, {:atom, true}}], nil}
+                  ]
+                }
+               )
+
+               assert {
+                :struct,
+                [
+                  {:__struct__, {:atom, ArgumentError}},
+                  {:message, nil},
+                  {:__exception__, {:atom, true}}
+                ],
+                {:atom, ArgumentError},
+                nil
+              } ==
+               Binding.expand(
+                 @env,
+                 {
+                  :intersection,
+                  [
+                    {
+                      :intersection,
+                      [
+                        {
+                          :intersection,
+                          [
+                            {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                            {:struct, [], {:atom, ArgumentError}, nil}
+                          ]
+                        },
+                        {:map, [{:__exception__, nil}], nil}
+                      ]
+                    },
+                    {:map, [{:__exception__, {:atom, true}}], nil}
+                  ]
+                }
+               )
+    end
+
     test "introspection module not a struct" do
       assert :none ==
                Binding.expand(@env, {:struct, [], {:atom, ElixirSenseExample.EmptyModule}, nil})
@@ -1857,16 +1955,28 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "none" do
+    test "none intersection" do
       assert :none == Binding.expand(@env, {:intersection, [{:atom, A}, :none]})
       assert :none == Binding.expand(@env, {:intersection, [:none, {:atom, A}]})
       assert :none == Binding.expand(@env, {:intersection, [:none, :none]})
     end
 
-    test "unknown" do
+    test "none union" do
+      assert {:atom, A} == Binding.expand(@env, {:union, [{:atom, A}, :none]})
+      assert {:atom, A} == Binding.expand(@env, {:union, [:none, {:atom, A}]})
+      assert :none == Binding.expand(@env, {:union, [:none, :none]})
+    end
+
+    test "unknown intersection" do
       assert {:atom, A} == Binding.expand(@env, {:intersection, [{:atom, A}, nil]})
       assert {:atom, A} == Binding.expand(@env, {:intersection, [nil, {:atom, A}]})
       assert nil == Binding.expand(@env, {:intersection, [nil, nil]})
+    end
+
+    test "unknown union" do
+      assert nil == Binding.expand(@env, {:union, [{:atom, A}, nil]})
+      assert nil == Binding.expand(@env, {:union, [nil, {:atom, A}]})
+      assert nil == Binding.expand(@env, {:union, [nil, nil]})
     end
 
     test "equal" do

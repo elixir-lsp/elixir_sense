@@ -874,8 +874,8 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   
 
-  def infer_type_from_guards(guard_ast, vars, state) do
-    type_info = Guard.type_information_from_guards(guard_ast, state)
+  def infer_type_from_guards(guard_ast, vars, _state) do
+    type_info = Guard.type_information_from_guards(guard_ast)
 
     Enum.reduce(type_info, vars, fn {var, type}, acc ->
       index = Enum.find_index(acc, &(&1.name == var))

@@ -2316,6 +2316,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
               var5 = ~r/foo/iu
               var6 = ~R(f\#{1,3}o)
               var7 = 12..34
+              var8 = 12..34//1
               IO.puts ""
             end
           end
@@ -2323,14 +2324,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           |> string_to_state
 
         assert [
-                 %VarInfo{name: :var1, type: {:struct, [], {:atom, Date}}},
-                 %VarInfo{name: :var2, type: {:struct, [], {:atom, Time}}},
-                 %VarInfo{name: :var3, type: {:struct, [], {:atom, DateTime}}},
-                 %VarInfo{name: :var4, type: {:struct, [], {:atom, NaiveDateTime}}},
-                 %VarInfo{name: :var5, type: {:struct, [], {:atom, Regex}}},
-                 %VarInfo{name: :var6, type: {:struct, [], {:atom, Regex}}},
-                 %VarInfo{name: :var7, type: {:struct, [], {:atom, Range}}}
-               ] = state |> get_line_vars(10)
+                 %VarInfo{name: :var1, type: {:struct, [], {:atom, Date}, nil}},
+                 %VarInfo{name: :var2, type: {:struct, [], {:atom, Time}, nil}},
+                 %VarInfo{name: :var3, type: {:struct, [], {:atom, DateTime}, nil}},
+                 %VarInfo{name: :var4, type: {:struct, [], {:atom, NaiveDateTime}, nil}},
+                 %VarInfo{name: :var5, type: {:struct, [], {:atom, Regex}, nil}},
+                 %VarInfo{name: :var6, type: {:struct, [], {:atom, Regex}, nil}},
+                 %VarInfo{name: :var7, type: {:struct, [], {:atom, Range}, nil}},
+                 %VarInfo{name: :var8, type: {:struct, [], {:atom, Range}, nil}}
+               ] = state |> get_line_vars(11)
       end
 
       test "struct binding understands stepped ranges" do
@@ -2346,7 +2348,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           |> string_to_state
 
         assert [
-                 %VarInfo{name: :var1, type: {:struct, [], {:atom, Range}}}
+                 %VarInfo{name: :var1, type: {:struct, [], {:atom, Range}, nil}}
                ] = state |> get_line_vars(4)
       end
 
@@ -3420,9 +3422,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert %VarInfo{name: :x, type: :number} = var_with_guards("is_integer(x)")
         assert %VarInfo{name: :x, type: :number} = var_with_guards("round(x)")
         assert %VarInfo{name: :x, type: :number} = var_with_guards("trunc(x)")
-        assert %VarInfo{name: :x, type: :number} = var_with_guards("div(x)")
-        assert %VarInfo{name: :x, type: :number} = var_with_guards("rem(x)")
+        assert %VarInfo{name: :x, type: :number} = var_with_guards("div(x, 1)")
+        assert %VarInfo{name: :x, type: :number} = var_with_guards("rem(x, 1)")
         assert %VarInfo{name: :x, type: :number} = var_with_guards("abs(x)")
+        assert %VarInfo{name: :x, type: :number} = var_with_guards("ceil(x)")
+        assert %VarInfo{name: :x, type: :number} = var_with_guards("floor(x)")
       end
 
       test "binary guards" do
@@ -3445,8 +3449,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       test "list guards" do
         assert %VarInfo{name: :x, type: :list} = var_with_guards("is_list(x)")
         assert %VarInfo{name: :x, type: {:list, :number}} = var_with_guards("hd(x) == 1")
+        assert %VarInfo{name: :x, type: {:list, :number}} = var_with_guards("1 == hd(x)")
         assert %VarInfo{name: :x, type: :list} = var_with_guards("tl(x) == [1]")
         assert %VarInfo{name: :x, type: :list} = var_with_guards("length(x) == 1")
+        assert %VarInfo{name: :x, type: :list} = var_with_guards("1 == length(x)")
+        assert %VarInfo{name: :x, type: {:list, :boolean}} = var_with_guards("hd(x)")
       end
 
       test "tuple guards" do
@@ -3454,6 +3461,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
         assert %VarInfo{name: :x, type: {:tuple, 1, [nil]}} =
                  var_with_guards("tuple_size(x) == 1")
+
+        assert %VarInfo{name: :x, type: {:tuple, 1, [nil]}} =
+                 var_with_guards("1 == tuple_size(x)")
 
         assert %VarInfo{name: :x, type: :tuple} = var_with_guards("elem(x, 0) == 1")
       end
@@ -3468,7 +3478,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       test "map guards" do
         assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("is_map(x)")
+        assert %VarInfo{name: :x, type: {:intersection, [{:map, [], nil}, nil]}} = var_with_guards("is_non_struct_map(x)")
         assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("map_size(x) == 1")
+        assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("1 == map_size(x)")
 
         assert %VarInfo{name: :x, type: {:map, [a: nil], nil}} =
                  var_with_guards("is_map_key(x, :a)")
@@ -3478,15 +3490,96 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
 
       test "struct guards" do
-        assert %VarInfo{name: :x, type: {:struct, [], nil, nil}} = var_with_guards("is_struct(x)")
+        assert %VarInfo{name: :x, type: {
+          :intersection,
+          [
+            {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+            {:struct, [], nil, nil}
+          ]
+        }} = var_with_guards("is_struct(x)")
 
-        assert %VarInfo{name: :x, type: {:struct, [], {:atom, URI}, nil}} =
+        assert %VarInfo{name: :x, type: {
+          :intersection,
+          [
+            {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+            {:struct, [], {:atom, URI}, nil}
+          ]
+        }} =
                  var_with_guards("is_struct(x, URI)")
 
-        assert %VarInfo{name: :x, type: {:struct, [], {:atom, URI}, nil}} =
+        assert %VarInfo{name: :x, type: {
+          :intersection,
+          [
+            {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+            {:struct, [], {:atom, URI}, nil}
+          ]
+        }} =
                  """
                  defmodule MyModule do
                    alias URI, as: MyURI
+
+                   def func(x) when is_struct(x, MyURI) do
+                     IO.puts ""
+                   end
+                 end
+                 """
+                 |> string_to_state()
+                 |> get_line_vars(5)
+                 |> hd()
+      end
+
+      test "exception guards" do
+        assert %VarInfo{name: :x, type: {
+          :intersection,
+          [
+            {
+              :intersection,
+              [
+                {
+                  :intersection,
+                  [
+                    {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                    {:struct, [], nil, nil}
+                  ]
+                },
+                {:map, [{:__exception__, nil}], nil}
+              ]
+            },
+            {:map, [{:__exception__, {:atom, true}}], nil}
+          ]
+        }} = var_with_guards("is_exception(x)")
+
+        assert %VarInfo{name: :x, type: {
+          :intersection,
+          [
+            {
+              :intersection,
+              [
+                {
+                  :intersection,
+                  [
+                    {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                    {:struct, [], {:atom, ArgumentError}, nil}
+                  ]
+                },
+                {:map, [{:__exception__, nil}], nil}
+              ]
+            },
+            {:map, [{:__exception__, {:atom, true}}], nil}
+          ]
+        }} =
+                 var_with_guards("is_exception(x, ArgumentError)")
+
+        assert %VarInfo{name: :x, type: {
+          :intersection,
+          [
+            {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+            {:struct, [], {:atom, ArgumentError}, nil}
+          ]
+        }} =
+                 """
+                 defmodule MyModule do
+                   alias ArgumentError, as: MyURI
 
                    def func(x) when is_struct(x, MyURI) do
                      IO.puts ""
@@ -3514,6 +3607,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
         assert %VarInfo{name: :x, type: {:union, [:number, :atom, :binary]}} =
                  var_with_guards("is_number(x) or is_atom(x) or is_binary(x)")
+      end
+
+      test "negated guards cannot be used for inference" do
+        assert %VarInfo{name: :x, type: nil} =
+                 var_with_guards("not is_map(x)")
+
+        assert %VarInfo{name: :x, type: {:union, [nil, :atom]}} =
+                 var_with_guards("not is_map(x) or is_atom(x)")
+
+        assert %VarInfo{name: :x, type: {:intersection, [:nil, :atom]}} =
+                 var_with_guards("not is_map(x) and is_atom(x)")
       end
     end
   end

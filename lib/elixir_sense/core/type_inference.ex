@@ -96,7 +96,11 @@ defmodule ElixirSense.Core.TypeInference do
 
   # map
   def get_binding_type(state, {:%{}, _meta, fields}) when is_list(fields) do
-    {:map, get_fields_binding_type(state, fields), nil}
+    field_type = get_fields_binding_type(state, fields)
+    case field_type |> Keyword.fetch(:__struct__) do
+      {:ok, type} -> {:struct, [], type, nil}
+      _ -> {:map, field_type, nil}
+    end
   end
 
   # match
@@ -106,12 +110,12 @@ defmodule ElixirSense.Core.TypeInference do
 
   # stepped range struct
   def get_binding_type(_state, {:"..//", _, [_, _, _]}) do
-    {:struct, [], {:atom, Range}}
+    {:struct, [], {:atom, Range}, nil}
   end
 
   # range struct
   def get_binding_type(_state, {:.., _, [_, _]}) do
-    {:struct, [], {:atom, Range}}
+    {:struct, [], {:atom, Range}, nil}
   end
 
   @builtin_sigils %{
@@ -126,7 +130,7 @@ defmodule ElixirSense.Core.TypeInference do
   # builtin sigil struct
   def get_binding_type(_state, {sigil, _, _}) when is_map_key(@builtin_sigils, sigil) do
     # TODO support custom sigils
-    {:struct, [], {:atom, @builtin_sigils |> Map.fetch!(sigil)}}
+    {:struct, [], {:atom, @builtin_sigils |> Map.fetch!(sigil)}, nil}
   end
 
   # tuple

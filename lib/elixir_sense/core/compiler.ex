@@ -1645,7 +1645,7 @@ defmodule ElixirSense.Core.Compiler do
         %{env_for_expand | context: :guard}
       )
 
-    type_info = Guard.type_information_from_guards(e_guard |> dbg, state) |> dbg
+    type_info = Guard.type_information_from_guards(e_guard)
 
     state = merge_inferred_types(state, type_info)
 
@@ -2156,8 +2156,8 @@ defmodule ElixirSense.Core.Compiler do
     sm = __MODULE__.Env.reset_read(sr, s)
     {[e_left], sl, el} = __MODULE__.Clauses.head([left], sm, er)
 
-    match_context_r = TypeInference.get_binding_type(sr, e_right) |> dbg
-    vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left |> dbg, {:for_expression, match_context_r}) |> dbg
+    match_context_r = TypeInference.get_binding_type(sr, e_right)
+    vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left, {:for_expression, match_context_r})
 
     sl = State.annotate_vars_with_inferred_types(sl, vars_l_with_inferred_types)
 
@@ -2511,7 +2511,7 @@ defmodule ElixirSense.Core.Compiler do
             {e_guard, sg, eg} =
               guard(guard, %{sa | prematch: prematch}, %{ea | context: :guard})
 
-            type_info = Guard.type_information_from_guards(e_guard |> dbg, sg) |> dbg
+            type_info = Guard.type_information_from_guards(e_guard)
 
             sg = merge_inferred_types(sg, type_info)
 
@@ -2684,8 +2684,8 @@ defmodule ElixirSense.Core.Compiler do
       sm = ElixirEnv.reset_read(sr, s)
       {[e_left], sl, el} = head([left], sm, er)
 
-      match_context_r = TypeInference.get_binding_type(sr, e_right) |> dbg
-      vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left |> dbg, match_context_r) |> dbg
+      match_context_r = TypeInference.get_binding_type(sr, e_right)
+      vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context_r)
 
       sl = State.annotate_vars_with_inferred_types(sl, vars_l_with_inferred_types)
 
@@ -4704,7 +4704,7 @@ defmodule ElixirSense.Core.Compiler do
 
   defmodule Rewrite do
     def inline(module, fun, arity) do
-      if Application.get_env(:elixir_sense, :compiler_rewrite) do
+      if true || Application.get_env(:elixir_sense, :compiler_rewrite) do
         :elixir_rewrite.inline(module, fun, arity)
       else
         false
@@ -4712,7 +4712,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     def rewrite(context, receiver, dot_meta, right, meta, e_args, s) do
-      if Application.get_env(:elixir_sense, :compiler_rewrite) do
+      if true || Application.get_env(:elixir_sense, :compiler_rewrite) do
         do_rewrite(context, receiver, dot_meta, right, meta, e_args, s)
       else
         {:ok, {{:., dot_meta, [receiver, right]}, meta, e_args}}
