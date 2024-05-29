@@ -187,39 +187,40 @@ defmodule ElixirSense.Core.TypeInference do
     {_ast, {vars, _match_context}} =
       Macro.prewalk(ast, {[], match_context}, &match_var(state, &1, &2))
 
-    vars |> Map.new
+    vars
   end
 
-  defp match_var(
-         state,
-         {:in, _meta,
-          [
-            left,
-            right
-          ]},
-         {vars, _match_context}
-       ) do
-    exception_type =
-      case right do
-        [elem] ->
-          get_binding_type(state, elem)
+  # TODO not needed
+  # defp match_var(
+  #        state,
+  #        {:in, _meta,
+  #         [
+  #           left,
+  #           right
+  #         ]},
+  #        {vars, _match_context}
+  #      ) do
+  #   exception_type =
+  #     case right do
+  #       [elem] ->
+  #         get_binding_type(state, elem)
 
-        list when is_list(list) ->
-          types = for elem <- list, do: get_binding_type(state, elem)
-          if Enum.all?(types, &match?({:atom, _}, &1)), do: {:atom, Exception}
+  #       list when is_list(list) ->
+  #         types = for elem <- list, do: get_binding_type(state, elem)
+  #         if Enum.all?(types, &match?({:atom, _}, &1)), do: {:atom, Exception}
 
-        elem ->
-          get_binding_type(state, elem)
-      end
+  #       elem ->
+  #         get_binding_type(state, elem)
+  #     end
 
-    match_context =
-      case exception_type do
-        {:atom, atom} -> {:struct, [], {:atom, atom}, nil}
-        _ -> nil
-      end
+  #   match_context =
+  #     case exception_type do
+  #       {:atom, atom} -> {:struct, [], {:atom, atom}, nil}
+  #       _ -> nil
+  #     end
 
-    match_var(state, left, {vars, match_context})
-  end
+  #   match_var(state, left, {vars, match_context})
+  # end
 
   defp match_var(
          state,
@@ -248,11 +249,7 @@ defmodule ElixirSense.Core.TypeInference do
        var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
       case Keyword.fetch(meta, :version) do
         {:ok, version} ->
-          var_info = state.vars_info |> hd |> Map.fetch!({var, version})
-
-          var_info = %VarInfo{var_info | type: match_context}
-
-          {nil, {[{{var, version}, var_info} | vars], nil}}
+          {nil, {[{{var, version}, match_context} | vars], nil}}
         _ ->
           {ast, {vars, match_context}}
         end
@@ -267,21 +264,18 @@ defmodule ElixirSense.Core.TypeInference do
               var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
     case Keyword.fetch(meta, :version) do
       {:ok, version} ->
-        var_info = state.vars_info |> hd |> Map.fetch!({var, version})
-
-        var_info = %VarInfo{var_info | type: match_context}
-
-        {nil, {[{{var, version}, var_info} | vars], nil}}
+        {nil, {[{{var, version}, match_context} | vars], nil}}
       _ ->
         {ast, {vars, match_context}}
      end
   end
 
   # drop right side of guard expression as guards cannot define vars
-  defp match_var(state, {:when, _, [left, _right]}, {vars, match_context}) do
-    # TODO should we infer from guard here?
-    match_var(state, left, {vars, match_context})
-  end
+  # TODO not needed
+  # defp match_var(state, {:when, _, [left, _right]}, {vars, match_context}) do
+  #   # TODO should we infer from guard here?
+  #   match_var(state, left, {vars, match_context})
+  # end
 
   defp match_var(state, {:%, _, [type_ast, {:%{}, _, ast}]}, {vars, match_context})
        when not is_nil(match_context) do
@@ -389,4 +383,8 @@ defmodule ElixirSense.Core.TypeInference do
   defp match_var(_state, ast, {vars, match_context}) do
     {ast, {vars, match_context}}
   end
+
+  def find_refinable({:=, _, [left, right]}, acc, e), do: find_refinable(right, [left | acc], e)
+  def find_refinable(other, acc, e) when e.context == :match, do: [other | acc]
+  def find_refinable(_, acc, _), do: acc
 end

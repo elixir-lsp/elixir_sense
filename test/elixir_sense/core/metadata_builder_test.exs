@@ -2352,7 +2352,30 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ] = state |> get_line_vars(4)
       end
 
-      test "nested `=` binding" do
+      test "two way refinement in match context" do
+        state =
+          """
+          defmodule MyModule do
+            def some(%MyState{formatted: formatted} = state) do
+              IO.puts ""
+            end
+          end
+          """
+          |> string_to_state
+
+        assert [
+                 %VarInfo{
+                   name: :formatted,
+                   type: {:map_key, {:variable, :state}, {:atom, :formatted}},
+                 },
+                 %VarInfo{
+                   name: :state,
+                   type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+                 }
+               ] = state |> get_line_vars(3)
+      end
+
+      test "two way refinement in nested `=` binding" do
         state =
           """
           defmodule MyModule do

@@ -34,14 +34,23 @@ defmodule ElixirSense.Core.Compiler do
 
     match_context_r = TypeInference.get_binding_type(sr, e_right)
     vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context_r)
-    vars_r_with_inferred_types = case e.context do
-      :match ->
-        match_context_l = TypeInference.get_binding_type(sl, e_left)
-        TypeInference.find_vars(sr, e_right, match_context_l)
-      _ -> %{}
-    end
 
-    sl = annotate_vars_with_inferred_types(sl, Map.merge(vars_l_with_inferred_types, vars_r_with_inferred_types))
+    expressions_to_refine = TypeInference.find_refinable(e_right, [], e) |> dbg
+    vars_r_with_inferred_types = if expressions_to_refine != [] do
+      # we are in match context and the right side is also a pattern, we can refine types
+      # on the right side using the inferred type of the left side
+      match_context_l = TypeInference.get_binding_type(sl, e_left) |> dbg
+      for expr <- expressions_to_refine, reduce: [] do
+        acc ->
+          vars_in_expr_with_inferred_types = TypeInference.find_vars(sl, expr, match_context_l) |> dbg
+          # TODO this merge is wrong
+          acc ++ vars_in_expr_with_inferred_types
+      end
+    else
+      []
+    end |> dbg
+
+    sl = merge_inferred_types(sl, vars_l_with_inferred_types ++ vars_r_with_inferred_types)
     # match_context_l = TypeInference.get_binding_type(sl, e_left) |> dbg
 
     # elixir raises parallel_bitstring_match if detected
@@ -2159,7 +2168,7 @@ defmodule ElixirSense.Core.Compiler do
     match_context_r = TypeInference.get_binding_type(sr, e_right)
     vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left, {:for_expression, match_context_r})
 
-    sl = State.annotate_vars_with_inferred_types(sl, vars_l_with_inferred_types)
+    sl = State.merge_inferred_types(sl, vars_l_with_inferred_types)
 
     {{:<-, meta, [e_left, e_right]}, sl, el}
   end
@@ -2575,7 +2584,7 @@ defmodule ElixirSense.Core.Compiler do
         case head(c, s, e) do
           {[h | _] = c, s, e} ->
             clause_vars_with_inferred_types = TypeInference.find_vars(s, h, match_context)
-            s = State.annotate_vars_with_inferred_types(s, clause_vars_with_inferred_types)
+            s = State.merge_inferred_types(s, clause_vars_with_inferred_types)
 
             {c, s, e}
           other -> other
@@ -2687,7 +2696,7 @@ defmodule ElixirSense.Core.Compiler do
       match_context_r = TypeInference.get_binding_type(sr, e_right)
       vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context_r)
 
-      sl = State.annotate_vars_with_inferred_types(sl, vars_l_with_inferred_types)
+      sl = State.merge_inferred_types(sl, vars_l_with_inferred_types)
 
       {{:<-, meta, [e_left, e_right]}, {sl, el}}
     end
@@ -2817,7 +2826,7 @@ defmodule ElixirSense.Core.Compiler do
       match_context = {:struct, [], {:atom, Exception}, nil}
 
       vars_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context)
-      sl = State.annotate_vars_with_inferred_types(sl, vars_with_inferred_types)
+      sl = State.merge_inferred_types(sl, vars_with_inferred_types)
       
       {e_left, sl, el}
     end
@@ -2839,7 +2848,7 @@ defmodule ElixirSense.Core.Compiler do
       match_context = {:struct, [], {:atom, Exception}, nil}
 
       vars_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context)
-      sl = State.annotate_vars_with_inferred_types(sl, vars_with_inferred_types)
+      sl = State.merge_inferred_types(sl, vars_with_inferred_types)
       
       {e_left, sl, el}
     end
@@ -2865,7 +2874,7 @@ defmodule ElixirSense.Core.Compiler do
           end
 
           vars_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context)
-          sr = State.annotate_vars_with_inferred_types(sr, vars_with_inferred_types)
+          sr = State.merge_inferred_types(sr, vars_with_inferred_types)
 
           {{:in, meta, [e_left, normalized]}, sr, er}
 
