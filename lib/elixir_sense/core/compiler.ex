@@ -33,19 +33,19 @@ defmodule ElixirSense.Core.Compiler do
     match_context_r = TypeInference.get_binding_type(e_right)
     vars_l_with_inferred_types = TypeInference.find_vars(e_left, match_context_r)
 
-    expressions_to_refine = TypeInference.find_refinable(e_right, [], e) |> dbg
+    expressions_to_refine = TypeInference.find_refinable(e_right, [], e)
     vars_r_with_inferred_types = if expressions_to_refine != [] do
       # we are in match context and the right side is also a pattern, we can refine types
       # on the right side using the inferred type of the left side
-      match_context_l = TypeInference.get_binding_type(e_left) |> dbg
+      match_context_l = TypeInference.get_binding_type(e_left)
       for expr <- expressions_to_refine, reduce: [] do
         acc ->
-          vars_in_expr_with_inferred_types = TypeInference.find_vars(expr, match_context_l) |> dbg
+          vars_in_expr_with_inferred_types = TypeInference.find_vars(expr, match_context_l)
           acc ++ vars_in_expr_with_inferred_types
       end
     else
       []
-    end |> dbg
+    end
 
     sl = merge_inferred_types(sl, vars_l_with_inferred_types ++ vars_r_with_inferred_types)
 
