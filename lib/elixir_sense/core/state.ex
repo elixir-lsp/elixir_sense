@@ -27,7 +27,7 @@ defmodule ElixirSense.Core.State do
           optional({module, atom, nil | non_neg_integer}) => ElixirSense.Core.State.SpecInfo.t()
         }
   @type vars_info_per_scope_id_t :: %{
-          optional(scope_id_t) => %{optional(atom) => ElixirSense.Core.State.VarInfo.t()}
+          optional(scope_id_t) => [%{optional({atom(), non_neg_integer()}) => ElixirSense.Core.State.VerInfo.t()}]
         }
   @type structs_t :: %{optional(module) => ElixirSense.Core.State.StructInfo.t()}
   @type protocol_t :: {module, nonempty_list(module)}
@@ -852,7 +852,14 @@ defmodule ElixirSense.Core.State do
     [scope_id | _other_scope_ids] = state.scope_ids
     [current_scope_vars | _other_scope_vars] = state.vars_info
 
-    Map.put(state.vars_info_per_scope_id, scope_id, current_scope_vars |> Map.values())
+    for {scope_id, vars} <- state.vars_info_per_scope_id, into: %{} do
+      updated_vars = for {key, var} <- vars, into: %{} do
+        {key, Map.get(current_scope_vars, key, var)}
+      end
+
+      {scope_id, updated_vars}
+    end
+    |> Map.put(scope_id, current_scope_vars)
   end
 
   def remove_attributes_scope(%__MODULE__{} = state) do

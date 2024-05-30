@@ -207,18 +207,20 @@ defmodule ElixirSense.Core.Metadata do
         {line, column},
         predicate \\ fn _ -> true end
       ) do
-    scope_vars = vars_info_per_scope_id[env.scope_id] || []
-    env_vars_names = env.vars |> Enum.map(& &1.name)
+    scope_vars = vars_info_per_scope_id[env.scope_id] || %{}
+    env_vars_keys = env.vars |> Enum.map(& {&1.name, &1.version})
 
     scope_vars_missing_in_env =
       scope_vars
-      |> Enum.filter(fn var ->
-        var.name not in env_vars_names and Enum.min(var.positions) <= {line, column} and
+      |> Enum.filter(fn {key, var} ->
+        key not in env_vars_keys and Enum.min(var.positions) <= {line, column} and
           predicate.(var)
       end)
+      |> Enum.map(fn {_, value} -> value end)
 
     env_vars = for var <- env.vars do
-      scope_vars |> Enum.find(& &1.name == var.name && &1.scope_id == var.scope_id)
+      key = {var.name, var.version}
+      Map.fetch!(scope_vars, key)
     end
 
     %{env | vars: env_vars ++ scope_vars_missing_in_env}

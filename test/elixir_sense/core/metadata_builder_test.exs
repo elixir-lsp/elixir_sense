@@ -1237,7 +1237,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert [%VarInfo{scope_id: scope_id}] = state |> get_line_vars(4)
-      assert [%VarInfo{name: :var}] = state.vars_info_per_scope_id[scope_id]
+      assert [%VarInfo{name: :var}] = state.vars_info_per_scope_id[scope_id] |> Map.values()
     end
 
     test "vars defined inside a function without params" do
@@ -1356,7 +1356,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :p, positions: [{2, 14}, {2, 21}, {2, 29}]}
-             ] = state.vars_info_per_scope_id[2]
+             ] = state.vars_info_per_scope_id[2] |> Map.values()
     end
 
     test "registers spec parameters" do
@@ -1373,7 +1373,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [
                %VarInfo{name: :p, positions: [{2, 49}, {2, 18}, {2, 25}, {2, 33}, {2, 70}]},
                %VarInfo{name: :q, positions: [{2, 49}, {2, 46}]}
-             ] = state.vars_info_per_scope_id[2]
+             ] = state.vars_info_per_scope_id[2] |> Map.values
     end
 
     test "does not register annotated spec params as type variables" do
@@ -1385,7 +1385,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert [] == state.vars_info_per_scope_id[2]
+      assert %{} == state.vars_info_per_scope_id[2]
     end
 
     test "does not register annotated type elements as variables" do
@@ -1397,7 +1397,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert [] == state.vars_info_per_scope_id[2]
+      assert %{} == state.vars_info_per_scope_id[2]
     end
   end
 
