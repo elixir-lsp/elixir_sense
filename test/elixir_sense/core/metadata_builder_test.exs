@@ -2062,7 +2062,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           |> string_to_state
 
         assert [
-                 %VarInfo{name: :a, type: {:list_head, {:attribute, :myattribute}}},                 
+                 %VarInfo{name: :a, type: {:intersection, [:atom, {:list_head, {:attribute, :myattribute}}]}},                 
                ] = state |> get_line_vars(4)
       end
 
@@ -2299,7 +2299,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ] = state |> get_line_vars(13) |> Enum.filter(&(&1.name == :asd))
 
         assert [
-                 %VarInfo{name: :x, type: {:intersection, [{:variable, :z}, {:variable, :asd}]}},
+                 %VarInfo{name: :x, type: {:intersection, [{:variable, :asd}, {:variable, :z}]}},
                  %VarInfo{name: :z, type: {:variable, :asd}}
                ] = state |> get_line_vars(15) |> Enum.filter(&(&1.name in [:x, :z]))
       end
@@ -2358,6 +2358,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           defmodule MyModule do
             def some(%MyState{formatted: formatted} = state) do
               IO.puts ""
+
+              case :ok do
+                %{foo: 1} = state = %{bar: 1} = x ->
+                  IO.puts ""
+              end
             end
           end
           """
@@ -2373,6 +2378,74 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
                  }
                ] = state |> get_line_vars(3)
+
+               assert [
+                %VarInfo{
+                  name: :formatted
+                },
+                %VarInfo{
+                  name: :state,
+                  type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+                }
+              ] = state |> get_line_vars(7)
+      end
+
+      test "two way refinement in match context nested" do
+        state =
+          """
+          defmodule MyModule do
+            def some(%{foo: 1} = state = %{bar: 1} = x) do
+              IO.puts ""
+            end
+          end
+          """
+          |> string_to_state
+
+        assert [
+                 %VarInfo{
+                   name: :formatted,
+                   type: {:map_key, {:variable, :state}, {:atom, :formatted}},
+                 },
+                 %VarInfo{
+                   name: :state,
+                   type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+                 }
+               ] = state |> get_line_vars(3)
+
+               assert [
+                %VarInfo{
+                  name: :formatted
+                },
+                %VarInfo{
+                  name: :state,
+                  type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+                }
+              ] = state |> get_line_vars(7)
+      end
+
+      test "two way refinement in match context nested case" do
+        state =
+          """
+          defmodule MyModule do
+            def some(state) do
+              case :ok do
+                %{foo: 1} = state = %{bar: 1} = x ->
+                  IO.puts ""
+              end
+            end
+          end
+          """
+          |> string_to_state
+
+               assert [
+                %VarInfo{
+                  name: :formatted
+                },
+                %VarInfo{
+                  name: :state,
+                  type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+                }
+              ] = state |> get_line_vars(5)
       end
 
       test "two way refinement in nested `=` binding" do
@@ -2380,7 +2453,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           """
           defmodule MyModule do
             def some() do
-              %State{formatted: formatted} = state = socket.assigns.state
+              %MyState{formatted: formatted} = state = socket.assigns.state
               IO.puts ""
             end
           end
@@ -2406,9 +2479,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    type:
                      {:intersection,
                       [
-                        {:struct, [formatted: {:variable, :formatted}], {:atom, Elixir.State},
-                         nil},
-                        {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []}
+                        {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []},
+                        {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
                       ]}
                  }
                ] = state |> get_line_vars(4)
@@ -2429,6 +2501,35 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           |> string_to_state
 
         assert [
+                 %VarInfo{
+                   name: :x,
+                   type:
+                     {:tuple_nth,
+                      {:intersection,
+                       [{:call, {:atom, Some}, :call, []}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
+                 }
+               ] = state |> get_line_vars(5)
+      end
+
+      test "case binding with match" do
+        state =
+          """
+          defmodule MyModule do
+            def some() do
+              case Some.call() do
+                {:ok, x} = res ->
+                  IO.puts ""
+              end
+            end
+          end
+          """
+          |> string_to_state
+
+        assert [
+                %VarInfo{
+                  name: :res,
+                  type: :todo
+                },
                  %VarInfo{
                    name: :x,
                    type:

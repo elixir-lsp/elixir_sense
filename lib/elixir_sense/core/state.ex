@@ -1320,11 +1320,6 @@ defmodule ElixirSense.Core.State do
     end
   end
 
-  defp merge_type(nil, new), do: new
-  defp merge_type(old, nil), do: old
-  defp merge_type(old, old), do: old
-  defp merge_type(old, new), do: {:intersection, [old, new]}
-
   def default_env, do: %ElixirSense.Core.State.Env{}
 
   def expand(ast, %__MODULE__{} = state) do
@@ -1844,16 +1839,15 @@ defmodule ElixirSense.Core.State do
   def merge_inferred_types(state, inferred_types) do
     [h | t] = state.vars_info
 
-    h = for {{var, version}, type} <- inferred_types, reduce: h do
-      acc ->
-        updated_var = case acc[{var, version}] do
-          %VarInfo{type: nil} = v -> %{v | type: type}
-          %VarInfo{type: ^type} = v -> v
-          %VarInfo{type: old_type} = v -> %{v | type: {:intersection, [type, old_type]}}
-        end
-        Map.put(acc, {var, version}, updated_var)
+    h = for {key, type} <- inferred_types, reduce: h do
+      acc -> Map.update!(acc, key, fn %VarInfo{type: old} = v -> %{v | type: merge_type(old, type)} end)
     end
 
     %{state | vars_info: [h | t]}
   end
+
+  defp merge_type(nil, new), do: new
+  defp merge_type(old, nil), do: old
+  defp merge_type(old, old), do: old
+  defp merge_type(old, new), do: {:intersection, [old, new]}
 end

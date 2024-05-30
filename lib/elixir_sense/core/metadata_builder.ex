@@ -140,9 +140,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
   defp pre_func({type, meta, ast_args}, state, meta, name, params, options \\ [])
        when is_atom(name) do
-    vars =
-      state
-      |> find_vars(params, nil)
+    vars = find_vars(params, nil)
 
     _vars =
       if options[:guards],
@@ -272,9 +270,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre_clause({_clause, _meta, _} = ast, state, lhs) do
-    _vars =
-      state
-      |> find_vars(lhs, Enum.at(state.binding_context, 0))
+    _vars = find_vars(lhs, Enum.at(state.binding_context, 0))
 
     state
     |> new_lexical_scope
@@ -501,9 +497,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   defp pre({:when, meta, [lhs, rhs]}, state) do
-    _vars =
-      state
-      |> find_vars(lhs, nil)
+    _vars = find_vars(lhs, nil)
 
     state
     # |> add_vars(vars, true)
@@ -524,7 +518,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     column = Keyword.fetch!(meta, :column)
 
     state
-    |> push_binding_context(get_binding_type(state, condition_ast))
+    |> push_binding_context(get_binding_type(condition_ast))
     |> add_call_to_line({nil, :case, 2}, {line, column})
     # |> add_current_env_to_line(line)
     |> result(ast)
@@ -808,7 +802,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   defp post({atom, meta, [lhs, rhs]} = ast, state)
        when atom in [:=, :<-] do
     _line = Keyword.fetch!(meta, :line)
-    match_context_r = get_binding_type(state, rhs)
+    match_context_r = get_binding_type(rhs)
 
     match_context_r =
       if atom == :<- and match?([:for | _], state.binding_context) do
@@ -817,13 +811,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
         match_context_r
       end
 
-    vars_l = find_vars(state, lhs, match_context_r)
+    vars_l = find_vars(lhs, match_context_r)
 
     _vars =
       case rhs do
         {:=, _, [nested_lhs, _nested_rhs]} ->
-          match_context_l = get_binding_type(state, lhs)
-          nested_vars = find_vars(state, nested_lhs, match_context_l)
+          match_context_l = get_binding_type(lhs)
+          nested_vars = find_vars(nested_lhs, match_context_l)
 
           vars_l ++ nested_vars
 

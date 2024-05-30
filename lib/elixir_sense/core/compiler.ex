@@ -28,22 +28,19 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:=, meta, [left, right]}, s, e) do
     # elixir validates we are not in guard context
     {e_right, sr, er} = expand(right, s, e)
-    # dbg(sr)
-    # dbg(e_right)
     {e_left, sl, el} = __MODULE__.Clauses.match(&expand/3, left, sr, s, er)
 
-    match_context_r = TypeInference.get_binding_type(sr, e_right)
-    vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context_r)
+    match_context_r = TypeInference.get_binding_type(e_right)
+    vars_l_with_inferred_types = TypeInference.find_vars(e_left, match_context_r)
 
     expressions_to_refine = TypeInference.find_refinable(e_right, [], e) |> dbg
     vars_r_with_inferred_types = if expressions_to_refine != [] do
       # we are in match context and the right side is also a pattern, we can refine types
       # on the right side using the inferred type of the left side
-      match_context_l = TypeInference.get_binding_type(sl, e_left) |> dbg
+      match_context_l = TypeInference.get_binding_type(e_left) |> dbg
       for expr <- expressions_to_refine, reduce: [] do
         acc ->
-          vars_in_expr_with_inferred_types = TypeInference.find_vars(sl, expr, match_context_l) |> dbg
-          # TODO this merge is wrong
+          vars_in_expr_with_inferred_types = TypeInference.find_vars(expr, match_context_l) |> dbg
           acc ++ vars_in_expr_with_inferred_types
       end
     else
@@ -51,18 +48,7 @@ defmodule ElixirSense.Core.Compiler do
     end |> dbg
 
     sl = merge_inferred_types(sl, vars_l_with_inferred_types ++ vars_r_with_inferred_types)
-    # match_context_l = TypeInference.get_binding_type(sl, e_left) |> dbg
 
-    # elixir raises parallel_bitstring_match if detected
-
-    # IO.inspect(sl.vars_info, label: "left")
-    # dbg(e_left)
-    # dbg(el.versioned_vars)
-    # dbg(sl.vars)
-    # {{:=, meta, [e_left, e_right]}, sl, el |> Map.from_struct()} |> dbg(limit: :infinity)
-    # el = el |> :elixir_env.with_vars(sl.vars |> elem(0))
-    # sl = sl |> add_current_env_to_line(Keyword.fetch!(meta, :line), el)
-    # dbg(sl)
     {{:=, meta, [e_left, e_right]}, sl, el}
   end
 
@@ -1212,7 +1198,7 @@ defmodule ElixirSense.Core.Compiler do
     inferred_type =
       case e_args do
         nil -> nil
-        [arg] -> TypeInference.get_binding_type(state, arg)
+        [arg] -> TypeInference.get_binding_type(arg)
       end
 
     state =
@@ -2165,8 +2151,8 @@ defmodule ElixirSense.Core.Compiler do
     sm = __MODULE__.Env.reset_read(sr, s)
     {[e_left], sl, el} = __MODULE__.Clauses.head([left], sm, er)
 
-    match_context_r = TypeInference.get_binding_type(sr, e_right)
-    vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left, {:for_expression, match_context_r})
+    match_context_r = TypeInference.get_binding_type(e_right)
+    vars_l_with_inferred_types = TypeInference.find_vars(e_left, {:for_expression, match_context_r})
 
     sl = State.merge_inferred_types(sl, vars_l_with_inferred_types)
 
@@ -2569,7 +2555,7 @@ defmodule ElixirSense.Core.Compiler do
     def case(meta, e_expr, opts, s, e) do
       opts = sanitize_opts(opts, [:do])
 
-      match_context = TypeInference.get_binding_type(s, e_expr)
+      match_context = TypeInference.get_binding_type(e_expr)
 
       {case_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
@@ -2583,7 +2569,7 @@ defmodule ElixirSense.Core.Compiler do
       expand_clauses(meta, :case, fn c, s, e ->
         case head(c, s, e) do
           {[h | _] = c, s, e} ->
-            clause_vars_with_inferred_types = TypeInference.find_vars(s, h, match_context)
+            clause_vars_with_inferred_types = TypeInference.find_vars(h, match_context)
             s = State.merge_inferred_types(s, clause_vars_with_inferred_types)
 
             {c, s, e}
@@ -2693,8 +2679,8 @@ defmodule ElixirSense.Core.Compiler do
       sm = ElixirEnv.reset_read(sr, s)
       {[e_left], sl, el} = head([left], sm, er)
 
-      match_context_r = TypeInference.get_binding_type(sr, e_right)
-      vars_l_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context_r)
+      match_context_r = TypeInference.get_binding_type(e_right)
+      vars_l_with_inferred_types = TypeInference.find_vars(e_left, match_context_r)
 
       sl = State.merge_inferred_types(sl, vars_l_with_inferred_types)
 
@@ -2825,7 +2811,7 @@ defmodule ElixirSense.Core.Compiler do
       
       match_context = {:struct, [], {:atom, Exception}, nil}
 
-      vars_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context)
+      vars_with_inferred_types = TypeInference.find_vars(e_left, match_context)
       sl = State.merge_inferred_types(sl, vars_with_inferred_types)
       
       {e_left, sl, el}
@@ -2847,7 +2833,7 @@ defmodule ElixirSense.Core.Compiler do
 
       match_context = {:struct, [], {:atom, Exception}, nil}
 
-      vars_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context)
+      vars_with_inferred_types = TypeInference.find_vars(e_left, match_context)
       sl = State.merge_inferred_types(sl, vars_with_inferred_types)
       
       {e_left, sl, el}
@@ -2873,7 +2859,7 @@ defmodule ElixirSense.Core.Compiler do
             match_context
           end
 
-          vars_with_inferred_types = TypeInference.find_vars(sl, e_left, match_context)
+          vars_with_inferred_types = TypeInference.find_vars(e_left, match_context)
           sr = State.merge_inferred_types(sr, vars_with_inferred_types)
 
           {{:in, meta, [e_left, normalized]}, sr, er}
@@ -4713,19 +4699,11 @@ defmodule ElixirSense.Core.Compiler do
 
   defmodule Rewrite do
     def inline(module, fun, arity) do
-      if true || Application.get_env(:elixir_sense, :compiler_rewrite) do
-        :elixir_rewrite.inline(module, fun, arity)
-      else
-        false
-      end
+      :elixir_rewrite.inline(module, fun, arity)
     end
 
     def rewrite(context, receiver, dot_meta, right, meta, e_args, s) do
-      if true || Application.get_env(:elixir_sense, :compiler_rewrite) do
-        do_rewrite(context, receiver, dot_meta, right, meta, e_args, s)
-      else
-        {:ok, {{:., dot_meta, [receiver, right]}, meta, e_args}}
-      end
+      do_rewrite(context, receiver, dot_meta, right, meta, e_args, s)
     end
 
     defp do_rewrite(_, :erlang, _, :+, _, [arg], _s) when is_number(arg), do: {:ok, arg}
