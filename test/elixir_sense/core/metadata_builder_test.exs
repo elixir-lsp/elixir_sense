@@ -1754,7 +1754,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  %State.VarInfo{
                    name: :abc,
                    type: {:struct, [cde: {:integer, 1}], {:atom, Abc}, nil},
-                   is_definition: true,
                    positions: [{3, 1}]
                  }
                ] = state |> get_line_vars(4)
@@ -2635,11 +2634,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
         vars = state |> get_line_vars(6)
 
+        # TODO wtf
         # assert %VarInfo{
         #          name: :a1,
         #          positions: [{5, 18}],
         #          scope_id: 6,
-        #          is_definition: true,
         #          type: {:map, [b: {:integer, 2}], nil}
         #        } = Enum.find(vars, &(&1.name == :a1))
 
@@ -2648,7 +2647,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert %VarInfo{
                  name: :a2,
                  positions: [{7, 18}],
-                 is_definition: true,
                  type: {:map, [b: {:variable, :b}], nil}
                } = Enum.find(vars, &(&1.name == :a2))
       end
@@ -2796,25 +2794,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert ([
                 %VarInfo{
-                  is_definition: true,
                   name: :var_in,
                   positions: [{5, 5}],
                   scope_id: scope_id_3
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :var_on,
                   positions: [{4, 7}, {4, 24}, {4, 47}],
                   scope_id: scope_id_2
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :var_on1,
                   positions: [{4, 37}],
                   scope_id: scope_id_2
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :var_out1,
                   positions: [{2, 3}],
                   scope_id: scope_id_1
@@ -2864,25 +2858,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert ([
                 %VarInfo{
-                  is_definition: true,
                   name: :var_in,
                   positions: [{5, 5}],
                   scope_id: scope_id_3
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :var_on,
                   positions: [{4, 8}, {4, 25}, {4, 48}],
                   scope_id: scope_id_2
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :var_on1,
                   positions: [{4, 38}],
                   scope_id: scope_id_2
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :var_out1,
                   positions: [{2, 3}],
                   scope_id: scope_id_1
@@ -2982,19 +2972,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert ([
                 %VarInfo{
-                  is_definition: true,
                   name: :var_in,
                   positions: [{4, 5}],
                   scope_id: scope_id_2
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :var_on,
                   positions: [{3, 6}],
                   scope_id: scope_id_2
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :var_out1,
                   positions: [{2, 3}],
                   scope_id: scope_id_1
@@ -3042,25 +3029,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert ([
                 %VarInfo{
-                  is_definition: true,
                   name: :var_in1,
                   positions: [{5, 7}],
                   scope_id: scope_id_2
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :var_on0,
                   positions: [{3, 8}],
                   scope_id: scope_id_1
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :var_on1,
                   positions: [{4, 6}],
                   scope_id: scope_id_2
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :var_out1,
                   positions: [{2, 3}, {3, 18}],
                   scope_id: scope_id_1
@@ -3497,25 +3480,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert ([
                 %VarInfo{
-                  is_definition: true,
                   name: :_my_other,
                   positions: [{2, 24}],
                   scope_id: scope_id_1
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :abc,
                   positions: [{3, 6}],
                   scope_id: scope_id_2
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :my_var,
                   positions: [{2, 13}],
                   scope_id: scope_id_1
                 },
                 %VarInfo{
-                  is_definition: true,
                   name: :x,
                   positions: [{2, 43}, {3, 14}],
                   scope_id: scope_id_1

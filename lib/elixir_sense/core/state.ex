@@ -162,13 +162,13 @@ defmodule ElixirSense.Core.State do
             name: atom,
             positions: list(ElixirSense.Core.State.position_t()),
             scope_id: nil | ElixirSense.Core.State.scope_id_t(),
-            is_definition: boolean,
+            version: non_neg_integer(),
             type: ElixirSense.Core.State.var_type()
           }
     defstruct name: nil,
               positions: [],
               scope_id: nil,
-              is_definition: false,
+              version: 0,
               type: nil
   end
 
@@ -1112,7 +1112,7 @@ defmodule ElixirSense.Core.State do
 
     info = %VarInfo{
       name: name,
-      is_definition: true,
+      version: version,
       positions: [{line, column}],
       scope_id: scope_id
     }
