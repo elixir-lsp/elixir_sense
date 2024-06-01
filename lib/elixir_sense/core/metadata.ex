@@ -59,10 +59,13 @@ defmodule ElixirSense.Core.Metadata do
     }
   end
 
-  def get_cursor_env(%__MODULE__{} = metadata, {line, column}) do
-    prefix = ElixirSense.Core.Source.text_before(metadata.source, line, column)
+  def get_cursor_env(%__MODULE__{} = metadata, {{begin_line, begin_column}, {end_line, end_column}}) do
+    prefix = ElixirSense.Core.Source.text_before(metadata.source, begin_line, begin_column)
+    suffix = ElixirSense.Core.Source.text_after(metadata.source, end_line, end_column)
 
-    {meta, cursor_env} = case NormalizedCode.Fragment.container_cursor_to_quoted(prefix, [columns: true, token_metadata: true]) do
+    source_with_cursor = prefix <> "(__cursor__())" <> suffix
+
+    {meta, cursor_env} = case Code.string_to_quoted(source_with_cursor, [columns: true, token_metadata: true]) do
       {:ok, ast} ->
         ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
 
@@ -70,7 +73,37 @@ defmodule ElixirSense.Core.Metadata do
         {[], nil}
     end
 
-    env = if cursor_env != nil do
+    {_meta, cursor_env} = if cursor_env != nil do
+      {meta, cursor_env}
+    else
+      case NormalizedCode.Fragment.container_cursor_to_quoted(prefix, [columns: true, token_metadata: true]) do
+        {:ok, ast} ->
+          ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
+  
+        _ ->
+          {[], nil}
+      end
+    end
+
+    if cursor_env != nil do
+      cursor_env
+    else
+      get_env(metadata, {begin_line, begin_column})
+    end
+  end
+
+  def get_cursor_env(%__MODULE__{} = metadata, {line, column}) do
+    prefix = ElixirSense.Core.Source.text_before(metadata.source, line, column)
+
+    {_meta, cursor_env} = case NormalizedCode.Fragment.container_cursor_to_quoted(prefix, [columns: true, token_metadata: true]) do
+      {:ok, ast} ->
+        ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
+
+      _ ->
+        {[], nil}
+    end
+
+    if cursor_env != nil do
       cursor_env
     else
       get_env(metadata, {line, column})

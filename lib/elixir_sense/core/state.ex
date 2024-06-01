@@ -1533,7 +1533,7 @@ defmodule ElixirSense.Core.State do
     outer_scope_vars =
       for {key, _} <- outer_scope_vars,
           into: %{},
-          # TODO merge type?
+          # TODO merge type and positions?
           do: {key, current_scope_vars[key]}
 
     vars_info = [current_scope_vars, outer_scope_vars | other_scopes_vars]
