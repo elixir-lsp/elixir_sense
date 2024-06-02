@@ -244,16 +244,17 @@ defmodule ElixirSense.Core.Compiler do
     {opts, state, env} = expand_opts([:only, :except, :warn], opts, state, env)
 
     if is_atom(arg) do
-      # TODO check difference
-      # elixir_aliases:ensure_loaded(Meta, ERef, ET)
-      # elixir_import:import(Meta, ERef, EOpts, ET, true, true)
-      # TODO this does not work for context modules
-      with true <- Code.ensure_loaded?(arg),
-           {:ok, env} <- Macro.Env.define_import(env, meta, arg, [trace: false] ++ opts) do
-        {arg, state, env}
-      else
+      opts = opts
+      |> Keyword.merge([
+        trace: false,
+        emit_warnings: false,
+        info_callback: import_info_callback(arg, state)
+      ])
+
+      case Macro.Env.define_import(env, meta, arg, opts) do
+        {:ok, env} ->
+           {arg, state, env}
         _ ->
-          # elixir_import
           {arg, state, env}
       end
     else
@@ -2314,6 +2315,37 @@ defmodule ElixirSense.Core.Compiler do
   def expand_args(args, s, e) do
     {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {__MODULE__.Env.prepare_write(s), s}, e, args)
     {e_args, __MODULE__.Env.close_write(sa, s), ea}
+  end
+
+  @internals [{:behaviour_info, 1}, {:module_info, 1}, {:module_info, 0}]
+  defp import_info_callback(module, state) do
+    fn kind ->
+      if Map.has_key?(state.mods_funs_to_positions, {module, nil, nil}) do
+        category = if kind == :functions, do: :function, else: :macro
+        for {{^module, fun, arity}, info} when fun != nil <- state.mods_funs_to_positions,
+          {fun, arity} not in @internals,
+          State.ModFunInfo.get_category(info) == category,
+          not State.ModFunInfo.private?(info) do
+          {fun, arity}
+        end
+      else
+        # this branch is based on implementation in :elixir_import
+        if Code.ensure_loaded?(module) do
+          try do
+            module.__info__(kind)
+          rescue
+            UndefinedFunctionError ->
+              if kind == :functions do
+                module.module_info(:exports) -- @internals
+              else
+                []
+              end
+          end
+        else
+          []
+        end
+      end
+    end
   end
 
   defmodule Env do

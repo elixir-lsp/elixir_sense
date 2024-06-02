@@ -315,6 +315,8 @@ defmodule ElixirSense.Core.State do
       do: :function
 
     def get_category(%ModFunInfo{}), do: :module
+
+    def private?(%ModFunInfo{type: type}), do: type in [:defp, :defmacrop, :defguardp]
   end
 
   def current_aliases(%__MODULE__{} = state) do

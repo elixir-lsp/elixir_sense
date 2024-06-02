@@ -4426,6 +4426,42 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Keyword.has_key?(functions, Enum)
     end
 
+    test "imports current buffer module" do
+      state =
+        """
+        defmodule ImportedModule do
+          def some_fun(a), do: a
+          def _some_fun_underscored(a), do: a
+          defp some_fun_priv(a), do: a
+          defguard my_guard(x) when x > 0
+          defguardp my_guard_priv(x) when x > 0
+          defdelegate to_list(map), to: Map
+          defmacro some(a, b) do
+            quote do: unquote(a) + unquote(b)
+          end
+          defmacrop some_priv(a, b) do
+            quote do: unquote(a) + unquote(b)
+          end
+          defmacro _some_underscored(a, b) do
+            quote do: unquote(a) + unquote(b)
+          end
+        end
+
+        defmodule OuterModule do
+          import ImportedModule
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      {functions, macros} = get_line_imports(state, 21)
+      assert Keyword.has_key?(functions, ImportedModule)
+      assert functions[ImportedModule] == [{:some_fun, 1}, {:to_list, 1}]
+
+      assert Keyword.has_key?(macros, ImportedModule)
+      assert macros[ImportedModule] == [{:my_guard, 1}, {:some, 2}]
+    end
+
     test "imports inside protocol" do
       state =
         """
