@@ -1813,7 +1813,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   end
 
   # stepped range struct
-  def get_binding_type(_state, {:..//, _, [_, _, _]}) do
+  def get_binding_type(_state, {:"..//", _, [_, _, _]}) do
     {:struct, [], {:atom, Range}}
   end
 
