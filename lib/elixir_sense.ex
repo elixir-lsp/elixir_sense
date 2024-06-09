@@ -77,4 +77,21 @@ defmodule ElixirSense do
       other -> other
     end
   end
+
+  defdelegate docs(code, line, column, options \\ []), to: ElixirSense.Providers.Hover.Docs
+
+  defdelegate definition(code, line, column, options \\ []),
+    to: ElixirSense.Providers.Definition.Locator
+
+  defdelegate implementations(code, line, column, options \\ []),
+    to: ElixirSense.Providers.Implementation.Locator
+
+  defdelegate suggestions(code, line, column, options \\ []),
+    to: ElixirSense.Providers.Completion.Suggestion
+
+  defdelegate signature(code, line, column, options \\ []),
+    to: ElixirSense.Providers.SignatureHelp.Signature
+
+  defdelegate references(code, line, column, trace, options \\ []),
+    to: ElixirSense.Providers.References.Locator
 end
