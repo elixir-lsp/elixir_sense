@@ -53,8 +53,12 @@ defmodule ElixirSense.Core.IntrospectionTest do
              }
            ] = get_callbacks_with_docs(:gen_statem) |> Enum.filter(&(&1.name == :callback_mode))
 
-    if ExUnitConfig.erlang_eep48_supported() do
-      assert "- CallbackMode = " <> _ = summary
+    if System.otp_release() |> String.to_integer() >= 23 do
+      if System.otp_release() |> String.to_integer() >= 27 do
+        assert "This function is" <> _ = summary
+      else
+        assert "- CallbackMode = " <> _ = summary
+      end
     end
   end
 

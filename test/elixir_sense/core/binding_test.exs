@@ -1511,8 +1511,7 @@ defmodule ElixirSense.Core.BindingTest do
                  |> Map.merge(%{
                    variables: [
                      %VarInfo{name: :ref, type: {:local_call, :f02, []}}
-                   ],
-                   imports: [{ElixirSenseExample.FunctionsWithReturnSpec, [except: [{:f02, 0}]]}]
+                   ]
                  }),
                  {:variable, :ref}
                )
@@ -1545,8 +1544,7 @@ defmodule ElixirSense.Core.BindingTest do
                           {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f1, []},
                           :abc, []}
                      }
-                   ],
-                   imports: [{ElixirSenseExample.FunctionsWithReturnSpec, []}]
+                   ]
                  }),
                  {:variable, :ref}
                )
@@ -1565,8 +1563,7 @@ defmodule ElixirSense.Core.BindingTest do
                           {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f2, []},
                           :abc, []}
                      }
-                   ],
-                   imports: [{ElixirSenseExample.FunctionsWithReturnSpec, []}]
+                   ]
                  }),
                  {:variable, :ref}
                )
@@ -1585,8 +1582,7 @@ defmodule ElixirSense.Core.BindingTest do
                           {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f2, []},
                           :cde, []}
                      }
-                   ],
-                   imports: [{ElixirSenseExample.FunctionsWithReturnSpec, []}]
+                   ]
                  }),
                  {:variable, :ref}
                )

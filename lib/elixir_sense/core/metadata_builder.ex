@@ -73,7 +73,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
             | attributes: [],
               scope_attributes: [],
               aliases: [],
-              imports: [],
               requires: [],
               scope_ids: [],
               vars: [],
