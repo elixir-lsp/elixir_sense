@@ -3575,6 +3575,18 @@ defmodule ElixirSense.Core.Compiler do
       # named :"&1" are not valid syntax.
       var = {:"&#{pos}", meta, nil}
       {var, :orddict.store(pos, var, dict)}
+
+      case :orddict.find(pos, dict) do
+        {:ok, var} ->
+          {var, dict};
+        :error ->
+          # elixir uses here elixir_module:next_counter(?key(E, module))
+          # but we are not compiling and do not need to keep count in module scope
+          # elixir 1.17 also renames the var to `capture`
+          next = System.unique_integer()
+          var = {:"&#{pos}", [{:counter, next} | meta], nil}
+          {var, :orddict.store(pos, var, dict)}
+      end
     end
 
     defp escape({:&, meta, [pos]}, dict) when is_integer(pos) do

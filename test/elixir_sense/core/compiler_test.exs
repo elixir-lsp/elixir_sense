@@ -61,7 +61,7 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
         {expanded, state, env} = expand(ast)
         dbg(expanded)
 
-        assert clean_capture_arg_position(expanded) == elixir_expanded
+        assert clean_capture_arg(expanded) == clean_capture_arg_elixir(elixir_expanded)
         assert env == elixir_env
         assert state_to_map(state) == elixir_ex_to_map(elixir_state)
       end
@@ -790,16 +790,28 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
       assert_expansion(code)
     end
 
-    defp clean_capture_arg_position(ast) do
+    defp clean_capture_arg(ast) do
       {ast, _} = Macro.prewalk(ast, nil, fn
         {atom, meta, nil} = node, state when is_atom(atom) ->
-          # elixir does not store position meta, we need to clean it to make tests pass
-          meta = with "&" <> int <- to_string(atom), {_, ""} <- Integer.parse(int) do
-            meta |> Keyword.delete(:line) |> Keyword.delete(:column)
+          # elixir changes the name to capture and does different counter tracking
+          node = with "&" <> int <- to_string(atom), {_, ""} <- Integer.parse(int) do
+            meta = Keyword.delete(meta, :counter)
+            {:capture, meta, nil}
           else
-            _ -> meta
+            _ -> node
           end
-          {{atom, meta, nil}, state}
+          {node, state}
+        node, state -> {node, state}
+      end)
+      ast
+    end
+
+    defp clean_capture_arg_elixir(ast) do
+      {ast, _} = Macro.prewalk(ast, nil, fn
+        {:capture, meta, nil} = node, state ->
+          # elixir changes the name to capture and does different counter tracking
+          meta = Keyword.delete(meta, :counter)
+          {{:capture, meta, nil}, state}
         node, state -> {node, state}
       end)
       ast
