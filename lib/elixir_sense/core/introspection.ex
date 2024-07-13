@@ -422,8 +422,7 @@ defmodule ElixirSense.Core.Introspection do
       if kind == :macrocallback do
         {:"MACRO-#{name}", arity + 1}
       else
-        # some erlang callbacks have broken docs e.g. :gen_statem.state_name
-        {name |> Atom.to_string() |> Macro.underscore() |> String.to_atom(), arity}
+        {name, arity}
       end
 
     case List.keyfind(callbacks, key, 0) do
