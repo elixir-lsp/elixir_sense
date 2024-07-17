@@ -76,6 +76,7 @@ defmodule ElixirSense.Core.TypeInference do
   # map
   def get_binding_type({:%{}, _meta, fields}) when is_list(fields) do
     field_type = get_fields_binding_type(fields)
+
     case field_type |> Keyword.fetch(:__struct__) do
       {:ok, type} -> {:struct, [], type, nil}
       _ -> {:map, field_type, nil}
@@ -222,13 +223,14 @@ defmodule ElixirSense.Core.TypeInference do
          {vars, match_context}
        )
        when is_atom(var) and is_atom(context) and
-       var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
-      case Keyword.fetch(meta, :version) do
-        {:ok, version} ->
-          {nil, {[{{var, version}, match_context} | vars], nil}}
-        _ ->
-          {ast, {vars, match_context}}
-        end
+              var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
+    case Keyword.fetch(meta, :version) do
+      {:ok, version} ->
+        {nil, {[{{var, version}, match_context} | vars], nil}}
+
+      _ ->
+        {ast, {vars, match_context}}
+    end
   end
 
   defp match_var(
@@ -240,9 +242,10 @@ defmodule ElixirSense.Core.TypeInference do
     case Keyword.fetch(meta, :version) do
       {:ok, version} ->
         {nil, {[{{var, version}, match_context} | vars], nil}}
+
       _ ->
         {ast, {vars, match_context}}
-     end
+    end
   end
 
   # drop right side of guard expression as guards cannot define vars
@@ -278,6 +281,7 @@ defmodule ElixirSense.Core.TypeInference do
         {:|, _, [_left, _right]} ->
           # map update is forbidden in match, we're in invalid code
           []
+
         {key, value_ast} ->
           key_type = get_binding_type(key)
 

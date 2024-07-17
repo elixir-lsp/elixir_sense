@@ -74,7 +74,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :abc, positions: [{1, 1}]},
-              #  %VarInfo{name: :abc, positions: [{1, 13}]},
+               #  %VarInfo{name: :abc, positions: [{1, 13}]},
                %VarInfo{name: :cde, positions: [{1, 7}]}
              ] = state |> get_line_vars(2)
     end
@@ -154,7 +154,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
 
       assert [
-              #  %VarInfo{name: :abc, positions: [{1, 1}]},
+               #  %VarInfo{name: :abc, positions: [{1, 1}]},
                %VarInfo{name: :abc, positions: [{2, 1}]}
              ] = state |> get_line_vars(3)
     end
@@ -239,17 +239,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:y, nil}
              ]
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
-        assert [
-                 %VarInfo{name: :y, positions: [{1, 1}, {2, 11}, {3, 11}]}
-               ] = state |> get_line_vars(4)
-      else
-        # TODO this is wrong
-        assert [
-                 %VarInfo{name: :y, positions: [{1, 1}, {2, 11}]},
-                 %VarInfo{name: :y, positions: [{3, 11}]}
-               ] = state |> get_line_vars(4)
-      end
+      assert [
+               %VarInfo{name: :y, positions: [{1, 1}, {2, 11}, {3, 11}]}
+             ] = state |> get_line_vars(4)
     end
 
     test "undefined usage" do
@@ -368,10 +360,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[4].versioned_vars, {:cde, nil})
 
-      assert ([
-                # %VarInfo{name: :cde, positions: [{1, 1}], scope_id: scope_id_1},
-                %VarInfo{name: :cde, positions: [{3, 3}]}
-              ]) = state |> get_line_vars(4)
+      assert [
+               # %VarInfo{name: :cde, positions: [{1, 1}], scope_id: scope_id_1},
+               %VarInfo{name: :cde, positions: [{3, 3}]}
+             ] = state |> get_line_vars(4)
 
       assert Map.has_key?(state.lines_to_env[6].versioned_vars, {:cde, nil})
 
@@ -513,96 +505,44 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
-        assert Map.keys(state.lines_to_env[1].versioned_vars) == []
-        assert [] = state |> get_line_vars(1)
+      assert Map.keys(state.lines_to_env[1].versioned_vars) == []
+      assert [] = state |> get_line_vars(1)
 
-        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
+      assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
 
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 6}]}
-               ] = state |> get_line_vars(2)
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 6}]}
+             ] = state |> get_line_vars(2)
 
-        assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:abc, nil}, {:cde, nil}]
+      assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:abc, nil}, {:cde, nil}]
 
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 6}]},
-                 %VarInfo{name: :cde, positions: [{2, 3}]}
-               ] = state |> get_line_vars(3)
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 6}]},
+               %VarInfo{name: :cde, positions: [{2, 3}]}
+             ] = state |> get_line_vars(3)
 
-        assert Map.keys(state.lines_to_env[5].versioned_vars) == [
-                 {:abc, nil},
-                 {:cde, nil},
-                 {:z, nil}
-               ]
+      assert Map.keys(state.lines_to_env[5].versioned_vars) == [
+               {:abc, nil},
+               {:cde, nil},
+               {:z, nil}
+             ]
 
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 6}, {4, 7}]},
-                 %VarInfo{name: :cde, positions: [{2, 3}, {4, 13}]},
-                 %VarInfo{name: :z, positions: [{4, 3}]}
-               ] = state |> get_line_vars(5)
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 6}, {4, 7}]},
+               %VarInfo{name: :cde, positions: [{2, 3}, {4, 13}]},
+               %VarInfo{name: :z, positions: [{4, 3}]}
+             ] = state |> get_line_vars(5)
 
-        assert Map.keys(state.lines_to_env[9].versioned_vars) == [{:c, nil}, {:other, nil}]
+      assert Map.keys(state.lines_to_env[9].versioned_vars) == [{:c, nil}, {:other, nil}]
 
-        assert [
-                 %VarInfo{name: :c, positions: [{8, 5}]},
-                 %VarInfo{name: :other, positions: [{7, 3}]}
-               ] = state |> get_line_vars(9)
+      assert [
+               %VarInfo{name: :c, positions: [{8, 5}]},
+               %VarInfo{name: :other, positions: [{7, 3}]}
+             ] = state |> get_line_vars(9)
 
-        assert Map.keys(state.lines_to_env[11].versioned_vars) == []
+      assert Map.keys(state.lines_to_env[11].versioned_vars) == []
 
-        assert [] = state |> get_line_vars(11)
-      else
-        assert Map.keys(state.lines_to_env[1].versioned_vars) == [{:abc, nil}]
-
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 6}]}
-               ] = state |> get_line_vars(1)
-
-        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}, {:cde, nil}]
-
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 6}]},
-                 %VarInfo{name: :cde, positions: [{2, 3}]}
-               ] = state |> get_line_vars(2)
-
-        assert Map.keys(state.lines_to_env[3].versioned_vars) == [{:abc, nil}, {:cde, nil}]
-
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 6}]},
-                 %VarInfo{name: :cde, positions: [{2, 3}]}
-               ] = state |> get_line_vars(3)
-
-        assert Map.keys(state.lines_to_env[5].versioned_vars) == [
-                 {:abc, nil},
-                 {:cde, nil},
-                 {:z, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 6}, {4, 7}]},
-                 %VarInfo{name: :cde, positions: [{2, 3}, {4, 13}]},
-                 %VarInfo{name: :z, positions: [{4, 3}]}
-               ] = state |> get_line_vars(5)
-
-        # TODO this is quite wrong
-        assert Map.keys(state.lines_to_env[9].versioned_vars) == [
-                 {:abc, nil},
-                 {:c, nil},
-                 {:cde, nil},
-                 {:other, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 6}, {4, 7}]},
-                 %VarInfo{name: :c, positions: [{8, 5}]},
-                 %VarInfo{name: :cde, positions: [{2, 3}, {4, 13}]},
-                 %VarInfo{name: :other, positions: [{7, 3}]}
-               ] = state |> get_line_vars(9)
-
-        assert Map.keys(state.lines_to_env[11].versioned_vars) == []
-        assert [] = state |> get_line_vars(11)
-      end
+      assert [] = state |> get_line_vars(11)
     end
 
     test "for" do
@@ -617,59 +557,29 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
-        assert Map.keys(state.lines_to_env[1].versioned_vars) == []
-        assert [] = state |> get_line_vars(3)
+      assert Map.keys(state.lines_to_env[1].versioned_vars) == []
+      assert [] = state |> get_line_vars(3)
 
-        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
+      assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
 
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 5}]}
-               ] = state |> get_line_vars(2)
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 5}]}
+             ] = state |> get_line_vars(2)
 
-        assert Map.keys(state.lines_to_env[4].versioned_vars) == [
-                 {:abc, nil},
-                 {:cde, nil},
-                 {:z, nil}
-               ]
+      assert Map.keys(state.lines_to_env[4].versioned_vars) == [
+               {:abc, nil},
+               {:cde, nil},
+               {:z, nil}
+             ]
 
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 5}]},
-                 %VarInfo{name: :cde, positions: [{2, 3}]},
-                 %VarInfo{name: :z, positions: [{3, 3}]}
-               ] = state |> get_line_vars(4)
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 5}]},
+               %VarInfo{name: :cde, positions: [{2, 3}]},
+               %VarInfo{name: :z, positions: [{3, 3}]}
+             ] = state |> get_line_vars(4)
 
-        assert Map.keys(state.lines_to_env[6].versioned_vars) == []
-        assert [] = state |> get_line_vars(3)
-      else
-        assert Map.keys(state.lines_to_env[1].versioned_vars) == [{:abc, nil}]
-
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 5}]}
-               ] = state |> get_line_vars(1)
-
-        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}, {:cde, nil}]
-
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 5}]},
-                 %VarInfo{name: :cde, positions: [{2, 3}]}
-               ] = state |> get_line_vars(2)
-
-        assert Map.keys(state.lines_to_env[4].versioned_vars) == [
-                 {:abc, nil},
-                 {:cde, nil},
-                 {:z, nil}
-               ]
-
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 5}]},
-                 %VarInfo{name: :cde, positions: [{2, 3}]},
-                 %VarInfo{name: :z, positions: [{3, 3}]}
-               ] = state |> get_line_vars(4)
-
-        assert Map.keys(state.lines_to_env[6].versioned_vars) == []
-        assert [] = state |> get_line_vars(6)
-      end
+      assert Map.keys(state.lines_to_env[6].versioned_vars) == []
+      assert [] = state |> get_line_vars(3)
     end
 
     if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
@@ -887,10 +797,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:abc, nil}]
 
-      assert ([
-                # %VarInfo{name: :abc, positions: [{1, 1}], scope_id: scope_id_1},
-                %VarInfo{name: :abc, positions: [{3, 3}]}
-              ]) = state |> get_line_vars(4)
+      assert [
+               # %VarInfo{name: :abc, positions: [{1, 1}], scope_id: scope_id_1},
+               %VarInfo{name: :abc, positions: [{3, 3}]}
+             ] = state |> get_line_vars(4)
 
       assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:abc, nil}]
 
@@ -984,11 +894,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[5].versioned_vars, {:abc, nil})
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
-        assert [%VarInfo{name: :abc, positions: [{1, 1}, {3, 11}]}] = state |> get_line_vars(5)
-      else
-        assert [%VarInfo{name: :abc, positions: [{1, 1}]}] = state |> get_line_vars(5)
-      end
+      assert [%VarInfo{name: :abc, positions: [{1, 1}, {3, 11}]}] = state |> get_line_vars(5)
     end
 
     test "in quote unquote_splicing" do
@@ -1007,16 +913,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.has_key?(state.lines_to_env[8].versioned_vars, {:abc, nil})
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
-        assert [
-                 %VarInfo{
-                   name: :abc,
-                   positions: [{1, 1}, {3, 20}, {4, 21}, {4, 44}, {5, 25}, {6, 21}]
-                 }
-               ] = state |> get_line_vars(8)
-      else
-        assert [%VarInfo{name: :abc, positions: [{1, 1}]}] = state |> get_line_vars(8)
-      end
+      assert [
+               %VarInfo{
+                 name: :abc,
+                 positions: [{1, 1}, {3, 20}, {4, 21}, {4, 44}, {5, 25}, {6, 21}]
+               }
+             ] = state |> get_line_vars(8)
     end
 
     test "in capture" do
@@ -1033,34 +935,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
-        assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:"&1", nil}, {:abc, nil}]
+      assert [{:"&1", _}, {:abc, nil}] = Map.keys(state.lines_to_env[6].versioned_vars)
 
-        assert [
-                 %VarInfo{name: :"&1", positions: [{3, 3}]},
-                 %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]}
-               ] = state |> get_line_vars(6)
+      assert [
+               %VarInfo{name: :"&1", positions: [{3, 3}]},
+               %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]}
+             ] = state |> get_line_vars(6)
 
-        assert Map.keys(state.lines_to_env[8].versioned_vars) == [{:abc, nil}]
+      assert Map.keys(state.lines_to_env[8].versioned_vars) == [{:abc, nil}]
 
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]}
-               ] = state |> get_line_vars(8)
-      else
-        assert Map.keys(state.lines_to_env[6].versioned_vars) == [{:abc, nil}, {:cde, nil}]
-
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]},
-                 %VarInfo{name: :cde, positions: [{5, 3}]}
-               ] = state |> get_line_vars(6)
-
-        assert Map.keys(state.lines_to_env[8].versioned_vars) == [{:abc, nil}, {:cde, nil}]
-
-        assert [
-                 %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]},
-                 %VarInfo{name: :cde, positions: [{5, 3}]}
-               ] = state |> get_line_vars(8)
-      end
+      assert [
+               %VarInfo{name: :abc, positions: [{1, 1}, {4, 3}]}
+             ] = state |> get_line_vars(8)
     end
 
     test "module body" do
@@ -1264,84 +1150,84 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   if @var_in_ex_unit do
-  describe "vars in ex_unit" do
-    test "variables are added to environment in ex_unit test" do
-      state =
-        """
-        defmodule MyModuleTests do
-          use ExUnit.Case, async: true
+    describe "vars in ex_unit" do
+      test "variables are added to environment in ex_unit test" do
+        state =
+          """
+          defmodule MyModuleTests do
+            use ExUnit.Case, async: true
 
-          test "it does what I want", %{some: some} do
-            IO.puts("")
-          end
-
-          describe "this" do
-            test "too does what I want" do
+            test "it does what I want", %{some: some} do
               IO.puts("")
             end
+
+            describe "this" do
+              test "too does what I want" do
+                IO.puts("")
+              end
+            end
+
+            test "is not implemented"
           end
+          """
+          |> string_to_state
 
-          test "is not implemented"
-        end
-        """
-        |> string_to_state
+        assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
+        assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
 
-      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
-      assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
+        assert Map.has_key?(
+                 state.mods_funs_to_positions,
+                 {MyModuleTests, :"test it does what I want", 1}
+               )
 
-      assert Map.has_key?(
-               state.mods_funs_to_positions,
-               {MyModuleTests, :"test it does what I want", 1}
-             )
+        assert Map.has_key?(
+                 state.mods_funs_to_positions,
+                 {MyModuleTests, :"test this too does what I want", 1}
+               )
 
-      assert Map.has_key?(
-               state.mods_funs_to_positions,
-               {MyModuleTests, :"test this too does what I want", 1}
-             )
+        assert Map.has_key?(
+                 state.mods_funs_to_positions,
+                 {MyModuleTests, :"test is not implemented", 1}
+               )
+      end
 
-      assert Map.has_key?(
-               state.mods_funs_to_positions,
-               {MyModuleTests, :"test is not implemented", 1}
-             )
+      test "variables are added to environment in ex_unit setup" do
+        state =
+          """
+          defmodule MyModuleTests do
+            use ExUnit.Case, async: true
+
+            setup_all %{some: some} do
+              IO.puts("")
+            end
+
+            setup %{some: other} do
+              IO.puts("")
+            end
+
+            setup do
+              IO.puts("")
+            end
+
+            setup :clean_up_tmp_directory
+
+            setup [:clean_up_tmp_directory, :another_setup]
+
+            setup {MyModule, :my_setup_function}
+          end
+          """
+          |> string_to_state
+
+        assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
+        assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
+
+        assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(9)
+        assert [%VarInfo{name: :other}] = state.vars_info_per_scope_id[scope_id]
+
+        # we do not generate defs - ExUnit.Callbacks.__setup__ is too complicated and generates def names with counters, e.g.
+        # :"__ex_unit_setup_#{counter}_#{length(setup)}"
+      end
     end
-
-    test "variables are added to environment in ex_unit setup" do
-      state =
-        """
-        defmodule MyModuleTests do
-          use ExUnit.Case, async: true
-
-          setup_all %{some: some} do
-            IO.puts("")
-          end
-
-          setup %{some: other} do
-            IO.puts("")
-          end
-
-          setup do
-            IO.puts("")
-          end
-
-          setup :clean_up_tmp_directory
-
-          setup [:clean_up_tmp_directory, :another_setup]
-
-          setup {MyModule, :my_setup_function}
-        end
-        """
-        |> string_to_state
-
-      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
-      assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
-
-      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(9)
-      assert [%VarInfo{name: :other}] = state.vars_info_per_scope_id[scope_id]
-
-      # we do not generate defs - ExUnit.Callbacks.__setup__ is too complicated and generates def names with counters, e.g.
-      # :"__ex_unit_setup_#{counter}_#{length(setup)}"
-    end
-  end
   end
 
   describe "typespec vars" do
@@ -1373,7 +1259,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [
                %VarInfo{name: :p, positions: [{2, 49}, {2, 18}, {2, 25}, {2, 33}, {2, 70}]},
                %VarInfo{name: :q, positions: [{2, 49}, {2, 46}]}
-             ] = state.vars_info_per_scope_id[2] |> Map.values
+             ] = state.vars_info_per_scope_id[2] |> Map.values()
     end
 
     test "does not register annotated spec params as type variables" do
@@ -1707,7 +1593,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           """
           |> string_to_state
 
-        assert [%VarInfo{type: {:atom, :ok}}, %VarInfo{type: {:map, [], nil}}] = state |> get_line_vars(3)
+        assert [%VarInfo{type: {:atom, :ok}}, %VarInfo{type: {:map, [], nil}}] =
+                 state |> get_line_vars(3)
       end
 
       test "module attributes value binding to and from variables" do
@@ -1785,14 +1672,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert [
                  %VarInfo{
                    name: :other,
-                  #  TODO do we need to rewrite? change Binding
-                  #  type: {:local_call, :elem, [{:attribute, :myattribute}, {:integer, 0}]}
+                   #  TODO do we need to rewrite? change Binding
+                   #  type: {:local_call, :elem, [{:attribute, :myattribute}, {:integer, 0}]}
                    type: {
-                      :call,
-                      {:atom, :erlang},
-                      :element,
-                      [integer: 1, attribute: :myattribute]
-                    }
+                     :call,
+                     {:atom, :erlang},
+                     :element,
+                     [integer: 1, attribute: :myattribute]
+                   }
                  },
                  %VarInfo{
                    name: :var,
@@ -2044,7 +1931,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert [
                  %VarInfo{name: :a, type: {:attribute, :myattribute}},
                  %VarInfo{name: :b, type: {:call, {:atom, Date}, :utc_now, []}},
-                 %VarInfo{name: :c, type: {:list_head, {:variable, :a}}},
+                 %VarInfo{name: :c, type: {:list_head, {:variable, :a}}}
                ] = state |> get_line_vars(6)
       end
 
@@ -2061,7 +1948,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           |> string_to_state
 
         assert [
-                 %VarInfo{name: :a, type: {:intersection, [:atom, {:list_head, {:attribute, :myattribute}}]}},                 
+                 %VarInfo{
+                   name: :a,
+                   type: {:intersection, [:atom, {:list_head, {:attribute, :myattribute}}]}
+                 }
                ] = state |> get_line_vars(4)
       end
 
@@ -2370,7 +2260,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert [
                  %VarInfo{
                    name: :formatted,
-                   type: {:map_key, {:variable, :state}, {:atom, :formatted}},
+                   type: {:map_key, {:variable, :state}, {:atom, :formatted}}
                  },
                  %VarInfo{
                    name: :state,
@@ -2378,15 +2268,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  }
                ] = state |> get_line_vars(3)
 
-               assert [
-                %VarInfo{
-                  name: :formatted
-                },
-                %VarInfo{
-                  name: :state,
-                  type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
-                }
-              ] = state |> get_line_vars(7)
+        assert [
+                 %VarInfo{
+                   name: :formatted
+                 },
+                 %VarInfo{
+                   name: :state,
+                   type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+                 }
+               ] = state |> get_line_vars(7)
       end
 
       test "two way refinement in match context nested" do
@@ -2403,7 +2293,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert [
                  %VarInfo{
                    name: :formatted,
-                   type: {:map_key, {:variable, :state}, {:atom, :formatted}},
+                   type: {:map_key, {:variable, :state}, {:atom, :formatted}}
                  },
                  %VarInfo{
                    name: :state,
@@ -2411,15 +2301,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  }
                ] = state |> get_line_vars(3)
 
-               assert [
-                %VarInfo{
-                  name: :formatted
-                },
-                %VarInfo{
-                  name: :state,
-                  type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
-                }
-              ] = state |> get_line_vars(7)
+        assert [
+                 %VarInfo{
+                   name: :formatted
+                 },
+                 %VarInfo{
+                   name: :state,
+                   type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+                 }
+               ] = state |> get_line_vars(7)
       end
 
       test "two way refinement in match context nested case" do
@@ -2436,15 +2326,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           """
           |> string_to_state
 
-               assert [
-                %VarInfo{
-                  name: :formatted
-                },
-                %VarInfo{
-                  name: :state,
-                  type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
-                }
-              ] = state |> get_line_vars(5)
+        assert [
+                 %VarInfo{
+                   name: :formatted
+                 },
+                 %VarInfo{
+                   name: :state,
+                   type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+                 }
+               ] = state |> get_line_vars(5)
       end
 
       test "two way refinement in nested `=` binding" do
@@ -2525,10 +2415,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           |> string_to_state
 
         assert [
-                %VarInfo{
-                  name: :res,
-                  type: :todo
-                },
+                 %VarInfo{
+                   name: :res,
+                   type: :todo
+                 },
                  %VarInfo{
                    name: :x,
                    type:
@@ -2584,12 +2474,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  %VarInfo{
                    name: :e2,
                    type: {
-                    :union,
-                    [
-                      {:struct, [], {:atom, RuntimeError}, nil},
-                      {:struct, [], {:atom, Enum.EmptyError}, nil}
-                    ]
-                  }
+                     :union,
+                     [
+                       {:struct, [], {:atom, RuntimeError}, nil},
+                       {:struct, [], {:atom, Enum.EmptyError}, nil}
+                     ]
+                   }
                  }
                ] = state |> get_line_vars(11)
 
@@ -2600,12 +2490,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  }
                ] = state |> get_line_vars(13)
 
-               assert [
-                %VarInfo{
-                  name: :e4,
-                  type: {:struct, [], {:atom, Exception}, nil}
-                }
-              ] = state |> get_line_vars(15)
+        assert [
+                 %VarInfo{
+                   name: :e4,
+                   type: {:struct, [], {:atom, Exception}, nil}
+                 }
+               ] = state |> get_line_vars(15)
 
         assert [
                  %VarInfo{
@@ -2672,15 +2562,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert ([
-               %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: scope_id_1},
-               %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id_2},
-               %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id_2}
-             ] when scope_id_2 > scope_id_1) = state |> get_line_vars(6)
+                %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: scope_id_1},
+                %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id_2}
+              ]
+              when scope_id_2 > scope_id_1) = state |> get_line_vars(6)
 
       assert ([
-               %VarInfo{name: :var_after, positions: [{8, 5}], scope_id: scope_id_2},
-               %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: scope_id_1}
-             ] when scope_id_2 > scope_id_1) = state |> get_line_vars(9)
+                %VarInfo{name: :var_after, positions: [{8, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: scope_id_1}
+              ]
+              when scope_id_2 > scope_id_1) = state |> get_line_vars(9)
     end
 
     test "vars defined inside a function with params" do
@@ -2700,14 +2592,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert ([
-               %VarInfo{name: :_par5, positions: [{3, 57}], scope_id:  scope_id_1},
-               %VarInfo{name: :par1, positions: [{3, 20}], scope_id:   scope_id_1},
-               %VarInfo{name: :par2, positions: [{3, 33}], scope_id:   scope_id_1},
-               %VarInfo{name: :par3, positions: [{3, 39}], scope_id:   scope_id_1},
-               %VarInfo{name: :par4, positions: [{3, 51}], scope_id:   scope_id_1},
-               %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id_2},
-               %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id_2}
-             ] when scope_id_2 > scope_id_1) = state |> get_line_vars(6)
+                %VarInfo{name: :_par5, positions: [{3, 57}], scope_id: scope_id_1},
+                %VarInfo{name: :par1, positions: [{3, 20}], scope_id: scope_id_1},
+                %VarInfo{name: :par2, positions: [{3, 33}], scope_id: scope_id_1},
+                %VarInfo{name: :par3, positions: [{3, 39}], scope_id: scope_id_1},
+                %VarInfo{name: :par4, positions: [{3, 51}], scope_id: scope_id_1},
+                %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id_2},
+                %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id_2}
+              ]
+              when scope_id_2 > scope_id_1) = state |> get_line_vars(6)
 
       assert [
                %VarInfo{name: :arg, positions: [{8, 14}, {8, 24}]}
@@ -2731,11 +2624,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       vars = state |> get_line_vars(6)
 
-      assert ([
-                # %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}], scope_id: scope_id_1},
-                # %VarInfo{name: :var1, positions: [{4, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var1, positions: [{5, 5}]}
-              ]) = vars
+      assert [
+               # %VarInfo{name: :var1, positions: [{3, 19}, {3, 37}], scope_id: scope_id_1},
+               # %VarInfo{name: :var1, positions: [{4, 5}], scope_id: scope_id_2},
+               %VarInfo{name: :var1, positions: [{5, 5}]}
+             ] = vars
     end
 
     test "vars defined inside a module" do
@@ -3546,7 +3439,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
 
       test "multiple guards" do
-        assert %VarInfo{name: :x, type: {:union, [:bitstring, :number]}} = var_with_guards("is_bitstring(x) when is_integer(x)")
+        assert %VarInfo{name: :x, type: {:union, [:bitstring, :number]}} =
+                 var_with_guards("is_bitstring(x) when is_integer(x)")
       end
 
       test "list guards" do
@@ -3581,7 +3475,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       test "map guards" do
         assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("is_map(x)")
-        assert %VarInfo{name: :x, type: {:intersection, [{:map, [], nil}, nil]}} = var_with_guards("is_non_struct_map(x)")
+
+        assert %VarInfo{name: :x, type: {:intersection, [{:map, [], nil}, nil]}} =
+                 var_with_guards("is_non_struct_map(x)")
+
         assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("map_size(x) == 1")
         assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("1 == map_size(x)")
 
@@ -3593,30 +3490,39 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
 
       test "struct guards" do
-        assert %VarInfo{name: :x, type: {
-          :intersection,
-          [
-            {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-            {:struct, [], nil, nil}
-          ]
-        }} = var_with_guards("is_struct(x)")
+        assert %VarInfo{
+                 name: :x,
+                 type: {
+                   :intersection,
+                   [
+                     {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                     {:struct, [], nil, nil}
+                   ]
+                 }
+               } = var_with_guards("is_struct(x)")
 
-        assert %VarInfo{name: :x, type: {
-          :intersection,
-          [
-            {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-            {:struct, [], {:atom, URI}, nil}
-          ]
-        }} =
+        assert %VarInfo{
+                 name: :x,
+                 type: {
+                   :intersection,
+                   [
+                     {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                     {:struct, [], {:atom, URI}, nil}
+                   ]
+                 }
+               } =
                  var_with_guards("is_struct(x, URI)")
 
-        assert %VarInfo{name: :x, type: {
-          :intersection,
-          [
-            {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-            {:struct, [], {:atom, URI}, nil}
-          ]
-        }} =
+        assert %VarInfo{
+                 name: :x,
+                 type: {
+                   :intersection,
+                   [
+                     {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                     {:struct, [], {:atom, URI}, nil}
+                   ]
+                 }
+               } =
                  """
                  defmodule MyModule do
                    alias URI, as: MyURI
@@ -3632,54 +3538,63 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       end
 
       test "exception guards" do
-        assert %VarInfo{name: :x, type: {
-          :intersection,
-          [
-            {
-              :intersection,
-              [
-                {
-                  :intersection,
-                  [
-                    {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                    {:struct, [], nil, nil}
-                  ]
-                },
-                {:map, [{:__exception__, nil}], nil}
-              ]
-            },
-            {:map, [{:__exception__, {:atom, true}}], nil}
-          ]
-        }} = var_with_guards("is_exception(x)")
+        assert %VarInfo{
+                 name: :x,
+                 type: {
+                   :intersection,
+                   [
+                     {
+                       :intersection,
+                       [
+                         {
+                           :intersection,
+                           [
+                             {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                             {:struct, [], nil, nil}
+                           ]
+                         },
+                         {:map, [{:__exception__, nil}], nil}
+                       ]
+                     },
+                     {:map, [{:__exception__, {:atom, true}}], nil}
+                   ]
+                 }
+               } = var_with_guards("is_exception(x)")
 
-        assert %VarInfo{name: :x, type: {
-          :intersection,
-          [
-            {
-              :intersection,
-              [
-                {
-                  :intersection,
-                  [
-                    {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                    {:struct, [], {:atom, ArgumentError}, nil}
-                  ]
-                },
-                {:map, [{:__exception__, nil}], nil}
-              ]
-            },
-            {:map, [{:__exception__, {:atom, true}}], nil}
-          ]
-        }} =
+        assert %VarInfo{
+                 name: :x,
+                 type: {
+                   :intersection,
+                   [
+                     {
+                       :intersection,
+                       [
+                         {
+                           :intersection,
+                           [
+                             {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                             {:struct, [], {:atom, ArgumentError}, nil}
+                           ]
+                         },
+                         {:map, [{:__exception__, nil}], nil}
+                       ]
+                     },
+                     {:map, [{:__exception__, {:atom, true}}], nil}
+                   ]
+                 }
+               } =
                  var_with_guards("is_exception(x, ArgumentError)")
 
-        assert %VarInfo{name: :x, type: {
-          :intersection,
-          [
-            {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-            {:struct, [], {:atom, ArgumentError}, nil}
-          ]
-        }} =
+        assert %VarInfo{
+                 name: :x,
+                 type: {
+                   :intersection,
+                   [
+                     {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                     {:struct, [], {:atom, ArgumentError}, nil}
+                   ]
+                 }
+               } =
                  """
                  defmodule MyModule do
                    alias ArgumentError, as: MyURI
@@ -3719,7 +3634,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         assert %VarInfo{name: :x, type: {:union, [nil, :atom]}} =
                  var_with_guards("not is_map(x) or is_atom(x)")
 
-        assert %VarInfo{name: :x, type: {:intersection, [:nil, :atom]}} =
+        assert %VarInfo{name: :x, type: {:intersection, [nil, :atom]}} =
                  var_with_guards("not is_map(x) and is_atom(x)")
       end
     end
@@ -5214,7 +5129,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                generated: [true],
                specs: ["@callback without_spec(t(), term()) :: term()"]
              },
-            #  TODO there is raw unquote in spec
+             #  TODO there is raw unquote in spec
              {Proto, :__protocol__, 1} => %ElixirSense.Core.State.SpecInfo{
                kind: :spec,
                specs: [
@@ -6565,10 +6480,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert state.calls == %{
-                2 => [
-                  %CallInfo{arity: 0, func: :integer, position: {2, 14}, mod: nil}
-                ]
-              }
+               2 => [
+                 %CallInfo{arity: 0, func: :integer, position: {2, 14}, mod: nil}
+               ]
+             }
     end
 
     test "registers typespec parens calls" do
@@ -6581,10 +6496,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert state.calls == %{
-                2 => [
-                  %CallInfo{arity: 0, func: :integer, position: {2, 16}, mod: nil}
-                ]
-              }
+               2 => [
+                 %CallInfo{arity: 0, func: :integer, position: {2, 16}, mod: nil}
+               ]
+             }
     end
 
     test "registers typespec no parens remote calls" do
@@ -6597,10 +6512,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert state.calls == %{
-                2 => [
-                  %CallInfo{arity: 0, func: :t, position: {2, 19}, mod: Enum}
-                ]
-              }
+               2 => [
+                 %CallInfo{arity: 0, func: :t, position: {2, 19}, mod: Enum}
+               ]
+             }
     end
 
     test "registers typespec parens remote calls" do
@@ -6614,13 +6529,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert state.calls == %{
-                2 => [
-                  %CallInfo{arity: 0, func: :t, position: {2, 21}, mod: Enum}
-                ],
-                3 => [
-                %CallInfo{arity: 0, func: :t, position: {3, 23}, mod: Enum}
-                ]
-              }
+               2 => [
+                 %CallInfo{arity: 0, func: :t, position: {2, 21}, mod: Enum}
+               ],
+               3 => [
+                 %CallInfo{arity: 0, func: :t, position: {3, 23}, mod: Enum}
+               ]
+             }
     end
 
     test "registers typespec calls in specs with when guard" do
@@ -6634,12 +6549,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       # NOTE var is not a type but a special variable
       assert state.calls == %{
-                2 => [
-                  %CallInfo{arity: 0, func: :pos_integer, position: {2, 71}, mod: nil},
-                  %CallInfo{arity: 0, func: :map, position: {2, 53}, mod: nil},
-                  %CallInfo{arity: 0, func: :integer, position: {2, 31}, mod: nil}
-                ]
-              }
+               2 => [
+                 %CallInfo{arity: 0, func: :pos_integer, position: {2, 71}, mod: nil},
+                 %CallInfo{arity: 0, func: :map, position: {2, 53}, mod: nil},
+                 %CallInfo{arity: 0, func: :integer, position: {2, 31}, mod: nil}
+               ]
+             }
     end
 
     test "registers typespec calls in typespec with named args" do
@@ -6653,18 +6568,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert state.calls == %{
-                2 => [
-                  %CallInfo{arity: 0, func: :integer, position: {2, 84}, mod: nil},
-                  %CallInfo{arity: 0, func: :integer, position: {2, 72}, mod: nil},
-                  %CallInfo{arity: 0, func: :integer, position: {2, 56}, mod: nil},
-                  %CallInfo{arity: 0, func: :integer, position: {2, 38}, mod: nil},
-                ],
-                3 => [
-                %CallInfo{arity: 0, func: :integer, position: {3, 61}, mod: nil},
-                %CallInfo{arity: 0, func: :integer, position: {3, 44}, mod: nil},
-                %CallInfo{arity: 0, func: :integer, position: {3, 26}, mod: nil},
-              ]
-              }
+               2 => [
+                 %CallInfo{arity: 0, func: :integer, position: {2, 84}, mod: nil},
+                 %CallInfo{arity: 0, func: :integer, position: {2, 72}, mod: nil},
+                 %CallInfo{arity: 0, func: :integer, position: {2, 56}, mod: nil},
+                 %CallInfo{arity: 0, func: :integer, position: {2, 38}, mod: nil}
+               ],
+               3 => [
+                 %CallInfo{arity: 0, func: :integer, position: {3, 61}, mod: nil},
+                 %CallInfo{arity: 0, func: :integer, position: {3, 44}, mod: nil},
+                 %CallInfo{arity: 0, func: :integer, position: {3, 26}, mod: nil}
+               ]
+             }
     end
 
     test "registers calls local no arg" do
@@ -7036,7 +6951,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-        assert state.calls[5] == [%CallInfo{arity: 2, position: {5, 5}, func: :test, mod: nil}]
+      assert state.calls[5] == [%CallInfo{arity: 2, position: {5, 5}, func: :test, mod: nil}]
     end
 
     test "registers super capture expression" do
@@ -7052,7 +6967,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-        assert [_, %CallInfo{arity: 2, position: {5, 20}, func: :test, mod: nil}, _] = state.calls[5]
+      assert [_, %CallInfo{arity: 2, position: {5, 20}, func: :test, mod: nil}, _] =
+               state.calls[5]
     end
 
     test "registers super capture" do
@@ -7068,7 +6984,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-        assert [_, %CallInfo{arity: 2, position: {5, 31}, func: :test, mod: nil}, _] = state.calls[5]
+      assert [_, %CallInfo{arity: 2, position: {5, 31}, func: :test, mod: nil}, _] =
+               state.calls[5]
     end
 
     test "registers calls capture operator __MODULE__" do

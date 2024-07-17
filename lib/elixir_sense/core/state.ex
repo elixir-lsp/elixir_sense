@@ -27,7 +27,9 @@ defmodule ElixirSense.Core.State do
           optional({module, atom, nil | non_neg_integer}) => ElixirSense.Core.State.SpecInfo.t()
         }
   @type vars_info_per_scope_id_t :: %{
-          optional(scope_id_t) => [%{optional({atom(), non_neg_integer()}) => ElixirSense.Core.State.VerInfo.t()}]
+          optional(scope_id_t) => [
+            %{optional({atom(), non_neg_integer()}) => ElixirSense.Core.State.VerInfo.t()}
+          ]
         }
   @type structs_t :: %{optional(module) => ElixirSense.Core.State.StructInfo.t()}
   @type protocol_t :: {module, nonempty_list(module)}
@@ -340,9 +342,11 @@ defmodule ElixirSense.Core.State do
     # vars_info has both read and write vars
     # filter to return only read
     [current_vars_info | _] = state.vars_info
-    vars = for {{name, context}, version} <- versioned_vars, context == nil do
-      Map.fetch!(current_vars_info, {name, version})
-    end
+
+    vars =
+      for {{name, context}, version} <- versioned_vars, context == nil do
+        Map.fetch!(current_vars_info, {name, version})
+      end
 
     current_protocol =
       case state.protocol do
@@ -855,9 +859,10 @@ defmodule ElixirSense.Core.State do
     [current_scope_vars | _other_scope_vars] = state.vars_info
 
     for {scope_id, vars} <- state.vars_info_per_scope_id, into: %{} do
-      updated_vars = for {key, var} <- vars, into: %{} do
-        {key, Map.get(current_scope_vars, key, var)}
-      end
+      updated_vars =
+        for {key, var} <- vars, into: %{} do
+          {key, Map.get(current_scope_vars, key, var)}
+        end
 
       {scope_id, updated_vars}
     end
@@ -1786,12 +1791,13 @@ defmodule ElixirSense.Core.State do
                     %ModFunInfo{positions: positions, params: params} =
                       state.mods_funs_to_positions[key]
 
-                    args = for param_variant <- params do
-                      case tl(param_variant) do
-                        [] -> ["t()"]
-                        other -> ["t()" | Enum.map(other, fn _ -> "term()" end)]
+                    args =
+                      for param_variant <- params do
+                        case tl(param_variant) do
+                          [] -> ["t()"]
+                          other -> ["t()" | Enum.map(other, fn _ -> "term()" end)]
+                        end
                       end
-                    end
 
                     specs =
                       for arg <- args do
@@ -1845,12 +1851,17 @@ defmodule ElixirSense.Core.State do
   end
 
   def merge_inferred_types(state, []), do: state
+
   def merge_inferred_types(state, inferred_types) do
     [h | t] = state.vars_info
 
-    h = for {key, type} <- inferred_types, reduce: h do
-      acc -> Map.update!(acc, key, fn %VarInfo{type: old} = v -> %{v | type: merge_type(old, type)} end)
-    end
+    h =
+      for {key, type} <- inferred_types, reduce: h do
+        acc ->
+          Map.update!(acc, key, fn %VarInfo{type: old} = v ->
+            %{v | type: merge_type(old, type)}
+          end)
+      end
 
     %{state | vars_info: [h | t]}
   end

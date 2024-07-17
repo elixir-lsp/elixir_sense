@@ -12,6 +12,7 @@ defmodule ElixirSense.Core.Guard do
     for expr <- list, reduce: %{} do
       acc ->
         right = type_information_from_guards(expr)
+
         Map.merge(acc, right, fn _k, v1, v2 ->
           case {v1, v2} do
             {{:union, types_1}, {:union, types_2}} -> {:union, types_1 ++ types_2}
@@ -57,16 +58,18 @@ defmodule ElixirSense.Core.Guard do
           case Keyword.fetch(meta, :version) do
             {:ok, version} ->
               {node, Map.put(acc, {var, version}, :boolean)}
+
             _ ->
               {node, acc}
           end
 
-        {{:., _dot_meta, [:erlang, fun]}, _call_meta, params}, acc when is_atom(fun) and is_list(params) ->
+        {{:., _dot_meta, [:erlang, fun]}, _call_meta, params}, acc
+        when is_atom(fun) and is_list(params) ->
           with {type, binding} <- guard_predicate_type(fun, params),
-            {var, meta, context} when is_atom(var) and is_atom(context) <- binding,
-            {:ok, version} <- Keyword.fetch(meta, :version) do
-              # If we found the predicate type, we can prematurely exit traversing the subtree
-              {[], Map.put(acc, {var, version}, type)}
+               {var, meta, context} when is_atom(var) and is_atom(context) <- binding,
+               {:ok, version} <- Keyword.fetch(meta, :version) do
+            # If we found the predicate type, we can prematurely exit traversing the subtree
+            {[], Map.put(acc, {var, version}, type)}
           else
             _ ->
               # traverse params
@@ -86,7 +89,18 @@ defmodule ElixirSense.Core.Guard do
 
   # TODO div and rem only work on first arg
   defp guard_predicate_type(p, [first | _])
-       when p in [:is_number, :is_float, :is_integer, :round, :trunc, :div, :rem, :abs, :ceil, :floor],
+       when p in [
+              :is_number,
+              :is_float,
+              :is_integer,
+              :round,
+              :trunc,
+              :div,
+              :rem,
+              :abs,
+              :ceil,
+              :floor
+            ],
        do: {:number, first}
 
   defp guard_predicate_type(p, [first | _]) when p in [:is_binary, :binary_part],
@@ -118,8 +132,9 @@ defmodule ElixirSense.Core.Guard do
 
     {rhs_type, first}
   end
+
   defp guard_predicate_type(p, [lhs, {{:., _, [:erlang, guard]}, _, _guard_params} = call])
-  when p in [:==, :===, :>=, :>, :<=, :<] and guard in [:hd, :tl] do
+       when p in [:==, :===, :>=, :>, :<=, :<] and guard in [:hd, :tl] do
     guard_predicate_type(p, [call, lhs])
   end
 
@@ -150,23 +165,27 @@ defmodule ElixirSense.Core.Guard do
 
   defp guard_predicate_type(p, [{{:., _, [:erlang, :map_get]}, _, [key, second | _]}, value])
        when p in [:==, :===] do
-    type = cond do
-      key == :__struct__ and is_atom(value) ->
-        {:struct, [], {:atom, value}, nil}
-      key == :__struct__ ->
-        {:struct, [], nil, nil}
-      is_atom(key) or is_binary(key) ->
-        # TODO other types of keys?
-        rhs_type =
-          cond do
-            is_number(value) -> {:number, value}
-            is_binary(value) -> :binary
-            is_bitstring(value) -> :bitstring
-            is_atom(value) -> {:atom, value}
-            is_boolean(value) -> :boolean
-            true -> nil
-          end
-        {:map, [{key, rhs_type}], nil}
+    type =
+      cond do
+        key == :__struct__ and is_atom(value) ->
+          {:struct, [], {:atom, value}, nil}
+
+        key == :__struct__ ->
+          {:struct, [], nil, nil}
+
+        is_atom(key) or is_binary(key) ->
+          # TODO other types of keys?
+          rhs_type =
+            cond do
+              is_number(value) -> {:number, value}
+              is_binary(value) -> :binary
+              is_bitstring(value) -> :bitstring
+              is_atom(value) -> {:atom, value}
+              is_boolean(value) -> :boolean
+              true -> nil
+            end
+
+          {:map, [{key, rhs_type}], nil}
       end
 
     {type, second}
@@ -185,12 +204,12 @@ defmodule ElixirSense.Core.Guard do
   defp guard_predicate_type(:is_map_key, [key, var | _]) do
     # TODO other types of keys?
     type =
-    case key do
-      :__struct__ -> {:struct, [], nil, nil}
-      key when is_atom(key) -> {:map, [{key, nil}], nil}
-      key when is_binary(key) -> {:map, [{key, nil}], nil}
-      _ -> {:map, [], nil}
-    end
+      case key do
+        :__struct__ -> {:struct, [], nil, nil}
+        key when is_atom(key) -> {:map, [{key, nil}], nil}
+        key when is_binary(key) -> {:map, [{key, nil}], nil}
+        _ -> {:map, [], nil}
+      end
 
     {type, var}
   end

@@ -59,31 +59,39 @@ defmodule ElixirSense.Core.Metadata do
     }
   end
 
-  def get_cursor_env(%__MODULE__{} = metadata, {{begin_line, begin_column}, {end_line, end_column}}) do
+  def get_cursor_env(
+        %__MODULE__{} = metadata,
+        {{begin_line, begin_column}, {end_line, end_column}}
+      ) do
     prefix = ElixirSense.Core.Source.text_before(metadata.source, begin_line, begin_column)
     suffix = ElixirSense.Core.Source.text_after(metadata.source, end_line, end_column)
 
     source_with_cursor = prefix <> "(__cursor__())" <> suffix
 
-    {meta, cursor_env} = case Code.string_to_quoted(source_with_cursor, [columns: true, token_metadata: true]) do
-      {:ok, ast} ->
-        ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
-
-      _ ->
-        {[], nil}
-    end
-
-    {_meta, cursor_env} = if cursor_env != nil do
-      {meta, cursor_env}
-    else
-      case NormalizedCode.Fragment.container_cursor_to_quoted(prefix, [columns: true, token_metadata: true]) do
+    {meta, cursor_env} =
+      case Code.string_to_quoted(source_with_cursor, columns: true, token_metadata: true) do
         {:ok, ast} ->
           ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
-  
+
         _ ->
           {[], nil}
       end
-    end
+
+    {_meta, cursor_env} =
+      if cursor_env != nil do
+        {meta, cursor_env}
+      else
+        case NormalizedCode.Fragment.container_cursor_to_quoted(prefix,
+               columns: true,
+               token_metadata: true
+             ) do
+          {:ok, ast} ->
+            ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
+
+          _ ->
+            {[], nil}
+        end
+      end
 
     if cursor_env != nil do
       cursor_env
@@ -95,13 +103,17 @@ defmodule ElixirSense.Core.Metadata do
   def get_cursor_env(%__MODULE__{} = metadata, {line, column}) do
     prefix = ElixirSense.Core.Source.text_before(metadata.source, line, column)
 
-    {_meta, cursor_env} = case NormalizedCode.Fragment.container_cursor_to_quoted(prefix, [columns: true, token_metadata: true]) do
-      {:ok, ast} ->
-        ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
+    {_meta, cursor_env} =
+      case NormalizedCode.Fragment.container_cursor_to_quoted(prefix,
+             columns: true,
+             token_metadata: true
+           ) do
+        {:ok, ast} ->
+          ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
 
-      _ ->
-        {[], nil}
-    end
+        _ ->
+          {[], nil}
+      end
 
     if cursor_env != nil do
       cursor_env
@@ -241,7 +253,7 @@ defmodule ElixirSense.Core.Metadata do
         predicate \\ fn _ -> true end
       ) do
     scope_vars = vars_info_per_scope_id[env.scope_id] || %{}
-    env_vars_keys = env.vars |> Enum.map(& {&1.name, &1.version})
+    env_vars_keys = env.vars |> Enum.map(&{&1.name, &1.version})
 
     scope_vars_missing_in_env =
       scope_vars
@@ -251,10 +263,11 @@ defmodule ElixirSense.Core.Metadata do
       end)
       |> Enum.map(fn {_, value} -> value end)
 
-    env_vars = for var <- env.vars do
-      key = {var.name, var.version}
-      Map.fetch!(scope_vars, key)
-    end
+    env_vars =
+      for var <- env.vars do
+        key = {var.name, var.version}
+        Map.fetch!(scope_vars, key)
+      end
 
     %{env | vars: env_vars ++ scope_vars_missing_in_env}
   end

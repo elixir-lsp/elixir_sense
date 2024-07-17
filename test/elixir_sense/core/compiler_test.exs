@@ -1,4 +1,4 @@
-if Version.match?(System.version(), ">= 1.17.0-dev") do
+if true or Version.match?(System.version(), ">= 1.17.0-dev") do
   defmodule ElixirSense.Core.CompilerTest do
     use ExUnit.Case, async: true
     alias ElixirSense.Core.Compiler
@@ -11,33 +11,62 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
     defp to_quoted!(string, false),
       do: Code.string_to_quoted!(string, columns: true, token_metadata: true)
 
-    Record.defrecordp(:elixir_ex,
-      caller: false,
-      prematch: :raise,
-      stacktrace: false,
-      unused: {%{}, 0},
-      runtime_modules: [],
-      vars: {%{}, false}
-    )
+    if Version.match?(System.version(), ">= 1.17.0-dev") do
+      Record.defrecordp(:elixir_ex,
+        caller: false,
+        prematch: :raise,
+        stacktrace: false,
+        unused: {%{}, 0},
+        runtime_modules: [],
+        vars: {%{}, false}
+      )
 
-    defp elixir_ex_to_map(
-           elixir_ex(
-             caller: caller,
-             prematch: prematch,
-             stacktrace: stacktrace,
-             unused: {_, unused},
-             runtime_modules: runtime_modules,
-             vars: vars
-           )
-         ) do
-      %{
-        caller: caller,
-        prematch: prematch,
-        stacktrace: stacktrace,
-        unused: unused,
-        runtime_modules: runtime_modules,
-        vars: vars
-      }
+      defp elixir_ex_to_map(
+             elixir_ex(
+               caller: caller,
+               prematch: prematch,
+               stacktrace: stacktrace,
+               unused: {_, unused},
+               runtime_modules: runtime_modules,
+               vars: vars
+             )
+           ) do
+        %{
+          caller: caller,
+          prematch: prematch,
+          stacktrace: stacktrace,
+          unused: unused,
+          runtime_modules: runtime_modules,
+          vars: vars
+        }
+      end
+    else
+      Record.defrecordp(:elixir_ex,
+        caller: false,
+        prematch: :raise,
+        stacktrace: false,
+        unused: {%{}, 0},
+        vars: {%{}, false}
+      )
+
+      defp elixir_ex_to_map(
+             elixir_ex(
+               caller: caller,
+               prematch: prematch,
+               stacktrace: stacktrace,
+               unused: {_, unused},
+               vars: vars
+             )
+           ) do
+        %{
+          caller: caller,
+          prematch: prematch,
+          stacktrace: stacktrace,
+          unused: unused,
+          runtime_modules: [],
+          vars: vars
+        }
+      end
     end
 
     defp state_to_map(%State{} = state) do
@@ -87,6 +116,7 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
       on_exit(fn ->
         Application.put_env(:elixir_sense, :compiler_rewrite, false)
       end)
+
       {:ok, %{}}
     end
 
@@ -765,6 +795,7 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
 
     defmodule Foo do
       defguard my(a) when is_integer(a) and a > 1
+
       defmacro aaa(a) do
         quote do
           is_integer(unquote(a)) and unquote(a) > 1
@@ -791,29 +822,39 @@ if Version.match?(System.version(), ">= 1.17.0-dev") do
     end
 
     defp clean_capture_arg(ast) do
-      {ast, _} = Macro.prewalk(ast, nil, fn
-        {atom, meta, nil} = node, state when is_atom(atom) ->
-          # elixir changes the name to capture and does different counter tracking
-          node = with "&" <> int <- to_string(atom), {_, ""} <- Integer.parse(int) do
-            meta = Keyword.delete(meta, :counter)
-            {:capture, meta, nil}
-          else
-            _ -> node
-          end
-          {node, state}
-        node, state -> {node, state}
-      end)
+      {ast, _} =
+        Macro.prewalk(ast, nil, fn
+          {atom, meta, nil} = node, state when is_atom(atom) ->
+            # elixir changes the name to capture and does different counter tracking
+            node =
+              with "&" <> int <- to_string(atom), {_, ""} <- Integer.parse(int) do
+                meta = Keyword.delete(meta, :counter)
+                {:capture, meta, nil}
+              else
+                _ -> node
+              end
+
+            {node, state}
+
+          node, state ->
+            {node, state}
+        end)
+
       ast
     end
 
     defp clean_capture_arg_elixir(ast) do
-      {ast, _} = Macro.prewalk(ast, nil, fn
-        {:capture, meta, nil} = node, state ->
-          # elixir changes the name to capture and does different counter tracking
-          meta = Keyword.delete(meta, :counter)
-          {{:capture, meta, nil}, state}
-        node, state -> {node, state}
-      end)
+      {ast, _} =
+        Macro.prewalk(ast, nil, fn
+          {:capture, meta, nil} = node, state ->
+            # elixir changes the name to capture and does different counter tracking
+            meta = Keyword.delete(meta, :counter)
+            {{:capture, meta, nil}, state}
+
+          node, state ->
+            {node, state}
+        end)
+
       ast
     end
   end

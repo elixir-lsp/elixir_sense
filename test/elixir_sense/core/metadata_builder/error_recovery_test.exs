@@ -5,7 +5,12 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
   defp get_cursor_env(code) do
-    {:ok, ast} = NormalizedCode.Fragment.container_cursor_to_quoted(code, [columns: true, token_metadata: true])
+    {:ok, ast} =
+      NormalizedCode.Fragment.container_cursor_to_quoted(code,
+        columns: true,
+        token_metadata: true
+      )
+
     # dbg(ast)
     state = MetadataBuilder.build(ast)
     state.cursor_env
@@ -17,6 +22,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       case []
       \
       """
+
       assert {meta, env} = get_cursor_env(code)
     end
 
@@ -25,6 +31,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       case [], []
       \
       """
+
       assert {meta, env} = get_cursor_env(code)
     end
 
@@ -32,6 +39,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       case [], \
       """
+
       assert {meta, env} = get_cursor_env(code)
     end
 
@@ -40,8 +48,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = 5
       case \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause left side" do
@@ -49,8 +58,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       case a do
         [x, \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause guard" do
@@ -58,8 +68,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       case a do
         x when \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause guard call" do
@@ -67,8 +78,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       case a do
         x when is_atom(\
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause right side" do
@@ -76,8 +88,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       case a do
         x -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause right side after expressions" do
@@ -87,14 +100,16 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
           foo(1)
           \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "invalid number of args with when" do
       code = """
       case nil do 0, z when not is_nil(z) -> \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -102,6 +117,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       case nil do 0, z -> \
       """
+
       assert get_cursor_env(code)
     end
   end
@@ -112,6 +128,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       cond []
       \
       """
+
       assert {meta, env} = get_cursor_env(code)
     end
 
@@ -120,8 +137,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       cond \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause left side" do
@@ -130,8 +148,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       cond do
         \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause left side with assignment" do
@@ -139,8 +158,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       cond do
         (x = foo(); \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause right side" do
@@ -148,8 +168,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       cond do
         x = foo() -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause right side after expressions" do
@@ -159,14 +180,16 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
           foo(1)
           \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "invalid number of args" do
       code = """
       cond do 0, z -> \
       """
+
       assert get_cursor_env(code)
     end
   end
@@ -177,6 +200,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       receive []
       \
       """
+
       assert {meta, env} = get_cursor_env(code)
     end
 
@@ -185,8 +209,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       receive \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause left side" do
@@ -195,8 +220,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       receive do
         \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause left side pin" do
@@ -205,8 +231,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       receive do
         {^\
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause left side multiple matches" do
@@ -214,8 +241,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       receive do
         {:msg, x, \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause left side guard" do
@@ -223,8 +251,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       receive do
         {:msg, x} when \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause left side guard call" do
@@ -232,8 +261,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       receive do
         {:msg, x} when is_atom(\
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in clause right side" do
@@ -241,8 +271,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       receive do
         {:msg, x} -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in after clause left side" do
@@ -253,8 +284,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       after
         \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in after clause right side" do
@@ -265,8 +297,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       after
         0 -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "invalid number of args in after" do
@@ -276,6 +309,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       after
         0, z -> \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -287,6 +321,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         0 -> :ok
         1 -> \
       """
+
       assert get_cursor_env(code)
     end
   end
@@ -297,6 +332,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       try []
       \
       """
+
       assert {meta, env} = get_cursor_env(code)
     end
 
@@ -305,8 +341,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       try \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in do block" do
@@ -315,8 +352,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       try do
         \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in left side of rescue clause" do
@@ -327,8 +365,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       rescue
         \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in left side of rescue clause match expression - invalid var" do
@@ -339,8 +378,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       rescue
         bar() in [\
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in left side of rescue clause match expression" do
@@ -351,8 +391,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       rescue
         e in [\
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in right side of rescue clause" do
@@ -362,8 +403,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       rescue
         x in [Error] -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in left side of catch clause" do
@@ -374,8 +416,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       catch
         \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in left side of catch clause guard" do
@@ -385,8 +428,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       catch
         x when \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in left side of catch clause after type" do
@@ -396,8 +440,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       catch
         x, \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in left side of catch clause 2 arg guard" do
@@ -407,8 +452,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       catch
         x, _ when \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in right side of catch clause" do
@@ -418,8 +464,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       catch
         x -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in right side of catch clause 2 arg" do
@@ -429,8 +476,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       catch
         x, _ -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in left side of else clause" do
@@ -441,8 +489,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       else
         \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in left side of else clause guard" do
@@ -452,8 +501,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       else
         x when \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in right side of else clause" do
@@ -463,8 +513,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       else
         x -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in after block" do
@@ -475,8 +526,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       after
         \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
   end
 
@@ -486,8 +538,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       with [], \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in match expressions" do
@@ -495,16 +548,18 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       with \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in match expressions guard" do
       code = """
       with x when \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in match expressions - right side" do
@@ -512,16 +567,18 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       with 1 <- \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in match expressions - right side next expression" do
       code = """
       with x <- foo(), \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in do block" do
@@ -529,8 +586,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       with x <- foo() do
         \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in else clause left side" do
@@ -541,8 +599,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       else
         \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in else clause left side guard" do
@@ -552,8 +611,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       else
         x when \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in else clause right side" do
@@ -563,8 +623,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       else
         x -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
   end
 
@@ -574,8 +635,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       for [], \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in generator match expressions" do
@@ -583,16 +645,18 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       for \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in generator match expression guard" do
       code = """
       for x when \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in generator match expression right side" do
@@ -600,8 +664,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       for a <- \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in generator match expressions bitstring" do
@@ -609,16 +674,18 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       for <<\
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in generator match expression guard bitstring" do
       code = """
       for <<x when \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in generator match expression right side bitstring" do
@@ -626,16 +693,18 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       for <<a <- \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in generator next match expression" do
       code = """
       for x <- [], \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in into option" do
@@ -643,8 +712,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       for x <- [], into: \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in uniq option" do
@@ -652,8 +722,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       for x <- [], uniq: \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in reduce option" do
@@ -661,8 +732,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       for x <- [], reduce: \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in do block" do
@@ -670,8 +742,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       x = foo()
       for x <- [], do: \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in do block reduce left side of clause" do
@@ -680,8 +753,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       for x <- [], reduce: %{} do
         \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in do block reduce left side of clause guard" do
@@ -689,9 +763,10 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       for x <- [], reduce: %{} do
         y when \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
-      assert Enum.any?(env.vars, & &1.name == :y)
+      assert Enum.any?(env.vars, &(&1.name == :x))
+      assert Enum.any?(env.vars, &(&1.name == :y))
     end
 
     test "cursor in do block reduce left side of clause too many args" do
@@ -699,9 +774,10 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       for x <- [], reduce: %{} do
         y, \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
-      assert Enum.any?(env.vars, & &1.name == :y)
+      assert Enum.any?(env.vars, &(&1.name == :x))
+      assert Enum.any?(env.vars, &(&1.name == :y))
     end
 
     test "cursor in do block reduce right side of clause" do
@@ -709,9 +785,10 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       for x <- [], reduce: %{} do
         y -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
-      assert Enum.any?(env.vars, & &1.name == :y)
+      assert Enum.any?(env.vars, &(&1.name == :x))
+      assert Enum.any?(env.vars, &(&1.name == :y))
     end
 
     test "cursor in do block reduce right side of clause too many args" do
@@ -719,9 +796,10 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       for x <- [], reduce: %{} do
         y, z -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
-      assert Enum.any?(env.vars, & &1.name == :y)
+      assert Enum.any?(env.vars, &(&1.name == :x))
+      assert Enum.any?(env.vars, &(&1.name == :y))
     end
 
     test "cursor in do block reduce right side of clause too little args" do
@@ -729,8 +807,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       for x <- [], reduce: %{} do
         -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "cursor in do block right side of clause without reduce" do
@@ -738,9 +817,10 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       for x <- [] do
         y -> \
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
-      assert Enum.any?(env.vars, & &1.name == :y)
+      assert Enum.any?(env.vars, &(&1.name == :x))
+      assert Enum.any?(env.vars, &(&1.name == :y))
     end
   end
 
@@ -753,8 +833,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         x, _ -> __cursor__()
       end
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "default args in clause" do
@@ -763,8 +844,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         x \\\\ nil -> __cursor__()
       end
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "incomplete clause left side" do
@@ -774,8 +856,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         __cursor__()
       end
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "incomplete clause left side guard" do
@@ -784,8 +867,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         x when __cursor__()
       end
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     test "incomplete clause right side" do
@@ -794,8 +878,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         x -> __cursor__()
       end
       """
+
       assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, & &1.name == :x)
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
   end
 
@@ -804,6 +889,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -811,6 +897,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &foo\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -818,6 +905,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &foo/\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -825,6 +913,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &foo/1\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -832,6 +921,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &foo/1000; \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -839,6 +929,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &foo.\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -846,6 +937,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &foo.(\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -853,6 +945,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &foo.()\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -860,6 +953,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &foo.bar\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -867,6 +961,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &Foo\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -874,6 +969,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &Foo.\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -881,6 +977,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &Foo.bar\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -888,6 +985,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &Foo.bar/\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -895,6 +993,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &Foo.bar/1\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -902,6 +1001,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &Foo.bar(\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -909,6 +1009,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &Foo.bar()\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -916,6 +1017,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &{\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -923,6 +1025,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &{}\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -930,6 +1033,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &[\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -937,6 +1041,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &[]\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -944,6 +1049,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &<<\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -951,6 +1057,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &<<>>\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -958,6 +1065,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &%\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -965,6 +1073,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &%{\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -972,6 +1081,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &%{}\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -979,6 +1089,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &%Foo\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -986,6 +1097,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &%Foo{\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -993,6 +1105,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &%Foo{}\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1000,6 +1113,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       & (\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1007,6 +1121,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       & (:ok; \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1014,6 +1129,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       & &\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1021,6 +1137,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       & &2\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1028,6 +1145,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &[&1, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1035,6 +1153,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &[&2, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1042,6 +1161,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &{}; \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1049,6 +1169,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       & &0; \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1056,6 +1177,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &1; \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1063,6 +1185,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &foo; \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1070,6 +1193,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &"foo"; \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1078,6 +1202,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       defmodule A do
         (&asdf/1) +\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1087,6 +1212,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         import :erlang, only: [exit: 1], warn: false
         def foo, do: (&exit/1) +\
       """
+
       assert get_cursor_env(code)
     end
   end
@@ -1096,6 +1222,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       ^\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1103,6 +1230,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       ^__cursor__() = x\
       """
+
       assert get_cursor_env(code)
     end
   end
@@ -1112,6 +1240,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       %{foo => x} = x\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1119,6 +1248,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       %{a | x: __cursor__()} = x\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1126,6 +1256,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       %{a: "123", \
       """
+
       assert get_cursor_env(code)
     end
   end
@@ -1135,6 +1266,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       %\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1142,6 +1274,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       %foo{\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1149,6 +1282,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       %Foo{"asd" => [\
       """
+
       assert get_cursor_env(code)
     end
   end
@@ -1158,6 +1292,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<x::unit(8), \
       """
+
       assert {meta, env} = get_cursor_env(code)
     end
 
@@ -1165,6 +1300,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<12.3::32*4, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1172,6 +1308,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<x::binary-signed, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1179,6 +1316,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<x::utf8-signed, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1186,6 +1324,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<x::utf8-size(1), \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1193,6 +1332,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<"foo"::integer, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1200,6 +1340,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<1::little-big, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1207,6 +1348,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<x::bitstring-unit(2), \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1214,6 +1356,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<"foo"::32, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1221,6 +1364,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<(<<>>)::32, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1228,6 +1372,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<x::binary, "foo" >> = \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1235,6 +1380,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<"foo"::size(8)-unit(:oops), \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1242,6 +1388,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<1::unknown(), \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1249,6 +1396,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<1::refb_spec, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1256,6 +1404,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<:ok, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1263,6 +1412,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<bar = baz>> = \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1270,6 +1420,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1277,6 +1428,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<1::\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1284,6 +1436,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<1::binary-\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1291,6 +1444,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<1::size(\
       """
+
       assert get_cursor_env(code)
     end
   end
@@ -1300,6 +1454,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote [bind_quoted: 123] do\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1307,6 +1462,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1314,6 +1470,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote [\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1321,6 +1478,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote [bind_quoted: \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1328,6 +1486,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote [bind_quoted: [\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1335,6 +1494,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote [bind_quoted: [asd: \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1342,6 +1502,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote [bind_quoted: [asd: 1]], \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1349,6 +1510,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote [bind_quoted: [asd: 1]], [\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1356,6 +1518,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote :foo, [\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1364,6 +1527,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       quote do
         \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1372,6 +1536,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       quote do
         unquote(\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1380,6 +1545,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       quote do
         unquote_splicing(\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1388,6 +1554,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       quote bind_quoted: [a: 1] do
         unquote(\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1395,6 +1562,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       unquote(\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1402,6 +1570,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote [file: 1] do\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1409,6 +1578,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote [unquote: 1] do\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1416,6 +1586,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       quote do: unquote_splicing(\
       """
+
       assert get_cursor_env(code)
     end
   end
@@ -1425,6 +1596,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       :foo.(a, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1432,6 +1604,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       a.() = \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1440,6 +1613,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       case x do
         y when a.() -> \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1448,6 +1622,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       case x do
         y when map.field() -> \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1455,6 +1630,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       Foo.bar() = \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1462,6 +1638,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       __ENV__.line.foo \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1470,6 +1647,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       Foo.foo do
         a -> \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1477,6 +1655,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       1.foo \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1485,6 +1664,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       a = 1
       a -1 .. \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1493,6 +1673,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       foo do
         a -> \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1500,6 +1681,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       bar() = \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1509,6 +1691,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         import :erlang, only: [exit: 1], warn: false
         def foo, do: exit(\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1522,6 +1705,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         defmacro _ && _, do: :error
         def world, do: 1 && \
       """
+
       assert get_cursor_env(code)
     end
   end
@@ -1532,6 +1716,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       foo = :foo
       foo.Foo.a(\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1539,16 +1724,19 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       alias \
       """
+
       assert get_cursor_env(code)
 
       code = """
       require \
       """
+
       assert get_cursor_env(code)
 
       code = """
       import \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1556,16 +1744,19 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       alias A.a\
       """
+
       assert get_cursor_env(code)
 
       code = """
       require A.a\
       """
+
       assert get_cursor_env(code)
 
       code = """
       import A.a\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1573,16 +1764,19 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       alias A.B, \
       """
+
       assert get_cursor_env(code)
 
       code = """
       require A.B, \
       """
+
       assert get_cursor_env(code)
 
       code = """
       import A.B, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1590,16 +1784,19 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       alias A.B, warn: \
       """
+
       assert get_cursor_env(code)
 
       code = """
       require A.B, warn: \
       """
+
       assert get_cursor_env(code)
 
       code = """
       import A.B, warn: \
       """
+
       assert get_cursor_env(code)
     end
   end
@@ -1609,6 +1806,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       super(\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1617,6 +1815,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       defmodule A do
         super(\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1624,6 +1823,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       super() = \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1631,6 +1831,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       & super(&1, \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1638,21 +1839,25 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       &super\
       """
+
       assert get_cursor_env(code)
 
       code = """
       &super/\
       """
+
       assert get_cursor_env(code)
 
       code = """
       &super/1 \
       """
+
       assert get_cursor_env(code)
 
       code = """
       (&super/1) +\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1662,6 +1867,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         def a do
           super(\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1672,6 +1878,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         def a(x) do
           super(x) +\
       """
+
       assert get_cursor_env(code)
     end
   end
@@ -1683,6 +1890,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         x -> x
         _ -> \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1690,6 +1898,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       {1, _, [\
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1697,6 +1906,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       <<foo>> = <<baz>> = \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1705,6 +1915,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       cond do
         x when x = \
       """
+
       assert get_cursor_env(code)
     end
 
@@ -1712,6 +1923,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       code = """
       __STACKTRACE__ = \
       """
+
       assert get_cursor_env(code)
     end
   end

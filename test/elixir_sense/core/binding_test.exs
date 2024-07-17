@@ -111,96 +111,96 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env,
                  {
-                  :intersection,
-                  [
-                    {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                    {:struct, [], nil, nil}
-                  ]
-                }
+                   :intersection,
+                   [
+                     {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                     {:struct, [], nil, nil}
+                   ]
+                 }
                )
 
-               assert {
-                :struct,
-                [
-                  {:__struct__, {:atom, URI}},
-                  {:port, nil},
-                  {:scheme, nil},
-                  {:path, nil},
-                  {:host, nil},
-                  {:userinfo, nil},
-                  {:fragment, nil},
-                  {:query, nil},
-                  {:authority, nil}
-                ],
-                {:atom, URI},
-                nil
-              } ==
+      assert {
+               :struct,
+               [
+                 {:__struct__, {:atom, URI}},
+                 {:port, nil},
+                 {:scheme, nil},
+                 {:path, nil},
+                 {:host, nil},
+                 {:userinfo, nil},
+                 {:fragment, nil},
+                 {:query, nil},
+                 {:authority, nil}
+               ],
+               {:atom, URI},
+               nil
+             } ==
                Binding.expand(
                  @env,
                  {
-                  :intersection,
-                  [
-                    {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                    {:struct, [], {:atom, URI}, nil}
-                  ]
-                }
+                   :intersection,
+                   [
+                     {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                     {:struct, [], {:atom, URI}, nil}
+                   ]
+                 }
                )
 
-               assert {:struct, [__struct__: nil, __exception__: {:atom, true}], nil, nil} ==
+      assert {:struct, [__struct__: nil, __exception__: {:atom, true}], nil, nil} ==
                Binding.expand(
                  @env,
                  {
-                  :intersection,
-                  [
-                    {
-                      :intersection,
-                      [
-                        {
-                          :intersection,
-                          [
-                            {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                            {:struct, [], nil, nil}
-                          ]
-                        },
-                        {:map, [{:__exception__, nil}], nil}
-                      ]
-                    },
-                    {:map, [{:__exception__, {:atom, true}}], nil}
-                  ]
-                }
+                   :intersection,
+                   [
+                     {
+                       :intersection,
+                       [
+                         {
+                           :intersection,
+                           [
+                             {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                             {:struct, [], nil, nil}
+                           ]
+                         },
+                         {:map, [{:__exception__, nil}], nil}
+                       ]
+                     },
+                     {:map, [{:__exception__, {:atom, true}}], nil}
+                   ]
+                 }
                )
 
-               assert {
-                :struct,
-                [
-                  {:__struct__, {:atom, ArgumentError}},
-                  {:message, nil},
-                  {:__exception__, {:atom, true}}
-                ],
-                {:atom, ArgumentError},
-                nil
-              } ==
+      assert {
+               :struct,
+               [
+                 {:__struct__, {:atom, ArgumentError}},
+                 {:message, nil},
+                 {:__exception__, {:atom, true}}
+               ],
+               {:atom, ArgumentError},
+               nil
+             } ==
                Binding.expand(
                  @env,
                  {
-                  :intersection,
-                  [
-                    {
-                      :intersection,
-                      [
-                        {
-                          :intersection,
-                          [
-                            {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                            {:struct, [], {:atom, ArgumentError}, nil}
-                          ]
-                        },
-                        {:map, [{:__exception__, nil}], nil}
-                      ]
-                    },
-                    {:map, [{:__exception__, {:atom, true}}], nil}
-                  ]
-                }
+                   :intersection,
+                   [
+                     {
+                       :intersection,
+                       [
+                         {
+                           :intersection,
+                           [
+                             {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                             {:struct, [], {:atom, ArgumentError}, nil}
+                           ]
+                         },
+                         {:map, [{:__exception__, nil}], nil}
+                       ]
+                     },
+                     {:map, [{:__exception__, {:atom, true}}], nil}
+                   ]
+                 }
                )
     end
 

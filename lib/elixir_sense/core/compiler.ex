@@ -6,6 +6,7 @@ defmodule ElixirSense.Core.Compiler do
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.TypeInference
   alias ElixirSense.Core.Guard
+  alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
 
   @env :elixir_env.new()
   def env, do: @env
@@ -34,18 +35,21 @@ defmodule ElixirSense.Core.Compiler do
     vars_l_with_inferred_types = TypeInference.find_vars(e_left, match_context_r)
 
     expressions_to_refine = TypeInference.find_refinable(e_right, [], e)
-    vars_r_with_inferred_types = if expressions_to_refine != [] do
-      # we are in match context and the right side is also a pattern, we can refine types
-      # on the right side using the inferred type of the left side
-      match_context_l = TypeInference.get_binding_type(e_left)
-      for expr <- expressions_to_refine, reduce: [] do
-        acc ->
-          vars_in_expr_with_inferred_types = TypeInference.find_vars(expr, match_context_l)
-          acc ++ vars_in_expr_with_inferred_types
+
+    vars_r_with_inferred_types =
+      if expressions_to_refine != [] do
+        # we are in match context and the right side is also a pattern, we can refine types
+        # on the right side using the inferred type of the left side
+        match_context_l = TypeInference.get_binding_type(e_left)
+
+        for expr <- expressions_to_refine, reduce: [] do
+          acc ->
+            vars_in_expr_with_inferred_types = TypeInference.find_vars(expr, match_context_l)
+            acc ++ vars_in_expr_with_inferred_types
+        end
+      else
+        []
       end
-    else
-      []
-    end
 
     sl = merge_inferred_types(sl, vars_l_with_inferred_types ++ vars_r_with_inferred_types)
 
@@ -103,7 +107,7 @@ defmodule ElixirSense.Core.Compiler do
   # __aliases__
 
   defp do_expand({:__aliases__, meta, [head | tail] = list}, state, env) do
-    case Macro.Env.expand_alias(env, meta, list, trace: false) do
+    case NormalizedMacroEnv.expand_alias(env, meta, list, trace: false) do
       {:alias, alias} ->
         # TODO?
         # A compiler may want to emit a :local_function trace in here.
@@ -158,7 +162,7 @@ defmodule ElixirSense.Core.Compiler do
       # TODO check difference with
       # elixir_aliases:alias(Meta, Ref, IncludeByDefault, Opts, E, true)
       # TODO PR to elixir with is_atom(module) check?
-      case Macro.Env.define_alias(env, meta, arg, [trace: false] ++ opts) do
+      case NormalizedMacroEnv.define_alias(env, meta, arg, [trace: false] ++ opts) do
         {:ok, env} ->
           {arg, state, env}
 
@@ -201,7 +205,7 @@ defmodule ElixirSense.Core.Compiler do
         # we counter it with only calling it if :as option is set
         # {arg, state, alias(meta, e_ref, false, e_opts, ea)}
         if Keyword.has_key?(opts, :as) do
-          case Macro.Env.define_alias(env, meta, arg, [trace: false] ++ opts) do
+          case NormalizedMacroEnv.define_alias(env, meta, arg, [trace: false] ++ opts) do
             {:ok, env} ->
               {arg, state, env}
 
@@ -219,7 +223,7 @@ defmodule ElixirSense.Core.Compiler do
         # ElixirAliases.ensure_loaded(meta, e_ref, et)
         # re = ElixirAliases.require(meta, e_ref, e_opts, et, true)
         # {e_ref, st, alias(meta, e_ref, false, e_opts, re)}
-        case Macro.Env.define_require(env, meta, arg, [trace: false] ++ opts) do
+        case NormalizedMacroEnv.define_require(env, meta, arg, [trace: false] ++ opts) do
           {:ok, env} ->
             {arg, state, env}
 
@@ -244,16 +248,18 @@ defmodule ElixirSense.Core.Compiler do
     {opts, state, env} = expand_opts([:only, :except, :warn], opts, state, env)
 
     if is_atom(arg) do
-      opts = opts
-      |> Keyword.merge([
-        trace: false,
-        emit_warnings: false,
-        info_callback: import_info_callback(arg, state)
-      ])
+      opts =
+        opts
+        |> Keyword.merge(
+          trace: false,
+          emit_warnings: false,
+          info_callback: import_info_callback(arg, state)
+        )
 
-      case Macro.Env.define_import(env, meta, arg, opts) do
+      case NormalizedMacroEnv.define_import(env, meta, arg, opts) do
         {:ok, env} ->
-           {arg, state, env}
+          {arg, state, env}
+
         _ ->
           {arg, state, env}
       end
@@ -333,6 +339,7 @@ defmodule ElixirSense.Core.Compiler do
         # elixir raises here missing_option
         # generate a fake do block
         expand({:quote, meta, [opts, [{:do, {:__block__, [], []}}]]}, s, e)
+
       {do_block, new_opts} ->
         expand({:quote, meta, [new_opts, [{:do, do_block}]]}, s, e)
     end
@@ -348,7 +355,9 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:quote, meta, [opts, do_block]}, s, e) when is_list(do_block) do
     exprs =
       case Keyword.fetch(do_block, :do) do
-        {:ok, expr} -> expr
+        {:ok, expr} ->
+          expr
+
         :error ->
           # elixir raises here missing_option
           # try to recover from error by generating a fake do block
@@ -396,14 +405,16 @@ defmodule ElixirSense.Core.Compiler do
     quoted = __MODULE__.Quote.quote(exprs, q)
     {e_quoted, es, eq} = expand(quoted, sc, ec)
 
-    e_binding = for {k, v} <- binding do
-      {:{}, [], [:=, [], [{:{}, [], [k, meta, e_context]}, v]]}
-    end
+    e_binding =
+      for {k, v} <- binding do
+        {:{}, [], [:=, [], [{:{}, [], [k, meta, e_context]}, v]]}
+      end
 
-    e_binding_quoted = case e_binding do
-      [] -> e_quoted
-      _ -> {:{}, [], [:__block__, [], e_binding ++ [e_quoted]]}
-    end
+    e_binding_quoted =
+      case e_binding do
+        [] -> e_quoted
+        _ -> {:{}, [], [:__block__, [], e_binding ++ [e_quoted]]}
+      end
 
     case e_prelude do
       [] -> {e_binding_quoted, es, eq}
@@ -437,7 +448,6 @@ defmodule ElixirSense.Core.Compiler do
        when is_atom(context) and is_integer(arity) do
     case resolve_super(meta, arity, s, e) do
       {kind, name, _} when kind in [:def, :defp] ->
-
         line = Keyword.get(super_meta, :line, 0)
         column = Keyword.get(super_meta, :column, nil)
 
@@ -492,12 +502,13 @@ defmodule ElixirSense.Core.Compiler do
   # Cursor
 
   defp do_expand({:__cursor__, meta, []}, s, e) do
-    s = unless s.cursor_env do
-      s
-      |> add_cursor_env(meta, e)
-    else
-      s
-    end
+    s =
+      unless s.cursor_env do
+        s
+        |> add_cursor_env(meta, e)
+      else
+        s
+      end
 
     {{:__cursor__, meta, []}, s, e}
   end
@@ -506,10 +517,11 @@ defmodule ElixirSense.Core.Compiler do
 
   defp do_expand({:super, meta, args}, s, e) when is_list(args) do
     arity = length(args)
+
     case resolve_super(meta, arity, s, e) do
       {kind, name, _} ->
         {e_args, sa, ea} = expand_args(args, s, e)
-        
+
         line = Keyword.get(meta, :line, 0)
         column = Keyword.get(meta, :column, nil)
 
@@ -519,6 +531,7 @@ defmodule ElixirSense.Core.Compiler do
           |> add_current_env_to_line(line, ea)
 
         {{:super, [{:super, {kind, name}} | meta], e_args}, sa, ea}
+
       _ ->
         # elixir does not allow this branch
         expand_local(meta, :super, args, s, e)
@@ -674,7 +687,7 @@ defmodule ElixirSense.Core.Compiler do
     allow_locals = match?({n, a} when fun != n or arity != a, env.function)
 
     # TODO this crashes with CompileError ambiguous_call
-    case Macro.Env.expand_import(env, meta, fun, arity,
+    case NormalizedMacroEnv.expand_import(env, meta, fun, arity,
            trace: false,
            allow_locals: allow_locals,
            check_deprecations: false
@@ -690,19 +703,23 @@ defmodule ElixirSense.Core.Compiler do
         expand_macro(meta, module, fun, args, callback, state, env)
 
       {:function, module, fun} ->
-        {ar, af} = case __MODULE__.Rewrite.inline(module, fun, arity) do
-          {ar, an} ->
-            {ar, an}
-          false ->
-            {module, fun}
-        end
+        {ar, af} =
+          case __MODULE__.Rewrite.inline(module, fun, arity) do
+            {ar, an} ->
+              {ar, an}
+
+            false ->
+              {module, fun}
+          end
+
         expand_remote(ar, meta, af, meta, args, state, __MODULE__.Env.prepare_write(state), env)
 
       {:error, :not_found} ->
         expand_local(meta, fun, args, state, env)
-      
+
       {:error, {:conflict, _module}} ->
         raise "conflict"
+
       {:error, {:ambiguous, _module}} ->
         raise "ambiguous"
     end
@@ -723,7 +740,7 @@ defmodule ElixirSense.Core.Compiler do
           expand_remote(ar, dot_meta, an, meta, args, state, state_l, env)
 
         false ->
-          case Macro.Env.expand_require(env, meta, module, fun, arity,
+          case NormalizedMacroEnv.expand_require(env, meta, module, fun, arity,
                  trace: false,
                  check_deprecations: false
                ) do
@@ -761,9 +778,10 @@ defmodule ElixirSense.Core.Compiler do
         column
       end
 
-    sa = sa
-    |> add_call_to_line({nil, e_expr, length(e_args)}, {line, column})
-    |> add_current_env_to_line(line, e)
+    sa =
+      sa
+      |> add_call_to_line({nil, e_expr, length(e_args)}, {line, column})
+      |> add_current_env_to_line(line, e)
 
     {{{:., dot_meta, [e_expr]}, meta, e_args}, sa, ea}
   end
@@ -838,7 +856,8 @@ defmodule ElixirSense.Core.Compiler do
          _callback,
          state,
          env = %{module: module}
-       ) when module != nil do
+       )
+       when module != nil do
     {position, end_position} = extract_range(meta)
     {line, _} = position
 
@@ -880,7 +899,8 @@ defmodule ElixirSense.Core.Compiler do
          _callback,
          state,
          env = %{module: module}
-       ) when module != nil do
+       )
+       when module != nil do
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -899,7 +919,8 @@ defmodule ElixirSense.Core.Compiler do
          _callback,
          state,
          env = %{module: module}
-       ) when module != nil do
+       )
+       when module != nil do
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -952,7 +973,8 @@ defmodule ElixirSense.Core.Compiler do
          _callback,
          state,
          env = %{module: module}
-       ) when module != nil do
+       )
+       when module != nil do
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -977,7 +999,8 @@ defmodule ElixirSense.Core.Compiler do
          _callback,
          state,
          env = %{module: module}
-       ) when module != nil do
+       )
+       when module != nil do
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -1001,7 +1024,8 @@ defmodule ElixirSense.Core.Compiler do
          _callback,
          state,
          env = %{module: module}
-       ) when module != nil do
+       )
+       when module != nil do
     line = Keyword.fetch!(meta, :line)
 
     state =
@@ -1025,7 +1049,8 @@ defmodule ElixirSense.Core.Compiler do
          _callback,
          state,
          env = %{module: module}
-       ) when module != nil do
+       )
+       when module != nil do
     line = Keyword.fetch!(meta, :line)
     column = Keyword.fetch!(meta, :column)
 
@@ -1091,8 +1116,9 @@ defmodule ElixirSense.Core.Compiler do
 
       {name, type_args} ->
         if __MODULE__.Typespec.built_in_type?(name, length(type_args)) do
-          raise"type #{name}/#{length(type_args)} is a built-in type and it cannot be redefined"
+          raise "type #{name}/#{length(type_args)} is a built-in type and it cannot be redefined"
         end
+
         # TODO elixir does Macro.escape with unquote: true
 
         spec = TypeInfo.typespec_to_string(kind, expr)
@@ -1188,8 +1214,8 @@ defmodule ElixirSense.Core.Compiler do
 
         [_] ->
           # @attribute(arg)
-          if env.function, do: raise "cannot set attribute @#{name} inside function/macro"
-          if name == :behavior, do: raise "@behavior attribute is not supported"
+          if env.function, do: raise("cannot set attribute @#{name} inside function/macro")
+          if name == :behavior, do: raise("@behavior attribute is not supported")
           {true, expand_args(args, state, env)}
 
         args ->
@@ -1218,7 +1244,8 @@ defmodule ElixirSense.Core.Compiler do
          _callback,
          state,
          env = %{module: module}
-       ) when module != nil do
+       )
+       when module != nil do
     {arg, state, env} = expand(arg, state, env)
 
     case arg do
@@ -1578,8 +1605,17 @@ defmodule ElixirSense.Core.Compiler do
     expand_macro(meta, Kernel, def_kind, [call, {:__block__, [], []}], callback, state, env)
   end
 
-  defp expand_macro(meta, Kernel, def_kind, [call, expr], _callback, state, env = %{module: module}) when module != nil
-       and def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
+  defp expand_macro(
+         meta,
+         Kernel,
+         def_kind,
+         [call, expr],
+         _callback,
+         state,
+         env = %{module: module}
+       )
+       when module != nil and
+              def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
     # dbg(call)
     # dbg(expr)
     # dbg(def_kind)
@@ -1622,12 +1658,15 @@ defmodule ElixirSense.Core.Compiler do
     arity = length(args)
 
     # based on :elixir_def.env_for_expansion
-    state = %{state | 
-        vars: {%{}, false},
-        unused: 0,
-        caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
+    state =
+      %{
+        state
+        | vars: {%{}, false},
+          unused: 0,
+          caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
       }
       |> new_func_vars_scope
+
     env_for_expand = %{env | function: {name, arity}}
 
     # based on :elixir_clauses.def
@@ -1771,7 +1810,7 @@ defmodule ElixirSense.Core.Compiler do
   defp alias_defmodule({:__aliases__, meta, [h | t]}, _module, env) when is_atom(h) do
     module = Module.concat([env.module, h])
     alias = String.to_atom("Elixir." <> Atom.to_string(h))
-    {:ok, env} = Macro.Env.define_alias(env, meta, module, as: alias, trace: false)
+    {:ok, env} = NormalizedMacroEnv.define_alias(env, meta, module, as: alias, trace: false)
 
     case t do
       [] -> {module, env}
@@ -1807,7 +1846,15 @@ defmodule ElixirSense.Core.Compiler do
       attached_meta = attach_runtime_module(receiver, meta, s, e)
       {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {sl, s}, e, args)
 
-      case __MODULE__.Rewrite.rewrite(context, receiver, dot_meta, right, attached_meta, e_args, s) do
+      case __MODULE__.Rewrite.rewrite(
+             context,
+             receiver,
+             dot_meta,
+             right,
+             attached_meta,
+             e_args,
+             s
+           ) do
         {:ok, rewritten} ->
           s =
             __MODULE__.Env.close_write(sa, s)
@@ -1822,6 +1869,7 @@ defmodule ElixirSense.Core.Compiler do
             __MODULE__.Env.close_write(sa, s)
             |> add_call_to_line({receiver, right, length(e_args)}, {line, column})
             |> add_current_env_to_line(line, e)
+
           {{{:., dot_meta, [receiver, right]}, attached_meta, e_args}, s, ea}
       end
     end
@@ -1835,10 +1883,11 @@ defmodule ElixirSense.Core.Compiler do
     column = Keyword.get(meta, :column, nil)
 
     s =
-            __MODULE__.Env.close_write(sa, s)
-            |> add_call_to_line({receiver, right, length(e_args)}, {line, column})
-            |> add_current_env_to_line(line, e)
-          {{{:., dot_meta, [receiver, right]}, meta, e_args}, s, ea}
+      __MODULE__.Env.close_write(sa, s)
+      |> add_call_to_line({receiver, right, length(e_args)}, {line, column})
+      |> add_current_env_to_line(line, e)
+
+    {{{:., dot_meta, [receiver, right]}, meta, e_args}, s, ea}
   end
 
   defp attach_runtime_module(receiver, meta, s, _e) do
@@ -1992,10 +2041,12 @@ defmodule ElixirSense.Core.Compiler do
 
   defp overridable_name(name, count) when is_integer(count), do: :"#{name} (overridable #{count})"
 
-  defp resolve_super(_meta, _arity, _state, %{module: module, function: function}) when module == nil or function == nil do
+  defp resolve_super(_meta, _arity, _state, %{module: module, function: function})
+       when module == nil or function == nil do
     # elixir asserts scope is function
     nil
   end
+
   defp resolve_super(_meta, arity, state, %{module: module, function: function}) do
     case function do
       {name, ^arity} ->
@@ -2081,23 +2132,26 @@ defmodule ElixirSense.Core.Compiler do
         {nil, do_opts} ->
           # elixir raises missing_option here
           {[], do_opts}
-        {do_expr, do_opts} -> {do_expr, do_opts}
+
+        {do_expr, do_opts} ->
+          {do_expr, do_opts}
       end
 
     {e_opts, so, eo} = expand(opts, __MODULE__.Env.reset_vars(s), e)
     {e_cases, sc, ec} = map_fold(&expand_for_generator/3, so, eo, cases)
     # elixir raises here for_generator_start on invalid start generator
 
-    {maybe_reduce, normalized_opts} = sanitize_for_options(e_opts, false, false, false, return, meta, e, [])
+    {maybe_reduce, normalized_opts} =
+      sanitize_for_options(e_opts, false, false, false, return, meta, e, [])
 
-     # TODO not sure new vars scope is actually needed
-     sc = sc |> new_vars_scope
-     {e_expr, se, ee} = expand_for_do_block(meta, expr, sc, ec, maybe_reduce)
+    # TODO not sure new vars scope is actually needed
+    sc = sc |> new_vars_scope
+    {e_expr, se, ee} = expand_for_do_block(meta, expr, sc, ec, maybe_reduce)
 
-     se =
+    se =
       se
-       |> maybe_move_vars_to_outer_scope
-       |> remove_vars_scope
+      |> maybe_move_vars_to_outer_scope
+      |> remove_vars_scope
 
     {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]},
      __MODULE__.Env.merge_vars(se, s, ee), e}
@@ -2117,10 +2171,12 @@ defmodule ElixirSense.Core.Compiler do
         # elixir checks here that clause has exactly 1 arg by matching against {_, _, [[_], _]}
         # we drop excessive or generate a fake arg
         # TODO check if there is cursor in dropped arg?
-        args = case args do
-          [] -> [{:_, [], e.module}]
-          [head | _] -> [head]
-        end
+        args =
+          case args do
+            [] -> [{:_, [], e.module}]
+            [head | _] -> [head]
+          end
+
         clause = {:->, clause_meta, [args, right]}
         s_reset = __MODULE__.Env.reset_vars(sa)
 
@@ -2141,6 +2197,7 @@ defmodule ElixirSense.Core.Compiler do
       [] ->
         # try to recover from error by emitting a fake clause
         expand_for_do_block(meta, [{:->, meta, [[{:_, [], e.module}], :ok]}], s, e, reduce)
+
       _ ->
         # try to recover from error by wrapping the expression in clause
         expand_for_do_block(meta, [{:->, meta, [[expr], :ok]}], s, e, reduce)
@@ -2153,7 +2210,9 @@ defmodule ElixirSense.Core.Compiler do
     {[e_left], sl, el} = __MODULE__.Clauses.head([left], sm, er)
 
     match_context_r = TypeInference.get_binding_type(e_right)
-    vars_l_with_inferred_types = TypeInference.find_vars(e_left, {:for_expression, match_context_r})
+
+    vars_l_with_inferred_types =
+      TypeInference.find_vars(e_left, {:for_expression, match_context_r})
 
     sl = State.merge_inferred_types(sl, vars_l_with_inferred_types)
 
@@ -2176,6 +2235,7 @@ defmodule ElixirSense.Core.Compiler do
             sm,
             er
           )
+
         # no point in doing type inference here, we're only going to find integers and binaries
 
         {{:<<>>, meta, [{:<-, op_meta, [e_left, e_right]}]}, sl, el}
@@ -2322,10 +2382,11 @@ defmodule ElixirSense.Core.Compiler do
     fn kind ->
       if Map.has_key?(state.mods_funs_to_positions, {module, nil, nil}) do
         category = if kind == :functions, do: :function, else: :macro
+
         for {{^module, fun, arity}, info} when fun != nil <- state.mods_funs_to_positions,
-          {fun, arity} not in @internals,
-          State.ModFunInfo.get_category(info) == category,
-          not State.ModFunInfo.private?(info) do
+            {fun, arity} not in @internals,
+            State.ModFunInfo.get_category(info) == category,
+            not State.ModFunInfo.private?(info) do
           {fun, arity}
         end
       else
@@ -2455,12 +2516,15 @@ defmodule ElixirSense.Core.Compiler do
 
     def has_cursor?(ast) do
       # TODO rewrite to lazy prewalker
-      {_, result} = Macro.prewalk(ast, false, fn
-        {:__cursor__, _, list} = node, _state when is_list(list) ->
-          {node, true}
-        node, state ->
-          {node, state}
-      end)
+      {_, result} =
+        Macro.prewalk(ast, false, fn
+          {:__cursor__, _, list} = node, _state when is_list(list) ->
+            {node, true}
+
+          node, state ->
+            {node, state}
+        end)
+
       result
     end
   end
@@ -2598,16 +2662,25 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp expand_case(meta, {:do, _} = do_clause, match_context, s, e) do
-      expand_clauses(meta, :case, fn c, s, e ->
-        case head(c, s, e) do
-          {[h | _] = c, s, e} ->
-            clause_vars_with_inferred_types = TypeInference.find_vars(h, match_context)
-            s = State.merge_inferred_types(s, clause_vars_with_inferred_types)
+      expand_clauses(
+        meta,
+        :case,
+        fn c, s, e ->
+          case head(c, s, e) do
+            {[h | _] = c, s, e} ->
+              clause_vars_with_inferred_types = TypeInference.find_vars(h, match_context)
+              s = State.merge_inferred_types(s, clause_vars_with_inferred_types)
 
-            {c, s, e}
-          other -> other
-        end
-      end, do_clause, s, e)
+              {c, s, e}
+
+            other ->
+              other
+          end
+        end,
+        do_clause,
+        s,
+        e
+      )
     end
 
     # cond
@@ -2683,10 +2756,12 @@ defmodule ElixirSense.Core.Compiler do
         expr when not is_list(expr) ->
           # try to recover from error by wrapping the expression in list
           expand_receive(meta, {:after, [expr]}, s, e)
+
         [first | _] ->
           # try to recover from error by taking first clause only
           # TODO maybe search for clause with cursor?
           expand_receive(meta, {:after, [first]}, s, e)
+
         [] ->
           # try to recover from error by inserting a fake clause
           expand_receive(meta, {:after, [{:->, meta, [[0], :ok]}]}, s, e)
@@ -2749,6 +2824,7 @@ defmodule ElixirSense.Core.Compiler do
 
         {expr, rest_opts} ->
           pair = {:else, expr}
+
           # no point in doing type inference here, we have no idea what data we are matching against
           {e_pair, se} = expand_clauses(meta, :with, &head/3, pair, s, e)
           {[e_pair], rest_opts, se}
@@ -2762,6 +2838,7 @@ defmodule ElixirSense.Core.Compiler do
       # emit a fake do block
       try(meta, [do: []], s, e)
     end
+
     def try(_meta, opts, s, e) when not is_list(opts) do
       # elixir raises here invalid_args
       # there may be cursor
@@ -2840,12 +2917,12 @@ defmodule ElixirSense.Core.Compiler do
     # rescue var
     defp expand_rescue({name, _, atom} = var, s, e) when is_atom(name) and is_atom(atom) do
       {e_left, sl, el} = match(&ElixirExpand.expand/3, var, s, s, e)
-      
+
       match_context = {:struct, [], {:atom, Exception}, nil}
 
       vars_with_inferred_types = TypeInference.find_vars(e_left, match_context)
       sl = State.merge_inferred_types(sl, vars_with_inferred_types)
-      
+
       {e_left, sl, el}
     end
 
@@ -2867,7 +2944,7 @@ defmodule ElixirSense.Core.Compiler do
 
       vars_with_inferred_types = TypeInference.find_vars(e_left, match_context)
       sl = State.merge_inferred_types(sl, vars_with_inferred_types)
-      
+
       {e_left, sl, el}
     end
 
@@ -2880,22 +2957,23 @@ defmodule ElixirSense.Core.Compiler do
         {name, _, atom} when is_atom(name) and is_atom(atom) ->
           normalized = normalize_rescue(e_right, e)
 
-          match_context = for exception <- normalized, reduce: nil do
-            nil -> {:struct, [], {:atom, exception}, nil}
-            other -> {:union, [other, {:struct, [], {:atom, exception}, nil}]}
-          end
+          match_context =
+            for exception <- normalized, reduce: nil do
+              nil -> {:struct, [], {:atom, exception}, nil}
+              other -> {:union, [other, {:struct, [], {:atom, exception}, nil}]}
+            end
 
-          match_context = if match_context == nil do
-            {:struct, [], {:atom, Exception}, nil}
-          else
-            match_context
-          end
+          match_context =
+            if match_context == nil do
+              {:struct, [], {:atom, Exception}, nil}
+            else
+              match_context
+            end
 
           vars_with_inferred_types = TypeInference.find_vars(e_left, match_context)
           sr = State.merge_inferred_types(sr, vars_with_inferred_types)
 
           {{:in, meta, [e_left, normalized]}, sr, er}
-
 
         _ ->
           # elixir rejects this case, we normalize to underscore
@@ -2911,7 +2989,9 @@ defmodule ElixirSense.Core.Compiler do
           # elixir rejects this case
           # try to recover from error by generating fake expression
           expand_rescue({:in, meta, [arg, {:_, [], e.module}]}, s, e)
-        new_arg -> expand_rescue(new_arg, s, e)
+
+        new_arg ->
+          expand_rescue(new_arg, s, e)
       end
     end
 
@@ -2926,11 +3006,12 @@ defmodule ElixirSense.Core.Compiler do
 
     defp normalize_rescue(other, e) do
       # elixir is strict here, we reject invalid nodes
-      res = if is_list(other) do
-        Enum.filter(other, &is_atom/1)
-      else
-        []
-      end
+      res =
+        if is_list(other) do
+          Enum.filter(other, &is_atom/1)
+        else
+          []
+        end
 
       if res == [] do
         [{:_, [], e.module}]
@@ -3148,6 +3229,7 @@ defmodule ElixirSense.Core.Compiler do
 
     defp type(:default, :default), do: :integer
     defp type(expr_type, :default), do: expr_type
+
     defp type(:binary, type) when type in [:binary, :bitstring, :utf8, :utf16, :utf32],
       do: type
 
@@ -3164,10 +3246,12 @@ defmodule ElixirSense.Core.Compiler do
       type(:default, :default)
     end
 
-    defp expand_each_spec(meta, [{:__cursor__, _, args} = h | t], map, s, original_s, e) when is_list(args) do
+    defp expand_each_spec(meta, [{:__cursor__, _, args} = h | t], map, s, original_s, e)
+         when is_list(args) do
       {_, s, e} = ElixirExpand.expand(h, s, e)
       expand_each_spec(meta, t, map, s, original_s, e)
     end
+
     defp expand_each_spec(meta, [{expr, meta_e, args} = h | t], map, s, original_s, e)
          when is_atom(expr) do
       case validate_spec(expr, args) do
@@ -3462,11 +3546,14 @@ defmodule ElixirSense.Core.Compiler do
     def capture(meta, {:__block__, _, expr}, s, e) do
       # elixir raises block_expr_in_capture
       # try to recover from error
-      expr = case expr do
-        [] -> {:"&1", meta, e.module}
-        list ->
-          ElixirUtils.select_with_cursor(list) || hd(list)
-      end
+      expr =
+        case expr do
+          [] ->
+            {:"&1", meta, e.module}
+
+          list ->
+            ElixirUtils.select_with_cursor(list) || hd(list)
+        end
 
       capture(meta, expr, s, e)
     end
@@ -3503,11 +3590,12 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp capture_import({atom, import_meta, args} = expr, s, e, sequential) do
-      res = if sequential do
-        ElixirDispatch.import_function(import_meta, atom, length(args), e)
-      else
-        false
-      end
+      res =
+        if sequential do
+          ElixirDispatch.import_function(import_meta, atom, length(args), e)
+        else
+          false
+        end
 
       handle_capture(res, import_meta, import_meta, expr, s, e, sequential)
     end
@@ -3517,20 +3605,21 @@ defmodule ElixirSense.Core.Compiler do
         {esc_left, []} ->
           {e_left, se, ee} = ElixirExpand.expand(esc_left, s, e)
 
-          res = if sequential do
-            case e_left do
-              {name, _, context} when is_atom(name) and is_atom(context) ->
-                {:remote, e_left, right, length(args)}
+          res =
+            if sequential do
+              case e_left do
+                {name, _, context} when is_atom(name) and is_atom(context) ->
+                  {:remote, e_left, right, length(args)}
 
-              _ when is_atom(e_left) ->
-                ElixirDispatch.require_function(require_meta, e_left, right, length(args), ee)
+                _ when is_atom(e_left) ->
+                  ElixirDispatch.require_function(require_meta, e_left, right, length(args), ee)
 
-              _ ->
-                false
+                _ ->
+                  false
+              end
+            else
+              false
             end
-          else
-            false
-          end
 
           dot = {{:., dot_meta, [e_left, right]}, require_meta, args}
           handle_capture(res, require_meta, dot_meta, dot, se, ee, sequential)
@@ -3564,7 +3653,7 @@ defmodule ElixirSense.Core.Compiler do
         {e_expr, e_dict} ->
           # elixir raises capture_arg_without_predecessor here
           # if argument vars are not consecutive
-          e_vars = Enum.map(e_dict, & elem(&1, 1))
+          e_vars = Enum.map(e_dict, &elem(&1, 1))
           fn_expr = {:fn, meta, [{:->, meta, [e_vars, e_expr]}]}
           {:expand, fn_expr, s, e}
       end
@@ -3578,7 +3667,8 @@ defmodule ElixirSense.Core.Compiler do
 
       case :orddict.find(pos, dict) do
         {:ok, var} ->
-          {var, dict};
+          {var, dict}
+
         :error ->
           # elixir uses here elixir_module:next_counter(?key(E, module))
           # but we are not compiling and do not need to keep count in module scope
@@ -3823,14 +3913,15 @@ defmodule ElixirSense.Core.Compiler do
       {:{}, [], [:quote, meta(new_meta, q), [t_opts, t_arg]]}
     end
 
-    defp do_quote({:unquote, meta, [expr]}, %__MODULE__{unquote: true}) when is_list(meta), do: expr
+    defp do_quote({:unquote, meta, [expr]}, %__MODULE__{unquote: true}) when is_list(meta),
+      do: expr
 
     # Aliases
 
     defp do_quote({:__aliases__, meta, [h | t] = list}, %__MODULE__{aliases_hygiene: e = %{}} = q)
-         when is_atom(h) and h != :"Elixir" and is_list(meta) do
+         when is_atom(h) and h != Elixir and is_list(meta) do
       annotation =
-        case Macro.Env.expand_alias(e, meta, list, trace: false) do
+        case NormalizedMacroEnv.expand_alias(e, meta, list, trace: false) do
           {:alias, atom} -> atom
           :error -> false
         end
@@ -3857,7 +3948,8 @@ defmodule ElixirSense.Core.Compiler do
     defp do_quote(
            {:__cursor__, meta, args},
            %__MODULE__{unquote: _}
-         ) when is_list(args) do
+         )
+         when is_list(args) do
       # emit cursor as is regardless of unquote
       {:__cursor__, meta, args}
     end
@@ -3867,11 +3959,13 @@ defmodule ElixirSense.Core.Compiler do
     defp do_quote(
            {{{:., meta, [left, :unquote]}, _, [expr]}, _, args},
            %__MODULE__{unquote: true} = q
-         ) when is_list(meta) do
+         )
+         when is_list(meta) do
       do_quote_call(left, meta, expr, args, q)
     end
 
-    defp do_quote({{:., meta, [left, :unquote]}, _, [expr]}, %__MODULE__{unquote: true} = q) when is_list(meta) do
+    defp do_quote({{:., meta, [left, :unquote]}, _, [expr]}, %__MODULE__{unquote: true} = q)
+         when is_list(meta) do
       do_quote_call(left, meta, expr, nil, q)
     end
 
@@ -3951,6 +4045,7 @@ defmodule ElixirSense.Core.Compiler do
              ElixirDispatch.find_imports(meta, name, e) do
         [_ | _] = imports ->
           keystore(:imports, keystore(:context, meta, q.context), imports)
+
         _ ->
           case arity == 1 && Keyword.fetch(meta, :ambiguous_op) do
             {:ok, nil} ->
@@ -4205,6 +4300,7 @@ defmodule ElixirSense.Core.Compiler do
           # elixir raises here, we choose first one
           # TODO trace call?
           head
+
         _ ->
           false
       end
@@ -4325,7 +4421,8 @@ defmodule ElixirSense.Core.Compiler do
             {[], []} ->
               false
 
-            _ -> {:ambiguous, fun_match ++ mac_match}
+            _ ->
+              {:ambiguous, fun_match ++ mac_match}
           end
       end
     end
@@ -4337,7 +4434,7 @@ defmodule ElixirSense.Core.Compiler do
     defp is_import(meta, arity) do
       with {:ok, imports = [_ | _]} <- Keyword.fetch(meta, :imports),
            {:ok, _} <- Keyword.fetch(meta, :context),
-           {:ok, receiver} <- Keyword.fetch(imports, arity) do
+           {_arity, receiver} <- :lists.keyfind(arity, 1, imports) do
         {:import, receiver}
       else
         _ -> false
@@ -4397,16 +4494,19 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp wrap_in_fake_map(right) do
-      map_args = case right do
-        list when is_list(list) ->
-          if Keyword.keyword?(list) do
-            list
-          else
-            [__fake_key__: list]
-          end
-        _ ->
-          [__fake_key__: right]
-      end
+      map_args =
+        case right do
+          list when is_list(list) ->
+            if Keyword.keyword?(list) do
+              list
+            else
+              [__fake_key__: list]
+            end
+
+          _ ->
+            [__fake_key__: right]
+        end
+
       {:%{}, [], map_args}
     end
 
@@ -4539,19 +4639,21 @@ defmodule ElixirSense.Core.Compiler do
 
     def type_to_signature({:"::", _, [{name, _, args}, _]})
         when is_atom(name) and name != :"::",
-      do: {name, args}
+        do: {name, args}
 
     def type_to_signature(_), do: :error
 
     def expand_spec(ast, state, env) do
       # TODO not sure this is correct. Are module vars accessible?
-      state = state
-      |> new_func_vars_scope
+      state =
+        state
+        |> new_func_vars_scope
 
       {ast, state, env} = do_expand_spec(ast, state, env)
 
-      state = state
-      |> remove_func_vars_scope
+      state =
+        state
+        |> remove_func_vars_scope
 
       {ast, state, env}
     end
@@ -4560,14 +4662,22 @@ defmodule ElixirSense.Core.Compiler do
       {spec, guard, state, env} = do_expand_spec(spec, guard, meta, state, env)
       {{:when, meta, [spec, guard]}, state, env}
     end
+
     defp do_expand_spec(spec, state, env) do
       {spec, _guard, state, env} = do_expand_spec(spec, [], [], state, env)
       {spec, state, env}
     end
 
-    defp do_expand_spec({:"::", meta, [{name, name_meta, args}, return]}, guard, guard_meta, state, env)
-      when is_atom(name) and name != :"::" do
-        args = if is_atom(args) do
+    defp do_expand_spec(
+           {:"::", meta, [{name, name_meta, args}, return]},
+           guard,
+           guard_meta,
+           state,
+           env
+         )
+         when is_atom(name) and name != :"::" do
+      args =
+        if is_atom(args) do
           []
         else
           args
@@ -4576,27 +4686,33 @@ defmodule ElixirSense.Core.Compiler do
 
       guard = if Keyword.keyword?(guard), do: guard, else: []
 
-      state = Enum.reduce(guard, state, fn {name, _val}, state ->
-        # guard is a keyword list so we don't have exact meta on keys
-        add_var_write(state, {name, guard_meta, nil})
-      end)
+      state =
+        Enum.reduce(guard, state, fn {name, _val}, state ->
+          # guard is a keyword list so we don't have exact meta on keys
+          add_var_write(state, {name, guard_meta, nil})
+        end)
 
-      {args_reverse, state, env} = Enum.reduce(args, {[], state, env}, fn arg, {acc, state, env} ->
-        {arg, state, env} = expand_typespec(arg, state, env)
-        {[arg | acc], state, env}
-      end)
+      {args_reverse, state, env} =
+        Enum.reduce(args, {[], state, env}, fn arg, {acc, state, env} ->
+          {arg, state, env} = expand_typespec(arg, state, env)
+          {[arg | acc], state, env}
+        end)
+
       args = Enum.reverse(args_reverse)
 
       {return, state, env} = expand_typespec(return, state, env)
 
-      {guard_reverse, state, env} = Enum.reduce(guard, {[], state, env}, fn
-        {_name, {:var, _, context}} = pair, {acc, state, env} when is_atom(context) ->
-          # special type var
-          {[pair | acc], state, env}
-        {name, type}, {acc, state, env} ->
-          {type, state, env} = expand_typespec(type, state, env)
-          {[{name, type} | acc], state, env}
-      end)
+      {guard_reverse, state, env} =
+        Enum.reduce(guard, {[], state, env}, fn
+          {_name, {:var, _, context}} = pair, {acc, state, env} when is_atom(context) ->
+            # special type var
+            {[pair | acc], state, env}
+
+          {name, type}, {acc, state, env} ->
+            {type, state, env} = expand_typespec(type, state, env)
+            {[{name, type} | acc], state, env}
+        end)
+
       guard = Enum.reverse(guard_reverse)
 
       {{:"::", meta, [{name, name_meta, args}, return]}, guard, state, env}
@@ -4612,42 +4728,46 @@ defmodule ElixirSense.Core.Compiler do
       Enum.map(args, fn
         {:"::", meta, [left, right]} ->
           {:"::", meta, [remove_default(left), remove_default(right)]}
-  
+
         other ->
           remove_default(other)
       end)
     end
-  
+
     defp remove_default({:\\, _, [left, _]}), do: left
     defp remove_default(other), do: other
 
-
     def expand_type(ast, state, env) do
-      state = state
-      |> new_func_vars_scope
+      state =
+        state
+        |> new_func_vars_scope
 
       {ast, state, env} = do_expand_type(ast, state, env)
 
-      state = state
-      |> remove_func_vars_scope
+      state =
+        state
+        |> remove_func_vars_scope
 
       {ast, state, env}
     end
 
     defp do_expand_type({:"::", meta, [{name, name_meta, args}, definition]}, state, env) do
-      args = if is_atom(args) do
-        []
-      else
-        args
-      end
+      args =
+        if is_atom(args) do
+          []
+        else
+          args
+        end
 
-      state = Enum.reduce(args, state, fn
-        {name, meta, context}, state when is_atom(name) and is_atom(context) and name != :_ ->
-          add_var_write(state, {name, meta, context})
-         _, state ->
-          # silently skip invalid typespec params
-          state
-      end)
+      state =
+        Enum.reduce(args, state, fn
+          {name, meta, context}, state when is_atom(name) and is_atom(context) and name != :_ ->
+            add_var_write(state, {name, meta, context})
+
+          _, state ->
+            # silently skip invalid typespec params
+            state
+        end)
 
       {definition, state, env} = expand_typespec(definition, state, env)
       {{:"::", meta, [{name, name_meta, args}, definition]}, state, env}
@@ -4660,7 +4780,19 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     @special_forms [
-      :|, :<<>>, :%{}, :%, :.., :->, :"::", :+, :-, :., :{}, :__block__, :...
+      :|,
+      :<<>>,
+      :%{},
+      :%,
+      :..,
+      :->,
+      :"::",
+      :+,
+      :-,
+      :.,
+      :{},
+      :__block__,
+      :...
     ]
 
     defp expand_typespec(ast, state, env) do
@@ -4672,64 +4804,83 @@ defmodule ElixirSense.Core.Compiler do
       # TODO expand struct module
       # {:%, _, [name, {:%{}, meta, fields}]}
       {ast, {state, env}} =
-        Macro.traverse(ast, {state, env}, fn
-          {:__aliases__, _meta, list} = node, {state, env} when is_list(list) ->
-            {node, state, env} = ElixirExpand.expand(node, state, env)
-            {node, {state, env}}
+        Macro.traverse(
+          ast,
+          {state, env},
+          fn
+            {:__aliases__, _meta, list} = node, {state, env} when is_list(list) ->
+              {node, state, env} = ElixirExpand.expand(node, state, env)
+              {node, {state, env}}
 
-          {:__MODULE__, _meta, ctx} = node, {state, env} when is_atom(ctx) ->
-            {node, state, env} = ElixirExpand.expand(node, state, env)
-            {node, {state, env}}
-          
-          {:"::", meta, [{var_name, var_meta, context}, expr]}, {state, env} when is_atom(var_name) and is_atom(context) ->
-            # mark as annotation
-          {{:"::", meta, [{var_name, [{:annotation, true} | var_meta], context}, expr]}, {state, env}}
+            {:__MODULE__, _meta, ctx} = node, {state, env} when is_atom(ctx) ->
+              {node, state, env} = ElixirExpand.expand(node, state, env)
+              {node, {state, env}}
 
-          {name, meta, args}, {state, env} when is_atom(name) and is_atom(args) and name not in @special_forms and hd(meta) != {:annotation, true} ->
-            [vars_from_scope | _other_vars] = state.vars_info
-            ast = case Elixir.Map.get(vars_from_scope, {name, nil}) do
-              nil ->
-                # add parens to no parens local call
-                {name, meta, []}
-              _ ->
-                {name, meta, args}
-            end
+            {:"::", meta, [{var_name, var_meta, context}, expr]}, {state, env}
+            when is_atom(var_name) and is_atom(context) ->
+              # mark as annotation
+              {{:"::", meta, [{var_name, [{:annotation, true} | var_meta], context}, expr]},
+               {state, env}}
 
-            {ast, {state, env}}
+            {name, meta, args}, {state, env}
+            when is_atom(name) and is_atom(args) and name not in @special_forms and
+                   hd(meta) != {:annotation, true} ->
+              [vars_from_scope | _other_vars] = state.vars_info
 
-          other, acc ->
-            {other, acc}
-        end, fn
-          {{:., dot_meta, [remote, name]}, meta, args}, {state, env} when is_atom(remote) ->
-            line = Keyword.get(meta, :line, 0)
-            column = Keyword.get(meta, :column, nil)
-            args = if is_atom(args) do
-              []
-            else
-              args
-            end
+              ast =
+                case Elixir.Map.get(vars_from_scope, {name, nil}) do
+                  nil ->
+                    # add parens to no parens local call
+                    {name, meta, []}
 
-            state = add_call_to_line(state, {remote, name, length(args)}, {line, column})
+                  _ ->
+                    {name, meta, args}
+                end
 
-            {{{:., dot_meta, [remote, name]}, meta, args}, {state, env}}
+              {ast, {state, env}}
 
-          {name, meta, args}, {state, env} when is_atom(name) and is_list(args) and name not in @special_forms ->
-            line = Keyword.get(meta, :line, 0)
-            column = Keyword.get(meta, :column, nil)
+            other, acc ->
+              {other, acc}
+          end,
+          fn
+            {{:., dot_meta, [remote, name]}, meta, args}, {state, env} when is_atom(remote) ->
+              line = Keyword.get(meta, :line, 0)
+              column = Keyword.get(meta, :column, nil)
 
-            state = add_call_to_line(state, {nil, name, length(args)}, {line, column})
+              args =
+                if is_atom(args) do
+                  []
+                else
+                  args
+                end
 
-            {{name, meta, args}, {state, env}}
-          {name, meta, context} = var, {state, env} when is_atom(name) and is_atom(context) and hd(meta) != {:annotation, true} ->
-            state = add_var_read(state, var)
-            {var, {state, env}}
-          other, acc ->
-            {other, acc}
-        end)
+              state = add_call_to_line(state, {remote, name, length(args)}, {line, column})
+
+              {{{:., dot_meta, [remote, name]}, meta, args}, {state, env}}
+
+            {name, meta, args}, {state, env}
+            when is_atom(name) and is_list(args) and name not in @special_forms ->
+              line = Keyword.get(meta, :line, 0)
+              column = Keyword.get(meta, :column, nil)
+
+              state = add_call_to_line(state, {nil, name, length(args)}, {line, column})
+
+              {{name, meta, args}, {state, env}}
+
+            {name, meta, context} = var, {state, env}
+            when is_atom(name) and is_atom(context) and hd(meta) != {:annotation, true} ->
+              state = add_var_read(state, var)
+              {var, {state, env}}
+
+            other, acc ->
+              {other, acc}
+          end
+        )
 
       {ast, state, env}
     end
-      # TODO: Remove char_list type by v2.0
+
+    # TODO: Remove char_list type by v2.0
     def built_in_type?(:char_list, 0), do: true
     def built_in_type?(:charlist, 0), do: true
     def built_in_type?(:as_boolean, 1), do: true

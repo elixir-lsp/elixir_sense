@@ -340,13 +340,21 @@ defmodule ElixirSense.Core.Binding do
   def do_expand(_env, {:integer, integer}, _stack), do: {:integer, integer}
 
   def do_expand(_env, {:union, all}, _stack) do
-    all = Enum.filter(all, & &1 != :none)
+    all = Enum.filter(all, &(&1 != :none))
+
     cond do
-      all == [] -> :none
-      Enum.any?(all, & &1 == nil) -> nil
-      match?([_], all) -> hd(all)
+      all == [] ->
+        :none
+
+      Enum.any?(all, &(&1 == nil)) ->
+        nil
+
+      match?([_], all) ->
+        hd(all)
+
       true ->
         first = hd(all)
+
         if Enum.all?(tl(all), &(&1 == first)) do
           first
         else
