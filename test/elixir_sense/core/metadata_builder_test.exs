@@ -1309,15 +1309,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       """
       |> string_to_state
 
-    assert state.functions == []
-    assert state.macros == []
-    assert state.requires == []
-    assert state.aliases == []
     assert state.attributes == []
-    assert state.protocols == []
     assert state.scope_attributes == []
     assert state.vars_info == []
     assert state.scope_ids == []
+    assert state.doc_context == []
+    assert state.typedoc_context == []
+    assert state.optional_callbacks_context == []
   end
 
   describe "moduledoc positions" do
