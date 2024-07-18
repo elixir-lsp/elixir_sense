@@ -955,15 +955,20 @@ defmodule ElixirSense.Core.State do
     column = meta[:column]
 
     [vars_from_scope | other_vars] = state.vars_info
-    info = Map.fetch!(vars_from_scope, {name, version})
 
-    info = %VarInfo{info | positions: (info.positions ++ [{line, column}]) |> Enum.uniq()}
-    vars_from_scope = Map.put(vars_from_scope, {name, version}, info)
+    case Map.get(vars_from_scope, {name, version}) do
+      nil ->
+        state
 
-    %__MODULE__{
-      state
-      | vars_info: [vars_from_scope | other_vars]
-    }
+      info ->
+        info = %VarInfo{info | positions: (info.positions ++ [{line, column}]) |> Enum.uniq()}
+        vars_from_scope = Map.put(vars_from_scope, {name, version}, info)
+
+        %__MODULE__{
+          state
+          | vars_info: [vars_from_scope | other_vars]
+        }
+    end
   end
 
   def add_var_read(%__MODULE__{} = state, _), do: state
