@@ -86,9 +86,9 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
       quote do
         ast = to_quoted!(unquote(code), unquote(ast))
         {elixir_expanded, elixir_state, elixir_env} = elixir_expand(ast)
-        dbg(elixir_expanded)
+        # dbg(elixir_expanded)
         {expanded, state, env} = expand(ast)
-        dbg(expanded)
+        # dbg(expanded)
 
         assert clean_capture_arg(expanded) == clean_capture_arg_elixir(elixir_expanded)
         assert env == elixir_env
@@ -100,11 +100,11 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
       quote do
         ast = to_quoted!(unquote(code), unquote(ast))
         {elixir_expanded, elixir_state, elixir_env} = elixir_expand(ast)
-        dbg(elixir_expanded)
-        dbg(elixir_ex_to_map(elixir_state))
+        # dbg(elixir_expanded)
+        # dbg(elixir_ex_to_map(elixir_state))
         {expanded, state, env} = expand(ast)
-        dbg(expanded)
-        dbg(state_to_map(state))
+        # dbg(expanded)
+        # dbg(state_to_map(state))
 
         assert env == elixir_env
         assert state_to_map(state) == elixir_ex_to_map(elixir_state)

@@ -2524,7 +2524,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       #          type: {:map, [b: {:integer, 2}], nil}
       #        } = Enum.find(vars, &(&1.name == :a1))
 
-      vars = state |> get_line_vars(8) |> dbg
+      vars = state |> get_line_vars(8)
 
       assert %VarInfo{
                name: :a2,
@@ -8166,7 +8166,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         []
 
       env ->
-        dbg(state)
         state.vars_info_per_scope_id[env.scope_id]
     end
     |> Enum.sort()
