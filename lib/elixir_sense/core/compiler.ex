@@ -3999,7 +3999,7 @@ defmodule ElixirSense.Core.Compiler do
       arity =
         case args_or_context do
           args when is_list(args) -> length(args)
-          _context when is_atom(args_or_context) -> 0
+          context when is_atom(context) -> 0
         end
 
       import_meta = import_meta(meta, name, arity, q, e)
