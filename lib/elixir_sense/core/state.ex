@@ -321,15 +321,7 @@ defmodule ElixirSense.Core.State do
     def private?(%ModFunInfo{type: type}), do: type in [:defp, :defmacrop, :defguardp]
   end
 
-  def current_aliases(%__MODULE__{} = state) do
-    state.aliases |> List.flatten() |> Enum.uniq_by(&elem(&1, 0)) |> Enum.reverse()
-  end
-
-  def current_requires(%__MODULE__{} = state) do
-    state.requires |> :lists.reverse() |> List.flatten() |> Enum.uniq() |> Enum.sort()
-  end
-
-  def get_current_env(%__MODULE__{} = state, macro_env) do
+  defp get_current_env(%__MODULE__{} = state, macro_env) do
     current_attributes = state |> get_current_attributes()
     current_behaviours = state.behaviours |> Map.get(macro_env.module, [])
 
@@ -375,10 +367,6 @@ defmodule ElixirSense.Core.State do
       scope_id: current_scope_id,
       protocol: current_protocol
     }
-  end
-
-  def get_current_module(%__MODULE__{} = state) do
-    state.module |> hd
   end
 
   def add_cursor_env(%__MODULE__{} = state, meta, macro_env) do
@@ -483,7 +471,7 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | calls: calls}
   end
 
-  def add_struct(%__MODULE__{} = state, env, type, fields) do
+  defp add_struct(%__MODULE__{} = state, env, type, fields) do
     structs =
       state.structs
       |> Map.put(env.module, %StructInfo{type: type, fields: fields ++ [__struct__: env.module]})
@@ -491,10 +479,11 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | structs: structs}
   end
 
-  def get_current_attributes(%__MODULE__{} = state) do
+  defp get_current_attributes(%__MODULE__{} = state) do
     state.scope_attributes |> :lists.reverse() |> List.flatten()
   end
 
+  # TODO make priv
   def add_mod_fun_to_position(
         %__MODULE__{} = state,
         {module, fun, arity},
@@ -555,16 +544,17 @@ defmodule ElixirSense.Core.State do
   end
 
   defp process_option(
-         state,
+         _state,
          info,
          :defdelegate,
-         {:target, {target_module_expression, target_function}}
+         {:target, {target_module, target_function}}
        ) do
-    {module, _state, _env} = expand(target_module_expression, state)
+    # TODO wtf
+    # {module, _state, _env} = expand(target_module_expression, state)
 
     %ModFunInfo{
       info
-      | target: {module, target_function}
+      | target: {target_module, target_function}
     }
   end
 
@@ -577,10 +567,6 @@ defmodule ElixirSense.Core.State do
   end
 
   defp process_option(_state, info, _type, _option), do: info
-
-  def implementation_alias(protocol, [first | _]) do
-    Module.concat(protocol, first)
-  end
 
   def add_module(%__MODULE__{} = state) do
     %__MODULE__{
@@ -598,10 +584,6 @@ defmodule ElixirSense.Core.State do
         typedoc_context: tl(state.typedoc_context),
         optional_callbacks_context: tl(state.optional_callbacks_context)
     }
-  end
-
-  def add_typespec_namespace(%__MODULE__{} = state, name, arity) do
-    %{state | scopes: [{:typespec, name, arity} | state.scopes]}
   end
 
   def register_optional_callbacks(%__MODULE__{} = state, list) do
@@ -623,36 +605,6 @@ defmodule ElixirSense.Core.State do
       end)
 
     %{state | specs: updated_specs}
-  end
-
-  def new_named_func(%__MODULE__{} = state, name, arity) do
-    %{state | scopes: [{name, arity} | state.scopes]}
-  end
-
-  def maybe_add_protocol_implementation(
-        %__MODULE__{} = state,
-        protocol = {_protocol, _implementations}
-      ) do
-    %__MODULE__{state | protocols: [protocol | state.protocols]}
-  end
-
-  def maybe_add_protocol_implementation(%__MODULE__{} = state, _) do
-    %__MODULE__{state | protocols: [nil | state.protocols]}
-  end
-
-  def remove_protocol_implementation(%__MODULE__{} = state) do
-    %__MODULE__{state | protocols: tl(state.protocols)}
-  end
-
-  def remove_last_scope_from_scopes(%__MODULE__{} = state) do
-    %__MODULE__{state | scopes: tl(state.scopes)}
-  end
-
-  def add_current_module_to_index(%__MODULE__{} = state, position, end_position, options)
-      when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
-    current_module = get_current_module(state)
-
-    add_module_to_index(state, current_module, position, end_position, options)
   end
 
   def add_module_to_index(%__MODULE__{} = state, module, position, end_position, options)
@@ -721,19 +673,19 @@ defmodule ElixirSense.Core.State do
         end
       end
 
-    meta =
-      if type == :defdelegate do
-        {target_module_expression, target_fun} = options[:target]
-        {module, _state, _env} = expand(target_module_expression, state)
+    # meta =
+    #   if type == :defdelegate do
+    #     {target_module, target_fun} = options[:target]
+    #     # {module, _state, _env} = expand(target_module_expression, state)
 
-        Map.put(
-          meta,
-          :delegate_to,
-          {module, target_fun, arity}
-        )
-      else
-        meta
-      end
+    #     Map.put(
+    #       meta,
+    #       :delegate_to,
+    #       {target_module, target_fun, arity}
+    #     )
+    #   else
+    #     meta
+    #   end
 
     meta =
       if type in [:defguard, :defguardp] do
@@ -743,7 +695,7 @@ defmodule ElixirSense.Core.State do
       end
 
     doc =
-      if type in [:defp, :defmacrop] do
+      if type in [:defp, :defmacrop, :defguardp] do
         # documentation is discarded on private
         ""
       else
@@ -807,20 +759,6 @@ defmodule ElixirSense.Core.State do
     }
   end
 
-  def push_binding_context(%__MODULE__{} = state, binding_context) do
-    %__MODULE__{
-      state
-      | binding_context: [binding_context | state.binding_context]
-    }
-  end
-
-  def pop_binding_context(%__MODULE__{} = state) do
-    %__MODULE__{
-      state
-      | binding_context: tl(state.binding_context)
-    }
-  end
-
   def new_func_vars_scope(%__MODULE__{} = state) do
     scope_id = state.scope_id_count + 1
 
@@ -854,7 +792,7 @@ defmodule ElixirSense.Core.State do
     }
   end
 
-  def update_vars_info_per_scope_id(state) do
+  defp update_vars_info_per_scope_id(state) do
     [scope_id | _other_scope_ids] = state.scope_ids
     [current_scope_vars | _other_scope_vars] = state.vars_info
 
@@ -873,121 +811,6 @@ defmodule ElixirSense.Core.State do
     attributes = tl(state.attributes)
     %__MODULE__{state | attributes: attributes, scope_attributes: attributes}
   end
-
-  def add_alias(%__MODULE__{} = state, {alias, aliased}) when is_list(aliased) do
-    if Introspection.elixir_module?(alias) do
-      alias = Module.split(alias) |> Enum.take(-1) |> Module.concat()
-      [aliases_from_scope | inherited_aliases] = state.aliases
-      aliases_from_scope = aliases_from_scope |> Enum.reject(&match?({^alias, _}, &1))
-
-      # TODO pass env
-      {expanded, state, _env} = expand(aliased, state)
-
-      aliases_from_scope =
-        if alias != expanded do
-          [{alias, expanded} | aliases_from_scope]
-        else
-          aliases_from_scope
-        end
-
-      %__MODULE__{
-        state
-        | aliases: [
-            aliases_from_scope | inherited_aliases
-          ]
-      }
-    else
-      state
-    end
-  end
-
-  def add_alias(%__MODULE__{} = state, {alias, aliased}) when is_atom(aliased) do
-    if Introspection.elixir_module?(alias) do
-      [aliases_from_scope | inherited_aliases] = state.aliases
-      aliases_from_scope = aliases_from_scope |> Enum.reject(&match?({^alias, _}, &1))
-
-      aliases_from_scope =
-        if alias != aliased do
-          [{alias, aliased} | aliases_from_scope]
-        else
-          aliases_from_scope
-        end
-
-      %__MODULE__{
-        state
-        | aliases: [
-            aliases_from_scope | inherited_aliases
-          ]
-      }
-    else
-      [aliases_from_scope | inherited_aliases] = state.aliases
-      aliases_from_scope = aliases_from_scope |> Enum.reject(&match?({^alias, _}, &1))
-
-      %__MODULE__{
-        state
-        | aliases: [
-            [{Module.concat([alias]), aliased} | aliases_from_scope] | inherited_aliases
-          ]
-      }
-    end
-  end
-
-  def add_alias(%__MODULE__{} = state, _), do: state
-
-  def new_lexical_scope(%__MODULE__{} = state) do
-    %__MODULE__{
-      state
-      | functions: [hd(state.functions) | state.functions],
-        macros: [hd(state.macros) | state.macros],
-        requires: [[] | state.requires],
-        aliases: [[] | state.aliases]
-    }
-  end
-
-  def remove_lexical_scope(%__MODULE__{} = state) do
-    %__MODULE__{
-      state
-      | functions: tl(state.functions),
-        macros: tl(state.macros),
-        requires: tl(state.requires),
-        aliases: tl(state.aliases)
-    }
-  end
-
-  def add_import(%__MODULE__{} = state, module, opts) when is_atom(module) do
-    {functions, macros} =
-      Introspection.expand_import(
-        {hd(state.functions), hd(state.macros)},
-        module,
-        opts,
-        state.mods_funs_to_positions
-      )
-
-    %__MODULE__{
-      state
-      | functions: [functions | tl(state.functions)],
-        macros: [macros | tl(state.macros)]
-    }
-  end
-
-  def add_import(%__MODULE__{} = state, _module, _opts), do: state
-
-  def add_require(%__MODULE__{} = state, module) when is_atom(module) do
-    [requires_from_scope | inherited_requires] = state.requires
-
-    current_requires = state.requires |> :lists.reverse() |> List.flatten()
-
-    requires_from_scope =
-      if module in current_requires do
-        requires_from_scope
-      else
-        [module | requires_from_scope]
-      end
-
-    %__MODULE__{state | requires: [requires_from_scope | inherited_requires]}
-  end
-
-  def add_require(%__MODULE__{} = state, _module), do: state
 
   def add_type(
         %__MODULE__{} = state,
@@ -1163,12 +986,6 @@ defmodule ElixirSense.Core.State do
 
   @builtin_attributes ElixirSense.Core.BuiltinAttributes.all()
 
-  def add_attributes(%__MODULE__{} = state, attributes, position) do
-    Enum.reduce(attributes, state, fn attribute, state ->
-      add_attribute(state, attribute, nil, true, position)
-    end)
-  end
-
   def add_attribute(%__MODULE__{} = state, attribute, type, is_definition, position)
       when attribute not in @builtin_attributes do
     [attributes_from_scope | other_attributes] = state.attributes
@@ -1336,204 +1153,6 @@ defmodule ElixirSense.Core.State do
 
   def default_env, do: %ElixirSense.Core.State.Env{}
 
-  def expand(ast, %__MODULE__{} = state) do
-    expand(ast, state, nil)
-  end
-
-  def expand({:@, meta, [{:behaviour, _, [arg]}]}, state, env) do
-    line = Keyword.fetch!(meta, :line)
-
-    state =
-      state
-      |> add_current_env_to_line(line, env)
-
-    {arg, state, env} = expand(arg, state, env)
-    add_behaviour(arg, state, env)
-  end
-
-  def expand({:defoverridable, meta, [arg]}, state, env) do
-    {arg, state, env} = expand(arg, state, env)
-
-    case arg do
-      keyword when is_list(keyword) ->
-        {nil, make_overridable(state, env, keyword, meta[:context]), env}
-
-      behaviour_module when is_atom(behaviour_module) ->
-        if Code.ensure_loaded?(behaviour_module) and
-             function_exported?(behaviour_module, :behaviour_info, 1) do
-          keyword =
-            behaviour_module.behaviour_info(:callbacks)
-            |> Enum.map(&Introspection.drop_macro_prefix/1)
-
-          {nil, make_overridable(state, env, keyword, meta[:context]), env}
-        else
-          {nil, state, env}
-        end
-
-      _ ->
-        {nil, state, env}
-    end
-  end
-
-  def expand({form, meta, [{{:., _, [base, :{}]}, _, refs} | rest]}, state, env)
-      when form in [:require, :alias, :import, :use] do
-    case rest do
-      [] ->
-        expand_multi_alias_call(form, meta, base, refs, [], state, env)
-
-      [opts] ->
-        opts = Keyword.delete(opts, :as)
-        # if Keyword.has_key?(opts, :as) do
-        #   raise "as_in_multi_alias_call"
-        # end
-
-        expand_multi_alias_call(form, meta, base, refs, opts, state, env)
-    end
-  end
-
-  def expand({form, meta, [arg]}, state, env) when form in [:require, :alias, :import] do
-    expand({form, meta, [arg, []]}, state, env)
-  end
-
-  def expand(module, %__MODULE__{} = state, env) when is_atom(module) do
-    {module, state, env}
-  end
-
-  def expand({:alias, meta, [arg, opts]}, state, env) do
-    line = Keyword.fetch!(meta, :line)
-
-    {arg, state, env} = expand(arg, state, env)
-    # options = expand(no_alias_opts(arg), state, env, env)
-
-    if is_atom(arg) do
-      state = add_first_alias_positions(state, env, meta)
-
-      alias_tuple =
-        case Keyword.get(opts, :as) do
-          nil ->
-            {Module.concat([List.last(Module.split(arg))]), arg}
-
-          as ->
-            # alias with `as:` option
-            {no_alias_expansion(as), arg}
-        end
-
-      state =
-        state
-        |> add_current_env_to_line(line, env)
-        |> add_alias(alias_tuple)
-
-      {arg, state, env}
-    else
-      {nil, state, env}
-    end
-  rescue
-    ArgumentError -> {nil, state, env}
-  end
-
-  def expand({:require, meta, [arg, opts]}, state, env) do
-    line = Keyword.fetch!(meta, :line)
-
-    {arg, state, env} = expand(arg, state, env)
-    # opts = expand(no_alias_opts(opts), state, env)
-
-    if is_atom(arg) do
-      state =
-        state
-        |> add_current_env_to_line(line, env)
-
-      state =
-        case Keyword.get(opts, :as) do
-          nil ->
-            state
-
-          as ->
-            # require with `as:` option
-            alias_tuple = {no_alias_expansion(as), arg}
-            add_alias(state, alias_tuple)
-        end
-        |> add_require(arg)
-
-      {arg, state, env}
-    else
-      {nil, state, env}
-    end
-  end
-
-  def expand({:import, meta, [arg, opts]}, state, env) do
-    line = Keyword.fetch!(meta, :line)
-
-    {arg, state, env} = expand(arg, state, env)
-    # opts = expand(no_alias_opts(opts), state, env)
-
-    if is_atom(arg) do
-      state =
-        state
-        |> add_current_env_to_line(line, env)
-        |> add_require(arg)
-        |> add_import(arg, opts)
-
-      {arg, state, env}
-    else
-      {nil, state, env}
-    end
-  end
-
-  def expand({:use, _meta, []} = ast, state, env) do
-    # defmacro use in Kernel
-    {ast, state, env}
-  end
-
-  def expand({:use, meta, [_ | _]} = ast, state, env) do
-    alias ElixirSense.Core.MacroExpander
-    line = Keyword.fetch!(meta, :line)
-
-    state =
-      state
-      |> add_current_env_to_line(line, env)
-
-    # TODO pass env
-    expanded_ast =
-      ast
-      |> MacroExpander.add_default_meta()
-      |> MacroExpander.expand_use(
-        env.module,
-        env.aliases,
-        meta |> Keyword.take([:line, :column])
-      )
-
-    {{:__generated__, [], [expanded_ast]}, %{state | generated: true}, env}
-  end
-
-  def expand(
-        {:__aliases__, _, [Elixir | _] = module},
-        %__MODULE__{} = state,
-        env
-      ) do
-    {Module.concat(module), state, env}
-  end
-
-  def expand({:__MODULE__, _, nil}, %__MODULE__{} = state, env) do
-    {env.module, state, env}
-  end
-
-  def expand(
-        {:__aliases__, _, [{:__MODULE__, _, nil} | rest]},
-        %__MODULE__{} = state,
-        env
-      ) do
-    {Module.concat([env.module | rest]), state, env}
-  end
-
-  def expand({:__aliases__, _, module}, %__MODULE__{} = state, env)
-      when is_list(module) do
-    {Introspection.expand_alias(Module.concat(module), env.aliases), state, env}
-  end
-
-  def expand(ast, %__MODULE__{} = state, env) do
-    {ast, state, env}
-  end
-
   def maybe_move_vars_to_outer_scope(
         %__MODULE__{vars_info: [current_scope_vars, outer_scope_vars | other_scopes_vars]} = state
       ) do
@@ -1549,74 +1168,6 @@ defmodule ElixirSense.Core.State do
   end
 
   def maybe_move_vars_to_outer_scope(state), do: state
-
-  def no_alias_expansion({:__aliases__, _, [h | t]} = _aliases) when is_atom(h) do
-    Module.concat([h | t])
-  end
-
-  def no_alias_expansion(other), do: other
-
-  def alias_defmodule({:__aliases__, _, [Elixir, h | t]}, module, state, env) do
-    if t == [] and Version.match?(System.version(), "< 1.16.0-dev") do
-      # on elixir < 1.16 unaliasing is happening
-      # https://github.com/elixir-lang/elixir/issues/12456
-      alias = String.to_atom("Elixir." <> Atom.to_string(h))
-      state = add_alias(state, {alias, module})
-      {module, state, env}
-    else
-      {module, state, env}
-    end
-  end
-
-  # defmodule Alias in root
-  def alias_defmodule({:__aliases__, _, _}, module, state, %{module: nil} = env) do
-    {module, state, env}
-  end
-
-  # defmodule Alias nested
-  def alias_defmodule({:__aliases__, _meta, [h | t]}, _module, state, env) when is_atom(h) do
-    module = Module.concat([env.module, h])
-    alias = String.to_atom("Elixir." <> Atom.to_string(h))
-    # {:ok, env} = Macro.Env.define_alias(env, meta, module, as: alias, trace: false)
-    state = add_alias(state, {alias, module})
-
-    case t do
-      [] -> {module, state, env}
-      _ -> {String.to_atom(Enum.join([module | t], ".")), state, env}
-    end
-  end
-
-  # defmodule _
-  def alias_defmodule(_raw, module, state, env) do
-    {module, state, env}
-  end
-
-  defp expand_multi_alias_call(kind, meta, base, refs, opts, state, env) do
-    {base_ref, state, env} = expand(base, state, env)
-
-    fun = fn
-      {:__aliases__, _, ref}, state, env ->
-        expand({kind, meta, [Module.concat([base_ref | ref]), opts]}, state, env)
-
-      ref, state, env when is_atom(ref) ->
-        expand({kind, meta, [Module.concat([base_ref, ref]), opts]}, state, env)
-
-      _other, s, e ->
-        {nil, s, e}
-        # raise "expected_compile_time_module"
-    end
-
-    map_fold(fun, state, env, refs)
-  end
-
-  defp map_fold(fun, s, e, list), do: map_fold(fun, s, e, list, [])
-
-  defp map_fold(fun, s, e, [h | t], acc) do
-    {rh, rs, re} = fun.(h, s, e)
-    map_fold(fun, rs, re, t, [rh | acc])
-  end
-
-  defp map_fold(_fun, s, e, [], acc), do: {Enum.reverse(acc), s, e}
 
   @module_functions [
     {:__info__, [:atom], :def},
@@ -1642,56 +1193,6 @@ defmodule ElixirSense.Core.State do
         generated: true
       )
     end)
-  end
-
-  def macro_env(%__MODULE__{} = state, meta \\ []) do
-    function =
-      case hd(hd(state.scopes)) do
-        {function, arity} -> {function, arity}
-        _ -> nil
-      end
-
-    context_modules =
-      state.mods_funs_to_positions
-      |> Enum.filter(&match?({{_module, nil, nil}, _}, &1))
-      |> Enum.map(&(elem(&1, 0) |> elem(0)))
-
-    %Macro.Env{
-      aliases: current_aliases(state),
-      requires: current_requires(state),
-      module: get_current_module(state),
-      line: Keyword.get(meta, :line, 0),
-      function: function,
-      # TODO context :guard, :match
-      context: nil,
-      context_modules: context_modules,
-      functions: state.functions |> hd,
-      macros: state.macros |> hd
-      # TODO macro_aliases
-      # TODO versioned_vars
-    }
-  end
-
-  def macro_env(%__MODULE__{} = state, %__MODULE__.Env{} = env, line) do
-    context_modules =
-      state.mods_funs_to_positions
-      |> Enum.filter(&match?({{_module, nil, nil}, _}, &1))
-      |> Enum.map(&(elem(&1, 0) |> elem(0)))
-
-    %Macro.Env{
-      aliases: env.aliases,
-      requires: env.requires,
-      module: env.module,
-      line: line,
-      function: env.function,
-      # TODO context :guard, :match
-      context: nil,
-      context_modules: context_modules,
-      functions: env.functions,
-      macros: env.macros,
-      # TODO macro_aliases
-      versioned_vars: elem(state.vars, 0)
-    }
   end
 
   def with_typespec(%__MODULE__{} = state, typespec) do
@@ -1843,12 +1344,6 @@ defmodule ElixirSense.Core.State do
   end
 
   def maybe_add_protocol_behaviour(state, env), do: {state, env}
-
-  def annotate_vars_with_inferred_types(state, vars_with_inferred_types) do
-    [h | t] = state.vars_info
-    h = Map.merge(h, vars_with_inferred_types)
-    %{state | vars_info: [h | t]}
-  end
 
   def merge_inferred_types(state, []), do: state
 

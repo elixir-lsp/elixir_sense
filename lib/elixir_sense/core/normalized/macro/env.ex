@@ -61,12 +61,8 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
       end
     end
 
-    defp wrap_expansion(receiver, expander, meta, name, arity, env, opts) do
+    defp wrap_expansion(receiver, expander, _meta, _name, _arity, env, _opts) do
       fn expansion_meta, args ->
-        if Keyword.get(opts, :check_deprecations, true) do
-          :elixir_dispatch.check_deprecated(:macro, meta, receiver, name, arity, env)
-        end
-
         quoted = expander.(args, env)
         next = :elixir_module.next_counter(env.module)
         :elixir_quote.linify_with_context_counter(expansion_meta, {receiver, next}, quoted)
@@ -330,10 +326,10 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
               :ok when except == false ->
                 only = ensure_no_duplicates(dup_only, :only, meta, e, warn)
 
-                {added1, used1, funs} =
+                {added1, _used1, funs} =
                   import_listed_functions(meta, ref, only, e, warn, info_callback)
 
-                {added2, used2, macs} =
+                {added2, _used2, macs} =
                   import_listed_macros(meta, ref, only, e, warn, info_callback)
 
                 # for {name, arity} <- (only -- used1) -- used2, warn, do: elixir_errors.file_warn(meta, e, __MODULE__, {:invalid_import, {ref, name, arity}})
@@ -586,7 +582,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
         expand_require(required, meta, receiver, name, arity, e, trace)
       end
 
-      defp expand_require(required, meta, receiver, name, arity, e, trace) do
+      defp expand_require(required, meta, receiver, name, arity, e, _trace) do
         if is_macro(name, arity, receiver, required) do
           {:macro, receiver, expander_macro_named(meta, receiver, name, arity, e)}
         else
@@ -605,7 +601,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
         fn args, caller -> expand_macro_fun(meta, fun, receiver, name, args, caller, e) end
       end
 
-      defp expand_macro_fun(meta, fun, receiver, name, args, caller, e) do
+      defp expand_macro_fun(_meta, fun, _receiver, _name, args, caller, _e) do
         apply(fun, [caller | args])
       end
 

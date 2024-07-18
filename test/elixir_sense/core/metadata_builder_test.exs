@@ -6,12 +6,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, ModFunInfo, AttributeInfo}
 
-  @attribute_binding_support true or Version.match?(System.version(), "< 1.17.0-dev")
   @expand_eval false
-  @binding_support true or Version.match?(System.version(), "< 1.17.0-dev")
-  @typespec_calls_support true or Version.match?(System.version(), "< 1.17.0-dev")
-  @var_in_ex_unit Version.match?(System.version(), "< 1.17.0-dev")
-  @compiler Code.ensure_loaded?(ElixirSense.Core.Compiler)
+  @var_in_ex_unit false
 
   describe "versioned_vars" do
     test "in block" do
@@ -1545,1001 +1541,998 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ]
     end
 
-    if @binding_support do
-      test "variable binding simple case" do
-        state =
-          """
-          var = :my_var
-          IO.puts("")
-          """
-          |> string_to_state
+    test "variable binding simple case" do
+      state =
+        """
+        var = :my_var
+        IO.puts("")
+        """
+        |> string_to_state
 
-        assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(2)
-      end
+      assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(2)
+    end
 
-      test "variable binding simple case match context" do
-        state =
-          """
-          case x do
-            var = :my_var ->
-              IO.puts("")
+    test "variable binding simple case match context" do
+      state =
+        """
+        case x do
+          var = :my_var ->
+            IO.puts("")
+        end
+        """
+        |> string_to_state
+
+      assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
+    end
+
+    test "variable binding simple case match context reverse order" do
+      state =
+        """
+        case x do
+          :my_var = var ->
+            IO.puts("")
+        end
+        """
+        |> string_to_state
+
+      assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
+    end
+
+    test "variable binding simple case match context guard" do
+      state =
+        """
+        receive do
+          [v = :ok, var] when is_map(var) ->
+            IO.puts("")
+        end
+        """
+        |> string_to_state
+
+      assert [%VarInfo{type: {:atom, :ok}}, %VarInfo{type: {:map, [], nil}}] =
+               state |> get_line_vars(3)
+    end
+
+    test "module attributes value binding to and from variables" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute %{abc: String}
+          var = @myattribute
+          @other var
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_attributes(state, 5) == [
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 9}],
+                 type: {:map, [abc: {:atom, String}], nil}
+               },
+               %AttributeInfo{
+                 name: :other,
+                 positions: [{4, 3}],
+                 type: {:variable, :var}
+               }
+             ]
+
+      assert [
+               %VarInfo{name: :var, type: {:attribute, :myattribute}}
+             ] = state |> get_line_vars(5)
+    end
+
+    test "variable rebinding" do
+      state =
+        """
+        abc = 1
+        some(abc)
+        abc = %Abc{cde: 1}
+        IO.puts ""
+        """
+        |> string_to_state
+
+      assert [
+               %State.VarInfo{
+                 name: :abc,
+                 type: {:struct, [cde: {:integer, 1}], {:atom, Abc}, nil},
+                 positions: [{3, 1}]
+               }
+             ] = state |> get_line_vars(4)
+    end
+
+    test "tuple destructuring" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute {:ok, %{abc: nil}}
+          {:ok, var} = @myattribute
+          other = elem(@myattribute, 0)
+          IO.puts
+          q = {:a, :b, :c}
+          {_, _, q1} = q
+          IO.puts
+        end
+        """
+        |> string_to_state
+
+      assert get_line_attributes(state, 4) == [
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{2, 3}, {3, 16}, {4, 16}],
+                 type: {:tuple, 2, [{:atom, :ok}, {:map, [abc: {:atom, nil}], nil}]}
+               }
+             ]
+
+      assert [
+               %VarInfo{
+                 name: :other,
+                 #  TODO do we need to rewrite? change Binding
+                 #  type: {:local_call, :elem, [{:attribute, :myattribute}, {:integer, 0}]}
+                 type: {
+                   :call,
+                   {:atom, :erlang},
+                   :element,
+                   [integer: 1, attribute: :myattribute]
+                 }
+               },
+               %VarInfo{
+                 name: :var,
+                 type:
+                   {:tuple_nth,
+                    {:intersection,
+                     [{:attribute, :myattribute}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
+               }
+             ] = state |> get_line_vars(5)
+
+      assert [
+               %VarInfo{
+                 name: :q,
+                 type: {:tuple, 3, [{:atom, :a}, {:atom, :b}, {:atom, :c}]}
+               },
+               %VarInfo{
+                 name: :q1,
+                 type:
+                   {:tuple_nth,
+                    {:intersection,
+                     [{:variable, :q}, {:tuple, 3, [{:variable, :_}, {:variable, :_}, nil]}]}, 2}
+               }
+             ] =
+               state
+               |> get_line_vars(8)
+               |> Enum.filter(&(&1.name |> Atom.to_string() |> String.starts_with?("q")))
+    end
+
+    test "list destructuring" do
+      state =
+        """
+        defmodule MyModule do
+          @a []
+          @myattribute [:ok, :error, :other]
+          @other1 [:some, :error | @myattribute]
+          @other2 [:some | @myattribute]
+          [var, _var1, _var2] = @myattribute
+          [other | rest] = @myattribute
+          [a] = @other
+          [b] = []
+          IO.puts
+        end
+        """
+        |> string_to_state
+
+      assert get_line_attributes(state, 5) == [
+               %AttributeInfo{
+                 name: :a,
+                 positions: [{2, 3}],
+                 type: {:list, :empty}
+               },
+               %AttributeInfo{
+                 name: :myattribute,
+                 positions: [{3, 3}, {4, 28}, {5, 20}],
+                 type: {:list, {:atom, :ok}}
+               },
+               %AttributeInfo{
+                 name: :other1,
+                 positions: [{4, 3}],
+                 type: {:list, {:atom, :some}}
+               },
+               %AttributeInfo{name: :other2, positions: [{5, 3}], type: {:list, {:atom, :some}}}
+             ]
+
+      assert [
+               %VarInfo{
+                 name: :_var1,
+                 type: {:list_head, {:list_tail, {:attribute, :myattribute}}}
+               },
+               %VarInfo{
+                 name: :_var2,
+                 type: {:list_head, {:list_tail, {:list_tail, {:attribute, :myattribute}}}}
+               },
+               %VarInfo{
+                 name: :a,
+                 type: {:list_head, {:attribute, :other}}
+               },
+               %VarInfo{
+                 name: :b,
+                 type: {:list_head, {:list, :empty}}
+               },
+               %VarInfo{name: :other, type: {:list_head, {:attribute, :myattribute}}},
+               %VarInfo{name: :rest, type: {:list_tail, {:attribute, :myattribute}}},
+               %VarInfo{name: :var, type: {:list_head, {:attribute, :myattribute}}}
+             ] = state |> get_line_vars(10)
+    end
+
+    test "list destructuring for" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute [:ok, :error, :other]
+          for a <- @myattribute do
+            b = a
+            IO.puts
           end
-          """
-          |> string_to_state
 
-        assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
-      end
-
-      test "variable binding simple case match context reverse order" do
-        state =
-          """
-          case x do
-            :my_var = var ->
-              IO.puts("")
+          for a <- @myattribute, a1 = @myattribute, a2 <- a1 do
+            b = a
+            IO.puts
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
-      end
+      assert [
+               %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
+               %VarInfo{name: :b, type: {:variable, :a}}
+             ] = state |> get_line_vars(5)
 
-      test "variable binding simple case match context guard" do
-        state =
-          """
-          receive do
-            [v = :ok, var] when is_map(var) ->
-              IO.puts("")
+      assert [
+               %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
+               %VarInfo{name: :a1, type: {:attribute, :myattribute}},
+               %VarInfo{name: :a2, type: {:for_expression, {:variable, :a1}}},
+               %VarInfo{name: :b, type: {:variable, :a}}
+             ] = state |> get_line_vars(10)
+    end
+
+    test "map destructuring" do
+      state =
+        """
+        defmodule MyModule do
+          @a %{}
+          @myattribute %{ok: :a, error: b, other: :c}
+          @other %{"a" => :a, "b" => b}
+          %{error: var1} = @myattribute
+          %{"a" => var2} = @other
+          IO.puts
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{
+                 name: :var1,
+                 type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
+               },
+               # TODO not atom keys currently not supported
+               %VarInfo{
+                 name: :var2,
+                 type: {:map_key, {:attribute, :other}, nil}
+               }
+             ] = state |> get_line_vars(7)
+    end
+
+    test "map destructuring for" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute %{ok: :a, error: b, other: :c}
+          for {k, v} <- @myattribute do
+            IO.puts
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert [%VarInfo{type: {:atom, :ok}}, %VarInfo{type: {:map, [], nil}}] =
-                 state |> get_line_vars(3)
-      end
+      assert [
+               %VarInfo{
+                 name: :k,
+                 type: {
+                   :tuple_nth,
+                   {
+                     :intersection,
+                     [
+                       {:for_expression, {:attribute, :myattribute}},
+                       {:tuple, 2, [nil, {:variable, :v}]}
+                     ]
+                   },
+                   0
+                 }
+               },
+               %VarInfo{
+                 name: :v,
+                 type: {
+                   :tuple_nth,
+                   {
+                     :intersection,
+                     [
+                       {:for_expression, {:attribute, :myattribute}},
+                       {:tuple, 2, [{:variable, :k}, nil]}
+                     ]
+                   },
+                   1
+                 }
+               }
+             ] = state |> get_line_vars(4)
+    end
 
-      test "module attributes value binding to and from variables" do
-        state =
-          """
-          defmodule MyModule do
-            @myattribute %{abc: String}
-            var = @myattribute
-            @other var
+    test "struct destructuring" do
+      state =
+        """
+        defmodule MyModule do
+          @a %My{}
+          @myattribute %My{ok: :a, error: b, other: :c}
+          %{error: var1} = @myattribute
+          %My{error: other} = @myattribute
+          IO.puts
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{
+                 name: :other,
+                 type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
+               },
+               %VarInfo{
+                 name: :var1,
+                 type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
+               }
+             ] = state |> get_line_vars(6)
+    end
+
+    test "binding in with expression" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute [:ok, :error, :other]
+          with a <- @myattribute do
+            b = a
+            IO.puts
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :a, type: {:attribute, :myattribute}},
+               %VarInfo{name: :b, type: {:variable, :a}}
+             ] = state |> get_line_vars(5)
+    end
+
+    test "binding in with expression more complex" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute [:ok, :error, :other]
+          with a <- @myattribute,
+            b = Date.utc_now(),
+            [c | _] <- a do
+            IO.puts
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :a, type: {:attribute, :myattribute}},
+               %VarInfo{name: :b, type: {:call, {:atom, Date}, :utc_now, []}},
+               %VarInfo{name: :c, type: {:list_head, {:variable, :a}}}
+             ] = state |> get_line_vars(6)
+    end
+
+    test "binding in with expression with guard" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute [:ok, :error, :other]
+          with [a | _] when is_atom(a) <- @myattribute do
+            IO.puts
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{
+                 name: :a,
+                 type: {:intersection, [:atom, {:list_head, {:attribute, :myattribute}}]}
+               }
+             ] = state |> get_line_vars(4)
+    end
+
+    test "binding in with expression else" do
+      state =
+        """
+        defmodule MyModule do
+          @myattribute [:ok, :error, :other]
+          with a <- @myattribute do
+            b = a
+            IO.puts
+          else
+            a = :ok ->
+              IO.puts
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :a, type: {:atom, :ok}}
+             ] = state |> get_line_vars(8)
+    end
+
+    test "vars binding" do
+      state =
+        """
+        defmodule MyModule do
+          def func do
+            var = String
+            IO.puts ""
+            var = Map
+            IO.puts ""
+            if abc do
+              IO.puts ""
+              var = List
+              IO.puts ""
+              var = Enum
+              IO.puts ""
+            end
+            IO.puts ""
+            var = Atom
+            IO.puts ""
+            other = var
             IO.puts ""
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert get_line_attributes(state, 5) == [
-                 %AttributeInfo{
-                   name: :myattribute,
-                   positions: [{2, 3}, {3, 9}],
-                   type: {:map, [abc: {:atom, String}], nil}
-                 },
-                 %AttributeInfo{
-                   name: :other,
-                   positions: [{4, 3}],
-                   type: {:variable, :var}
-                 }
-               ]
+      assert [%VarInfo{type: {:atom, String}}] = state |> get_line_vars(4)
 
-        assert [
-                 %VarInfo{name: :var, type: {:attribute, :myattribute}}
-               ] = state |> get_line_vars(5)
-      end
+      assert [%VarInfo{type: {:atom, Map}}] =
+               state |> get_line_vars(6)
 
-      test "variable rebinding" do
-        state =
-          """
-          abc = 1
-          some(abc)
-          abc = %Abc{cde: 1}
-          IO.puts ""
-          """
-          |> string_to_state
+      assert [%VarInfo{type: {:atom, Map}}] =
+               state |> get_line_vars(8)
 
-        assert [
-                 %State.VarInfo{
-                   name: :abc,
-                   type: {:struct, [cde: {:integer, 1}], {:atom, Abc}, nil},
-                   positions: [{3, 1}]
-                 }
-               ] = state |> get_line_vars(4)
-      end
+      assert [
+               %VarInfo{type: {:atom, List}}
+             ] = state |> get_line_vars(10)
 
-      test "tuple destructuring" do
-        state =
-          """
-          defmodule MyModule do
-            @myattribute {:ok, %{abc: nil}}
-            {:ok, var} = @myattribute
-            other = elem(@myattribute, 0)
-            IO.puts
-            q = {:a, :b, :c}
-            {_, _, q1} = q
-            IO.puts
+      assert [
+               %VarInfo{type: {:atom, Enum}}
+             ] = state |> get_line_vars(12)
+
+      assert [%VarInfo{type: {:atom, Map}}] =
+               state |> get_line_vars(14)
+
+      assert [
+               %VarInfo{type: {:atom, Atom}}
+             ] = state |> get_line_vars(16)
+
+      assert [
+               %VarInfo{name: :other, type: {:variable, :var}},
+               %VarInfo{type: {:atom, Atom}}
+             ] = state |> get_line_vars(18)
+    end
+
+    test "call binding" do
+      state =
+        """
+        defmodule MyModule do
+          def remote_calls do
+            var1 = DateTime.now
+            var2 = :erlang.now()
+            var3 = __MODULE__.now(:abc)
+            var4 = "Etc/UTC" |> DateTime.now
+            IO.puts ""
           end
-          """
-          |> string_to_state
 
-        assert get_line_attributes(state, 4) == [
-                 %AttributeInfo{
-                   name: :myattribute,
-                   positions: [{2, 3}, {3, 16}, {4, 16}],
-                   type: {:tuple, 2, [{:atom, :ok}, {:map, [abc: {:atom, nil}], nil}]}
-                 }
-               ]
+          def local_calls do
+            var1 = now
+            var2 = now()
+            var3 = now(:abc)
+            var4 = :abc |> now
+            var5 = :abc |> now(5)
+            IO.puts ""
+          end
 
-        assert [
-                 %VarInfo{
-                   name: :other,
-                   #  TODO do we need to rewrite? change Binding
-                   #  type: {:local_call, :elem, [{:attribute, :myattribute}, {:integer, 0}]}
-                   type: {
+          @attr %{qwe: String}
+          def map_field(var1) do
+            var1 = var1.abc
+            var2 = @attr.qwe(0)
+            var3 = abc.cde.efg
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :var1, type: {:call, {:atom, DateTime}, :now, []}},
+               %VarInfo{name: :var2, type: {:call, {:atom, :erlang}, :now, []}},
+               %VarInfo{name: :var3, type: {:call, {:atom, MyModule}, :now, [{:atom, :abc}]}},
+               %VarInfo{name: :var4, type: {:call, {:atom, DateTime}, :now, [nil]}}
+             ] = state |> get_line_vars(7)
+
+      assert [
+               %VarInfo{name: :var1, type: {:variable, :now}},
+               %VarInfo{name: :var2, type: {:local_call, :now, []}},
+               %VarInfo{name: :var3, type: {:local_call, :now, [{:atom, :abc}]}},
+               %VarInfo{name: :var4, type: {:local_call, :now, [{:atom, :abc}]}},
+               %VarInfo{name: :var5, type: {:local_call, :now, [{:atom, :abc}, {:integer, 5}]}}
+             ] = state |> get_line_vars(16)
+
+      assert [
+               %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, []}},
+               %VarInfo{name: :var2, type: {:call, {:attribute, :attr}, :qwe, [{:integer, 0}]}},
+               %VarInfo{
+                 name: :var3,
+                 type: {:call, {:call, {:variable, :abc}, :cde, []}, :efg, []}
+               }
+             ] = state |> get_line_vars(24)
+    end
+
+    test "map binding" do
+      state =
+        """
+        defmodule MyModule do
+          def func do
+            var = %{asd: 5}
+            IO.puts ""
+            var = %{asd: 5, nested: %{wer: "asd"}}
+            IO.puts ""
+            var = %{"asd" => "dsds"}
+            IO.puts ""
+            var = %{asd: 5, zxc: String}
+            IO.puts ""
+            qwe = %{var | asd: 2, zxc: 5}
+            IO.puts ""
+            qwe = %{var | asd: 2}
+            IO.puts ""
+
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [%VarInfo{type: {:map, [asd: {:integer, 5}], nil}}] = state |> get_line_vars(4)
+
+      assert [
+               %VarInfo{
+                 type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}
+               }
+             ] = state |> get_line_vars(6)
+
+      assert [
+               %VarInfo{type: {:map, [], nil}}
+             ] = state |> get_line_vars(8)
+
+      assert [
+               %VarInfo{type: {:map, [asd: {:integer, 5}, zxc: {:atom, String}], nil}}
+             ] = state |> get_line_vars(10)
+
+      assert [
+               %VarInfo{
+                 type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var}}
+               }
+             ] =
+               state |> get_line_vars(12) |> Enum.filter(&(&1.name == :qwe))
+
+      assert [
+               %VarInfo{type: {:map, [{:asd, {:integer, 2}}], {:variable, :var}}}
+             ] = state |> get_line_vars(14) |> Enum.filter(&(&1.name == :qwe))
+    end
+
+    test "struct binding" do
+      state =
+        """
+        defmodule MyModule do
+          def func(%MyStruct{} = var1, var2 = %:other_struct{}, var3 = %__MODULE__{},
+            var4 = %__MODULE__.Sub{}, var7 = %_{}) do
+            IO.puts ""
+          end
+
+          def some(a) do
+            asd = %Some{sub: Atom}
+            IO.puts ""
+            asd = %Other{a | sub: Atom}
+            IO.puts ""
+            asd = %{asd | other: 123}
+            IO.puts ""
+            z = x = asd
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :var1, type: {:struct, [], {:atom, MyStruct}, nil}},
+               %VarInfo{name: :var2, type: {:struct, [], {:atom, :other_struct}, nil}},
+               %VarInfo{name: :var3, type: {:struct, [], {:atom, MyModule}, nil}},
+               %VarInfo{name: :var4, type: {:struct, [], {:atom, MyModule.Sub}, nil}},
+               %VarInfo{name: :var7, type: {:struct, [], nil, nil}}
+             ] = state |> get_line_vars(4)
+
+      assert %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}} =
+               state |> get_line_vars(9) |> Enum.find(&(&1.name == :asd))
+
+      assert [
+               %VarInfo{
+                 name: :asd,
+                 type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
+               }
+             ] = state |> get_line_vars(11) |> Enum.filter(&(&1.name == :asd))
+
+      assert [
+               %VarInfo{
+                 name: :asd,
+                 type: {:map, [{:other, {:integer, 123}}], {:variable, :asd}}
+               }
+             ] = state |> get_line_vars(13) |> Enum.filter(&(&1.name == :asd))
+
+      assert [
+               %VarInfo{name: :x, type: {:intersection, [{:variable, :asd}, {:variable, :z}]}},
+               %VarInfo{name: :z, type: {:variable, :asd}}
+             ] = state |> get_line_vars(15) |> Enum.filter(&(&1.name in [:x, :z]))
+    end
+
+    test "struct binding understands builtin sigils and ranges" do
+      state =
+        """
+        defmodule MyModule do
+          def some() do
+            var1 = ~D[2000-01-01]
+            var2 = ~T[13:00:07]
+            var3 = ~U[2015-01-13 13:00:07Z]
+            var4 = ~N[2000-01-01 23:00:07]
+            var5 = ~r/foo/iu
+            var6 = ~R(f\#{1,3}o)
+            var7 = 12..34
+            var8 = 12..34//1
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :var1, type: {:struct, [], {:atom, Date}, nil}},
+               %VarInfo{name: :var2, type: {:struct, [], {:atom, Time}, nil}},
+               %VarInfo{name: :var3, type: {:struct, [], {:atom, DateTime}, nil}},
+               %VarInfo{name: :var4, type: {:struct, [], {:atom, NaiveDateTime}, nil}},
+               %VarInfo{name: :var5, type: {:struct, [], {:atom, Regex}, nil}},
+               %VarInfo{name: :var6, type: {:struct, [], {:atom, Regex}, nil}},
+               %VarInfo{name: :var7, type: {:struct, [], {:atom, Range}, nil}},
+               %VarInfo{name: :var8, type: {:struct, [], {:atom, Range}, nil}}
+             ] = state |> get_line_vars(11)
+    end
+
+    test "struct binding understands stepped ranges" do
+      state =
+        """
+        defmodule MyModule do
+          def some() do
+            var1 = 12..34//2
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{name: :var1, type: {:struct, [], {:atom, Range}, nil}}
+             ] = state |> get_line_vars(4)
+    end
+
+    test "two way refinement in match context" do
+      state =
+        """
+        defmodule MyModule do
+          def some(%MyState{formatted: formatted} = state) do
+            IO.puts ""
+
+            case :ok do
+              %{foo: 1} = state = %{bar: 1} = x ->
+                IO.puts ""
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{
+                 name: :formatted,
+                 type: {:map_key, {:variable, :state}, {:atom, :formatted}}
+               },
+               %VarInfo{
+                 name: :state,
+                 type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+               }
+             ] = state |> get_line_vars(3)
+
+      assert [
+               %VarInfo{
+                 name: :formatted
+               },
+               %VarInfo{
+                 name: :state,
+                 type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+               }
+             ] = state |> get_line_vars(7)
+    end
+
+    test "two way refinement in match context nested" do
+      state =
+        """
+        defmodule MyModule do
+          def some(%{foo: 1} = state = %{bar: 1} = x) do
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{
+                 name: :formatted,
+                 type: {:map_key, {:variable, :state}, {:atom, :formatted}}
+               },
+               %VarInfo{
+                 name: :state,
+                 type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+               }
+             ] = state |> get_line_vars(3)
+
+      assert [
+               %VarInfo{
+                 name: :formatted
+               },
+               %VarInfo{
+                 name: :state,
+                 type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+               }
+             ] = state |> get_line_vars(7)
+    end
+
+    test "two way refinement in match context nested case" do
+      state =
+        """
+        defmodule MyModule do
+          def some(state) do
+            case :ok do
+              %{foo: 1} = state = %{bar: 1} = x ->
+                IO.puts ""
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{
+                 name: :formatted
+               },
+               %VarInfo{
+                 name: :state,
+                 type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+               }
+             ] = state |> get_line_vars(5)
+    end
+
+    test "two way refinement in nested `=` binding" do
+      state =
+        """
+        defmodule MyModule do
+          def some() do
+            %MyState{formatted: formatted} = state = socket.assigns.state
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{
+                 name: :formatted,
+                 type: {
+                   :map_key,
+                   {
                      :call,
-                     {:atom, :erlang},
-                     :element,
-                     [integer: 1, attribute: :myattribute]
-                   }
-                 },
-                 %VarInfo{
-                   name: :var,
-                   type:
-                     {:tuple_nth,
-                      {:intersection,
-                       [{:attribute, :myattribute}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
+                     {:call, {:variable, :socket}, :assigns, []},
+                     :state,
+                     []
+                   },
+                   {:atom, :formatted}
                  }
-               ] = state |> get_line_vars(5)
+               },
+               %VarInfo{
+                 name: :state,
+                 type:
+                   {:intersection,
+                    [
+                      {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []},
+                      {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
+                    ]}
+               }
+             ] = state |> get_line_vars(4)
+    end
 
-        assert [
-                 %VarInfo{
-                   name: :q,
-                   type: {:tuple, 3, [{:atom, :a}, {:atom, :b}, {:atom, :c}]}
-                 },
-                 %VarInfo{
-                   name: :q1,
-                   type:
-                     {:tuple_nth,
-                      {:intersection,
-                       [{:variable, :q}, {:tuple, 3, [{:variable, :_}, {:variable, :_}, nil]}]},
-                      2}
-                 }
-               ] =
-                 state
-                 |> get_line_vars(8)
-                 |> Enum.filter(&(&1.name |> Atom.to_string() |> String.starts_with?("q")))
-      end
-
-      test "list destructuring" do
-        state =
-          """
-          defmodule MyModule do
-            @a []
-            @myattribute [:ok, :error, :other]
-            @other1 [:some, :error | @myattribute]
-            @other2 [:some | @myattribute]
-            [var, _var1, _var2] = @myattribute
-            [other | rest] = @myattribute
-            [a] = @other
-            [b] = []
-            IO.puts
-          end
-          """
-          |> string_to_state
-
-        assert get_line_attributes(state, 5) == [
-                 %AttributeInfo{
-                   name: :a,
-                   positions: [{2, 3}],
-                   type: {:list, :empty}
-                 },
-                 %AttributeInfo{
-                   name: :myattribute,
-                   positions: [{3, 3}, {4, 28}, {5, 20}],
-                   type: {:list, {:atom, :ok}}
-                 },
-                 %AttributeInfo{
-                   name: :other1,
-                   positions: [{4, 3}],
-                   type: {:list, {:atom, :some}}
-                 },
-                 %AttributeInfo{name: :other2, positions: [{5, 3}], type: {:list, {:atom, :some}}}
-               ]
-
-        assert [
-                 %VarInfo{
-                   name: :_var1,
-                   type: {:list_head, {:list_tail, {:attribute, :myattribute}}}
-                 },
-                 %VarInfo{
-                   name: :_var2,
-                   type: {:list_head, {:list_tail, {:list_tail, {:attribute, :myattribute}}}}
-                 },
-                 %VarInfo{
-                   name: :a,
-                   type: {:list_head, {:attribute, :other}}
-                 },
-                 %VarInfo{
-                   name: :b,
-                   type: {:list_head, {:list, :empty}}
-                 },
-                 %VarInfo{name: :other, type: {:list_head, {:attribute, :myattribute}}},
-                 %VarInfo{name: :rest, type: {:list_tail, {:attribute, :myattribute}}},
-                 %VarInfo{name: :var, type: {:list_head, {:attribute, :myattribute}}}
-               ] = state |> get_line_vars(10)
-      end
-
-      test "list destructuring for" do
-        state =
-          """
-          defmodule MyModule do
-            @myattribute [:ok, :error, :other]
-            for a <- @myattribute do
-              b = a
-              IO.puts
-            end
-
-            for a <- @myattribute, a1 = @myattribute, a2 <- a1 do
-              b = a
-              IO.puts
+    test "case binding" do
+      state =
+        """
+        defmodule MyModule do
+          def some() do
+            case Some.call() do
+              {:ok, x} ->
+                IO.puts ""
             end
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert [
-                 %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
-                 %VarInfo{name: :b, type: {:variable, :a}}
-               ] = state |> get_line_vars(5)
+      assert [
+               %VarInfo{
+                 name: :x,
+                 type:
+                   {:tuple_nth,
+                    {:intersection,
+                     [{:call, {:atom, Some}, :call, []}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
+               }
+             ] = state |> get_line_vars(5)
+    end
 
-        assert [
-                 %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
-                 %VarInfo{name: :a1, type: {:attribute, :myattribute}},
-                 %VarInfo{name: :a2, type: {:for_expression, {:variable, :a1}}},
-                 %VarInfo{name: :b, type: {:variable, :a}}
-               ] = state |> get_line_vars(10)
-      end
-
-      test "map destructuring" do
-        state =
-          """
-          defmodule MyModule do
-            @a %{}
-            @myattribute %{ok: :a, error: b, other: :c}
-            @other %{"a" => :a, "b" => b}
-            %{error: var1} = @myattribute
-            %{"a" => var2} = @other
-            IO.puts
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{
-                   name: :var1,
-                   type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
-                 },
-                 # TODO not atom keys currently not supported
-                 %VarInfo{
-                   name: :var2,
-                   type: {:map_key, {:attribute, :other}, nil}
-                 }
-               ] = state |> get_line_vars(7)
-      end
-
-      test "map destructuring for" do
-        state =
-          """
-          defmodule MyModule do
-            @myattribute %{ok: :a, error: b, other: :c}
-            for {k, v} <- @myattribute do
-              IO.puts
+    test "case binding with match" do
+      state =
+        """
+        defmodule MyModule do
+          def some() do
+            case Some.call() do
+              {:ok, x} = res ->
+                IO.puts ""
             end
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert [
-                 %VarInfo{
-                   name: :k,
-                   type: {
-                     :tuple_nth,
-                     {
-                       :intersection,
-                       [
-                         {:for_expression, {:attribute, :myattribute}},
-                         {:tuple, 2, [nil, {:variable, :v}]}
-                       ]
-                     },
-                     0
-                   }
-                 },
-                 %VarInfo{
-                   name: :v,
-                   type: {
-                     :tuple_nth,
-                     {
-                       :intersection,
-                       [
-                         {:for_expression, {:attribute, :myattribute}},
-                         {:tuple, 2, [{:variable, :k}, nil]}
-                       ]
-                     },
-                     1
-                   }
-                 }
-               ] = state |> get_line_vars(4)
-      end
+      assert [
+               %VarInfo{
+                 name: :res,
+                 type: :todo
+               },
+               %VarInfo{
+                 name: :x,
+                 type:
+                   {:tuple_nth,
+                    {:intersection,
+                     [{:call, {:atom, Some}, :call, []}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
+               }
+             ] = state |> get_line_vars(5)
+    end
 
-      test "struct destructuring" do
-        state =
-          """
-          defmodule MyModule do
-            @a %My{}
-            @myattribute %My{ok: :a, error: b, other: :c}
-            %{error: var1} = @myattribute
-            %My{error: other} = @myattribute
-            IO.puts
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{
-                   name: :other,
-                   type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
-                 },
-                 %VarInfo{
-                   name: :var1,
-                   type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
-                 }
-               ] = state |> get_line_vars(6)
-      end
-
-      test "binding in with expression" do
-        state =
-          """
-          defmodule MyModule do
-            @myattribute [:ok, :error, :other]
-            with a <- @myattribute do
-              b = a
-              IO.puts
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{name: :a, type: {:attribute, :myattribute}},
-                 %VarInfo{name: :b, type: {:variable, :a}}
-               ] = state |> get_line_vars(5)
-      end
-
-      test "binding in with expression more complex" do
-        state =
-          """
-          defmodule MyModule do
-            @myattribute [:ok, :error, :other]
-            with a <- @myattribute,
-              b = Date.utc_now(),
-              [c | _] <- a do
-              IO.puts
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{name: :a, type: {:attribute, :myattribute}},
-                 %VarInfo{name: :b, type: {:call, {:atom, Date}, :utc_now, []}},
-                 %VarInfo{name: :c, type: {:list_head, {:variable, :a}}}
-               ] = state |> get_line_vars(6)
-      end
-
-      test "binding in with expression with guard" do
-        state =
-          """
-          defmodule MyModule do
-            @myattribute [:ok, :error, :other]
-            with [a | _] when is_atom(a) <- @myattribute do
-              IO.puts
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{
-                   name: :a,
-                   type: {:intersection, [:atom, {:list_head, {:attribute, :myattribute}}]}
-                 }
-               ] = state |> get_line_vars(4)
-      end
-
-      test "binding in with expression else" do
-        state =
-          """
-          defmodule MyModule do
-            @myattribute [:ok, :error, :other]
-            with a <- @myattribute do
-              b = a
-              IO.puts
+    test "rescue binding" do
+      state =
+        """
+        defmodule MyModule do
+          def some() do
+            try do
+              Some.call()
+            rescue
+              e0 in ArgumentError ->
+                IO.puts ""
+              e1 in [ArgumentError] ->
+                IO.puts ""
+              e2 in [RuntimeError, Enum.EmptyError] ->
+                IO.puts ""
+              e3 in _ ->
+                IO.puts ""
+              e4 ->
+                IO.puts ""
             else
-              a = :ok ->
-                IO.puts
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{name: :a, type: {:atom, :ok}}
-               ] = state |> get_line_vars(8)
-      end
-
-      test "vars binding" do
-        state =
-          """
-          defmodule MyModule do
-            def func do
-              var = String
-              IO.puts ""
-              var = Map
-              IO.puts ""
-              if abc do
+              a ->
                 IO.puts ""
-                var = List
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{
+                 name: :e0,
+                 type: {:struct, [], {:atom, ArgumentError}, nil}
+               }
+             ] = state |> get_line_vars(7)
+
+      assert [
+               %VarInfo{
+                 name: :e1,
+                 type: {:struct, [], {:atom, ArgumentError}, nil}
+               }
+             ] = state |> get_line_vars(9)
+
+      assert [
+               %VarInfo{
+                 name: :e2,
+                 type: {
+                   :union,
+                   [
+                     {:struct, [], {:atom, RuntimeError}, nil},
+                     {:struct, [], {:atom, Enum.EmptyError}, nil}
+                   ]
+                 }
+               }
+             ] = state |> get_line_vars(11)
+
+      assert [
+               %VarInfo{
+                 name: :e3,
+                 type: {:struct, [], {:atom, Exception}, nil}
+               }
+             ] = state |> get_line_vars(13)
+
+      assert [
+               %VarInfo{
+                 name: :e4,
+                 type: {:struct, [], {:atom, Exception}, nil}
+               }
+             ] = state |> get_line_vars(15)
+
+      assert [
+               %VarInfo{
+                 name: :a,
+                 type: nil
+               }
+             ] = state |> get_line_vars(18)
+    end
+
+    test "vars binding by pattern matching with pin operators" do
+      state =
+        """
+        defmodule MyModule do
+          def func(a) do
+            b = 1
+            case a do
+              %{b: 2} = a1 ->
                 IO.puts ""
-                var = Enum
+              %{b: ^b} = a2 ->
                 IO.puts ""
-              end
-              IO.puts ""
-              var = Atom
-              IO.puts ""
-              other = var
-              IO.puts ""
             end
           end
-          """
-          |> string_to_state
+        end
+        """
+        |> string_to_state
 
-        assert [%VarInfo{type: {:atom, String}}] = state |> get_line_vars(4)
+      vars = state |> get_line_vars(6)
 
-        assert [%VarInfo{type: {:atom, Map}}] =
-                 state |> get_line_vars(6)
+      # TODO wtf
+      # assert %VarInfo{
+      #          name: :a1,
+      #          positions: [{5, 18}],
+      #          scope_id: 6,
+      #          type: {:map, [b: {:integer, 2}], nil}
+      #        } = Enum.find(vars, &(&1.name == :a1))
 
-        assert [%VarInfo{type: {:atom, Map}}] =
-                 state |> get_line_vars(8)
+      vars = state |> get_line_vars(8) |> dbg
 
-        assert [
-                 %VarInfo{type: {:atom, List}}
-               ] = state |> get_line_vars(10)
-
-        assert [
-                 %VarInfo{type: {:atom, Enum}}
-               ] = state |> get_line_vars(12)
-
-        assert [%VarInfo{type: {:atom, Map}}] =
-                 state |> get_line_vars(14)
-
-        assert [
-                 %VarInfo{type: {:atom, Atom}}
-               ] = state |> get_line_vars(16)
-
-        assert [
-                 %VarInfo{name: :other, type: {:variable, :var}},
-                 %VarInfo{type: {:atom, Atom}}
-               ] = state |> get_line_vars(18)
-      end
-
-      test "call binding" do
-        state =
-          """
-          defmodule MyModule do
-            def remote_calls do
-              var1 = DateTime.now
-              var2 = :erlang.now()
-              var3 = __MODULE__.now(:abc)
-              var4 = "Etc/UTC" |> DateTime.now
-              IO.puts ""
-            end
-
-            def local_calls do
-              var1 = now
-              var2 = now()
-              var3 = now(:abc)
-              var4 = :abc |> now
-              var5 = :abc |> now(5)
-              IO.puts ""
-            end
-
-            @attr %{qwe: String}
-            def map_field(var1) do
-              var1 = var1.abc
-              var2 = @attr.qwe(0)
-              var3 = abc.cde.efg
-              IO.puts ""
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{name: :var1, type: {:call, {:atom, DateTime}, :now, []}},
-                 %VarInfo{name: :var2, type: {:call, {:atom, :erlang}, :now, []}},
-                 %VarInfo{name: :var3, type: {:call, {:atom, MyModule}, :now, [{:atom, :abc}]}},
-                 %VarInfo{name: :var4, type: {:call, {:atom, DateTime}, :now, [nil]}}
-               ] = state |> get_line_vars(7)
-
-        assert [
-                 %VarInfo{name: :var1, type: {:variable, :now}},
-                 %VarInfo{name: :var2, type: {:local_call, :now, []}},
-                 %VarInfo{name: :var3, type: {:local_call, :now, [{:atom, :abc}]}},
-                 %VarInfo{name: :var4, type: {:local_call, :now, [{:atom, :abc}]}},
-                 %VarInfo{name: :var5, type: {:local_call, :now, [{:atom, :abc}, {:integer, 5}]}}
-               ] = state |> get_line_vars(16)
-
-        assert [
-                 %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, []}},
-                 %VarInfo{name: :var2, type: {:call, {:attribute, :attr}, :qwe, [{:integer, 0}]}},
-                 %VarInfo{
-                   name: :var3,
-                   type: {:call, {:call, {:variable, :abc}, :cde, []}, :efg, []}
-                 }
-               ] = state |> get_line_vars(24)
-      end
-
-      test "map binding" do
-        state =
-          """
-          defmodule MyModule do
-            def func do
-              var = %{asd: 5}
-              IO.puts ""
-              var = %{asd: 5, nested: %{wer: "asd"}}
-              IO.puts ""
-              var = %{"asd" => "dsds"}
-              IO.puts ""
-              var = %{asd: 5, zxc: String}
-              IO.puts ""
-              qwe = %{var | asd: 2, zxc: 5}
-              IO.puts ""
-              qwe = %{var | asd: 2}
-              IO.puts ""
-
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [%VarInfo{type: {:map, [asd: {:integer, 5}], nil}}] = state |> get_line_vars(4)
-
-        assert [
-                 %VarInfo{
-                   type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}
-                 }
-               ] = state |> get_line_vars(6)
-
-        assert [
-                 %VarInfo{type: {:map, [], nil}}
-               ] = state |> get_line_vars(8)
-
-        assert [
-                 %VarInfo{type: {:map, [asd: {:integer, 5}, zxc: {:atom, String}], nil}}
-               ] = state |> get_line_vars(10)
-
-        assert [
-                 %VarInfo{
-                   type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var}}
-                 }
-               ] =
-                 state |> get_line_vars(12) |> Enum.filter(&(&1.name == :qwe))
-
-        assert [
-                 %VarInfo{type: {:map, [{:asd, {:integer, 2}}], {:variable, :var}}}
-               ] = state |> get_line_vars(14) |> Enum.filter(&(&1.name == :qwe))
-      end
-
-      test "struct binding" do
-        state =
-          """
-          defmodule MyModule do
-            def func(%MyStruct{} = var1, var2 = %:other_struct{}, var3 = %__MODULE__{},
-              var4 = %__MODULE__.Sub{}, var7 = %_{}) do
-              IO.puts ""
-            end
-
-            def some(a) do
-              asd = %Some{sub: Atom}
-              IO.puts ""
-              asd = %Other{a | sub: Atom}
-              IO.puts ""
-              asd = %{asd | other: 123}
-              IO.puts ""
-              z = x = asd
-              IO.puts ""
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{name: :var1, type: {:struct, [], {:atom, MyStruct}, nil}},
-                 %VarInfo{name: :var2, type: {:struct, [], {:atom, :other_struct}, nil}},
-                 %VarInfo{name: :var3, type: {:struct, [], {:atom, MyModule}, nil}},
-                 %VarInfo{name: :var4, type: {:struct, [], {:atom, MyModule.Sub}, nil}},
-                 %VarInfo{name: :var7, type: {:struct, [], nil, nil}}
-               ] = state |> get_line_vars(4)
-
-        assert %VarInfo{name: :asd, type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Some}, nil}} =
-                 state |> get_line_vars(9) |> Enum.find(&(&1.name == :asd))
-
-        assert [
-                 %VarInfo{
-                   name: :asd,
-                   type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
-                 }
-               ] = state |> get_line_vars(11) |> Enum.filter(&(&1.name == :asd))
-
-        assert [
-                 %VarInfo{
-                   name: :asd,
-                   type: {:map, [{:other, {:integer, 123}}], {:variable, :asd}}
-                 }
-               ] = state |> get_line_vars(13) |> Enum.filter(&(&1.name == :asd))
-
-        assert [
-                 %VarInfo{name: :x, type: {:intersection, [{:variable, :asd}, {:variable, :z}]}},
-                 %VarInfo{name: :z, type: {:variable, :asd}}
-               ] = state |> get_line_vars(15) |> Enum.filter(&(&1.name in [:x, :z]))
-      end
-
-      test "struct binding understands builtin sigils and ranges" do
-        state =
-          """
-          defmodule MyModule do
-            def some() do
-              var1 = ~D[2000-01-01]
-              var2 = ~T[13:00:07]
-              var3 = ~U[2015-01-13 13:00:07Z]
-              var4 = ~N[2000-01-01 23:00:07]
-              var5 = ~r/foo/iu
-              var6 = ~R(f\#{1,3}o)
-              var7 = 12..34
-              var8 = 12..34//1
-              IO.puts ""
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{name: :var1, type: {:struct, [], {:atom, Date}, nil}},
-                 %VarInfo{name: :var2, type: {:struct, [], {:atom, Time}, nil}},
-                 %VarInfo{name: :var3, type: {:struct, [], {:atom, DateTime}, nil}},
-                 %VarInfo{name: :var4, type: {:struct, [], {:atom, NaiveDateTime}, nil}},
-                 %VarInfo{name: :var5, type: {:struct, [], {:atom, Regex}, nil}},
-                 %VarInfo{name: :var6, type: {:struct, [], {:atom, Regex}, nil}},
-                 %VarInfo{name: :var7, type: {:struct, [], {:atom, Range}, nil}},
-                 %VarInfo{name: :var8, type: {:struct, [], {:atom, Range}, nil}}
-               ] = state |> get_line_vars(11)
-      end
-
-      test "struct binding understands stepped ranges" do
-        state =
-          """
-          defmodule MyModule do
-            def some() do
-              var1 = 12..34//2
-              IO.puts ""
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{name: :var1, type: {:struct, [], {:atom, Range}, nil}}
-               ] = state |> get_line_vars(4)
-      end
-
-      test "two way refinement in match context" do
-        state =
-          """
-          defmodule MyModule do
-            def some(%MyState{formatted: formatted} = state) do
-              IO.puts ""
-
-              case :ok do
-                %{foo: 1} = state = %{bar: 1} = x ->
-                  IO.puts ""
-              end
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{
-                   name: :formatted,
-                   type: {:map_key, {:variable, :state}, {:atom, :formatted}}
-                 },
-                 %VarInfo{
-                   name: :state,
-                   type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
-                 }
-               ] = state |> get_line_vars(3)
-
-        assert [
-                 %VarInfo{
-                   name: :formatted
-                 },
-                 %VarInfo{
-                   name: :state,
-                   type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
-                 }
-               ] = state |> get_line_vars(7)
-      end
-
-      test "two way refinement in match context nested" do
-        state =
-          """
-          defmodule MyModule do
-            def some(%{foo: 1} = state = %{bar: 1} = x) do
-              IO.puts ""
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{
-                   name: :formatted,
-                   type: {:map_key, {:variable, :state}, {:atom, :formatted}}
-                 },
-                 %VarInfo{
-                   name: :state,
-                   type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
-                 }
-               ] = state |> get_line_vars(3)
-
-        assert [
-                 %VarInfo{
-                   name: :formatted
-                 },
-                 %VarInfo{
-                   name: :state,
-                   type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
-                 }
-               ] = state |> get_line_vars(7)
-      end
-
-      test "two way refinement in match context nested case" do
-        state =
-          """
-          defmodule MyModule do
-            def some(state) do
-              case :ok do
-                %{foo: 1} = state = %{bar: 1} = x ->
-                  IO.puts ""
-              end
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{
-                   name: :formatted
-                 },
-                 %VarInfo{
-                   name: :state,
-                   type: {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
-                 }
-               ] = state |> get_line_vars(5)
-      end
-
-      test "two way refinement in nested `=` binding" do
-        state =
-          """
-          defmodule MyModule do
-            def some() do
-              %MyState{formatted: formatted} = state = socket.assigns.state
-              IO.puts ""
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{
-                   name: :formatted,
-                   type: {
-                     :map_key,
-                     {
-                       :call,
-                       {:call, {:variable, :socket}, :assigns, []},
-                       :state,
-                       []
-                     },
-                     {:atom, :formatted}
-                   }
-                 },
-                 %VarInfo{
-                   name: :state,
-                   type:
-                     {:intersection,
-                      [
-                        {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []},
-                        {:struct, [formatted: {:variable, :formatted}], {:atom, MyState}, nil}
-                      ]}
-                 }
-               ] = state |> get_line_vars(4)
-      end
-
-      test "case binding" do
-        state =
-          """
-          defmodule MyModule do
-            def some() do
-              case Some.call() do
-                {:ok, x} ->
-                  IO.puts ""
-              end
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{
-                   name: :x,
-                   type:
-                     {:tuple_nth,
-                      {:intersection,
-                       [{:call, {:atom, Some}, :call, []}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
-                 }
-               ] = state |> get_line_vars(5)
-      end
-
-      test "case binding with match" do
-        state =
-          """
-          defmodule MyModule do
-            def some() do
-              case Some.call() do
-                {:ok, x} = res ->
-                  IO.puts ""
-              end
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{
-                   name: :res,
-                   type: :todo
-                 },
-                 %VarInfo{
-                   name: :x,
-                   type:
-                     {:tuple_nth,
-                      {:intersection,
-                       [{:call, {:atom, Some}, :call, []}, {:tuple, 2, [{:atom, :ok}, nil]}]}, 1}
-                 }
-               ] = state |> get_line_vars(5)
-      end
-
-      test "rescue binding" do
-        state =
-          """
-          defmodule MyModule do
-            def some() do
-              try do
-                Some.call()
-              rescue
-                e0 in ArgumentError ->
-                  IO.puts ""
-                e1 in [ArgumentError] ->
-                  IO.puts ""
-                e2 in [RuntimeError, Enum.EmptyError] ->
-                  IO.puts ""
-                e3 in _ ->
-                  IO.puts ""
-                e4 ->
-                  IO.puts ""
-              else
-                a ->
-                  IO.puts ""
-              end
-            end
-          end
-          """
-          |> string_to_state
-
-        assert [
-                 %VarInfo{
-                   name: :e0,
-                   type: {:struct, [], {:atom, ArgumentError}, nil}
-                 }
-               ] = state |> get_line_vars(7)
-
-        assert [
-                 %VarInfo{
-                   name: :e1,
-                   type: {:struct, [], {:atom, ArgumentError}, nil}
-                 }
-               ] = state |> get_line_vars(9)
-
-        assert [
-                 %VarInfo{
-                   name: :e2,
-                   type: {
-                     :union,
-                     [
-                       {:struct, [], {:atom, RuntimeError}, nil},
-                       {:struct, [], {:atom, Enum.EmptyError}, nil}
-                     ]
-                   }
-                 }
-               ] = state |> get_line_vars(11)
-
-        assert [
-                 %VarInfo{
-                   name: :e3,
-                   type: {:struct, [], {:atom, Exception}, nil}
-                 }
-               ] = state |> get_line_vars(13)
-
-        assert [
-                 %VarInfo{
-                   name: :e4,
-                   type: {:struct, [], {:atom, Exception}, nil}
-                 }
-               ] = state |> get_line_vars(15)
-
-        assert [
-                 %VarInfo{
-                   name: :a,
-                   type: nil
-                 }
-               ] = state |> get_line_vars(18)
-      end
-
-      test "vars binding by pattern matching with pin operators" do
-        state =
-          """
-          defmodule MyModule do
-            def func(a) do
-              b = 1
-              case a do
-                %{b: 2} = a1 ->
-                  IO.puts ""
-                %{b: ^b} = a2 ->
-                  IO.puts ""
-              end
-            end
-          end
-          """
-          |> string_to_state
-
-        vars = state |> get_line_vars(6)
-
-        # TODO wtf
-        # assert %VarInfo{
-        #          name: :a1,
-        #          positions: [{5, 18}],
-        #          scope_id: 6,
-        #          type: {:map, [b: {:integer, 2}], nil}
-        #        } = Enum.find(vars, &(&1.name == :a1))
-
-        vars = state |> get_line_vars(8) |> dbg
-
-        assert %VarInfo{
-                 name: :a2,
-                 positions: [{7, 18}],
-                 type: {:map, [b: {:variable, :b}], nil}
-               } = Enum.find(vars, &(&1.name == :a2))
-      end
+      assert %VarInfo{
+               name: :a2,
+               positions: [{7, 18}],
+               type: {:map, [b: {:variable, :b}], nil}
+             } = Enum.find(vars, &(&1.name == :a2))
     end
   end
 
@@ -3397,246 +3390,244 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-  if @binding_support do
-    describe "infer vars type information from guards" do
-      defp var_with_guards(guard) do
-        """
-        defmodule MyModule do
-          def func(x) when #{guard} do
-            IO.puts ""
-          end
+  describe "infer vars type information from guards" do
+    defp var_with_guards(guard) do
+      """
+      defmodule MyModule do
+        def func(x) when #{guard} do
+          IO.puts ""
         end
-        """
-        |> string_to_state()
-        |> get_line_vars(3)
-        |> hd()
       end
+      """
+      |> string_to_state()
+      |> get_line_vars(3)
+      |> hd()
+    end
 
-      test "number guards" do
-        assert %VarInfo{name: :x, type: :number} = var_with_guards("is_number(x)")
-        assert %VarInfo{name: :x, type: :number} = var_with_guards("is_float(x)")
-        assert %VarInfo{name: :x, type: :number} = var_with_guards("is_integer(x)")
-        assert %VarInfo{name: :x, type: :number} = var_with_guards("round(x)")
-        assert %VarInfo{name: :x, type: :number} = var_with_guards("trunc(x)")
-        assert %VarInfo{name: :x, type: :number} = var_with_guards("div(x, 1)")
-        assert %VarInfo{name: :x, type: :number} = var_with_guards("rem(x, 1)")
-        assert %VarInfo{name: :x, type: :number} = var_with_guards("abs(x)")
-        assert %VarInfo{name: :x, type: :number} = var_with_guards("ceil(x)")
-        assert %VarInfo{name: :x, type: :number} = var_with_guards("floor(x)")
-      end
+    test "number guards" do
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("is_number(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("is_float(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("is_integer(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("round(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("trunc(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("div(x, 1)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("rem(x, 1)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("abs(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("ceil(x)")
+      assert %VarInfo{name: :x, type: :number} = var_with_guards("floor(x)")
+    end
 
-      test "binary guards" do
-        assert %VarInfo{name: :x, type: :binary} = var_with_guards("is_binary(x)")
+    test "binary guards" do
+      assert %VarInfo{name: :x, type: :binary} = var_with_guards("is_binary(x)")
 
-        assert %VarInfo{name: :x, type: :binary} =
-                 var_with_guards(~s/binary_part(x, 0, 1) == "a"/)
-      end
+      assert %VarInfo{name: :x, type: :binary} =
+               var_with_guards(~s/binary_part(x, 0, 1) == "a"/)
+    end
 
-      test "bitstring guards" do
-        assert %VarInfo{name: :x, type: :bitstring} = var_with_guards("is_bitstring(x)")
-        assert %VarInfo{name: :x, type: :bitstring} = var_with_guards("bit_size(x) == 1")
-        assert %VarInfo{name: :x, type: :bitstring} = var_with_guards("byte_size(x) == 1")
-      end
+    test "bitstring guards" do
+      assert %VarInfo{name: :x, type: :bitstring} = var_with_guards("is_bitstring(x)")
+      assert %VarInfo{name: :x, type: :bitstring} = var_with_guards("bit_size(x) == 1")
+      assert %VarInfo{name: :x, type: :bitstring} = var_with_guards("byte_size(x) == 1")
+    end
 
-      test "multiple guards" do
-        assert %VarInfo{name: :x, type: {:union, [:bitstring, :number]}} =
-                 var_with_guards("is_bitstring(x) when is_integer(x)")
-      end
+    test "multiple guards" do
+      assert %VarInfo{name: :x, type: {:union, [:bitstring, :number]}} =
+               var_with_guards("is_bitstring(x) when is_integer(x)")
+    end
 
-      test "list guards" do
-        assert %VarInfo{name: :x, type: :list} = var_with_guards("is_list(x)")
-        assert %VarInfo{name: :x, type: {:list, :number}} = var_with_guards("hd(x) == 1")
-        assert %VarInfo{name: :x, type: {:list, :number}} = var_with_guards("1 == hd(x)")
-        assert %VarInfo{name: :x, type: :list} = var_with_guards("tl(x) == [1]")
-        assert %VarInfo{name: :x, type: :list} = var_with_guards("length(x) == 1")
-        assert %VarInfo{name: :x, type: :list} = var_with_guards("1 == length(x)")
-        assert %VarInfo{name: :x, type: {:list, :boolean}} = var_with_guards("hd(x)")
-      end
+    test "list guards" do
+      assert %VarInfo{name: :x, type: :list} = var_with_guards("is_list(x)")
+      assert %VarInfo{name: :x, type: {:list, :number}} = var_with_guards("hd(x) == 1")
+      assert %VarInfo{name: :x, type: {:list, :number}} = var_with_guards("1 == hd(x)")
+      assert %VarInfo{name: :x, type: :list} = var_with_guards("tl(x) == [1]")
+      assert %VarInfo{name: :x, type: :list} = var_with_guards("length(x) == 1")
+      assert %VarInfo{name: :x, type: :list} = var_with_guards("1 == length(x)")
+      assert %VarInfo{name: :x, type: {:list, :boolean}} = var_with_guards("hd(x)")
+    end
 
-      test "tuple guards" do
-        assert %VarInfo{name: :x, type: :tuple} = var_with_guards("is_tuple(x)")
+    test "tuple guards" do
+      assert %VarInfo{name: :x, type: :tuple} = var_with_guards("is_tuple(x)")
 
-        assert %VarInfo{name: :x, type: {:tuple, 1, [nil]}} =
-                 var_with_guards("tuple_size(x) == 1")
+      assert %VarInfo{name: :x, type: {:tuple, 1, [nil]}} =
+               var_with_guards("tuple_size(x) == 1")
 
-        assert %VarInfo{name: :x, type: {:tuple, 1, [nil]}} =
-                 var_with_guards("1 == tuple_size(x)")
+      assert %VarInfo{name: :x, type: {:tuple, 1, [nil]}} =
+               var_with_guards("1 == tuple_size(x)")
 
-        assert %VarInfo{name: :x, type: :tuple} = var_with_guards("elem(x, 0) == 1")
-      end
+      assert %VarInfo{name: :x, type: :tuple} = var_with_guards("elem(x, 0) == 1")
+    end
 
-      test "atom guards" do
-        assert %VarInfo{name: :x, type: :atom} = var_with_guards("is_atom(x)")
-      end
+    test "atom guards" do
+      assert %VarInfo{name: :x, type: :atom} = var_with_guards("is_atom(x)")
+    end
 
-      test "boolean guards" do
-        assert %VarInfo{name: :x, type: :boolean} = var_with_guards("is_boolean(x)")
-      end
+    test "boolean guards" do
+      assert %VarInfo{name: :x, type: :boolean} = var_with_guards("is_boolean(x)")
+    end
 
-      test "map guards" do
-        assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("is_map(x)")
+    test "map guards" do
+      assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("is_map(x)")
 
-        assert %VarInfo{name: :x, type: {:intersection, [{:map, [], nil}, nil]}} =
-                 var_with_guards("is_non_struct_map(x)")
+      assert %VarInfo{name: :x, type: {:intersection, [{:map, [], nil}, nil]}} =
+               var_with_guards("is_non_struct_map(x)")
 
-        assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("map_size(x) == 1")
-        assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("1 == map_size(x)")
+      assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("map_size(x) == 1")
+      assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("1 == map_size(x)")
 
-        assert %VarInfo{name: :x, type: {:map, [a: nil], nil}} =
-                 var_with_guards("is_map_key(x, :a)")
+      assert %VarInfo{name: :x, type: {:map, [a: nil], nil}} =
+               var_with_guards("is_map_key(x, :a)")
 
-        assert %VarInfo{name: :x, type: {:map, [{"a", nil}], nil}} =
-                 var_with_guards(~s/is_map_key(x, "a")/)
-      end
+      assert %VarInfo{name: :x, type: {:map, [{"a", nil}], nil}} =
+               var_with_guards(~s/is_map_key(x, "a")/)
+    end
 
-      test "struct guards" do
-        assert %VarInfo{
-                 name: :x,
-                 type: {
-                   :intersection,
-                   [
-                     {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                     {:struct, [], nil, nil}
-                   ]
-                 }
-               } = var_with_guards("is_struct(x)")
+    test "struct guards" do
+      assert %VarInfo{
+               name: :x,
+               type: {
+                 :intersection,
+                 [
+                   {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                   {:struct, [], nil, nil}
+                 ]
+               }
+             } = var_with_guards("is_struct(x)")
 
-        assert %VarInfo{
-                 name: :x,
-                 type: {
-                   :intersection,
-                   [
-                     {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                     {:struct, [], {:atom, URI}, nil}
-                   ]
-                 }
-               } =
-                 var_with_guards("is_struct(x, URI)")
+      assert %VarInfo{
+               name: :x,
+               type: {
+                 :intersection,
+                 [
+                   {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                   {:struct, [], {:atom, URI}, nil}
+                 ]
+               }
+             } =
+               var_with_guards("is_struct(x, URI)")
 
-        assert %VarInfo{
-                 name: :x,
-                 type: {
-                   :intersection,
-                   [
-                     {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                     {:struct, [], {:atom, URI}, nil}
-                   ]
-                 }
-               } =
-                 """
-                 defmodule MyModule do
-                   alias URI, as: MyURI
+      assert %VarInfo{
+               name: :x,
+               type: {
+                 :intersection,
+                 [
+                   {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                   {:struct, [], {:atom, URI}, nil}
+                 ]
+               }
+             } =
+               """
+               defmodule MyModule do
+                 alias URI, as: MyURI
 
-                   def func(x) when is_struct(x, MyURI) do
-                     IO.puts ""
-                   end
+                 def func(x) when is_struct(x, MyURI) do
+                   IO.puts ""
                  end
-                 """
-                 |> string_to_state()
-                 |> get_line_vars(5)
-                 |> hd()
-      end
+               end
+               """
+               |> string_to_state()
+               |> get_line_vars(5)
+               |> hd()
+    end
 
-      test "exception guards" do
-        assert %VarInfo{
-                 name: :x,
-                 type: {
-                   :intersection,
-                   [
-                     {
-                       :intersection,
-                       [
-                         {
-                           :intersection,
-                           [
-                             {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                             {:struct, [], nil, nil}
-                           ]
-                         },
-                         {:map, [{:__exception__, nil}], nil}
-                       ]
-                     },
-                     {:map, [{:__exception__, {:atom, true}}], nil}
-                   ]
-                 }
-               } = var_with_guards("is_exception(x)")
+    test "exception guards" do
+      assert %VarInfo{
+               name: :x,
+               type: {
+                 :intersection,
+                 [
+                   {
+                     :intersection,
+                     [
+                       {
+                         :intersection,
+                         [
+                           {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                           {:struct, [], nil, nil}
+                         ]
+                       },
+                       {:map, [{:__exception__, nil}], nil}
+                     ]
+                   },
+                   {:map, [{:__exception__, {:atom, true}}], nil}
+                 ]
+               }
+             } = var_with_guards("is_exception(x)")
 
-        assert %VarInfo{
-                 name: :x,
-                 type: {
-                   :intersection,
-                   [
-                     {
-                       :intersection,
-                       [
-                         {
-                           :intersection,
-                           [
-                             {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                             {:struct, [], {:atom, ArgumentError}, nil}
-                           ]
-                         },
-                         {:map, [{:__exception__, nil}], nil}
-                       ]
-                     },
-                     {:map, [{:__exception__, {:atom, true}}], nil}
-                   ]
-                 }
-               } =
-                 var_with_guards("is_exception(x, ArgumentError)")
+      assert %VarInfo{
+               name: :x,
+               type: {
+                 :intersection,
+                 [
+                   {
+                     :intersection,
+                     [
+                       {
+                         :intersection,
+                         [
+                           {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                           {:struct, [], {:atom, ArgumentError}, nil}
+                         ]
+                       },
+                       {:map, [{:__exception__, nil}], nil}
+                     ]
+                   },
+                   {:map, [{:__exception__, {:atom, true}}], nil}
+                 ]
+               }
+             } =
+               var_with_guards("is_exception(x, ArgumentError)")
 
-        assert %VarInfo{
-                 name: :x,
-                 type: {
-                   :intersection,
-                   [
-                     {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                     {:struct, [], {:atom, ArgumentError}, nil}
-                   ]
-                 }
-               } =
-                 """
-                 defmodule MyModule do
-                   alias ArgumentError, as: MyURI
+      assert %VarInfo{
+               name: :x,
+               type: {
+                 :intersection,
+                 [
+                   {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
+                   {:struct, [], {:atom, ArgumentError}, nil}
+                 ]
+               }
+             } =
+               """
+               defmodule MyModule do
+                 alias ArgumentError, as: MyURI
 
-                   def func(x) when is_struct(x, MyURI) do
-                     IO.puts ""
-                   end
+                 def func(x) when is_struct(x, MyURI) do
+                   IO.puts ""
                  end
-                 """
-                 |> string_to_state()
-                 |> get_line_vars(5)
-                 |> hd()
-      end
+               end
+               """
+               |> string_to_state()
+               |> get_line_vars(5)
+               |> hd()
+    end
 
-      test "and combination predicate guards can be merge" do
-        assert %VarInfo{name: :x, type: {:intersection, [:number, :boolean]}} =
-                 var_with_guards("is_number(x) and x >= 1")
+    test "and combination predicate guards can be merge" do
+      assert %VarInfo{name: :x, type: {:intersection, [:number, :boolean]}} =
+               var_with_guards("is_number(x) and x >= 1")
 
-        assert %VarInfo{
-                 name: :x,
-                 type: {:intersection, [{:map, [a: nil], nil}, {:map, [b: nil], nil}]}
-               } = var_with_guards("is_map_key(x, :a) and is_map_key(x, :b)")
-      end
+      assert %VarInfo{
+               name: :x,
+               type: {:intersection, [{:map, [a: nil], nil}, {:map, [b: nil], nil}]}
+             } = var_with_guards("is_map_key(x, :a) and is_map_key(x, :b)")
+    end
 
-      test "or combination predicate guards can be merge into union type" do
-        assert %VarInfo{name: :x, type: {:union, [:number, :atom]}} =
-                 var_with_guards("is_number(x) or is_atom(x)")
+    test "or combination predicate guards can be merge into union type" do
+      assert %VarInfo{name: :x, type: {:union, [:number, :atom]}} =
+               var_with_guards("is_number(x) or is_atom(x)")
 
-        assert %VarInfo{name: :x, type: {:union, [:number, :atom, :binary]}} =
-                 var_with_guards("is_number(x) or is_atom(x) or is_binary(x)")
-      end
+      assert %VarInfo{name: :x, type: {:union, [:number, :atom, :binary]}} =
+               var_with_guards("is_number(x) or is_atom(x) or is_binary(x)")
+    end
 
-      test "negated guards cannot be used for inference" do
-        assert %VarInfo{name: :x, type: nil} =
-                 var_with_guards("not is_map(x)")
+    test "negated guards cannot be used for inference" do
+      assert %VarInfo{name: :x, type: nil} =
+               var_with_guards("not is_map(x)")
 
-        assert %VarInfo{name: :x, type: {:union, [nil, :atom]}} =
-                 var_with_guards("not is_map(x) or is_atom(x)")
+      assert %VarInfo{name: :x, type: {:union, [nil, :atom]}} =
+               var_with_guards("not is_map(x) or is_atom(x)")
 
-        assert %VarInfo{name: :x, type: {:intersection, [nil, :atom]}} =
-                 var_with_guards("not is_map(x) and is_atom(x)")
-      end
+      assert %VarInfo{name: :x, type: {:intersection, [nil, :atom]}} =
+               var_with_guards("not is_map(x) and is_atom(x)")
     end
   end
 

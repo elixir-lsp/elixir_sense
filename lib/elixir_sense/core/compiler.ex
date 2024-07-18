@@ -863,6 +863,7 @@ defmodule ElixirSense.Core.Compiler do
 
     {opts, state, env} = expand(opts, state, env)
     target = Kernel.Utils.defdelegate_all(funs, opts, env)
+
     # TODO: Remove List.wrap when multiple funs are no longer supported
     state =
       funs
@@ -874,6 +875,7 @@ defmodule ElixirSense.Core.Compiler do
 
         state
         |> add_current_env_to_line(line, %{env | context: nil, function: {name, arity}})
+        # TODO use add_func_to_index to collect docs
         |> add_mod_fun_to_position(
           {module, name, arity},
           position,
@@ -881,6 +883,7 @@ defmodule ElixirSense.Core.Compiler do
           args,
           :defdelegate,
           "",
+          # TODO
           # doc,
           %{delegate_to: {target, as, length(as_args)}},
           # meta
