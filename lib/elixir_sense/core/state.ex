@@ -36,86 +36,72 @@ defmodule ElixirSense.Core.State do
   @type var_type :: nil | {:atom, atom} | {:map, keyword} | {:struct, keyword, module}
 
   @type t :: %ElixirSense.Core.State{
-          module: [atom],
-          scopes: [scope],
-          requires: list(list(module)),
-          aliases: list(list(alias_t)),
           attributes: list(list(ElixirSense.Core.State.AttributeInfo.t())),
-          protocols: list(protocol_t() | nil),
           scope_attributes: list(list(atom)),
           behaviours: %{optional(module) => [module]},
           specs: specs_t,
+          types: types_t,
+          mods_funs_to_positions: mods_funs_to_positions_t,
+          structs: structs_t,
+          calls: calls_t,
           vars_info:
             list(%{optional({atom, non_neg_integer}) => ElixirSense.Core.State.VarInfo.t()}),
+          vars_info_per_scope_id: vars_info_per_scope_id_t,
           scope_id_count: non_neg_integer,
           scope_ids: list(scope_id_t),
-          vars_info_per_scope_id: vars_info_per_scope_id_t,
-          mods_funs_to_positions: mods_funs_to_positions_t,
-          lines_to_env: lines_to_env_t,
-          calls: calls_t,
-          structs: structs_t,
-          types: types_t,
-          generated: boolean,
+          typespec: nil | {atom, arity},
+          protocol: nil | {atom, [atom]},
+
+          # elixir_ex
+          vars: {map, false | map()},
+          unused: non_neg_integer(),
+          prematch: atom | tuple,
+          stacktrace: boolean(),
+          caller: boolean(),
+          runtime_modules: list(module),
+
+          # TODO ?
+          # generated: boolean,
           first_alias_positions: map(),
           moduledoc_positions: map(),
-          context: map(),
           doc_context: list(),
           typedoc_context: list(),
           optional_callbacks_context: list(),
-          # TODO better type
-          binding_context: list,
-          macro_env: list(Macro.Env.t()),
-          typespec: nil | {atom, arity},
-          protocol: nil | {atom, [atom]},
+          lines_to_env: lines_to_env_t,
           cursor_env: nil | {keyword, ElixirSense.Core.State.Env.t()}
         }
 
-  @auto_imported_functions :elixir_env.new().functions
-  @auto_imported_macros :elixir_env.new().macros
-  @auto_required [Application, Kernel] ++
-                   (if Version.match?(System.version(), ">= 1.17.0-dev") do
-                      []
-                    else
-                      [Kernel.Typespec]
-                    end)
-
-  defstruct module: [nil],
-            scopes: [nil],
-            functions: [@auto_imported_functions],
-            macros: [@auto_imported_macros],
-            requires: [@auto_required],
-            aliases: [[]],
-            attributes: [[]],
-            protocols: [nil],
+  defstruct attributes: [[]],
             scope_attributes: [[]],
             behaviours: %{},
             specs: %{},
+            types: %{},
+            mods_funs_to_positions: %{},
+            structs: %{},
+            calls: %{},
             vars_info: [%{}],
+            vars_info_per_scope_id: %{},
+            scope_id_count: 0,
+            scope_ids: [0],
+            typespec: nil,
+            protocol: nil,
+
+            # elixir_ex
             vars: {%{}, false},
             unused: 0,
             prematch: :raise,
             stacktrace: false,
             caller: false,
             runtime_modules: [],
-            scope_id_count: 0,
-            scope_ids: [0],
-            vars_info_per_scope_id: %{},
-            mods_funs_to_positions: %{},
-            lines_to_env: %{},
-            calls: %{},
-            structs: %{},
-            types: %{},
-            generated: false,
-            binding_context: [],
-            context: %{},
+
+            # TODO ?
+            # generated: false,
             first_alias_positions: %{},
+            moduledoc_positions: %{},
             doc_context: [[]],
             typedoc_context: [[]],
             optional_callbacks_context: [[]],
-            moduledoc_positions: %{},
-            macro_env: [:elixir_env.new()],
-            typespec: nil,
-            protocol: nil,
+            lines_to_env: %{},
             cursor_env: nil
 
   defmodule Env do
@@ -650,10 +636,8 @@ defmodule ElixirSense.Core.State do
     arity = length(params)
 
     {state, {doc, meta}} =
-      if not state.generated and Keyword.get(options, :generated, false) do
+      if Keyword.get(options, :generated, false) do
         # do not consume docs on generated functions
-        # NOTE state.generated is set when expanding use macro
-        # we want to consume docs there
         {state, {"", %{generated: true}}}
       else
         consume_doc_context(state)

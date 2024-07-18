@@ -1179,7 +1179,9 @@ defmodule ElixirSense.Core.Compiler do
         state =
           state
           |> add_spec(env, name, type_args, spec, kind, position, end_position,
-            generated: state.generated
+            # TODO ?
+            # generated: state.generated
+            generated: false
           )
           |> with_typespec({name, length(type_args)})
           |> add_current_env_to_line(line, env)
