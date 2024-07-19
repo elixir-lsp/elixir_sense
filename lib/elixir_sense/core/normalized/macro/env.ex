@@ -4,6 +4,8 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
     defdelegate expand_require(env, meta, module, fun, arity, opts), to: Macro.Env
     defdelegate expand_alias(env, meta, list, opts), to: Macro.Env
     defdelegate define_alias(env, meta, arg, opts), to: Macro.Env
+    defdelegate define_require(env, meta, arg, opts), to: Macro.Env
+    defdelegate define_import(env, meta, arg, opts), to: Macro.Env
   else
     def fake_expand_callback(_meta, _args) do
       {:__block__, [], []}
