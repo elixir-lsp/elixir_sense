@@ -6,7 +6,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, ModFunInfo, AttributeInfo}
 
-  @expand_eval false
   @var_in_ex_unit false
 
   describe "versioned_vars" do
@@ -6176,22 +6175,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              } = state.mods_funs_to_positions
     end
 
-    if @expand_eval do
-      test "find struct fields from expression" do
-        state =
-          """
-          defmodule MyStruct do
-            @fields_1 [a: nil]
-            defstruct [a_field: nil] ++ @fields_1
-          end
-          """
-          |> string_to_state
+    test "gracefully handles struct with expression fields" do
+      state =
+        """
+        defmodule MyStruct do
+          @fields_1 [a: nil]
+          defstruct [a_field: nil] ++ @fields_1
+        end
+        """
+        |> string_to_state
 
-        # TODO expression is not supported
-        assert state.structs == %{
-                 MyStruct => %StructInfo{type: :defstruct, fields: [__struct__: MyStruct]}
-               }
-      end
+      assert state.structs == %{
+               MyStruct => %StructInfo{type: :defstruct, fields: [__struct__: MyStruct]}
+             }
     end
 
     test "find exception" do

@@ -1290,13 +1290,15 @@ defmodule ElixirSense.Core.Compiler do
               "#{inspect(module)}, defstruct can only be called once per module"
     end
 
-    case fields do
-      fs when is_list(fs) ->
-        :ok
+    fields =
+      case fields do
+        fs when is_list(fs) ->
+          fs
 
-      other ->
-        raise ArgumentError, "struct fields definition must be list, got: #{inspect(other)}"
-    end
+        _other ->
+          # elixir raises ArgumentError here
+          []
+      end
 
     {position, end_position} = extract_range(meta)
 
