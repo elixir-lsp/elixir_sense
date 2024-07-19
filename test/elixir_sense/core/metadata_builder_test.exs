@@ -2538,15 +2538,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      # vars = state |> get_line_vars(6)
+      vars = state |> get_line_vars(6)
 
-      # TODO wtf
-      # assert %VarInfo{
-      #          name: :a1,
-      #          positions: [{5, 18}],
-      #          scope_id: 6,
-      #          type: {:map, [b: {:integer, 2}], nil}
-      #        } = Enum.find(vars, &(&1.name == :a1))
+      assert %VarInfo{
+               name: :a1,
+               positions: [{5, 17}],
+               type: {:map, [b: {:integer, 2}], nil}
+             } = Enum.find(vars, &(&1.name == :a1))
 
       vars = state |> get_line_vars(8)
 
