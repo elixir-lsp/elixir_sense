@@ -1621,56 +1621,52 @@ defmodule ElixirSense.Core.Compiler do
        )
        when module != nil and
               def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
-    # dbg(call)
-    # dbg(expr)
-    # dbg(def_kind)
-
     %{vars: vars, unused: unused} = state
 
-    # unquoted_call = :elixir_quote.has_unquotes(call)
-    # unquoted_expr = :elixir_quote.has_unquotes(expr)
-    # TODO expand the call and expression.
-    # TODO store mod_fun_to_pos
     line = Keyword.fetch!(meta, :line)
 
     unquoted_call = __MODULE__.Quote.has_unquotes(call)
     unquoted_expr = __MODULE__.Quote.has_unquotes(expr)
+    has_unquotes = unquoted_call or unquoted_expr
 
-    {call, expr} =
-      if unquoted_expr or unquoted_call do
-        {call, expr} = __MODULE__.Quote.escape({call, expr}, :none, true)
-
-        try do
-          # TODO binding?
-          {{call, expr}, _} = Code.eval_quoted({call, expr}, [], env)
-          {call, expr}
-        rescue
-          _ -> raise "unable to eval #{inspect({call, expr})}"
-        end
-      else
-        {call, expr}
-      end
+    # if there are unquote fragments in either call or body elixir escapes both and evaluates
+    # if unquoted_expr or unquoted_call, do: __MODULE__.Quote.escape({call, expr}, :none, true)
+    # instead we try to expand the call and body ignoring the unquotes
+    # 
 
     {name_and_args, guards} = __MODULE__.Utils.extract_guards(call)
 
+    # elixir raises here if def is invalid, we try to continue with unknown
+    # especially, we return unknown for calls with unquote fragments
     {name, _meta_1, args} =
       case name_and_args do
         {n, m, a} when is_atom(n) and is_atom(a) -> {n, m, []}
         {n, m, a} when is_atom(n) and is_list(a) -> {n, m, a}
-        _ -> raise "invalid_def #{inspect(name_and_args)}"
+        {n, m, a} when is_atom(a) -> {:__unknown__, m, []}
+        {n, m, a} when is_list(a) -> {:__unknown__, m, a}
+        _ -> {:__unknown__, [], []}
       end
 
     arity = length(args)
 
     # based on :elixir_def.env_for_expansion
     state =
-      %{
-        state
-        | vars: {%{}, false},
-          unused: 0,
-          caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
-      }
-      |> new_func_vars_scope
+      unless has_unquotes do
+        # module vars are not accessible in def body
+        %{
+          state
+          | vars: {%{}, false},
+            unused: 0,
+            caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
+        }
+        |> new_func_vars_scope()
+      else
+        # make module variables accessible if there are unquote fragments in def body
+        %{
+          state
+          | caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
+        }
+      end
 
     env_for_expand = %{env | function: {name, arity}}
 
@@ -1716,7 +1712,15 @@ defmodule ElixirSense.Core.Compiler do
       %{state | vars: vars, unused: unused, caller: false}
       |> maybe_move_vars_to_outer_scope
       |> remove_vars_scope
-      |> remove_func_vars_scope
+
+    state =
+      unless has_unquotes do
+        # restore module vars
+        remove_func_vars_scope(state)
+      else
+        # no need to do anything
+        state
+      end
 
     # result of def expansion is fa tuple
     {{name, arity}, state, env}

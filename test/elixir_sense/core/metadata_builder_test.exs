@@ -578,25 +578,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [] = state |> get_line_vars(3)
     end
 
-    if Version.match?(System.version(), ">= 1.17.0-dev") and @compiler do
-      test "for bitstring" do
-        state =
-          """
-          for <<r::8, g::8, b::8 <- pixels>> do
-            record_env()
-          end
+    test "for bitstring" do
+      state =
+        """
+        for <<r::8, g::8, b::8 <- pixels>> do
           record_env()
-          """
-          |> string_to_state
+        end
+        record_env()
+        """
+        |> string_to_state
 
-        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:b, nil}, {:g, nil}, {:r, nil}]
+      assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:b, nil}, {:g, nil}, {:r, nil}]
 
-        assert [
-                 %VarInfo{name: :b, positions: [{1, 19}]},
-                 %VarInfo{name: :g, positions: [{1, 13}]},
-                 %VarInfo{name: :r, positions: [{1, 7}]}
-               ] = state |> get_line_vars(2)
-      end
+      assert [
+               %VarInfo{name: :b, positions: [{1, 19}]},
+               %VarInfo{name: :g, positions: [{1, 13}]},
+               %VarInfo{name: :r, positions: [{1, 7}]}
+             ] = state |> get_line_vars(2)
     end
 
     test "for assignment" do
@@ -915,6 +913,32 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  positions: [{1, 1}, {3, 20}, {4, 21}, {4, 44}, {5, 25}, {6, 21}]
                }
              ] = state |> get_line_vars(8)
+    end
+
+    test "in unquote fragment" do
+      state =
+        """
+        defmodule MyModuleWithFuns do
+          kv = [foo: 1, bar: 2] |> IO.inspect
+          Enum.each(kv, fn {k, v} ->
+            @spec unquote(k)() :: unquote(v)
+            def unquote(k)() do
+              unquote(v)
+              record_env()
+            end
+          end)
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:k, nil}, {:kv, nil}, {:v, nil}]
+
+      # TODO we are not tracking usages in typespec
+      assert [
+               %VarInfo{name: :k, positions: [{3, 21}]},
+               %VarInfo{name: :kv, positions: [{2, 3}, {3, 13}]},
+               %VarInfo{name: :v, positions: [{3, 24}, {6, 15}]}
+             ] = state |> get_line_vars(7)
     end
 
     test "in capture" do
@@ -2514,7 +2538,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      vars = state |> get_line_vars(6)
+      # vars = state |> get_line_vars(6)
 
       # TODO wtf
       # assert %VarInfo{
@@ -5656,52 +5680,44 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
-  if @expand_eval do
-    test "registers defs with unquote fragments" do
-      state =
-        """
-        defmodule MyModuleWithFuns do
-          def unquote(:foo)(), do: :ok
-          def bar(), do: unquote(:ok)
-          def baz(unquote(:abc)), do: unquote(:abc)
-        end
-        """
-        |> string_to_state
+  test "registers defs with unquote fragments in body" do
+    state =
+      """
+      defmodule MyModuleWithFuns do
+        kv = [foo: 1]
+        Enum.each(kv, fn {k, v} ->
+          def foo(), do: unquote(v)
+        end)
+      end
+      """
+      |> string_to_state
 
-      assert %{
-               {MyModuleWithFuns, :foo, 0} => %ModFunInfo{
-                 params: [[]]
-               },
-               {MyModuleWithFuns, :bar, 0} => %ModFunInfo{
-                 params: [[]]
-               },
-               {MyModuleWithFuns, :baz, 1} => %ModFunInfo{
-                 params: [[:abc]]
-               }
-             } = state.mods_funs_to_positions
-    end
+    assert %{
+             {MyModuleWithFuns, :foo, 0} => %ModFunInfo{
+               params: [[]]
+             }
+           } = state.mods_funs_to_positions
+  end
 
-    test "registers defs with unquote fragments with binding" do
-      state =
-        """
-        defmodule MyModuleWithFuns do
-          kv = [foo: 1, bar: 2] |> IO.inspect
-          Enum.each(kv, fn {k, v} ->
-            def unquote(k)(), do: unquote(v)
-          end)
-        end
-        """
-        |> string_to_state
+  test "registers unknown for defs with unquote fragments in call" do
+    state =
+      """
+      defmodule MyModuleWithFuns do
+        kv = [foo: 1, bar: 2]
+        Enum.each(kv, fn {k, v} ->
+          def unquote(k)(), do: 123
+        end)
+      end
+      """
+      |> string_to_state
 
-      assert %{
-               {MyModuleWithFuns, :foo, 0} => %ModFunInfo{
-                 params: [[]]
-               },
-               {MyModuleWithFuns, :bar, 0} => %ModFunInfo{
-                 params: [[]]
-               }
-             } = state.mods_funs_to_positions
-    end
+    assert Map.keys(state.mods_funs_to_positions) == [
+             {MyModuleWithFuns, :__info__, 1},
+             {MyModuleWithFuns, :__unknown__, 0},
+             {MyModuleWithFuns, :module_info, 0},
+             {MyModuleWithFuns, :module_info, 1},
+             {MyModuleWithFuns, nil, nil}
+           ]
   end
 
   test "registers builtin functions for protocols" do
@@ -6338,10 +6354,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   describe "calls" do
-    defp sort_calls(calls) do
-      calls |> Enum.map(fn {k, v} -> {k, Enum.sort(v)} end) |> Map.new()
-    end
-
     test "registers calls with __MODULE__" do
       state =
         """
@@ -7202,6 +7214,46 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  specs: ["@opaque with_args(a, b) :: {a, b}"]
                }
              } = state.types
+    end
+
+    test "registers types with unquote fragments in body" do
+      state =
+        """
+        defmodule My do
+          kv = [foo: 1]
+          Enum.each(kv, fn {k, v} ->
+            @type foo :: unquote(v)
+          end)
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {My, :foo, 0} => %ElixirSense.Core.State.TypeInfo{
+                 args: [[]],
+                 kind: :type,
+                 name: :foo,
+                 positions: [{4, 5}],
+                 end_positions: [{4, 28}],
+                 generated: [false],
+                 specs: ["@type foo() :: unquote(v())"]
+               }
+             } = state.types
+    end
+
+    test "skips types with unquote fragments in call" do
+      state =
+        """
+        defmodule My do
+          kv = [foo: 1]
+          Enum.each(kv, fn {k, v} ->
+            @type unquote(k)() :: 123
+          end)
+        end
+        """
+        |> string_to_state
+
+      assert %{} == state.types
     end
 
     test "protocol exports type t" do
@@ -8158,17 +8210,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     |> Code.string_to_quoted(columns: true, token_metadata: true)
     |> (fn {:ok, ast} -> ast end).()
     |> MetadataBuilder.build()
-  end
-
-  defp get_scope_vars(state, line) do
-    case state.lines_to_env[line] do
-      nil ->
-        []
-
-      env ->
-        state.vars_info_per_scope_id[env.scope_id]
-    end
-    |> Enum.sort()
   end
 
   defp get_line_vars(state, line) do
