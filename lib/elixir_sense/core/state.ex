@@ -321,8 +321,12 @@ defmodule ElixirSense.Core.State do
     # filter to return only read
     [current_vars_info | _] = state.vars_info
 
+    # here we filter vars to only return the ones with nil context to maintain macro hygiene
+    # &n capture args are an exception as they have non nil context everywhere (since elixir 1.17)
+    # we return them all but the risk of breaking hygiene is small
     vars =
-      for {{name, context}, version} <- versioned_vars, context == nil do
+      for {{name, context}, version} <- versioned_vars,
+          context == nil or String.starts_with?(to_string(name), "&") do
         Map.fetch!(current_vars_info, {name, version})
       end
 
