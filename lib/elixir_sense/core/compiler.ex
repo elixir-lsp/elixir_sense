@@ -1172,11 +1172,7 @@ defmodule ElixirSense.Core.Compiler do
 
         state =
           state
-          |> add_spec(env, name, type_args, spec, kind, position, end_position,
-            # TODO ?
-            # generated: state.generated
-            generated: false
-          )
+          |> add_spec(env, name, type_args, spec, kind, position, end_position)
           |> with_typespec({name, length(type_args)})
           |> add_current_env_to_line(line, env)
           |> with_typespec(nil)
@@ -4885,7 +4881,7 @@ defmodule ElixirSense.Core.Compiler do
       {ast, state, env}
     end
 
-    # TODO: Remove char_list type by v2.0
+    # TODO Remove char_list type by v2.0
     def built_in_type?(:char_list, 0), do: true
     def built_in_type?(:charlist, 0), do: true
     def built_in_type?(:as_boolean, 1), do: true

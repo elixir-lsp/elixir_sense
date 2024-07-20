@@ -59,9 +59,6 @@ defmodule ElixirSense.Core.State do
           stacktrace: boolean(),
           caller: boolean(),
           runtime_modules: list(module),
-
-          # TODO ?
-          # generated: boolean,
           first_alias_positions: map(),
           moduledoc_positions: map(),
           doc_context: list(),
@@ -93,9 +90,6 @@ defmodule ElixirSense.Core.State do
             stacktrace: false,
             caller: false,
             runtime_modules: [],
-
-            # TODO ?
-            # generated: false,
             first_alias_positions: %{},
             moduledoc_positions: %{},
             doc_context: [[]],
@@ -857,7 +851,7 @@ defmodule ElixirSense.Core.State do
         kind,
         pos,
         end_pos,
-        options
+        options \\ []
       ) do
     arg_names =
       type_args
