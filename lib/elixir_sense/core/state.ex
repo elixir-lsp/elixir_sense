@@ -473,19 +473,18 @@ defmodule ElixirSense.Core.State do
     state.scope_attributes |> :lists.reverse() |> List.flatten()
   end
 
-  # TODO make priv
-  def add_mod_fun_to_position(
-        %__MODULE__{} = state,
-        {module, fun, arity},
-        position,
-        end_position,
-        params,
-        type,
-        doc,
-        meta,
-        options \\ []
-      )
-      when is_tuple(position) do
+  defp add_mod_fun_to_position(
+         %__MODULE__{} = state,
+         {module, fun, arity},
+         position,
+         end_position,
+         params,
+         type,
+         doc,
+         meta,
+         options
+       )
+       when is_tuple(position) do
     current_info = Map.get(state.mods_funs_to_positions, {module, fun, arity}, %ModFunInfo{})
     current_params = current_info |> Map.get(:params, [])
     current_positions = current_info |> Map.get(:positions, [])
@@ -498,6 +497,7 @@ defmodule ElixirSense.Core.State do
       if fun != nil and arity == nil and
            current_info.type not in [nil, :defp, :defmacrop, :defguardp] and
            not match?({true, _}, current_info.overridable) do
+        # TODO this is no longer needed
         # in case there are multiple definitions for nil arity prefer public ones
         # unless this is an overridable def
         current_info.type
@@ -537,14 +537,13 @@ defmodule ElixirSense.Core.State do
          _state,
          info,
          :defdelegate,
-         {:target, {target_module, target_function}}
+         {:target, {target, as, _as_arity}}
        ) do
-    # TODO wtf
-    # {module, _state, _env} = expand(target_module_expression, state)
+    # TODO remove this and rely on meta
 
     %ModFunInfo{
       info
-      | target: {target_module, target_function}
+      | target: {target, as}
     }
   end
 
@@ -613,18 +612,6 @@ defmodule ElixirSense.Core.State do
     )
   end
 
-  # TODO require end position
-  def add_func_to_index(
-        state,
-        env,
-        func,
-        params,
-        position,
-        end_position \\ nil,
-        type,
-        options \\ []
-      )
-
   def add_func_to_index(
         %__MODULE__{} = state,
         env,
@@ -633,7 +620,7 @@ defmodule ElixirSense.Core.State do
         position,
         end_position,
         type,
-        options
+        options \\ []
       )
       when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
     current_module = env.module
@@ -661,19 +648,18 @@ defmodule ElixirSense.Core.State do
         end
       end
 
-    # meta =
-    #   if type == :defdelegate do
-    #     {target_module, target_fun} = options[:target]
-    #     # {module, _state, _env} = expand(target_module_expression, state)
+    meta =
+      if type == :defdelegate do
+        {target, as, as_arity} = options[:target]
 
-    #     Map.put(
-    #       meta,
-    #       :delegate_to,
-    #       {target_module, target_fun, arity}
-    #     )
-    #   else
-    #     meta
-    #   end
+        Map.put(
+          meta,
+          :delegate_to,
+          {target, as, as_arity}
+        )
+      else
+        meta
+      end
 
     meta =
       if type in [:defguard, :defguardp] do

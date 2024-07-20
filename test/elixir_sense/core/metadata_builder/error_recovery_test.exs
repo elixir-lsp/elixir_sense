@@ -834,7 +834,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       end
       """
 
-      assert {meta, env} = get_cursor_env(code)
+      assert {_meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
@@ -845,7 +845,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       end
       """
 
-      assert {meta, env} = get_cursor_env(code)
+      assert {_meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
@@ -857,7 +857,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       end
       """
 
-      assert {meta, env} = get_cursor_env(code)
+      assert {_meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, &(&1.name == :x))
     end
 

@@ -7932,6 +7932,36 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                state.mods_funs_to_positions[{Some, :macro, 0}]
     end
 
+    test "doc is applied to next delegate" do
+      state =
+        """
+        defmodule Some do
+          @doc "Some fun"
+          @doc since: "1.2.3"
+          defdelegate count(a), to: Enum
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some fun", meta: %{since: "1.2.3"}} =
+               state.mods_funs_to_positions[{Some, :count, 1}]
+    end
+
+    test "doc is applied to next guard" do
+      state =
+        """
+        defmodule Some do
+          @doc "Some fun"
+          @doc since: "1.2.3"
+          defguard foo(a) when is_integer(a) 
+        end
+        """
+        |> string_to_state
+
+      assert %{doc: "Some fun", meta: %{since: "1.2.3"}} =
+               state.mods_funs_to_positions[{Some, :foo, 1}]
+    end
+
     test "doc false is applied to next function" do
       state =
         """
