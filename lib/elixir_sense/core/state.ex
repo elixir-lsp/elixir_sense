@@ -493,18 +493,6 @@ defmodule ElixirSense.Core.State do
     new_positions = [position | current_positions]
     new_end_positions = [end_position | current_end_positions]
 
-    info_type =
-      if fun != nil and arity == nil and
-           current_info.type not in [nil, :defp, :defmacrop, :defguardp] and
-           not match?({true, _}, current_info.overridable) do
-        # TODO this is no longer needed
-        # in case there are multiple definitions for nil arity prefer public ones
-        # unless this is an overridable def
-        current_info.type
-      else
-        type
-      end
-
     overridable = current_info |> Map.get(:overridable, false)
 
     meta =
@@ -518,7 +506,7 @@ defmodule ElixirSense.Core.State do
       positions: new_positions,
       end_positions: new_end_positions,
       params: new_params,
-      type: info_type,
+      type: type,
       doc: doc,
       meta: meta,
       generated: [Keyword.get(options, :generated, false) | current_info.generated],
