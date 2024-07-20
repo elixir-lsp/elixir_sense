@@ -5677,6 +5677,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            } = state.mods_funs_to_positions
   end
 
+  test "gracefully handles delegated with unquote fragment" do
+    state =
+      """
+      defmodule MyModuleWithFuns do
+        dynamic = :dynamic_flatten
+        defdelegate unquote(dynamic)(list), to: List, as: :flatten
+      end
+      """
+      |> string_to_state
+
+    assert %{
+             {MyModuleWithFuns, :__unknown__, 0} => %ModFunInfo{
+               target: {List, :flatten},
+               type: :defdelegate
+             }
+           } = state.mods_funs_to_positions
+  end
+
   test "registers defs with unquote fragments in body" do
     state =
       """

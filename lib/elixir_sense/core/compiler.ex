@@ -862,13 +862,22 @@ defmodule ElixirSense.Core.Compiler do
     {line, _} = position
 
     {opts, state, env} = expand(opts, state, env)
-    target = Kernel.Utils.defdelegate_all(funs, opts, env)
+    # elixir does validation here
+    target = Keyword.get(opts, :to, :__unknown__)
 
     # TODO Remove List.wrap when multiple funs are no longer supported by elixir
     state =
       funs
       |> List.wrap()
       |> Enum.reduce(state, fn fun, state ->
+        fun =
+          if __MODULE__.Quote.has_unquotes(fun) do
+            # dynamic defdelegate - replace unquote expression with fake call
+            {:__unknown__, [], []}
+          else
+            fun
+          end
+
         {name, args, as, as_args} = Kernel.Utils.defdelegate_each(fun, opts)
         arity = length(args)
 
