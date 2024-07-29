@@ -1646,8 +1646,8 @@ defmodule ElixirSense.Core.Compiler do
       case name_and_args do
         {n, m, a} when is_atom(n) and is_atom(a) -> {n, m, []}
         {n, m, a} when is_atom(n) and is_list(a) -> {n, m, a}
-        {n, m, a} when is_atom(a) -> {:__unknown__, m, []}
-        {n, m, a} when is_list(a) -> {:__unknown__, m, a}
+        {_n, m, a} when is_atom(a) -> {:__unknown__, m, []}
+        {_n, m, a} when is_list(a) -> {:__unknown__, m, a}
         _ -> {:__unknown__, [], []}
       end
 
