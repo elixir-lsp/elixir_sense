@@ -54,6 +54,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     test "finds variables in tuple" do
       assert find_vars_in("{}", nil, :match) == []
       assert find_vars_in("{a}", nil, :match) == [{{:a, 1}, nil}]
+      assert find_vars_in("{a}", :none, :match) == [{{:a, 1}, :none}]
       assert find_vars_in("{a}") == []
 
       assert find_vars_in("{a, b}", nil, :match) == [
@@ -84,6 +85,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     test "finds variables in list" do
       assert find_vars_in("[]", nil, :match) == []
       assert find_vars_in("[a]", nil, :match) == [{{:a, 1}, nil}]
+      assert find_vars_in("[a]", :none, :match) == [{{:a, 1}, :none}]
       assert find_vars_in("[a]", nil) == []
 
       assert find_vars_in("[a, b]", nil, :match) == [
@@ -116,6 +118,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     test "finds variables in map" do
       assert find_vars_in("%{}", nil, :match) == []
       assert find_vars_in("%{a: a}", nil, :match) == [{{:a, 1}, nil}]
+      assert find_vars_in("%{a: a}", :none, :match) == [{{:a, 1}, :none}]
       assert find_vars_in("%{a: a}", nil) == []
       assert find_vars_in("%{\"a\" => a}", nil, :match) == [{{:a, 1}, nil}]
       # NOTE variable keys are forbidden in match
@@ -135,6 +138,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     test "finds variables in struct" do
       assert find_vars_in("%Foo{}", nil, :match) == []
       assert find_vars_in("%Foo{a: a}", nil, :match) == [{{:a, 1}, nil}]
+      assert find_vars_in("%Foo{a: a}", :none, :match) == [{{:a, 1}, :none}]
       assert find_vars_in("%Foo{a: a}", nil) == []
       assert find_vars_in("%bar{a: a}", nil) == []
       assert find_vars_in("%bar{a: a}", nil, :match) == [{{:a, 1}, nil}, {{:bar, 1}, nil}]

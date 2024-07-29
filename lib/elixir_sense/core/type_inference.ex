@@ -260,8 +260,10 @@ defmodule ElixirSense.Core.TypeInference do
       match_var(
         type_ast,
         {[],
-         if(match_context, do: {:map_key, match_context, get_binding_type(:__struct__, context)}),
-         context}
+         propagate_context(
+           match_context,
+           &{:map_key, &1, get_binding_type(:__struct__, context)}
+         ), context}
       )
 
     {_ast, {map_vars, _match_context, _context}} =
@@ -295,7 +297,7 @@ defmodule ElixirSense.Core.TypeInference do
           {_ast, {new_vars, _match_context, _context}} =
             match_var(
               value_ast,
-              {[], if(match_context, do: {:map_key, match_context, key_type}), context}
+              {[], propagate_context(match_context, &{:map_key, &1, key_type}), context}
             )
 
           new_vars
@@ -320,7 +322,7 @@ defmodule ElixirSense.Core.TypeInference do
         {_ast, {new_vars, _match_context, _context}} =
           match_var(
             nth_elem_ast,
-            {[], if(match_context, do: {:tuple_nth, match_context, n}), context}
+            {[], propagate_context(match_context, &{:tuple_nth, &1, n}), context}
           )
 
         new_vars
@@ -332,10 +334,10 @@ defmodule ElixirSense.Core.TypeInference do
   defp match_var(list, {vars, match_context, context}) when is_list(list) do
     match_var_list = fn head, tail ->
       {_ast, {new_vars_head, _match_context, _context}} =
-        match_var(head, {[], if(match_context, do: {:list_head, match_context}), context})
+        match_var(head, {[], propagate_context(match_context, &{:list_head, &1}), context})
 
       {_ast, {new_vars_tail, _match_context, _context}} =
-        match_var(tail, {[], if(match_context, do: {:list_tail, match_context}), context})
+        match_var(tail, {[], propagate_context(match_context, &{:list_tail, &1}), context})
 
       {nil, {vars ++ new_vars_head ++ new_vars_tail, nil, context}}
     end
@@ -355,6 +357,10 @@ defmodule ElixirSense.Core.TypeInference do
   defp match_var(ast, {vars, match_context, context}) do
     {ast, {vars, match_context, context}}
   end
+
+  defp propagate_context(nil, _), do: nil
+  defp propagate_context(:none, _), do: :none
+  defp propagate_context(match_context, fun), do: fun.(match_context)
 
   def intersect(nil, new), do: new
   def intersect(old, nil), do: old
