@@ -1827,7 +1827,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  name: :var1,
                  type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
                },
-               # TODO not atom keys currently not supported
+               # NOTE non atom keys currently not supported
                %VarInfo{
                  name: :var2,
                  type: {:map_key, {:attribute, :other}, nil}

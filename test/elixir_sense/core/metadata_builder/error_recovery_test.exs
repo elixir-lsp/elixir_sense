@@ -852,9 +852,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
     test "incomplete clause left side" do
       code = """
       x = foo()
-      fn
-        __cursor__()
-      end
+      fn \
       """
 
       assert {_meta, env} = get_cursor_env(code)
@@ -864,8 +862,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
     test "incomplete clause left side guard" do
       code = """
       fn
-        x when __cursor__()
-      end
+        x when \
       """
 
       assert {meta, env} = get_cursor_env(code)
