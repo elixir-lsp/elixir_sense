@@ -721,10 +721,14 @@ defmodule ElixirSense.Core.Compiler do
         expand_local(meta, fun, args, state, env)
 
       {:error, {:conflict, _module}} ->
-        raise "conflict"
+        # elixir raises here, expand args to look for cursor
+        {_, state, _e} = expand_args(args, state, env)
+        {{fun, meta, args}, state, env}
 
       {:error, {:ambiguous, _module}} ->
-        raise "ambiguous"
+        # elixir raises here, expand args to look for cursor
+        {_, state, _e} = expand_args(args, state, env)
+        {{fun, meta, args}, state, env}
     end
   end
 
@@ -4349,8 +4353,9 @@ defmodule ElixirSense.Core.Compiler do
         {:import, receiver} ->
           require_function(meta, receiver, name, arity, e)
 
-        {:ambiguous, ambiguous} ->
-          raise "ambiguous #{inspect(ambiguous)}"
+        {:ambiguous, [first | _]} ->
+          # elixir raises here, we return first matching
+          require_function(meta, first, name, arity, e)
 
         false ->
           if Macro.special_form?(name, arity) do
