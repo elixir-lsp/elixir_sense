@@ -1315,15 +1315,10 @@ defmodule ElixirSense.Core.State do
       for {key, type} <- inferred_types, reduce: h do
         acc ->
           Map.update!(acc, key, fn %VarInfo{type: old} = v ->
-            %{v | type: merge_type(old, type)}
+            %{v | type: ElixirSense.Core.TypeInference.intersect(old, type)}
           end)
       end
 
     %{state | vars_info: [h | t]}
   end
-
-  defp merge_type(nil, new), do: new
-  defp merge_type(old, nil), do: old
-  defp merge_type(old, old), do: old
-  defp merge_type(old, new), do: {:intersection, [old, new]}
 end

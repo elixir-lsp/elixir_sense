@@ -1,101 +1,124 @@
 defmodule ElixirSense.Core.TypeInference do
-  # TODO struct or struct update
+  def get_binding_type(
+        {:%, _struct_meta,
+         [
+           _struct_ast,
+           {:%{}, _map_meta, [{:|, _, _} | _]}
+         ]},
+        :match
+      ),
+      do: :none
 
   def get_binding_type(
         {:%, _meta,
          [
            struct_ast,
            {:%{}, _, _} = ast
-         ]}
+         ]},
+        context
       ) do
     {fields, updated_struct} =
-      case get_binding_type(ast) do
+      case get_binding_type(ast, context) do
         {:map, fields, updated_map} -> {fields, updated_map}
         {:struct, fields, _, updated_struct} -> {fields, updated_struct}
         _ -> {[], nil}
       end
 
-    # expand struct type - only compile type atoms or attributes are supported
-    type =
-      case get_binding_type(struct_ast) do
-        {:atom, atom} -> {:atom, atom}
-        {:attribute, attribute} -> {:attribute, attribute}
-        _ -> nil
-      end
+    type = get_binding_type(struct_ast, context) |> known_struct_type()
 
     {:struct, fields, type, updated_struct}
   end
 
-  # pipe
-  # TODO no pipes in expanded code
-  # def get_binding_type({:|>, _, [params_1, {call, meta, params_rest}]}) do
-  #   params = [params_1 | params_rest || []]
-  #   get_binding_type({call, meta, params})
-  # end
-
   # remote call
-  def get_binding_type({{:., _, [target, fun]}, _, args})
+  def get_binding_type({{:., _, [target, fun]}, _, args}, context)
       when is_atom(fun) and is_list(args) do
-    target = get_binding_type(target)
-    {:call, target, fun, Enum.map(args, &get_binding_type(&1))}
+    target = get_binding_type(target, context)
+    {:call, target, fun, Enum.map(args, &get_binding_type(&1, context))}
   end
 
-  # variable or local no parens call
-  # TODO version?
-  def get_binding_type({var, _, context}) when is_atom(var) and is_atom(context) do
-    {:variable, var}
+  # pinned variable
+  def get_binding_type({:^, _, [pinned]}, :match), do: get_binding_type(pinned, nil)
+  def get_binding_type({:^, _, [_pinned]}, _context), do: :none
+
+  # variable
+  def get_binding_type({:_, _meta, var_context}, context)
+      when is_atom(var_context) and context != :match,
+      do: :none
+
+  def get_binding_type({var, meta, var_context}, context)
+      when is_atom(var) and is_atom(var_context) and
+             var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] and
+             context != :match do
+    case Keyword.fetch(meta, :version) do
+      {:ok, _version} ->
+        # TODO include version in type?
+        {:variable, var}
+
+      _ ->
+        nil
+    end
   end
 
   # attribute
   # expanded attribute reference has nil arg
-  def get_binding_type({:@, _, [{attribute, _, nil}]})
+  def get_binding_type({:@, _, [{attribute, _, nil}]}, _context)
       when is_atom(attribute) do
     {:attribute, attribute}
   end
 
-  # erlang module or atom
-  def get_binding_type(atom) when is_atom(atom) do
+  # module or atom
+  def get_binding_type(atom, _context) when is_atom(atom) do
     {:atom, atom}
   end
 
-  # map update
-  def get_binding_type(
-        {:%{}, _meta,
-         [
-           {:|, _meta1,
-            [
-              updated_map,
-              fields
-            ]}
-         ]}
-      )
-      when is_list(fields) do
-    {:map, get_fields_binding_type(fields), get_binding_type(updated_map)}
-  end
-
   # map
-  def get_binding_type({:%{}, _meta, fields}) when is_list(fields) do
-    field_type = get_fields_binding_type(fields)
+  def get_binding_type({:%{}, _meta, [{:|, _, _} | _]}, :match), do: :none
 
-    case field_type |> Keyword.fetch(:__struct__) do
-      {:ok, type} -> {:struct, [], type, nil}
-      _ -> {:map, field_type, nil}
+  def get_binding_type({:%{}, _meta, ast}, context) do
+    {updated_map, fields} =
+      case ast do
+        [{:|, _, [left, right]}] ->
+          {get_binding_type(left, context), right}
+
+        list ->
+          {nil, list}
+      end
+
+    field_types = get_fields_binding_type(fields, context)
+
+    case field_types |> Keyword.fetch(:__struct__) do
+      {:ok, type} ->
+        {:struct, field_types |> Keyword.delete(:__struct__), type |> known_struct_type(),
+         updated_map}
+
+      _ ->
+        {:map, field_types, updated_map}
     end
   end
 
   # match
-  def get_binding_type({:=, _, [_, ast]}) do
-    get_binding_type(ast)
+  def get_binding_type({:=, _, [left, right]}, context) do
+    intersect(get_binding_type(left, :match), get_binding_type(right, context))
   end
 
   # stepped range struct
-  def get_binding_type({:"..//", _, [_, _, _]}) do
-    {:struct, [], {:atom, Range}, nil}
+  def get_binding_type({:"..//", _, [first, last, step]}, context) do
+    {:struct,
+     [
+       first: get_binding_type(first, context),
+       last: get_binding_type(last, context),
+       step: get_binding_type(step, context)
+     ], {:atom, Range}, nil}
   end
 
   # range struct
-  def get_binding_type({:.., _, [_, _]}) do
-    {:struct, [], {:atom, Range}, nil}
+  def get_binding_type({:.., _, [first, last]}, context) do
+    {:struct,
+     [
+       first: get_binding_type(first, context),
+       last: get_binding_type(last, context),
+       step: get_binding_type(1, context)
+     ], {:atom, Range}, nil}
   end
 
   @builtin_sigils %{
@@ -108,8 +131,8 @@ defmodule ElixirSense.Core.TypeInference do
   }
 
   # builtin sigil struct
-  def get_binding_type({sigil, _, _}) when is_map_key(@builtin_sigils, sigil) do
-    # TODO support custom sigils
+  def get_binding_type({sigil, _, _}, _context) when is_map_key(@builtin_sigils, sigil) do
+    # TODO support custom sigils?
     {:struct, [], {:atom, @builtin_sigils |> Map.fetch!(sigil)}, nil}
   end
 
@@ -117,89 +140,72 @@ defmodule ElixirSense.Core.TypeInference do
   # regular tuples use {:{}, [], [field_1, field_2]} ast
   # two element use {field_1, field_2} ast (probably as an optimization)
   # detect and convert to regular
-  def get_binding_type(ast) when is_tuple(ast) and tuple_size(ast) == 2 do
-    get_binding_type({:{}, [], Tuple.to_list(ast)})
+  def get_binding_type(ast, context) when is_tuple(ast) and tuple_size(ast) == 2 do
+    get_binding_type({:{}, [], Tuple.to_list(ast)}, context)
   end
 
-  def get_binding_type({:{}, _, list}) do
-    {:tuple, length(list), list |> Enum.map(&get_binding_type(&1))}
+  def get_binding_type({:{}, _, list}, context) do
+    {:tuple, length(list), list |> Enum.map(&get_binding_type(&1, context))}
   end
 
-  def get_binding_type(list) when is_list(list) do
+  def get_binding_type(list, context) when is_list(list) do
     type =
       case list do
-        [] -> :empty
-        [{:|, _, [head, _tail]}] -> get_binding_type(head)
-        [head | _] -> get_binding_type(head)
+        [] ->
+          :empty
+
+        [{:|, _, [head, _tail]}] ->
+          get_binding_type(head, context)
+
+        [head | _] ->
+          get_binding_type(head, context)
+          # TODO ++
       end
 
     {:list, type}
   end
 
-  def get_binding_type(list) when is_list(list) do
-    {:list, list |> Enum.map(&get_binding_type(&1))}
+  def get_binding_type(list, context) when is_list(list) do
+    {:list, list |> Enum.map(&get_binding_type(&1, context))}
   end
 
-  # pinned variable
-  def get_binding_type({:^, _, [pinned]}), do: get_binding_type(pinned)
-
   # local call
-  def get_binding_type({var, _, args}) when is_atom(var) and is_list(args) do
-    {:local_call, var, Enum.map(args, &get_binding_type(&1))}
+  def get_binding_type({var, _, args}, context) when is_atom(var) and is_list(args) do
+    {:local_call, var, Enum.map(args, &get_binding_type(&1, context))}
   end
 
   # integer
-  def get_binding_type(integer) when is_integer(integer) do
+  def get_binding_type(integer, _context) when is_integer(integer) do
     {:integer, integer}
   end
 
   # other
-  def get_binding_type(_), do: nil
+  def get_binding_type(_, _), do: nil
 
-  defp get_fields_binding_type(fields) do
+  defp get_fields_binding_type(fields, context) do
     for {field, value} <- fields,
         is_atom(field) do
-      {field, get_binding_type(value)}
+      {field, get_binding_type(value, context)}
     end
   end
 
-  def find_vars(ast, match_context) do
-    {_ast, {vars, _match_context}} =
-      Macro.prewalk(ast, {[], match_context}, &match_var(&1, &2))
-
-    vars
+  # expand struct type - only compile type atoms or attributes are supported
+  # variables supported in match context
+  defp known_struct_type(type) do
+    case type do
+      {:atom, atom} -> {:atom, atom}
+      {:attribute, attribute} -> {:attribute, attribute}
+      {:variable, variable} -> {:variable, variable}
+      _ -> nil
+    end
   end
 
-  # TODO not needed
-  # defp match_var(
-  #        {:in, _meta,
-  #         [
-  #           left,
-  #           right
-  #         ]},
-  #        {vars, _match_context}
-  #      ) do
-  #   exception_type =
-  #     case right do
-  #       [elem] ->
-  #         get_binding_type(elem)
+  def find_vars(ast, match_context, context) do
+    {_ast, {vars, _match_context, _context}} =
+      Macro.prewalk(ast, {[], match_context, context}, &match_var(&1, &2))
 
-  #       list when is_list(list) ->
-  #         types = for elem <- list, do: get_binding_type(elem)
-  #         if Enum.all?(types, &match?({:atom, _}, &1)), do: {:atom, Exception}
-
-  #       elem ->
-  #         get_binding_type(elem)
-  #     end
-
-  #   match_context =
-  #     case exception_type do
-  #       {:atom, atom} -> {:struct, [], {:atom, atom}, nil}
-  #       _ -> nil
-  #     end
-
-  #   match_var(left, {vars, match_context})
-  # end
+    Enum.uniq(vars)
+  end
 
   defp match_var(
          {:=, _meta,
@@ -207,149 +213,136 @@ defmodule ElixirSense.Core.TypeInference do
             left,
             right
           ]},
-         {vars, _match_context}
+         {vars, match_context, context}
        ) do
-    {_ast, {vars, _match_context}} =
-      match_var(left, {vars, get_binding_type(right)})
+    {_ast, {vars, _match_context, _context}} =
+      match_var(
+        left,
+        {vars, intersect(match_context, get_binding_type(right, context)), :match}
+      )
 
-    {_ast, {vars, _match_context}} =
-      match_var(right, {vars, get_binding_type(left)})
+    {_ast, {vars, _match_context, _context}} =
+      match_var(
+        right,
+        {vars, intersect(match_context, get_binding_type(left, :match)), context}
+      )
 
-    {[], {vars, nil}}
+    {[], {vars, nil, context}}
   end
 
+  # pinned variable
   defp match_var(
-         {:^, _meta, [{var, meta, context}]} = ast,
-         {vars, match_context}
+         {:^, _meta, [{var, _var_meta, var_context}]},
+         {vars, match_context, context}
        )
-       when is_atom(var) and is_atom(context) and
+       when is_atom(var) and is_atom(var_context) do
+    {nil, {vars, match_context, context}}
+  end
+
+  # variable
+  defp match_var(
+         {var, meta, var_context},
+         {vars, match_context, :match}
+       )
+       when is_atom(var) and is_atom(var_context) and
               var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
     case Keyword.fetch(meta, :version) do
       {:ok, version} ->
-        {nil, {[{{var, version}, match_context} | vars], nil}}
+        {nil, {[{{var, version}, match_context} | vars], nil, :match}}
 
       _ ->
-        {ast, {vars, match_context}}
+        {nil, {vars, match_context, :match}}
     end
   end
 
-  defp match_var(
-         {var, meta, context} = ast,
-         {vars, match_context}
-       )
-       when is_atom(var) and is_atom(context) and
-              var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
-    case Keyword.fetch(meta, :version) do
-      {:ok, version} ->
-        {nil, {[{{var, version}, match_context} | vars], nil}}
+  defp match_var({:%, _, [type_ast, {:%{}, _, _ast} = map_ast]}, {vars, match_context, context}) do
+    {_ast, {type_vars, _match_context, _context}} =
+      match_var(
+        type_ast,
+        {[],
+         if(match_context, do: {:map_key, match_context, get_binding_type(:__struct__, context)}),
+         context}
+      )
 
-      _ ->
-        {ast, {vars, match_context}}
-    end
+    {_ast, {map_vars, _match_context, _context}} =
+      match_var(map_ast, {[], match_context, context})
+
+    {nil, {vars ++ map_vars ++ type_vars, nil, context}}
   end
 
-  # drop right side of guard expression as guards cannot define vars
-  # TODO not needed
-  # defp match_var({:when, _, [left, _right]}, {vars, match_context}) do
-  #   # TODO should we infer from guard here?
-  #   match_var(left, {vars, match_context})
-  # end
+  defp match_var({:%{}, _, ast}, {vars, match_context, context}) do
+    {updated_vars, list} =
+      case ast do
+        [{:|, _, [left, right]} | _] ->
+          if context == :match do
+            # map update is forbidden in match, we're in invalid code
+            {[], []}
+          else
+            {_ast, {updated_vars, _match_context, _context}} = match_var(left, {[], nil, context})
+            {updated_vars, right}
+          end
 
-  defp match_var({:%, _, [type_ast, {:%{}, _, ast}]}, {vars, match_context})
-       when not is_nil(match_context) do
-    # TODO pass mach_context here as map __struct__ key access
-    {_ast, {type_vars, _match_context}} = match_var(type_ast, {[], nil})
+        list ->
+          {[], list}
+      end
 
     destructured_vars =
-      ast
-      |> Enum.flat_map(fn {key, value_ast} ->
-        key_type = get_binding_type(key)
-
-        {_ast, {new_vars, _match_context}} =
-          match_var(value_ast, {[], {:map_key, match_context, key_type}})
-
-        new_vars
-      end)
-
-    {ast, {vars ++ destructured_vars ++ type_vars, nil}}
-  end
-
-  defp match_var({:%{}, _, ast}, {vars, match_context}) when not is_nil(match_context) do
-    destructured_vars =
-      ast
+      list
       |> Enum.flat_map(fn
-        {:|, _, [_left, _right]} ->
-          # map update is forbidden in match, we're in invalid code
-          []
-
         {key, value_ast} ->
-          key_type = get_binding_type(key)
+          key_type = get_binding_type(key, context)
 
-          {_ast, {new_vars, _match_context}} =
-            match_var(value_ast, {[], {:map_key, match_context, key_type}})
+          {_ast, {new_vars, _match_context, _context}} =
+            match_var(
+              value_ast,
+              {[], if(match_context, do: {:map_key, match_context, key_type}), context}
+            )
 
           new_vars
       end)
 
-    {ast, {vars ++ destructured_vars, nil}}
+    {nil, {vars ++ destructured_vars ++ updated_vars, nil, context}}
   end
 
   # regular tuples use {:{}, [], [field_1, field_2]} ast
   # two element use `{field_1, field_2}` ast (probably as an optimization)
   # detect and convert to regular
-  defp match_var(ast, {vars, match_context})
+  defp match_var(ast, {vars, match_context, context})
        when is_tuple(ast) and tuple_size(ast) == 2 do
-    match_var({:{}, [], ast |> Tuple.to_list()}, {vars, match_context})
+    match_var({:{}, [], ast |> Tuple.to_list()}, {vars, match_context, context})
   end
 
-  defp match_var({:{}, _, ast}, {vars, match_context}) when not is_nil(match_context) do
-    indexed = ast |> Enum.with_index()
-    total = length(ast)
-
+  defp match_var({:{}, _, ast}, {vars, match_context, context}) do
     destructured_vars =
-      indexed
+      ast
+      |> Enum.with_index()
       |> Enum.flat_map(fn {nth_elem_ast, n} ->
-        bond =
-          {:tuple, total,
-           indexed |> Enum.map(&if(n != elem(&1, 1), do: get_binding_type(elem(&1, 0))))}
-
-        match_context =
-          if match_context != bond do
-            {:intersection, [match_context, bond]}
-          else
-            match_context
-          end
-
-        {_ast, {new_vars, _match_context}} =
-          match_var(nth_elem_ast, {[], {:tuple_nth, match_context, n}})
+        {_ast, {new_vars, _match_context, _context}} =
+          match_var(
+            nth_elem_ast,
+            {[], if(match_context, do: {:tuple_nth, match_context, n}), context}
+          )
 
         new_vars
       end)
 
-    {ast, {vars ++ destructured_vars, nil}}
+    {nil, {vars ++ destructured_vars, nil, context}}
   end
 
-  # two element tuples on the left of `->` are encoded as list `[field1, field2]`
-  # detect and convert to regular
-  defp match_var({:->, meta, [[left], right]}, {vars, match_context}) do
-    match_var({:->, meta, [left, right]}, {vars, match_context})
-  end
-
-  defp match_var(list, {vars, match_context})
-       when not is_nil(match_context) and is_list(list) do
+  defp match_var(list, {vars, match_context, context}) when is_list(list) do
     match_var_list = fn head, tail ->
-      {_ast, {new_vars_head, _match_context}} =
-        match_var(head, {[], {:list_head, match_context}})
+      {_ast, {new_vars_head, _match_context, _context}} =
+        match_var(head, {[], if(match_context, do: {:list_head, match_context}), context})
 
-      {_ast, {new_vars_tail, _match_context}} =
-        match_var(tail, {[], {:list_tail, match_context}})
+      {_ast, {new_vars_tail, _match_context, _context}} =
+        match_var(tail, {[], if(match_context, do: {:list_tail, match_context}), context})
 
-      {list, {vars ++ new_vars_head ++ new_vars_tail, nil}}
+      {nil, {vars ++ new_vars_head ++ new_vars_tail, nil, context}}
     end
 
     case list do
       [] ->
-        {list, {vars, nil}}
+        {nil, {vars, nil, context}}
 
       [{:|, _, [head, tail]}] ->
         match_var_list.(head, tail)
@@ -359,11 +352,33 @@ defmodule ElixirSense.Core.TypeInference do
     end
   end
 
-  defp match_var(ast, {vars, match_context}) do
-    {ast, {vars, match_context}}
+  defp match_var(ast, {vars, match_context, context}) do
+    {ast, {vars, match_context, context}}
   end
 
-  def find_refinable({:=, _, [left, right]}, acc, e), do: find_refinable(right, [left | acc], e)
-  def find_refinable(other, acc, e) when e.context == :match, do: [other | acc]
+  def intersect(nil, new), do: new
+  def intersect(old, nil), do: old
+  def intersect(:none, _), do: :none
+  def intersect(_, :none), do: :none
+  def intersect(old, old), do: old
+
+  def intersect({:intersection, old}, {:intersection, new}) do
+    {:intersection, Enum.uniq(old ++ new)}
+  end
+
+  def intersect({:intersection, old}, new) do
+    {:intersection, Enum.uniq([new | old])}
+  end
+
+  def intersect(old, {:intersection, new}) do
+    {:intersection, Enum.uniq([old | new])}
+  end
+
+  def intersect(old, new), do: {:intersection, [old, new]}
+
+  def find_refinable({:=, _, [left, right]}, acc, context),
+    do: find_refinable(right, [left | acc], context)
+
+  def find_refinable(other, acc, :match), do: [other | acc]
   def find_refinable(_, acc, _), do: acc
 end
