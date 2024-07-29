@@ -504,7 +504,7 @@ defmodule ElixirSense.Core.Compiler do
 
   # Cursor
 
-  defp do_expand({:__cursor__, meta, []}, s, e) do
+  defp do_expand({:__cursor__, meta, args}, s, e) when is_list(args) do
     s =
       unless s.cursor_env do
         s
@@ -513,7 +513,7 @@ defmodule ElixirSense.Core.Compiler do
         s
       end
 
-    {{:__cursor__, meta, []}, s, e}
+    {{:__cursor__, meta, args}, s, e}
   end
 
   # Super
