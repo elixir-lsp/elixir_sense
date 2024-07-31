@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.TypeInference do
-  def get_binding_type(
+  def type_of(
         {:%, _struct_meta,
          [
            _struct_ast,
@@ -9,7 +9,7 @@ defmodule ElixirSense.Core.TypeInference do
       ),
       do: :none
 
-  def get_binding_type(
+  def type_of(
         {:%, _meta,
          [
            struct_ast,
@@ -18,34 +18,34 @@ defmodule ElixirSense.Core.TypeInference do
         context
       ) do
     {fields, updated_struct} =
-      case get_binding_type(ast, context) do
+      case type_of(ast, context) do
         {:map, fields, updated_map} -> {fields, updated_map}
         {:struct, fields, _, updated_struct} -> {fields, updated_struct}
         _ -> {[], nil}
       end
 
-    type = get_binding_type(struct_ast, context) |> known_struct_type()
+    type = type_of(struct_ast, context) |> known_struct_type()
 
     {:struct, fields, type, updated_struct}
   end
 
   # remote call
-  def get_binding_type({{:., _, [target, fun]}, _, args}, context)
+  def type_of({{:., _, [target, fun]}, _, args}, context)
       when is_atom(fun) and is_list(args) do
-    target = get_binding_type(target, context)
-    {:call, target, fun, Enum.map(args, &get_binding_type(&1, context))}
+    target = type_of(target, context)
+    {:call, target, fun, Enum.map(args, &type_of(&1, context))}
   end
 
   # pinned variable
-  def get_binding_type({:^, _, [pinned]}, :match), do: get_binding_type(pinned, nil)
-  def get_binding_type({:^, _, [_pinned]}, _context), do: :none
+  def type_of({:^, _, [pinned]}, :match), do: type_of(pinned, nil)
+  def type_of({:^, _, [_pinned]}, _context), do: :none
 
   # variable
-  def get_binding_type({:_, _meta, var_context}, context)
+  def type_of({:_, _meta, var_context}, context)
       when is_atom(var_context) and context != :match,
       do: :none
 
-  def get_binding_type({var, meta, var_context}, context)
+  def type_of({var, meta, var_context}, context)
       when is_atom(var) and is_atom(var_context) and
              var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] and
              context != :match do
@@ -61,24 +61,24 @@ defmodule ElixirSense.Core.TypeInference do
 
   # attribute
   # expanded attribute reference has nil arg
-  def get_binding_type({:@, _, [{attribute, _, nil}]}, _context)
+  def type_of({:@, _, [{attribute, _, nil}]}, _context)
       when is_atom(attribute) do
     {:attribute, attribute}
   end
 
   # module or atom
-  def get_binding_type(atom, _context) when is_atom(atom) do
+  def type_of(atom, _context) when is_atom(atom) do
     {:atom, atom}
   end
 
   # map
-  def get_binding_type({:%{}, _meta, [{:|, _, _} | _]}, :match), do: :none
+  def type_of({:%{}, _meta, [{:|, _, _} | _]}, :match), do: :none
 
-  def get_binding_type({:%{}, _meta, ast}, context) do
+  def type_of({:%{}, _meta, ast}, context) do
     {updated_map, fields} =
       case ast do
         [{:|, _, [left, right]}] ->
-          {get_binding_type(left, context), right}
+          {type_of(left, context), right}
 
         list ->
           {nil, list}
@@ -97,27 +97,27 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   # match
-  def get_binding_type({:=, _, [left, right]}, context) do
-    intersect(get_binding_type(left, :match), get_binding_type(right, context))
+  def type_of({:=, _, [left, right]}, context) do
+    intersect(type_of(left, :match), type_of(right, context))
   end
 
   # stepped range struct
-  def get_binding_type({:"..//", _, [first, last, step]}, context) do
+  def type_of({:"..//", _, [first, last, step]}, context) do
     {:struct,
      [
-       first: get_binding_type(first, context),
-       last: get_binding_type(last, context),
-       step: get_binding_type(step, context)
+       first: type_of(first, context),
+       last: type_of(last, context),
+       step: type_of(step, context)
      ], {:atom, Range}, nil}
   end
 
   # range struct
-  def get_binding_type({:.., _, [first, last]}, context) do
+  def type_of({:.., _, [first, last]}, context) do
     {:struct,
      [
-       first: get_binding_type(first, context),
-       last: get_binding_type(last, context),
-       step: get_binding_type(1, context)
+       first: type_of(first, context),
+       last: type_of(last, context),
+       step: type_of(1, context)
      ], {:atom, Range}, nil}
   end
 
@@ -131,7 +131,7 @@ defmodule ElixirSense.Core.TypeInference do
   }
 
   # builtin sigil struct
-  def get_binding_type({sigil, _, _}, _context) when is_map_key(@builtin_sigils, sigil) do
+  def type_of({sigil, _, _}, _context) when is_map_key(@builtin_sigils, sigil) do
     # TODO support custom sigils?
     {:struct, [], {:atom, @builtin_sigils |> Map.fetch!(sigil)}, nil}
   end
@@ -140,52 +140,52 @@ defmodule ElixirSense.Core.TypeInference do
   # regular tuples use {:{}, [], [field_1, field_2]} ast
   # two element use {field_1, field_2} ast (probably as an optimization)
   # detect and convert to regular
-  def get_binding_type(ast, context) when is_tuple(ast) and tuple_size(ast) == 2 do
-    get_binding_type({:{}, [], Tuple.to_list(ast)}, context)
+  def type_of(ast, context) when is_tuple(ast) and tuple_size(ast) == 2 do
+    type_of({:{}, [], Tuple.to_list(ast)}, context)
   end
 
-  def get_binding_type({:{}, _, list}, context) do
-    {:tuple, length(list), list |> Enum.map(&get_binding_type(&1, context))}
+  def type_of({:{}, _, list}, context) do
+    {:tuple, length(list), list |> Enum.map(&type_of(&1, context))}
   end
 
-  def get_binding_type(list, context) when is_list(list) do
+  def type_of(list, context) when is_list(list) do
     type =
       case list do
         [] ->
           :empty
 
         [{:|, _, [head, _tail]}] ->
-          get_binding_type(head, context)
+          type_of(head, context)
 
         [head | _] ->
-          get_binding_type(head, context)
+          type_of(head, context)
           # TODO ++
       end
 
     {:list, type}
   end
 
-  def get_binding_type(list, context) when is_list(list) do
-    {:list, list |> Enum.map(&get_binding_type(&1, context))}
+  def type_of(list, context) when is_list(list) do
+    {:list, list |> Enum.map(&type_of(&1, context))}
   end
 
   # local call
-  def get_binding_type({var, _, args}, context) when is_atom(var) and is_list(args) do
-    {:local_call, var, Enum.map(args, &get_binding_type(&1, context))}
+  def type_of({var, _, args}, context) when is_atom(var) and is_list(args) do
+    {:local_call, var, Enum.map(args, &type_of(&1, context))}
   end
 
   # integer
-  def get_binding_type(integer, _context) when is_integer(integer) do
+  def type_of(integer, _context) when is_integer(integer) do
     {:integer, integer}
   end
 
   # other
-  def get_binding_type(_, _), do: nil
+  def type_of(_, _), do: nil
 
   defp get_fields_binding_type(fields, context) do
     for {field, value} <- fields,
         is_atom(field) do
-      {field, get_binding_type(value, context)}
+      {field, type_of(value, context)}
     end
   end
 
@@ -218,13 +218,13 @@ defmodule ElixirSense.Core.TypeInference do
     {_ast, {vars, _match_context, _context}} =
       match_var(
         left,
-        {vars, intersect(match_context, get_binding_type(right, context)), :match}
+        {vars, intersect(match_context, type_of(right, context)), :match}
       )
 
     {_ast, {vars, _match_context, _context}} =
       match_var(
         right,
-        {vars, intersect(match_context, get_binding_type(left, :match)), context}
+        {vars, intersect(match_context, type_of(left, :match)), context}
       )
 
     {nil, {vars, nil, context}}
@@ -262,7 +262,7 @@ defmodule ElixirSense.Core.TypeInference do
         {[],
          propagate_context(
            match_context,
-           &{:map_key, &1, get_binding_type(:__struct__, context)}
+           &{:map_key, &1, type_of(:__struct__, context)}
          ), context}
       )
 
@@ -292,7 +292,7 @@ defmodule ElixirSense.Core.TypeInference do
       list
       |> Enum.flat_map(fn
         {key, value_ast} ->
-          key_type = get_binding_type(key, context)
+          key_type = type_of(key, context)
 
           {_ast, {new_vars, _match_context, _context}} =
             match_var(

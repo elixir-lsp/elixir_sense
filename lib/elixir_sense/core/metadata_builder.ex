@@ -186,7 +186,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   #   column = Keyword.fetch!(meta, :column)
 
   #   state
-  #   |> push_binding_context(get_binding_type(condition_ast))
+  #   |> push_binding_context(type_of(condition_ast))
   #   |> add_call_to_line({nil, :case, 2}, {line, column})
   #   # |> add_current_env_to_line(line)
   #   # |> result(ast)
@@ -222,7 +222,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # defp post({atom, meta, [lhs, rhs]} = _ast, state)
   #      when atom in [:=, :<-] do
   #   _line = Keyword.fetch!(meta, :line)
-  #   match_context_r = get_binding_type(rhs)
+  #   match_context_r = type_of(rhs)
 
   #   match_context_r =
   #     if atom == :<- and match?([:for | _], state.binding_context) do
@@ -236,7 +236,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   #   _vars =
   #     case rhs do
   #       {:=, _, [nested_lhs, _nested_rhs]} ->
-  #         match_context_l = get_binding_type(lhs)
+  #         match_context_l = type_of(lhs)
   #         nested_vars = find_vars(nested_lhs, match_context_l)
 
   #         vars_l ++ nested_vars

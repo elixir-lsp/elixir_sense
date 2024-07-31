@@ -1129,6 +1129,19 @@ defmodule ElixirSense.Core.Compiler do
         {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
 
       :error ->
+        # elixir throws here
+        # expand expression in case there's cursor
+
+        state =
+          state
+          |> with_typespec({:__unknown__, 0})
+
+        {expr, state, _tenv} = expand(expr, state, env)
+
+        state =
+          state
+          |> with_typespec(nil)
+
         {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
     end
   end
@@ -1217,7 +1230,7 @@ defmodule ElixirSense.Core.Compiler do
     inferred_type =
       case e_args do
         nil -> nil
-        [arg] -> TypeInference.get_binding_type(arg, env.context)
+        [arg] -> TypeInference.type_of(arg, env.context)
       end
 
     state =
@@ -2207,7 +2220,7 @@ defmodule ElixirSense.Core.Compiler do
     sm = __MODULE__.Env.reset_read(sr, s)
     {[e_left], sl, el} = __MODULE__.Clauses.head([left], sm, er)
 
-    match_context_r = TypeInference.get_binding_type(e_right, e.context)
+    match_context_r = TypeInference.type_of(e_right, e.context)
 
     vars_l_with_inferred_types =
       TypeInference.find_vars(e_left, {:for_expression, match_context_r}, :match)
@@ -2649,7 +2662,7 @@ defmodule ElixirSense.Core.Compiler do
     def case(meta, e_expr, opts, s, e) do
       opts = sanitize_opts(opts, [:do])
 
-      match_context = TypeInference.get_binding_type(e_expr, e.context)
+      match_context = TypeInference.type_of(e_expr, e.context)
 
       {case_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
@@ -2786,7 +2799,7 @@ defmodule ElixirSense.Core.Compiler do
       sm = ElixirEnv.reset_read(sr, s)
       {[e_left], sl, el} = head([left], sm, er)
 
-      match_context_r = TypeInference.get_binding_type(e_right, e.context)
+      match_context_r = TypeInference.type_of(e_right, e.context)
       vars_l_with_inferred_types = TypeInference.find_vars(e_left, match_context_r, :match)
 
       sl = State.merge_inferred_types(sl, vars_l_with_inferred_types)
@@ -4809,6 +4822,17 @@ defmodule ElixirSense.Core.Compiler do
           ast,
           {state, env},
           fn
+            {:__cursor__, meta, args} = node, {state, env} when is_list(args) ->
+              state =
+                unless state.cursor_env do
+                  state
+                  |> add_cursor_env(meta, env)
+                else
+                  state
+                end
+
+              {node, {state, env}}
+
             {:__aliases__, _meta, list} = node, {state, env} when is_list(list) ->
               {node, state, env} = ElixirExpand.expand(node, state, env)
               {node, {state, env}}

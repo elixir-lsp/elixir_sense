@@ -273,7 +273,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
   end
 
-  describe "get_binding_type" do
+  describe "type_of" do
     defp binding_type_in(code, context \\ nil) do
       # NOTE binding_type_in works on expanded AST so it expects aliases expanded to atoms
       ast =
@@ -289,7 +289,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
             node
         end)
 
-      TypeInference.get_binding_type(ast, context)
+      TypeInference.type_of(ast, context)
     end
 
     test "atom" do
