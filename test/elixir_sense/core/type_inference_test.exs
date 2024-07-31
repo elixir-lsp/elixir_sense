@@ -113,6 +113,45 @@ defmodule ElixirSense.Core.TypeInferenceTest do
                {{:a, 1}, {:list_head, {:integer, 1}}},
                {{:b, 1}, {:list_tail, {:integer, 1}}}
              ]
+
+      assert find_typed_vars_in("[1, a | b]", {:integer, 1}, :match) == [
+               {{:a, 1}, {:list_head, {:list_tail, {:integer, 1}}}},
+               {{:b, 1}, {:list_tail, {:list_tail, {:integer, 1}}}}
+             ]
+
+      assert find_typed_vars_in("[a | 1]", {:integer, 1}, :match) == [
+               {{:a, 1}, {:list_head, {:integer, 1}}}
+             ]
+    end
+
+    test "finds variables in list operator" do
+      assert find_typed_vars_in(":erlang.++([a], [5])", {:integer, 1}, :match) == [
+               {{:a, 1}, {:list_head, {:integer, 1}}}
+             ]
+
+      assert find_typed_vars_in(":erlang.++([a], 5)", {:integer, 1}, :match) == [
+               {{:a, 1}, {:list_head, {:integer, 1}}}
+             ]
+
+      assert find_typed_vars_in(":erlang.++([2, a], [5])", {:integer, 1}, :match) == [
+               {{:a, 1}, {:list_head, {:list_tail, {:integer, 1}}}}
+             ]
+
+      assert find_typed_vars_in(":erlang.++([5], [a])", {:integer, 1}, :match) == [
+               {{:a, 1}, {:list_head, {:list_tail, {:integer, 1}}}}
+             ]
+
+      assert find_typed_vars_in(":erlang.++([5], [2, a])", {:integer, 1}, :match) == [
+               {{:a, 1}, {:list_head, {:list_tail, {:list_tail, {:integer, 1}}}}}
+             ]
+
+      assert find_typed_vars_in(":erlang.++([5], a)", {:integer, 1}, :match) == [
+               {{:a, 1}, {:list_tail, {:integer, 1}}}
+             ]
+
+      assert find_typed_vars_in(":erlang.++([5, 6], a)", {:integer, 1}, :match) == [
+               {{:a, 1}, {:list_tail, {:list_tail, {:integer, 1}}}}
+             ]
     end
 
     test "finds variables in map" do
@@ -323,12 +362,24 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     test "list" do
       assert type_of("[]") == {:list, :empty}
       assert type_of("[a]") == {:list, {:variable, :a}}
+      assert type_of("[a | 1]") == {:list, {:variable, :a}}
       assert type_of("[a]", :match) == {:list, nil}
+      assert type_of("[a | 1]", :match) == {:list, nil}
       assert type_of("[^a]", :match) == {:list, {:variable, :a}}
       assert type_of("[[1]]") == {:list, {:list, {:integer, 1}}}
       # TODO union a | b?
       assert type_of("[a, b]") == {:list, {:variable, :a}}
       assert type_of("[a | b]") == {:list, {:variable, :a}}
+      assert type_of("[a, b | c]") == {:list, {:variable, :a}}
+    end
+
+    test "list operators" do
+      # TODO check in guard
+      assert type_of(":erlang.++([a], [b])") ==
+               {:call, {:atom, :erlang}, :++, [list: {:variable, :a}, list: {:variable, :b}]}
+
+      assert type_of(":erlang.--([a], [b])") ==
+               {:call, {:atom, :erlang}, :--, [list: {:variable, :a}, list: {:variable, :b}]}
     end
 
     test "tuple" do

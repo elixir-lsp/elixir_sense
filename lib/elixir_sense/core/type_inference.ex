@@ -331,6 +331,12 @@ defmodule ElixirSense.Core.TypeInference do
     {nil, {vars ++ destructured_vars, nil, context}}
   end
 
+  defp match_var({{:., _, [:erlang, :++]}, _, [left, right]}, {vars, match_context, context})
+       when is_list(left) do
+    # NOTE this may produce improper lists
+    match_var(left ++ right, {vars, match_context, context})
+  end
+
   defp match_var(list, {vars, match_context, context}) when is_list(list) do
     match_var_list = fn head, tail ->
       {_ast, {new_vars_head, _match_context, _context}} =
