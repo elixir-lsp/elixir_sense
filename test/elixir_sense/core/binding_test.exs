@@ -1978,6 +1978,11 @@ defmodule ElixirSense.Core.BindingTest do
     test "equal" do
       assert {:atom, A} == Binding.expand(@env, {:intersection, [{:atom, A}, {:atom, A}]})
       assert :none == Binding.expand(@env, {:intersection, [{:atom, A}, {:atom, B}]})
+
+      assert {:atom, A} == Binding.expand(@env, {:union, [{:atom, A}, {:atom, A}]})
+
+      assert {:union, [{:atom, A}, {:atom, B}]} ==
+               Binding.expand(@env, {:union, [{:atom, A}, {:atom, B}]})
     end
 
     test "tuple" do
@@ -1998,6 +2003,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:map, [], nil} ==
                Binding.expand(@env, {:intersection, [{:map, [], nil}, {:map, [], nil}]})
 
+      # NOTE intersection is not strict and does an union on map keys
       assert {:map, [{:a, nil}, {:b, {:tuple, 2, [atom: Z, atom: X]}}, {:c, {:atom, C}}], nil} ==
                Binding.expand(
                  @env,

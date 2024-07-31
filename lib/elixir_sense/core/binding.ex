@@ -340,6 +340,7 @@ defmodule ElixirSense.Core.Binding do
   def do_expand(_env, {:integer, integer}, _stack), do: {:integer, integer}
 
   def do_expand(_env, {:union, all}, _stack) do
+    # TODO implement union for maps and lists?
     all = Enum.filter(all, &(&1 != :none))
 
     cond do
@@ -1331,6 +1332,8 @@ defmodule ElixirSense.Core.Binding do
   defp combine_intersection(nil, type), do: type
   defp combine_intersection(type, nil), do: type
   defp combine_intersection(type, type), do: type
+
+  # NOTE intersection is not strict and does an union on map keys
 
   defp combine_intersection({:struct, fields_1, nil, nil}, {:struct, fields_2, nil, nil}) do
     keys = (safe_keys(fields_1) ++ safe_keys(fields_2)) |> Enum.uniq()

@@ -173,7 +173,11 @@ defmodule ElixirSense.Core.TypeInferenceTest do
              ]
 
       assert find_typed_vars_in("[a] = b", nil) == [{{:a, 1}, {:list_head, {:variable, :b}}}]
-      assert find_typed_vars_in("[a] = b", nil, :match) == [{{:b, 1}, {:list, nil}}, {{:a, 1}, nil}]
+
+      assert find_typed_vars_in("[a] = b", nil, :match) == [
+               {{:b, 1}, {:list, nil}},
+               {{:a, 1}, nil}
+             ]
 
       assert find_typed_vars_in("[a] = b", {:variable, :x}, :match) == [
                {{:b, 1}, {:intersection, [variable: :x, list: nil]}},
@@ -235,7 +239,6 @@ defmodule ElixirSense.Core.TypeInferenceTest do
                  {:atom, :bar}}}
              ]
 
-      # TODO check how Binding module handles this case
       assert find_typed_vars_in("%{foo: a} = %{bar: b} = c", nil, :match) == [
                {
                  {:c, 1},
@@ -323,7 +326,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       assert binding_type_in("[a]", :match) == {:list, nil}
       assert binding_type_in("[^a]", :match) == {:list, {:variable, :a}}
       assert binding_type_in("[[1]]") == {:list, {:list, {:integer, 1}}}
-      # TODO intersection a | b?
+      # TODO union a | b?
       assert binding_type_in("[a, b]") == {:list, {:variable, :a}}
       assert binding_type_in("[a | b]") == {:list, {:variable, :a}}
     end
