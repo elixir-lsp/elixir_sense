@@ -84,7 +84,7 @@ defmodule ElixirSense.Core.TypeInference do
           {nil, list}
       end
 
-    field_types = get_fields_binding_type(fields, context)
+    field_types = get_fields_type(fields, context)
 
     case field_types |> Keyword.fetch(:__struct__) do
       {:ok, type} ->
@@ -182,7 +182,7 @@ defmodule ElixirSense.Core.TypeInference do
   # other
   def type_of(_, _), do: nil
 
-  defp get_fields_binding_type(fields, context) do
+  defp get_fields_type(fields, context) do
     for {field, value} <- fields,
         is_atom(field) do
       {field, type_of(value, context)}
