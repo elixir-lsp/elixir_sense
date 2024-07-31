@@ -165,7 +165,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   # end
 
   # defp pre({:when, _meta, [lhs, _rhs]}, state) do
-  #   _vars = find_vars(lhs, nil)
+  #   _vars = find_typed_vars(lhs, nil)
 
   #   state
   #   # |> add_vars(vars, true)
@@ -231,13 +231,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
   #       match_context_r
   #     end
 
-  #   vars_l = find_vars(lhs, match_context_r)
+  #   vars_l = find_typed_vars(lhs, match_context_r)
 
   #   _vars =
   #     case rhs do
   #       {:=, _, [nested_lhs, _nested_rhs]} ->
   #         match_context_l = type_of(lhs)
-  #         nested_vars = find_vars(nested_lhs, match_context_l)
+  #         nested_vars = find_typed_vars(nested_lhs, match_context_l)
 
   #         vars_l ++ nested_vars
 
@@ -267,15 +267,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
   #   {ast, state}
   # end
 
-  # # defp find_vars(state, ast, match_context \\ nil)
+  # # defp find_typed_vars(state, ast, match_context \\ nil)
 
-  # # defp find_vars(_state, {var, _meta, nil}, _)
+  # # defp find_typed_vars(_state, {var, _meta, nil}, _)
   # #      when var in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__] do
   # #   # TODO local calls?
   # #   []
   # # end
 
-  # # defp find_vars(_state, {var, meta, nil}, :rescue) when is_atom(var) do
+  # # defp find_typed_vars(_state, {var, meta, nil}, :rescue) when is_atom(var) do
   # #   line = Keyword.fetch!(meta, :line)
   # #   column = Keyword.fetch!(meta, :column)
   # #   match_context = {:struct, [], {:atom, Exception}, nil}

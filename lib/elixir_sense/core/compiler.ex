@@ -33,7 +33,7 @@ defmodule ElixirSense.Core.Compiler do
 
     e_expr = {:=, meta, [e_left, e_right]}
 
-    vars_with_inferred_types = TypeInference.find_vars(e_expr, nil, el.context)
+    vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, el.context)
 
     sl = merge_inferred_types(sl, vars_with_inferred_types)
 
@@ -2223,7 +2223,7 @@ defmodule ElixirSense.Core.Compiler do
     match_context_r = TypeInference.type_of(e_right, e.context)
 
     vars_l_with_inferred_types =
-      TypeInference.find_vars(e_left, {:for_expression, match_context_r}, :match)
+      TypeInference.find_typed_vars(e_left, {:for_expression, match_context_r}, :match)
 
     sl = State.merge_inferred_types(sl, vars_l_with_inferred_types)
 
@@ -2680,7 +2680,7 @@ defmodule ElixirSense.Core.Compiler do
           case head(c, s, e) do
             {[h | _] = c, s, e} ->
               clause_vars_with_inferred_types =
-                TypeInference.find_vars(h, match_context, :match)
+                TypeInference.find_typed_vars(h, match_context, :match)
 
               s = State.merge_inferred_types(s, clause_vars_with_inferred_types)
 
@@ -2800,7 +2800,7 @@ defmodule ElixirSense.Core.Compiler do
       {[e_left], sl, el} = head([left], sm, er)
 
       match_context_r = TypeInference.type_of(e_right, e.context)
-      vars_l_with_inferred_types = TypeInference.find_vars(e_left, match_context_r, :match)
+      vars_l_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context_r, :match)
 
       sl = State.merge_inferred_types(sl, vars_l_with_inferred_types)
 
@@ -2933,7 +2933,7 @@ defmodule ElixirSense.Core.Compiler do
 
       match_context = {:struct, [], {:atom, Exception}, nil}
 
-      vars_with_inferred_types = TypeInference.find_vars(e_left, match_context, :match)
+      vars_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context, :match)
       sl = State.merge_inferred_types(sl, vars_with_inferred_types)
 
       {e_left, sl, el}
@@ -2955,7 +2955,7 @@ defmodule ElixirSense.Core.Compiler do
 
       match_context = {:struct, [], {:atom, Exception}, nil}
 
-      vars_with_inferred_types = TypeInference.find_vars(e_left, match_context, :match)
+      vars_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context, :match)
       sl = State.merge_inferred_types(sl, vars_with_inferred_types)
 
       {e_left, sl, el}
@@ -2983,7 +2983,7 @@ defmodule ElixirSense.Core.Compiler do
               match_context
             end
 
-          vars_with_inferred_types = TypeInference.find_vars(e_left, match_context, :match)
+          vars_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context, :match)
           sr = State.merge_inferred_types(sr, vars_with_inferred_types)
 
           {{:in, meta, [e_left, normalized]}, sr, er}

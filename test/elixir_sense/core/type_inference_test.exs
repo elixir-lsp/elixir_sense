@@ -2,8 +2,8 @@ defmodule ElixirSense.Core.TypeInferenceTest do
   use ExUnit.Case, async: true
   alias ElixirSense.Core.TypeInference
 
-  describe "find_vars" do
-    defp find_vars_in(code, match_context \\ nil, context \\ nil) do
+  describe "find_typed_vars" do
+    defp find_typed_vars_in(code, match_context \\ nil, context \\ nil) do
       ast =
         Code.string_to_quoted!(code)
         |> Macro.prewalk(fn
@@ -17,60 +17,60 @@ defmodule ElixirSense.Core.TypeInferenceTest do
             node
         end)
 
-      TypeInference.find_vars(ast, match_context, context)
+      TypeInference.find_typed_vars(ast, match_context, context)
     end
 
     test "finds simple variable" do
-      assert find_vars_in("a", nil, :match) == [{{:a, 1}, nil}]
-      assert find_vars_in("a", nil) == []
+      assert find_typed_vars_in("a", nil, :match) == [{{:a, 1}, nil}]
+      assert find_typed_vars_in("a", nil) == []
     end
 
     test "finds simple variable with match context" do
-      assert find_vars_in("a", {:integer, 1}, :match) == [{{:a, 1}, {:integer, 1}}]
-      assert find_vars_in("a", {:integer, 1}) == []
+      assert find_typed_vars_in("a", {:integer, 1}, :match) == [{{:a, 1}, {:integer, 1}}]
+      assert find_typed_vars_in("a", {:integer, 1}) == []
     end
 
     test "does not find special variables" do
-      assert find_vars_in("__MODULE__") == []
-      assert find_vars_in("__MODULE__", nil, :match) == []
+      assert find_typed_vars_in("__MODULE__") == []
+      assert find_typed_vars_in("__MODULE__", nil, :match) == []
     end
 
     test "does not find _" do
-      assert find_vars_in("_") == []
-      assert find_vars_in("_", nil, :match) == []
+      assert find_typed_vars_in("_") == []
+      assert find_typed_vars_in("_", nil, :match) == []
     end
 
     test "does not find other primitives" do
-      assert find_vars_in("1") == []
-      assert find_vars_in("1.3") == []
-      assert find_vars_in("\"as\"") == []
+      assert find_typed_vars_in("1") == []
+      assert find_typed_vars_in("1.3") == []
+      assert find_typed_vars_in("\"as\"") == []
     end
 
     test "does not find pinned variables" do
-      assert find_vars_in("^a") == []
-      assert find_vars_in("^a", nil, :match) == []
+      assert find_typed_vars_in("^a") == []
+      assert find_typed_vars_in("^a", nil, :match) == []
     end
 
     test "finds variables in tuple" do
-      assert find_vars_in("{}", nil, :match) == []
-      assert find_vars_in("{a}", nil, :match) == [{{:a, 1}, nil}]
-      assert find_vars_in("{a}", :none, :match) == [{{:a, 1}, :none}]
-      assert find_vars_in("{a}") == []
+      assert find_typed_vars_in("{}", nil, :match) == []
+      assert find_typed_vars_in("{a}", nil, :match) == [{{:a, 1}, nil}]
+      assert find_typed_vars_in("{a}", :none, :match) == [{{:a, 1}, :none}]
+      assert find_typed_vars_in("{a}") == []
 
-      assert find_vars_in("{a, b}", nil, :match) == [
+      assert find_typed_vars_in("{a, b}", nil, :match) == [
                {{:a, 1}, nil},
                {{:b, 1}, nil}
              ]
 
-      assert find_vars_in("{a, b}") == []
+      assert find_typed_vars_in("{a, b}") == []
     end
 
     test "finds variables in tuple with match context" do
-      assert find_vars_in("{a}", {:integer, 1}, :match) == [
+      assert find_typed_vars_in("{a}", {:integer, 1}, :match) == [
                {{:a, 1}, {:tuple_nth, {:integer, 1}, 0}}
              ]
 
-      assert find_vars_in("{a, b}", {:integer, 1}, :match) == [
+      assert find_typed_vars_in("{a, b}", {:integer, 1}, :match) == [
                {
                  {:a, 1},
                  {:tuple_nth, {:integer, 1}, 0}
@@ -83,145 +83,145 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "finds variables in list" do
-      assert find_vars_in("[]", nil, :match) == []
-      assert find_vars_in("[a]", nil, :match) == [{{:a, 1}, nil}]
-      assert find_vars_in("[a]", :none, :match) == [{{:a, 1}, :none}]
-      assert find_vars_in("[a]", nil) == []
+      assert find_typed_vars_in("[]", nil, :match) == []
+      assert find_typed_vars_in("[a]", nil, :match) == [{{:a, 1}, nil}]
+      assert find_typed_vars_in("[a]", :none, :match) == [{{:a, 1}, :none}]
+      assert find_typed_vars_in("[a]", nil) == []
 
-      assert find_vars_in("[a, b]", nil, :match) == [
+      assert find_typed_vars_in("[a, b]", nil, :match) == [
                {{:a, 1}, nil},
                {{:b, 1}, nil}
              ]
 
-      assert find_vars_in("[a | b]", nil, :match) == [
+      assert find_typed_vars_in("[a | b]", nil, :match) == [
                {{:a, 1}, nil},
                {{:b, 1}, nil}
              ]
     end
 
     test "finds variables in list with match context" do
-      assert find_vars_in("[a]", {:integer, 1}, :match) == [
+      assert find_typed_vars_in("[a]", {:integer, 1}, :match) == [
                {{:a, 1}, {:list_head, {:integer, 1}}}
              ]
 
-      assert find_vars_in("[a, b]", {:integer, 1}, :match) == [
+      assert find_typed_vars_in("[a, b]", {:integer, 1}, :match) == [
                {{:a, 1}, {:list_head, {:integer, 1}}},
                {{:b, 1}, {:list_head, {:list_tail, {:integer, 1}}}}
              ]
 
-      assert find_vars_in("[a | b]", {:integer, 1}, :match) == [
+      assert find_typed_vars_in("[a | b]", {:integer, 1}, :match) == [
                {{:a, 1}, {:list_head, {:integer, 1}}},
                {{:b, 1}, {:list_tail, {:integer, 1}}}
              ]
     end
 
     test "finds variables in map" do
-      assert find_vars_in("%{}", nil, :match) == []
-      assert find_vars_in("%{a: a}", nil, :match) == [{{:a, 1}, nil}]
-      assert find_vars_in("%{a: a}", :none, :match) == [{{:a, 1}, :none}]
-      assert find_vars_in("%{a: a}", nil) == []
-      assert find_vars_in("%{\"a\" => a}", nil, :match) == [{{:a, 1}, nil}]
+      assert find_typed_vars_in("%{}", nil, :match) == []
+      assert find_typed_vars_in("%{a: a}", nil, :match) == [{{:a, 1}, nil}]
+      assert find_typed_vars_in("%{a: a}", :none, :match) == [{{:a, 1}, :none}]
+      assert find_typed_vars_in("%{a: a}", nil) == []
+      assert find_typed_vars_in("%{\"a\" => a}", nil, :match) == [{{:a, 1}, nil}]
       # NOTE variable keys are forbidden in match
-      assert find_vars_in("%{a => 1}", nil, :match) == []
-      assert find_vars_in("%{a => 1}", nil) == []
+      assert find_typed_vars_in("%{a => 1}", nil, :match) == []
+      assert find_typed_vars_in("%{a => 1}", nil) == []
       # NOTE map update is forbidden in match
-      assert find_vars_in("%{a | b: b}", nil, :match) == []
-      assert find_vars_in("%{a | b: b}", nil) == []
+      assert find_typed_vars_in("%{a | b: b}", nil, :match) == []
+      assert find_typed_vars_in("%{a | b: b}", nil) == []
     end
 
     test "finds variables in map with match context" do
-      assert find_vars_in("%{a: a}", {:integer, 1}, :match) == [
+      assert find_typed_vars_in("%{a: a}", {:integer, 1}, :match) == [
                {{:a, 1}, {:map_key, {:integer, 1}, {:atom, :a}}}
              ]
     end
 
     test "finds variables in struct" do
-      assert find_vars_in("%Foo{}", nil, :match) == []
-      assert find_vars_in("%Foo{a: a}", nil, :match) == [{{:a, 1}, nil}]
-      assert find_vars_in("%Foo{a: a}", :none, :match) == [{{:a, 1}, :none}]
-      assert find_vars_in("%Foo{a: a}", nil) == []
-      assert find_vars_in("%bar{a: a}", nil) == []
-      assert find_vars_in("%bar{a: a}", nil, :match) == [{{:a, 1}, nil}, {{:bar, 1}, nil}]
-      assert find_vars_in("%_{a: a}", nil, :match) == [{{:a, 1}, nil}]
-      assert find_vars_in("%Foo{a | b: b}", nil) == []
-      assert find_vars_in("%Foo{a | b: b}", nil, :match) == []
+      assert find_typed_vars_in("%Foo{}", nil, :match) == []
+      assert find_typed_vars_in("%Foo{a: a}", nil, :match) == [{{:a, 1}, nil}]
+      assert find_typed_vars_in("%Foo{a: a}", :none, :match) == [{{:a, 1}, :none}]
+      assert find_typed_vars_in("%Foo{a: a}", nil) == []
+      assert find_typed_vars_in("%bar{a: a}", nil) == []
+      assert find_typed_vars_in("%bar{a: a}", nil, :match) == [{{:a, 1}, nil}, {{:bar, 1}, nil}]
+      assert find_typed_vars_in("%_{a: a}", nil, :match) == [{{:a, 1}, nil}]
+      assert find_typed_vars_in("%Foo{a | b: b}", nil) == []
+      assert find_typed_vars_in("%Foo{a | b: b}", nil, :match) == []
     end
 
     test "finds variables in struct with match context" do
-      assert find_vars_in("%Foo{a: a}", {:integer, 1}, :match) == [
+      assert find_typed_vars_in("%Foo{a: a}", {:integer, 1}, :match) == [
                {{:a, 1}, {:map_key, {:integer, 1}, {:atom, :a}}}
              ]
 
-      assert find_vars_in("%bar{a: a}", {:integer, 1}, :match) == [
+      assert find_typed_vars_in("%bar{a: a}", {:integer, 1}, :match) == [
                {{:a, 1}, {:map_key, {:integer, 1}, {:atom, :a}}},
                {{:bar, 1}, {:map_key, {:integer, 1}, {:atom, :__struct__}}}
              ]
     end
 
     test "finds variables in match" do
-      assert find_vars_in("a = b", nil, :match) == [{{:b, 1}, nil}, {{:a, 1}, nil}]
-      assert find_vars_in("a = b", nil) == [{{:a, 1}, {:variable, :b}}]
-      assert find_vars_in("^a = b", nil) == []
+      assert find_typed_vars_in("a = b", nil, :match) == [{{:b, 1}, nil}, {{:a, 1}, nil}]
+      assert find_typed_vars_in("a = b", nil) == [{{:a, 1}, {:variable, :b}}]
+      assert find_typed_vars_in("^a = b", nil) == []
 
-      assert find_vars_in("a = a", nil, :match) == [{{:a, 1}, nil}]
-      assert find_vars_in("a = a", nil) == [{{:a, 1}, {:variable, :a}}]
+      assert find_typed_vars_in("a = a", nil, :match) == [{{:a, 1}, nil}]
+      assert find_typed_vars_in("a = a", nil) == [{{:a, 1}, {:variable, :a}}]
 
-      assert find_vars_in("a = b = c", nil, :match) == [
+      assert find_typed_vars_in("a = b = c", nil, :match) == [
                {{:c, 1}, nil},
                {{:b, 1}, nil},
                {{:a, 1}, nil}
              ]
 
-      assert find_vars_in("[a] = b", nil) == [{{:a, 1}, {:list_head, {:variable, :b}}}]
-      assert find_vars_in("[a] = b", nil, :match) == [{{:b, 1}, {:list, nil}}, {{:a, 1}, nil}]
+      assert find_typed_vars_in("[a] = b", nil) == [{{:a, 1}, {:list_head, {:variable, :b}}}]
+      assert find_typed_vars_in("[a] = b", nil, :match) == [{{:b, 1}, {:list, nil}}, {{:a, 1}, nil}]
 
-      assert find_vars_in("[a] = b", {:variable, :x}, :match) == [
+      assert find_typed_vars_in("[a] = b", {:variable, :x}, :match) == [
                {{:b, 1}, {:intersection, [variable: :x, list: nil]}},
                {{:a, 1}, {:list_head, {:variable, :x}}}
              ]
 
-      assert find_vars_in("{a} = b", nil) == [{{:a, 1}, {:tuple_nth, {:variable, :b}, 0}}]
+      assert find_typed_vars_in("{a} = b", nil) == [{{:a, 1}, {:tuple_nth, {:variable, :b}, 0}}]
 
-      assert find_vars_in("{a} = b", nil, :match) == [
+      assert find_typed_vars_in("{a} = b", nil, :match) == [
                {{:b, 1}, {:tuple, 1, [nil]}},
                {{:a, 1}, nil}
              ]
 
-      assert find_vars_in("{a} = b", {:variable, :x}, :match) == [
+      assert find_typed_vars_in("{a} = b", {:variable, :x}, :match) == [
                {{:b, 1}, {:intersection, [{:variable, :x}, {:tuple, 1, [nil]}]}},
                {{:a, 1}, {:tuple_nth, {:variable, :x}, 0}}
              ]
 
-      assert find_vars_in("%{foo: a} = b", nil) == [
+      assert find_typed_vars_in("%{foo: a} = b", nil) == [
                {{:a, 1}, {:map_key, {:variable, :b}, {:atom, :foo}}}
              ]
 
-      assert find_vars_in("%{foo: a} = b", nil, :match) == [
+      assert find_typed_vars_in("%{foo: a} = b", nil, :match) == [
                {{:b, 1}, {:map, [foo: nil], nil}},
                {{:a, 1}, nil}
              ]
 
-      assert find_vars_in("%{foo: a} = b", {:variable, :x}, :match) == [
+      assert find_typed_vars_in("%{foo: a} = b", {:variable, :x}, :match) == [
                {{:b, 1}, {:intersection, [{:variable, :x}, {:map, [foo: nil], nil}]}},
                {{:a, 1}, {:map_key, {:variable, :x}, {:atom, :foo}}}
              ]
 
-      assert find_vars_in("%Foo{foo: a} = b", nil) == [
+      assert find_typed_vars_in("%Foo{foo: a} = b", nil) == [
                {{:a, 1}, {:map_key, {:variable, :b}, {:atom, :foo}}}
              ]
 
-      assert find_vars_in("%Foo{foo: a} = b", nil, :match) == [
+      assert find_typed_vars_in("%Foo{foo: a} = b", nil, :match) == [
                {{:b, 1}, {:struct, [foo: nil], {:atom, Foo}, nil}},
                {{:a, 1}, nil}
              ]
 
-      assert find_vars_in("%Foo{foo: a} = b", {:variable, :x}, :match) == [
+      assert find_typed_vars_in("%Foo{foo: a} = b", {:variable, :x}, :match) == [
                {{:b, 1},
                 {:intersection, [{:variable, :x}, {:struct, [foo: nil], {:atom, Foo}, nil}]}},
                {{:a, 1}, {:map_key, {:variable, :x}, {:atom, :foo}}}
              ]
 
-      assert find_vars_in("%{foo: a} = %{bar: b} = c", nil) == [
+      assert find_typed_vars_in("%{foo: a} = %{bar: b} = c", nil) == [
                {
                  {:a, 1},
                  {
@@ -236,7 +236,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
              ]
 
       # TODO check how Binding module handles this case
-      assert find_vars_in("%{foo: a} = %{bar: b} = c", nil, :match) == [
+      assert find_typed_vars_in("%{foo: a} = %{bar: b} = c", nil, :match) == [
                {
                  {:c, 1},
                  {:intersection, [{:map, [foo: nil], nil}, {:map, [bar: nil], nil}]}
@@ -245,7 +245,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
                {{:b, 1}, {:map_key, {:map, [foo: nil], nil}, {:atom, :bar}}}
              ]
 
-      assert find_vars_in("%{foo: a} = %{bar: b} = c", {:variable, :x}, :match) == [
+      assert find_typed_vars_in("%{foo: a} = %{bar: b} = c", {:variable, :x}, :match) == [
                {
                  {:c, 1},
                  {

@@ -200,7 +200,7 @@ defmodule ElixirSense.Core.TypeInference do
     end
   end
 
-  def find_vars(ast, match_context, context) do
+  def find_typed_vars(ast, match_context, context) do
     {_ast, {vars, _match_context, _context}} =
       Macro.prewalk(ast, {[], match_context, context}, &match_var(&1, &2))
 
