@@ -630,6 +630,10 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
         assert_expansion("length([])")
       end
 
+      test "expands local operator call" do
+        assert_expansion("a = b = []; a ++ b")
+      end
+
       test "expands local call macro" do
         # TODO
         # assert_expansion("if true, do: :ok")
