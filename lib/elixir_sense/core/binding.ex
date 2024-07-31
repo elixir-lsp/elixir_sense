@@ -1336,9 +1336,9 @@ defmodule ElixirSense.Core.Binding do
   defp expand_type_from_introspection(env, mod, type_name, arity, include_private) do
     case TypeInfo.get_type_spec(mod, type_name, arity) do
       {kind, spec} when type_is_public(kind, include_private) ->
-        {:"::", _, [_, type]} = Typespec.type_to_quoted(spec)
+        {:"::", _, [{expanded_name, _, _}, type]} = Typespec.type_to_quoted(spec)
 
-        parse_type(env, type, mod, include_private)
+        if type_name != expanded_name, do: parse_type(env, type, mod, include_private)
 
       _ ->
         nil
