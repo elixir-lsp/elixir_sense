@@ -277,8 +277,8 @@ defmodule ElixirSense.Core.TypeInferenceTest do
   end
 
   describe "type_of" do
-    defp binding_type_in(code, context \\ nil) do
-      # NOTE binding_type_in works on expanded AST so it expects aliases expanded to atoms
+    defp type_of(code, context \\ nil) do
+      # NOTE type_of works on expanded AST so it expects aliases expanded to atoms
       ast =
         Code.string_to_quoted!(code)
         |> Macro.prewalk(fn
@@ -296,90 +296,90 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "atom" do
-      assert binding_type_in(":a") == {:atom, :a}
-      assert binding_type_in("My.Module") == {:atom, My.Module}
-      assert binding_type_in("nil") == {:atom, nil}
-      assert binding_type_in("true") == {:atom, true}
-      assert binding_type_in("false") == {:atom, false}
+      assert type_of(":a") == {:atom, :a}
+      assert type_of("My.Module") == {:atom, My.Module}
+      assert type_of("nil") == {:atom, nil}
+      assert type_of("true") == {:atom, true}
+      assert type_of("false") == {:atom, false}
     end
 
     test "variable" do
-      assert binding_type_in("a") == {:variable, :a}
-      assert binding_type_in("a", :match) == nil
-      assert binding_type_in("^a", :match) == {:variable, :a}
-      assert binding_type_in("^a") == :none
-      assert binding_type_in("_", :match) == nil
-      assert binding_type_in("_") == :none
+      assert type_of("a") == {:variable, :a}
+      assert type_of("a", :match) == nil
+      assert type_of("^a", :match) == {:variable, :a}
+      assert type_of("^a") == :none
+      assert type_of("_", :match) == nil
+      assert type_of("_") == :none
     end
 
     test "attribute" do
-      assert binding_type_in("@a") == {:attribute, :a}
+      assert type_of("@a") == {:attribute, :a}
     end
 
     test "integer" do
-      assert binding_type_in("1") == {:integer, 1}
+      assert type_of("1") == {:integer, 1}
     end
 
     test "list" do
-      assert binding_type_in("[]") == {:list, :empty}
-      assert binding_type_in("[a]") == {:list, {:variable, :a}}
-      assert binding_type_in("[a]", :match) == {:list, nil}
-      assert binding_type_in("[^a]", :match) == {:list, {:variable, :a}}
-      assert binding_type_in("[[1]]") == {:list, {:list, {:integer, 1}}}
+      assert type_of("[]") == {:list, :empty}
+      assert type_of("[a]") == {:list, {:variable, :a}}
+      assert type_of("[a]", :match) == {:list, nil}
+      assert type_of("[^a]", :match) == {:list, {:variable, :a}}
+      assert type_of("[[1]]") == {:list, {:list, {:integer, 1}}}
       # TODO union a | b?
-      assert binding_type_in("[a, b]") == {:list, {:variable, :a}}
-      assert binding_type_in("[a | b]") == {:list, {:variable, :a}}
+      assert type_of("[a, b]") == {:list, {:variable, :a}}
+      assert type_of("[a | b]") == {:list, {:variable, :a}}
     end
 
     test "tuple" do
-      assert binding_type_in("{}") == {:tuple, 0, []}
-      assert binding_type_in("{a}") == {:tuple, 1, [{:variable, :a}]}
-      assert binding_type_in("{a, b}") == {:tuple, 2, [{:variable, :a}, {:variable, :b}]}
+      assert type_of("{}") == {:tuple, 0, []}
+      assert type_of("{a}") == {:tuple, 1, [{:variable, :a}]}
+      assert type_of("{a, b}") == {:tuple, 2, [{:variable, :a}, {:variable, :b}]}
     end
 
     test "map" do
-      assert binding_type_in("%{}") == {:map, [], nil}
-      assert binding_type_in("%{asd: a}") == {:map, [{:asd, {:variable, :a}}], nil}
+      assert type_of("%{}") == {:map, [], nil}
+      assert type_of("%{asd: a}") == {:map, [{:asd, {:variable, :a}}], nil}
       # NOTE non atom keys are not supported
-      assert binding_type_in("%{\"asd\" => a}") == {:map, [], nil}
+      assert type_of("%{\"asd\" => a}") == {:map, [], nil}
 
-      assert binding_type_in("%{b | asd: a}") ==
+      assert type_of("%{b | asd: a}") ==
                {:map, [{:asd, {:variable, :a}}], {:variable, :b}}
 
-      assert binding_type_in("%{b | asd: a}", :match) == :none
+      assert type_of("%{b | asd: a}", :match) == :none
     end
 
     test "map with __struct__ key" do
-      assert binding_type_in("%{__struct__: Foo}") == {:struct, [], {:atom, Foo}, nil}
+      assert type_of("%{__struct__: Foo}") == {:struct, [], {:atom, Foo}, nil}
 
-      assert binding_type_in("%{__struct__: Foo, asd: a}") ==
+      assert type_of("%{__struct__: Foo, asd: a}") ==
                {:struct, [{:asd, {:variable, :a}}], {:atom, Foo}, nil}
 
-      assert binding_type_in("%{b | __struct__: Foo, asd: a}") ==
+      assert type_of("%{b | __struct__: Foo, asd: a}") ==
                {:struct, [{:asd, {:variable, :a}}], {:atom, Foo}, {:variable, :b}}
     end
 
     test "struct" do
-      assert binding_type_in("%Foo{}") == {:struct, [], {:atom, Foo}, nil}
-      assert binding_type_in("%a{}") == {:struct, [], {:variable, :a}, nil}
-      assert binding_type_in("%@a{}") == {:struct, [], {:attribute, :a}, nil}
+      assert type_of("%Foo{}") == {:struct, [], {:atom, Foo}, nil}
+      assert type_of("%a{}") == {:struct, [], {:variable, :a}, nil}
+      assert type_of("%@a{}") == {:struct, [], {:attribute, :a}, nil}
 
-      assert binding_type_in("%Foo{asd: a}") ==
+      assert type_of("%Foo{asd: a}") ==
                {:struct, [{:asd, {:variable, :a}}], {:atom, Foo}, nil}
 
-      assert binding_type_in("%Foo{b | asd: a}") ==
+      assert type_of("%Foo{b | asd: a}") ==
                {:struct, [{:asd, {:variable, :a}}], {:atom, Foo}, {:variable, :b}}
 
-      assert binding_type_in("%Foo{b | asd: a}", :match) == :none
+      assert type_of("%Foo{b | asd: a}", :match) == :none
     end
 
     test "range" do
-      assert binding_type_in("a..b") ==
+      assert type_of("a..b") ==
                {:struct,
                 [{:first, {:variable, :a}}, {:last, {:variable, :b}}, {:step, {:integer, 1}}],
                 {:atom, Range}, nil}
 
-      assert binding_type_in("a..b//2") ==
+      assert type_of("a..b//2") ==
                {:struct,
                 [{:first, {:variable, :a}}, {:last, {:variable, :b}}, {:step, {:integer, 2}}],
                 {:atom, Range}, nil}
@@ -387,38 +387,38 @@ defmodule ElixirSense.Core.TypeInferenceTest do
 
     test "sigil" do
       # NOTE we do not attempt to parse sigils
-      assert binding_type_in("~r//") == {:struct, [], {:atom, Regex}, nil}
-      assert binding_type_in("~R//") == {:struct, [], {:atom, Regex}, nil}
-      assert binding_type_in("~N//") == {:struct, [], {:atom, NaiveDateTime}, nil}
-      assert binding_type_in("~U//") == {:struct, [], {:atom, DateTime}, nil}
-      assert binding_type_in("~T//") == {:struct, [], {:atom, Time}, nil}
-      assert binding_type_in("~D//") == {:struct, [], {:atom, Date}, nil}
+      assert type_of("~r//") == {:struct, [], {:atom, Regex}, nil}
+      assert type_of("~R//") == {:struct, [], {:atom, Regex}, nil}
+      assert type_of("~N//") == {:struct, [], {:atom, NaiveDateTime}, nil}
+      assert type_of("~U//") == {:struct, [], {:atom, DateTime}, nil}
+      assert type_of("~T//") == {:struct, [], {:atom, Time}, nil}
+      assert type_of("~D//") == {:struct, [], {:atom, Date}, nil}
     end
 
     test "local call" do
-      assert binding_type_in("foo(a)") == {:local_call, :foo, [{:variable, :a}]}
+      assert type_of("foo(a)") == {:local_call, :foo, [{:variable, :a}]}
     end
 
     test "remote call" do
-      assert binding_type_in(":foo.bar(a)") == {:call, {:atom, :foo}, :bar, [variable: :a]}
+      assert type_of(":foo.bar(a)") == {:call, {:atom, :foo}, :bar, [variable: :a]}
     end
 
     test "match" do
-      assert binding_type_in("a = 5") == {:integer, 5}
-      assert binding_type_in("5 = a") == {:intersection, [integer: 5, variable: :a]}
-      assert binding_type_in("b = 5 = a") == {:intersection, [{:integer, 5}, {:variable, :a}]}
-      assert binding_type_in("5 = 5") == {:integer, 5}
+      assert type_of("a = 5") == {:integer, 5}
+      assert type_of("5 = a") == {:intersection, [integer: 5, variable: :a]}
+      assert type_of("b = 5 = a") == {:intersection, [{:integer, 5}, {:variable, :a}]}
+      assert type_of("5 = 5") == {:integer, 5}
 
-      assert binding_type_in("%{foo: a} = %{bar: b}") ==
+      assert type_of("%{foo: a} = %{bar: b}") ==
                {:intersection, [{:map, [foo: nil], nil}, {:map, [bar: {:variable, :b}], nil}]}
 
-      assert binding_type_in("%{foo: a} = %{bar: b}", :match) ==
+      assert type_of("%{foo: a} = %{bar: b}", :match) ==
                {:intersection, [{:map, [foo: nil], nil}, {:map, [bar: nil], nil}]}
     end
 
     test "other" do
-      assert binding_type_in("\"asd\"") == nil
-      assert binding_type_in("1.23") == nil
+      assert type_of("\"asd\"") == nil
+      assert type_of("1.23") == nil
     end
   end
 end
