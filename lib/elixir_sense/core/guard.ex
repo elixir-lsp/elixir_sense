@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Guard do
+  # TODO add tests
   @moduledoc """
   This module is responsible for infer type information from guard expressions
   """

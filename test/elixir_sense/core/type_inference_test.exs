@@ -374,7 +374,6 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "list operators" do
-      # TODO check in guard
       assert type_of(":erlang.++([a], [b])") ==
                {:call, {:atom, :erlang}, :++, [list: {:variable, :a}, list: {:variable, :b}]}
 
