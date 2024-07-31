@@ -227,7 +227,7 @@ defmodule ElixirSense.Core.TypeInference do
         {vars, intersect(match_context, get_binding_type(left, :match)), context}
       )
 
-    {[], {vars, nil, context}}
+    {nil, {vars, nil, context}}
   end
 
   # pinned variable
@@ -381,10 +381,4 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   def intersect(old, new), do: {:intersection, [old, new]}
-
-  def find_refinable({:=, _, [left, right]}, acc, context),
-    do: find_refinable(right, [left | acc], context)
-
-  def find_refinable(other, acc, :match), do: [other | acc]
-  def find_refinable(_, acc, _), do: acc
 end

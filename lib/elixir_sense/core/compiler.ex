@@ -31,32 +31,13 @@ defmodule ElixirSense.Core.Compiler do
     {e_right, sr, er} = expand(right, s, e)
     {e_left, sl, el} = __MODULE__.Clauses.match(&expand/3, left, sr, s, er)
 
-    match_context_r = TypeInference.get_binding_type(e_right, e.context)
-    vars_l_with_inferred_types = TypeInference.find_vars(e_left, match_context_r, :match)
+    e_expr = {:=, meta, [e_left, e_right]}
 
-    expressions_to_refine = TypeInference.find_refinable(e_right, [], e.context)
+    vars_with_inferred_types = TypeInference.find_vars(e_expr, nil, el.context)
 
-    vars_r_with_inferred_types =
-      if expressions_to_refine != [] do
-        # we are in match context and the right side is also a pattern, we can refine types
-        # on the right side using the inferred type of the left side
-        match_context_l = TypeInference.get_binding_type(e_left, :match)
+    sl = merge_inferred_types(sl, vars_with_inferred_types)
 
-        for expr <- expressions_to_refine, reduce: [] do
-          acc ->
-            vars_in_expr_with_inferred_types =
-              TypeInference.find_vars(expr, match_context_l, :match)
-
-            acc ++ vars_in_expr_with_inferred_types
-        end
-      else
-        []
-      end
-
-    sl =
-      merge_inferred_types(sl, vars_l_with_inferred_types ++ vars_r_with_inferred_types)
-
-    {{:=, meta, [e_left, e_right]}, sl, el}
+    {e_expr, sl, el}
   end
 
   # Literal operators
