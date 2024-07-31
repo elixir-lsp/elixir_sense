@@ -1613,7 +1613,22 @@ defmodule ElixirSense.Core.BindingTest do
     end
   end
 
+  describe ":erlang functions" do
+    test "++" do
+      assert {:list, {:integer, 1}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{name: :a, type: {:integer, 1}},
+                   %VarInfo{name: :b, type: {:integer, 2}}
+                 ]),
+                 {:call, {:atom, :erlang}, :++, [list: {:variable, :a}, list: {:variable, :b}]}
+               )
+    end
+  end
+
   describe "Kernel functions" do
+    # TODO check which of those get rewritten
     test "tuple elem" do
       assert {:atom, :a} ==
                Binding.expand(

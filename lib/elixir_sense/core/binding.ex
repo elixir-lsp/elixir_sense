@@ -397,6 +397,27 @@ defmodule ElixirSense.Core.Binding do
 
   defp expand_call(
          env,
+         {:atom, :erlang},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:++, :--] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
          {:atom, Kernel},
          :elem,
          [tuple_candidate, n_candidate],
