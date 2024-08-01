@@ -199,11 +199,11 @@ defmodule ElixirSense.Core.TypeInferenceTest do
 
     test "finds variables in match" do
       assert find_typed_vars_in("a = b", nil, :match) == [{{:b, 1}, nil}, {{:a, 1}, nil}]
-      assert find_typed_vars_in("a = b", nil) == [{{:a, 1}, {:variable, :b}}]
+      assert find_typed_vars_in("a = b", nil) == [{{:a, 1}, {:variable, :b, 1}}]
       assert find_typed_vars_in("^a = b", nil) == []
 
       assert find_typed_vars_in("a = a", nil, :match) == [{{:a, 1}, nil}]
-      assert find_typed_vars_in("a = a", nil) == [{{:a, 1}, {:variable, :a}}]
+      assert find_typed_vars_in("a = a", nil) == [{{:a, 1}, {:variable, :a, 1}}]
 
       assert find_typed_vars_in("a = b = c", nil, :match) == [
                {{:c, 1}, nil},
@@ -211,7 +211,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
                {{:a, 1}, nil}
              ]
 
-      assert find_typed_vars_in("[a] = b", nil) == [{{:a, 1}, {:list_head, {:variable, :b}}}]
+      assert find_typed_vars_in("[a] = b", nil) == [{{:a, 1}, {:list_head, {:variable, :b, 1}}}]
 
       assert find_typed_vars_in("[a] = b", nil, :match) == [
                {{:b, 1}, {:list, nil}},
@@ -223,7 +223,9 @@ defmodule ElixirSense.Core.TypeInferenceTest do
                {{:a, 1}, {:list_head, {:variable, :x}}}
              ]
 
-      assert find_typed_vars_in("{a} = b", nil) == [{{:a, 1}, {:tuple_nth, {:variable, :b}, 0}}]
+      assert find_typed_vars_in("{a} = b", nil) == [
+               {{:a, 1}, {:tuple_nth, {:variable, :b, 1}, 0}}
+             ]
 
       assert find_typed_vars_in("{a} = b", nil, :match) == [
                {{:b, 1}, {:tuple, 1, [nil]}},
@@ -236,7 +238,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
              ]
 
       assert find_typed_vars_in("%{foo: a} = b", nil) == [
-               {{:a, 1}, {:map_key, {:variable, :b}, {:atom, :foo}}}
+               {{:a, 1}, {:map_key, {:variable, :b, 1}, {:atom, :foo}}}
              ]
 
       assert find_typed_vars_in("%{foo: a} = b", nil, :match) == [
@@ -250,7 +252,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
              ]
 
       assert find_typed_vars_in("%Foo{foo: a} = b", nil) == [
-               {{:a, 1}, {:map_key, {:variable, :b}, {:atom, :foo}}}
+               {{:a, 1}, {:map_key, {:variable, :b, 1}, {:atom, :foo}}}
              ]
 
       assert find_typed_vars_in("%Foo{foo: a} = b", nil, :match) == [
@@ -269,12 +271,12 @@ defmodule ElixirSense.Core.TypeInferenceTest do
                  {:a, 1},
                  {
                    :map_key,
-                   {:intersection, [{:map, [bar: nil], nil}, {:variable, :c}]},
+                   {:intersection, [{:map, [bar: nil], nil}, {:variable, :c, 1}]},
                    {:atom, :foo}
                  }
                },
                {{:b, 1},
-                {:map_key, {:intersection, [{:map, [foo: nil], nil}, {:variable, :c}]},
+                {:map_key, {:intersection, [{:map, [foo: nil], nil}, {:variable, :c, 1}]},
                  {:atom, :bar}}}
              ]
 
@@ -343,9 +345,9 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "variable" do
-      assert type_of("a") == {:variable, :a}
+      assert type_of("a") == {:variable, :a, 1}
       assert type_of("a", :match) == nil
-      assert type_of("^a", :match) == {:variable, :a}
+      assert type_of("^a", :match) == {:variable, :a, 1}
       assert type_of("^a") == :none
       assert type_of("_", :match) == nil
       assert type_of("_") == :none
@@ -361,40 +363,42 @@ defmodule ElixirSense.Core.TypeInferenceTest do
 
     test "list" do
       assert type_of("[]") == {:list, :empty}
-      assert type_of("[a]") == {:list, {:variable, :a}}
-      assert type_of("[a | 1]") == {:list, {:variable, :a}}
+      assert type_of("[a]") == {:list, {:variable, :a, 1}}
+      assert type_of("[a | 1]") == {:list, {:variable, :a, 1}}
       assert type_of("[a]", :match) == {:list, nil}
       assert type_of("[a | 1]", :match) == {:list, nil}
-      assert type_of("[^a]", :match) == {:list, {:variable, :a}}
+      assert type_of("[^a]", :match) == {:list, {:variable, :a, 1}}
       assert type_of("[[1]]") == {:list, {:list, {:integer, 1}}}
       # TODO union a | b?
-      assert type_of("[a, b]") == {:list, {:variable, :a}}
-      assert type_of("[a | b]") == {:list, {:variable, :a}}
-      assert type_of("[a, b | c]") == {:list, {:variable, :a}}
+      assert type_of("[a, b]") == {:list, {:variable, :a, 1}}
+      assert type_of("[a | b]") == {:list, {:variable, :a, 1}}
+      assert type_of("[a, b | c]") == {:list, {:variable, :a, 1}}
     end
 
     test "list operators" do
       assert type_of(":erlang.++([a], [b])") ==
-               {:call, {:atom, :erlang}, :++, [list: {:variable, :a}, list: {:variable, :b}]}
+               {:call, {:atom, :erlang}, :++,
+                [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
 
       assert type_of(":erlang.--([a], [b])") ==
-               {:call, {:atom, :erlang}, :--, [list: {:variable, :a}, list: {:variable, :b}]}
+               {:call, {:atom, :erlang}, :--,
+                [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
     end
 
     test "tuple" do
       assert type_of("{}") == {:tuple, 0, []}
-      assert type_of("{a}") == {:tuple, 1, [{:variable, :a}]}
-      assert type_of("{a, b}") == {:tuple, 2, [{:variable, :a}, {:variable, :b}]}
+      assert type_of("{a}") == {:tuple, 1, [{:variable, :a, 1}]}
+      assert type_of("{a, b}") == {:tuple, 2, [{:variable, :a, 1}, {:variable, :b, 1}]}
     end
 
     test "map" do
       assert type_of("%{}") == {:map, [], nil}
-      assert type_of("%{asd: a}") == {:map, [{:asd, {:variable, :a}}], nil}
+      assert type_of("%{asd: a}") == {:map, [{:asd, {:variable, :a, 1}}], nil}
       # NOTE non atom keys are not supported
       assert type_of("%{\"asd\" => a}") == {:map, [], nil}
 
       assert type_of("%{b | asd: a}") ==
-               {:map, [{:asd, {:variable, :a}}], {:variable, :b}}
+               {:map, [{:asd, {:variable, :a, 1}}], {:variable, :b, 1}}
 
       assert type_of("%{b | asd: a}", :match) == :none
     end
@@ -403,22 +407,22 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       assert type_of("%{__struct__: Foo}") == {:struct, [], {:atom, Foo}, nil}
 
       assert type_of("%{__struct__: Foo, asd: a}") ==
-               {:struct, [{:asd, {:variable, :a}}], {:atom, Foo}, nil}
+               {:struct, [{:asd, {:variable, :a, 1}}], {:atom, Foo}, nil}
 
       assert type_of("%{b | __struct__: Foo, asd: a}") ==
-               {:struct, [{:asd, {:variable, :a}}], {:atom, Foo}, {:variable, :b}}
+               {:struct, [{:asd, {:variable, :a, 1}}], {:atom, Foo}, {:variable, :b, 1}}
     end
 
     test "struct" do
       assert type_of("%Foo{}") == {:struct, [], {:atom, Foo}, nil}
-      assert type_of("%a{}") == {:struct, [], {:variable, :a}, nil}
+      assert type_of("%a{}") == {:struct, [], {:variable, :a, 1}, nil}
       assert type_of("%@a{}") == {:struct, [], {:attribute, :a}, nil}
 
       assert type_of("%Foo{asd: a}") ==
-               {:struct, [{:asd, {:variable, :a}}], {:atom, Foo}, nil}
+               {:struct, [{:asd, {:variable, :a, 1}}], {:atom, Foo}, nil}
 
       assert type_of("%Foo{b | asd: a}") ==
-               {:struct, [{:asd, {:variable, :a}}], {:atom, Foo}, {:variable, :b}}
+               {:struct, [{:asd, {:variable, :a, 1}}], {:atom, Foo}, {:variable, :b, 1}}
 
       assert type_of("%Foo{b | asd: a}", :match) == :none
     end
@@ -426,13 +430,19 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     test "range" do
       assert type_of("a..b") ==
                {:struct,
-                [{:first, {:variable, :a}}, {:last, {:variable, :b}}, {:step, {:integer, 1}}],
-                {:atom, Range}, nil}
+                [
+                  {:first, {:variable, :a, 1}},
+                  {:last, {:variable, :b, 1}},
+                  {:step, {:integer, 1}}
+                ], {:atom, Range}, nil}
 
       assert type_of("a..b//2") ==
                {:struct,
-                [{:first, {:variable, :a}}, {:last, {:variable, :b}}, {:step, {:integer, 2}}],
-                {:atom, Range}, nil}
+                [
+                  {:first, {:variable, :a, 1}},
+                  {:last, {:variable, :b, 1}},
+                  {:step, {:integer, 2}}
+                ], {:atom, Range}, nil}
     end
 
     test "sigil" do
@@ -446,21 +456,21 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "local call" do
-      assert type_of("foo(a)") == {:local_call, :foo, [{:variable, :a}]}
+      assert type_of("foo(a)") == {:local_call, :foo, [{:variable, :a, 1}]}
     end
 
     test "remote call" do
-      assert type_of(":foo.bar(a)") == {:call, {:atom, :foo}, :bar, [variable: :a]}
+      assert type_of(":foo.bar(a)") == {:call, {:atom, :foo}, :bar, [{:variable, :a, 1}]}
     end
 
     test "match" do
       assert type_of("a = 5") == {:integer, 5}
-      assert type_of("5 = a") == {:intersection, [integer: 5, variable: :a]}
-      assert type_of("b = 5 = a") == {:intersection, [{:integer, 5}, {:variable, :a}]}
+      assert type_of("5 = a") == {:intersection, [{:integer, 5}, {:variable, :a, 1}]}
+      assert type_of("b = 5 = a") == {:intersection, [{:integer, 5}, {:variable, :a, 1}]}
       assert type_of("5 = 5") == {:integer, 5}
 
       assert type_of("%{foo: a} = %{bar: b}") ==
-               {:intersection, [{:map, [foo: nil], nil}, {:map, [bar: {:variable, :b}], nil}]}
+               {:intersection, [{:map, [foo: nil], nil}, {:map, [bar: {:variable, :b, 1}], nil}]}
 
       assert type_of("%{foo: a} = %{bar: b}", :match) ==
                {:intersection, [{:map, [foo: nil], nil}, {:map, [bar: nil], nil}]}

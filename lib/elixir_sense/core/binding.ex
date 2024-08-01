@@ -8,6 +8,7 @@ defmodule ElixirSense.Core.Binding do
   alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
 
+  # TODO refactor to use env
   defstruct structs: %{},
             variables: [],
             attributes: [],
@@ -83,20 +84,18 @@ defmodule ElixirSense.Core.Binding do
     expand(env, combined, stack)
   end
 
-  def do_expand(%Binding{variables: variables} = env, {:variable, variable}, stack) do
+  def do_expand(%Binding{variables: variables} = env, {:variable, variable, version}, stack) do
     type =
-      case Enum.find(variables, fn %{name: name} -> name == variable end) do
+      case Enum.find(variables, fn %State.VarInfo{} = var ->
+             var.name == variable and var.version == version
+           end) do
         nil ->
           # no variable found - treat a local call
+          # TODO this cannot happen
           expand(env, {:local_call, variable, []}, stack)
 
-        %State.VarInfo{name: name, type: type} ->
-          # filter underscored variables
-          if name |> Atom.to_string() |> String.starts_with?("_") do
-            :none
-          else
-            type
-          end
+        %State.VarInfo{type: type} ->
+          type
       end
 
     expand(env, type, stack)
@@ -1112,7 +1111,7 @@ defmodule ElixirSense.Core.Binding do
       {:ok, {:@, _, [{_kind, _, [ast]}]}} ->
         case extract_type(ast) do
           {:ok, type} ->
-            parsed_type = parse_type(env, type, mod, include_private)
+            parsed_type = parse_type(env, type, mod, include_private, [])
             expand(env, parsed_type, stack)
 
           :error ->
@@ -1152,7 +1151,7 @@ defmodule ElixirSense.Core.Binding do
   defp get_return_from_spec(env, {{fun, _arity}, [ast]}, mod, include_private) do
     case Typespec.spec_to_quoted(fun, ast) |> extract_type do
       {:ok, type} ->
-        parse_type(env, type, mod, include_private)
+        parse_type(env, type, mod, include_private, [])
 
       :error ->
         nil
@@ -1168,8 +1167,8 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # union type
-  defp parse_type(env, {:|, _, variants}, mod, include_private) do
-    {:union, variants |> Enum.map(&parse_type(env, &1, mod, include_private))}
+  defp parse_type(env, {:|, _, variants}, mod, include_private, stack) do
+    {:union, variants |> Enum.map(&parse_type(env, &1, mod, include_private, stack))}
   end
 
   # struct
@@ -1181,12 +1180,13 @@ defmodule ElixirSense.Core.Binding do
             {:%{}, _, fields}
           ]},
          mod,
-         include_private
+         include_private,
+         stack
        ) do
     fields =
       for {field, type} <- fields,
           is_atom(field),
-          do: {field, parse_type(env, type, mod, include_private)}
+          do: {field, parse_type(env, type, mod, include_private, stack)}
 
     module =
       case struct_mod do
@@ -1201,57 +1201,58 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # map
-  defp parse_type(env, {:%{}, _, fields}, mod, include_private) do
+  defp parse_type(env, {:%{}, _, fields}, mod, include_private, stack) do
     fields =
       for {field, type} <- fields,
           field = drop_optional(field),
           is_atom(field),
-          do: {field, parse_type(env, type, mod, include_private)}
+          do: {field, parse_type(env, type, mod, include_private, stack)}
 
     {:map, fields, nil}
   end
 
-  defp parse_type(_env, {:map, _, []}, _mod, _include_private) do
+  defp parse_type(_env, {:map, _, []}, _mod, _include_private, _stack) do
     {:map, [], nil}
   end
 
-  defp parse_type(env, {:{}, _, fields}, mod, include_private) do
-    {:tuple, length(fields), fields |> Enum.map(&parse_type(env, &1, mod, include_private))}
+  defp parse_type(env, {:{}, _, fields}, mod, include_private, stack) do
+    {:tuple, length(fields),
+     fields |> Enum.map(&parse_type(env, &1, mod, include_private, stack))}
   end
 
-  defp parse_type(_env, [], _mod, _include_private) do
+  defp parse_type(_env, [], _mod, _include_private, _stack) do
     {:list, :empty}
   end
 
-  defp parse_type(env, [type | _], mod, include_private) do
-    {:list, parse_type(env, type, mod, include_private)}
+  defp parse_type(env, [type | _], mod, include_private, stack) do
+    {:list, parse_type(env, type, mod, include_private, stack)}
   end
 
   # for simplicity we skip terminator type
-  defp parse_type(env, {kind, _, [type, _]}, mod, include_private)
+  defp parse_type(env, {kind, _, [type, _]}, mod, include_private, stack)
        when kind in [:maybe_improper_list, :nonempty_improper_list, :nonempty_maybe_improper_list] do
-    {:list, parse_type(env, type, mod, include_private)}
+    {:list, parse_type(env, type, mod, include_private, stack)}
   end
 
-  defp parse_type(_env, {:list, _, []}, _mod, _include_private) do
+  defp parse_type(_env, {:list, _, []}, _mod, _include_private, _stack) do
     {:list, nil}
   end
 
-  defp parse_type(_env, {:keyword, _, []}, _mod, _include_private) do
+  defp parse_type(_env, {:keyword, _, []}, _mod, _include_private, _stack) do
     # TODO no support for atom type for now
     {:list, {:tuple, 2, [nil, nil]}}
   end
 
-  defp parse_type(env, {:keyword, _, [type]}, mod, include_private) do
+  defp parse_type(env, {:keyword, _, [type]}, mod, include_private, stack) do
     # TODO no support for atom type for now
-    {:list, {:tuple, 2, [nil, parse_type(env, type, mod, include_private)]}}
+    {:list, {:tuple, 2, [nil, parse_type(env, type, mod, include_private, stack)]}}
   end
 
   # remote user type
-  defp parse_type(env, {{:., _, [mod, atom]}, _, args}, _mod, _include_private)
+  defp parse_type(env, {{:., _, [mod, atom]}, _, args}, _mod, _include_private, stack)
        when is_atom(mod) and is_atom(atom) do
     # do not propagate include_private when expanding remote types
-    expand_type(env, mod, atom, args, false)
+    expand_type(env, mod, atom, args, false, stack)
   end
 
   # remote user type
@@ -1259,45 +1260,55 @@ defmodule ElixirSense.Core.Binding do
          env,
          {{:., _, [{:__aliases__, _, aliases}, atom]}, _, args},
          _mod,
-         _include_private
+         _include_private,
+         stack
        )
        when is_atom(atom) do
     # do not propagate include_private when expanding remote types
-    expand_type(env, Module.concat(aliases), atom, args, false)
+    expand_type(env, Module.concat(aliases), atom, args, false, stack)
   end
 
   # no_return
-  defp parse_type(_env, {:no_return, _, _}, _, _include_private), do: :none
+  defp parse_type(_env, {:no_return, _, _}, _, _include_private, _stack), do: :none
 
   # term, any, dynamic
-  defp parse_type(_env, {kind, _, _}, _, _include_private) when kind in [:term, :any, :dynamic],
-    do: nil
+  defp parse_type(_env, {kind, _, _}, _, _include_private, _stack)
+       when kind in [:term, :any, :dynamic],
+       do: nil
 
   # local user type
-  defp parse_type(env, {atom, _, args}, mod, include_private) when is_atom(atom) do
+  defp parse_type(env, {atom, _, args}, mod, include_private, stack) when is_atom(atom) do
     # propagate include_private when expanding local types
-    expand_type(env, mod, atom, args, include_private)
+    expand_type(env, mod, atom, args, include_private, stack)
   end
 
   # atom
-  defp parse_type(_env, atom, _, _include_private) when is_atom(atom), do: {:atom, atom}
+  defp parse_type(_env, atom, _, _include_private, _stack) when is_atom(atom), do: {:atom, atom}
 
-  defp parse_type(_env, integer, _, _include_private) when is_integer(integer) do
+  defp parse_type(_env, integer, _, _include_private, _stack) when is_integer(integer) do
     {:integer, integer}
   end
 
   # other
-  # defp parse_type(_env, t, _, _include_private) do
-  #   IO.inspect t
-  #   nil
-  # end
-  defp parse_type(_env, _, _, _include_private), do: nil
+  defp parse_type(_env, _type, _, _include_private, _stack), do: nil
 
-  defp expand_type(env, mod, type_name, args, include_private) do
+  defp expand_type(env, mod, type_name, args, include_private, stack) do
+    arity = length(args || [])
+    type = {mod, type_name, arity}
+
+    if type in stack do
+      # self referential type
+      nil
+    else
+      do_expand_type(env, mod, type_name, args, include_private, [type | stack])
+    end
+  end
+
+  defp do_expand_type(env, mod, type_name, args, include_private, stack) do
     arity = length(args || [])
 
-    case expand_type_from_metadata(env, mod, type_name, arity, include_private) do
-      nil -> expand_type_from_introspection(env, mod, type_name, arity, include_private)
+    case expand_type_from_metadata(env, mod, type_name, arity, include_private, stack) do
+      nil -> expand_type_from_introspection(env, mod, type_name, arity, include_private, stack)
       res -> res
     end
     |> drop_no_spec
@@ -1310,7 +1321,8 @@ defmodule ElixirSense.Core.Binding do
          mod,
          type_name,
          arity,
-         include_private
+         include_private,
+         stack
        ) do
     case types[{mod, type_name, arity}] do
       %State.TypeInfo{specs: [type_spec], kind: kind}
@@ -1319,7 +1331,7 @@ defmodule ElixirSense.Core.Binding do
           {:ok, {:@, _, [{_kind, _, [ast]}]}} ->
             case extract_type(ast) do
               {:ok, type} ->
-                parse_type(env, type, mod, include_private) || :no_spec
+                parse_type(env, type, mod, include_private, stack) || :no_spec
 
               :error ->
                 nil
@@ -1337,12 +1349,12 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_type_from_introspection(env, mod, type_name, arity, include_private) do
+  defp expand_type_from_introspection(env, mod, type_name, arity, include_private, stack) do
     case TypeInfo.get_type_spec(mod, type_name, arity) do
       {kind, spec} when type_is_public(kind, include_private) ->
-        {:"::", _, [{expanded_name, _, _}, type]} = Typespec.type_to_quoted(spec)
+        {:"::", _, [{_expanded_name, _, _}, type]} = Typespec.type_to_quoted(spec)
 
-        if type_name != expanded_name, do: parse_type(env, type, mod, include_private)
+        parse_type(env, type, mod, include_private, stack)
 
       _ ->
         nil

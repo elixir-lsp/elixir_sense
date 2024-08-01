@@ -1634,7 +1634,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{
                  name: :other,
                  positions: [{4, 3}],
-                 type: {:variable, :var}
+                 type: {:variable, :var, 0}
                }
              ]
 
@@ -1710,7 +1710,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                },
                %VarInfo{
                  name: :q1,
-                 type: {:tuple_nth, {:variable, :q}, 2}
+                 type: {:tuple_nth, {:variable, :q, 2}, 2}
                }
              ] =
                state
@@ -1797,14 +1797,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
-               %VarInfo{name: :b, type: {:variable, :a}}
+               %VarInfo{name: :b, type: {:variable, :a, 0}}
              ] = state |> get_line_vars(5)
 
       assert [
                %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
                %VarInfo{name: :a1, type: {:attribute, :myattribute}},
-               %VarInfo{name: :a2, type: {:for_expression, {:variable, :a1}}},
-               %VarInfo{name: :b, type: {:variable, :a}}
+               %VarInfo{name: :a2, type: {:for_expression, {:variable, :a1, 3}}},
+               %VarInfo{name: :b, type: {:variable, :a, 2}}
              ] = state |> get_line_vars(10)
     end
 
@@ -1899,7 +1899,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :a, type: {:attribute, :myattribute}},
-               %VarInfo{name: :b, type: {:variable, :a}}
+               %VarInfo{name: :b, type: {:variable, :a, 0}}
              ] = state |> get_line_vars(5)
     end
 
@@ -1920,7 +1920,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [
                %VarInfo{name: :a, type: {:attribute, :myattribute}},
                %VarInfo{name: :b, type: {:call, {:atom, Date}, :utc_now, []}},
-               %VarInfo{name: :c, type: {:list_head, {:variable, :a}}}
+               %VarInfo{name: :c, type: {:list_head, {:variable, :a, 0}}}
              ] = state |> get_line_vars(6)
     end
 
@@ -2015,7 +2015,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ] = state |> get_line_vars(16)
 
       assert [
-               %VarInfo{name: :other, type: {:variable, :var}},
+               %VarInfo{name: :other, type: {:variable, :var, 5}},
                %VarInfo{type: {:atom, Atom}}
              ] = state |> get_line_vars(18)
     end
@@ -2069,11 +2069,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :abc, type: nil},
-               %VarInfo{name: :var1, type: {:call, {:variable, :var1}, :abc, []}},
+               %VarInfo{name: :var1, type: {:call, {:variable, :var1, 0}, :abc, []}},
                %VarInfo{name: :var2, type: {:call, {:attribute, :attr}, :qwe, [{:integer, 0}]}},
                %VarInfo{
                  name: :var3,
-                 type: {:call, {:call, {:variable, :abc}, :cde, []}, :efg, []}
+                 type: {:call, {:call, {:variable, :abc, 1}, :cde, []}, :efg, []}
                }
              ] = state |> get_line_vars(24)
     end
@@ -2119,13 +2119,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{
-                 type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var}}
+                 type: {:map, [asd: {:integer, 2}, zxc: {:integer, 5}], {:variable, :var, 3}}
                }
              ] =
                state |> get_line_vars(12) |> Enum.filter(&(&1.name == :qwe))
 
       assert [
-               %VarInfo{type: {:map, [{:asd, {:integer, 2}}], {:variable, :var}}}
+               %VarInfo{type: {:map, [{:asd, {:integer, 2}}], {:variable, :var, 3}}}
              ] = state |> get_line_vars(14) |> Enum.filter(&(&1.name == :qwe))
     end
 
@@ -2166,20 +2166,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [
                %VarInfo{
                  name: :asd,
-                 type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a}}
+                 type: {:struct, [{:sub, {:atom, Atom}}], {:atom, Other}, {:variable, :a, 0}}
                }
              ] = state |> get_line_vars(11) |> Enum.filter(&(&1.name == :asd))
 
       assert [
                %VarInfo{
                  name: :asd,
-                 type: {:map, [{:other, {:integer, 123}}], {:variable, :asd}}
+                 type: {:map, [{:other, {:integer, 123}}], {:variable, :asd, 2}}
                }
              ] = state |> get_line_vars(13) |> Enum.filter(&(&1.name == :asd))
 
       assert [
-               %VarInfo{name: :x, type: {:variable, :asd}},
-               %VarInfo{name: :z, type: {:variable, :asd}}
+               %VarInfo{name: :x, type: {:variable, :asd, 3}},
+               %VarInfo{name: :z, type: {:variable, :asd, 3}}
              ] = state |> get_line_vars(15) |> Enum.filter(&(&1.name in [:x, :z]))
     end
 
@@ -2377,7 +2377,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  name: :formatted,
                  type: {
                    :map_key,
-                   {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []},
+                   {:call, {:call, {:variable, :socket, 0}, :assigns, []}, :state, []},
                    {:atom, :formatted}
                  }
                },
@@ -2390,7 +2390,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  type:
                    {:intersection,
                     [
-                      {:call, {:call, {:variable, :socket}, :assigns, []}, :state, []},
+                      {:call, {:call, {:variable, :socket, 0}, :assigns, []}, :state, []},
                       {:struct, [formatted: nil], {:atom, MyState}, nil}
                     ]}
                }
@@ -2548,7 +2548,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %VarInfo{
                name: :a1,
                positions: [{5, 17}],
-               type: {:intersection, [{:map, [b: {:integer, 2}], nil}, {:variable, :a}]}
+               type: {:intersection, [{:map, [b: {:integer, 2}], nil}, {:variable, :a, 0}]}
              } = Enum.find(vars, &(&1.name == :a1))
 
       vars = state |> get_line_vars(8)
@@ -2558,7 +2558,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                positions: [{7, 18}],
                type: {
                  :intersection,
-                 [{:map, [b: {:variable, :b}], nil}, {:variable, :a}]
+                 [{:map, [b: {:variable, :b, 1}], nil}, {:variable, :a, 0}]
                }
              } = Enum.find(vars, &(&1.name == :a2))
     end

@@ -50,9 +50,8 @@ defmodule ElixirSense.Core.TypeInference do
              var not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] and
              context != :match do
     case Keyword.fetch(meta, :version) do
-      {:ok, _version} ->
-        # TODO include version in type?
-        {:variable, var}
+      {:ok, version} ->
+        {:variable, var, version}
 
       _ ->
         nil
@@ -159,7 +158,6 @@ defmodule ElixirSense.Core.TypeInference do
 
         [head | _] ->
           type_of(head, context)
-          # TODO ++
       end
 
     {:list, type}
@@ -195,7 +193,7 @@ defmodule ElixirSense.Core.TypeInference do
     case type do
       {:atom, atom} -> {:atom, atom}
       {:attribute, attribute} -> {:attribute, attribute}
-      {:variable, variable} -> {:variable, variable}
+      {:variable, variable, version} -> {:variable, variable, version}
       _ -> nil
     end
   end
