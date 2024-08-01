@@ -317,6 +317,19 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "known variable any version chooses max" do
+      assert {:atom, :abc} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :v, type: {:atom, :foo}},
+                   %VarInfo{version: 3, name: :v, type: {:atom, :abc}},
+                   %VarInfo{version: 2, name: :v, type: {:atom, :bar}}
+                 ]),
+                 {:variable, :v, :any}
+               )
+    end
+
     test "known variable self referencing" do
       assert nil ==
                Binding.expand(

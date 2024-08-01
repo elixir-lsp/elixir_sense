@@ -84,6 +84,25 @@ defmodule ElixirSense.Core.Binding do
     expand(env, combined, stack)
   end
 
+  def do_expand(%Binding{variables: variables} = env, {:variable, variable, :any}, stack) do
+    sorted_variables = Enum.sort_by(variables, &(-&1.version))
+
+    type =
+      case Enum.find(sorted_variables, fn %State.VarInfo{} = var ->
+             var.name == variable
+           end) do
+        nil ->
+          # no variable found - treat a local call
+          # TODO this cannot happen
+          expand(env, {:local_call, variable, []}, stack)
+
+        %State.VarInfo{type: type} ->
+          type
+      end
+
+    expand(env, type, stack)
+  end
+
   def do_expand(%Binding{variables: variables} = env, {:variable, variable, version}, stack) do
     type =
       case Enum.find(variables, fn %State.VarInfo{} = var ->
@@ -1239,12 +1258,12 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp parse_type(_env, {:keyword, _, []}, _mod, _include_private, _stack) do
-    # TODO no support for atom type for now
+    # no support for atom type for now
     {:list, {:tuple, 2, [nil, nil]}}
   end
 
   defp parse_type(env, {:keyword, _, [type]}, mod, include_private, stack) do
-    # TODO no support for atom type for now
+    # no support for atom type for now
     {:list, {:tuple, 2, [nil, parse_type(env, type, mod, include_private, stack)]}}
   end
 
