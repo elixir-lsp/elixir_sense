@@ -6657,7 +6657,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       state =
         """
         defmodule NyModule do
-          def func do
+          @attr Some
+          def func(var) do
             @attr.func("test")
             var.func("test")
           end
@@ -6667,21 +6668,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       if Version.match?(System.version(), ">= 1.15.0") do
         assert state.calls == %{
-                 3 => [
-                   %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
-                 ],
                  4 => [
-                   %CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}
+                   %CallInfo{arity: 1, func: :func, position: {4, 11}, mod: {:attribute, :attr}}
+                 ],
+                 5 => [
+                   %CallInfo{arity: 1, func: :func, position: {5, 9}, mod: {:variable, :var, 0}}
                  ]
                }
       else
         assert state.calls == %{
-                 3 => [
-                   %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
-                 ],
                  4 => [
-                   %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
-                   %CallInfo{arity: 1, func: :func, position: {4, 9}, mod: {:variable, :var}}
+                   %CallInfo{arity: 1, func: :func, position: {4, 11}, mod: {:attribute, :attr}}
+                 ],
+                 5 => [
+                   %CallInfo{arity: 0, func: :var, position: {5, 5}, mod: nil},
+                   %CallInfo{arity: 1, func: :func, position: {5, 9}, mod: {:variable, :var, 0}}
                  ]
                }
       end
@@ -6691,7 +6692,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       state =
         """
         defmodule NyModule do
-          def func do
+          @attr (fn -> :ok end)
+          def func(var) do
             @attr.func
             var.func
           end
@@ -6701,21 +6703,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       if Version.match?(System.version(), ">= 1.15.0") do
         assert state.calls == %{
-                 3 => [
-                   %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
-                 ],
                  4 => [
-                   %CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}
+                   %CallInfo{arity: 0, func: :func, position: {4, 11}, mod: {:attribute, :attr}}
+                 ],
+                 5 => [
+                   %CallInfo{arity: 0, func: :func, position: {5, 9}, mod: {:variable, :var, 0}}
                  ]
                }
       else
         assert state.calls == %{
-                 3 => [
-                   %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: {:attribute, :attr}}
-                 ],
                  4 => [
-                   %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
-                   %CallInfo{arity: 0, func: :func, position: {4, 9}, mod: {:variable, :var}}
+                   %CallInfo{arity: 0, func: :func, position: {4, 11}, mod: {:attribute, :attr}}
+                 ],
+                 5 => [
+                   %CallInfo{arity: 0, func: :var, position: {5, 5}, mod: nil},
+                   %CallInfo{arity: 0, func: :func, position: {5, 9}, mod: {:variable, :var, 0}}
                  ]
                }
       end
@@ -6725,7 +6727,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       state =
         """
         defmodule NyModule do
-          def func do
+          @attr (fn -> :ok end)
+          def func(var) do
             @attr.()
             var.()
           end
@@ -6735,19 +6738,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       if Version.match?(System.version(), ">= 1.15.0") do
         assert state.calls == %{
-                 3 => [
-                   %CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}
+                 4 => [
+                   %CallInfo{arity: 0, func: {:attribute, :attr}, position: {4, 11}, mod: nil}
                  ],
-                 4 => [%CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}]
+                 5 => [
+                   %CallInfo{arity: 0, func: {:variable, :var, 0}, position: {5, 9}, mod: nil}
+                 ]
                }
       else
         assert state.calls == %{
-                 3 => [
-                   %CallInfo{arity: 0, func: {:attribute, :attr}, position: {3, 11}, mod: nil}
-                 ],
                  4 => [
-                   %CallInfo{arity: 0, func: :var, position: {4, 5}, mod: nil},
-                   %CallInfo{arity: 0, func: {:variable, :var}, position: {4, 9}, mod: nil}
+                   %CallInfo{arity: 0, func: {:attribute, :attr}, position: {4, 11}, mod: nil}
+                 ],
+                 5 => [
+                   %CallInfo{arity: 0, func: :var, position: {5, 5}, mod: nil},
+                   %CallInfo{arity: 0, func: {:variable, :var, 0}, position: {5, 9}, mod: nil}
                  ]
                }
       end

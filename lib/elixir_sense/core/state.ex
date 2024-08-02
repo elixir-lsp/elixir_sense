@@ -410,20 +410,25 @@ defmodule ElixirSense.Core.State do
 
   def add_call_to_line(
         %__MODULE__{} = state,
-        {{:@, _meta, [{name, _name_meta, _args}]}, func, arity},
+        {{:@, _meta, [{name, _name_meta, nil}]}, func, arity},
         {_line, _column} = position
       )
       when is_atom(name) do
-    add_call_to_line(state, {{:attribute, name}, func, arity}, position)
+    do_add_call_to_line(state, {{:attribute, name}, func, arity}, position)
   end
 
   def add_call_to_line(
         %__MODULE__{} = state,
-        {{name, _name_meta, args}, func, arity},
+        {{name, meta, args}, func, arity},
         {_line, _column} = position
       )
-      when is_atom(args) do
-    add_call_to_line(state, {{:variable, name}, func, arity}, position)
+      when is_atom(name) and is_atom(args) and
+             name not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
+    do_add_call_to_line(
+      state,
+      {{:variable, name, Keyword.get(meta, :version, :any)}, func, arity},
+      position
+    )
   end
 
   def add_call_to_line(
@@ -432,19 +437,28 @@ defmodule ElixirSense.Core.State do
         {_line, _column} = position
       )
       when is_atom(name) do
-    add_call_to_line(state, {nil, {:attribute, name}, arity}, position)
+    do_add_call_to_line(state, {nil, {:attribute, name}, arity}, position)
   end
 
   def add_call_to_line(
         %__MODULE__{} = state,
-        {nil, {name, _name_meta, args}, arity},
+        {nil, {name, meta, args}, arity},
         {_line, _column} = position
       )
-      when is_atom(args) do
-    add_call_to_line(state, {nil, {:variable, name}, arity}, position)
+      when is_atom(name) and is_atom(args) and
+             name not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
+    do_add_call_to_line(
+      state,
+      {nil, {:variable, name, Keyword.get(meta, :version, :any)}, arity},
+      position
+    )
   end
 
-  def add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, {line, _column} = position) do
+  def add_call_to_line(state, call, position) do
+    do_add_call_to_line(state, call, position)
+  end
+
+  defp do_add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, {line, _column} = position) do
     call = %CallInfo{mod: mod, func: func, arity: arity, position: position}
 
     calls =
