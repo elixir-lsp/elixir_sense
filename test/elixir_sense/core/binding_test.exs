@@ -1727,8 +1727,18 @@ defmodule ElixirSense.Core.BindingTest do
     end
   end
 
-  describe ":erlang functions" do
+  describe "Kernel functions" do
     test "++" do
+      assert {:list, {:integer, 1}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :a, type: {:integer, 1}},
+                   %VarInfo{version: 1, name: :b, type: {:integer, 2}}
+                 ]),
+                 {:local_call, :++, [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
+               )
+
       assert {:list, {:integer, 1}} ==
                Binding.expand(
                  @env
@@ -1740,10 +1750,7 @@ defmodule ElixirSense.Core.BindingTest do
                   [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
                )
     end
-  end
 
-  describe "Kernel functions" do
-    # TODO check which of those get rewritten
     test "tuple elem" do
       assert {:atom, :a} ==
                Binding.expand(
@@ -1754,6 +1761,86 @@ defmodule ElixirSense.Core.BindingTest do
                      version: 1,
                      name: :ref,
                      type: {:local_call, :elem, [{:variable, :tuple, 1}, {:integer, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+
+      assert {:atom, :a} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type:
+                       {:call, {:atom, :erlang}, :element,
+                        [{:integer, 2}, {:variable, :tuple, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+    end
+
+    test "tuple put_elem" do
+      assert {:tuple, 2, [{:atom, :b}, {:atom, :a}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type:
+                       {:local_call, :put_elem,
+                        [{:variable, :tuple, 1}, {:integer, 0}, {:atom, :b}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+
+      assert {:tuple, 2, [{:atom, :b}, {:atom, :a}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type:
+                       {:call, {:atom, :erlang}, :setelement,
+                        [{:integer, 1}, {:variable, :tuple, 1}, {:atom, :b}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+    end
+
+    test "tuple_size" do
+      assert {:integer, 2} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type: {:local_call, :tuple_size, [{:variable, :tuple, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+
+      assert {:integer, 2} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type: {:call, {:atom, :erlang}, :tuple_size, [{:variable, :tuple, 1}]}
                    }
                  ]),
                  {:variable, :ref, 1}
@@ -1774,6 +1861,20 @@ defmodule ElixirSense.Core.BindingTest do
                  ]),
                  {:variable, :ref, 1}
                )
+
+      assert {:atom, :a} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :list, type: {:list, {:atom, :a}}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type: {:call, {:atom, :erlang}, :hd, [{:variable, :list, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
     end
 
     test "list tl" do
@@ -1790,6 +1891,200 @@ defmodule ElixirSense.Core.BindingTest do
                  ]),
                  {:variable, :ref, 1}
                )
+
+      assert {:list, {:atom, :a}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :list, type: {:list, {:atom, :a}}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type: {:call, {:atom, :erlang}, :tl, [{:variable, :list, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+    end
+  end
+
+  describe "Tuple functions" do
+    test "append" do
+      assert {:tuple, 3, [nil, {:atom, :a}, {:atom, :b}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type: {:call, {:atom, Tuple}, :append, [{:variable, :tuple, 1}, {:atom, :b}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+
+      assert {:tuple, 3, [nil, {:atom, :a}, {:atom, :b}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type:
+                       {:call, {:atom, :erlang}, :append_element,
+                        [{:variable, :tuple, 1}, {:atom, :b}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+    end
+
+    test "delete_at" do
+      assert {:tuple, 1, [{:atom, :a}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type:
+                       {:call, {:atom, Tuple}, :delete_at,
+                        [{:variable, :tuple, 1}, {:integer, 0}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+
+      assert {:tuple, 1, [{:atom, :a}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type:
+                       {:call, {:atom, :erlang}, :delete_element,
+                        [{:integer, 1}, {:variable, :tuple, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+    end
+
+    test "insert_at" do
+      assert {:tuple, 3, [{:atom, :b}, nil, {:atom, :a}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type:
+                       {:call, {:atom, Tuple}, :insert_at,
+                        [{:variable, :tuple, 1}, {:integer, 0}, {:atom, :b}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+
+      assert {:tuple, 3, [{:atom, :b}, nil, {:atom, :a}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type:
+                       {:call, {:atom, :erlang}, :insert_element,
+                        [{:integer, 1}, {:variable, :tuple, 1}, {:atom, :b}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+    end
+
+    test "to_list" do
+      assert {:list, {:atom, :a}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 1, [{:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type: {:call, {:atom, Tuple}, :to_list, [{:variable, :tuple, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+
+      assert {:list, :empty} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 0, []}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type: {:call, {:atom, Tuple}, :to_list, [{:variable, :tuple, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+
+      assert {:list, {:atom, :a}} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:tuple, 1, [{:atom, :a}]}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type: {:call, {:atom, :erlang}, :tuple_to_list, [{:variable, :tuple, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+    end
+
+    test "duplicate" do
+      assert {:tuple, 2, [{:atom, :a}, {:atom, :a}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:atom, :a}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type:
+                       {:call, {:atom, Tuple}, :duplicate,
+                        [{:variable, :tuple, 1}, {:integer, 2}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+
+      assert {:tuple, 2, [{:atom, :a}, {:atom, :a}]} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:variables, [
+                   %VarInfo{version: 1, name: :tuple, type: {:atom, :a}},
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type:
+                       {:call, {:atom, :erlang}, :make_tuple,
+                        [{:integer, 2}, {:variable, :tuple, 1}]}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
     end
   end
 
@@ -1800,6 +2095,13 @@ defmodule ElixirSense.Core.BindingTest do
                  @env,
                  {:call, {:atom, Map}, :put,
                   [{:map, [abc: {:atom, :a}], nil}, {:atom, :cde}, {:atom, :b}]}
+               )
+
+      assert {:map, [cde: {:atom, :b}, abc: {:atom, :a}], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, :maps}, :put,
+                  [{:atom, :cde}, {:atom, :b}, {:map, [abc: {:atom, :a}], nil}]}
                )
     end
 
@@ -1823,6 +2125,13 @@ defmodule ElixirSense.Core.BindingTest do
                  {:call, {:atom, Map}, :delete,
                   [{:map, [abc: {:atom, :a}, cde: nil], nil}, {:atom, :cde}]}
                )
+
+      assert {:map, [abc: {:atom, :a}], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, :maps}, :remove,
+                  [{:atom, :cde}, {:map, [abc: {:atom, :a}, cde: nil], nil}]}
+               )
     end
 
     test "merge" do
@@ -1830,6 +2139,13 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env,
                  {:call, {:atom, Map}, :merge,
+                  [{:map, [abc: {:atom, :a}], nil}, {:map, [cde: {:atom, :b}], nil}]}
+               )
+
+      assert {:map, [abc: {:atom, :a}, cde: {:atom, :b}], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, :maps}, :merge,
                   [{:map, [abc: {:atom, :a}], nil}, {:map, [cde: {:atom, :b}], nil}]}
                )
     end
@@ -1886,6 +2202,13 @@ defmodule ElixirSense.Core.BindingTest do
                  {:call, {:atom, Map}, :replace!,
                   [{:map, [abc: {:atom, :a}], nil}, {:atom, :abc}, {:atom, :b}]}
                )
+
+      assert {:map, [abc: {:atom, :b}], nil} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, :maps}, :update,
+                  [{:atom, :abc}, {:atom, :b}, {:map, [abc: {:atom, :a}], nil}]}
+               )
     end
 
     test "put_new" do
@@ -1912,6 +2235,12 @@ defmodule ElixirSense.Core.BindingTest do
                  @env,
                  {:call, {:atom, Map}, :fetch!, [{:map, [abc: {:atom, :a}], nil}, {:atom, :abc}]}
                )
+
+      assert {:atom, :a} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, :maps}, :get, [{:atom, :abc}, {:map, [abc: {:atom, :a}], nil}]}
+               )
     end
 
     test "fetch" do
@@ -1919,6 +2248,12 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env,
                  {:call, {:atom, Map}, :fetch, [{:map, [abc: {:atom, :a}], nil}, {:atom, :abc}]}
+               )
+
+      assert {:tuple, 2, [atom: :ok, atom: :a]} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, :maps}, :find, [{:atom, :abc}, {:map, [abc: {:atom, :a}], nil}]}
                )
     end
 

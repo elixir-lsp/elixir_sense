@@ -399,13 +399,13 @@ defmodule ElixirSense.Core.Binding do
 
   defp expand_call(
          env,
-         {:atom, :erlang},
+         {:atom, module},
          name,
          [list_candidate | _],
          _include_private,
          stack
        )
-       when name in [:++, :--] do
+       when name in [:++, :--] and module in [Kernel, :erlang] do
     case expand(env, list_candidate, stack) do
       {:list, type} ->
         {:list, type}
@@ -438,17 +438,18 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  # rewritten elem
   defp expand_call(
          env,
-         {:atom, Kernel},
-         :hd,
-         [list_candidate],
+         {:atom, :erlang},
+         :element,
+         [n_candidate, tuple_candidate],
          _include_private,
          stack
        ) do
-    case expand(env, list_candidate, stack) do
-      {:list, type} ->
-        type
+    case expand(env, n_candidate, stack) do
+      {:integer, n} ->
+        expand(env, {:tuple_nth, tuple_candidate, n - 1}, stack)
 
       nil ->
         nil
@@ -461,11 +462,258 @@ defmodule ElixirSense.Core.Binding do
   defp expand_call(
          env,
          {:atom, Kernel},
+         :put_elem,
+         [tuple_candidate, n_candidate, value],
+         _include_private,
+         stack
+       ) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         {:integer, n} when n >= 0 and n < elems_count <- expand(env, n_candidate, stack),
+         expanded_value when expanded_value != :none <- expand(env, value, stack) do
+      {:tuple, elems_count, elems |> List.replace_at(n, expanded_value)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  # rewritten put_elem
+  defp expand_call(
+         env,
+         {:atom, :erlang},
+         :setelement,
+         [n_candidate, tuple_candidate, value],
+         _include_private,
+         stack
+       ) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         {:integer, n} when n >= 1 and n <= elems_count <- expand(env, n_candidate, stack),
+         expanded_value when expanded_value != :none <- expand(env, value, stack) do
+      {:tuple, elems_count, elems |> List.replace_at(n - 1, expanded_value)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, module},
+         fun,
+         [tuple_candidate, value],
+         _include_private,
+         stack
+       )
+       when (module == Tuple and fun == :append) or (module == :erlang and fun == :append_element) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         expanded_value when expanded_value != :none <- expand(env, value, stack) do
+      {:tuple, elems_count + 1, elems ++ [expanded_value]}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Tuple},
+         :delete_at,
+         [tuple_candidate, n_candidate],
+         _include_private,
+         stack
+       ) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         {:integer, n} when n >= 0 and n < elems_count <- expand(env, n_candidate, stack) do
+      {:tuple, elems_count - 1, elems |> List.delete_at(n)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  # rewritten Tuple.delete_at
+  defp expand_call(
+         env,
+         {:atom, :erlang},
+         :delete_element,
+         [n_candidate, tuple_candidate],
+         _include_private,
+         stack
+       ) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         {:integer, n} when n > 0 and n <= elems_count <- expand(env, n_candidate, stack) do
+      {:tuple, elems_count - 1, elems |> List.delete_at(n - 1)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Tuple},
+         :insert_at,
+         [tuple_candidate, n_candidate, value],
+         _include_private,
+         stack
+       ) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         {:integer, n} when n >= 0 and n <= elems_count <- expand(env, n_candidate, stack),
+         expanded_value when expanded_value != :none <- expand(env, value, stack) do
+      {:tuple, elems_count + 1, elems |> List.insert_at(n, expanded_value)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  # rewritten Tuple.insert_at
+  defp expand_call(
+         env,
+         {:atom, :erlang},
+         :insert_element,
+         [n_candidate, tuple_candidate, value],
+         _include_private,
+         stack
+       ) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         {:integer, n} when n > 0 and n <= elems_count + 1 <- expand(env, n_candidate, stack),
+         expanded_value when expanded_value != :none <- expand(env, value, stack) do
+      {:tuple, elems_count + 1, elems |> List.insert_at(n - 1, expanded_value)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, module},
+         fun,
+         [tuple_candidate],
+         _include_private,
+         stack
+       )
+       when (module == Tuple and fun == :to_list) or (module == :erlang and fun == :tuple_to_list) do
+    with {:tuple, _elems_count, elems} <- expand(env, tuple_candidate, stack) do
+      case elems do
+        [] -> {:list, :empty}
+        [first | _] -> {:list, first}
+      end
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, module},
+         :tuple_size,
+         [tuple_candidate],
+         _include_private,
+         stack
+       )
+       when module in [Kernel, :erlang] do
+    with {:tuple, elems_count, _elems} <- expand(env, tuple_candidate, stack) do
+      {:integer, elems_count}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, module},
+         fun,
+         [value, n_candidate],
+         _include_private,
+         stack
+       )
+       when (module == Tuple and fun == :duplicate) or (module == :erlang and fun == :make_tuple) do
+    {value, n_candidate} =
+      if module == :erlang do
+        {n_candidate, value}
+      else
+        {value, n_candidate}
+      end
+
+    # limit to 5
+    with {:integer, n} when n >= 0 <- expand(env, n_candidate, stack),
+         expanded_value when expanded_value != :none <- expand(env, value, stack) do
+      {:tuple, n, expanded_value |> List.duplicate(n)}
+    else
+      nil ->
+        nil
+
+      {:integer, _n} ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  # hd is inlined
+  defp expand_call(
+         env,
+         {:atom, module},
+         :hd,
+         [list_candidate],
+         _include_private,
+         stack
+       )
+       when module in [Kernel, :erlang] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        type
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  # tl is inlined
+  defp expand_call(
+         env,
+         {:atom, module},
          :tl,
          [list_candidate],
          _include_private,
          stack
-       ) do
+       )
+       when module in [Kernel, :erlang] do
     case expand(env, list_candidate, stack) do
       {:list, type} ->
         {:list, type}
@@ -762,8 +1010,17 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, fun, [map, key], _include_private, stack)
-       when fun in [:fetch, :fetch!, :get] do
+  defp expand_call(env, {:atom, module}, fun, [map, key], _include_private, stack)
+       when (module == Map and fun in [:fetch, :fetch!, :get]) or
+              (module == :maps and fun in [:find, :get]) do
+    {map, key} =
+      if module == :maps do
+        # rewritten versions have different arg order
+        {key, map}
+      else
+        {map, key}
+      end
+
     fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
@@ -773,7 +1030,7 @@ defmodule ElixirSense.Core.Binding do
         {:atom, atom} ->
           value = fields |> Keyword.get(atom)
 
-          if fun == :fetch and value != nil do
+          if fun in [:fetch, :find] and value != nil do
             {:tuple, 2, [{:atom, :ok}, value]}
           else
             value
@@ -809,8 +1066,17 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private, stack)
-       when fun in [:put, :replace!] do
+  defp expand_call(env, {:atom, module}, fun, [map, key, value], _include_private, stack)
+       when (fun == :put and module in [Map, :maps]) or (fun == :update and module == :maps) or
+              (fun == :replace! and module == Map) do
+    {map, key, value} =
+      if module == :maps do
+        # rewritten versions have different parameter order
+        {value, map, key}
+      else
+        {map, key, value}
+      end
+
     fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
@@ -850,7 +1116,16 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, :delete, [map, key], _include_private, stack) do
+  defp expand_call(env, {:atom, module}, fun, [map, key], _include_private, stack)
+       when (module == Map and fun == :delete) or (module == :maps and fun == :remove) do
+    {map, key} =
+      if module == :maps do
+        # rewritten versions have different arg order
+        {key, map}
+      else
+        {map, key}
+      end
+
     fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
@@ -869,7 +1144,9 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, :merge, [map, other_map], _include_private, stack) do
+  # Map.merge/2 is inlined
+  defp expand_call(env, {:atom, module}, :merge, [map, other_map], _include_private, stack)
+       when module in [Map, :maps] do
     fields = expand_map_fields(env, map, stack)
 
     other_fields =
