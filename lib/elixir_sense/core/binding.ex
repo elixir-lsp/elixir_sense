@@ -84,34 +84,18 @@ defmodule ElixirSense.Core.Binding do
     expand(env, combined, stack)
   end
 
-  def do_expand(%Binding{variables: variables} = env, {:variable, variable, :any}, stack) do
-    sorted_variables = Enum.sort_by(variables, &(-&1.version))
+  def do_expand(%Binding{variables: variables} = env, {:variable, variable, version}, stack) do
+    sorted_variables = Enum.sort_by(variables, &{&1.name, -&1.version})
 
     type =
       case Enum.find(sorted_variables, fn %State.VarInfo{} = var ->
-             var.name == variable
+             var.name == variable and (var.version == version or version == :any)
            end) do
         nil ->
           # no variable found - treat a local call
-          # TODO this cannot happen
-          expand(env, {:local_call, variable, []}, stack)
-
-        %State.VarInfo{type: type} ->
-          type
-      end
-
-    expand(env, type, stack)
-  end
-
-  def do_expand(%Binding{variables: variables} = env, {:variable, variable, version}, stack) do
-    type =
-      case Enum.find(variables, fn %State.VarInfo{} = var ->
-             var.name == variable and var.version == version
-           end) do
-        nil ->
-          # no variable found - treat a local call
-          # TODO this cannot happen
-          expand(env, {:local_call, variable, []}, stack)
+          # this cannot happen if no parens call is missclassed as variable e.g. by
+          # Code.Fragment APIs
+          {:local_call, variable, []}
 
         %State.VarInfo{type: type} ->
           type
