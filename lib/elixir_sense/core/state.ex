@@ -65,7 +65,8 @@ defmodule ElixirSense.Core.State do
           typedoc_context: list(),
           optional_callbacks_context: list(),
           lines_to_env: lines_to_env_t,
-          cursor_env: nil | {keyword, ElixirSense.Core.State.Env.t()}
+          cursor_env: nil | {keyword, ElixirSense.Core.State.Env.t()},
+          ex_unit_describe: nil | atom
         }
 
   defstruct attributes: [[]],
@@ -96,7 +97,8 @@ defmodule ElixirSense.Core.State do
             typedoc_context: [[]],
             optional_callbacks_context: [[]],
             lines_to_env: %{},
-            cursor_env: nil
+            cursor_env: nil,
+            ex_unit_describe: nil
 
   defmodule Env do
     @moduledoc """

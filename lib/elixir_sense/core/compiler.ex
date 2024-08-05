@@ -12,16 +12,16 @@ defmodule ElixirSense.Core.Compiler do
   def env, do: @env
 
   def expand(ast, state, env) do
-    try do
-      do_expand(ast, state, env)
-    catch
-      kind, payload ->
-        Logger.warning(
-          "Unable to expand ast node #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
-        )
+    # try do
+    do_expand(ast, state, env)
+    # catch
+    #   kind, payload ->
+    #     Logger.warning(
+    #       "Unable to expand ast node #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
+    #     )
 
-        {ast, state, env}
-    end
+    #     {ast, state, env}
+    # end
   end
 
   # =/2
@@ -1728,6 +1728,69 @@ defmodule ElixirSense.Core.Compiler do
     {{name, arity}, state, env}
   end
 
+  defp expand_macro(
+         meta,
+         ExUnit.Case,
+         :test,
+         [name | rest],
+         callback,
+         state,
+         env = %{module: module}
+       )
+       when module != nil and is_binary(name) do
+    {args, do_block} =
+      case rest do
+        [] -> {[{:_, [], nil}], [do: {:__block__, [], []}]}
+        [do_block] -> {[{:_, [], nil}], do_block}
+        [context, do_block | _] -> {[context], do_block}
+      end
+
+    call = {ex_unit_test_name(state, name), meta, args}
+    expand_macro(meta, Kernel, :def, [call, do_block], callback, state, env)
+  end
+
+  defp expand_macro(
+         meta,
+         ExUnit.Callbacks,
+         setup,
+         rest,
+         callback,
+         state,
+         env = %{module: module}
+       )
+       when module != nil and setup in [:setup, :setup_all] do
+    {args, do_block} =
+      case rest do
+        [] -> {[{:_, [], nil}], [do: {:__block__, [], []}]}
+        [do_block] -> {[{:_, [], nil}], do_block}
+        [context, do_block | _] -> {[context], do_block}
+      end
+
+    line = Keyword.fetch!(meta, :line)
+
+    # NOTE this name is not 100% correct - ex_unit uses counters instead of line but it's too complicated
+    call = {:"__ex_unit_#{setup}_#{line}", meta, args}
+    # TODO add on expand_import/require
+    # |> add_call_to_line({nil, :test, 3}, {line, column})
+    expand_macro(meta, Kernel, :def, [call, do_block], callback, state, env)
+  end
+
+  defp expand_macro(
+         _meta,
+         ExUnit.Case,
+         :describe,
+         [name, [{:do, block}]],
+         _callback,
+         state,
+         env = %{module: module}
+       )
+       when module != nil and is_binary(name) do
+    state = %{state | ex_unit_describe: name}
+    {ast, state, _env} = expand(block, state, env)
+    state = %{state | ex_unit_describe: nil}
+    {{:__block__, [], [ast]}, state, env}
+  end
+
   defp expand_macro(meta, module, fun, args, callback, state, env) do
     expand_macro_callback(meta, module, fun, args, callback, state, env)
   end
@@ -1804,6 +1867,14 @@ defmodule ElixirSense.Core.Compiler do
 
       {position, end_position}
     end
+  end
+
+  defp ex_unit_test_name(state, name) do
+    case state.ex_unit_describe do
+      nil -> "test #{name}"
+      describe -> "test #{describe} #{name}"
+    end
+    |> String.to_atom()
   end
 
   # defmodule helpers

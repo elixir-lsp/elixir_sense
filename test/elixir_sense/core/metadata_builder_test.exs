@@ -6,8 +6,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, ModFunInfo, AttributeInfo}
 
-  @var_in_ex_unit false
-
   describe "versioned_vars" do
     test "in block" do
       state =
@@ -1168,84 +1166,79 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
-  if @var_in_ex_unit do
-    describe "vars in ex_unit" do
-      test "variables are added to environment in ex_unit test" do
-        state =
-          """
-          defmodule MyModuleTests do
-            use ExUnit.Case, async: true
-
-            test "it does what I want", %{some: some} do
-              IO.puts("")
-            end
-
-            describe "this" do
-              test "too does what I want" do
-                IO.puts("")
-              end
-            end
-
-            test "is not implemented"
+  describe "vars in ex_unit" do
+    test "variables are added to environment in ex_unit test" do
+      state =
+        """
+        defmodule MyModuleTests do
+          use ExUnit.Case, async: true
+          IO.puts("")
+          test "it does what I want", %{some: some} do
+            IO.puts("")
           end
-          """
-          |> string_to_state
 
-        assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
-        assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
-
-        assert Map.has_key?(
-                 state.mods_funs_to_positions,
-                 {MyModuleTests, :"test it does what I want", 1}
-               )
-
-        assert Map.has_key?(
-                 state.mods_funs_to_positions,
-                 {MyModuleTests, :"test this too does what I want", 1}
-               )
-
-        assert Map.has_key?(
-                 state.mods_funs_to_positions,
-                 {MyModuleTests, :"test is not implemented", 1}
-               )
-      end
-
-      test "variables are added to environment in ex_unit setup" do
-        state =
-          """
-          defmodule MyModuleTests do
-            use ExUnit.Case, async: true
-
-            setup_all %{some: some} do
+          describe "this" do
+            test "too does what I want" do
               IO.puts("")
             end
-
-            setup %{some: other} do
-              IO.puts("")
-            end
-
-            setup do
-              IO.puts("")
-            end
-
-            setup :clean_up_tmp_directory
-
-            setup [:clean_up_tmp_directory, :another_setup]
-
-            setup {MyModule, :my_setup_function}
           end
-          """
-          |> string_to_state
 
-        assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
-        assert [%VarInfo{name: :some}] = state.vars_info_per_scope_id[scope_id]
+          test "is not implemented"
+        end
+        """
+        |> string_to_state
 
-        assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(9)
-        assert [%VarInfo{name: :other}] = state.vars_info_per_scope_id[scope_id]
+      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
 
-        # we do not generate defs - ExUnit.Callbacks.__setup__ is too complicated and generates def names with counters, e.g.
-        # :"__ex_unit_setup_#{counter}_#{length(setup)}"
-      end
+      assert Map.has_key?(
+               state.mods_funs_to_positions,
+               {MyModuleTests, :"test it does what I want", 1}
+             )
+
+      assert Map.has_key?(
+               state.mods_funs_to_positions,
+               {MyModuleTests, :"test this too does what I want", 1}
+             )
+
+      assert Map.has_key?(
+               state.mods_funs_to_positions,
+               {MyModuleTests, :"test is not implemented", 1}
+             )
+    end
+
+    test "variables are added to environment in ex_unit setup" do
+      state =
+        """
+        defmodule MyModuleTests do
+          use ExUnit.Case, async: true
+
+          setup_all %{some: some} do
+            IO.puts("")
+          end
+
+          setup %{some: other} do
+            IO.puts("")
+          end
+
+          setup do
+            IO.puts("")
+          end
+
+          setup :clean_up_tmp_directory
+
+          setup [:clean_up_tmp_directory, :another_setup]
+
+          setup {MyModule, :my_setup_function}
+        end
+        """
+        |> string_to_state
+
+      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
+
+      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(9)
+
+      # we do not generate defs - ExUnit.Callbacks.__setup__ is too complicated and generates def names with counters, e.g.
+      # :"__ex_unit_setup_#{counter}_#{length(setup)}"
     end
   end
 
