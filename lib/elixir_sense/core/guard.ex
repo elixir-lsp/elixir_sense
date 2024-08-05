@@ -45,9 +45,15 @@ defmodule ElixirSense.Core.Guard do
         {guard_predicate, _, params} = node, acc ->
           case guard_predicate_type(guard_predicate, params, state) do
             {type, binding} ->
-              {var, _, nil} = binding
-              # If we found the predicate type, we can prematurely exit traversing the subtree
-              {[], [{var, type} | acc]}
+              case binding do
+                # If we found the predicate type, we can prematurely exit traversing the subtree
+                {var, _, nil} ->
+                  {[], [{var, type} | acc]}
+
+                _ ->
+                  {node, acc}
+
+              end
 
             nil ->
               {node, acc}
@@ -61,7 +67,7 @@ defmodule ElixirSense.Core.Guard do
   end
 
   defp guard_predicate_type(p, params, _)
-       when p in [:is_number, :is_float, :is_integer, :round, :trunc, :div, :rem, :abs],
+       when p in [:is_number, :is_float, :is_integer, :round, :trunc, :div, :rem, :abs, :floor, :ceil],
        do: {:number, hd(params)}
 
   defp guard_predicate_type(p, params, _) when p in [:is_binary, :binary_part],

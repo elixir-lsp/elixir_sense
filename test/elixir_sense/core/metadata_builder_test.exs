@@ -1018,7 +1018,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           &1,
           abc,
           cde = 1,
-          record_env()  
+          record_env()
         ]
         record_env()
         """
@@ -1213,6 +1213,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [
                %VarInfo{name: :abc, positions: [{2, 11}, {3, 10}]}
              ] = state |> get_line_vars(3)
+    end
+
+    test "guards referencing `map.field` don't have match errors" do
+      logs =
+        ExUnit.CaptureLog.capture_log(fn ->
+          """
+          defmodule My do
+            def foo(abc) when is_atom(abc.foo) do
+              record_env()
+            end
+          end
+          """
+          |> string_to_state
+        end)
+
+      refute String.contains?(logs, "MatchError")
     end
   end
 
