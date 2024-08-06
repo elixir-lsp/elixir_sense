@@ -360,10 +360,17 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | cursor_env: {meta, env}}
   end
 
-  def add_current_env_to_line(%__MODULE__{} = state, line, macro_env) when is_integer(line) do
+  def add_current_env_to_line(%__MODULE__{} = state, meta, macro_env) when is_list(meta) do
+    do_add_current_env_to_line(state, Keyword.get(meta, :line, 0), macro_env)
+  end
+
+  defp do_add_current_env_to_line(%__MODULE__{} = state, line, macro_env)
+       when is_integer(line) and line > 0 do
     env = get_current_env(state, macro_env)
     %__MODULE__{state | lines_to_env: Map.put(state.lines_to_env, line, env)}
   end
+
+  defp do_add_current_env_to_line(%__MODULE__{} = state, _line, _macro_env), do: state
 
   def add_moduledoc_positions(
         %__MODULE__{} = state,

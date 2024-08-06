@@ -136,7 +136,7 @@ defmodule ElixirSense.Core.Compiler do
     state =
       state
       |> add_first_alias_positions(env, meta)
-      |> add_current_env_to_line(Keyword.fetch!(meta, :line), env)
+      |> add_current_env_to_line(meta, env)
 
     # no need to call expand_without_aliases_report - we never report
     {arg, state, env} = expand(arg, state, env)
@@ -165,7 +165,7 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> add_current_env_to_line(Keyword.fetch!(meta, :line), env)
+      |> add_current_env_to_line(meta, env)
 
     # no need to call expand_without_aliases_report - we never report
     {arg, state, env} = expand(arg, state, env)
@@ -225,7 +225,7 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:import, meta, [arg, opts]}, state, env) do
     state =
       state
-      |> add_current_env_to_line(Keyword.fetch!(meta, :line), env)
+      |> add_current_env_to_line(meta, env)
 
     # no need to call expand_without_aliases_report - we never report
     {arg, state, env} = expand(arg, state, env)
@@ -256,48 +256,42 @@ defmodule ElixirSense.Core.Compiler do
   # Compilation environment macros
 
   defp do_expand({:__MODULE__, meta, ctx}, state, env) when is_atom(ctx) do
-    line = Keyword.get(meta, :line, 0)
-    state = if line > 0, do: add_current_env_to_line(state, line, env), else: state
+    state = add_current_env_to_line(state, meta, env)
 
     {env.module, state, env}
   end
 
   defp do_expand({:__DIR__, meta, ctx}, state, env) when is_atom(ctx) do
-    line = Keyword.get(meta, :line, 0)
-    state = if line > 0, do: add_current_env_to_line(state, line, env), else: state
+    state = add_current_env_to_line(state, meta, env)
 
     {Path.dirname(env.file), state, env}
   end
 
-  defp do_expand({:__CALLER__, meta, ctx} = caller, s, e) when is_atom(ctx) do
+  defp do_expand({:__CALLER__, meta, ctx} = caller, state, env) when is_atom(ctx) do
     # elixir checks if context is not match and if caller is allowed
-    line = Keyword.get(meta, :line, 0)
-    s = if line > 0, do: add_current_env_to_line(s, line, e), else: s
+    state = add_current_env_to_line(state, meta, env)
 
-    {caller, s, e}
+    {caller, state, env}
   end
 
-  defp do_expand({:__STACKTRACE__, meta, ctx} = stacktrace, s, e) when is_atom(ctx) do
+  defp do_expand({:__STACKTRACE__, meta, ctx} = stacktrace, state, env) when is_atom(ctx) do
     # elixir checks if context is not match and if stacktrace is allowed
-    line = Keyword.get(meta, :line, 0)
-    s = if line > 0, do: add_current_env_to_line(s, line, e), else: s
+    state = add_current_env_to_line(state, meta, env)
 
-    {stacktrace, s, e}
+    {stacktrace, state, env}
   end
 
-  defp do_expand({:__ENV__, meta, ctx}, s, e) when is_atom(ctx) do
+  defp do_expand({:__ENV__, meta, ctx}, state, env) when is_atom(ctx) do
     # elixir checks if context is not match
-    line = Keyword.get(meta, :line, 0)
-    s = if line > 0, do: add_current_env_to_line(s, line, e), else: s
+    state = add_current_env_to_line(state, meta, env)
 
-    {escape_map(escape_env_entries(meta, s, e)), s, e}
+    {escape_map(escape_env_entries(meta, state, env)), state, env}
   end
 
   defp do_expand({{:., dot_meta, [{:__ENV__, meta, atom}, field]}, call_meta, []}, s, e)
        when is_atom(atom) and is_atom(field) do
     # elixir checks if context is not match
-    line = Keyword.get(call_meta, :line, 0)
-    s = if line > 0, do: add_current_env_to_line(s, line, e), else: s
+    s = add_current_env_to_line(s, call_meta, e)
 
     env = escape_env_entries(meta, s, e)
 
@@ -308,7 +302,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   # Quote
-
+  # TODO add_current_line_to_env
   defp do_expand({unquote_call, meta, [arg]}, s, e)
        when unquote_call in [:unquote, :unquote_splicing] do
     # elixir raises here unquote_outside_quote
@@ -438,7 +432,7 @@ defmodule ElixirSense.Core.Compiler do
         s =
           s
           |> add_call_to_line({nil, name, arity}, {line, column})
-          |> add_current_env_to_line(line, e)
+          |> add_current_env_to_line(super_meta, e)
 
         {{:&, meta, [{:/, arity_meta, [{name, super_meta, context}, arity]}]}, s, e}
 
@@ -512,7 +506,7 @@ defmodule ElixirSense.Core.Compiler do
         sa =
           sa
           |> add_call_to_line({nil, name, arity}, {line, column})
-          |> add_current_env_to_line(line, ea)
+          |> add_current_env_to_line(meta, ea)
 
         {{:super, [{:super, {kind, name}} | meta], e_args}, sa, ea}
 
@@ -778,7 +772,7 @@ defmodule ElixirSense.Core.Compiler do
     sa =
       sa
       |> add_call_to_line({nil, e_expr, length(e_args)}, {line, column})
-      |> add_current_env_to_line(line, e)
+      |> add_current_env_to_line(meta, e)
 
     {{{:., dot_meta, [e_expr]}, meta, e_args}, sa, ea}
   end
@@ -879,7 +873,7 @@ defmodule ElixirSense.Core.Compiler do
         arity = length(args)
 
         state
-        |> add_current_env_to_line(line, %{env | context: nil, function: {name, arity}})
+        |> add_current_env_to_line(meta, %{env | context: nil, function: {name, arity}})
         |> add_func_to_index(
           env,
           name,
@@ -904,11 +898,9 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when module != nil do
-    line = Keyword.fetch!(meta, :line)
-
     state =
       state
-      |> add_current_env_to_line(line, env)
+      |> add_current_env_to_line(meta, env)
 
     {arg, state, env} = expand(arg, state, env)
     add_behaviour(arg, state, env)
@@ -924,11 +916,9 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when module != nil do
-    line = Keyword.fetch!(meta, :line)
-
     state =
       state
-      |> add_current_env_to_line(line, env)
+      |> add_current_env_to_line(meta, env)
 
     {arg, state, env} = expand(arg, state, env)
 
@@ -953,11 +943,9 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when doc in [:doc, :typedoc] and module != nil do
-    line = Keyword.fetch!(meta, :line)
-
     state =
       state
-      |> add_current_env_to_line(line, env)
+      |> add_current_env_to_line(meta, env)
 
     {arg, state, env} = expand(arg, state, env)
 
@@ -978,11 +966,9 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when module != nil do
-    line = Keyword.fetch!(meta, :line)
-
     state =
       state
-      |> add_current_env_to_line(line, env)
+      |> add_current_env_to_line(meta, env)
 
     {arg, state, env} = expand(arg, state, env)
 
@@ -1004,11 +990,9 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when module != nil do
-    line = Keyword.fetch!(meta, :line)
-
     state =
       state
-      |> add_current_env_to_line(line, env)
+      |> add_current_env_to_line(meta, env)
 
     {arg, state, env} = expand(arg, state, env)
 
@@ -1029,11 +1013,9 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when module != nil do
-    line = Keyword.fetch!(meta, :line)
-
     state =
       state
-      |> add_current_env_to_line(line, env)
+      |> add_current_env_to_line(meta, env)
 
     {arg, state, env} = expand(arg, state, env)
 
@@ -1132,7 +1114,7 @@ defmodule ElixirSense.Core.Compiler do
           state
           |> add_type(env, name, type_args, spec, kind, position, end_position)
           |> with_typespec({name, length(type_args)})
-          |> add_current_env_to_line(line, env)
+          |> add_current_env_to_line(attr_meta, env)
           |> with_typespec(nil)
 
         {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
@@ -1193,7 +1175,7 @@ defmodule ElixirSense.Core.Compiler do
           state
           |> add_spec(env, name, type_args, spec, kind, position, end_position)
           |> with_typespec({name, length(type_args)})
-          |> add_current_env_to_line(line, env)
+          |> add_current_env_to_line(attr_meta, env)
           |> with_typespec(nil)
 
         {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
@@ -1245,7 +1227,7 @@ defmodule ElixirSense.Core.Compiler do
     state =
       state
       |> add_attribute(name, inferred_type, is_definition, {line, column})
-      |> add_current_env_to_line(line, env)
+      |> add_current_env_to_line(meta, env)
 
     {{:@, meta, [{name, name_meta, e_args}]}, state, env}
   end
@@ -1371,7 +1353,7 @@ defmodule ElixirSense.Core.Compiler do
         options
       )
       |> add_call_to_line({module, call, length(args)}, {line, column})
-      |> add_current_env_to_line(line, env)
+      |> add_current_env_to_line(meta, env)
 
     {{{:., meta, [Record, call]}, meta, args}, state, env}
   end
@@ -1554,7 +1536,7 @@ defmodule ElixirSense.Core.Compiler do
           state
           |> add_module_to_index(full, position, end_position, [])
           |> add_module
-          |> add_current_env_to_line(line, %{env | module: full})
+          |> add_current_env_to_line(meta, %{env | module: full})
           |> add_module_functions(%{env | module: full}, module_functions, position, end_position)
           |> new_vars_scope
           |> new_attributes_scope
@@ -1702,7 +1684,7 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> add_current_env_to_line(line, env_for_expand)
+      |> add_current_env_to_line(meta, env_for_expand)
       |> add_func_to_index(
         env,
         name,
@@ -1934,7 +1916,7 @@ defmodule ElixirSense.Core.Compiler do
           s =
             __MODULE__.Env.close_write(sa, s)
             |> add_call_to_line({receiver, right, length(e_args)}, {line, column})
-            |> add_current_env_to_line(line, e)
+            |> add_current_env_to_line(meta, e)
 
           {rewritten, s, ea}
 
@@ -1943,7 +1925,7 @@ defmodule ElixirSense.Core.Compiler do
           s =
             __MODULE__.Env.close_write(sa, s)
             |> add_call_to_line({receiver, right, length(e_args)}, {line, column})
-            |> add_current_env_to_line(line, e)
+            |> add_current_env_to_line(meta, e)
 
           {{{:., dot_meta, [receiver, right]}, attached_meta, e_args}, s, ea}
       end
@@ -1960,7 +1942,7 @@ defmodule ElixirSense.Core.Compiler do
     s =
       __MODULE__.Env.close_write(sa, s)
       |> add_call_to_line({receiver, right, length(e_args)}, {line, column})
-      |> add_current_env_to_line(line, e)
+      |> add_current_env_to_line(meta, e)
 
     {{{:., dot_meta, [receiver, right]}, meta, e_args}, s, ea}
   end
@@ -2005,7 +1987,7 @@ defmodule ElixirSense.Core.Compiler do
     state =
       state
       |> add_call_to_line({nil, fun, length(args)}, {line, column})
-      |> add_current_env_to_line(line, env)
+      |> add_current_env_to_line(meta, env)
 
     {args, state, env} = expand_args(args, state, env)
     {{fun, meta, args}, state, env}
@@ -2049,7 +2031,7 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_block([], acc, _meta, s, e), do: {Enum.reverse(acc), s, e}
 
   defp expand_block([h], acc, meta, s, e) do
-    # s = s |> add_current_env_to_line(Keyword.fetch!(meta, :line), e)
+    # s = s |> add_current_env_to_line(meta, e)
     {eh, se, ee} = expand(h, s, e)
     expand_block([], [eh | acc], meta, se, ee)
   end
@@ -2067,7 +2049,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_block([h | t], acc, meta, s, e) do
-    # s = s |> add_current_env_to_line(Keyword.fetch!(meta, :line), e)
+    # s = s |> add_current_env_to_line(meta, e)
     {eh, se, ee} = expand(h, s, e)
     expand_block(t, [eh | acc], meta, se, ee)
   end
@@ -2176,7 +2158,7 @@ defmodule ElixirSense.Core.Compiler do
         se =
           se
           |> add_call_to_line({remote, fun, arity}, {line, column})
-          |> add_current_env_to_line(line, ee)
+          |> add_current_env_to_line(attached_meta, ee)
 
         {{:&, meta, [{:/, [], [{{:., dot_meta, [remote, fun]}, attached_meta, []}, arity]}]}, se,
          ee}
@@ -2189,7 +2171,7 @@ defmodule ElixirSense.Core.Compiler do
         se =
           se
           |> add_call_to_line({nil, fun, arity}, {line, column})
-          |> add_current_env_to_line(line, ee)
+          |> add_current_env_to_line(local_meta, ee)
 
         {{:&, meta, [{:/, [], [{fun, local_meta, nil}, arity]}]}, se, ee}
 
