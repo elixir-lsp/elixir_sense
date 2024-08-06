@@ -12,16 +12,16 @@ defmodule ElixirSense.Core.Compiler do
   def env, do: @env
 
   def expand(ast, state, env) do
-    # try do
-    do_expand(ast, state, env)
-    # catch
-    #   kind, payload ->
-    #     Logger.warning(
-    #       "Unable to expand ast node #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
-    #     )
+    try do
+      do_expand(ast, state, env)
+    catch
+      kind, payload ->
+        Logger.warning(
+          "Unable to expand ast node #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
+        )
 
-    #     {ast, state, env}
-    # end
+        {ast, state, env}
+    end
   end
 
   # =/2
@@ -1807,10 +1807,12 @@ defmodule ElixirSense.Core.Compiler do
     try do
       callback.(meta, args)
     catch
-      # TODO raise?
-      # For language servers, if expanding the macro fails, we just give up.
-      _kind, _payload ->
-        # IO.inspect(payload, label: inspect(fun))
+      # If expanding the macro fails, we just give up.
+      kind, payload ->
+        Logger.warning(
+          "Unable to expand macro #{inspect(module)}.#{fun}/#{length(args)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
+        )
+
         {{{:., meta, [module, fun]}, meta, args}, state, env}
     else
       ast ->
