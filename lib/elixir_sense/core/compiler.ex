@@ -670,20 +670,22 @@ defmodule ElixirSense.Core.Compiler do
     # If we are inside a function, we support reading from locals.
     allow_locals = match?({n, a} when fun != n or arity != a, env.function)
 
-    # TODO this crashes with CompileError ambiguous_call
     case NormalizedMacroEnv.expand_import(env, meta, fun, arity,
            trace: false,
            allow_locals: allow_locals,
            check_deprecations: false
          ) do
       {:macro, module, callback} ->
-        # TODO there is a subtle difference - callback will call expander with state derived from env via
-        # :elixir_env.env_to_ex(env) possibly losing some details
-        # line = Keyword.get(meta, :line, 0)
-        # column = Keyword.get(meta, :column, nil)
-        # state = state
-        # |> add_call_to_line({module, fun, length(args)}, {line, column})
-        # |> add_current_env_to_line(line, env)
+        # NOTE there is a subtle difference - callback will call expander with state derived from env via
+        # :elixir_env.env_to_ex(env) possibly losing some details. Jose Valim is convinced this is not a problem
+        line = Keyword.get(meta, :line, 0)
+        column = Keyword.get(meta, :column, nil)
+
+        state =
+          state
+          |> add_call_to_line({module, fun, length(args)}, {line, column})
+          |> add_current_env_to_line(meta, env)
+
         expand_macro(meta, module, fun, args, callback, state, env)
 
       {:function, module, fun} ->
@@ -733,12 +735,19 @@ defmodule ElixirSense.Core.Compiler do
                  check_deprecations: false
                ) do
             {:macro, module, callback} ->
-              # TODO there is a subtle difference - callback will call expander with state derived from env via
-              # :elixir_env.env_to_ex(env) possibly losing some details
+              # NOTE there is a subtle difference - callback will call expander with state derived from env via
+              # :elixir_env.env_to_ex(env) possibly losing some details. Jose Valim is convinced this is not a problem
+              line = Keyword.get(meta, :line, 0)
+              column = Keyword.get(meta, :column, nil)
+
+              state =
+                state
+                |> add_call_to_line({module, fun, length(args)}, {line, column})
+                |> add_current_env_to_line(meta, env)
+
               expand_macro(meta, module, fun, args, callback, state, env)
 
             :error ->
-              # expand_remote(meta, module, fun, args, state, env)
               expand_remote(module, dot_meta, fun, meta, args, state, state_l, env)
           end
       end
@@ -1796,13 +1805,6 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_macro_callback(meta, module, fun, args, callback, state, env) do
-    line = Keyword.get(meta, :line, 0)
-    column = Keyword.get(meta, :column)
-
-    state =
-      state
-      |> add_call_to_line({module, fun, length(args)}, {line, column})
-
     # dbg({module, fun, args})
     try do
       callback.(meta, args)
@@ -1822,14 +1824,6 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_macro_callback!(meta, module, fun, args, callback, state, env) do
-    line = Keyword.get(meta, :line, 0)
-    column = Keyword.get(meta, :column)
-
-    state =
-      state
-      |> add_call_to_line({module, fun, length(args)}, {line, column})
-
-    # dbg({module, fun, args})
     ast = callback.(meta, args)
     {ast, state, env} = expand(ast, state, env)
     {ast, state, env}
@@ -1914,17 +1908,14 @@ defmodule ElixirSense.Core.Compiler do
     line = Keyword.get(meta, :line, 0)
     column = Keyword.get(meta, :column, nil)
 
-    sl =
-      if line > 0 do
-        sl
-        |> add_current_env_to_line(line, e)
-      else
-        sl
-      end
-
     if context == :guard and is_tuple(receiver) do
       # elixir raises parens_map_lookup unless no_parens is set in meta
       # TODO there may be cursor in discarded args
+      sl =
+        sl
+        |> add_call_to_line({receiver, right, length(args)}, {line, column})
+        |> add_current_env_to_line(meta, e)
+
       {{{:., dot_meta, [receiver, right]}, meta, []}, sl, e}
     else
       attached_meta = attach_runtime_module(receiver, meta, s, e)
