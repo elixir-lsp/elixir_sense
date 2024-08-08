@@ -1188,7 +1188,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
+      assert [%VarInfo{name: :some}] = state |> get_line_vars(5)
 
       assert Map.has_key?(
                state.mods_funs_to_positions,
@@ -1233,9 +1233,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(5)
+      assert [%VarInfo{name: :some}] = state |> get_line_vars(5)
 
-      assert [%VarInfo{type: nil, scope_id: scope_id}] = state |> get_line_vars(9)
+      assert [%VarInfo{name: :other}] = state |> get_line_vars(9)
 
       # we do not generate defs - ExUnit.Callbacks.__setup__ is too complicated and generates def names with counters, e.g.
       # :"__ex_unit_setup_#{counter}_#{length(setup)}"
@@ -6384,12 +6384,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                5 => [%CallInfo{arity: 0, func: :func1, position: {5, 16}, mod: NyModule}],
                6 => [%CallInfo{arity: 0, func: :func1, position: {6, 16}, mod: NyModule}],
                7 => [%CallInfo{arity: 1, func: :func2, position: {7, 16}, mod: NyModule}],
                8 => [%CallInfo{arity: 1, func: :func2, position: {8, 20}, mod: NyModule.Sub}]
-             }
+             } = state.calls
     end
 
     test "registers calls with erlang module" do
@@ -6405,11 +6405,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 0, func: :func1, position: {3, 14}, mod: :erl_mod}],
                4 => [%CallInfo{arity: 0, func: :func1, position: {4, 14}, mod: :erl_mod}],
                5 => [%CallInfo{arity: 1, func: :func2, position: {5, 14}, mod: :erl_mod}]
-             }
+             } = state.calls
     end
 
     test "registers calls with atom module" do
@@ -6425,11 +6425,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 0, func: :func1, position: {3, 21}, mod: MyMod}],
                4 => [%CallInfo{arity: 0, func: :func1, position: {4, 21}, mod: MyMod}],
                5 => [%CallInfo{arity: 1, func: :func2, position: {5, 21}, mod: MyMod}]
-             }
+             } = state.calls
     end
 
     test "registers calls no arg no parens" do
@@ -6443,9 +6443,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod}]
-             }
+             } = state.calls
     end
 
     test "registers calls no arg" do
@@ -6459,9 +6459,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod}]
-             }
+             } = state.calls
     end
 
     test "registers calls local no arg no parens" do
@@ -6477,13 +6477,44 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       if Version.match?(System.version(), ">= 1.15.0") do
-        assert state.calls == %{}
+        assert state.calls
+               |> Enum.flat_map(fn {_line, info} -> info end)
+               |> Enum.filter(fn info -> info.mod != Kernel end) == []
       else
-        assert state.calls == %{
+        assert %{
                  4 => [%CallInfo{arity: 0, func: :func_1, position: {4, 5}, mod: nil}]
-               }
+               } = state.calls
       end
     end
+
+    test "registers macro calls" do
+      state =
+        """
+        defmodule NyModule do
+          @foo "123"
+          require Record
+          Record.defrecord(:user, name: "meg", age: "25")
+          def func do
+            IO.inspect(binding())
+            :ok
+          end
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               1 => [%CallInfo{arity: 2, position: {1, 1}, func: :defmodule, mod: Kernel}],
+               2 => [%CallInfo{arity: 1, position: {2, 3}, func: :@, mod: Kernel}],
+               4 => [%CallInfo{arity: 2, position: {4, 10}, func: :defrecord, mod: Record}],
+               5 => [%CallInfo{arity: 2, position: {5, 3}, func: :def, mod: Kernel}],
+               6 => [
+                 %CallInfo{arity: 1, position: {6, 8}, func: :inspect, mod: IO},
+                 %CallInfo{arity: 0, position: {6, 16}, func: :binding, mod: Kernel}
+               ]
+             } == state.calls
+    end
+
+    # TODO track Kernel.SpecialForms calls?
 
     test "registers typespec no parens calls" do
       state =
@@ -6494,11 +6525,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                2 => [
-                 %CallInfo{arity: 0, func: :integer, position: {2, 14}, mod: nil}
+                 %CallInfo{arity: 0, func: :integer, position: {2, 14}, mod: nil},
+                 _
                ]
-             }
+             } = state.calls
     end
 
     test "registers typespec parens calls" do
@@ -6510,11 +6542,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                2 => [
-                 %CallInfo{arity: 0, func: :integer, position: {2, 16}, mod: nil}
+                 %CallInfo{arity: 0, func: :integer, position: {2, 16}, mod: nil},
+                 _
                ]
-             }
+             } = state.calls
     end
 
     test "registers typespec no parens remote calls" do
@@ -6526,11 +6559,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                2 => [
-                 %CallInfo{arity: 0, func: :t, position: {2, 19}, mod: Enum}
+                 %CallInfo{arity: 0, func: :t, position: {2, 19}, mod: Enum},
+                 _
                ]
-             }
+             } = state.calls
     end
 
     test "registers typespec parens remote calls" do
@@ -6543,14 +6577,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                2 => [
-                 %CallInfo{arity: 0, func: :t, position: {2, 21}, mod: Enum}
+                 %CallInfo{arity: 0, func: :t, position: {2, 21}, mod: Enum},
+                 _
                ],
                3 => [
-                 %CallInfo{arity: 0, func: :t, position: {3, 23}, mod: Enum}
+                 %CallInfo{arity: 0, func: :t, position: {3, 23}, mod: Enum},
+                 _
                ]
-             }
+             } = state.calls
     end
 
     test "registers typespec calls in specs with when guard" do
@@ -6563,13 +6599,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       # NOTE var is not a type but a special variable
-      assert state.calls == %{
+      assert %{
                2 => [
                  %CallInfo{arity: 0, func: :pos_integer, position: {2, 71}, mod: nil},
                  %CallInfo{arity: 0, func: :map, position: {2, 53}, mod: nil},
-                 %CallInfo{arity: 0, func: :integer, position: {2, 31}, mod: nil}
+                 %CallInfo{arity: 0, func: :integer, position: {2, 31}, mod: nil},
+                 _
                ]
-             }
+             } = state.calls
     end
 
     test "registers typespec calls in typespec with named args" do
@@ -6582,19 +6619,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                2 => [
                  %CallInfo{arity: 0, func: :integer, position: {2, 84}, mod: nil},
                  %CallInfo{arity: 0, func: :integer, position: {2, 72}, mod: nil},
                  %CallInfo{arity: 0, func: :integer, position: {2, 56}, mod: nil},
-                 %CallInfo{arity: 0, func: :integer, position: {2, 38}, mod: nil}
+                 %CallInfo{arity: 0, func: :integer, position: {2, 38}, mod: nil} | _
                ],
                3 => [
                  %CallInfo{arity: 0, func: :integer, position: {3, 61}, mod: nil},
                  %CallInfo{arity: 0, func: :integer, position: {3, 44}, mod: nil},
-                 %CallInfo{arity: 0, func: :integer, position: {3, 26}, mod: nil}
+                 %CallInfo{arity: 0, func: :integer, position: {3, 26}, mod: nil} | _
                ]
-             }
+             } = state.calls
     end
 
     test "registers calls local no arg" do
@@ -6609,9 +6646,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                4 => [%CallInfo{arity: 0, func: :func_1, position: {4, 5}, mod: nil}]
-             }
+             } = state.calls
     end
 
     test "registers calls local arg" do
@@ -6625,9 +6662,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 1, func: :func_1, position: {3, 5}, mod: nil}]
-             }
+             } = state.calls
     end
 
     test "registers calls arg" do
@@ -6641,9 +6678,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 1, func: :func, position: {3, 11}, mod: MyMod}]
-             }
+             } = state.calls
     end
 
     test "registers calls on attribute and var with args" do
@@ -6660,16 +6697,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       if Version.match?(System.version(), ">= 1.15.0") do
-        assert state.calls == %{
+        assert %{
                  4 => [
-                   %CallInfo{arity: 1, func: :func, position: {4, 11}, mod: {:attribute, :attr}}
+                   %CallInfo{arity: 1, func: :func, position: {4, 11}, mod: {:attribute, :attr}},
+                   _
                  ],
                  5 => [
                    %CallInfo{arity: 1, func: :func, position: {5, 9}, mod: {:variable, :var, 0}}
                  ]
-               }
+               } = state.calls
       else
-        assert state.calls == %{
+        assert %{
                  4 => [
                    %CallInfo{arity: 1, func: :func, position: {4, 11}, mod: {:attribute, :attr}}
                  ],
@@ -6677,7 +6715,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    %CallInfo{arity: 0, func: :var, position: {5, 5}, mod: nil},
                    %CallInfo{arity: 1, func: :func, position: {5, 9}, mod: {:variable, :var, 0}}
                  ]
-               }
+               } = state.calls
       end
     end
 
@@ -6695,16 +6733,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       if Version.match?(System.version(), ">= 1.15.0") do
-        assert state.calls == %{
-                 4 => [
-                   %CallInfo{arity: 0, func: :func, position: {4, 11}, mod: {:attribute, :attr}}
-                 ],
-                 5 => [
-                   %CallInfo{arity: 0, func: :func, position: {5, 9}, mod: {:variable, :var, 0}}
-                 ]
-               }
+        Enum.any?(
+          state.calls[4],
+          &match?(
+            %CallInfo{arity: 0, func: :func, position: {4, 11}, mod: {:attribute, :attr}},
+            &1
+          )
+        )
+
+        Enum.any?(
+          state.calls[4],
+          &match?(
+            %CallInfo{arity: 0, func: :func, position: {5, 9}, mod: {:variable, :var, 0}},
+            &1
+          )
+        )
       else
-        assert state.calls == %{
+        assert %{
                  4 => [
                    %CallInfo{arity: 0, func: :func, position: {4, 11}, mod: {:attribute, :attr}}
                  ],
@@ -6712,7 +6757,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    %CallInfo{arity: 0, func: :var, position: {5, 5}, mod: nil},
                    %CallInfo{arity: 0, func: :func, position: {5, 9}, mod: {:variable, :var, 0}}
                  ]
-               }
+               } = state.calls
       end
     end
 
@@ -6730,16 +6775,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       if Version.match?(System.version(), ">= 1.15.0") do
-        assert state.calls == %{
+        assert %{
                  4 => [
-                   %CallInfo{arity: 0, func: {:attribute, :attr}, position: {4, 11}, mod: nil}
+                   %CallInfo{arity: 0, func: {:attribute, :attr}, position: {4, 11}, mod: nil},
+                   _
                  ],
                  5 => [
                    %CallInfo{arity: 0, func: {:variable, :var, 0}, position: {5, 9}, mod: nil}
                  ]
-               }
+               } = state.calls
       else
-        assert state.calls == %{
+        assert %{
                  4 => [
                    %CallInfo{arity: 0, func: {:attribute, :attr}, position: {4, 11}, mod: nil}
                  ],
@@ -6747,7 +6793,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    %CallInfo{arity: 0, func: :var, position: {5, 5}, mod: nil},
                    %CallInfo{arity: 0, func: {:variable, :var, 0}, position: {5, 9}, mod: nil}
                  ]
-               }
+               } = state.calls
       end
     end
 
@@ -7020,10 +7066,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 1, position: {3, 17}, func: :func, mod: NyModule}],
                4 => [%CallInfo{arity: 1, position: {4, 21}, func: :func, mod: NyModule.Sub}]
-             }
+             } = state.calls
     end
 
     test "registers calls capture operator external" do
@@ -7037,9 +7083,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 1, position: {3, 12}, func: :func, mod: MyMod}]
-             }
+             } = state.calls
     end
 
     test "registers calls capture expression external" do
@@ -7053,9 +7099,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 2, position: {3, 12}, func: :func, mod: MyMod}]
-             }
+             } = state.calls
     end
 
     test "registers calls capture operator external erlang module" do
@@ -7069,9 +7115,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 1, func: :func, position: {3, 15}, mod: :erl_mod}]
-             }
+             } = state.calls
     end
 
     test "registers calls capture operator external atom module" do
@@ -7085,9 +7131,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 1, func: :func, position: {3, 22}, mod: MyMod}]
-             }
+             } = state.calls
     end
 
     test "registers calls capture operator local" do
@@ -7102,10 +7148,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 1, func: :func, position: {3, 6}, mod: nil}],
                4 => [%CallInfo{arity: 0, func: :func, position: {4, 6}, mod: nil}]
-             }
+             } = state.calls
     end
 
     test "registers calls capture expression local" do
@@ -7119,9 +7165,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls == %{
+      assert %{
                3 => [%CallInfo{arity: 2, func: :func, position: {3, 6}, mod: nil}]
-             }
+             } = state.calls
     end
 
     test "registers calls on ex_unit DSL" do

@@ -302,12 +302,13 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   # Quote
-  # TODO add_current_line_to_env
+
   defp do_expand({unquote_call, meta, [arg]}, s, e)
        when unquote_call in [:unquote, :unquote_splicing] do
     # elixir raises here unquote_outside_quote
     # we may have cursor there
     {arg, s, e} = expand(arg, s, e)
+    s = s |> add_current_env_to_line(meta, e)
     {{unquote_call, meta, [arg]}, s, e}
   end
 
@@ -327,6 +328,7 @@ defmodule ElixirSense.Core.Compiler do
     # elixir raises here invalid_args
     # we may have cursor there
     {arg, s, e} = expand(arg, s, e)
+    s = s |> add_current_env_to_line(meta, e)
     {{:quote, meta, [arg]}, s, e}
   end
 
@@ -383,6 +385,8 @@ defmodule ElixirSense.Core.Compiler do
     quoted = __MODULE__.Quote.quote(exprs, q)
     {e_quoted, es, eq} = expand(quoted, sc, ec)
 
+    es = es |> add_current_env_to_line(meta, eq)
+
     e_binding =
       for {k, v} <- binding do
         {:{}, [], [:=, [], [{:{}, [], [k, meta, e_context]}, v]]}
@@ -426,12 +430,9 @@ defmodule ElixirSense.Core.Compiler do
        when is_atom(context) and is_integer(arity) do
     case resolve_super(meta, arity, s, e) do
       {kind, name, _} when kind in [:def, :defp] ->
-        line = Keyword.get(super_meta, :line, 0)
-        column = Keyword.get(super_meta, :column, nil)
-
         s =
           s
-          |> add_call_to_line({nil, name, arity}, {line, column})
+          |> add_call_to_line({nil, name, arity}, super_meta)
           |> add_current_env_to_line(super_meta, e)
 
         {{:&, meta, [{:/, arity_meta, [{name, super_meta, context}, arity]}]}, s, e}
@@ -500,12 +501,9 @@ defmodule ElixirSense.Core.Compiler do
       {kind, name, _} ->
         {e_args, sa, ea} = expand_args(args, s, e)
 
-        line = Keyword.get(meta, :line, 0)
-        column = Keyword.get(meta, :column, nil)
-
         sa =
           sa
-          |> add_call_to_line({nil, name, arity}, {line, column})
+          |> add_call_to_line({nil, name, arity}, meta)
           |> add_current_env_to_line(meta, ea)
 
         {{:super, [{:super, {kind, name}} | meta], e_args}, sa, ea}
@@ -672,12 +670,9 @@ defmodule ElixirSense.Core.Compiler do
       {:macro, module, callback} ->
         # NOTE there is a subtle difference - callback will call expander with state derived from env via
         # :elixir_env.env_to_ex(env) possibly losing some details. Jose Valim is convinced this is not a problem
-        line = Keyword.get(meta, :line, 0)
-        column = Keyword.get(meta, :column, nil)
-
         state =
           state
-          |> add_call_to_line({module, fun, length(args)}, {line, column})
+          |> add_call_to_line({module, fun, length(args)}, meta)
           |> add_current_env_to_line(meta, env)
 
         expand_macro(meta, module, fun, args, callback, state, env)
@@ -731,12 +726,9 @@ defmodule ElixirSense.Core.Compiler do
             {:macro, module, callback} ->
               # NOTE there is a subtle difference - callback will call expander with state derived from env via
               # :elixir_env.env_to_ex(env) possibly losing some details. Jose Valim is convinced this is not a problem
-              line = Keyword.get(meta, :line, 0)
-              column = Keyword.get(meta, :column, nil)
-
               state =
                 state
-                |> add_call_to_line({module, fun, length(args)}, {line, column})
+                |> add_call_to_line({module, fun, length(args)}, meta)
                 |> add_current_env_to_line(meta, env)
 
               expand_macro(meta, module, fun, args, callback, state, env)
@@ -757,21 +749,13 @@ defmodule ElixirSense.Core.Compiler do
 
     # elixir validates if e_expr is not atom and raises invalid_function_call
 
-    line = Keyword.get(dot_meta, :line, 0)
-    column = Keyword.get(dot_meta, :column, nil)
-
-    column =
-      if column do
-        # for remote calls we emit position of right side of .
-        # to make it consistent we shift dot position here
-        column + 1
-      else
-        column
-      end
+    # for remote calls we emit position of right side of .
+    # to make it consistent we shift dot position here
+    dot_meta = dot_meta |> Keyword.put(:column_correction, 1)
 
     sa =
       sa
-      |> add_call_to_line({nil, e_expr, length(e_args)}, {line, column})
+      |> add_call_to_line({nil, e_expr, length(e_args)}, dot_meta)
       |> add_current_env_to_line(meta, e)
 
     {{{:., dot_meta, [e_expr]}, meta, e_args}, sa, ea}
@@ -850,7 +834,6 @@ defmodule ElixirSense.Core.Compiler do
        )
        when module != nil do
     {position, end_position} = extract_range(meta)
-    {line, _} = position
 
     {opts, state, env} = expand(opts, state, env)
     # elixir does validation here
@@ -1108,7 +1091,7 @@ defmodule ElixirSense.Core.Compiler do
 
         spec = TypeInfo.typespec_to_string(kind, expr)
 
-        {position = {line, _column}, end_position} = extract_range(attr_meta)
+        {position, end_position} = extract_range(attr_meta)
 
         state =
           state
@@ -1153,7 +1136,7 @@ defmodule ElixirSense.Core.Compiler do
       {name, type_args} ->
         spec = TypeInfo.typespec_to_string(kind, expr)
 
-        {position = {line, _column}, end_position} = extract_range(attr_meta)
+        {position, end_position} = extract_range(attr_meta)
 
         state =
           if kind in [:callback, :macrocallback] do
@@ -1322,7 +1305,7 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when call in [:defrecord, :defrecordp] and module != nil do
-    {position = {line, column}, end_position} = extract_range(meta)
+    {position, end_position} = extract_range(meta)
 
     type =
       case call do
@@ -1352,7 +1335,6 @@ defmodule ElixirSense.Core.Compiler do
         type,
         options
       )
-      |> add_call_to_line({module, call, length(args)}, {line, column})
       |> add_current_env_to_line(meta, env)
 
     {{{:., meta, [Record, call]}, meta, args}, state, env}
@@ -1524,8 +1506,6 @@ defmodule ElixirSense.Core.Compiler do
 
         {position, end_position} = extract_range(meta)
 
-        line = Keyword.fetch!(meta, :line)
-
         module_functions =
           case state.protocol do
             nil -> []
@@ -1615,8 +1595,6 @@ defmodule ElixirSense.Core.Compiler do
        when module != nil and
               def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
     %{vars: vars, unused: unused} = state
-
-    line = Keyword.fetch!(meta, :line)
 
     unquoted_call = __MODULE__.Quote.has_unquotes(call)
     unquoted_expr = __MODULE__.Quote.has_unquotes(expr)
@@ -1761,8 +1739,6 @@ defmodule ElixirSense.Core.Compiler do
 
     # NOTE this name is not 100% correct - ex_unit uses counters instead of line but it's too complicated
     call = {:"__ex_unit_#{setup}_#{line}", meta, args}
-    # TODO add on expand_import/require
-    # |> add_call_to_line({nil, :test, 3}, {line, column})
     expand_macro(meta, Kernel, :def, [call, do_block], callback, state, env)
   end
 
@@ -1805,7 +1781,7 @@ defmodule ElixirSense.Core.Compiler do
     end
   end
 
-  defp expand_macro_callback!(meta, module, fun, args, callback, state, env) do
+  defp expand_macro_callback!(meta, _module, _fun, args, callback, state, env) do
     ast = callback.(meta, args)
     {ast, state, env} = expand(ast, state, env)
     {ast, state, env}
@@ -1814,7 +1790,7 @@ defmodule ElixirSense.Core.Compiler do
   defp extract_range(meta) do
     line = Keyword.get(meta, :line, 0)
 
-    if line == 0 do
+    if line <= 0 do
       {nil, nil}
     else
       position = {
@@ -1887,15 +1863,12 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_remote(receiver, dot_meta, right, meta, args, s, sl, %{context: context} = e)
        when is_atom(receiver) or is_tuple(receiver) do
-    line = Keyword.get(meta, :line, 0)
-    column = Keyword.get(meta, :column, nil)
-
     if context == :guard and is_tuple(receiver) do
       # elixir raises parens_map_lookup unless no_parens is set in meta
       # TODO there may be cursor in discarded args
       sl =
         sl
-        |> add_call_to_line({receiver, right, length(args)}, {line, column})
+        |> add_call_to_line({receiver, right, length(args)}, meta)
         |> add_current_env_to_line(meta, e)
 
       {{{:., dot_meta, [receiver, right]}, meta, []}, sl, e}
@@ -1915,7 +1888,7 @@ defmodule ElixirSense.Core.Compiler do
         {:ok, rewritten} ->
           s =
             __MODULE__.Env.close_write(sa, s)
-            |> add_call_to_line({receiver, right, length(e_args)}, {line, column})
+            |> add_call_to_line({receiver, right, length(e_args)}, meta)
             |> add_current_env_to_line(meta, e)
 
           {rewritten, s, ea}
@@ -1924,7 +1897,7 @@ defmodule ElixirSense.Core.Compiler do
           # elixir raises here elixir_rewrite
           s =
             __MODULE__.Env.close_write(sa, s)
-            |> add_call_to_line({receiver, right, length(e_args)}, {line, column})
+            |> add_call_to_line({receiver, right, length(e_args)}, meta)
             |> add_current_env_to_line(meta, e)
 
           {{{:., dot_meta, [receiver, right]}, attached_meta, e_args}, s, ea}
@@ -1936,12 +1909,9 @@ defmodule ElixirSense.Core.Compiler do
     # elixir raises here invalid_call
     {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {sl, s}, e, args)
 
-    line = Keyword.get(meta, :line, 0)
-    column = Keyword.get(meta, :column, nil)
-
     s =
       __MODULE__.Env.close_write(sa, s)
-      |> add_call_to_line({receiver, right, length(e_args)}, {line, column})
+      |> add_call_to_line({receiver, right, length(e_args)}, meta)
       |> add_current_env_to_line(meta, e)
 
     {{{:., dot_meta, [receiver, right]}, meta, e_args}, s, ea}
@@ -1981,12 +1951,10 @@ defmodule ElixirSense.Core.Compiler do
     # elixir check if there are no clauses
     # elixir raises here invalid_local_invocation if context is match or guard
     # elixir compiler raises here undefined_function if env.function is nil
-    line = Keyword.get(meta, :line, 0)
-    column = Keyword.get(meta, :column, nil)
 
     state =
       state
-      |> add_call_to_line({nil, fun, length(args)}, {line, column})
+      |> add_call_to_line({nil, fun, length(args)}, meta)
       |> add_current_env_to_line(meta, env)
 
     {args, state, env} = expand_args(args, state, env)
@@ -2152,12 +2120,9 @@ defmodule ElixirSense.Core.Compiler do
       {{:remote, remote, fun, arity}, require_meta, dot_meta, se, ee} ->
         attached_meta = attach_runtime_module(remote, require_meta, s, e)
 
-        line = Keyword.get(attached_meta, :line, 0)
-        column = Keyword.get(attached_meta, :column, nil)
-
         se =
           se
-          |> add_call_to_line({remote, fun, arity}, {line, column})
+          |> add_call_to_line({remote, fun, arity}, attached_meta)
           |> add_current_env_to_line(attached_meta, ee)
 
         {{:&, meta, [{:/, [], [{{:., dot_meta, [remote, fun]}, attached_meta, []}, arity]}]}, se,
@@ -2165,12 +2130,10 @@ defmodule ElixirSense.Core.Compiler do
 
       {{:local, fun, arity}, local_meta, _, se, ee} ->
         # elixir raises undefined_local_capture if ee.function is nil
-        line = Keyword.get(local_meta, :line, 0)
-        column = Keyword.get(local_meta, :column, nil)
 
         se =
           se
-          |> add_call_to_line({nil, fun, arity}, {line, column})
+          |> add_call_to_line({nil, fun, arity}, local_meta)
           |> add_current_env_to_line(local_meta, ee)
 
         {{:&, meta, [{:/, [], [{fun, local_meta, nil}, arity]}]}, se, ee}
@@ -4915,9 +4878,6 @@ defmodule ElixirSense.Core.Compiler do
           end,
           fn
             {{:., dot_meta, [remote, name]}, meta, args}, {state, env} when is_atom(remote) ->
-              line = Keyword.get(meta, :line, 0)
-              column = Keyword.get(meta, :column, nil)
-
               args =
                 if is_atom(args) do
                   []
@@ -4925,16 +4885,13 @@ defmodule ElixirSense.Core.Compiler do
                   args
                 end
 
-              state = add_call_to_line(state, {remote, name, length(args)}, {line, column})
+              state = add_call_to_line(state, {remote, name, length(args)}, meta)
 
               {{{:., dot_meta, [remote, name]}, meta, args}, {state, env}}
 
             {name, meta, args}, {state, env}
             when is_atom(name) and is_list(args) and name not in @special_forms ->
-              line = Keyword.get(meta, :line, 0)
-              column = Keyword.get(meta, :column, nil)
-
-              state = add_call_to_line(state, {nil, name, length(args)}, {line, column})
+              state = add_call_to_line(state, {nil, name, length(args)}, meta)
 
               {{name, meta, args}, {state, env}}
 
