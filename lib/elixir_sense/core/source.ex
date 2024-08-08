@@ -163,7 +163,7 @@ defmodule ElixirSense.Core.Source do
     end)
   end
 
-  @type var_or_attr_t :: {:variable, atom} | {:attribute, atom} | nil
+  @type var_or_attr_t :: {:variable, atom, non_neg_integer | :any} | {:attribute, atom} | nil
 
   @spec which_struct(String.t(), nil | module) ::
           nil
@@ -251,8 +251,17 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  defp get_var_or_attr({var, _, nil}) when is_atom(var) and var != :__MODULE__ do
-    {:variable, var}
+  defp get_var_or_attr({var, meta, context})
+       when is_atom(var) and is_atom(context) and
+              var not in [
+                :__MODULE__,
+                :__DIR__,
+                :__ENV__,
+                :__CALLER__,
+                :__STACKTRACE__,
+                :_
+              ] do
+    {:variable, var, Keyword.get(meta, :version, :any)}
   end
 
   defp get_var_or_attr({:@, _, [{attr, _, nil}]}) when is_atom(attr) do
@@ -518,8 +527,10 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  def get_mod_fun([{name, _, nil}, fun], binding_env) when is_atom(name) do
-    case Binding.expand(binding_env, {:variable, name}) do
+  def get_mod_fun([{name, meta, context}, fun], binding_env)
+      when is_atom(name) and is_atom(context) and
+             name not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
+    case Binding.expand(binding_env, {:variable, name, Keyword.get(meta, :version, :any)}) do
       {:atom, atom} ->
         {{atom, false}, fun}
 

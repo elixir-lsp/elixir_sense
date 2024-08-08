@@ -218,7 +218,7 @@ defmodule ElixirSense.Core.Parser do
     |> List.update_at(line_number - 1, fn line ->
       # try to replace token do with do: marker
       line
-      |> String.replace("do", "do: " <> marker(line_number), global: false)
+      |> String.replace("do", "do: " <> marker(), global: false)
     end)
     |> Enum.join("\n")
   end
@@ -325,7 +325,7 @@ defmodule ElixirSense.Core.Parser do
     |> List.update_at(line_number - 1, fn line ->
       # try to prepend unexpected terminator with marker
       line
-      |> String.replace(terminator, marker(line_number) <> " " <> terminator, global: false)
+      |> String.replace(terminator, marker() <> " " <> terminator, global: false)
     end)
     |> Enum.join("\n")
   end
@@ -448,7 +448,7 @@ defmodule ElixirSense.Core.Parser do
 
                 replaced_line =
                   case terminator do
-                    "end" -> previous <> "; " <> marker(length(rest)) <> "; end"
+                    "end" -> previous <> "; " <> marker() <> "; end"
                     _ -> previous <> " " <> terminator
                   end
 
@@ -515,7 +515,7 @@ defmodule ElixirSense.Core.Parser do
     |> Source.split_lines()
     # by replacing a line here we risk introducing a syntax error
     # instead we append marker to the existing line
-    |> List.update_at(line_number - 1, &(&1 <> "; " <> marker(line_number)))
+    |> List.update_at(line_number - 1, &(&1 <> "; " <> marker()))
     |> Enum.join("\n")
   end
 
@@ -523,7 +523,7 @@ defmodule ElixirSense.Core.Parser do
     # IO.puts :stderr, "REPLACING LINE: #{line}"
     source
     |> Source.split_lines()
-    |> List.replace_at(line_number - 1, marker(line_number))
+    |> List.replace_at(line_number - 1, marker())
     |> Enum.join("\n")
   end
 
@@ -535,7 +535,7 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
-  defp marker(line_number), do: "(__atom_elixir_marker_#{line_number}__())"
+  defp marker(), do: "(__cursor__())"
 
   defp get_line_from_meta(meta) when is_integer(meta), do: meta
   defp get_line_from_meta(meta), do: Keyword.fetch!(meta, :line)

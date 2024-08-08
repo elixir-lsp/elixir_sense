@@ -38,7 +38,7 @@ defmodule ElixirSense.Core.SurroundContext do
   end
 
   defp to_binding_impl({:local_or_var, charlist}, _current_module) do
-    {:variable, :"#{charlist}"}
+    {:variable, :"#{charlist}", :any}
   end
 
   defp to_binding_impl({:local_arity, charlist}, _current_module) do
@@ -120,7 +120,7 @@ defmodule ElixirSense.Core.SurroundContext do
   end
 
   defp inside_dot_to_binding({:var, inside_charlist}, _current_module) do
-    {:variable, :"#{inside_charlist}"}
+    {:variable, :"#{inside_charlist}", :any}
   end
 
   defp inside_dot_to_binding(:expr, _current_module) do

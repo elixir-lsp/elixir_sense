@@ -198,7 +198,13 @@ defmodule ElixirSense.Core.SourceTest do
 
       assert nil ==
                which_func("var = my_var.some(", %ElixirSense.Core.Binding{
-                 variables: [%{name: "my_var", type: {:atom, Some}}]
+                 variables: [
+                   %ElixirSense.Core.State.VarInfo{
+                     name: "my_var",
+                     version: 1,
+                     type: {:atom, Some}
+                   }
+                 ]
                })
     end
 
@@ -700,7 +706,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %{asd |
       """
 
-      assert which_struct(code, MyMod) == {:map, [], {:variable, :asd}}
+      assert which_struct(code, MyMod) == {:map, [], {:variable, :asd, :any}}
     end
 
     test "map update attribute" do
@@ -720,7 +726,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %{asd | qwe: "ds",
       """
 
-      assert which_struct(code, MyMod) == {:map, [:qwe], {:variable, :asd}}
+      assert which_struct(code, MyMod) == {:map, [:qwe], {:variable, :asd, :any}}
     end
 
     test "patern match with _" do
@@ -893,10 +899,10 @@ defmodule ElixirSense.Core.SourceTest do
       """
 
       assert which_struct(text_before(code, 3, 23), MyMod) ==
-               {{:atom, Mod}, [], false, {:variable, :par1}}
+               {{:atom, Mod}, [], false, {:variable, :par1, :any}}
 
       assert which_struct(text_before(code, 5, 7), MyMod) ==
-               {{:atom, Mod}, [:field1], false, {:variable, :par1}}
+               {{:atom, Mod}, [:field1], false, {:variable, :par1, :any}}
     end
 
     test "struct update attribute syntax" do
