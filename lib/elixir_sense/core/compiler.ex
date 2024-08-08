@@ -359,7 +359,7 @@ defmodule ElixirSense.Core.Compiler do
       case Keyword.fetch(e_opts, :bind_quoted) do
         {:ok, bq} ->
           if is_list(bq) do
-            # TODO check if there's cursor?
+            # safe to drop, opts already expanded
             bq = Enum.filter(bq, &match?({key, _} when is_atom(key), &1))
             {bq, false}
           else
@@ -1773,6 +1773,9 @@ defmodule ElixirSense.Core.Compiler do
           "Unable to expand macro #{inspect(module)}.#{fun}/#{length(args)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
         )
 
+        # look for cursor in args
+        {_ast, state, _env} = expand(args, state, env)
+
         {{{:., meta, [module, fun]}, meta, args}, state, env}
     else
       ast ->
@@ -1865,7 +1868,9 @@ defmodule ElixirSense.Core.Compiler do
        when is_atom(receiver) or is_tuple(receiver) do
     if context == :guard and is_tuple(receiver) do
       # elixir raises parens_map_lookup unless no_parens is set in meta
-      # TODO there may be cursor in discarded args
+      # look for cursor in discarded args
+      {_ast, sl, _env} = expand(args, sl, e)
+
       sl =
         sl
         |> add_call_to_line({receiver, right, length(args)}, meta)
@@ -1963,6 +1968,7 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_opts(allowed, opts, s, e) do
     {e_opts, se, ee} = expand(opts, s, e)
+    # safe to drop after expand
     e_opts = sanitize_opts(allowed, e_opts)
     {e_opts, se, ee}
   end
@@ -2145,7 +2151,6 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_for({:for, meta, [_ | _] = args}, s, e, return) do
     {cases, block} = __MODULE__.Utils.split_opts(args)
-    block = sanitize_opts([:do, :into, :uniq, :reduce], block)
 
     {expr, opts} =
       case Keyword.pop(block, :do) do
@@ -2160,6 +2165,9 @@ defmodule ElixirSense.Core.Compiler do
     {e_opts, so, eo} = expand(opts, __MODULE__.Env.reset_vars(s), e)
     {e_cases, sc, ec} = map_fold(&expand_for_generator/3, so, eo, cases)
     # elixir raises here for_generator_start on invalid start generator
+
+    # safe to drop after expand
+    e_opts = sanitize_opts([:into, :uniq, :reduce], e_opts)
 
     {maybe_reduce, normalized_opts} =
       sanitize_for_options(e_opts, false, false, false, return, meta, e, [])
@@ -2190,12 +2198,18 @@ defmodule ElixirSense.Core.Compiler do
       {:->, clause_meta, [args, right]}, sa ->
         # elixir checks here that clause has exactly 1 arg by matching against {_, _, [[_], _]}
         # we drop excessive or generate a fake arg
-        # TODO check if there is cursor in dropped arg?
-        args =
+
+        {args, discarded_args} =
           case args do
-            [] -> [{:_, [], e.module}]
-            [head | _] -> [head]
+            [] ->
+              {[{:_, [], e.module}], []}
+
+            [head | rest] ->
+              {[head], rest}
           end
+
+        # check if there is cursor in dropped arg
+        {_ast, sa, _e} = expand(discarded_args, sa, e)
 
         clause = {:->, clause_meta, [args, right]}
         s_reset = __MODULE__.Env.reset_vars(sa)
@@ -2309,7 +2323,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp sanitize_for_options([], false, {:uniq, true}, false, false, meta, e, acc) do
-    # TODO check if there is cursor  in dropped unique
+    # safe to drop here even if there's a cursor options are already expanded
     acc_without_uniq = Keyword.delete(acc, :uniq)
     sanitize_for_options([], false, false, false, false, meta, e, acc_without_uniq)
   end
@@ -2319,7 +2333,6 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp sanitize_opts(allowed, opts) when is_list(opts) do
-    # TODO check if there's cursor
     for {key, value} <- opts, Enum.member?(allowed, key), do: {key, value}
   end
 
@@ -2656,6 +2669,8 @@ defmodule ElixirSense.Core.Compiler do
 
     # case
 
+    @valid_case_opts [:do]
+
     def case(meta, e_expr, [], s, e) do
       # elixir raises here missing_option
       # emit a fake do block
@@ -2669,7 +2684,10 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     def case(meta, e_expr, opts, s, e) do
-      opts = sanitize_opts(opts, [:do])
+      # expand invalid opts in case there's cursor
+      {_ast, s, _e} = ElixirExpand.expand(opts |> Keyword.drop(@valid_case_opts), s, e)
+
+      opts = sanitize_opts(opts, @valid_case_opts)
 
       match_context = TypeInference.type_of(e_expr, e.context)
 
@@ -2707,6 +2725,8 @@ defmodule ElixirSense.Core.Compiler do
 
     # cond
 
+    @valid_cond_opts [:do]
+
     def cond(meta, [], s, e) do
       # elixir raises here missing_option
       # emit a fake do block
@@ -2720,7 +2740,10 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     def cond(meta, opts, s, e) do
-      opts = sanitize_opts(opts, [:do])
+      # expand invalid opts in case there's cursor
+      {_ast, s, _e} = ElixirExpand.expand(opts |> Keyword.drop(@valid_cond_opts), s, e)
+
+      opts = sanitize_opts(opts, @valid_cond_opts)
 
       {cond_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
@@ -2736,6 +2759,8 @@ defmodule ElixirSense.Core.Compiler do
 
     # receive
 
+    @valid_receive_opts [:do, :after]
+
     def receive(meta, [], s, e) do
       # elixir raises here missing_option
       # emit a fake do block
@@ -2749,7 +2774,10 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     def receive(meta, opts, s, e) do
-      opts = sanitize_opts(opts, [:do, :after])
+      # expand invalid opts in case there's cursor
+      {_ast, s, _e} = ElixirExpand.expand(opts |> Keyword.drop(@valid_receive_opts), s, e)
+
+      opts = sanitize_opts(opts, @valid_receive_opts)
 
       {receive_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
@@ -2779,9 +2807,10 @@ defmodule ElixirSense.Core.Compiler do
           # try to recover from error by wrapping the expression in list
           expand_receive(meta, {:after, [expr]}, s, e)
 
-        [first | _] ->
+        [first | discarded] ->
           # try to recover from error by taking first clause only
-          # TODO maybe search for clause with cursor?
+          # expand other in case there's cursor
+          {_ast, s, _e} = ElixirExpand.expand(discarded, s, e)
           expand_receive(meta, {:after, [first]}, s, e)
 
         [] ->
@@ -2792,9 +2821,15 @@ defmodule ElixirSense.Core.Compiler do
 
     # with
 
+    @valid_with_opts [:do, :else]
+
     def with(meta, args, s, e) do
       {exprs, opts0} = ElixirUtils.split_opts(args)
-      opts0 = sanitize_opts(opts0, [:do, :else])
+
+      # expand invalid opts in case there's cursor
+      {_ast, s, _e} = ElixirExpand.expand(opts0 |> Keyword.drop(@valid_with_opts), s, e)
+
+      opts0 = sanitize_opts(opts0, @valid_with_opts)
       s0 = ElixirEnv.reset_vars(s)
       {e_exprs, {s1, e1}} = Enum.map_reduce(exprs, {s0, e}, &expand_with/2)
       {e_do, opts1, s2} = expand_with_do(meta, opts0, s, s1, e1)
@@ -2855,6 +2890,8 @@ defmodule ElixirSense.Core.Compiler do
 
     # try
 
+    @valid_try_opts [:do, :rescue, :catch, :else, :after]
+
     def try(meta, [], s, e) do
       # elixir raises here missing_option
       # emit a fake do block
@@ -2868,7 +2905,10 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     def try(meta, opts, s, e) do
-      opts = sanitize_opts(opts, [:do, :rescue, :catch, :else, :after])
+      # expand invalid opts in case there's cursor
+      {_ast, s, _e} = ElixirExpand.expand(opts |> Keyword.drop(@valid_try_opts), s, e)
+
+      opts = sanitize_opts(opts, @valid_try_opts)
 
       {try_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
@@ -3068,7 +3108,6 @@ defmodule ElixirSense.Core.Compiler do
     # helpers
 
     defp sanitize_opt(opts, opt) do
-      # TODO look for opt with cursor?
       case Keyword.fetch(opts, opt) do
         :error -> []
         {:ok, value} -> [{opt, value}]
