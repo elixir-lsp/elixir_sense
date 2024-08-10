@@ -468,6 +468,7 @@ defmodule ElixirSense.Core.State do
   end
 
   defp do_add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, meta) do
+    # extract_position is not suitable here, we need to handle invalid lines
     line = Keyword.get(meta, :line, 0)
     column = Keyword.get(meta, :column, nil)
 
@@ -609,7 +610,7 @@ defmodule ElixirSense.Core.State do
     %{state | specs: updated_specs}
   end
 
-  def add_module_to_index(%__MODULE__{} = state, module, position, end_position, options)
+  def add_module_to_index(%__MODULE__{} = state, module, {position, end_position}, options)
       when (is_tuple(position) and is_tuple(end_position)) or is_nil(end_position) do
     # TODO :defprotocol, :defimpl?
     add_mod_fun_to_position(
@@ -630,8 +631,7 @@ defmodule ElixirSense.Core.State do
         env,
         func,
         params,
-        position,
-        end_position,
+        {position, end_position},
         type,
         options \\ []
       )
@@ -806,8 +806,7 @@ defmodule ElixirSense.Core.State do
         type_args,
         spec,
         kind,
-        pos,
-        end_pos,
+        {pos, end_pos},
         options \\ []
       ) do
     arg_names =
@@ -880,8 +879,7 @@ defmodule ElixirSense.Core.State do
         type_args,
         spec,
         kind,
-        pos,
-        end_pos,
+        {pos, end_pos},
         options \\ []
       ) do
     arg_names =
@@ -930,14 +928,12 @@ defmodule ElixirSense.Core.State do
 
   def add_var_write(%__MODULE__{} = state, {name, meta, _}) when name != :_ do
     version = meta[:version]
-    line = meta[:line]
-    column = meta[:column]
     scope_id = hd(state.scope_ids)
 
     info = %VarInfo{
       name: name,
       version: version,
-      positions: [{line, column}],
+      positions: [extract_position(meta)],
       scope_id: scope_id
     }
 
@@ -954,8 +950,6 @@ defmodule ElixirSense.Core.State do
 
   def add_var_read(%__MODULE__{} = state, {name, meta, _}) when name != :_ do
     version = meta[:version]
-    line = meta[:line]
-    column = meta[:column]
 
     [vars_from_scope | other_vars] = state.vars_info
 
@@ -964,7 +958,11 @@ defmodule ElixirSense.Core.State do
         state
 
       info ->
-        info = %VarInfo{info | positions: (info.positions ++ [{line, column}]) |> Enum.uniq()}
+        info = %VarInfo{
+          info
+          | positions: (info.positions ++ [extract_position(meta)]) |> Enum.uniq()
+        }
+
         vars_from_scope = Map.put(vars_from_scope, {name, version}, info)
 
         %__MODULE__{
@@ -978,8 +976,9 @@ defmodule ElixirSense.Core.State do
 
   @builtin_attributes ElixirSense.Core.BuiltinAttributes.all()
 
-  def add_attribute(%__MODULE__{} = state, attribute, type, is_definition, position)
+  def add_attribute(%__MODULE__{} = state, attribute, type, is_definition, meta)
       when attribute not in @builtin_attributes do
+    position = extract_position(meta)
     [attributes_from_scope | other_attributes] = state.attributes
 
     existing_attribute_index =
@@ -1009,7 +1008,7 @@ defmodule ElixirSense.Core.State do
 
             %AttributeInfo{
               existing
-              | # FIXME this is wrong for accumulating attributes
+              | # TODO this is wrong for accumulating attributes
                 type: type,
                 positions: (existing.positions ++ [position]) |> Enum.uniq() |> Enum.sort()
             }
@@ -1021,7 +1020,7 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | attributes: attributes, scope_attributes: scope_attributes}
   end
 
-  def add_attribute(%__MODULE__{} = state, _attribute, _type, _is_definition, _position) do
+  def add_attribute(%__MODULE__{} = state, _attribute, _type, _is_definition, _meta) do
     state
   end
 
@@ -1167,20 +1166,20 @@ defmodule ElixirSense.Core.State do
     {:module_info, [:atom], :def}
   ]
 
-  def add_module_functions(state, env, functions, position, end_position) do
-    {line, column} = position
+  def add_module_functions(state, env, functions, range) do
+    {{line, column}, _} = range
+    meta = [line: line || 0] ++ if(column > 0, do: [column: column], else: [])
 
     (functions ++ @module_functions)
     |> Enum.reduce(state, fn {name, args, kind}, acc ->
-      mapped_args = for arg <- args, do: {arg, [line: line, column: column], nil}
+      mapped_args = for arg <- args, do: {arg, meta, nil}
 
       acc
       |> add_func_to_index(
         env,
         name,
         mapped_args,
-        position,
-        end_position,
+        range,
         kind,
         generated: true
       )
@@ -1191,7 +1190,10 @@ defmodule ElixirSense.Core.State do
     %{state | typespec: typespec}
   end
 
-  def add_struct_or_exception(state, env, type, fields, {line, column} = position, end_position) do
+  def add_struct_or_exception(state, env, type, fields, range) do
+    {{line, column}, _} = range
+    meta = [line: line || 0] ++ if(column > 0, do: [column: column], else: [])
+
     fields =
       fields ++
         if type == :defexception do
@@ -1211,18 +1213,16 @@ defmodule ElixirSense.Core.State do
           |> add_func_to_index(
             env,
             :exception,
-            [{:msg, [line: line, column: column], nil}],
-            position,
-            end_position,
+            [{:msg, meta, nil}],
+            range,
             :def,
             options
           )
           |> add_func_to_index(
             env,
             :message,
-            [{:exception, [line: line, column: column], nil}],
-            position,
-            end_position,
+            [{:exception, meta, nil}],
+            range,
             :def,
             options
           )
@@ -1232,22 +1232,20 @@ defmodule ElixirSense.Core.State do
         |> add_func_to_index(
           env,
           :exception,
-          [{:args, [line: line, column: column], nil}],
-          position,
-          end_position,
+          [{:args, meta, nil}],
+          range,
           :def,
           options
         )
       else
         state
       end
-      |> add_func_to_index(env, :__struct__, [], position, end_position, :def, options)
+      |> add_func_to_index(env, :__struct__, [], range, :def, options)
       |> add_func_to_index(
         env,
         :__struct__,
-        [{:kv, [line: line, column: column], nil}],
-        position,
-        end_position,
+        [{:kv, meta, nil}],
+        range,
         :def,
         options
       )
@@ -1351,5 +1349,54 @@ defmodule ElixirSense.Core.State do
       end
 
     %{state | vars_info: [h | t]}
+  end
+
+  def extract_position(meta) do
+    line = Keyword.get(meta, :line, 0)
+
+    if line <= 0 do
+      nil
+    else
+      {
+        line,
+        Keyword.get(meta, :column)
+      }
+    end
+  end
+
+  def extract_range(meta) do
+    line = Keyword.get(meta, :line, 0)
+
+    if line <= 0 do
+      {nil, nil}
+    else
+      position = {
+        line,
+        Keyword.get(meta, :column)
+      }
+
+      end_position =
+        case meta[:end] do
+          nil ->
+            case meta[:end_of_expression] do
+              nil ->
+                nil
+
+              end_of_expression_meta ->
+                {
+                  Keyword.fetch!(end_of_expression_meta, :line),
+                  Keyword.fetch!(end_of_expression_meta, :column)
+                }
+            end
+
+          end_meta ->
+            {
+              Keyword.fetch!(end_meta, :line),
+              Keyword.fetch!(end_meta, :column) + 3
+            }
+        end
+
+      {position, end_position}
+    end
   end
 end

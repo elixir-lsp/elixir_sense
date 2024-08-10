@@ -833,8 +833,6 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when module != nil do
-    {position, end_position} = extract_range(meta)
-
     {opts, state, env} = expand(opts, state, env)
     # elixir does validation here
     target = Keyword.get(opts, :to, :__unknown__)
@@ -861,8 +859,7 @@ defmodule ElixirSense.Core.Compiler do
           env,
           name,
           args,
-          position,
-          end_position,
+          extract_range(meta),
           :defdelegate,
           target: {target, as, length(as_args)}
         )
@@ -1019,9 +1016,6 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when module != nil do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.fetch!(meta, :column)
-
     state =
       List.wrap(derived_protos)
       |> Enum.map(fn
@@ -1041,7 +1035,7 @@ defmodule ElixirSense.Core.Compiler do
               nil ->
                 # implementation for: Any not detected (is in other file etc.)
                 acc
-                |> add_module_to_index(mod, {line, column}, nil, generated: true)
+                |> add_module_to_index(mod, extract_range(meta), generated: true)
 
               _any_mods_funs ->
                 # copy implementation for: Any
@@ -1091,11 +1085,9 @@ defmodule ElixirSense.Core.Compiler do
 
         spec = TypeInfo.typespec_to_string(kind, expr)
 
-        {position, end_position} = extract_range(attr_meta)
-
         state =
           state
-          |> add_type(env, name, type_args, spec, kind, position, end_position)
+          |> add_type(env, name, type_args, spec, kind, extract_range(attr_meta))
           |> with_typespec({name, length(type_args)})
           |> add_current_env_to_line(attr_meta, env)
           |> with_typespec(nil)
@@ -1136,7 +1128,7 @@ defmodule ElixirSense.Core.Compiler do
       {name, type_args} ->
         spec = TypeInfo.typespec_to_string(kind, expr)
 
-        {position, end_position} = extract_range(attr_meta)
+        range = extract_range(attr_meta)
 
         state =
           if kind in [:callback, :macrocallback] do
@@ -1145,8 +1137,7 @@ defmodule ElixirSense.Core.Compiler do
               env,
               :behaviour_info,
               [{:atom, attr_meta, nil}],
-              position,
-              end_position,
+              range,
               :def,
               generated: true
             )
@@ -1156,7 +1147,7 @@ defmodule ElixirSense.Core.Compiler do
 
         state =
           state
-          |> add_spec(env, name, type_args, spec, kind, position, end_position)
+          |> add_spec(env, name, type_args, spec, kind, range)
           |> with_typespec({name, length(type_args)})
           |> add_current_env_to_line(attr_meta, env)
           |> with_typespec(nil)
@@ -1178,9 +1169,6 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when is_atom(name) and module != nil do
-    line = Keyword.fetch!(meta, :line)
-    column = Keyword.get(meta, :column, 1)
-
     {is_definition, {e_args, state, env}} =
       case args do
         arg when is_atom(arg) ->
@@ -1209,7 +1197,7 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> add_attribute(name, inferred_type, is_definition, {line, column})
+      |> add_attribute(name, inferred_type, is_definition, meta)
       |> add_current_env_to_line(meta, env)
 
     {{:@, meta, [{name, name_meta, e_args}]}, state, env}
@@ -1274,8 +1262,6 @@ defmodule ElixirSense.Core.Compiler do
           []
       end
 
-    {position, end_position} = extract_range(meta)
-
     fields =
       fields
       |> Enum.filter(fn
@@ -1290,7 +1276,7 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> add_struct_or_exception(env, type, fields, position, end_position)
+      |> add_struct_or_exception(env, type, fields, extract_range(meta))
 
     {{type, meta, [fields]}, state, env}
   end
@@ -1305,7 +1291,7 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when call in [:defrecord, :defrecordp] and module != nil do
-    {position, end_position} = extract_range(meta)
+    range = extract_range(meta)
 
     type =
       case call do
@@ -1321,8 +1307,7 @@ defmodule ElixirSense.Core.Compiler do
         env,
         name,
         [{:\\, [], [{:args, [], nil}, []]}],
-        position,
-        end_position,
+        range,
         type,
         options
       )
@@ -1330,8 +1315,7 @@ defmodule ElixirSense.Core.Compiler do
         env,
         name,
         [{:record, [], nil}, {:args, [], nil}],
-        position,
-        end_position,
+        range,
         type,
         options
       )
@@ -1349,7 +1333,6 @@ defmodule ElixirSense.Core.Compiler do
          state,
          env
        ) do
-    {position, end_position} = extract_range(meta)
     original_env = env
     # expand the macro normally
     {ast, state, env} =
@@ -1364,8 +1347,7 @@ defmodule ElixirSense.Core.Compiler do
         %{env | module: module},
         :behaviour_info,
         [:atom],
-        position,
-        end_position,
+        extract_range(meta),
         :def,
         generated: true
       )
@@ -1504,7 +1486,7 @@ defmodule ElixirSense.Core.Compiler do
               %{state | runtime_modules: [full | state.runtime_modules]}
           end
 
-        {position, end_position} = extract_range(meta)
+        range = extract_range(meta)
 
         module_functions =
           case state.protocol do
@@ -1514,10 +1496,10 @@ defmodule ElixirSense.Core.Compiler do
 
         state =
           state
-          |> add_module_to_index(full, position, end_position, [])
+          |> add_module_to_index(full, range, [])
           |> add_module
           |> add_current_env_to_line(meta, %{env | module: full})
-          |> add_module_functions(%{env | module: full}, module_functions, position, end_position)
+          |> add_module_functions(%{env | module: full}, module_functions, range)
           |> new_vars_scope
           |> new_attributes_scope
 
@@ -1658,8 +1640,6 @@ defmodule ElixirSense.Core.Compiler do
 
     env_for_expand = %{env_for_expand | context: nil}
 
-    {position, end_position} = extract_range(meta)
-
     state =
       state
       |> add_current_env_to_line(meta, env_for_expand)
@@ -1667,8 +1647,7 @@ defmodule ElixirSense.Core.Compiler do
         env,
         name,
         args,
-        position,
-        end_position,
+        extract_range(meta),
         def_kind
       )
 
@@ -1735,7 +1714,7 @@ defmodule ElixirSense.Core.Compiler do
         [context, do_block | _] -> {[context], do_block}
       end
 
-    line = Keyword.fetch!(meta, :line)
+    line = __MODULE__.Utils.get_line(meta)
 
     # NOTE this name is not 100% correct - ex_unit uses counters instead of line but it's too complicated
     call = {:"__ex_unit_#{setup}_#{line}", meta, args}
@@ -1788,42 +1767,6 @@ defmodule ElixirSense.Core.Compiler do
     ast = callback.(meta, args)
     {ast, state, env} = expand(ast, state, env)
     {ast, state, env}
-  end
-
-  defp extract_range(meta) do
-    line = Keyword.get(meta, :line, 0)
-
-    if line <= 0 do
-      {nil, nil}
-    else
-      position = {
-        line,
-        Keyword.get(meta, :column, 1)
-      }
-
-      end_position =
-        case meta[:end] do
-          nil ->
-            case meta[:end_of_expression] do
-              nil ->
-                nil
-
-              end_of_expression_meta ->
-                {
-                  Keyword.fetch!(end_of_expression_meta, :line),
-                  Keyword.fetch!(end_of_expression_meta, :column)
-                }
-            end
-
-          end_meta ->
-            {
-              Keyword.fetch!(end_meta, :line),
-              Keyword.fetch!(end_meta, :column) + 3
-            }
-        end
-
-      {position, end_position}
-    end
   end
 
   defp ex_unit_test_name(state, name) do
@@ -3046,7 +2989,7 @@ defmodule ElixirSense.Core.Compiler do
     # rescue expr() => rescue expanded_expr()
     defp expand_rescue({_, meta, _} = arg, s, e) do
       # TODO wut?
-      case Macro.expand_once(arg, %{e | line: line(meta)}) do
+      case Macro.expand_once(arg, %{e | line: ElixirUtils.get_line(meta)}) do
         ^arg ->
           # elixir rejects this case
           # try to recover from error by generating fake expression
@@ -3120,13 +3063,6 @@ defmodule ElixirSense.Core.Compiler do
 
     defp origin(meta, default) do
       Keyword.get(meta, :origin, default)
-    end
-
-    defp line(opts) when is_list(opts) do
-      case Keyword.fetch(opts, :line) do
-        {:ok, line} when is_integer(line) -> line
-        _ -> 0
-      end
     end
   end
 
