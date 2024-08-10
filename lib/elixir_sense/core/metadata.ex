@@ -61,6 +61,7 @@ defmodule ElixirSense.Core.Metadata do
 
   def get_cursor_env(
         %__MODULE__{} = metadata,
+        {line, column},
         {{begin_line, begin_column}, {end_line, end_column}}
       ) do
     prefix = ElixirSense.Core.Source.text_before(metadata.source, begin_line, begin_column)
@@ -70,8 +71,8 @@ defmodule ElixirSense.Core.Metadata do
 
     {meta, cursor_env} =
       case Code.string_to_quoted(source_with_cursor, columns: true, token_metadata: true) do
-        {:ok, ast} ->
-          ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
+        # {:ok, ast} ->
+        #   ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
 
         _ ->
           {[], nil}
@@ -85,8 +86,8 @@ defmodule ElixirSense.Core.Metadata do
                columns: true,
                token_metadata: true
              ) do
-          {:ok, ast} ->
-            ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
+          # {:ok, ast} ->
+          #   ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
 
           _ ->
             {[], nil}
@@ -96,7 +97,7 @@ defmodule ElixirSense.Core.Metadata do
     if cursor_env != nil do
       cursor_env
     else
-      get_env(metadata, {begin_line, begin_column})
+      get_env(metadata, {line, column})
     end
   end
 
