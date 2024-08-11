@@ -143,9 +143,6 @@ defmodule ElixirSense.Core.Compiler do
     {opts, state, env} = expand_opts([:as, :warn], no_alias_opts(opts), state, env)
 
     if is_atom(arg) do
-      # TODO check difference with
-      # elixir_aliases:alias(Meta, Ref, IncludeByDefault, Opts, E, true)
-      # TODO PR to elixir with is_atom(module) check?
       case NormalizedMacroEnv.define_alias(env, meta, arg, [trace: false] ++ opts) do
         {:ok, env} ->
           {arg, state, env}
@@ -202,11 +199,8 @@ defmodule ElixirSense.Core.Compiler do
         end
 
       :error when is_atom(arg) ->
-        # TODO check differences
-        # TODO ensure loaded?
-        # ElixirAliases.ensure_loaded(meta, e_ref, et)
-        # re = ElixirAliases.require(meta, e_ref, e_opts, et, true)
-        # {e_ref, st, alias(meta, e_ref, false, e_opts, re)}
+        # elixir calls here :elixir_aliases.ensure_loaded(meta, e_ref, et)
+        # and optionally waits until required module is compiled
         case NormalizedMacroEnv.define_require(env, meta, arg, [trace: false] ++ opts) do
           {:ok, env} ->
             {arg, state, env}

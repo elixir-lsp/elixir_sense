@@ -4452,6 +4452,25 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                [Application, Kernel, Kernel.Typespec, Mod] |> maybe_reject_typespec
     end
 
+    test "requires local module" do
+      state =
+        """
+        defmodule Mod do
+          defmacro some, do: :ok
+        end
+
+        defmodule MyModule do
+          require Mod
+          Mod.some()
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert get_line_requires(state, 8) ==
+               [Application, Kernel, Kernel.Typespec, Mod] |> maybe_reject_typespec
+    end
+
     test "requires with __MODULE__" do
       state =
         """
