@@ -172,19 +172,19 @@ defmodule ElixirSense.Core.Compiler do
     # It is only set by defmodule and we handle it there
 
     if is_atom(arg) do
-        # elixir calls here :elixir_aliases.ensure_loaded(meta, e_ref, et)
-        # and optionally waits until required module is compiled
-        case NormalizedMacroEnv.define_require(env, meta, arg, [trace: false] ++ opts) do
-          {:ok, env} ->
-            {arg, state, env}
+      # elixir calls here :elixir_aliases.ensure_loaded(meta, e_ref, et)
+      # and optionally waits until required module is compiled
+      case NormalizedMacroEnv.define_require(env, meta, arg, [trace: false] ++ opts) do
+        {:ok, env} ->
+          {arg, state, env}
 
-          {:error, _} ->
-            # elixir_aliases
-            {arg, state, env}
-        end
+        {:error, _} ->
+          # elixir_aliases
+          {arg, state, env}
+      end
     else
-        # expected_compile_time_module
-        {arg, state, env}
+      # expected_compile_time_module
+      {arg, state, env}
     end
   end
 
@@ -1441,13 +1441,13 @@ defmodule ElixirSense.Core.Compiler do
         # we do it here instead
         {full, env} = alias_defmodule(alias, expanded, env)
         env = %{env | context_modules: [full | env.context_modules]}
+
         state =
           case original_env do
             %{function: nil} ->
               state
 
             _ ->
-              # TODO how to test that? quote do defmodule?
               %{state | runtime_modules: [full | state.runtime_modules]}
           end
 

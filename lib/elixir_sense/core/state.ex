@@ -348,6 +348,7 @@ defmodule ElixirSense.Core.State do
       module: macro_env.module,
       function: macro_env.function,
       context_modules: macro_env.context_modules,
+      # TODO macro_aliases
       vars: vars,
       versioned_vars: versioned_vars,
       attributes: current_attributes,

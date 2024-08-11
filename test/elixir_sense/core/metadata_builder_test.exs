@@ -4475,6 +4475,39 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert state.runtime_modules == []
     end
 
+    test "defmodule emits require with :defined meta - runtime module" do
+      state =
+        """
+        IO.puts ""
+        defmodule Foo.Bar do
+          IO.puts ""
+          def a do
+            defmodule Some.Mod do
+              IO.puts ""
+              def b, do: :ok
+            end
+            IO.puts ""
+            Some.Mod.b()
+            IO.puts ""
+          end
+          IO.puts ""
+        end
+        IO.puts ""
+        """
+        |> string_to_state
+
+      assert state.lines_to_env[1].context_modules == []
+      assert state.lines_to_env[3].context_modules == [Foo.Bar]
+      assert state.lines_to_env[6].context_modules == [Foo.Bar.Some.Mod, Foo.Bar]
+      assert state.lines_to_env[9].context_modules == [Foo.Bar.Some.Mod, Foo.Bar]
+      assert state.lines_to_env[11].context_modules == [Foo.Bar.Some.Mod, Foo.Bar]
+      assert state.lines_to_env[13].context_modules == [Foo.Bar]
+      assert state.lines_to_env[15].context_modules == [Foo.Bar]
+      assert state.runtime_modules == [Foo.Bar.Some.Mod]
+
+      assert state.lines_to_env[9].aliases == [{Some, Foo.Bar.Some}]
+    end
+
     test "requires local module" do
       state =
         """
