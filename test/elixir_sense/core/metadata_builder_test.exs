@@ -4220,6 +4220,52 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert get_line_aliases(state, 3) == [{User, Foo.User}]
       assert get_line_aliases(state, 5) == []
     end
+
+    defmodule Macro.AliasTest.Definer do
+      defmacro __using__(_options) do
+        quote do
+          @before_compile unquote(__MODULE__)
+        end
+      end
+
+      defmacro __before_compile__(_env) do
+        quote do
+          defmodule First do
+            defstruct foo: :bar
+          end
+
+          defmodule Second do
+            defstruct baz: %First{}
+          end
+        end
+      end
+    end
+
+    defmodule Macro.AliasTest.Aliaser do
+      defmacro __using__(_options) do
+        quote do
+          alias Some.First
+          IO.inspect({__ENV__.aliases, __ENV__.macro_aliases})
+        end
+      end
+    end
+
+    test "macro alias" do
+      state =
+        """
+        defmodule MyModule do
+          use ElixirSense.Core.MetadataBuilderTest.Macro.AliasTest.Definer
+          use ElixirSense.Core.MetadataBuilderTest.Macro.AliasTest.Aliaser
+          IO.puts ""
+          a = %MyModule.First{}
+          b = %MyModule.Second{}
+        end
+        """
+        |> string_to_state
+
+      assert [{First, {_, Some.First}}] = state.lines_to_env[4].macro_aliases
+      # TODO should we handle @before_compile?
+    end
   end
 
   describe "import" do

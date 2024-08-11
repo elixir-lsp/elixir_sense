@@ -110,6 +110,7 @@ defmodule ElixirSense.Core.State do
             macros: [{module, [{atom, arity}]}],
             requires: list(module),
             aliases: list(ElixirSense.Core.State.alias_t()),
+            macro_aliases: [{module, {term, module}}],
             module: nil | module,
             function: nil | {atom, arity},
             protocol: nil | ElixirSense.Core.State.protocol_t(),
@@ -125,6 +126,7 @@ defmodule ElixirSense.Core.State do
               macros: [],
               requires: [],
               aliases: [],
+              macro_aliases: [],
               # NOTE for protocol implementation this will be the first variant
               module: nil,
               function: nil,
@@ -345,10 +347,10 @@ defmodule ElixirSense.Core.State do
       macros: macro_env.macros,
       requires: macro_env.requires,
       aliases: macro_env.aliases,
+      macro_aliases: macro_env.macro_aliases,
       module: macro_env.module,
       function: macro_env.function,
       context_modules: macro_env.context_modules,
-      # TODO macro_aliases
       vars: vars,
       versioned_vars: versioned_vars,
       attributes: current_attributes,
