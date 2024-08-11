@@ -117,6 +117,7 @@ defmodule ElixirSense.Core.State do
             vars: list(ElixirSense.Core.State.VarInfo.t()),
             attributes: list(ElixirSense.Core.State.AttributeInfo.t()),
             behaviours: list(module),
+            context_modules: list(module),
             typespec: nil | {atom, arity},
             scope_id: nil | ElixirSense.Core.State.scope_id_t()
           }
@@ -133,6 +134,7 @@ defmodule ElixirSense.Core.State do
               vars: [],
               attributes: [],
               behaviours: [],
+              context_modules: [],
               typespec: nil,
               scope_id: nil
   end
@@ -345,6 +347,7 @@ defmodule ElixirSense.Core.State do
       aliases: macro_env.aliases,
       module: macro_env.module,
       function: macro_env.function,
+      context_modules: macro_env.context_modules,
       vars: vars,
       versioned_vars: versioned_vars,
       attributes: current_attributes,

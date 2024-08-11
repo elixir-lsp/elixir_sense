@@ -4452,6 +4452,29 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                [Application, Kernel, Kernel.Typespec, Mod] |> maybe_reject_typespec
     end
 
+    test "defmodule emits require with :defined meta" do
+      state =
+        """
+        IO.puts ""
+        defmodule Foo.Bar do
+          IO.puts ""
+          defmodule Some.Mod do
+            IO.puts ""
+          end
+          IO.puts ""
+        end
+        IO.puts ""
+        """
+        |> string_to_state
+
+      assert state.lines_to_env[1].context_modules == []
+      assert state.lines_to_env[3].context_modules == [Foo.Bar]
+      assert state.lines_to_env[5].context_modules == [Foo.Bar.Some.Mod, Foo.Bar]
+      assert state.lines_to_env[7].context_modules == [Foo.Bar.Some.Mod, Foo.Bar]
+      assert state.lines_to_env[9].context_modules == [Foo.Bar]
+      assert state.runtime_modules == []
+    end
+
     test "requires local module" do
       state =
         """

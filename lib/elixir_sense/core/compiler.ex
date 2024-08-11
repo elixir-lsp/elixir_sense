@@ -158,8 +158,6 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp do_expand({:require, meta, [arg, opts]}, state, env) do
-    original_env = env
-
     state =
       state
       |> add_current_env_to_line(meta, env)
@@ -170,35 +168,10 @@ defmodule ElixirSense.Core.Compiler do
     {opts, state, env} =
       expand_opts([:as, :warn], no_alias_opts(opts), state, env)
 
-    case Keyword.fetch(meta, :defined) do
-      {:ok, mod} when is_atom(mod) ->
-        env = %{env | context_modules: [mod | env.context_modules]}
+    # elixir handles special meta key :defined in the require call.
+    # It is only set by defmodule and we handle it there
 
-        state =
-          case original_env do
-            %{function: nil} -> state
-            _ -> %{state | runtime_modules: [mod | state.runtime_modules]}
-          end
-
-        # TODO how to test that case?
-        # TODO remove this case - in elixir this is a hack used only by special require call emitted by defmodule
-        # Macro.Env.define_alias is not fully equivalent - it calls alias with IncludeByDefault set to true
-        # we counter it with only calling it if :as option is set
-        # {arg, state, alias(meta, e_ref, false, e_opts, ea)}
-        if Keyword.has_key?(opts, :as) do
-          case NormalizedMacroEnv.define_alias(env, meta, arg, [trace: false] ++ opts) do
-            {:ok, env} ->
-              {arg, state, env}
-
-            {:error, _} ->
-              # elixir_aliases
-              {arg, state, env}
-          end
-        else
-          {arg, state, env}
-        end
-
-      :error when is_atom(arg) ->
+    if is_atom(arg) do
         # elixir calls here :elixir_aliases.ensure_loaded(meta, e_ref, et)
         # and optionally waits until required module is compiled
         case NormalizedMacroEnv.define_require(env, meta, arg, [trace: false] ++ opts) do
@@ -209,8 +182,7 @@ defmodule ElixirSense.Core.Compiler do
             # elixir_aliases
             {arg, state, env}
         end
-
-      :error ->
+    else
         # expected_compile_time_module
         {arg, state, env}
     end
@@ -1464,12 +1436,11 @@ defmodule ElixirSense.Core.Compiler do
     # The env inside the block is discarded
     {_result, state, env} =
       if is_atom(expanded) do
+        # elixir emits a special require directive with :defined key set in meta
+        # require expand does alias, updates context_modules and runtime_modules
+        # we do it here instead
         {full, env} = alias_defmodule(alias, expanded, env)
-
-        # in elixir context_modules and runtime_modules are handled via special require expansion
-        # with :defined key set in meta
         env = %{env | context_modules: [full | env.context_modules]}
-
         state =
           case original_env do
             %{function: nil} ->
