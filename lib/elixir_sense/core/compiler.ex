@@ -1163,7 +1163,7 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> add_attribute(name, inferred_type, is_definition, meta)
+      |> add_attribute(env, name, meta, e_args, inferred_type, is_definition)
       |> add_current_env_to_line(meta, env)
 
     {{:@, meta, [{name, name_meta, e_args}]}, state, env}
@@ -1475,7 +1475,26 @@ defmodule ElixirSense.Core.Compiler do
 
         {state, _env} = maybe_add_protocol_behaviour(state, %{env | module: full})
 
-        {result, state, _env} = expand(block, state, %{env | module: full})
+        {result, state, e_env} = expand(block, state, %{env | module: full})
+
+        before_compile =
+          for args <- Map.get(state.attribute_store, {full, :before_compile}, []) do
+            target =
+              case args do
+                {module, fun} -> [module, fun]
+                module -> [module, :__before_compile__]
+              end
+
+            {:__block__, [],
+             [
+               {:require, [], [hd(target)]},
+               {{:., [], target}, [], [e_env]}
+             ]}
+          end
+
+        module_callbacks = {:__block__, [], before_compile}
+
+        {_result, state, _e_env} = expand(module_callbacks, state, e_env)
 
         state =
           state
@@ -1504,8 +1523,9 @@ defmodule ElixirSense.Core.Compiler do
       |> remove_attributes_scope
       |> remove_module
 
-    # TODO hardcode expansion?
-    # to result of require (a module atom) and :elixir_module.compile dot call in block
+    # in elixir the result of defmodule expansion is
+    # require (a module atom) and :elixir_module.compile dot call in block
+    # we don't need that
 
     {{:__block__, [], []}, state, env}
   end

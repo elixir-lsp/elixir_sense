@@ -66,7 +66,8 @@ defmodule ElixirSense.Core.State do
           optional_callbacks_context: list(),
           lines_to_env: lines_to_env_t,
           cursor_env: nil | {keyword, ElixirSense.Core.State.Env.t()},
-          ex_unit_describe: nil | atom
+          ex_unit_describe: nil | atom,
+          attribute_store: %{optional(module) => term}
         }
 
   defstruct attributes: [[]],
@@ -98,7 +99,8 @@ defmodule ElixirSense.Core.State do
             optional_callbacks_context: [[]],
             lines_to_env: %{},
             cursor_env: nil,
-            ex_unit_describe: nil
+            ex_unit_describe: nil,
+            attribute_store: %{}
 
   defmodule Env do
     @moduledoc """
@@ -515,8 +517,7 @@ defmodule ElixirSense.Core.State do
          doc,
          meta,
          options
-       )
-       when is_tuple(position) do
+       ) do
     current_info = Map.get(state.mods_funs_to_positions, {module, fun, arity}, %ModFunInfo{})
     current_params = current_info |> Map.get(:params, [])
     current_positions = current_info |> Map.get(:positions, [])
@@ -980,10 +981,7 @@ defmodule ElixirSense.Core.State do
 
   def add_var_read(%__MODULE__{} = state, _), do: state
 
-  @builtin_attributes ElixirSense.Core.BuiltinAttributes.all()
-
-  def add_attribute(%__MODULE__{} = state, attribute, type, is_definition, meta)
-      when attribute not in @builtin_attributes do
+  def add_attribute(%__MODULE__{} = state, env, attribute, meta, args, type, is_definition) do
     position = extract_position(meta)
     [attributes_from_scope | other_attributes] = state.attributes
 
@@ -1023,11 +1021,47 @@ defmodule ElixirSense.Core.State do
 
     attributes = [attributes_from_scope | other_attributes]
     scope_attributes = [attributes_from_scope | tl(state.scope_attributes)]
-    %__MODULE__{state | attributes: attributes, scope_attributes: scope_attributes}
-  end
 
-  def add_attribute(%__MODULE__{} = state, _attribute, _type, _is_definition, _meta) do
-    state
+    # TODO handle other
+    # {moduledoc, nil, nil, []},
+    # {after_compile, [], accumulate, []},
+    # {after_verify, [], accumulate, []},
+    # {before_compile, [], accumulate, []},
+    # {behaviour, [], accumulate, []},
+    # {compile, [], accumulate, []},
+    # {derive, [], accumulate, []},
+    # {dialyzer, [], accumulate, []},
+    # {external_resource, [], accumulate, []},
+    # {on_definition, [], accumulate, []},
+    # {type, [], accumulate, []},
+    # {opaque, [], accumulate, []},
+    # {typep, [], accumulate, []},
+    # {spec, [], accumulate, []},
+    # {callback, [], accumulate, []},
+    # {macrocallback, [], accumulate, []},
+    # {optional_callbacks, [], accumulate, []},
+    accumulating? =
+      attribute in [:before_compile, :after_compile, :after_verify, :on_definition, :on_load]
+
+    attribute_store =
+      if is_definition do
+        [arg] = args
+
+        if accumulating? do
+          state.attribute_store |> Map.update({env.module, attribute}, [arg], &(&1 ++ [arg]))
+        else
+          state.attribute_store |> Map.put({env.module, attribute}, arg)
+        end
+      else
+        state.attribute_store
+      end
+
+    %__MODULE__{
+      state
+      | attributes: attributes,
+        scope_attributes: scope_attributes,
+        attribute_store: attribute_store
+    }
   end
 
   def add_behaviour(module, %__MODULE__{} = state, env) when is_atom(module) do
@@ -1173,8 +1207,13 @@ defmodule ElixirSense.Core.State do
   ]
 
   def add_module_functions(state, env, functions, range) do
-    {{line, column}, _} = range
-    meta = [line: line || 0] ++ if(column > 0, do: [column: column], else: [])
+    {line, column} =
+      case range do
+        {{line, column}, _} -> {line, column}
+        _ -> {0, nil}
+      end
+
+    meta = [line: line] ++ if(column > 0, do: [column: column], else: [])
 
     (functions ++ @module_functions)
     |> Enum.reduce(state, fn {name, args, kind}, acc ->
@@ -1197,7 +1236,12 @@ defmodule ElixirSense.Core.State do
   end
 
   def add_struct_or_exception(state, env, type, fields, range) do
-    {{line, column}, _} = range
+    {line, column} =
+      case range do
+        {{line, column}, _} -> {line, column}
+        _ -> {0, nil}
+      end
+
     meta = [line: line || 0] ++ if(column > 0, do: [column: column], else: [])
 
     fields =

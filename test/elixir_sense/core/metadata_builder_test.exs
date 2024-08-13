@@ -4245,26 +4245,34 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmacro __using__(_options) do
         quote do
           alias Some.First
-          IO.inspect({__ENV__.aliases, __ENV__.macro_aliases})
         end
       end
     end
 
-    test "macro alias" do
+    test "macro alias does not leak outside macro" do
       state =
         """
         defmodule MyModule do
           use ElixirSense.Core.MetadataBuilderTest.Macro.AliasTest.Definer
           use ElixirSense.Core.MetadataBuilderTest.Macro.AliasTest.Aliaser
           IO.puts ""
-          a = %MyModule.First{}
-          b = %MyModule.Second{}
         end
         """
         |> string_to_state
 
       assert [{First, {_, Some.First}}] = state.lines_to_env[4].macro_aliases
-      # TODO should we handle @before_compile?
+
+      assert %{
+               MyModule.First => %StructInfo{
+                 fields: [foo: :bar, __struct__: MyModule.First]
+               },
+               MyModule.Second => %StructInfo{
+                 fields: [
+                   baz: {:%, [], [MyModule.First, {:%{}, [], [{:foo, :bar}]}]},
+                   __struct__: MyModule.Second
+                 ]
+               }
+             } = state.structs
     end
   end
 
@@ -5434,7 +5442,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           use Application
           @behaviour SomeModule.SomeBehaviour
           IO.puts ""
-          defmodule InnerModuleWithUse do
+          defmodule InnerModuleWithUse1 do
             use GenServer
             IO.puts ""
           end
@@ -5997,6 +6005,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ])
 
       assert [
+               %AttributeInfo{name: :before_compile, positions: [{2, _}]},
                %AttributeInfo{name: :my_attribute, positions: [{2, _}]}
              ] = get_line_attributes(state, 4)
 
@@ -7294,7 +7303,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     test "registers calls on ex_unit DSL" do
       state =
         """
-        defmodule MyModuleTest do
+        defmodule MyModuleTests do
           use ExUnit.Case
 
           describe "describe1" do
@@ -7664,7 +7673,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   test "gets ExUnit imports from `use ExUnit.Case`" do
     state =
       """
-      defmodule MyTest do
+      defmodule MyModuleTest do
         use ExUnit.Case
         IO.puts ""
       end
@@ -7678,7 +7687,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   test "gets ExUnit imports from case template" do
     state =
       """
-      defmodule MyTest do
+      defmodule My1Test do
         use ElixirSenseExample.CaseTemplateExample
         IO.puts ""
       end
@@ -8419,6 +8428,32 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert state
+  end
+
+  describe "module callbacks" do
+    defmodule Callbacks do
+      defmacro __before_compile__(_arg) do
+        quote do
+          def constant, do: 1
+          defoverridable constant: 0
+        end
+      end
+    end
+
+    test "before_compile" do
+      state =
+        """
+        defmodule User do
+          @before_compile ElixirSense.Core.MetadataBuilderTest.Callbacks
+        end
+        """
+        |> string_to_state
+
+      assert %ModFunInfo{meta: %{overridable: true}} =
+               state.mods_funs_to_positions[{User, :constant, 0}]
+    end
+
+    # TODO after_compile?, after_verify?, on_defined, on_load?
   end
 
   defp string_to_state(string) do
