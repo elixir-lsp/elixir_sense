@@ -1218,6 +1218,8 @@ defmodule ElixirSense.Core.Compiler do
               "#{inspect(module)}, defstruct can only be called once per module"
     end
 
+    {fields, state, env} = expand(fields, state, env)
+
     fields =
       case fields do
         fs when is_list(fs) ->
@@ -1251,13 +1253,14 @@ defmodule ElixirSense.Core.Compiler do
          meta,
          Record,
          call,
-         [name, _] = args,
+         [_name, _fields] = args,
          _callback,
          state,
          env = %{module: module}
        )
        when call in [:defrecord, :defrecordp] and module != nil do
     range = extract_range(meta)
+    {[name, _fields] = args, state, env} = expand(args, state, env)
 
     type =
       case call do
