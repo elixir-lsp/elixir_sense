@@ -14,7 +14,15 @@ defmodule ElixirSense.Core.MetadataBuilder do
   """
   @spec build(Macro.t()) :: State.t()
   def build(ast) do
-    {_ast, state, _env} = Compiler.expand(ast, %State{}, Compiler.env())
+    {_ast, state, _env} =
+      Compiler.expand(
+        ast,
+        %State{
+          # TODO remove default when we require elixir 1.15
+          prematch: Code.get_compiler_option(:on_undefined_variable) || :warn
+        },
+        Compiler.env()
+      )
 
     state
     |> remove_attributes_scope

@@ -5,7 +5,6 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
     alias ElixirSense.Core.State
     require Record
 
-    defp to_quoted!(string_or_ast, ast \\ false)
     defp to_quoted!(ast, true), do: ast
 
     defp to_quoted!(string, false),
@@ -568,7 +567,7 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
       end
 
       defmodule Overridable do
-        defmacro __using__(args) do
+        defmacro __using__(_args) do
           quote do
             def foo(a) do
               a
@@ -623,6 +622,44 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
 
       test "expands var pin" do
         assert_expansion("a = 5; ^a = 6")
+      end
+
+      test "expands nullary call if_undefined: :apply" do
+        ast = {:self, [if_undefined: :apply], nil}
+        {expanded, state, env} = Compiler.expand(ast, %State{}, Compiler.env())
+        elixir_env = :elixir_env.new()
+
+        {elixir_expanded, elixir_state, elixir_env} =
+          :elixir_expand.expand(ast, :elixir_env.env_to_ex(elixir_env), elixir_env)
+
+        assert expanded == elixir_expanded
+        assert env == elixir_env
+        assert state_to_map(state) == elixir_ex_to_map(elixir_state)
+      end
+
+      test "expands nullary call if_undefined: :warn" do
+        Code.put_compiler_option(:on_undefined_variable, :warn)
+        ast = {:self, [], nil}
+
+        {expanded, state, env} =
+          Compiler.expand(
+            ast,
+            %State{
+              prematch: Code.get_compiler_option(:on_undefined_variable) || :warn
+            },
+            Compiler.env()
+          )
+
+        elixir_env = :elixir_env.new()
+
+        {elixir_expanded, elixir_state, elixir_env} =
+          :elixir_expand.expand(ast, :elixir_env.env_to_ex(elixir_env), elixir_env)
+
+        assert expanded == elixir_expanded
+        assert env == elixir_env
+        assert state_to_map(state) == elixir_ex_to_map(elixir_state)
+      after
+        Code.put_compiler_option(:on_undefined_variable, :raise)
       end
 
       test "expands local call" do
@@ -788,7 +825,9 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
             token_metadata: true
           )
 
-        {expanded, state, env} = Compiler.expand(ast, %State{}, %{Compiler.env() | module: Foo})
+        {_expanded, _state, _env} =
+          Compiler.expand(ast, %State{}, %{Compiler.env() | module: Foo})
+
         # elixir_env = %{:elixir_env.new() | module: Foo}
         # {elixir_expanded, _elixir_state, elixir_env} = :elixir_expand.expand(ast, :elixir_env.env_to_ex(elixir_env), elixir_env)
 
@@ -850,7 +889,7 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
     defp clean_capture_arg_elixir(ast) do
       {ast, _} =
         Macro.prewalk(ast, nil, fn
-          {:capture, meta, nil} = node, state ->
+          {:capture, meta, nil} = _node, state ->
             # elixir changes the name to capture and does different counter tracking
             meta = Keyword.delete(meta, :counter)
             {{:capture, meta, nil}, state}

@@ -135,6 +135,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ] = state |> get_line_vars(3)
     end
 
+    test "pin undefined" do
+      state =
+        """
+        ^abc = foo()
+        record_env()
+        """
+        |> string_to_state
+
+      refute Map.has_key?(state.lines_to_env[2].versioned_vars, {:abc, nil})
+
+      assert [] = state |> get_line_vars(3)
+    end
+
     test "rebinding" do
       state =
         """

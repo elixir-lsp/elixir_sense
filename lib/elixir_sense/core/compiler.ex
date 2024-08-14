@@ -549,7 +549,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp do_expand({name, meta, kind}, s, e) when is_atom(name) and is_atom(kind) do
-    %{vars: {read, _write}, unused: version, prematch: prematch} = s
+    %{vars: {read, _write}, prematch: prematch} = s
     pair = {name, var_context(meta, kind)}
 
     result =
@@ -584,34 +584,31 @@ defmodule ElixirSense.Core.Compiler do
       {:ok, pair_version} ->
         var = {name, [{:version, pair_version} | meta], kind}
         s = add_var_read(s, var)
-        {var, %{s | unused: version}, e}
+        {var, s, e}
 
       error ->
         case Keyword.fetch(meta, :if_undefined) do
           {:ok, :apply} ->
-            # TODO check if this can happen
+            # convert to local call
             expand({name, meta, []}, s, e)
 
           # elixir plans to remove this clause on v2.0
           {:ok, :raise} ->
-            # TODO is it worth registering var access
-            # function_error(meta, e, __MODULE__, {:undefined_var, name, kind})
+            # elixir raises here undefined_var
             {{name, meta, kind}, s, e}
 
           # elixir plans to remove this clause on v2.0
           _ when error == :warn ->
-            # TODO is it worth registering var access?
+            # convert to local call and add if_undefined meta
             expand({name, [{:if_undefined, :warn} | meta], []}, s, e)
 
           _ when error == :pin ->
-            # TODO is it worth registering var access
-            # function_error(meta, e, __MODULE__, {:undefined_var_pin, name, kind})
+            # elixir raises here undefined_var_pin
             {{name, meta, kind}, s, e}
 
           _ ->
-            # TODO is it worth registering var access
+            # elixir raises here undefined_var
             span_meta = __MODULE__.Env.calculate_span(meta, name)
-            # function_error(span_meta, e, __MODULE__, {:undefined_var, name, kind})
             {{name, span_meta, kind}, s, e}
         end
     end
