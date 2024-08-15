@@ -621,7 +621,6 @@ defmodule ElixirSense.Core.Compiler do
     # elixir checks here id fall is not ambiguous
     arity = length(args)
 
-    # TODO check if it works in our case
     # If we are inside a function, we support reading from locals.
     allow_locals = match?({n, a} when fun != n or arity != a, env.function)
 

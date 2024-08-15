@@ -5949,6 +5949,112 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     assert Map.has_key?(state.mods_funs_to_positions, {Reversible.My.List, :__impl__, 1})
   end
 
+  describe "macro expansion" do
+    defmodule WithMacros do
+      IO.inspect(__ENV__.module)
+
+      defmacro go do
+        quote do
+          def my_fun, do: :ok
+        end
+      end
+    end
+
+    test "expands remote macro" do
+      state =
+        """
+        defmodule SomeMod do
+          require ElixirSense.Core.MetadataBuilderTest.WithMacros, as: WithMacros
+          WithMacros.go()
+        end
+        """
+        |> string_to_state
+
+      assert %{{SomeMod, :my_fun, 0} => _} = state.mods_funs_to_positions
+    end
+
+    test "expands remote imported macro" do
+      state =
+        """
+        defmodule SomeMod do
+          import ElixirSense.Core.MetadataBuilderTest.WithMacros
+          go()
+        end
+        """
+        |> string_to_state
+
+      assert %{{SomeMod, :my_fun, 0} => _} = state.mods_funs_to_positions
+    end
+
+    test "expands local macro" do
+      state =
+        """
+        defmodule SomeMod do
+          defmacrop go do
+            quote do
+              self()
+            end
+          end
+
+          def foo do
+            go()
+          end
+        end
+        """
+        |> string_to_state
+
+      assert %{{SomeMod, :my_fun, 0} => _} = state.calls
+    end
+
+    defmodule SomeCompiledMod do
+      defmacro go do
+        quote do
+          self()
+        end
+      end
+
+      defmacrop go_priv do
+        quote do
+          self()
+        end
+      end
+    end
+
+    test "expands public local macro from compiled module" do
+      # NOTE we optimistically assume the previously compiled module version has
+      # the same macro implementation as the currently expanded
+      state =
+        """
+        defmodule ElixirSense.Core.MetadataBuilderTest.SomeCompiledMod do
+          defmacro go do
+            quote do
+              self()
+            end
+          end
+
+          defmacrop go_priv do
+            quote do
+              self()
+            end
+          end
+
+          def foo do
+            go()
+            go_priv()
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [%CallInfo{func: :self}, %CallInfo{func: :go}] = state.calls[15]
+
+      # NOTE as of elixir 1.17 MacroEnv.expand_import relies on module.__info__(:macros) for locals
+      # this means only public local macros are returned in our case
+      # making it work for all locals would require hooking into :elixir_def and compiling the code
+      assert [%CallInfo{func: :go_priv}] = state.calls[16]
+    end
+  end
+
   test "first_alias_positions" do
     state =
       """
