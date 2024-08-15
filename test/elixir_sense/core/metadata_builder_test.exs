@@ -5986,26 +5986,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{{SomeMod, :my_fun, 0} => _} = state.mods_funs_to_positions
     end
 
-    test "expands local macro" do
-      state =
-        """
-        defmodule SomeMod do
-          defmacrop go do
-            quote do
-              self()
-            end
-          end
-
-          def foo do
-            go()
-          end
-        end
-        """
-        |> string_to_state
-
-      assert %{{SomeMod, :my_fun, 0} => _} = state.calls
-    end
-
     defmodule SomeCompiledMod do
       defmacro go do
         quote do

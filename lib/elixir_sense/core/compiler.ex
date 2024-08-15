@@ -94,7 +94,7 @@ defmodule ElixirSense.Core.Compiler do
     case NormalizedMacroEnv.expand_alias(env, meta, list, trace: false) do
       {:alias, alias} ->
         # TODO?
-        # A compiler may want to emit a :local_function trace in here.
+        # A compiler may want to emit a :alias_reference trace in here.
         # Elixir also warns on easy to confuse aliases, such as True/False/Nil.
         {alias, state, env}
 
@@ -103,7 +103,7 @@ defmodule ElixirSense.Core.Compiler do
 
         if is_atom(head) do
           # TODO?
-          # A compiler may want to emit a :local_function trace in here.
+          # A compiler may want to emit a :alias_reference trace in here.
           {Module.concat([head | tail]), state, env}
         else
           # elixir raises here invalid_alias
@@ -1358,9 +1358,13 @@ defmodule ElixirSense.Core.Compiler do
           raise ArgumentError, "defimpl/3 expects a :for option when declared outside a module"
       end)
 
-    # TODO elixir uses expand_literals here
-    {for, state, _env} =
-      expand(for, state, %{env | module: env.module || Elixir, function: {:__impl__, 1}})
+    # TODO how to look for cursor in for?
+    for =
+      __MODULE__.Macro.expand_literals(for, %{
+        env
+        | module: env.module || Elixir,
+          function: {:__impl__, 1}
+      })
 
     {protocol, state, _env} = expand(name, state, env)
 
@@ -2972,8 +2976,8 @@ defmodule ElixirSense.Core.Compiler do
 
     # rescue expr() => rescue expanded_expr()
     defp expand_rescue({_, meta, _} = arg, s, e) do
-      # TODO wut?
-      case Macro.expand_once(arg, %{e | line: ElixirUtils.get_line(meta)}) do
+      # TODO how to check for cursor here?
+      case ElixirExpand.Macro.expand_once(arg, %{e | line: ElixirUtils.get_line(meta)}) do
         ^arg ->
           # elixir rejects this case
           # try to recover from error by generating fake expression
@@ -3250,8 +3254,8 @@ defmodule ElixirSense.Core.Compiler do
               h
             end
 
-          # TODO not call it here
-          case Macro.expand(ha, Map.put(e, :line, ElixirUtils.get_line(meta))) do
+          # TODO how to check for cursor here?
+          case ElixirExpand.Macro.expand(ha, Map.put(e, :line, ElixirUtils.get_line(meta))) do
             ^ha ->
               # elixir raises here undefined_bittype
               # we omit the spec
@@ -4453,8 +4457,10 @@ defmodule ElixirSense.Core.Compiler do
               struct = load_struct(e_left, assocs, se, ee)
               keys = [:__struct__ | assoc_keys]
               without_keys = Elixir.Map.drop(struct, keys)
-              # TODO is escape safe?
-              struct_assocs = Macro.escape(Enum.sort(Elixir.Map.to_list(without_keys)))
+
+              struct_assocs =
+                ElixirExpand.Macro.escape(Enum.sort(Elixir.Map.to_list(without_keys)))
+
               {{:%, meta, [e_left, {:%{}, map_meta, struct_assocs ++ assocs}]}, se, ee}
 
             {_, _, _assocs} ->
