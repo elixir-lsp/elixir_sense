@@ -3486,6 +3486,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           case {x, :foo} do
             {a, ^x} when is_nil(a) ->
               IO.puts ""
+            some_macro(c) ->
+              IO.puts ""
             _ when is_integer(x) ->
               IO.puts ""
           end
@@ -3516,12 +3518,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 6)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 8)
+      assert [%VarInfo{name: :c, type: nil}, %VarInfo{name: :x, type: nil}] =
+               get_line_vars(state, 8)
+
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
 
       # TODO this type should not leak outside clause
-      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 10)
+      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
       assert [%VarInfo{name: :x, type: :number}] =
-               get_line_vars(state, 10)
+               get_line_vars(state, 12)
     end
 
     test "guards in with clauses" do

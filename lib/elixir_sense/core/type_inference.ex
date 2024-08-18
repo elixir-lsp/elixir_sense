@@ -363,8 +363,10 @@ defmodule ElixirSense.Core.TypeInference do
     end
   end
 
-  defp match_var(ast, {vars, match_context, context}) do
-    {ast, {vars, match_context, context}}
+  defp match_var(ast, {vars, _match_context, context}) do
+    # traverse literals, not expanded macro calls and bitstrings with nil match_context
+    # we cannot assume anything basing on match_context on variables there
+    {ast, {vars, nil, context}}
   end
 
   defp propagate_context(nil, _), do: nil
