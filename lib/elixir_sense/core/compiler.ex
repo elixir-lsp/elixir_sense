@@ -5,7 +5,7 @@ defmodule ElixirSense.Core.Compiler do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.TypeInference
-  alias ElixirSense.Core.Guard
+  alias ElixirSense.Core.TypeInference.Guard
   alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
 
   @env :elixir_env.new()
@@ -2130,6 +2130,7 @@ defmodule ElixirSense.Core.Compiler do
         # elixir checks here that clause has exactly 1 arg by matching against {_, _, [[_], _]}
         # we drop excessive or generate a fake arg
 
+        # TODO this is invalid for guards
         {args, discarded_args} =
           case args do
             [] ->
@@ -2577,8 +2578,6 @@ defmodule ElixirSense.Core.Compiler do
           s,
           e
         )
-
-      # TODO infer type from guard here
 
       {[{:when, meta, e_args ++ [e_guard]}], sg, eg}
     end
@@ -3394,7 +3393,7 @@ defmodule ElixirSense.Core.Compiler do
       new_pre = {pre_read, pre_counter, {:bitsize, original_read}}
 
       {e_expr, se, ee} =
-        ElixirExpand.expand(expr, %{s | prematch: new_pre}, %{e | context: :guard})
+        ElixirExpand.expand(expr |> dbg, %{s | prematch: new_pre}, %{e | context: :guard})
 
       {e_expr, %{se | prematch: old_pre}, %{ee | context: :match}}
     end

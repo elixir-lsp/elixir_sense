@@ -1394,7 +1394,16 @@ defmodule ElixirSense.Core.State do
       for {key, type} <- inferred_types, reduce: h do
         acc ->
           Map.update!(acc, key, fn %VarInfo{type: old} = v ->
-            %{v | type: ElixirSense.Core.TypeInference.intersect(old, type)}
+            {variable, version} = key
+            # TODO detect more complicated self referential cases
+            case type do
+              {:variable, ^variable, ^version} ->
+                # self referential type
+                v
+
+              _ ->
+                %{v | type: ElixirSense.Core.TypeInference.intersect(old, type)}
+            end
           end)
       end
 

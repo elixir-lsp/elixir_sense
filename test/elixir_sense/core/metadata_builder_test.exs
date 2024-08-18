@@ -3438,6 +3438,285 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> hd()
     end
 
+    test "guards in case clauses" do
+      buffer = """
+      defmodule MyModule do
+        def func(x) do
+          IO.puts ""
+          case x do
+            {a, b} when is_nil(a) and is_integer(b) ->
+              IO.puts ""
+            _ when is_integer(x) ->
+              IO.puts ""
+          end
+          IO.puts ""
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 3)
+
+      assert [
+               %VarInfo{
+                 name: :a,
+                 type: {:intersection, [{:atom, nil}, {:tuple_nth, {:variable, :x, 0}, 0}]}
+               },
+               %VarInfo{
+                 name: :b,
+                 type: {:intersection, [:number, {:tuple_nth, {:variable, :x, 0}, 1}]}
+               },
+               %VarInfo{name: :x, type: nil}
+             ] = get_line_vars(state, 6)
+
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 8)
+
+      # TODO this type should not leak outside clause
+      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 10)
+      assert [%VarInfo{name: :x, type: :number}] =
+               get_line_vars(state, 10)
+    end
+
+    test "guards in with clauses" do
+      buffer = """
+      defmodule MyModule do
+        def func(x) do
+          IO.puts ""
+          with {a, b} when is_nil(a) and is_integer(b) <- x do
+            IO.puts ""
+          else
+            {:error, e} when is_atom(e) ->
+              IO.puts ""
+            _ when is_integer(x) ->
+              IO.puts ""
+          end
+          IO.puts ""
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 3)
+
+      assert [
+               %VarInfo{
+                 name: :a,
+                 type: {:intersection, [{:atom, nil}, {:tuple_nth, {:variable, :x, 0}, 0}]}
+               },
+               %VarInfo{
+                 name: :b,
+                 type: {:intersection, [:number, {:tuple_nth, {:variable, :x, 0}, 1}]}
+               },
+               %VarInfo{name: :x, type: nil}
+             ] = get_line_vars(state, 5)
+
+      assert [%VarInfo{name: :e, type: :atom}, %VarInfo{name: :x, type: nil}] =
+               get_line_vars(state, 8)
+
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
+      # TODO this type should not leak outside clause
+      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 12)
+    end
+
+    test "guards in receive clauses" do
+      buffer = """
+      defmodule MyModule do
+        def func(x) do
+          IO.puts ""
+          receive do
+            {a, b} when is_nil(a) and is_integer(b) ->
+              IO.puts ""
+            _ when is_integer(x) ->
+              IO.puts ""
+          end
+          IO.puts ""
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 3)
+
+      assert [
+               %VarInfo{name: :a, type: {:atom, nil}},
+               %VarInfo{name: :b, type: :number},
+               %VarInfo{name: :x, type: nil}
+             ] = get_line_vars(state, 6)
+
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 8)
+      # TODO this type should not leak outside clause
+      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 10)
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
+    end
+
+    test "guards in for generator clauses" do
+      buffer = """
+      defmodule MyModule do
+        def func(x) do
+          IO.puts ""
+          for {a, b} when is_nil(a) and is_integer(b) <- x, y when is_integer(x) <- a do
+            IO.puts ""
+          end
+          IO.puts ""
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 3)
+
+      assert [
+               %VarInfo{
+                 name: :a,
+                 type:
+                   {:intersection,
+                    [{:atom, nil}, {:tuple_nth, {:for_expression, {:variable, :x, 0}}, 0}]}
+               },
+               %VarInfo{
+                 name: :b,
+                 type:
+                   {:intersection,
+                    [:number, {:tuple_nth, {:for_expression, {:variable, :x, 0}}, 1}]}
+               },
+               %VarInfo{name: :x, type: :number},
+               %VarInfo{name: :y, type: {:for_expression, {:variable, :a, 1}}}
+             ] = get_line_vars(state, 5)
+
+      # TODO this type should not leak outside clause
+      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 7)
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 7)
+    end
+
+    test "guards in for aggregate clauses" do
+      buffer = """
+      defmodule MyModule do
+        def func(x) do
+          IO.puts ""
+          for a <- x, reduce: %{} do
+            b when is_integer(b) ->
+              IO.puts ""
+            c when is_atom(c) ->
+              IO.puts ""
+            _ when is_integer(x) ->
+              IO.puts ""
+          end
+          IO.puts ""
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 3)
+
+      assert [
+               %VarInfo{name: :a, type: {:for_expression, {:variable, :x, 0}}},
+               %VarInfo{name: :b, type: :number},
+               %VarInfo{name: :x, type: nil}
+             ] = get_line_vars(state, 6)
+
+      assert [
+               %VarInfo{name: :a, type: {:for_expression, {:variable, :x, 0}}},
+               %VarInfo{name: :c, type: :atom},
+               %VarInfo{name: :x, type: nil}
+             ] = get_line_vars(state, 8)
+
+      assert [
+               %VarInfo{name: :a, type: {:for_expression, {:variable, :x, 0}}},
+               %VarInfo{name: :x, type: :number}
+             ] = get_line_vars(state, 10)
+
+      # TODO this type should not leak outside clause
+      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 12)
+    end
+
+    test "guards in try clauses" do
+      buffer = """
+      defmodule MyModule do
+        def func(x) do
+          IO.puts ""
+          try do
+            foo()
+          catch
+            a, b when is_nil(a) and is_integer(b) ->
+              IO.puts ""
+          else
+            c when is_nil(c) when is_binary(c) ->
+              IO.puts ""
+            _ when is_integer(x) ->
+              IO.puts ""
+          end
+          IO.puts ""
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 3)
+
+      assert [
+               %VarInfo{name: :a, type: {:atom, nil}},
+               %VarInfo{name: :b, type: :number},
+               %VarInfo{name: :x, type: nil}
+             ] = get_line_vars(state, 8)
+
+      assert [
+               %VarInfo{name: :c, type: {:union, [{:atom, nil}, :binary]}},
+               %VarInfo{name: :x, type: nil}
+             ] = get_line_vars(state, 11)
+
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 13)
+      # TODO this type should not leak outside clause
+      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 15)
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 15)
+    end
+
+    test "guards in fn clauses" do
+      buffer = """
+      defmodule MyModule do
+        def func(x) do
+          IO.puts ""
+          fn
+            a, b when is_nil(a) and is_integer(b) ->
+              IO.puts ""
+            c, _ when is_nil(c) when is_binary(c) ->
+              IO.puts ""
+            _, _ when is_integer(x) ->
+              IO.puts ""
+          end
+          IO.puts ""
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 3)
+
+      assert [
+               %VarInfo{name: :a, type: {:atom, nil}},
+               %VarInfo{name: :b, type: :number},
+               %VarInfo{name: :x, type: nil}
+             ] = get_line_vars(state, 6)
+
+      assert [
+               %VarInfo{name: :c, type: {:union, [{:atom, nil}, :binary]}},
+               %VarInfo{name: :x, type: nil}
+             ] = get_line_vars(state, 8)
+
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
+      # TODO this type should not leak outside clause
+      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 12)
+    end
+
     test "number guards" do
       assert %VarInfo{name: :x, type: :number} = var_with_guards("is_number(x)")
       assert %VarInfo{name: :x, type: :number} = var_with_guards("is_float(x)")
@@ -3471,8 +3750,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     test "list guards" do
       assert %VarInfo{name: :x, type: :list} = var_with_guards("is_list(x)")
-      assert %VarInfo{name: :x, type: {:list, :number}} = var_with_guards("hd(x) == 1")
-      assert %VarInfo{name: :x, type: {:list, :number}} = var_with_guards("1 == hd(x)")
+      assert %VarInfo{name: :x, type: {:list, {:integer, 1}}} = var_with_guards("hd(x) == 1")
+      assert %VarInfo{name: :x, type: {:list, {:integer, 1}}} = var_with_guards("1 == hd(x)")
       assert %VarInfo{name: :x, type: :list} = var_with_guards("tl(x) == [1]")
       assert %VarInfo{name: :x, type: :list} = var_with_guards("length(x) == 1")
       assert %VarInfo{name: :x, type: :list} = var_with_guards("1 == length(x)")
@@ -3502,7 +3781,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     test "map guards" do
       assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("is_map(x)")
 
-      assert %VarInfo{name: :x, type: {:intersection, [{:map, [], nil}, nil]}} =
+      assert %VarInfo{name: :x, type: {:map, [], nil}} =
                var_with_guards("is_non_struct_map(x)")
 
       assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("map_size(x) == 1")
@@ -3521,8 +3800,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: {
                  :intersection,
                  [
-                   {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                   {:struct, [], nil, nil}
+                   {:struct, [], nil, nil},
+                   {:map, [], nil}
                  ]
                }
              } = var_with_guards("is_struct(x)")
@@ -3532,8 +3811,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: {
                  :intersection,
                  [
-                   {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                   {:struct, [], {:atom, URI}, nil}
+                   {:struct, [], {:atom, URI}, nil},
+                   {:map, [], nil},
+                   {:struct, [], nil, nil}
                  ]
                }
              } =
@@ -3544,8 +3824,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: {
                  :intersection,
                  [
-                   {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                   {:struct, [], {:atom, URI}, nil}
+                   {:struct, [], {:atom, URI}, nil},
+                   {:map, [], nil},
+                   {:struct, [], nil, nil}
                  ]
                }
              } =
@@ -3569,20 +3850,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: {
                  :intersection,
                  [
-                   {
-                     :intersection,
-                     [
-                       {
-                         :intersection,
-                         [
-                           {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                           {:struct, [], nil, nil}
-                         ]
-                       },
-                       {:map, [{:__exception__, nil}], nil}
-                     ]
-                   },
-                   {:map, [{:__exception__, {:atom, true}}], nil}
+                   {:map, [{:__exception__, {:atom, true}}], nil},
+                   {:map, [{:__exception__, nil}], nil},
+                   {:struct, [], nil, nil},
+                   {:map, [], nil}
                  ]
                }
              } = var_with_guards("is_exception(x)")
@@ -3592,20 +3863,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: {
                  :intersection,
                  [
-                   {
-                     :intersection,
-                     [
-                       {
-                         :intersection,
-                         [
-                           {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                           {:struct, [], {:atom, ArgumentError}, nil}
-                         ]
-                       },
-                       {:map, [{:__exception__, nil}], nil}
-                     ]
-                   },
-                   {:map, [{:__exception__, {:atom, true}}], nil}
+                   {:map, [{:__exception__, {:atom, true}}], nil},
+                   {:map, [{:__exception__, nil}], nil},
+                   {:struct, [], {:atom, ArgumentError}, nil},
+                   {:map, [], nil},
+                   {:struct, [], nil, nil}
                  ]
                }
              } =
@@ -3616,8 +3878,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: {
                  :intersection,
                  [
-                   {:intersection, [{:map, [], nil}, {:struct, [], nil, nil}]},
-                   {:struct, [], {:atom, ArgumentError}, nil}
+                   {:struct, [], {:atom, ArgumentError}, nil},
+                   {:map, [], nil},
+                   {:struct, [], nil, nil}
                  ]
                }
              } =
@@ -3635,8 +3898,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                |> hd()
     end
 
-    test "and combination predicate guards can be merge" do
-      assert %VarInfo{name: :x, type: {:intersection, [:number, :boolean]}} =
+    test "and combination predicate guards can be merged" do
+      assert %VarInfo{name: :x, type: :number} =
                var_with_guards("is_number(x) and x >= 1")
 
       assert %VarInfo{
@@ -3657,10 +3920,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %VarInfo{name: :x, type: nil} =
                var_with_guards("not is_map(x)")
 
-      assert %VarInfo{name: :x, type: {:union, [nil, :atom]}} =
+      assert %VarInfo{name: :x, type: nil} =
                var_with_guards("not is_map(x) or is_atom(x)")
 
-      assert %VarInfo{name: :x, type: {:intersection, [nil, :atom]}} =
+      assert %VarInfo{name: :x, type: :atom} =
                var_with_guards("not is_map(x) and is_atom(x)")
     end
   end
