@@ -1312,10 +1312,9 @@ defmodule ElixirSense.Core.State do
 
     keys =
       state.mods_funs_to_positions
-      |> Map.keys()
       |> Enum.filter(fn
-        {^current_module, name, _arity} when not is_nil(name) ->
-          name not in builtins
+        {{^current_module, name, _arity}, info} when not is_nil(name) ->
+          name not in builtins and info.type == :def
 
         _ ->
           false
