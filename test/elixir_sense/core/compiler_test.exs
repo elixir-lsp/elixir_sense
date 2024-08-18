@@ -867,6 +867,10 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
     defp clean_capture_arg(ast) do
       {ast, _} =
         Macro.prewalk(ast, nil, fn
+          {{:., dot_meta, target}, call_meta, args}, state ->
+            dot_meta = Keyword.delete(dot_meta, :column_correction)
+            {{{:., dot_meta, target}, call_meta, args}, state}
+
           {atom, meta, nil} = node, state when is_atom(atom) ->
             # elixir changes the name to capture and does different counter tracking
             node =

@@ -1405,11 +1405,11 @@ defmodule ElixirSense.Core.State do
     line = Keyword.get(meta, :line, 0)
 
     if line <= 0 do
-      nil
+      {1, 1}
     else
       {
         line,
-        Keyword.get(meta, :column)
+        Keyword.get(meta, :column, 1)
       }
     end
   end
@@ -1418,11 +1418,11 @@ defmodule ElixirSense.Core.State do
     line = Keyword.get(meta, :line, 0)
 
     if line <= 0 do
-      {nil, nil}
+      {{1, 1}, nil}
     else
       position = {
         line,
-        Keyword.get(meta, :column)
+        Keyword.get(meta, :column, 1)
       }
 
       end_position =

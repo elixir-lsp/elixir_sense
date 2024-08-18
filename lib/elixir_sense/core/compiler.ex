@@ -732,9 +732,15 @@ defmodule ElixirSense.Core.Compiler do
   # Invalid calls
 
   defp do_expand({other, meta, args}, s, e) when is_list(meta) and is_list(args) do
-    # elixir raises invalid_call
-    {args, s, e} = expand_args(args, s, e)
-    {{other, meta, args}, s, e}
+    # elixir raises invalid_call, we may have cursor in other
+    {other_exp, s, e} = expand(other, s, e)
+
+    if other_exp != other do
+      expand(other_exp, s, e)
+    else
+      {args, s, e} = expand_args(args, s, e)
+      {{other, meta, args}, s, e}
+    end
   end
 
   # Literals
@@ -3264,8 +3270,15 @@ defmodule ElixirSense.Core.Compiler do
 
     defp expand_each_spec(meta, [{:__cursor__, _, args} = h | t], map, s, original_s, e)
          when is_list(args) do
-      {_, s, e} = ElixirExpand.expand(h, s, e)
-      expand_each_spec(meta, t, map, s, original_s, e)
+      {h, s, e} = ElixirExpand.expand(h, s, e)
+
+      args =
+        case h do
+          nil -> t
+          h -> [h | t]
+        end
+
+      expand_each_spec(meta, args, map, s, original_s, e)
     end
 
     defp expand_each_spec(meta, [{expr, meta_e, args} = h | t], map, s, original_s, e)
@@ -4828,8 +4841,6 @@ defmodule ElixirSense.Core.Compiler do
           {state, env},
           fn
             {:__cursor__, meta, args}, {state, env} when is_list(args) ->
-              dbg(args)
-
               state =
                 unless state.cursor_env do
                   state

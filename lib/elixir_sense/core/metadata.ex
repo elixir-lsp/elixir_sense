@@ -73,10 +73,10 @@ defmodule ElixirSense.Core.Metadata do
     # IO.puts(metadata.source)
     source_with_cursor = prefix <> "__cursor__(#{needle})" <> suffix
     # IO.puts(source_with_cursor)
+    # dbg(metadata)
 
     {meta, cursor_env} =
-      case Code.string_to_quoted(source_with_cursor, columns: true, token_metadata: true)
-           |> dbg do
+      case Code.string_to_quoted(source_with_cursor, columns: true, token_metadata: true) do
         {:ok, ast} ->
           ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
 
@@ -101,10 +101,10 @@ defmodule ElixirSense.Core.Metadata do
       end
 
     if cursor_env != nil do
-      get_env(metadata, {line, column}) |> dbg
-      cursor_env |> dbg
+      get_env(metadata, {line, column})
+      cursor_env
     else
-      get_env(metadata, {line, column}) |> dbg
+      get_env(metadata, {line, column})
     end
   end
 
@@ -322,7 +322,12 @@ defmodule ElixirSense.Core.Metadata do
   def get_call_arity(%__MODULE__{}, _module, nil, _line, _column), do: nil
 
   def get_call_arity(
-        %__MODULE__{calls: calls, error: error, mods_funs_to_positions: mods_funs_to_positions},
+        %__MODULE__{
+          calls: calls,
+          error: error,
+          mods_funs_to_positions: mods_funs_to_positions,
+          types: types
+        },
         module,
         fun,
         line,
@@ -350,10 +355,26 @@ defmodule ElixirSense.Core.Metadata do
           end)
       end
 
+    result =
+      if result == nil do
+        mods_funs_to_positions
+        |> Enum.find_value(fn
+          {{^module, ^fun, arity}, %{positions: positions}} when not is_nil(arity) ->
+            if Enum.any?(positions, &match?({^line, _}, &1)) do
+              arity
+            end
+
+          _ ->
+            nil
+        end)
+      else
+        result
+      end
+
     if result == nil do
-      mods_funs_to_positions
+      types
       |> Enum.find_value(fn
-        {{^module, ^fun, arity}, %{positions: positions}} when not is_nil(arity) ->
+        {{^module, ^fun, arity}, %{positions: positions}} ->
           if Enum.any?(positions, &match?({^line, _}, &1)) do
             arity
           end
@@ -422,7 +443,7 @@ defmodule ElixirSense.Core.Metadata do
       when not is_nil(module) and not is_nil(type) do
     metadata.types
     |> Enum.filter(fn
-      {{^module, ^type, arity}, _type_info} when not is_nil(arity) -> true
+      {{^module, ^type, _arity}, _type_info} -> true
       _ -> false
     end)
     |> Enum.map(fn {_, %State.TypeInfo{} = type_info} ->
