@@ -205,6 +205,11 @@ defmodule ElixirSense.Core.TypeInference do
     Enum.uniq(vars)
   end
 
+  defp match_var({:when, _, [left, _right]}, match_context) do
+    # no variables can be defined in guard context so we skip that subtree
+    match_var(left, match_context)
+  end
+
   defp match_var(
          {:=, _meta,
           [

@@ -51,6 +51,12 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       assert find_typed_vars_in("^a", nil, :match) == []
     end
 
+    test "does not find variables in guard" do
+      assert find_typed_vars_in("_ when is_integer(a)", nil, :match) == []
+    end
+
+    # TODO should it find variables in bitstring size specifiers guard?
+
     test "finds variables in tuple" do
       assert find_typed_vars_in("{}", nil, :match) == []
       assert find_typed_vars_in("{a}", nil, :match) == [{{:a, 1}, nil}]
@@ -153,6 +159,8 @@ defmodule ElixirSense.Core.TypeInferenceTest do
                {{:a, 1}, {:list_tail, {:list_tail, {:integer, 1}}}}
              ]
     end
+
+    # TODO should it find vars in bitstring?
 
     test "finds variables in map" do
       assert find_typed_vars_in("%{}", nil, :match) == []

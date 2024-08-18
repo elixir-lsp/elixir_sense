@@ -3478,6 +3478,52 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                get_line_vars(state, 10)
     end
 
+    test "guards in case clauses more complicated" do
+      buffer = """
+      defmodule MyModule do
+        def func(x) do
+          IO.puts ""
+          case {x, :foo} do
+            {a, ^x} when is_nil(a) ->
+              IO.puts ""
+            _ when is_integer(x) ->
+              IO.puts ""
+          end
+          IO.puts ""
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 3)
+
+      assert [
+               %VarInfo{
+                 name: :a,
+                 type: {
+                   :intersection,
+                   [
+                     {:atom, nil},
+                     {
+                       :tuple_nth,
+                       {:tuple, 2, [{:variable, :x, 0}, {:atom, :foo}]},
+                       0
+                     }
+                   ]
+                 }
+               },
+               %VarInfo{name: :x, type: nil}
+             ] = get_line_vars(state, 6)
+
+      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 8)
+
+      # TODO this type should not leak outside clause
+      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 10)
+      assert [%VarInfo{name: :x, type: :number}] =
+               get_line_vars(state, 10)
+    end
+
     test "guards in with clauses" do
       buffer = """
       defmodule MyModule do

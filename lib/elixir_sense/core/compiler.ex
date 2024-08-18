@@ -3393,7 +3393,7 @@ defmodule ElixirSense.Core.Compiler do
       new_pre = {pre_read, pre_counter, {:bitsize, original_read}}
 
       {e_expr, se, ee} =
-        ElixirExpand.expand(expr |> dbg, %{s | prematch: new_pre}, %{e | context: :guard})
+        ElixirExpand.expand(expr, %{s | prematch: new_pre}, %{e | context: :guard})
 
       {e_expr, %{se | prematch: old_pre}, %{ee | context: :match}}
     end
