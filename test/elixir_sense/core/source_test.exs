@@ -688,6 +688,74 @@ defmodule ElixirSense.Core.SourceTest do
     end
   end
 
+  describe "split_at/2" do
+    test "empty list" do
+      code = """
+      defmodule Abcd do
+        def go do
+          :ok
+        end
+      end
+      """
+
+      assert split_at(code, []) == [code]
+    end
+
+    test "one element list" do
+      code = """
+      defmodule Abcd do
+        def go do
+          :ok
+        end
+      end
+      """
+
+      parts = split_at(code, [{2, 3}])
+      assert parts == ["defmodule Abcd do\n  ", "def go do\n    :ok\n  end\nend\n"]
+      assert Enum.join(parts) == code
+    end
+
+    test "two element list same line" do
+      code = """
+      defmodule Abcd do
+        def go do
+          :ok
+        end
+      end
+      """
+
+      parts = split_at(code, [{2, 3}, {2, 6}])
+      assert parts == ["defmodule Abcd do\n  ", "def", " go do\n    :ok\n  end\nend\n"]
+      assert Enum.join(parts) == code
+    end
+
+    test "two element list different lines" do
+      code = """
+      defmodule Abcd do
+        def go do
+          :ok
+        end
+      end
+      """
+
+      parts = split_at(code, [{2, 3}, {4, 6}])
+      assert parts == ["defmodule Abcd do\n  ", "def go do\n    :ok\n  end", "\nend\n"]
+      assert Enum.join(parts) == code
+    end
+
+    test "handles positions at start and end of code" do
+      code = "abcdef"
+      positions = [{1, 1}, {1, 7}]
+      assert split_at(code, positions) == ["", "abcdef", ""]
+    end
+
+    test "handles positions beyond code length" do
+      code = "short"
+      positions = [{0, 0}, {10, 15}]
+      assert split_at(code, positions) == ["", "short", ""]
+    end
+  end
+
   describe "which_struct" do
     test "map" do
       code = """

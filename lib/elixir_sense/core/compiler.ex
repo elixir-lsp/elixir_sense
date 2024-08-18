@@ -455,7 +455,13 @@ defmodule ElixirSense.Core.Compiler do
         s
       end
 
-    {{:__cursor__, meta, args}, s, e}
+    case args do
+      [h | _] ->
+        expand(h, s, e)
+
+      [] ->
+        {nil, s, e}
+    end
   end
 
   # Super
@@ -1032,6 +1038,7 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when kind in [:type, :typep, :opaque] and module != nil do
+    cursor_before? = state.cursor_env != nil
     {expr, state, env} = __MODULE__.Typespec.expand_type(expr, state, env)
 
     case __MODULE__.Typespec.type_to_signature(expr) do
@@ -1043,6 +1050,8 @@ defmodule ElixirSense.Core.Compiler do
           raise "type #{name}/#{length(type_args)} is a built-in type and it cannot be redefined"
         end
 
+        cursor_after? = state.cursor_env != nil
+
         # TODO elixir does Macro.escape with unquote: true
 
         spec = TypeInfo.typespec_to_string(kind, expr)
@@ -1053,6 +1062,15 @@ defmodule ElixirSense.Core.Compiler do
           |> with_typespec({name, length(type_args)})
           |> add_current_env_to_line(attr_meta, env)
           |> with_typespec(nil)
+
+        state =
+          if not cursor_before? and cursor_after? do
+            {meta, env} = state.cursor_env
+            env = %{env | typespec: {name, length(type_args)}}
+            %{state | cursor_env: {meta, env}}
+          else
+            state
+          end
 
         {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
 
@@ -1084,10 +1102,12 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when kind in [:callback, :macrocallback, :spec] and module != nil do
+    cursor_before? = state.cursor_env != nil
     {expr, state, env} = __MODULE__.Typespec.expand_spec(expr, state, env)
 
     case __MODULE__.Typespec.spec_to_signature(expr) do
       {name, type_args} ->
+        cursor_after? = state.cursor_env != nil
         spec = TypeInfo.typespec_to_string(kind, expr)
 
         range = extract_range(attr_meta)
@@ -1113,6 +1133,15 @@ defmodule ElixirSense.Core.Compiler do
           |> with_typespec({name, length(type_args)})
           |> add_current_env_to_line(attr_meta, env)
           |> with_typespec(nil)
+
+        state =
+          if not cursor_before? and cursor_after? do
+            {meta, env} = state.cursor_env
+            env = %{env | typespec: {name, length(type_args)}}
+            %{state | cursor_env: {meta, env}}
+          else
+            state
+          end
 
         {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
 
@@ -2483,11 +2512,14 @@ defmodule ElixirSense.Core.Compiler do
       # TODO rewrite to lazy prewalker
       {_, result} =
         Macro.prewalk(ast, false, fn
-          {:__cursor__, _, list} = node, _state when is_list(list) ->
-            {node, true}
+          _node, true ->
+            {nil, true}
 
-          node, state ->
-            {node, state}
+          {:__cursor__, _, list}, _state when is_list(list) ->
+            {nil, true}
+
+          node, false ->
+            {node, false}
         end)
 
       result
@@ -4795,13 +4827,21 @@ defmodule ElixirSense.Core.Compiler do
           ast,
           {state, env},
           fn
-            {:__cursor__, meta, args} = node, {state, env} when is_list(args) ->
+            {:__cursor__, meta, args}, {state, env} when is_list(args) ->
+              dbg(args)
+
               state =
                 unless state.cursor_env do
                   state
                   |> add_cursor_env(meta, env)
                 else
                   state
+                end
+
+              node =
+                case args do
+                  [h | _] -> h
+                  [] -> nil
                 end
 
               {node, {state, env}}

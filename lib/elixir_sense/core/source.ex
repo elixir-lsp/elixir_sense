@@ -120,8 +120,21 @@ defmodule ElixirSense.Core.Source do
 
   @spec split_at(String.t(), pos_integer, pos_integer) :: {String.t(), String.t()}
   def split_at(code, line, col) do
-    pos = find_position(code, line, col, {0, 1, 1})
+    pos = find_position(code, max(line, 1), max(col, 1), {0, 1, 1})
     String.split_at(code, pos)
+  end
+
+  @spec split_at(String.t(), list({pos_integer, pos_integer})) :: list(String.t())
+  def split_at(code, list) do
+    do_split_at(code, Enum.reverse(list), [])
+  end
+
+  defp do_split_at(code, [], acc), do: [code | acc]
+
+  defp do_split_at(code, [{line, col} | rest], acc) do
+    pos = find_position(code, max(line, 1), max(col, 1), {0, 1, 1})
+    {text_before, text_after} = String.split_at(code, pos)
+    do_split_at(text_before, rest, [text_after | acc])
   end
 
   @spec text_before(String.t(), pos_integer, pos_integer) :: String.t()

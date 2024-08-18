@@ -64,15 +64,21 @@ defmodule ElixirSense.Core.Metadata do
         {line, column},
         {{begin_line, begin_column}, {end_line, end_column}}
       ) do
-    prefix = ElixirSense.Core.Source.text_before(metadata.source, begin_line, begin_column)
-    suffix = ElixirSense.Core.Source.text_after(metadata.source, end_line, end_column)
+    [prefix, needle, suffix] =
+      ElixirSense.Core.Source.split_at(metadata.source, [
+        {begin_line, begin_column},
+        {end_line, end_column}
+      ])
 
-    source_with_cursor = prefix <> "(__cursor__())" <> suffix
+    # IO.puts(metadata.source)
+    source_with_cursor = prefix <> "__cursor__(#{needle})" <> suffix
+    # IO.puts(source_with_cursor)
 
     {meta, cursor_env} =
-      case Code.string_to_quoted(source_with_cursor, columns: true, token_metadata: true) do
-        # {:ok, ast} ->
-        #   ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
+      case Code.string_to_quoted(source_with_cursor, columns: true, token_metadata: true)
+           |> dbg do
+        {:ok, ast} ->
+          ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
 
         _ ->
           {[], nil}
@@ -95,9 +101,10 @@ defmodule ElixirSense.Core.Metadata do
       end
 
     if cursor_env != nil do
-      cursor_env
+      get_env(metadata, {line, column}) |> dbg
+      cursor_env |> dbg
     else
-      get_env(metadata, {line, column})
+      get_env(metadata, {line, column}) |> dbg
     end
   end
 
