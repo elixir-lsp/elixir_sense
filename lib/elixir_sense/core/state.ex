@@ -1321,15 +1321,14 @@ defmodule ElixirSense.Core.State do
       end)
 
     new_specs =
-      for key = {_mod, name, _arity} <- keys,
+      for {key = {_mod, name, _arity}, mod_fun_info} <- keys,
           into: %{},
           do:
             (
               new_spec =
                 case state.specs[key] do
                   nil ->
-                    %ModFunInfo{positions: positions, params: params} =
-                      state.mods_funs_to_positions[key]
+                    %ModFunInfo{positions: positions, params: params} = mod_fun_info
 
                     args =
                       for param_variant <- params do
