@@ -38,25 +38,6 @@ defmodule ElixirSense.Core.MetadataBuilder do
   #   # |> result(ast)
   # end
 
-  # # incomplete spec
-  # # @callback my(integer)
-  # defp pre(
-  #        {:@, _meta_attr, [{kind, _meta_kind, [{name, _meta_name, type_args}]} = _spec]},
-  #        _state
-  #      )
-  #      when kind in [:spec, :callback, :macrocallback] and is_atom(name) and
-  #             (is_nil(type_args) or is_list(type_args)) do
-  #   # pre_spec(
-  #   #   {:@, meta_attr, [{kind, add_no_call(meta_kind), [{name, meta_name, type_args}]}]},
-  #   #   state,
-  #   #   meta_attr,
-  #   #   name,
-  #   #   expand_aliases_in_ast(state, List.wrap(type_args)),
-  #   #   expand_aliases_in_ast(state, spec),
-  #   #   kind
-  #   # )
-  # end
-
   # # Any other tuple with a line
   # defp pre({_, meta, _} = ast, state) do
   #   case Keyword.get(meta, :line) do

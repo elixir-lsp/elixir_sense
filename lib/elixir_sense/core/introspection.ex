@@ -568,6 +568,10 @@ defmodule ElixirSense.Core.Introspection do
     next_snippet(ast, index)
   end
 
+  defp term_to_snippet({name, _, []} = ast, index) when is_atom(name) do
+    next_snippet(ast, index)
+  end
+
   defp term_to_snippet(ast, index) do
     {ast, index}
   end
