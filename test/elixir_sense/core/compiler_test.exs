@@ -42,7 +42,7 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
     else
       Record.defrecordp(:elixir_ex,
         caller: false,
-        prematch: :raise,
+        prematch: if(Version.match?(System.version(), ">= 1.15.0-dev"), do: :raise, else: :warn),
         stacktrace: false,
         unused: {%{}, 0},
         vars: {%{}, false}
