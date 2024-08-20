@@ -14,12 +14,9 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: {:error, :env_not_found},
+             error: nil,
              mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 1}]}},
-             lines_to_env: %{
-               1 => %Env{},
-               3 => %Env{functions: functions}
-             },
+             cursor_env: {_, %Env{functions: functions}},
              source: "defmodule MyModule" <> _
            } = parse_string(source, true, true, {3, 3})
 
@@ -35,12 +32,8 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{module: MyModule},
-               2 => %Env{functions: _functions2, module: MyModule},
-               3 => %Env{functions: functions3, module: MyModule}
-             }
+             error: nil,
+             cursor_env: {_, %Env{functions: functions3, module: MyModule}}
            } = parse_string(source, true, true, {3, 10})
 
     assert Keyword.has_key?(functions3, List)
@@ -56,10 +49,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{},
-               3 => %Env{functions: functions}
-             }
+             cursor_env: {_, %Env{functions: functions}}
            } = parse_string(source, true, true, {3, 20})
 
     assert Keyword.has_key?(functions, List)
@@ -75,10 +65,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{},
-               3 => %Env{functions: functions}
-             }
+             cursor_env: {_, %Env{functions: functions}}
            } = parse_string(source, true, true, {3, 8})
 
     assert Keyword.has_key?(functions, List)
@@ -94,10 +81,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{},
-               3 => %Env{functions: functions}
-             }
+             cursor_env: {_, %Env{functions: functions}}
            } = parse_string(source, true, true, {3, 11})
 
     assert Keyword.has_key?(functions, List)
@@ -113,10 +97,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{},
-               3 => %Env{functions: functions}
-             }
+             cursor_env: {_, %Env{functions: functions}}
            } = parse_string(source, true, true, {3, 12})
 
     assert Keyword.has_key?(functions, List)
@@ -170,10 +151,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{},
-               3 => %Env{functions: functions}
-             }
+             cursor_env: {_, %Env{functions: functions}}
            } = parse_string(source, true, true, {3, 12})
 
     assert Keyword.has_key?(functions, List)
@@ -189,10 +167,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{},
-               3 => %Env{functions: functions}
-             }
+             cursor_env: {_, %Env{functions: functions}}
            } = parse_string(source, true, true, {3, 12})
 
     assert Keyword.has_key?(functions, List)
@@ -208,10 +183,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{},
-               3 => %Env{functions: functions}
-             }
+             cursor_env: {_, %Env{functions: functions}}
            } = parse_string(source, true, true, {3, 12})
 
     assert Keyword.has_key?(functions, List)
@@ -227,10 +199,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{},
-               3 => %Env{functions: functions}
-             }
+             cursor_env: {_, %Env{functions: functions}}
            } = parse_string(source, true, true, {3, 14})
 
     assert Keyword.has_key?(functions, List)
@@ -253,24 +222,16 @@ defmodule ElixirSense.Core.ParserTest do
 
     # assert_received {:result, result}
 
-    assert (%Metadata{
-              error: {:error, :parse_error},
-              lines_to_env: %{
-                1 => %Env{
-                  module: MyModule,
-                  scope_id: scope_id_1
-                },
-                3 => %Env{
-                  module: MyModule,
-                  requires: _,
-                  scope_id: scope_id_2,
+    assert %Metadata{
+             error: {:error, :parse_error},
+             cursor_env:
+               {_,
+                %Env{
                   vars: [
                     %VarInfo{name: :x}
                   ]
-                }
-              }
-            }
-            when scope_id_2 > scope_id_1) = result
+                }}
+           } = result
   end
 
   test "parse_string with missing terminator \"end\" attempts to insert `end` at correct indentation" do
@@ -281,10 +242,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{module: MyModule},
-               2 => %Env{module: MyModule}
-             }
+             cursor_env: {_, %Env{module: MyModule}}
            } = parse_string(source, true, true, {2, 3})
 
     source = """
@@ -296,18 +254,12 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{module: MyModule},
-               3 => %Env{module: _}
-             }
+             cursor_env: {_, %Env{module: MyModule}}
            } = parse_string(source, true, true, {3, 1})
 
     assert %Metadata{
              error: {:error, :parse_error},
-             lines_to_env: %{
-               1 => %Env{module: MyModule},
-               2 => %Env{module: MyModule}
-             }
+             cursor_env: {_, %Env{module: MyModule}}
            } = parse_string(source, true, true, {2, 1})
 
     source = """
@@ -319,15 +271,16 @@ defmodule ElixirSense.Core.ParserTest do
 
     assert %Metadata{
              error: {:error, :parse_error},
+             cursor_env: {_, %Env{module: MyModule}},
              lines_to_env: %{
                1 => %Env{module: MyModule},
-               2 => %Env{module: MyModule},
                3 => %Env{module: MyModule.MyModule1}
              }
            } = parse_string(source, true, true, {2, 1})
 
     assert %Metadata{
              error: {:error, :parse_error},
+             cursor_env: {_, %Env{module: MyModule}},
              lines_to_env: %{
                1 => %Env{module: MyModule},
                3 => %Env{module: MyModule.MyModule1}
@@ -347,7 +300,7 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     capture_io(:stderr, fn ->
-      assert %Metadata{error: {:error, :parse_error}, lines_to_env: %{5 => _}} =
+      assert %Metadata{error: {:error, :parse_error}, cursor_env: {_, _}} =
                parse_string(source, true, true, {5, 10})
     end)
   end
@@ -363,8 +316,8 @@ defmodule ElixirSense.Core.ParserTest do
     end
     """
 
-    %Metadata{error: {:error, :parse_error}, lines_to_env: %{6 => _}} =
-      parse_string(source, true, true, {5, 12})
+    assert %Metadata{error: {:error, :parse_error}, cursor_env: {_, _}} =
+             parse_string(source, true, true, {5, 12})
   end
 
   @tag capture_log: true
@@ -379,12 +332,9 @@ defmodule ElixirSense.Core.ParserTest do
     """
 
     assert %Metadata{
-             error: {:error, :env_not_found},
+             error: nil,
              mods_funs_to_positions: %{{MyModule, nil, nil} => %{positions: [{1, 1}]}},
-             lines_to_env: %{
-               1 => %Env{},
-               4 => %Env{functions: functions}
-             },
+             cursor_env: {_, %Env{functions: functions}},
              source: "defmodule MyModule" <> _
            } = parse_string(source, true, true, {5, 3})
 
@@ -417,15 +367,14 @@ defmodule ElixirSense.Core.ParserTest do
     '''
 
     assert %ElixirSense.Core.Metadata{
-             lines_to_env: %{
-               6 => %ElixirSense.Core.State.Env{
-                 attributes: [%ElixirSense.Core.State.AttributeInfo{name: :my_attr}]
-               }
-             }
+             cursor_env:
+               {_,
+                %ElixirSense.Core.State.Env{
+                  attributes: [%ElixirSense.Core.State.AttributeInfo{name: :my_attr}]
+                }}
            } = parse_string(source, true, true, {6, 6})
   end
 
-  @tag only_this: true
   test "parse_string with literal strings in sigils" do
     source = ~S'''
     defmodule MyMod do
