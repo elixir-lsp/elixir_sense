@@ -1185,4 +1185,88 @@ defmodule ElixirSense.Core.SourceTest do
       assert "integer-un" == bitstring_options(text)
     end
   end
+
+  describe "prefix/3" do
+    test "returns empty string when no prefix is found" do
+      code = "def example do\n  :ok\nend"
+      assert "" == prefix(code, 2, 3)
+    end
+
+    test "returns the correct prefix" do
+      code = "defmodule Test do\n  def example_func do\n    :ok\n  end\nend"
+      assert "example_f" == prefix(code, 2, 16)
+    end
+
+    test "handles line shorter than column" do
+      code = "short"
+      assert "" == prefix(code, 1, 10)
+    end
+
+    test "handles line outside range" do
+      code = "short"
+      assert "" == prefix(code, 3, 1)
+    end
+
+    test "returns prefix with special characters" do
+      code = "def example?!:@&^~+-<>=*/|\\() do\n  :ok\nend"
+      assert "example?!:@&^~+-<>=*/|\\" == prefix(code, 1, 28)
+    end
+
+    test "returns prefix at the end of line" do
+      code = "def example\ndef another"
+      assert "example" == prefix(code, 1, 12)
+    end
+
+    test "handles empty lines" do
+      code = "\n\ndef example"
+      assert "" == prefix(code, 2, 1)
+    end
+
+    test "returns prefix with numbers" do
+      code = "variable123 = 42"
+      assert "variable12" == prefix(code, 1, 11)
+    end
+  end
+
+  describe "prefix_suffix/3" do
+    test "returns empty string when no prefix is found" do
+      code = "def example do\n  :ok\nend"
+      assert {"", ":ok"} == prefix_suffix(code, 2, 3)
+    end
+
+    test "returns the correct prefix" do
+      code = "defmodule Test do\n  def example_func do\n    :ok\n  end\nend"
+      assert {"example_f", "unc"} == prefix_suffix(code, 2, 16)
+    end
+
+    test "handles line shorter than column" do
+      code = "short"
+      assert {"", ""} == prefix_suffix(code, 1, 10)
+    end
+
+    test "handles line outside range" do
+      code = "short"
+      assert {"", ""} == prefix_suffix(code, 3, 1)
+    end
+
+    test "returns prefix with special characters" do
+      code = "def example?!:@&^~+-<>=*/|\\() do\n  :ok\nend"
+      assert {"example?!:@&^~+-<>=*/", "|\\"} == prefix_suffix(code, 1, 26)
+    end
+
+    test "returns prefix at the end of line" do
+      code = "def example\ndef another"
+      assert {"example", ""} == prefix_suffix(code, 1, 12)
+    end
+
+    test "handles empty lines" do
+      code = "\n\ndef example"
+      assert {"", ""} == prefix_suffix(code, 2, 1)
+    end
+
+    test "returns prefix with numbers" do
+      code = "variable123 = 42"
+      assert {"variable12", "3"} == prefix_suffix(code, 1, 11)
+    end
+  end
 end

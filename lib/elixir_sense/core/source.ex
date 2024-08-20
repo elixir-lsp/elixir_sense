@@ -118,6 +118,45 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
+  @spec prefix_suffix(String.t(), pos_integer, pos_integer) :: {String.t(), String.t()}
+  def prefix_suffix(code, line, col) do
+    line = code |> split_lines() |> Enum.at(line - 1, "")
+
+    line =
+      if String.length(line) < col do
+        line_padding = for _ <- 1..(col - String.length(line)), into: "", do: " "
+        line <> line_padding
+      else
+        line
+      end
+
+    # Extract the prefix
+    line_str = line |> String.slice(0, col - 1)
+
+    prefix =
+      case Regex.run(~r/[\p{L}\p{N}\.\_\!\?\:\@\&\^\~\+\-\<\>\=\*\/\|\\]+$/u, line_str) do
+        nil -> ""
+        [prefix] when is_binary(prefix) -> prefix
+      end
+
+    # Extract the suffix
+    suffix =
+      line
+      |> String.slice((col - 1)..-1//1)
+      |> case do
+        nil ->
+          ""
+
+        str ->
+          case Regex.run(~r/^[\p{L}\p{N}\.\_\!\?\:\@\&\^\~\+\-\<\>\=\*\/\|\\]+/u, str) do
+            nil -> ""
+            [suffix] when is_binary(suffix) -> suffix
+          end
+      end
+
+    {prefix, suffix}
+  end
+
   @spec split_at(String.t(), pos_integer, pos_integer) :: {String.t(), String.t()}
   def split_at(code, line, col) do
     pos = find_position(code, max(line, 1), max(col, 1), {0, 1, 1})
