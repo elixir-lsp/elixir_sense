@@ -18,8 +18,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
       Compiler.expand(
         ast,
         %State{
-          # TODO remove default when we require elixir 1.15
-          prematch: Code.get_compiler_option(:on_undefined_variable) || :warn
+          prematch:
+            if Version.match?(System.version(), ">= 1.15.0-dev") do
+              Code.get_compiler_option(:on_undefined_variable)
+            else
+              :warn
+            end
         },
         Compiler.env()
       )
