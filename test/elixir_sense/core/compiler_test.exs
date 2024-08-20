@@ -42,7 +42,14 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
     else
       Record.defrecordp(:elixir_ex,
         caller: false,
-        prematch: if(Version.match?(System.version(), ">= 1.15.0-dev"), do: :raise, else: :warn),
+        prematch: %State{
+          prematch:
+            if Version.match?(System.version(), ">= 1.15.0-dev") do
+              Code.get_compiler_option(:on_undefined_variable)
+            else
+              :warn
+            end
+        },
         stacktrace: false,
         unused: {%{}, 0},
         vars: {%{}, false}
@@ -73,7 +80,18 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
     end
 
     defp expand(ast) do
-      Compiler.expand(ast, %State{}, Compiler.env())
+      Compiler.expand(
+        ast,
+        %State{
+          prematch:
+            if Version.match?(System.version(), ">= 1.15.0-dev") do
+              Code.get_compiler_option(:on_undefined_variable)
+            else
+              :warn
+            end
+        },
+        Compiler.env()
+      )
     end
 
     defp elixir_expand(ast) do
