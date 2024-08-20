@@ -12,6 +12,7 @@ defmodule ElixirSense.Core.Metadata do
   @type t :: %ElixirSense.Core.Metadata{
           source: String.t(),
           mods_funs_to_positions: State.mods_funs_to_positions_t(),
+          cursor_env: nil | {keyword(), ElixirSense.Core.State.Env.t()},
           lines_to_env: State.lines_to_env_t(),
           calls: State.calls_t(),
           vars_info_per_scope_id: State.vars_info_per_scope_id_t(),
@@ -25,6 +26,7 @@ defmodule ElixirSense.Core.Metadata do
 
   defstruct source: "",
             mods_funs_to_positions: %{},
+            cursor_env: nil,
             lines_to_env: %{},
             calls: %{},
             vars_info_per_scope_id: %{},

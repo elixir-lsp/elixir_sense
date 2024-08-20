@@ -49,7 +49,8 @@ defmodule ElixirSense.Core.Parser do
       {:ok, ast, modified_source, error} ->
         acc = MetadataBuilder.build(ast)
 
-        if cursor_position == nil or Map.has_key?(acc.lines_to_env, elem(cursor_position, 0)) or
+        if cursor_position == nil or acc.cursor_env != nil or
+             Map.has_key?(acc.lines_to_env, elem(cursor_position, 0)) or
              !try_to_fix_line_not_found do
           create_metadata(source, {:ok, acc, error})
         else
@@ -186,6 +187,7 @@ defmodule ElixirSense.Core.Parser do
       specs: acc.specs,
       structs: acc.structs,
       mods_funs_to_positions: acc.mods_funs_to_positions,
+      cursor_env: acc.cursor_env,
       lines_to_env: acc.lines_to_env,
       vars_info_per_scope_id: acc.vars_info_per_scope_id,
       calls: acc.calls,
