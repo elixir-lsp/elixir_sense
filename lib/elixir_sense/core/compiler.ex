@@ -1052,6 +1052,8 @@ defmodule ElixirSense.Core.Compiler do
         raise "type #{name}/#{1} is a reserved type and it cannot be defined"
 
       {name, type_args} ->
+        type_args = type_args || []
+
         if __MODULE__.Typespec.built_in_type?(name, length(type_args)) do
           raise "type #{name}/#{length(type_args)} is a built-in type and it cannot be redefined"
         end
@@ -1132,6 +1134,8 @@ defmodule ElixirSense.Core.Compiler do
           else
             state
           end
+
+        type_args = type_args || []
 
         state =
           state
@@ -4673,7 +4677,12 @@ defmodule ElixirSense.Core.Compiler do
         when is_atom(name) and name != :"::",
         do: {name, args}
 
-    def type_to_signature(_), do: :error
+    def type_to_signature({name, _, args}) when is_atom(name) and name != :"::" do
+      # elixir returns :error here, we handle incomplete signatures
+      {name, args}
+    end
+
+    def type_to_signature(), do: :error
 
     def expand_spec(ast, state, env) do
       # TODO not sure this is correct. Are module vars accessible?

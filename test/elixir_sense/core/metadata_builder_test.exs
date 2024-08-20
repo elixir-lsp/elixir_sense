@@ -7864,6 +7864,54 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{} == state.types
     end
 
+    test "registers incomplete types" do
+      state =
+        """
+        defmodule My do
+          @type foo
+          @type bar()
+          @type baz(a)
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {My, :bar, 0} => %ElixirSense.Core.State.TypeInfo{
+                 name: :bar,
+                 args: [[]],
+                 specs: ["@type bar()"],
+                 kind: :type,
+                 positions: [{3, 3}],
+                 end_positions: [{3, 14}],
+                 generated: [false],
+                 doc: "",
+                 meta: %{}
+               },
+               {My, :bar, 0} => %ElixirSense.Core.State.TypeInfo{
+                 name: :bar,
+                 args: [[]],
+                 specs: ["@type bar()"],
+                 kind: :type,
+                 positions: [{3, 3}],
+                 end_positions: [{3, 14}],
+                 generated: [false],
+                 doc: "",
+                 meta: %{}
+               },
+               {My, :baz, 1} => %ElixirSense.Core.State.TypeInfo{
+                 name: :baz,
+                 args: [["a"]],
+                 specs: ["@type baz(a)"],
+                 kind: :type,
+                 positions: [{4, 3}],
+                 end_positions: [{4, 15}],
+                 generated: [false],
+                 doc: "",
+                 meta: %{}
+               }
+             } = state.types
+    end
+
     test "protocol exports type t" do
       state =
         """
@@ -7960,6 +8008,54 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  }
                } = state.specs
       end
+    end
+
+    test "registers incomplete specs" do
+      state =
+        """
+        defmodule My do
+          @spec foo
+          @spec bar()
+          @spec baz(a)
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {My, :bar, 0} => %ElixirSense.Core.State.SpecInfo{
+                 name: :bar,
+                 args: [[]],
+                 specs: ["@spec bar()"],
+                 kind: :spec,
+                 positions: [{3, 3}],
+                 end_positions: [{3, 14}],
+                 generated: [false],
+                 doc: "",
+                 meta: %{}
+               },
+               {My, :bar, 0} => %ElixirSense.Core.State.SpecInfo{
+                 name: :bar,
+                 args: [[]],
+                 specs: ["@spec bar()"],
+                 kind: :spec,
+                 positions: [{3, 3}],
+                 end_positions: [{3, 14}],
+                 generated: [false],
+                 doc: "",
+                 meta: %{}
+               },
+               {My, :baz, 1} => %ElixirSense.Core.State.SpecInfo{
+                 name: :baz,
+                 args: [["a"]],
+                 specs: ["@spec baz(a)"],
+                 kind: :spec,
+                 positions: [{4, 3}],
+                 end_positions: [{4, 15}],
+                 generated: [false],
+                 doc: "",
+                 meta: %{}
+               }
+             } = state.specs
     end
 
     test "specs and types expand aliases" do
