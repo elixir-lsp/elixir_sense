@@ -64,18 +64,35 @@ defmodule ElixirSense.Core.Metadata do
   def get_cursor_env(
         %__MODULE__{} = metadata,
         {line, column},
-        {{begin_line, begin_column}, {end_line, end_column}}
+        surround \\ nil
       ) do
-    [prefix, needle, suffix] =
-      ElixirSense.Core.Source.split_at(metadata.source, [
-        {begin_line, begin_column},
-        {end_line, end_column}
-      ])
+    {prefix, source_with_cursor} =
+      case surround do
+        {{begin_line, begin_column}, {end_line, end_column}} ->
+          [prefix, needle, suffix] =
+            ElixirSense.Core.Source.split_at(metadata.source, [
+              {begin_line, begin_column},
+              {end_line, end_column}
+            ])
 
-    # IO.puts(metadata.source)
-    source_with_cursor = prefix <> "__cursor__(#{needle})" <> suffix
+          # IO.puts(metadata.source)
+          source_with_cursor = prefix <> "__cursor__(#{needle})" <> suffix
+          # IO.puts(source_with_cursor)
+          # dbg(metadata)
+          {prefix, source_with_cursor}
+
+        nil ->
+          [prefix, suffix] =
+            ElixirSense.Core.Source.split_at(metadata.source, [
+              {line, column}
+            ])
+
+          source_with_cursor = prefix <> "__cursor__()" <> suffix
+
+          {prefix, source_with_cursor}
+      end
+
     # IO.puts(source_with_cursor)
-    # dbg(metadata)
 
     {meta, cursor_env} =
       case Code.string_to_quoted(source_with_cursor, columns: true, token_metadata: true) do
@@ -94,35 +111,12 @@ defmodule ElixirSense.Core.Metadata do
                columns: true,
                token_metadata: true
              ) do
-          # {:ok, ast} ->
-          #   ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
+          {:ok, ast} ->
+            ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
 
           _ ->
             {[], nil}
         end
-      end
-
-    if cursor_env != nil do
-      get_env(metadata, {line, column})
-      cursor_env
-    else
-      get_env(metadata, {line, column})
-    end
-  end
-
-  def get_cursor_env(%__MODULE__{} = metadata, {line, column}) do
-    prefix = ElixirSense.Core.Source.text_before(metadata.source, line, column)
-
-    {_meta, cursor_env} =
-      case NormalizedCode.Fragment.container_cursor_to_quoted(prefix,
-             columns: true,
-             token_metadata: true
-           ) do
-        {:ok, ast} ->
-          ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
-
-        _ ->
-          {[], nil}
       end
 
     if cursor_env != nil do
