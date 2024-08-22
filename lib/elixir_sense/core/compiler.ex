@@ -13,6 +13,16 @@ defmodule ElixirSense.Core.Compiler do
 
   def expand(ast, state, env) do
     try do
+      state =
+        case ast do
+          {_, meta, _} when is_list(meta) ->
+            add_current_env_to_line(state, meta, env)
+
+          # state
+          _ ->
+            state
+        end
+
       do_expand(ast, state, env)
     catch
       kind, payload ->

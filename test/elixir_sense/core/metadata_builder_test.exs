@@ -160,9 +160,29 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.has_key?(state.lines_to_env[3].versioned_vars, {:abc, nil})
 
       assert [
-               #  %VarInfo{name: :abc, positions: [{1, 1}]},
-               %VarInfo{name: :abc, positions: [{2, 1}]}
+               %VarInfo{name: :abc, version: 1, positions: [{2, 1}]}
              ] = state |> get_line_vars(3)
+
+      assert [
+               %VarInfo{name: :abc, version: 0, positions: [{1, 1}]}
+             ] = state |> get_line_vars(2)
+
+      assert state.vars_info_per_scope_id[0] == %{
+               {:abc, 0} => %VarInfo{
+                 name: :abc,
+                 positions: [{1, 1}],
+                 scope_id: 0,
+                 version: 0,
+                 type: {:integer, 5}
+               },
+               {:abc, 1} => %VarInfo{
+                 name: :abc,
+                 positions: [{2, 1}],
+                 scope_id: 0,
+                 version: 1,
+                 type: {:local_call, :foo, []}
+               }
+             }
     end
 
     test "binding in function call" do
@@ -564,7 +584,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.keys(state.lines_to_env[1].versioned_vars) == []
-      assert [] = state |> get_line_vars(3)
+      assert [] = state |> get_line_vars(1)
 
       assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
 
@@ -585,7 +605,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ] = state |> get_line_vars(4)
 
       assert Map.keys(state.lines_to_env[6].versioned_vars) == []
-      assert [] = state |> get_line_vars(3)
+      assert [] = state |> get_line_vars(6)
     end
 
     test "for bitstring" do
@@ -1686,7 +1706,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert get_line_attributes(state, 4) == [
                %AttributeInfo{
                  name: :myattribute,
-                 positions: [{2, 3}, {3, 16}, {4, 16}],
+                 positions: [{2, 3}, {3, 16}],
                  type: {:tuple, 2, [{:atom, :ok}, {:map, [abc: {:atom, nil}], nil}]}
                }
              ]
@@ -1694,13 +1714,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [
                %VarInfo{
                  name: :other,
-                 #  TODO do we need to rewrite? change Binding
-                 #  type: {:local_call, :elem, [{:attribute, :myattribute}, {:integer, 0}]}
                  type: {
                    :call,
                    {:atom, :erlang},
                    :element,
-                   [integer: 1, attribute: :myattribute]
+                   [{:integer, 1}, {:attribute, :myattribute}]
                  }
                },
                %VarInfo{
