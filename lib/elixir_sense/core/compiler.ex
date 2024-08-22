@@ -4972,11 +4972,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
-      if Version.match?(System.version(), ">= 1.13.0-dev") do
       :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args, guard_context(s))
-      else
-      :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args)
-      end
     end
 
     defp do_rewrite(_, receiver, dot_meta, right, meta, e_args, _s) do
