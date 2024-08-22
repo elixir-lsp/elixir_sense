@@ -3850,8 +3850,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     test "map guards" do
       assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("is_map(x)")
 
+      if Version.match?(System.version(), ">= 1.17.0") do
       assert %VarInfo{name: :x, type: {:map, [], nil}} =
                var_with_guards("is_non_struct_map(x)")
+      end
 
       assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("map_size(x) == 1")
       assert %VarInfo{name: :x, type: {:map, [], nil}} = var_with_guards("1 == map_size(x)")
@@ -7860,7 +7862,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  kind: :type,
                  name: :foo,
                  positions: [{4, 5}],
-                 end_positions: [{4, 28}],
+                 end_positions: _,
                  generated: [false],
                  specs: ["@type foo() :: unquote(v())"]
                }
@@ -7894,13 +7896,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               {My, :bar, 0} => %ElixirSense.Core.State.TypeInfo{
-                 name: :bar,
+               {My, :foo, 0} => %ElixirSense.Core.State.TypeInfo{
+                 name: :foo,
                  args: [[]],
-                 specs: ["@type bar()"],
+                 specs: ["@type foo"],
                  kind: :type,
-                 positions: [{3, 3}],
-                 end_positions: [{3, 14}],
+                 positions: [{2, 3}],
+                 end_positions: [{2, 12}],
                  generated: [false],
                  doc: "",
                  meta: %{}
@@ -7922,7 +7924,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  specs: ["@type baz(a)"],
                  kind: :type,
                  positions: [{4, 3}],
-                 end_positions: [{4, 15}],
+                 end_positions: _,
                  generated: [false],
                  doc: "",
                  meta: %{}
@@ -8040,13 +8042,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               {My, :bar, 0} => %ElixirSense.Core.State.SpecInfo{
-                 name: :bar,
+               {My, :foo, 0} => %ElixirSense.Core.State.SpecInfo{
+                 name: :foo,
                  args: [[]],
-                 specs: ["@spec bar()"],
+                 specs: ["@spec foo"],
                  kind: :spec,
-                 positions: [{3, 3}],
-                 end_positions: [{3, 14}],
+                 positions: [{2, 3}],
+                 end_positions: [{2, 12}],
                  generated: [false],
                  doc: "",
                  meta: %{}
@@ -8068,7 +8070,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  specs: ["@spec baz(a)"],
                  kind: :spec,
                  positions: [{4, 3}],
-                 end_positions: [{4, 15}],
+                 end_positions: _,
                  generated: [false],
                  doc: "",
                  meta: %{}

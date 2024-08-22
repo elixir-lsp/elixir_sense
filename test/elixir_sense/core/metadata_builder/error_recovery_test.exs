@@ -441,6 +441,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
+    if Version.match?(System.version(), ">= 1.17.0") do
     test "cursor in left side of catch clause after type" do
       code = """
       try do
@@ -452,7 +453,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert {meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, &(&1.name == :x))
     end
+    end
 
+    if Version.match?(System.version(), ">= 1.17.0") do
     test "cursor in left side of catch clause 2 arg guard" do
       code = """
       try do
@@ -463,6 +466,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
 
       assert {meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, &(&1.name == :x))
+    end
     end
 
     test "cursor in right side of catch clause" do
@@ -777,6 +781,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert Enum.any?(env.vars, &(&1.name == :y))
     end
 
+    if Version.match?(System.version(), ">= 1.17.0") do
     test "cursor in do block reduce left side of clause too many args" do
       code = """
       for x <- [], reduce: %{} do
@@ -787,6 +792,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert Enum.any?(env.vars, &(&1.name == :x))
       # this test fails
       # assert Enum.any?(env.vars, &(&1.name == :y))
+    end
     end
 
     test "cursor in do block reduce right side of clause" do
@@ -868,6 +874,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
+    if Version.match?(System.version(), ">= 1.17.0") do
     test "incomplete clause left side guard" do
       code = """
       fn
@@ -876,6 +883,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
 
       assert {meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, &(&1.name == :x))
+    end
     end
 
     test "incomplete clause right side" do
