@@ -4,6 +4,7 @@ defmodule ElixirSense.Core.Ast do
   """
 
   # TODO the code in this module is broken and probably violates GPL license
+  # TODO replace
 
   @partials [
     :def,

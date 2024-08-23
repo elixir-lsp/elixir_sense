@@ -442,31 +442,31 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
     end
 
     if Version.match?(System.version(), ">= 1.17.0") do
-    test "cursor in left side of catch clause after type" do
-      code = """
-      try do
-        bar()
-      catch
-        x, \
-      """
+      test "cursor in left side of catch clause after type" do
+        code = """
+        try do
+          bar()
+        catch
+          x, \
+        """
 
-      assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, &(&1.name == :x))
-    end
+        assert {meta, env} = get_cursor_env(code)
+        assert Enum.any?(env.vars, &(&1.name == :x))
+      end
     end
 
     if Version.match?(System.version(), ">= 1.17.0") do
-    test "cursor in left side of catch clause 2 arg guard" do
-      code = """
-      try do
-        bar()
-      catch
-        x, _ when \
-      """
+      test "cursor in left side of catch clause 2 arg guard" do
+        code = """
+        try do
+          bar()
+        catch
+          x, _ when \
+        """
 
-      assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, &(&1.name == :x))
-    end
+        assert {meta, env} = get_cursor_env(code)
+        assert Enum.any?(env.vars, &(&1.name == :x))
+      end
     end
 
     test "cursor in right side of catch clause" do
@@ -782,17 +782,17 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
     end
 
     if Version.match?(System.version(), ">= 1.17.0") do
-    test "cursor in do block reduce left side of clause too many args" do
-      code = """
-      for x <- [], reduce: %{} do
-        y, \
-      """
+      test "cursor in do block reduce left side of clause too many args" do
+        code = """
+        for x <- [], reduce: %{} do
+          y, \
+        """
 
-      assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, &(&1.name == :x))
-      # this test fails
-      # assert Enum.any?(env.vars, &(&1.name == :y))
-    end
+        assert {meta, env} = get_cursor_env(code)
+        assert Enum.any?(env.vars, &(&1.name == :x))
+        # this test fails
+        # assert Enum.any?(env.vars, &(&1.name == :y))
+      end
     end
 
     test "cursor in do block reduce right side of clause" do
@@ -875,15 +875,15 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
     end
 
     if Version.match?(System.version(), ">= 1.17.0") do
-    test "incomplete clause left side guard" do
-      code = """
-      fn
-        x when \
-      """
+      test "incomplete clause left side guard" do
+        code = """
+        fn
+          x when \
+        """
 
-      assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, &(&1.name == :x))
-    end
+        assert {meta, env} = get_cursor_env(code)
+        assert Enum.any?(env.vars, &(&1.name == :x))
+      end
     end
 
     test "incomplete clause right side" do

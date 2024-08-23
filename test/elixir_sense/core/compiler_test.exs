@@ -381,16 +381,16 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
       end
 
       if Version.match?(System.version(), ">= 1.17.0") do
-      test "expands quote with bind_quoted" do
-        assert_expansion("""
-        kv = [a: 1]
-        quote bind_quoted: [kv: kv] do
-          Enum.each(kv, fn {k, v} ->
-            def unquote(k)(), do: unquote(v)
-          end)
+        test "expands quote with bind_quoted" do
+          assert_expansion("""
+          kv = [a: 1]
+          quote bind_quoted: [kv: kv] do
+            Enum.each(kv, fn {k, v} ->
+              def unquote(k)(), do: unquote(v)
+            end)
+          end
+          """)
         end
-        """)
-      end
       end
 
       test "expands quote with unquote false" do
@@ -402,11 +402,11 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
       end
 
       if Version.match?(System.version(), ">= 1.17.0") do
-      test "expands quote with file" do
-        assert_expansion("""
-        quote file: "some.ex", do: bar(1, 2, 3)
-        """)
-      end
+        test "expands quote with file" do
+          assert_expansion("""
+          quote file: "some.ex", do: bar(1, 2, 3)
+          """)
+        end
       end
 
       test "expands quote with line" do
@@ -450,19 +450,19 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
       end
 
       if Version.match?(System.version(), ">= 1.17.0") do
-      test "expands &" do
-        assert_expansion("& &1")
-        assert_expansion("&Enum.take(&1, 5)")
-        assert_expansion("&{&1, &2}")
-        assert_expansion("&[&1 | &2]")
-        assert_expansion("&inspect/1")
-        assert_expansion("&Enum.count/1")
-        assert_expansion("a = %{}; &a.b(&1)")
-        assert_expansion("&Enum.count(&1)")
-        assert_expansion("&inspect(&1)")
-        assert_expansion("&Enum.map(&2, &1)")
-        assert_expansion("&inspect([&2, &1])")
-      end
+        test "expands &" do
+          assert_expansion("& &1")
+          assert_expansion("&Enum.take(&1, 5)")
+          assert_expansion("&{&1, &2}")
+          assert_expansion("&[&1 | &2]")
+          assert_expansion("&inspect/1")
+          assert_expansion("&Enum.count/1")
+          assert_expansion("a = %{}; &a.b(&1)")
+          assert_expansion("&Enum.count(&1)")
+          assert_expansion("&inspect(&1)")
+          assert_expansion("&Enum.map(&2, &1)")
+          assert_expansion("&inspect([&2, &1])")
+        end
       end
 
       test "expands fn" do

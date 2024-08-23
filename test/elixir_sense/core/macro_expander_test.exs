@@ -14,9 +14,7 @@ defmodule ElixirSense.Core.MacroExpanderTest do
       |> MacroExpander.add_default_meta()
       |> MacroExpander.expand_use(MyModule, [], line: 2, column: 1)
 
-    if Version.match?(System.version(), ">= 1.13.0") do
-      assert Macro.to_string(expanded) =~ "defmacro required(var)"
-    end
+    assert Macro.to_string(expanded) =~ "defmacro required(var)"
   end
 
   test "expand use with alias" do
@@ -35,9 +33,7 @@ defmodule ElixirSense.Core.MacroExpanderTest do
         column: 1
       )
 
-    if Version.match?(System.version(), ">= 1.13.0") do
-      assert Macro.to_string(expanded) =~ "defmacro required(var)"
-    end
+    assert Macro.to_string(expanded) =~ "defmacro required(var)"
   end
 
   test "expand use calling use" do
@@ -51,9 +47,7 @@ defmodule ElixirSense.Core.MacroExpanderTest do
       |> MacroExpander.add_default_meta()
       |> MacroExpander.expand_use(MyModule, [], line: 2, column: 1)
 
-    if Version.match?(System.version(), ">= 1.13.0") do
-      assert Macro.to_string(expanded) =~ "defmacro bar(var)"
-    end
+    assert Macro.to_string(expanded) =~ "defmacro bar(var)"
   end
 
   test "expand use when module does not define __using__ macro" do
@@ -67,8 +61,6 @@ defmodule ElixirSense.Core.MacroExpanderTest do
       |> MacroExpander.add_default_meta()
       |> MacroExpander.expand_use(MyModule, [], line: 2, column: 1)
 
-    if Version.match?(System.version(), ">= 1.13.0") do
-      assert Macro.to_string(expanded) =~ "require ElixirSenseExample.OverridableBehaviour"
-    end
+    assert Macro.to_string(expanded) =~ "require ElixirSenseExample.OverridableBehaviour"
   end
 end

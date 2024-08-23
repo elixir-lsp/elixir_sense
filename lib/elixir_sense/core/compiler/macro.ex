@@ -132,7 +132,10 @@ defmodule ElixirSense.Core.Compiler.Macro do
        when is_atom(name) and is_list(args) and is_list(meta) do
     arity = length(args)
 
-    case NormalizedMacroEnv.expand_import(env, meta, name, arity, trace: false, check_deprecations: false) do
+    case NormalizedMacroEnv.expand_import(env, meta, name, arity,
+           trace: false,
+           check_deprecations: false
+         ) do
       {:macro, _receiver, expander} ->
         # TODO register call
         # We don't want the line to propagate yet, but generated might!

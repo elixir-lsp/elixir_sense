@@ -67,11 +67,15 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
       fn expansion_meta, args ->
         quoted = expander.(args, env)
         next = :elixir_module.next_counter(env.module)
-        
+
         if Version.match?(System.version(), ">= 1.14.0-dev") do
-        :elixir_quote.linify_with_context_counter(expansion_meta, {receiver, next}, quoted)
+          :elixir_quote.linify_with_context_counter(expansion_meta, {receiver, next}, quoted)
         else
-        :elixir_quote.linify_with_context_counter(expansion_meta |> Keyword.get(:line, 0), {receiver, next}, quoted)
+          :elixir_quote.linify_with_context_counter(
+            expansion_meta |> Keyword.get(:line, 0),
+            {receiver, next},
+            quoted
+          )
         end
       end
     end
@@ -540,11 +544,11 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
           _ ->
             local =
               allow_locals and
-              if Version.match?(System.version(), ">= 1.14.0-dev") do
-                :elixir_def.local_for(meta, name, arity, [:defmacro, :defmacrop], e)
-              else
-                :elixir_def.local_for(module, name, arity, [:defmacro, :defmacrop])
-              end
+                if Version.match?(System.version(), ">= 1.14.0-dev") do
+                  :elixir_def.local_for(meta, name, arity, [:defmacro, :defmacrop], e)
+                else
+                  :elixir_def.local_for(module, name, arity, [:defmacro, :defmacrop])
+                end
 
             case dispatch do
               {_, receiver} when local != false and receiver != module ->

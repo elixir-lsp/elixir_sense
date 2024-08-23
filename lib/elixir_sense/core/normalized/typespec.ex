@@ -81,7 +81,6 @@ defmodule ElixirSense.Core.Normalized.Typespec do
     if Version.match?(System.version(), ">= 1.14.0-dev") do
       Code.Typespec
     else
-      # fall back to bundled on < 1.13 (1.12 is broken on OTP 24)
       # on 1.13 use our version as it has all the fixes from last 1.13 release
       ElixirSense.Core.Normalized.Code.ElixirSense.Typespec
     end

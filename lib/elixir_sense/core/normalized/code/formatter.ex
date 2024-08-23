@@ -5,7 +5,6 @@ defmodule ElixirSense.Core.Normalized.Code.Formatter do
         apply(Code.Formatter, :locals_without_parens, [])
 
       true ->
-        # fall back to bundled on < 1.13
         # on 1.13 use our version as it has all the fixes from last 1.13 release
         apply(ElixirSense.Core.Normalized.Code.ElixirSense.Formatter, :locals_without_parens, [])
     end
@@ -17,7 +16,6 @@ defmodule ElixirSense.Core.Normalized.Code.Formatter do
         apply(Code.Formatter, :local_without_parens?, [fun, arity, locals_without_parens])
 
       true ->
-        # fall back to bundled on < 1.13
         # on 1.13 use our version as it has all the fixes from last 1.13 release
         apply(ElixirSense.Core.Normalized.Code.ElixirSense.Formatter, :local_without_parens?, [
           fun,
