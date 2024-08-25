@@ -15,7 +15,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         NormalizedCode.Fragment.container_cursor_to_quoted(code,
           columns: true,
           token_metadata: true
-        )
+        ) |> dbg
       end
 
     # dbg(ast)
@@ -1947,6 +1947,358 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert get_cursor_env(code)
+    end
+  end
+
+  describe "typespec" do
+    test "in type name" do
+      code = """
+      defmodule Abc do
+        @type foo\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:__unknown__, 0}
+    end
+
+    test "in spec name" do
+      code = """
+      defmodule Abc do
+        @spec foo\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:__unknown__, 0}
+    end
+
+    test "in type after ::" do
+      code = """
+      defmodule Abc do
+        @type foo :: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in spec after ::" do
+      code = """
+      defmodule Abc do
+        @spec foo :: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type" do
+      code = """
+      defmodule Abc do
+        @type foo :: bar\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type with | empty" do
+      code = """
+      defmodule Abc do
+        @type foo :: bar | \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type with |" do
+      code = """
+      defmodule Abc do
+        @type foo :: bar | baz\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type with " do
+      code = """
+      defmodule Abc do
+        @type foo :: (...\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type with ->" do
+      code = """
+      defmodule Abc do
+        @type foo :: (... -> \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type with map empty" do
+      code = """
+      defmodule Abc do
+        @type foo :: %{\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type with map key" do
+      code = """
+      defmodule Abc do
+        @type foo :: %{bar\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type with map after key" do
+      code = """
+      defmodule Abc do
+        @type foo :: %{bar: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type with map after =>" do
+      code = """
+      defmodule Abc do
+        @type foo :: %{:bar => \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type with map optional" do
+      code = """
+      defmodule Abc do
+        @type foo :: %{optional(\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type named empty" do
+      code = """
+      defmodule Abc do
+        @type foo :: {bar :: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type named" do
+      code = """
+      defmodule Abc do
+        @type foo :: {bar :: baz\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in spec after :: type" do
+      code = """
+      defmodule Abc do
+        @spec foo :: bar\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: remote type" do
+      code = """
+      defmodule Abc do
+        @type foo :: Remote.bar\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type args" do
+      code = """
+      defmodule Abc do
+        @type foo :: Remote.bar(\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in spec after :: type args" do
+      code = """
+      defmodule Abc do
+        @spec foo :: Remote.bar(\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type arg empty" do
+      code = """
+      defmodule Abc do
+        @type foo(\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 1}
+    end
+
+    test "in spec arg empty" do
+      code = """
+      defmodule Abc do
+        @spec foo(\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 1}
+    end
+
+    test "in type arg" do
+      code = """
+      defmodule Abc do
+        @type foo(bar\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 1}
+    end
+
+    test "in spec arg" do
+      code = """
+      defmodule Abc do
+        @spec foo(bar\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 1}
+    end
+
+    test "in spec arg named empty" do
+      code = """
+      defmodule Abc do
+        @spec foo(bar :: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 1}
+    end
+
+    test "in spec arg named" do
+      code = """
+      defmodule Abc do
+        @spec foo(bar :: baz\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 1}
+    end
+
+    test "in type arg next" do
+      code = """
+      defmodule Abc do
+        @type foo(asd, \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 2}
+    end
+
+    test "in spec when" do
+      code = """
+      defmodule Abc do
+        @spec foo(a) :: integer when \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 1}
+    end
+
+    test "in spec when after :" do
+      code = """
+      defmodule Abc do
+        @spec foo(a) :: integer when x: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 1}
+    end
+
+    test "in spec when after : type" do
+      code = """
+      defmodule Abc do
+        @spec foo(a) :: integer when x: bar\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 1}
+    end
+
+    test "in spec when after : type arg" do
+      code = """
+      defmodule Abc do
+        @spec foo(a) :: integer when x: bar(\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 1}
+    end
+
+    test "in spec when after : next" do
+      code = """
+      defmodule Abc do
+        @spec foo(a) :: integer when x: bar(), \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 1}
+    end
+
+    test "in type invalid expression" do
+      code = """
+      defmodule Abc do
+        @type [{\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:__unknown__, 0}
+    end
+
+    test "in spec invalid expression" do
+      code = """
+      defmodule Abc do
+        @spec [{\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:__unknown__, 0}
+    end
+
+    test "redefining built in" do
+      code = """
+      defmodule Abc do
+        @type required(a) :: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:__required__, 0}
     end
   end
 end

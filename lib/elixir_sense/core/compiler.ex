@@ -1057,15 +1057,18 @@ defmodule ElixirSense.Core.Compiler do
     cursor_before? = state.cursor_env != nil
     {expr, state, env} = __MODULE__.Typespec.expand_type(expr, state, env)
 
-    case __MODULE__.Typespec.type_to_signature(expr) do
-      {name, [_type_arg]} when name in [:required, :optional] ->
-        raise "type #{name}/#{1} is a reserved type and it cannot be defined"
-
-      {name, type_args} ->
+    {name, type_args} = __MODULE__.Typespec.type_to_signature(expr)
         type_args = type_args || []
 
-        if __MODULE__.Typespec.built_in_type?(name, length(type_args)) do
-          raise "type #{name}/#{length(type_args)} is a built-in type and it cannot be redefined"
+        name = cond do
+          name in [:required, :optional] ->
+            # elixir raises here type #{name}/#{1} is a reserved type and it cannot be defined
+            :"__#{name}__"
+          __MODULE__.Typespec.built_in_type?(name, length(type_args)) ->
+            # elixir raises here type #{name}/#{length(type_args)} is a built-in type and it cannot be redefined
+            :"__#{name}__"
+          true ->
+            name
         end
 
         cursor_after? = state.cursor_env != nil
@@ -1091,23 +1094,6 @@ defmodule ElixirSense.Core.Compiler do
           end
 
         {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
-
-      :error ->
-        # elixir throws here
-        # expand expression in case there's cursor
-
-        state =
-          state
-          |> with_typespec({:__unknown__, 0})
-
-        {expr, state, _tenv} = expand(expr, state, env)
-
-        state =
-          state
-          |> with_typespec(nil)
-
-        {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
-    end
   end
 
   defp expand_macro(
@@ -1123,8 +1109,7 @@ defmodule ElixirSense.Core.Compiler do
     cursor_before? = state.cursor_env != nil
     {expr, state, env} = __MODULE__.Typespec.expand_spec(expr, state, env)
 
-    case __MODULE__.Typespec.spec_to_signature(expr) do
-      {name, type_args} ->
+    {name, type_args} = __MODULE__.Typespec.spec_to_signature(expr)
         cursor_after? = state.cursor_env != nil
         spec = TypeInfo.typespec_to_string(kind, expr)
 
@@ -1164,10 +1149,6 @@ defmodule ElixirSense.Core.Compiler do
           end
 
         {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
-
-      :error ->
-        {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
-    end
   end
 
   defp expand_macro(
@@ -4683,16 +4664,27 @@ defmodule ElixirSense.Core.Compiler do
         when is_atom(name) and name != :"::" and is_atom(context),
         do: {name, []}
 
+    def type_to_signature({:"::", _, [{:__cursor__, _, args}, _]})
+        when is_list(args) do
+      # type name replaced by cursor
+      {:__unknown__, []}
+    end
+
     def type_to_signature({:"::", _, [{name, _, args}, _]})
         when is_atom(name) and name != :"::",
         do: {name, args}
+
+    def type_to_signature({:__cursor__, _, args}) when is_list(args) do
+      # type name replaced by cursor
+      {:__unknown__, []}
+    end
 
     def type_to_signature({name, _, args}) when is_atom(name) and name != :"::" do
       # elixir returns :error here, we handle incomplete signatures
       {name, args}
     end
 
-    def type_to_signature(), do: :error
+    def type_to_signature(_), do: {:__unknown__, []}
 
     def expand_spec(ast, state, env) do
       # TODO not sure this is correct. Are module vars accessible?
@@ -4709,7 +4701,7 @@ defmodule ElixirSense.Core.Compiler do
       {ast, state, env}
     end
 
-    defp do_expand_spec({:when, meta, [spec, guard]}, state, env) when is_list(guard) do
+    defp do_expand_spec({:when, meta, [spec, guard]}, state, env) do
       {spec, guard, state, env} = do_expand_spec(spec, guard, meta, state, env)
       {{:when, meta, [spec, guard]}, state, env}
     end
@@ -4735,12 +4727,23 @@ defmodule ElixirSense.Core.Compiler do
         end
         |> sanitize_args()
 
-      guard = if Keyword.keyword?(guard), do: guard, else: []
+      {_, state, env} = expand_typespec({name, name_meta, args}, state, env)
+
+      {guard, state, env} = if is_list(guard) do
+        {guard, state, env}
+      else
+        # invalid guard may still have cursor
+        {_, state, env} = expand_typespec(guard, state, env)
+        {[], state, env}
+      end
 
       state =
-        Enum.reduce(guard, state, fn {name, _val}, state ->
+        Enum.reduce(guard, state, fn {name, _val}, state when is_atom(name) ->
           # guard is a keyword list so we don't have exact meta on keys
           add_var_write(state, {name, guard_meta, nil})
+        _, state ->
+          # invalid entry
+          state
         end)
 
       {args_reverse, state, env} =
@@ -4755,13 +4758,17 @@ defmodule ElixirSense.Core.Compiler do
 
       {guard_reverse, state, env} =
         Enum.reduce(guard, {[], state, env}, fn
-          {_name, {:var, _, context}} = pair, {acc, state, env} when is_atom(context) ->
+          {name, {:var, _, context}} = pair, {acc, state, env} when is_atom(name) and is_atom(context) ->
             # special type var
             {[pair | acc], state, env}
 
-          {name, type}, {acc, state, env} ->
+          {name, type}, {acc, state, env} when is_atom(name) ->
             {type, state, env} = expand_typespec(type, state, env)
             {[{name, type} | acc], state, env}
+          other, {acc, state, env} ->
+            # there may be cursor in invalid entries
+            {_type, state, env} = expand_typespec(other, state, env)
+            {acc, state, env}
         end)
 
       guard = Enum.reverse(guard_reverse)
@@ -4769,10 +4776,17 @@ defmodule ElixirSense.Core.Compiler do
       {{:"::", meta, [{name, name_meta, args}, return]}, guard, state, env}
     end
 
-    defp do_expand_spec(other, guard, _guard_meta, state, env) do
-      # invalid or incomplete spec
-      # TODO try to wrap in :: expression
-      {other, guard, state, env}
+    defp do_expand_spec(other, guard, guard_meta, state, env) do
+      case other do
+        {name, meta, args} when is_atom(name) and name != :"::" ->
+          # invalid or incomplete spec
+          # try to wrap in :: expression
+          do_expand_spec({:"::", meta, [{name, meta, args}, nil]}, guard, guard_meta, state, env)
+        _ ->
+          # there may be cursor in invalid entries
+          {_type, state, env} = expand_typespec(other, state, env)
+          {other, guard, state, env}
+      end
     end
 
     defp sanitize_args(args) do
@@ -4810,6 +4824,8 @@ defmodule ElixirSense.Core.Compiler do
           args
         end
 
+      {_, state, env} = expand_typespec({name, name_meta, args}, state, env)
+
       state =
         Enum.reduce(args, state, fn
           {name, meta, context}, state when is_atom(name) and is_atom(context) and name != :_ ->
@@ -4825,9 +4841,16 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp do_expand_type(other, state, env) do
-      # invalid or incomplete spec
-      # TODO try to wrap in :: expression
-      {other, state, env}
+      case other do
+        {name, meta, args} when is_atom(name) and name != :"::" ->
+          # invalid or incomplete type
+          # try to wrap in :: expression
+          do_expand_type({:"::", meta, [{name, meta, args}, nil]}, state, env)
+        _ ->
+          # there may be cursor in invalid entries
+          {_type, state, env} = expand_typespec(other, state, env)
+          {other, state, env}
+      end
     end
 
     @special_forms [
