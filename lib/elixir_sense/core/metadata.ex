@@ -13,6 +13,7 @@ defmodule ElixirSense.Core.Metadata do
           source: String.t(),
           mods_funs_to_positions: State.mods_funs_to_positions_t(),
           cursor_env: nil | {keyword(), ElixirSense.Core.State.Env.t()},
+          closest_env: nil | {{pos_integer, pos_integer}, {non_neg_integer, non_neg_integer}, ElixirSense.Core.State.Env.t()},
           lines_to_env: State.lines_to_env_t(),
           calls: State.calls_t(),
           vars_info_per_scope_id: State.vars_info_per_scope_id_t(),
@@ -27,6 +28,7 @@ defmodule ElixirSense.Core.Metadata do
   defstruct source: "",
             mods_funs_to_positions: %{},
             cursor_env: nil,
+            closest_env: nil,
             lines_to_env: %{},
             calls: %{},
             vars_info_per_scope_id: %{},
@@ -76,6 +78,7 @@ defmodule ElixirSense.Core.Metadata do
             ])
 
           # IO.puts(metadata.source)
+          # dbg(needle)
           source_with_cursor = prefix <> "__cursor__(#{needle})" <> suffix
           # IO.puts(source_with_cursor)
           # dbg(metadata)
@@ -122,7 +125,12 @@ defmodule ElixirSense.Core.Metadata do
     if cursor_env != nil do
       cursor_env
     else
-      get_env(metadata, {line, column})
+      case metadata.closest_env do
+        {pos, dist, env} ->
+          dbg({pos, dist})
+          env
+        nil -> get_env(metadata, {line, column})
+      end
     end
   end
 

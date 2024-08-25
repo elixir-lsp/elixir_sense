@@ -45,9 +45,12 @@ defmodule ElixirSense.Core.Parser do
       fallback_to_container_cursor_to_quoted: try_to_fix_parse_error
     ]
 
-    case string_to_ast(source, string_to_ast_options) do
+    # source_with_cursor = inject_cursor(source, cursor_position)
+    source_with_cursor = source
+
+    case string_to_ast(source_with_cursor, string_to_ast_options) do
       {:ok, ast, modified_source, error} ->
-        acc = MetadataBuilder.build(ast)
+        acc = MetadataBuilder.build(ast, cursor_position)
 
         if cursor_position == nil or acc.cursor_env != nil or
              Map.has_key?(acc.lines_to_env, elem(cursor_position, 0)) or
@@ -188,6 +191,7 @@ defmodule ElixirSense.Core.Parser do
       structs: acc.structs,
       mods_funs_to_positions: acc.mods_funs_to_positions,
       cursor_env: acc.cursor_env,
+      closest_env: acc.closest_env,
       lines_to_env: acc.lines_to_env,
       vars_info_per_scope_id: acc.vars_info_per_scope_id,
       calls: acc.calls,

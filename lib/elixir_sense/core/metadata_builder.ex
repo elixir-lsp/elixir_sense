@@ -12,12 +12,13 @@ defmodule ElixirSense.Core.MetadataBuilder do
   Traverses the AST building/retrieving the environment information.
   It returns a `ElixirSense.Core.State` struct containing the information.
   """
-  @spec build(Macro.t()) :: State.t()
-  def build(ast) do
+  @spec build(Macro.t(), nil | {pos_integer, pos_integer}) :: State.t()
+  def build(ast, cursor_position \\ nil) do
     {_ast, state, _env} =
       Compiler.expand(
         ast,
         %State{
+          cursor_position: cursor_position,
           prematch:
             if Version.match?(System.version(), ">= 1.15.0-dev") do
               Code.get_compiler_option(:on_undefined_variable)

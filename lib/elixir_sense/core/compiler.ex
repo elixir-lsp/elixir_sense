@@ -16,7 +16,9 @@ defmodule ElixirSense.Core.Compiler do
       state =
         case ast do
           {_, meta, _} when is_list(meta) ->
-            add_current_env_to_line(state, meta, env)
+            state
+            |> add_current_env_to_line(meta, env)
+            |> update_closest_env(meta, env)
 
           # state
           _ ->
@@ -2550,7 +2552,8 @@ defmodule ElixirSense.Core.Compiler do
           calls: after_s.calls,
           lines_to_env: after_s.lines_to_env,
           vars_info: after_s.vars_info,
-          cursor_env: after_s.cursor_env
+          cursor_env: after_s.cursor_env,
+          closest_env: after_s.closest_env
       }
 
       call_e = Map.put(e, :context, :match)
@@ -2564,7 +2567,8 @@ defmodule ElixirSense.Core.Compiler do
           calls: s_expr.calls,
           lines_to_env: s_expr.lines_to_env,
           vars_info: s_expr.vars_info,
-          cursor_env: s_expr.cursor_env
+          cursor_env: s_expr.cursor_env,
+          closest_env: s_expr.closest_env
       }
 
       end_e = Map.put(ee, :context, Map.get(e, :context))
