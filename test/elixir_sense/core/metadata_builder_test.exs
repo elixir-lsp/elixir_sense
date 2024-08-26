@@ -8096,6 +8096,58 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
              } = state.types
     end
+
+    defmodule TypespecMacros do
+      defmacro some() do
+        quote do
+          Foo
+        end
+      end
+    end
+
+    test "specs and types expand macros in remote type" do
+      state =
+        """
+        defmodule Proto do
+          require ElixirSense.Core.MetadataBuilderTest.TypespecMacros, as: TypespecMacros
+          @type local_type() :: TypespecMacros.some().foo(integer())
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {Proto, :local_type, 0} => %State.TypeInfo{
+                 specs: ["@type local_type() :: Foo.foo(integer())"]
+               }
+             } = state.types
+    end
+
+    test "specs and types expand attributes in remote type" do
+      state =
+        """
+        defmodule Proto do
+          @some Remote.Module
+          @type local_type() :: @some.foo(integer())
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {Proto, :local_type, 0} => %State.TypeInfo{
+                 specs: ["@type local_type() :: Remote.Module.foo(integer())"]
+               }
+             } = state.types
+
+      assert [
+               %AttributeInfo{
+                 positions: [{2, 3}, {3, 25}]
+               }
+             ] = state.lines_to_env[4].attributes
+
+      assert [%CallInfo{position: {3, 25}}, %CallInfo{position: {3, 3}}] =
+               state.calls[3] |> Enum.filter(&(&1.func == :@))
+    end
   end
 
   describe "defrecord" do

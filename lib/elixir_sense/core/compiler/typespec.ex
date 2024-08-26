@@ -434,13 +434,17 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   # Macro.expand/2 on the remote does not expand module attributes (but expands
   # things like __MODULE__).
   defp typespec(
-         {{:., dot_meta, [{:@, _, [{attr, _, _}]}, name]}, meta, args} = orig,
+         {{:., dot_meta, [{:@, attr_meta, [{attr, _, _}]}, name]}, meta, args} = orig,
          vars,
          caller,
          state
        ) do
     # TODO Module.get_attribute(caller.module, attr)
-    # TODO register attribute access
+    state =
+      state
+      |> add_attribute(caller, attr, attr_meta, nil, nil, false)
+      |> add_call_to_line({Kernel, :@, 0}, attr_meta)
+
     case Map.get(state.attribute_store, {caller.module, attr}) do
       remote when is_atom(remote) and remote != nil ->
         {remote_spec, state} = typespec(remote, vars, caller, state)
@@ -616,6 +620,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   end
 
   # TODO trace alias?
+  # TODO trace calls in expand
   defdelegate expand_remote(other, env), to: ElixirSense.Core.Compiler.Macro, as: :expand
 
   defp remote_type({{:., dot_meta, [remote_spec, name_spec]}, meta, args}, vars, caller, state) do
@@ -627,37 +632,4 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   defp fn_args(args, vars, caller, state) do
     :lists.mapfoldl(&typespec(&1, vars, caller, &2), state, args)
   end
-
-  # def load_struct(name, assocs, s, _e) do
-  #   case s.structs[name] do
-  #     nil ->
-  #       try do
-  #         apply(name, :__struct__, [assocs])
-  #       else
-  #         %{:__struct__ => ^name} = struct ->
-  #           struct
-
-  #         _ ->
-  #           # recover from invalid return value
-  #           [__struct__: name] |> Keyword.merge(assocs) |> Elixir.Map.new()
-  #       rescue
-  #         _ ->
-  #           # recover from error by building the fake struct
-  #           [__struct__: name] |> Keyword.merge(assocs) |> Elixir.Map.new()
-  #       end
-
-  #     info ->
-  #       info.fields |> Keyword.merge(assocs) |> Elixir.Map.new()
-  #   end
-  # end
-
-  # def struct!(module, env) when is_atom(module) do
-  #   if module == env.module do
-  #     Module.get_attribute(module, :__struct__)
-  #   end ||
-  #     case :elixir_map.maybe_load_struct([line: env.line], module, [], [], env) do
-  #       {:ok, struct} -> struct
-  #       {:error, desc} -> raise ArgumentError, List.to_string(:elixir_map.format_error(desc))
-  #     end
-  # end
 end
