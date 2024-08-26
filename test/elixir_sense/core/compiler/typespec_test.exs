@@ -72,30 +72,30 @@ defmodule ElixirSense.Core.Compiler.TypespecTest do
     end
 
     test "charlist" do
-      assert {{{:., [], [:elixir, :charlist]}, [], []}, _state} =
+      assert {{:charlist, [], []}, _state} =
                expand_typespec({:charlist, [], []})
 
-      assert {{{:., [], [:elixir, :charlist]}, [], []}, _state} =
+      assert {{:char_list, [], []}, _state} =
                expand_typespec({:char_list, [], []})
 
-      assert {{{:., [], [:elixir, :nonempty_charlist]}, [], []}, _state} =
+      assert {{:nonempty_charlist, [], []}, _state} =
                expand_typespec({:nonempty_charlist, [], []})
     end
 
     test "struct" do
-      assert {{{:., [], [:elixir, :struct]}, [], []}, _state} = expand_typespec({:struct, [], []})
+      assert {{:struct, [], []}, _state} = expand_typespec({:struct, [], []})
     end
 
     test "as_boolean" do
-      assert {{{:., [], [:elixir, :as_boolean]}, [], [:foo]}, _state} =
+      assert {{:as_boolean, [], [:foo]}, _state} =
                expand_typespec({:as_boolean, [], [:foo]})
     end
 
     test "keyword" do
-      assert {{{:., [], [:elixir, :keyword]}, [], []}, _state} =
+      assert {{:keyword, [], []}, _state} =
                expand_typespec({:keyword, [], []})
 
-      assert {{{:., [], [:elixir, :keyword]}, [], [:foo]}, _state} =
+      assert {{:keyword, [], [:foo]}, _state} =
                expand_typespec({:keyword, [], [:foo]})
     end
 

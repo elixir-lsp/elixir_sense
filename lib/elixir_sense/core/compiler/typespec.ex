@@ -509,27 +509,6 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   end
 
   # Handle local calls
-
-  defp typespec({type, _meta, []}, vars, caller, state) when type in [:charlist, :char_list] do
-    typespec(quote(do: :elixir.charlist()), vars, caller, state)
-  end
-
-  defp typespec({:nonempty_charlist, _meta, []}, vars, caller, state) do
-    typespec(quote(do: :elixir.nonempty_charlist()), vars, caller, state)
-  end
-
-  defp typespec({:struct, _meta, []}, vars, caller, state) do
-    typespec(quote(do: :elixir.struct()), vars, caller, state)
-  end
-
-  defp typespec({:as_boolean, _meta, [arg]}, vars, caller, state) do
-    typespec(quote(do: :elixir.as_boolean(unquote(arg))), vars, caller, state)
-  end
-
-  defp typespec({:keyword, _meta, args}, vars, caller, state) when length(args) <= 1 do
-    typespec(quote(do: :elixir.keyword(unquote_splicing(args))), vars, caller, state)
-  end
-
   defp typespec({name, meta, args}, :disabled, caller, state) when is_atom(name) do
     {args, state} = :lists.mapfoldl(&typespec(&1, :disabled, caller, &2), state, args)
     {{name, meta, args}, state}
