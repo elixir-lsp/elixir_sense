@@ -15,7 +15,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         NormalizedCode.Fragment.container_cursor_to_quoted(code,
           columns: true,
           token_metadata: true
-        ) |> dbg
+        )
       end
 
     # dbg(ast)
@@ -2021,7 +2021,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert env.typespec == {:foo, 0}
     end
 
-    test "in type after :: type with " do
+    test "in type after :: type with fun" do
       code = """
       defmodule Abc do
         @type foo :: (...\
@@ -2031,10 +2031,40 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert env.typespec == {:foo, 0}
     end
 
-    test "in type after :: type with ->" do
+    test "in type after :: type with fun ->" do
       code = """
       defmodule Abc do
         @type foo :: (... -> \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type with fun -> no arg" do
+      code = """
+      defmodule Abc do
+        @type foo :: (-> \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type with fun (" do
+      code = """
+      defmodule Abc do
+        @type foo :: (\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type after :: type with fun ( nex arg" do
+      code = """
+      defmodule Abc do
+        @type foo :: (bar, \
       """
 
       assert {_, env} = get_cursor_env(code)
@@ -2298,7 +2328,157 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
-      assert env.typespec == {:__required__, 0}
+      assert env.typespec == {:__required__, 1}
+    end
+
+    test "in type list" do
+      code = """
+      defmodule Abc do
+        @type foo :: [\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type list next" do
+      code = """
+      defmodule Abc do
+        @type foo :: [:foo, \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type list keyword" do
+      code = """
+      defmodule Abc do
+        @type foo :: [foo: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type tuple" do
+      code = """
+      defmodule Abc do
+        @type foo :: {\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type tuple next" do
+      code = """
+      defmodule Abc do
+        @type foo :: {:foo, \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type union" do
+      code = """
+      defmodule Abc do
+        @type foo :: :foo | \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type bitstring" do
+      code = """
+      defmodule Abc do
+        @type foo :: <<\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type bitstring after ::" do
+      code = """
+      defmodule Abc do
+        @type foo :: <<_::\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    # test "in type bitstring next" do
+    #   code = """
+    #   defmodule Abc do
+    #     @type foo :: <<_::, \
+    #   """
+
+    #   assert {_, env} = get_cursor_env(code)
+    #   assert env.typespec == {:foo, 0}
+    # end
+
+    test "in type bitstring next after" do
+      code = """
+      defmodule Abc do
+        @type foo :: <<_::size, _::_*\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type struct" do
+      code = """
+      defmodule Abc do
+        @type foo :: %\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type struct {}" do
+      code = """
+      defmodule Abc do
+        @type foo :: %Date{\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type struct key" do
+      code = """
+      defmodule Abc do
+        @type foo :: %Date{key: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "in type range" do
+      code = """
+      defmodule Abc do
+        @type foo :: 1..\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 0}
+    end
+
+    test "type with underscored arg" do
+      code = """
+      defmodule Abc do
+        @type foo(_) :: 1..\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.typespec == {:foo, 1}
     end
   end
 end

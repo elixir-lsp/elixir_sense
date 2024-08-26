@@ -388,8 +388,10 @@ defmodule ElixirSense.Core.ParserTest do
     '''
 
     assert %ElixirSense.Core.Metadata{
-      closest_env: {
-               _, _, %ElixirSense.Core.State.Env{
+             closest_env: {
+               _,
+               _,
+               %ElixirSense.Core.State.Env{
                  vars: vars
                }
              }

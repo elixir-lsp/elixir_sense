@@ -5621,7 +5621,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {Proto, :__protocol__, 1} => %ElixirSense.Core.State.SpecInfo{
                kind: :spec,
                specs: [
-                 "@spec __protocol__(:impls) :: :not_consolidated | {:consolidated, [module()]}",
+                 "@spec __protocol__(:impls) :: :not_consolidated | {:consolidated, list(module())}",
                  "@spec __protocol__(:consolidated?) :: boolean()",
                  "@spec __protocol__(:functions) :: unquote(Protocol.__functions_spec__(@__functions__()))",
                  "@spec __protocol__(:module) :: Proto"
@@ -6727,6 +6727,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         defmodule MyStruct do
           defstruct [:some_field, a_field: 1]
           IO.puts ""
+          %Date{month: 1, day: 1, year: 1}
         end
         """
         |> string_to_state
@@ -7869,7 +7870,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              } = state.types
     end
 
-    test "skips types with unquote fragments in call" do
+    # TODO check if variables are available in unquote
+    test "store types as unknown when unquote fragments in call" do
       state =
         """
         defmodule My do
@@ -7881,7 +7883,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert %{} == state.types
+      assert %{
+               {My, :__unknown__, 0} => %ElixirSense.Core.State.TypeInfo{
+                 name: :__unknown__,
+                 args: [[]],
+                 specs: ["@type unquote(k)() :: 123"],
+                 kind: :type,
+                 positions: [{4, 5}],
+                 end_positions: [{4, 30}],
+                 generated: [false],
+                 doc: "",
+                 meta: %{hidden: true}
+               }
+             } == state.types
     end
 
     test "registers incomplete types" do
@@ -7899,7 +7913,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {My, :foo, 0} => %ElixirSense.Core.State.TypeInfo{
                  name: :foo,
                  args: [[]],
-                 specs: ["@type foo"],
+                 specs: ["@type foo() :: nil"],
                  kind: :type,
                  positions: [{2, 3}],
                  end_positions: [{2, 12}],
@@ -7910,7 +7924,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {My, :bar, 0} => %ElixirSense.Core.State.TypeInfo{
                  name: :bar,
                  args: [[]],
-                 specs: ["@type bar()"],
+                 specs: ["@type bar() :: nil"],
                  kind: :type,
                  positions: [{3, 3}],
                  end_positions: [{3, 14}],
@@ -7921,7 +7935,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {My, :baz, 1} => %ElixirSense.Core.State.TypeInfo{
                  name: :baz,
                  args: [["a"]],
-                 specs: ["@type baz(a)"],
+                 specs: ["@type baz(a) :: nil"],
                  kind: :type,
                  positions: [{4, 3}],
                  end_positions: _,
@@ -8004,7 +8018,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         defmodule My do
           @spec foo
           @spec bar()
-          @spec baz(a)
+          @spec baz(number)
         end
         """
         |> string_to_state
@@ -8013,7 +8027,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {My, :foo, 0} => %ElixirSense.Core.State.SpecInfo{
                  name: :foo,
                  args: [[]],
-                 specs: ["@spec foo"],
+                 specs: ["@spec foo() :: nil"],
                  kind: :spec,
                  positions: [{2, 3}],
                  end_positions: [{2, 12}],
@@ -8024,7 +8038,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {My, :bar, 0} => %ElixirSense.Core.State.SpecInfo{
                  name: :bar,
                  args: [[]],
-                 specs: ["@spec bar()"],
+                 specs: ["@spec bar() :: nil"],
                  kind: :spec,
                  positions: [{3, 3}],
                  end_positions: [{3, 14}],
@@ -8034,8 +8048,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                },
                {My, :baz, 1} => %ElixirSense.Core.State.SpecInfo{
                  name: :baz,
-                 args: [["a"]],
-                 specs: ["@spec baz(a)"],
+                 args: [["number()"]],
+                 specs: ["@spec baz(number()) :: nil"],
                  kind: :spec,
                  positions: [{4, 3}],
                  end_positions: _,
@@ -8049,21 +8063,29 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     test "specs and types expand aliases" do
       state =
         """
+        defmodule Model.User do
+          defstruct name: nil
+        end
+
+        defmodule Model.UserOrder do
+          defstruct order: nil
+        end
+
         defmodule Proto do
           alias Model.User
           alias Model.Order
           alias Model.UserOrder
           @type local_type() :: User.t
-          @spec abc({%User{}}) :: [%UserOrder{order: Order.t}, local_type()]
+          @spec abc({%User{}}) :: {%UserOrder{order: Order.t}, local_type()}
         end
         """
         |> string_to_state
 
       assert %{
                {Proto, :abc, 1} => %State.SpecInfo{
-                 args: [["{%Model.User{}}"]],
+                 args: [["{%Model.User{name: term()}}"]],
                  specs: [
-                   "@spec abc({%Model.User{}}) :: [%Model.UserOrder{order: Model.Order.t()}, local_type()]"
+                   "@spec abc({%Model.User{name: term()}}) :: {%Model.UserOrder{order: Model.Order.t()}, local_type()}"
                  ]
                }
              } = state.specs

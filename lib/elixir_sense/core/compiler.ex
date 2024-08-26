@@ -1060,42 +1060,45 @@ defmodule ElixirSense.Core.Compiler do
     {expr, state, env} = __MODULE__.Typespec.expand_type(expr, state, env)
 
     {name, type_args} = __MODULE__.Typespec.type_to_signature(expr)
-        type_args = type_args || []
+    type_args = type_args || []
 
-        name = cond do
-          name in [:required, :optional] ->
-            # elixir raises here type #{name}/#{1} is a reserved type and it cannot be defined
-            :"__#{name}__"
-          __MODULE__.Typespec.built_in_type?(name, length(type_args)) ->
-            # elixir raises here type #{name}/#{length(type_args)} is a built-in type and it cannot be redefined
-            :"__#{name}__"
-          true ->
-            name
-        end
+    name =
+      cond do
+        name in [:required, :optional] ->
+          # elixir raises here type #{name}/#{1} is a reserved type and it cannot be defined
+          :"__#{name}__"
 
-        cursor_after? = state.cursor_env != nil
+        __MODULE__.Typespec.built_in_type?(name, length(type_args)) ->
+          # elixir raises here type #{name}/#{length(type_args)} is a built-in type and it cannot be redefined
+          :"__#{name}__"
 
-        # TODO elixir does Macro.escape with unquote: true
+        true ->
+          name
+      end
 
-        spec = TypeInfo.typespec_to_string(kind, expr)
+    cursor_after? = state.cursor_env != nil
 
-        state =
-          state
-          |> add_type(env, name, type_args, spec, kind, extract_range(attr_meta))
-          |> with_typespec({name, length(type_args)})
-          |> add_current_env_to_line(attr_meta, env)
-          |> with_typespec(nil)
+    # TODO elixir does Macro.escape with unquote: true
 
-        state =
-          if not cursor_before? and cursor_after? do
-            {meta, env} = state.cursor_env
-            env = %{env | typespec: {name, length(type_args)}}
-            %{state | cursor_env: {meta, env}}
-          else
-            state
-          end
+    spec = TypeInfo.typespec_to_string(kind, expr)
 
-        {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
+    state =
+      state
+      |> add_type(env, name, type_args, spec, kind, extract_range(attr_meta))
+      |> with_typespec({name, length(type_args)})
+      |> add_current_env_to_line(attr_meta, env)
+      |> with_typespec(nil)
+
+    state =
+      if not cursor_before? and cursor_after? do
+        {meta, env} = state.cursor_env
+        env = %{env | typespec: {name, length(type_args)}}
+        %{state | cursor_env: {meta, env}}
+      else
+        state
+      end
+
+    {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
   end
 
   defp expand_macro(
@@ -1112,45 +1115,45 @@ defmodule ElixirSense.Core.Compiler do
     {expr, state, env} = __MODULE__.Typespec.expand_spec(expr, state, env)
 
     {name, type_args} = __MODULE__.Typespec.spec_to_signature(expr)
-        cursor_after? = state.cursor_env != nil
-        spec = TypeInfo.typespec_to_string(kind, expr)
+    cursor_after? = state.cursor_env != nil
+    spec = TypeInfo.typespec_to_string(kind, expr)
 
-        range = extract_range(attr_meta)
+    range = extract_range(attr_meta)
 
-        state =
-          if kind in [:callback, :macrocallback] do
-            state
-            |> add_func_to_index(
-              env,
-              :behaviour_info,
-              [{:atom, attr_meta, nil}],
-              range,
-              :def,
-              generated: true
-            )
-          else
-            state
-          end
+    state =
+      if kind in [:callback, :macrocallback] do
+        state
+        |> add_func_to_index(
+          env,
+          :behaviour_info,
+          [{:atom, attr_meta, nil}],
+          range,
+          :def,
+          generated: true
+        )
+      else
+        state
+      end
 
-        type_args = type_args || []
+    type_args = type_args || []
 
-        state =
-          state
-          |> add_spec(env, name, type_args, spec, kind, range)
-          |> with_typespec({name, length(type_args)})
-          |> add_current_env_to_line(attr_meta, env)
-          |> with_typespec(nil)
+    state =
+      state
+      |> add_spec(env, name, type_args, spec, kind, range)
+      |> with_typespec({name, length(type_args)})
+      |> add_current_env_to_line(attr_meta, env)
+      |> with_typespec(nil)
 
-        state =
-          if not cursor_before? and cursor_after? do
-            {meta, env} = state.cursor_env
-            env = %{env | typespec: {name, length(type_args)}}
-            %{state | cursor_env: {meta, env}}
-          else
-            state
-          end
+    state =
+      if not cursor_before? and cursor_after? do
+        {meta, env} = state.cursor_env
+        env = %{env | typespec: {name, length(type_args)}}
+        %{state | cursor_env: {meta, env}}
+      else
+        state
+      end
 
-        {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
+    {{:@, attr_meta, [{kind, kind_meta, [expr]}]}, state, env}
   end
 
   defp expand_macro(
@@ -4494,10 +4497,11 @@ defmodule ElixirSense.Core.Compiler do
 
       case validate_struct(e_left, context) do
         true when is_atom(e_left) ->
+          # TODO register alias/struct
           case extract_struct_assocs(e_right) do
             {:expand, map_meta, assocs} when context != :match ->
               assoc_keys = Enum.map(assocs, fn {k, _} -> k end)
-              struct = load_struct(e_left, assocs, se, ee)
+              struct = load_struct(e_left, [assocs], se, ee)
               keys = [:__struct__ | assoc_keys]
               without_keys = Elixir.Map.drop(struct, keys)
 
@@ -4635,350 +4639,36 @@ defmodule ElixirSense.Core.Compiler do
       Keyword.delete(assocs, :__struct__)
     end
 
-    defp load_struct(name, assocs, s, _e) do
+    def load_struct(name, assocs, s, _e) do
       case s.structs[name] do
         nil ->
           try do
-            apply(name, :__struct__, [assocs])
+            apply(name, :__struct__, assocs)
           else
             %{:__struct__ => ^name} = struct ->
               struct
 
             _ ->
               # recover from invalid return value
-              [__struct__: name] |> Keyword.merge(assocs) |> Elixir.Map.new()
+              [__struct__: name] |> merge_assocs(assocs)
           rescue
             _ ->
               # recover from error by building the fake struct
-              [__struct__: name] |> Keyword.merge(assocs) |> Elixir.Map.new()
+              [__struct__: name] |> merge_assocs(assocs)
           end
 
         info ->
-          info.fields |> Keyword.merge(assocs) |> Elixir.Map.new()
-      end
-    end
-  end
-
-  defmodule Typespec do
-    alias ElixirSense.Core.Compiler, as: ElixirExpand
-    def spec_to_signature({:when, _, [spec, _]}), do: type_to_signature(spec)
-    def spec_to_signature(other), do: type_to_signature(other)
-
-    def type_to_signature({:"::", _, [{name, _, context}, _]})
-        when is_atom(name) and name != :"::" and is_atom(context),
-        do: {name, []}
-
-    def type_to_signature({:"::", _, [{:__cursor__, _, args}, _]})
-        when is_list(args) do
-      # type name replaced by cursor
-      {:__unknown__, []}
-    end
-
-    def type_to_signature({:"::", _, [{name, _, args}, _]})
-        when is_atom(name) and name != :"::",
-        do: {name, args}
-
-    def type_to_signature({:__cursor__, _, args}) when is_list(args) do
-      # type name replaced by cursor
-      {:__unknown__, []}
-    end
-
-    def type_to_signature({name, _, args}) when is_atom(name) and name != :"::" do
-      # elixir returns :error here, we handle incomplete signatures
-      {name, args}
-    end
-
-    def type_to_signature(_), do: {:__unknown__, []}
-
-    def expand_spec(ast, state, env) do
-      # TODO not sure this is correct. Are module vars accessible?
-      state =
-        state
-        |> new_func_vars_scope
-
-      {ast, state, env} = do_expand_spec(ast, state, env)
-
-      state =
-        state
-        |> remove_func_vars_scope
-
-      {ast, state, env}
-    end
-
-    defp do_expand_spec({:when, meta, [spec, guard]}, state, env) do
-      {spec, guard, state, env} = do_expand_spec(spec, guard, meta, state, env)
-      {{:when, meta, [spec, guard]}, state, env}
-    end
-
-    defp do_expand_spec(spec, state, env) do
-      {spec, _guard, state, env} = do_expand_spec(spec, [], [], state, env)
-      {spec, state, env}
-    end
-
-    defp do_expand_spec(
-           {:"::", meta, [{name, name_meta, args}, return]},
-           guard,
-           guard_meta,
-           state,
-           env
-         )
-         when is_atom(name) and name != :"::" do
-      args =
-        if is_atom(args) do
-          []
-        else
-          args
-        end
-        |> sanitize_args()
-
-      {_, state, env} = expand_typespec({name, name_meta, args}, state, env)
-
-      {guard, state, env} = if is_list(guard) do
-        {guard, state, env}
-      else
-        # invalid guard may still have cursor
-        {_, state, env} = expand_typespec(guard, state, env)
-        {[], state, env}
-      end
-
-      state =
-        Enum.reduce(guard, state, fn {name, _val}, state when is_atom(name) ->
-          # guard is a keyword list so we don't have exact meta on keys
-          add_var_write(state, {name, guard_meta, nil})
-        _, state ->
-          # invalid entry
-          state
-        end)
-
-      {args_reverse, state, env} =
-        Enum.reduce(args, {[], state, env}, fn arg, {acc, state, env} ->
-          {arg, state, env} = expand_typespec(arg, state, env)
-          {[arg | acc], state, env}
-        end)
-
-      args = Enum.reverse(args_reverse)
-
-      {return, state, env} = expand_typespec(return, state, env)
-
-      {guard_reverse, state, env} =
-        Enum.reduce(guard, {[], state, env}, fn
-          {name, {:var, _, context}} = pair, {acc, state, env} when is_atom(name) and is_atom(context) ->
-            # special type var
-            {[pair | acc], state, env}
-
-          {name, type}, {acc, state, env} when is_atom(name) ->
-            {type, state, env} = expand_typespec(type, state, env)
-            {[{name, type} | acc], state, env}
-          other, {acc, state, env} ->
-            # there may be cursor in invalid entries
-            {_type, state, env} = expand_typespec(other, state, env)
-            {acc, state, env}
-        end)
-
-      guard = Enum.reverse(guard_reverse)
-
-      {{:"::", meta, [{name, name_meta, args}, return]}, guard, state, env}
-    end
-
-    defp do_expand_spec(other, guard, guard_meta, state, env) do
-      case other do
-        {name, meta, args} when is_atom(name) and name != :"::" ->
-          # invalid or incomplete spec
-          # try to wrap in :: expression
-          do_expand_spec({:"::", meta, [{name, meta, args}, nil]}, guard, guard_meta, state, env)
-        _ ->
-          # there may be cursor in invalid entries
-          {_type, state, env} = expand_typespec(other, state, env)
-          {other, guard, state, env}
+          info.fields |> merge_assocs(assocs)
       end
     end
 
-    defp sanitize_args(args) do
-      Enum.map(args, fn
-        {:"::", meta, [left, right]} ->
-          {:"::", meta, [remove_default(left), remove_default(right)]}
-
-        other ->
-          remove_default(other)
-      end)
+    defp merge_assocs(fields, []) do
+      fields |> Elixir.Map.new()
     end
 
-    defp remove_default({:\\, _, [left, _]}), do: left
-    defp remove_default(other), do: other
-
-    def expand_type(ast, state, env) do
-      state =
-        state
-        |> new_func_vars_scope
-
-      {ast, state, env} = do_expand_type(ast, state, env)
-
-      state =
-        state
-        |> remove_func_vars_scope
-
-      {ast, state, env}
+    defp merge_assocs(fields, [assocs]) do
+      fields |> Keyword.merge(assocs) |> Elixir.Map.new()
     end
-
-    defp do_expand_type({:"::", meta, [{name, name_meta, args}, definition]}, state, env) do
-      args =
-        if is_atom(args) do
-          []
-        else
-          args
-        end
-
-      {_, state, env} = expand_typespec({name, name_meta, args}, state, env)
-
-      state =
-        Enum.reduce(args, state, fn
-          {name, meta, context}, state when is_atom(name) and is_atom(context) and name != :_ ->
-            add_var_write(state, {name, meta, context})
-
-          _, state ->
-            # silently skip invalid typespec params
-            state
-        end)
-
-      {definition, state, env} = expand_typespec(definition, state, env)
-      {{:"::", meta, [{name, name_meta, args}, definition]}, state, env}
-    end
-
-    defp do_expand_type(other, state, env) do
-      case other do
-        {name, meta, args} when is_atom(name) and name != :"::" ->
-          # invalid or incomplete type
-          # try to wrap in :: expression
-          do_expand_type({:"::", meta, [{name, meta, args}, nil]}, state, env)
-        _ ->
-          # there may be cursor in invalid entries
-          {_type, state, env} = expand_typespec(other, state, env)
-          {other, state, env}
-      end
-    end
-
-    @special_forms [
-      :|,
-      :<<>>,
-      :%{},
-      :%,
-      :..,
-      :->,
-      :"::",
-      :+,
-      :-,
-      :.,
-      :{},
-      :__block__,
-      :...
-    ]
-
-    defp expand_typespec(ast, state, env) do
-      # TODO this should handle remote calls, attributes unquotes?
-      # TODO attribute remote call should expand attribute
-      # {{:., meta, [{:@, _, [{attr, _, _}]}, name]}, _, args}
-      # TODO remote call should expand remote
-      # {{:., meta, [remote, name]}, _, args}
-      # TODO expand struct module
-      # {:%, _, [name, {:%{}, meta, fields}]}
-      {ast, {state, env}} =
-        Macro.traverse(
-          ast,
-          {state, env},
-          fn
-            {:__cursor__, meta, args}, {state, env} when is_list(args) ->
-              state =
-                unless state.cursor_env do
-                  state
-                  |> add_cursor_env(meta, env)
-                else
-                  state
-                end
-
-              node =
-                case args do
-                  [h | _] -> h
-                  [] -> nil
-                end
-
-              {node, {state, env}}
-
-            {:__aliases__, _meta, list} = node, {state, env} when is_list(list) ->
-              {node, state, env} = ElixirExpand.expand(node, state, env)
-              {node, {state, env}}
-
-            {:__MODULE__, _meta, ctx} = node, {state, env} when is_atom(ctx) ->
-              {node, state, env} = ElixirExpand.expand(node, state, env)
-              {node, {state, env}}
-
-            {:"::", meta, [{var_name, var_meta, context}, expr]}, {state, env}
-            when is_atom(var_name) and is_atom(context) ->
-              # mark as annotation
-              {{:"::", meta, [{var_name, [{:annotation, true} | var_meta], context}, expr]},
-               {state, env}}
-
-            {name, meta, args}, {state, env}
-            when is_atom(name) and is_atom(args) and name not in @special_forms and
-                   hd(meta) != {:annotation, true} ->
-              [vars_from_scope | _other_vars] = state.vars_info
-
-              ast =
-                case Elixir.Map.get(vars_from_scope, {name, nil}) do
-                  nil ->
-                    # add parens to no parens local call
-                    {name, meta, []}
-
-                  _ ->
-                    {name, meta, args}
-                end
-
-              {ast, {state, env}}
-
-            other, acc ->
-              {other, acc}
-          end,
-          fn
-            {{:., dot_meta, [remote, name]}, meta, args}, {state, env} when is_atom(remote) ->
-              args =
-                if is_atom(args) do
-                  []
-                else
-                  args
-                end
-
-              state = add_call_to_line(state, {remote, name, length(args)}, meta)
-
-              {{{:., dot_meta, [remote, name]}, meta, args}, {state, env}}
-
-            {name, meta, args}, {state, env}
-            when is_atom(name) and is_list(args) and name not in @special_forms ->
-              state = add_call_to_line(state, {nil, name, length(args)}, meta)
-
-              {{name, meta, args}, {state, env}}
-
-            {name, meta, context} = var, {state, env}
-            when is_atom(name) and is_atom(context) and hd(meta) != {:annotation, true} ->
-              state = add_var_read(state, var)
-              {var, {state, env}}
-
-            other, acc ->
-              {other, acc}
-          end
-        )
-
-      {ast, state, env}
-    end
-
-    # TODO Remove char_list type by v2.0
-    def built_in_type?(:char_list, 0), do: true
-    def built_in_type?(:charlist, 0), do: true
-    def built_in_type?(:as_boolean, 1), do: true
-    def built_in_type?(:struct, 0), do: true
-    def built_in_type?(:nonempty_charlist, 0), do: true
-    def built_in_type?(:keyword, 0), do: true
-    def built_in_type?(:keyword, 1), do: true
-    def built_in_type?(:var, 0), do: true
-    def built_in_type?(name, arity), do: :erl_internal.is_type(name, arity)
   end
 
   defmodule Rewrite do

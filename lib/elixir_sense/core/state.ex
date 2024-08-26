@@ -66,9 +66,12 @@ defmodule ElixirSense.Core.State do
           optional_callbacks_context: list(),
           lines_to_env: lines_to_env_t,
           cursor_env: nil | {keyword, ElixirSense.Core.State.Env.t()},
-          closest_env: nil | {{pos_integer, pos_integer}, {non_neg_integer, non_neg_integer}, ElixirSense.Core.State.Env.t()},
+          closest_env:
+            nil
+            | {{pos_integer, pos_integer}, {non_neg_integer, non_neg_integer},
+               ElixirSense.Core.State.Env.t()},
           ex_unit_describe: nil | atom,
-          attribute_store: %{optional(module) => term},
+          attribute_store: %{optional({module, atom}) => term},
           cursor_position: nil | {pos_integer, pos_integer}
         }
 
@@ -372,7 +375,8 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | cursor_env: {meta, env}}
   end
 
-  def update_closest_env(%__MODULE__{cursor_position: cursor_position} = state, meta, macro_env) when is_list(meta) and cursor_position != nil do
+  def update_closest_env(%__MODULE__{cursor_position: cursor_position} = state, meta, macro_env)
+      when is_list(meta) and cursor_position != nil do
     case Keyword.get(meta, :line, 0) do
       line when is_integer(line) and line > 0 ->
         column = Keyword.get(meta, :column, 0)
@@ -382,21 +386,32 @@ defmodule ElixirSense.Core.State do
         line_distance = abs(cursor_line - line)
         column_distance = abs(cursor_column - column)
 
-        store = case state.closest_env do
-          nil -> true
-          {_, {old_line_distance, old_column_distance}, _} ->
-            line_distance < old_line_distance or line_distance == old_line_distance and column_distance < old_column_distance
-        end
+        store =
+          case state.closest_env do
+            nil ->
+              true
+
+            {_, {old_line_distance, old_column_distance}, _} ->
+              line_distance < old_line_distance or
+                (line_distance == old_line_distance and column_distance < old_column_distance)
+          end
 
         if store do
           env = get_current_env(state, macro_env)
-          %__MODULE__{state | closest_env: {{line, column}, {line_distance, column_distance}, env}}
+
+          %__MODULE__{
+            state
+            | closest_env: {{line, column}, {line_distance, column_distance}, env}
+          }
         else
           state
         end
-      _ -> state
+
+      _ ->
+        state
     end
   end
+
   def update_closest_env(%__MODULE__{} = state, _meta, _macro_env) do
     state
   end
