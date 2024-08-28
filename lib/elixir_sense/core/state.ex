@@ -120,6 +120,7 @@ defmodule ElixirSense.Core.State do
             requires: list(module),
             aliases: list(ElixirSense.Core.State.alias_t()),
             macro_aliases: [{module, {term, module}}],
+            context: nil | :match | :guard,
             module: nil | module,
             function: nil | {atom, arity},
             protocol: nil | ElixirSense.Core.State.protocol_t(),
@@ -146,6 +147,7 @@ defmodule ElixirSense.Core.State do
               attributes: [],
               behaviours: [],
               context_modules: [],
+              context: nil,
               typespec: nil,
               scope_id: nil
   end
@@ -360,6 +362,7 @@ defmodule ElixirSense.Core.State do
       module: macro_env.module,
       function: macro_env.function,
       context_modules: macro_env.context_modules,
+      context: macro_env.context,
       vars: vars,
       versioned_vars: versioned_vars,
       attributes: current_attributes,

@@ -964,6 +964,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:k, nil}, {:kv, nil}, {:v, nil}]
 
       # TODO we are not tracking usages in typespec
+      # TODO defdelegate
+      # TODO defguard 1.18
       assert [
                %VarInfo{name: :k, positions: [{3, 21}]},
                %VarInfo{name: :kv, positions: [{2, 3}, {3, 13}]},
@@ -2548,6 +2550,28 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  type: nil
                }
              ] = state |> get_line_vars(18)
+    end
+
+    test "def rescue binding" do
+      state =
+        """
+        defmodule MyModule do
+          def some() do
+            Some.call()
+          rescue
+            e0 in ArgumentError ->
+              IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %VarInfo{
+                 name: :e0,
+                 type: {:struct, [], {:atom, ArgumentError}, nil}
+               }
+             ] = state |> get_line_vars(6)
     end
 
     test "vars binding by pattern matching with pin operators" do

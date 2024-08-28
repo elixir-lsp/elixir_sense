@@ -1677,6 +1677,25 @@ defmodule ElixirSense.Core.Compiler do
     # TODO not sure vars scope is needed
     state = state |> new_vars_scope
 
+    # if there are other blocks besides do: wrap in try
+    expr =
+      case expr do
+        nil ->
+          # function head
+          nil
+
+        [do: do_block] ->
+          do_block
+
+        _ ->
+          if is_list(expr) and Keyword.has_key?(expr, :do) do
+            {:try, [{:origin, def_kind} | meta], [expr]}
+          else
+            # elixir raises here
+            expr
+          end
+      end
+
     {_e_body, state, _env_for_expand} =
       expand(expr, state, env_for_expand)
 

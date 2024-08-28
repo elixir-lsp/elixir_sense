@@ -2481,4 +2481,132 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert env.typespec == {:foo, 1}
     end
   end
+
+  describe "def" do
+    test "in def" do
+      code = """
+      defmodule Abc do
+        def\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.module == Abc
+    end
+
+    test "in def name" do
+      code = """
+      defmodule Abc do
+        def foo\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.function == {:__unknown__, 0}
+    end
+
+    test "in def args" do
+      code = """
+      defmodule Abc do
+        def foo(\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.function == {:foo, 1}
+    end
+
+    test "in def arg" do
+      code = """
+      defmodule Abc do
+        def foo(some\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.function == {:foo, 1}
+    end
+
+    test "in def arg next" do
+      code = """
+      defmodule Abc do
+        def foo(some, \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.function == {:foo, 2}
+    end
+
+    test "in def after args" do
+      code = """
+      defmodule Abc do
+        def foo(some) \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.function == {:foo, 1}
+    end
+
+    test "in def after," do
+      code = """
+      defmodule Abc do
+        def foo(some), \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.function == {:foo, 1}
+    end
+
+    test "in def after do:" do
+      code = """
+      defmodule Abc do
+        def foo(some), do: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.function == {:foo, 1}
+    end
+
+    test "in def after do" do
+      code = """
+      defmodule Abc do
+        def foo(some) do
+          \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.function == {:foo, 1}
+    end
+
+    test "in def guard" do
+      code = """
+      defmodule Abc do
+        def foo(some) when \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.function == {:foo, 1}
+      assert env.context == :guard
+    end
+
+    test "in def guard variale" do
+      code = """
+      defmodule Abc do
+        def foo(some) when some\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.function == {:foo, 1}
+      assert env.context == :guard
+    end
+
+    test "in def after block" do
+      code = """
+      defmodule Abc do
+        def foo(some) do
+          :ok
+        after
+          \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.function == {:foo, 1}
+    end
+  end
 end
