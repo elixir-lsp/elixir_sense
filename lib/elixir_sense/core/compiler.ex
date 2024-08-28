@@ -432,7 +432,7 @@ defmodule ElixirSense.Core.Compiler do
 
   defp do_expand({:cond, meta, [opts]}, s, e) do
     # elixir raises underscore_in_cond if the last clause is _
-    {e_clauses, sc, ec} = __MODULE__.Clauses.cond(meta, opts, s, e)
+    {e_clauses, sc, ec} = __MODULE__.Clauses.cond(opts, s, e)
     {{:cond, meta, [e_clauses]}, sc, ec}
   end
 
@@ -441,12 +441,12 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp do_expand({:receive, meta, [opts]}, s, e) do
-    {e_clauses, sc, ec} = __MODULE__.Clauses.receive(meta, opts, s, e)
+    {e_clauses, sc, ec} = __MODULE__.Clauses.receive(opts, s, e)
     {{:receive, meta, [e_clauses]}, sc, ec}
   end
 
   defp do_expand({:try, meta, [opts]}, s, e) do
-    {e_clauses, sc, ec} = __MODULE__.Clauses.try(meta, opts, s, e)
+    {e_clauses, sc, ec} = __MODULE__.Clauses.try(opts, s, e)
     {{:try, meta, [e_clauses]}, sc, ec}
   end
 
@@ -1577,7 +1577,7 @@ defmodule ElixirSense.Core.Compiler do
        when is_atom(name) do
     # transform protocol def to def with empty body
     {ast, state, env} =
-      expand_macro(meta, Kernel, :def, [call, {:__block__, [], []}], callback, state, env)
+      expand_macro(meta, Kernel, :def, [call, nil], callback, state, env)
 
     {ast, state, env}
   end
@@ -1585,7 +1585,7 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_macro(meta, Kernel, def_kind, [call], callback, state, env)
        when def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
     # transform guard and function head to def with empty body
-    expand_macro(meta, Kernel, def_kind, [call, {:__block__, [], []}], callback, state, env)
+    expand_macro(meta, Kernel, def_kind, [call, nil], callback, state, env)
   end
 
   defp expand_macro(
@@ -1677,7 +1677,6 @@ defmodule ElixirSense.Core.Compiler do
     # TODO not sure vars scope is needed
     state = state |> new_vars_scope
 
-    # if there are other blocks besides do: wrap in try
     expr =
       case expr do
         nil ->
@@ -1685,10 +1684,15 @@ defmodule ElixirSense.Core.Compiler do
           nil
 
         [do: do_block] ->
+          # do block only
           do_block
 
         _ ->
           if is_list(expr) and Keyword.has_key?(expr, :do) do
+            # do block with receive/catch/else/after
+            # wrap in try
+            # NOTE origin kind may be not correct here but origin is not used and
+            # elixir uses it only for error messages in elixir_clauses module
             {:try, [{:origin, def_kind} | meta], [expr]}
           else
             # elixir raises here
@@ -2159,7 +2163,7 @@ defmodule ElixirSense.Core.Compiler do
 
     # TODO not sure new vars scope is actually needed
     sc = sc |> new_vars_scope
-    {e_expr, se, ee} = expand_for_do_block(meta, expr, sc, ec, maybe_reduce)
+    {e_expr, se, ee} = expand_for_do_block(expr, sc, ec, maybe_reduce)
 
     se =
       se
@@ -2170,15 +2174,15 @@ defmodule ElixirSense.Core.Compiler do
      __MODULE__.Env.merge_vars(se, s, ee), e}
   end
 
-  defp expand_for_do_block(meta, [{:->, _, _} | _] = clauses, s, e, false) do
+  defp expand_for_do_block([{:->, _, _} | _] = clauses, s, e, false) do
     # elixir raises here for_without_reduce_bad_block
     # try to recover from error by emitting fake reduce
-    expand_for_do_block(meta, clauses, s, e, {:reduce, []})
+    expand_for_do_block(clauses, s, e, {:reduce, []})
   end
 
-  defp expand_for_do_block(_meta, expr, s, e, false), do: expand(expr, s, e)
+  defp expand_for_do_block(expr, s, e, false), do: expand(expr, s, e)
 
-  defp expand_for_do_block(meta, [{:->, _, _} | _] = clauses, s, e, {:reduce, _}) do
+  defp expand_for_do_block([{:->, _, _} | _] = clauses, s, e, {:reduce, _}) do
     transformer = fn
       {:->, clause_meta, [args, right]}, sa ->
         # elixir checks here that clause has exactly 1 arg by matching against {_, _, [[_], _]}
@@ -2202,7 +2206,7 @@ defmodule ElixirSense.Core.Compiler do
 
         # no point in doing type inference here, we are only certain of the initial value of the accumulator
         {e_clause, s_acc, e_acc} =
-          __MODULE__.Clauses.clause(meta, :fn, &__MODULE__.Clauses.head/3, clause, s_reset, e)
+          __MODULE__.Clauses.clause(&__MODULE__.Clauses.head/3, clause, s_reset, e)
 
         {e_clause, __MODULE__.Env.merge_vars(s_acc, sa, e_acc)}
     end
@@ -2211,16 +2215,16 @@ defmodule ElixirSense.Core.Compiler do
     {do_expr, sa, e}
   end
 
-  defp expand_for_do_block(meta, expr, s, e, {:reduce, _} = reduce) do
+  defp expand_for_do_block(expr, s, e, {:reduce, _} = reduce) do
     # elixir raises here for_with_reduce_bad_block
     case expr do
       [] ->
         # try to recover from error by emitting a fake clause
-        expand_for_do_block(meta, [{:->, meta, [[{:_, [], e.module}], :ok]}], s, e, reduce)
+        expand_for_do_block([{:->, [], [[{:_, [], e.module}], :ok]}], s, e, reduce)
 
       _ ->
         # try to recover from error by wrapping the expression in clause
-        expand_for_do_block(meta, [{:->, meta, [[expr], :ok]}], s, e, reduce)
+        expand_for_do_block([{:->, [], [[expr], :ok]}], s, e, reduce)
     end
   end
 
@@ -2368,7 +2372,7 @@ defmodule ElixirSense.Core.Compiler do
     #   opts
     # end
 
-    {e_opts, so, eo} = __MODULE__.Clauses.case(meta, e_expr, r_opts, se, ee)
+    {e_opts, so, eo} = __MODULE__.Clauses.case(e_expr, r_opts, se, ee)
     {{:case, meta, [e_expr, e_opts]}, so, eo}
   end
 
@@ -2597,21 +2601,21 @@ defmodule ElixirSense.Core.Compiler do
       {e_expr, end_s, end_e}
     end
 
-    def clause(meta, kind, fun, {:->, clause_meta, [_, _]} = clause, s, e)
+    def clause(fun, {:->, clause_meta, [_, _]} = clause, s, e)
         when is_function(fun, 4) do
-      clause(meta, kind, fn x, sa, ea -> fun.(clause_meta, x, sa, ea) end, clause, s, e)
+      clause(fn x, sa, ea -> fun.(clause_meta, x, sa, ea) end, clause, s, e)
     end
 
-    def clause(_meta, _kind, fun, {:->, meta, [left, right]}, s, e) do
+    def clause(fun, {:->, meta, [left, right]}, s, e) do
       {e_left, sl, el} = fun.(left, s, e)
       {e_right, sr, er} = ElixirExpand.expand(right, sl, el)
       {{:->, meta, [e_left, e_right]}, sr, er}
     end
 
-    def clause(meta, kind, fun, expr, s, e) do
+    def clause(fun, expr, s, e) do
       # try to recover from error by wrapping the expression in clause
       # elixir raises here bad_or_missing_clauses
-      clause(meta, kind, fun, {:->, meta, [[expr], :ok]}, s, e)
+      clause(fun, {:->, [], [[expr], :ok]}, s, e)
     end
 
     def head([{:when, meta, [_ | _] = all}], s, e) do
@@ -2660,19 +2664,19 @@ defmodule ElixirSense.Core.Compiler do
 
     @valid_case_opts [:do]
 
-    def case(meta, e_expr, [], s, e) do
+    def case(e_expr, [], s, e) do
       # elixir raises here missing_option
       # emit a fake do block
-      case(meta, e_expr, [do: []], s, e)
+      case(e_expr, [do: []], s, e)
     end
 
-    def case(_meta, _e_expr, opts, s, e) when not is_list(opts) do
+    def case(_e_expr, opts, s, e) when not is_list(opts) do
       # elixir raises here invalid_args
       # there may be cursor
       ElixirExpand.expand(opts, s, e)
     end
 
-    def case(meta, e_expr, opts, s, e) do
+    def case(e_expr, opts, s, e) do
       # expand invalid opts in case there's cursor
       {_ast, s, _e} = ElixirExpand.expand(opts |> Keyword.drop(@valid_case_opts), s, e)
 
@@ -2682,16 +2686,14 @@ defmodule ElixirSense.Core.Compiler do
 
       {case_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
-          expand_case(meta, x, match_context, sa, e)
+          expand_case(x, match_context, sa, e)
         end)
 
       {case_clauses, sa, e}
     end
 
-    defp expand_case(meta, {:do, _} = do_clause, match_context, s, e) do
+    defp expand_case({:do, _} = do_clause, match_context, s, e) do
       expand_clauses(
-        meta,
-        :case,
         fn c, s, e ->
           case head(c, s, e) do
             {[h | _] = c, s, e} ->
@@ -2716,19 +2718,19 @@ defmodule ElixirSense.Core.Compiler do
 
     @valid_cond_opts [:do]
 
-    def cond(meta, [], s, e) do
+    def cond([], s, e) do
       # elixir raises here missing_option
       # emit a fake do block
-      cond(meta, [do: []], s, e)
+      cond([do: []], s, e)
     end
 
-    def cond(_meta, opts, s, e) when not is_list(opts) do
+    def cond(opts, s, e) when not is_list(opts) do
       # elixir raises here invalid_args
       # there may be cursor
       ElixirExpand.expand(opts, s, e)
     end
 
-    def cond(meta, opts, s, e) do
+    def cond(opts, s, e) do
       # expand invalid opts in case there's cursor
       {_ast, s, _e} = ElixirExpand.expand(opts |> Keyword.drop(@valid_cond_opts), s, e)
 
@@ -2736,33 +2738,33 @@ defmodule ElixirSense.Core.Compiler do
 
       {cond_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
-          expand_cond(meta, x, sa, e)
+          expand_cond(x, sa, e)
         end)
 
       {cond_clauses, sa, e}
     end
 
-    defp expand_cond(meta, {:do, _} = do_clause, s, e) do
-      expand_clauses(meta, :cond, &ElixirExpand.expand_args/3, do_clause, s, e)
+    defp expand_cond({:do, _} = do_clause, s, e) do
+      expand_clauses(&ElixirExpand.expand_args/3, do_clause, s, e)
     end
 
     # receive
 
     @valid_receive_opts [:do, :after]
 
-    def receive(meta, [], s, e) do
+    def receive([], s, e) do
       # elixir raises here missing_option
       # emit a fake do block
-      receive(meta, [do: []], s, e)
+      receive([do: []], s, e)
     end
 
-    def receive(_meta, opts, s, e) when not is_list(opts) do
+    def receive(opts, s, e) when not is_list(opts) do
       # elixir raises here invalid_args
       # there may be cursor
       ElixirExpand.expand(opts, s, e)
     end
 
-    def receive(meta, opts, s, e) do
+    def receive(opts, s, e) do
       # expand invalid opts in case there's cursor
       {_ast, s, _e} = ElixirExpand.expand(opts |> Keyword.drop(@valid_receive_opts), s, e)
 
@@ -2770,41 +2772,41 @@ defmodule ElixirSense.Core.Compiler do
 
       {receive_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
-          expand_receive(meta, x, sa, e)
+          expand_receive(x, sa, e)
         end)
 
       {receive_clauses, sa, e}
     end
 
-    defp expand_receive(_meta, {:do, {:__block__, _, []}} = do_block, s, _e) do
+    defp expand_receive({:do, {:__block__, _, []}} = do_block, s, _e) do
       {do_block, s}
     end
 
-    defp expand_receive(meta, {:do, _} = do_clause, s, e) do
+    defp expand_receive({:do, _} = do_clause, s, e) do
       # no point in doing type inference here, we have no idea what message we may get
-      expand_clauses(meta, :receive, &head/3, do_clause, s, e)
+      expand_clauses(&head/3, do_clause, s, e)
     end
 
-    defp expand_receive(meta, {:after, [_ | _]} = after_clause, s, e) do
-      expand_clauses(meta, :receive, &ElixirExpand.expand_args/3, after_clause, s, e)
+    defp expand_receive({:after, [_ | _]} = after_clause, s, e) do
+      expand_clauses(&ElixirExpand.expand_args/3, after_clause, s, e)
     end
 
-    defp expand_receive(meta, {:after, expr}, s, e) when not is_list(expr) do
+    defp expand_receive({:after, expr}, s, e) when not is_list(expr) do
       # elixir raises here multiple_after_clauses_in_receive
       case expr do
         expr when not is_list(expr) ->
           # try to recover from error by wrapping the expression in list
-          expand_receive(meta, {:after, [expr]}, s, e)
+          expand_receive({:after, [expr]}, s, e)
 
         [first | discarded] ->
           # try to recover from error by taking first clause only
           # expand other in case there's cursor
           {_ast, s, _e} = ElixirExpand.expand(discarded, s, e)
-          expand_receive(meta, {:after, [first]}, s, e)
+          expand_receive({:after, [first]}, s, e)
 
         [] ->
           # try to recover from error by inserting a fake clause
-          expand_receive(meta, {:after, [{:->, meta, [[0], :ok]}]}, s, e)
+          expand_receive({:after, [{:->, [], [[0], :ok]}]}, s, e)
       end
     end
 
@@ -2822,7 +2824,7 @@ defmodule ElixirSense.Core.Compiler do
       s0 = ElixirEnv.reset_vars(s)
       {e_exprs, {s1, e1}} = Enum.map_reduce(exprs, {s0, e}, &expand_with/2)
       {e_do, opts1, s2} = expand_with_do(meta, opts0, s, s1, e1)
-      {e_opts, _opts2, s3} = expand_with_else(meta, opts1, s2, e)
+      {e_opts, _opts2, s3} = expand_with_else(opts1, s2, e)
 
       {{:with, meta, e_exprs ++ [[{:do, e_do} | e_opts]]}, s3, e}
     end
@@ -2863,7 +2865,7 @@ defmodule ElixirSense.Core.Compiler do
       {e_expr, rest_opts, ElixirEnv.merge_vars(s_acc, s, e_acc)}
     end
 
-    defp expand_with_else(meta, opts, s, e) do
+    defp expand_with_else(opts, s, e) do
       case Keyword.pop(opts, :else) do
         {nil, _} ->
           {[], opts, s}
@@ -2872,7 +2874,7 @@ defmodule ElixirSense.Core.Compiler do
           pair = {:else, expr}
 
           # no point in doing type inference here, we have no idea what data we are matching against
-          {e_pair, se} = expand_clauses(meta, :with, &head/3, pair, s, e)
+          {e_pair, se} = expand_clauses(&head/3, pair, s, e)
           {[e_pair], rest_opts, se}
       end
     end
@@ -2881,19 +2883,19 @@ defmodule ElixirSense.Core.Compiler do
 
     @valid_try_opts [:do, :rescue, :catch, :else, :after]
 
-    def try(meta, [], s, e) do
+    def try([], s, e) do
       # elixir raises here missing_option
       # emit a fake do block
-      try(meta, [do: []], s, e)
+      try([do: []], s, e)
     end
 
-    def try(_meta, opts, s, e) when not is_list(opts) do
+    def try(opts, s, e) when not is_list(opts) do
       # elixir raises here invalid_args
       # there may be cursor
       ElixirExpand.expand(opts, s, e)
     end
 
-    def try(meta, opts, s, e) do
+    def try(opts, s, e) do
       # expand invalid opts in case there's cursor
       {_ast, s, _e} = ElixirExpand.expand(opts |> Keyword.drop(@valid_try_opts), s, e)
 
@@ -2901,39 +2903,39 @@ defmodule ElixirSense.Core.Compiler do
 
       {try_clauses, sa} =
         Enum.map_reduce(opts, s, fn x, sa ->
-          expand_try(meta, x, sa, e)
+          expand_try(x, sa, e)
         end)
 
       {try_clauses, sa, e}
     end
 
-    defp expand_try(_meta, {:do, expr}, s, e) do
+    defp expand_try({:do, expr}, s, e) do
       {e_expr, se, ee} = ElixirExpand.expand(expr, ElixirEnv.reset_vars(s), e)
       {{:do, e_expr}, ElixirEnv.merge_vars(se, s, ee)}
     end
 
-    defp expand_try(_meta, {:after, expr}, s, e) do
+    defp expand_try({:after, expr}, s, e) do
       {e_expr, se, ee} = ElixirExpand.expand(expr, ElixirEnv.reset_vars(s), e)
       {{:after, e_expr}, ElixirEnv.merge_vars(se, s, ee)}
     end
 
-    defp expand_try(meta, {:else, _} = else_clause, s, e) do
+    defp expand_try({:else, _} = else_clause, s, e) do
       # TODO we could try to infer type from last try block expression
-      expand_clauses(meta, :try, &head/3, else_clause, s, e)
+      expand_clauses(&head/3, else_clause, s, e)
     end
 
-    defp expand_try(meta, {:catch, _} = catch_clause, s, e) do
-      expand_clauses_with_stacktrace(meta, &expand_catch/4, catch_clause, s, e)
+    defp expand_try({:catch, _} = catch_clause, s, e) do
+      expand_clauses_with_stacktrace(&expand_catch/4, catch_clause, s, e)
     end
 
-    defp expand_try(meta, {:rescue, _} = rescue_clause, s, e) do
-      expand_clauses_with_stacktrace(meta, &expand_rescue/4, rescue_clause, s, e)
+    defp expand_try({:rescue, _} = rescue_clause, s, e) do
+      expand_clauses_with_stacktrace(&expand_rescue/4, rescue_clause, s, e)
     end
 
-    defp expand_clauses_with_stacktrace(meta, fun, clauses, s, e) do
+    defp expand_clauses_with_stacktrace(fun, clauses, s, e) do
       old_stacktrace = s.stacktrace
       ss = %{s | stacktrace: true}
-      {ret, se} = expand_clauses(meta, :try, fun, clauses, ss, e)
+      {ret, se} = expand_clauses(fun, clauses, ss, e)
       {ret, %{se | stacktrace: old_stacktrace}}
     end
 
@@ -3071,15 +3073,10 @@ defmodule ElixirSense.Core.Compiler do
       end
     end
 
-    defp expand_clauses(meta, kind, fun, clauses, s, e) do
-      new_kind = origin(meta, kind)
-      expand_clauses_origin(meta, new_kind, fun, clauses, s, e)
-    end
-
-    defp expand_clauses_origin(meta, kind, fun, {key, [_ | _] = clauses}, s, e) do
+    defp expand_clauses(fun, {key, [_ | _] = clauses}, s, e) do
       transformer = fn clause, sa ->
         {e_clause, s_acc, e_acc} =
-          clause(meta, {kind, key}, fun, clause, ElixirEnv.reset_vars(sa), e)
+          clause(fun, clause, ElixirEnv.reset_vars(sa), e)
 
         {e_clause, ElixirEnv.merge_vars(s_acc, sa, e_acc)}
       end
@@ -3088,10 +3085,10 @@ defmodule ElixirSense.Core.Compiler do
       {{key, values}, se}
     end
 
-    defp expand_clauses_origin(meta, kind, fun, {key, expr}, s, e) do
+    defp expand_clauses(fun, {key, expr}, s, e) do
       # try to recover from error by wrapping the expression in a clauses list
       # elixir raises here bad_or_missing_clauses
-      expand_clauses_origin(meta, kind, fun, {key, [expr]}, s, e)
+      expand_clauses(fun, {key, [expr]}, s, e)
     end
 
     # helpers
@@ -3105,10 +3102,6 @@ defmodule ElixirSense.Core.Compiler do
 
     defp sanitize_opts(opts, allowed) do
       Enum.flat_map(allowed, fn opt -> sanitize_opt(opts, opt) end)
-    end
-
-    defp origin(meta, default) do
-      Keyword.get(meta, :origin, default)
     end
   end
 
@@ -3555,7 +3548,7 @@ defmodule ElixirSense.Core.Compiler do
 
           # no point in doing type inference here, we have no idea what the fn will be called with
           {e_clause, s_acc, e_acc} =
-            ElixirClauses.clause(meta, :fn, &ElixirClauses.head/3, clause, s_reset, e)
+            ElixirClauses.clause(&ElixirClauses.head/3, clause, s_reset, e)
 
           {e_clause, ElixirEnv.merge_vars(s_acc, sa, e_acc)}
       end

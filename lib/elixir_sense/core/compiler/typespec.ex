@@ -1,5 +1,4 @@
 defmodule ElixirSense.Core.Compiler.Typespec do
-  alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
   alias ElixirSense.Core.Compiler, as: ElixirExpand
   alias ElixirSense.Core.Compiler.Utils
   import ElixirSense.Core.State
@@ -185,7 +184,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
         when is_atom(name) and is_atom(context) and name != :_ ->
           {add_var_write(state, {name, meta, context}), [name | var_names]}
 
-        other, acc ->
+        _other, acc ->
           # silently skip invalid typespec params
           acc
       end)
@@ -257,9 +256,9 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   end
 
   ## Handle maps and structs
-  defp typespec({:%{}, meta, fields} = map, vars, caller, state) do
+  defp typespec({:%{}, meta, fields}, vars, caller, state) do
     fun = fn
-      {{:required, meta2, [k]}, v}, state ->
+      {{:required, _meta2, [k]}, v}, state ->
         {arg1, state} = typespec(k, vars, caller, state)
         {arg2, state} = typespec(v, vars, caller, state)
         {{arg1, arg2}, state}
@@ -284,7 +283,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     {{:%{}, meta, fields |> Enum.filter(&(&1 != nil))}, state}
   end
 
-  defp typespec({:%, struct_meta, [name, {:%{}, meta, fields}]} = node, vars, caller, state) do
+  defp typespec({:%, struct_meta, [name, {:%{}, meta, fields}]}, vars, caller, state) do
     case ElixirExpand.Macro.expand(name, %{caller | function: {:__info__, 1}}) do
       module when is_atom(module) ->
         # TODO register alias/struct
@@ -409,7 +408,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
 
   # Handle type operator
   defp typespec(
-         {:"::", meta, [{var_name, var_meta, context}, expr]} = ann_type,
+         {:"::", meta, [{var_name, var_meta, context}, expr]},
          vars,
          caller,
          state
@@ -434,7 +433,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   # Macro.expand/2 on the remote does not expand module attributes (but expands
   # things like __MODULE__).
   defp typespec(
-         {{:., dot_meta, [{:@, attr_meta, [{attr, _, _}]}, name]}, meta, args} = orig,
+         {{:., dot_meta, [{:@, attr_meta, [{attr, _, _}]}, name]}, meta, args},
          vars,
          caller,
          state
@@ -459,7 +458,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   end
 
   # Handle remote calls
-  defp typespec({{:., dot_meta, [remote, name]}, meta, args} = orig, vars, caller, state) do
+  defp typespec({{:., dot_meta, [remote, name]}, meta, args}, vars, caller, state) do
     remote = expand_remote(remote, caller)
 
     if remote == caller.module do
@@ -491,7 +490,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   end
 
   # Handle variables or local calls
-  defp typespec({name, meta, atom} = node, :disabled, caller, state) when is_atom(atom) do
+  defp typespec({name, meta, atom}, :disabled, _caller, state) when is_atom(atom) do
     {{name, meta, atom}, state}
   end
 
@@ -532,7 +531,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     {integer, state}
   end
 
-  defp typespec([], vars, caller, state) do
+  defp typespec([], _vars, _caller, state) do
     {[], state}
   end
 
@@ -586,16 +585,6 @@ defmodule ElixirSense.Core.Compiler.Typespec do
       end
 
     {nil, state}
-  end
-
-  defp location(meta) do
-    line = Keyword.get(meta, :line, 0)
-
-    if column = Keyword.get(meta, :column) do
-      {line, column}
-    else
-      line
-    end
   end
 
   # TODO trace alias?
