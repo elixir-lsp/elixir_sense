@@ -1459,98 +1459,82 @@ defmodule ElixirSense.Core.Compiler do
 
     {expanded, _state, _env} = expand(alias, state, env)
 
-    # {expanded, with_alias} =
-    #   case is_atom(expanded) do
-    #     true ->
-    #       {full, old, opts} = alias_defmodule(alias, expanded, env)
-    #       # Expand the module considering the current environment/nesting
-    #       meta = [defined: full] ++ alias_meta(alias)
-    #       {full, {:require, meta, [old, opts]}}
-
-    #     false ->
-    #       {expanded, nil}
-    #   end
-
-    # The env inside the block is discarded
-    {_result, state, env} =
+    {expanded, full, env} =
       if is_atom(expanded) do
-        # elixir emits a special require directive with :defined key set in meta
-        # require expand does alias, updates context_modules and runtime_modules
-        # we do it here instead
         {full, env} = alias_defmodule(alias, expanded, env)
-        env = %{env | context_modules: [full | env.context_modules]}
-
-        state =
-          case original_env do
-            %{function: nil} ->
-              state
-
-            _ ->
-              %{state | runtime_modules: [full | state.runtime_modules]}
-          end
-
-        range = extract_range(meta)
-
-        module_functions =
-          case state.protocol do
-            nil -> []
-            _ -> [{:__impl__, [:atom], :def}]
-          end
-
-        state =
-          state
-          |> add_module_to_index(full, range, [])
-          |> add_module
-          |> add_current_env_to_line(meta, %{env | module: full})
-          |> add_module_functions(%{env | module: full}, module_functions, range)
-          |> new_vars_scope
-          |> new_attributes_scope
-
-        # TODO magic with ElixirEnv instead of new_vars_scope?
-
-        {state, _env} = maybe_add_protocol_behaviour(state, %{env | module: full})
-
-        {result, state, e_env} = expand(block, state, %{env | module: full})
-
-        before_compile =
-          for args <- Map.get(state.attribute_store, {full, :before_compile}, []) do
-            target =
-              case args do
-                {module, fun} -> [module, fun]
-                module -> [module, :__before_compile__]
-              end
-
-            {:__block__, [],
-             [
-               {:require, [], [hd(target)]},
-               {{:., [], target}, [], [e_env]}
-             ]}
-          end
-
-        module_callbacks = {:__block__, [], before_compile}
-
-        {_result, state, _e_env} = expand(module_callbacks, state, e_env)
-
-        state =
-          state
-          |> apply_optional_callbacks(%{env | module: full})
-
-        {result, state, env}
+        {expanded, full, env}
       else
-        raise "unable to expand module alias #{inspect(expanded)}"
-        # alias |> dbg
-        # keys = state |> Map.from_struct() |> Map.take([:vars, :unused])
-        # keys |> dbg(limit: :infinity)
-        # block |> dbg
-        # # If we don't know the module name, do we still want to expand it here?
-        # # Perhaps it would be useful for dealing with local functions anyway?
-        # # But note that __MODULE__ will return nil.
-
-        # # TODO
-        # expand(block, state, %{env | module: nil})
+        # elixir raises here
+        {:"Elixir.__Unknown__", :"Elixir.__Unknown__", env}
       end
 
+    # elixir emits a special require directive with :defined key set in meta
+    # require expand does alias, updates context_modules and runtime_modules
+    # we do it here instead
+
+    env = %{env | context_modules: [full | env.context_modules]}
+
+    state =
+      case original_env do
+        %{function: nil} ->
+          state
+
+        _ ->
+          %{state | runtime_modules: [full | state.runtime_modules]}
+      end
+
+    range = extract_range(meta)
+
+    module_functions =
+      case state.protocol do
+        nil -> []
+        _ -> [{:__impl__, [:atom], :def}]
+      end
+
+    state =
+      state
+      |> add_module_to_index(full, range, [])
+      |> add_module
+      |> add_current_env_to_line(meta, %{env | module: full})
+      |> add_module_functions(%{env | module: full}, module_functions, range)
+      |> new_vars_scope
+      |> new_attributes_scope
+
+    # TODO magic with ElixirEnv instead of new_vars_scope?
+
+    {state, _env} = maybe_add_protocol_behaviour(state, %{env | module: full})
+
+    {result, state, e_env} = expand(block, state, %{env | module: full})
+
+    {state, _e_env} =
+      for args <- Map.get(state.attribute_store, {full, :before_compile}, []) do
+        case args do
+          {module, fun} -> [module, fun]
+          module -> [module, :__before_compile__]
+        end
+      end
+      |> Enum.reduce({state, e_env}, fn target, {state, env} ->
+        env = %{env | versioned_vars: %{}, line: meta[:line]}
+        state = %{state | unused: 0, vars: {%{}, false}}
+        |> new_func_vars_scope()
+
+        ast = {:__block__, [],
+        [
+          {:require, [], [hd(target)]},
+          {{:., [], target}, [], [env]}
+        ]}
+
+        {_result, state, env} = expand(ast, state, env)
+        {remove_func_vars_scope(state), env}
+      end)
+
+    state =
+      state
+      |> apply_optional_callbacks(%{env | module: full})
+
     # restore vars from outer scope
+    # TODO magic with ElixirEnv instead of new_vars_scope?
+    # unused probably shouldnt be restored
     state =
       %{state | vars: vars, unused: unused}
       |> maybe_move_vars_to_outer_scope
@@ -1644,6 +1628,7 @@ defmodule ElixirSense.Core.Compiler do
         }
       end
 
+    # TODO check if versioned_vars need to be set to %{}
     env_for_expand = %{env | function: {name, arity}}
 
     # based on :elixir_clauses.def

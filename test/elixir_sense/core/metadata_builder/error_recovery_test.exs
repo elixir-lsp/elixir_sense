@@ -2609,4 +2609,42 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert env.function == {:foo, 1}
     end
   end
+
+  describe "defmodule" do
+    test "in defmodule" do
+      code = """
+      defmodule\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.module == Abc
+    end
+
+    test "in defmodule alias" do
+      code = """
+      defmodule A\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.module == Abc
+    end
+
+    test "in defmodule after do" do
+      code = """
+      defmodule Abc, do: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.module == Abc
+    end
+
+    test "in defmodule invalid alias" do
+      code = """
+      defmodule 123, do: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.module == :"Elixir.__Unknown__"
+    end
+  end
 end
