@@ -1543,7 +1543,6 @@ defmodule ElixirSense.Core.Compiler do
     # unused probably shouldnt be restored
     state =
       %{state | vars: vars, unused: unused}
-      |> maybe_move_vars_to_outer_scope
       |> remove_vars_scope
       |> remove_attributes_scope
       |> remove_module
@@ -1695,7 +1694,6 @@ defmodule ElixirSense.Core.Compiler do
     # restore vars from outer scope
     state =
       %{state | caller: false}
-      |> maybe_move_vars_to_outer_scope
       |> remove_vars_scope
 
     state =
@@ -2457,7 +2455,6 @@ defmodule ElixirSense.Core.Compiler do
       # dbg({read, write})
       s =
         %{s | vars: {read, write}}
-        |> maybe_move_vars_to_outer_scope
         |> remove_vars_scope
 
       # dbg(s.vars_info)
