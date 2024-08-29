@@ -1454,7 +1454,7 @@ defmodule ElixirSense.Core.Compiler do
          state,
          env
        ) do
-    %{vars: vars, unused: unused} = state
+    state_orig = state
     original_env = env
 
     {expanded, _state, _env} = expand(alias, state, env)
@@ -1534,16 +1534,10 @@ defmodule ElixirSense.Core.Compiler do
         {remove_func_vars_scope(state, state_orig), env}
       end)
 
-    state =
-      state
-      |> apply_optional_callbacks(%{env | module: full})
-
     # restore vars from outer scope
-    # TODO magic with ElixirEnv instead of new_vars_scope?
-    # unused probably shouldnt be restored
-    state =
-      %{state | vars: vars, unused: unused}
-      |> remove_vars_scope
+    state = state
+      |> apply_optional_callbacks(%{env | module: full})
+      |> remove_vars_scope(state_orig)
       |> remove_attributes_scope
       |> remove_module
 
@@ -1629,6 +1623,7 @@ defmodule ElixirSense.Core.Compiler do
           state
           | caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
         }
+        |> new_vars_scope()
       end
 
     # no need to reset versioned_vars - we never update it
@@ -1662,9 +1657,6 @@ defmodule ElixirSense.Core.Compiler do
         def_kind
       )
 
-    # TODO not sure vars scope is needed
-    state = state |> new_vars_scope
-
     expr =
       case expr do
         nil ->
@@ -1694,15 +1686,14 @@ defmodule ElixirSense.Core.Compiler do
     # restore vars from outer scope
     state =
       %{state | caller: false}
-      |> remove_vars_scope
 
     state =
       unless has_unquotes do
         # restore module vars
         remove_func_vars_scope(state, state_orig)
       else
-        # no need to do anything
-        state
+        # remove scope
+        remove_vars_scope(state, state_orig)
       end
 
     # result of def expansion is fa tuple
@@ -2138,7 +2129,7 @@ defmodule ElixirSense.Core.Compiler do
           {do_expr, do_opts}
       end
 
-    {e_opts, so, eo} = expand(opts, __MODULE__.Env.reset_vars(s), e)
+    {e_opts, so, eo} = expand(opts, new_vars_scope(s), e)
     {e_cases, sc, ec} = map_fold(&expand_for_generator/3, so, eo, cases)
     # elixir raises here for_generator_start on invalid start generator
 
@@ -2148,10 +2139,10 @@ defmodule ElixirSense.Core.Compiler do
     {maybe_reduce, normalized_opts} =
       sanitize_for_options(e_opts, false, false, false, return, meta, e, [])
 
-    {e_expr, se, ee} = expand_for_do_block(expr, sc, ec, maybe_reduce)
+    {e_expr, se, _ee} = expand_for_do_block(expr, sc, ec, maybe_reduce)
 
     {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]},
-     __MODULE__.Env.merge_vars(se, s, ee), e}
+    remove_vars_scope(se, s), e}
   end
 
   defp expand_for_do_block([{:->, _, _} | _] = clauses, s, e, false) do
@@ -2182,13 +2173,13 @@ defmodule ElixirSense.Core.Compiler do
         {_ast, sa, _e} = expand(discarded_args, sa, e)
 
         clause = {:->, clause_meta, [args, right]}
-        s_reset = __MODULE__.Env.reset_vars(sa)
+        s_reset = new_vars_scope(sa)
 
         # no point in doing type inference here, we are only certain of the initial value of the accumulator
-        {e_clause, s_acc, e_acc} =
+        {e_clause, s_acc, _e_acc} =
           __MODULE__.Clauses.clause(&__MODULE__.Clauses.head/3, clause, s_reset, e)
 
-        {e_clause, __MODULE__.Env.merge_vars(s_acc, sa, e_acc)}
+        {e_clause, remove_vars_scope(s_acc, sa)}
     end
 
     {do_expr, sa} = Enum.map_reduce(clauses, s, transformer)
@@ -2415,10 +2406,6 @@ defmodule ElixirSense.Core.Compiler do
   defmodule Env do
     alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
 
-    def reset_vars(s) do
-      s |> new_vars_scope
-    end
-
     def reset_read(%{vars: {_, write}} = s, %{vars: {read, _}}) do
       %{s | vars: {read, write}}
     end
@@ -2448,18 +2435,6 @@ defmodule ElixirSense.Core.Compiler do
         v1,
         v2
       )
-    end
-
-    def merge_vars(s, %{vars: {read, write}}, _e) do
-      # dbg(s.vars_info)
-      # dbg({read, write})
-      s =
-        %{s | vars: {read, write}}
-        |> remove_vars_scope
-
-      # dbg(s.vars_info)
-      # dbg(s.vars_info_per_scope_id)
-      s
     end
 
     def calculate_span(meta, name) do
@@ -2800,7 +2775,7 @@ defmodule ElixirSense.Core.Compiler do
       {_ast, s, _e} = ElixirExpand.expand(opts0 |> Keyword.drop(@valid_with_opts), s, e)
 
       opts0 = sanitize_opts(opts0, @valid_with_opts)
-      s0 = ElixirEnv.reset_vars(s)
+      s0 = new_vars_scope(s)
       {e_exprs, {s1, e1}} = Enum.map_reduce(exprs, {s0, e}, &expand_with/2)
       {e_do, opts1, s2} = expand_with_do(meta, opts0, s, s1, e1)
       {e_opts, _opts2, s3} = expand_with_else(opts1, s2, e)
@@ -2832,9 +2807,9 @@ defmodule ElixirSense.Core.Compiler do
       # we return empty expression
       expr = expr || []
 
-      {e_expr, s_acc, e_acc} = ElixirExpand.expand(expr, acc, e)
+      {e_expr, s_acc, _e_acc} = ElixirExpand.expand(expr, acc, e)
 
-      {e_expr, rest_opts, ElixirEnv.merge_vars(s_acc, s, e_acc)}
+      {e_expr, rest_opts, remove_vars_scope(s_acc, s)}
     end
 
     defp expand_with_else(opts, s, e) do
@@ -2882,13 +2857,13 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp expand_try({:do, expr}, s, e) do
-      {e_expr, se, ee} = ElixirExpand.expand(expr, ElixirEnv.reset_vars(s), e)
-      {{:do, e_expr}, ElixirEnv.merge_vars(se, s, ee)}
+      {e_expr, se, _ee} = ElixirExpand.expand(expr, new_vars_scope(s), e)
+      {{:do, e_expr}, remove_vars_scope(se, s)}
     end
 
     defp expand_try({:after, expr}, s, e) do
-      {e_expr, se, ee} = ElixirExpand.expand(expr, ElixirEnv.reset_vars(s), e)
-      {{:after, e_expr}, ElixirEnv.merge_vars(se, s, ee)}
+      {e_expr, se, _ee} = ElixirExpand.expand(expr, new_vars_scope(s), e)
+      {{:after, e_expr}, remove_vars_scope(se, s)}
     end
 
     defp expand_try({:else, _} = else_clause, s, e) do
@@ -3047,10 +3022,10 @@ defmodule ElixirSense.Core.Compiler do
 
     defp expand_clauses(fun, {key, [_ | _] = clauses}, s, e) do
       transformer = fn clause, sa ->
-        {e_clause, s_acc, e_acc} =
-          clause(fun, clause, ElixirEnv.reset_vars(sa), e)
+        {e_clause, s_acc, _e_acc} =
+          clause(fun, clause, new_vars_scope(sa), e)
 
-        {e_clause, ElixirEnv.merge_vars(s_acc, sa, e_acc)}
+        {e_clause, remove_vars_scope(s_acc, sa)}
       end
 
       {values, se} = Enum.map_reduce(clauses, s, transformer)
@@ -3516,13 +3491,13 @@ defmodule ElixirSense.Core.Compiler do
       transformer = fn
         {:->, _, [_left, _right]} = clause, sa ->
           # elixir raises defaults_in_args
-          s_reset = ElixirEnv.reset_vars(sa)
+          s_reset = new_vars_scope(sa)
 
           # no point in doing type inference here, we have no idea what the fn will be called with
-          {e_clause, s_acc, e_acc} =
+          {e_clause, s_acc, _e_acc} =
             ElixirClauses.clause(&ElixirClauses.head/3, clause, s_reset, e)
 
-          {e_clause, ElixirEnv.merge_vars(s_acc, sa, e_acc)}
+          {e_clause, remove_vars_scope(s_acc, sa)}
       end
 
       {e_clauses, se} = Enum.map_reduce(clauses, s, transformer)

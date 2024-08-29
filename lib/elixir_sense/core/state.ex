@@ -819,16 +819,19 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | attributes: [[] | state.attributes], scope_attributes: [[]]}
   end
 
-  def remove_vars_scope(%__MODULE__{} = state) do
+  def remove_vars_scope(%__MODULE__{} = state, %{vars: vars}) do
     state = maybe_move_vars_to_outer_scope(state)
     %__MODULE__{
       state
       | scope_ids: tl(state.scope_ids),
         vars_info: tl(state.vars_info),
-        vars_info_per_scope_id: update_vars_info_per_scope_id(state)
+        vars_info_per_scope_id: update_vars_info_per_scope_id(state),
+        # restore elixir_ex fields
+        vars: vars
     }
   end
 
+  # TODO should we restore unused?
   def remove_func_vars_scope(%__MODULE__{} = state, %{vars: vars, unused: unused}) do
     %__MODULE__{
       state

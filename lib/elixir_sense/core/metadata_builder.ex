@@ -31,7 +31,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
 
     state
     |> remove_attributes_scope
-    |> remove_vars_scope
+    |> remove_vars_scope(%{vars: {%{}, false}})
     |> remove_module
   end
 

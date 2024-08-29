@@ -2660,16 +2660,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert ([
+      assert [
                 %VarInfo{name: :_par5, positions: [{3, 57}], scope_id: scope_id_1},
                 %VarInfo{name: :par1, positions: [{3, 20}], scope_id: scope_id_1},
                 %VarInfo{name: :par2, positions: [{3, 33}], scope_id: scope_id_1},
                 %VarInfo{name: :par3, positions: [{3, 39}], scope_id: scope_id_1},
                 %VarInfo{name: :par4, positions: [{3, 51}], scope_id: scope_id_1},
-                %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id_2}
-              ]
-              when scope_id_2 > scope_id_1) = state |> get_line_vars(6)
+                %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id_1},
+                %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id_1}
+              ] = state |> get_line_vars(6)
 
       assert [
                %VarInfo{name: :arg, positions: [{8, 14}, {8, 24}]}
@@ -3449,7 +3448,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:x, nil}
              ]
 
-      assert ([
+      assert [
                 %VarInfo{
                   name: :_my_other,
                   positions: [{2, 24}],
@@ -3458,7 +3457,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                 %VarInfo{
                   name: :abc,
                   positions: [{3, 6}],
-                  scope_id: scope_id_2
+                  scope_id: scope_id_1
                 },
                 %VarInfo{
                   name: :my_var,
@@ -3470,8 +3469,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                   positions: [{2, 43}, {3, 14}],
                   scope_id: scope_id_1
                 }
-              ]
-              when scope_id_2 > scope_id_1) = state |> get_line_vars(4)
+              ] = state |> get_line_vars(4)
     end
   end
 
