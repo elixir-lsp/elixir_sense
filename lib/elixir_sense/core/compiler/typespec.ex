@@ -32,16 +32,14 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   def type_to_signature(_), do: {:__unknown__, []}
 
   def expand_spec(ast, state, env) do
-    # TODO not sure this is correct. Are module vars accessible?
-    state =
-      state
-      |> new_func_vars_scope
+    # unless there are unquotes module vars are not accessible
+    # TODO handle unquotes
+    state_orig = state
+    state = new_func_vars_scope(state)
 
     {ast, state, env} = do_expand_spec(ast, state, env)
 
-    state =
-      state
-      |> remove_func_vars_scope
+    state = remove_func_vars_scope(state, state_orig)
 
     {ast, state, env}
   end
@@ -155,17 +153,13 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   defp remove_default(other), do: other
 
   def expand_type(ast, state, env) do
-    state =
-      state
-      |> new_func_vars_scope
+    # unless there are unquotes module vars are not accessible
+    # TODO handle unquotes
+    state_orig = state
 
-    {ast, state, env} = do_expand_type(ast, state, env)
+    {ast, state, env} = do_expand_type(ast, new_func_vars_scope(state), env)
 
-    state =
-      state
-      |> remove_func_vars_scope
-
-    {ast, state, env}
+    {ast, remove_func_vars_scope(state, state_orig), env}
   end
 
   defp do_expand_type({:"::", meta, [{name, name_meta, args}, definition]}, state, env) do

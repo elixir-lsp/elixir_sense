@@ -2700,13 +2700,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ] = vars
     end
 
-    test "vars defined inside a module" do
+    test "vars defined inside a module body" do
       state =
         """
         defmodule MyModule do
           var_out1 = 1
           def func do
             var_in = 1
+            IO.puts ""
           end
           var_out2 = 1
           IO.puts ""
@@ -2714,15 +2715,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert Map.keys(state.lines_to_env[7].versioned_vars) == [
+      assert Map.keys(state.lines_to_env[5].versioned_vars) == [
+          {:var_in, nil}
+        ]
+
+        assert [
+          %VarInfo{name: :var_in, positions: [{4, 5}]}
+        ] = state |> get_line_vars(5)
+
+      assert Map.keys(state.lines_to_env[8].versioned_vars) == [
                {:var_out1, nil},
                {:var_out2, nil}
              ]
 
       assert [
                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id},
-               %VarInfo{name: :var_out2, positions: [{6, 3}], scope_id: scope_id}
-             ] = state |> get_line_vars(7)
+               %VarInfo{name: :var_out2, positions: [{7, 3}], scope_id: scope_id}
+             ] = state |> get_line_vars(8)
     end
 
     test "vars defined in a `for` comprehension" do

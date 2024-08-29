@@ -1459,13 +1459,12 @@ defmodule ElixirSense.Core.Compiler do
 
     {expanded, _state, _env} = expand(alias, state, env)
 
-    {expanded, full, env} =
+    {full, env} =
       if is_atom(expanded) do
-        {full, env} = alias_defmodule(alias, expanded, env)
-        {expanded, full, env}
+        alias_defmodule(alias, expanded, env)
       else
         # elixir raises here
-        {:"Elixir.__Unknown__", :"Elixir.__Unknown__", env}
+        {:"Elixir.__Unknown__", env}
       end
 
     # elixir emits a special require directive with :defined key set in meta
@@ -1504,8 +1503,11 @@ defmodule ElixirSense.Core.Compiler do
 
     {state, _env} = maybe_add_protocol_behaviour(state, %{env | module: full})
 
-    {result, state, e_env} = expand(block, state, %{env | module: full})
+    {_result, state, e_env} = expand(block, state, %{env | module: full})
 
+    # here we handle module callbacks. Only before_compile macro callbacks are expanded as they
+    # affect module body. Func before_compile callbacks are not executed. after_compile and after_verify
+    # are not executed as we do not preform a real compilation
     {state, _e_env} =
       for args <- Map.get(state.attribute_store, {full, :before_compile}, []) do
         case args do
@@ -1514,10 +1516,14 @@ defmodule ElixirSense.Core.Compiler do
         end
       end
       |> Enum.reduce({state, e_env}, fn target, {state, env} ->
+        # module vars are not accessible in module callbacks
         env = %{env | versioned_vars: %{}, line: meta[:line]}
-        state = %{state | unused: 0, vars: {%{}, false}}
-        |> new_func_vars_scope()
+        state_orig = state
+        state = new_func_vars_scope(state)
 
+        # elixir dispatches callbacks by raw dispatch and eval_forms
+        # instead we expand a bock with require and possibly expand macros
+        # we do not attempt to exec function callbacks
         ast = {:__block__, [],
         [
           {:require, [], [hd(target)]},
@@ -1525,7 +1531,7 @@ defmodule ElixirSense.Core.Compiler do
         ]}
 
         {_result, state, env} = expand(ast, state, env)
-        {remove_func_vars_scope(state), env}
+        {remove_func_vars_scope(state, state_orig), env}
       end)
 
     state =
@@ -1583,7 +1589,7 @@ defmodule ElixirSense.Core.Compiler do
        )
        when module != nil and
               def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
-    %{vars: vars, unused: unused} = state
+    state_orig = state
 
     unquoted_call = __MODULE__.Quote.has_unquotes(call)
     unquoted_expr = __MODULE__.Quote.has_unquotes(expr)
@@ -1615,9 +1621,7 @@ defmodule ElixirSense.Core.Compiler do
         # module vars are not accessible in def body
         %{
           state
-          | vars: {%{}, false},
-            unused: 0,
-            caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
+          | caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
         }
         |> new_func_vars_scope()
       else
@@ -1628,7 +1632,7 @@ defmodule ElixirSense.Core.Compiler do
         }
       end
 
-    # TODO check if versioned_vars need to be set to %{}
+    # no need to reset versioned_vars - we never update it
     env_for_expand = %{env | function: {name, arity}}
 
     # based on :elixir_clauses.def
@@ -1690,14 +1694,14 @@ defmodule ElixirSense.Core.Compiler do
 
     # restore vars from outer scope
     state =
-      %{state | vars: vars, unused: unused, caller: false}
+      %{state | caller: false}
       |> maybe_move_vars_to_outer_scope
       |> remove_vars_scope
 
     state =
       unless has_unquotes do
         # restore module vars
-        remove_func_vars_scope(state)
+        remove_func_vars_scope(state, state_orig)
       else
         # no need to do anything
         state

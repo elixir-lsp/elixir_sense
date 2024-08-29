@@ -325,11 +325,8 @@ defmodule ElixirSense.Core.State do
     current_scope_id = hd(state.scope_ids)
 
     # Macro.Env versioned_vars is not updated
-    # versioned_vars: macro_env.versioned_vars,
+    # elixir keeps current vars instate
     {versioned_vars, _} = state.vars
-
-    # vars_info has both read and write vars
-    # filter to return only read
     [current_vars_info | _] = state.vars_info
 
     # here we filter vars to only return the ones with nil context to maintain macro hygiene
@@ -811,7 +808,10 @@ defmodule ElixirSense.Core.State do
       state
       | scope_ids: [scope_id | state.scope_ids],
         scope_id_count: scope_id,
-        vars_info: [%{} | state.vars_info]
+        vars_info: [%{} | state.vars_info],
+        # elixir_ex entries
+        unused: 0,
+        vars: {%{}, false}
     }
   end
 
@@ -828,12 +828,15 @@ defmodule ElixirSense.Core.State do
     }
   end
 
-  def remove_func_vars_scope(%__MODULE__{} = state) do
+  def remove_func_vars_scope(%__MODULE__{} = state, %{vars: vars, unused: unused}) do
     %__MODULE__{
       state
       | scope_ids: tl(state.scope_ids),
         vars_info: tl(state.vars_info),
-        vars_info_per_scope_id: update_vars_info_per_scope_id(state)
+        vars_info_per_scope_id: update_vars_info_per_scope_id(state),
+        # restore elixir_ex fields
+        vars: vars,
+        unused: unused
     }
   end
 
