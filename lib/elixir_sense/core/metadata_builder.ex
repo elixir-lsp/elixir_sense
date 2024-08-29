@@ -14,24 +14,21 @@ defmodule ElixirSense.Core.MetadataBuilder do
   """
   @spec build(Macro.t(), nil | {pos_integer, pos_integer}) :: State.t()
   def build(ast, cursor_position \\ nil) do
-    {_ast, state, _env} =
-      Compiler.expand(
-        ast,
-        %State{
-          cursor_position: cursor_position,
-          prematch:
-            if Version.match?(System.version(), ">= 1.15.0-dev") do
-              Code.get_compiler_option(:on_undefined_variable)
-            else
-              :warn
-            end
-        },
-        Compiler.env()
-      )
+    state_orig = %State{
+      cursor_position: cursor_position,
+      prematch:
+        if Version.match?(System.version(), ">= 1.15.0-dev") do
+          Code.get_compiler_option(:on_undefined_variable)
+        else
+          :warn
+        end
+    }
+
+    {_ast, state, _env} =Compiler.expand(ast, state_orig, Compiler.env())
 
     state
     |> remove_attributes_scope
-    |> remove_vars_scope(%{vars: {%{}, false}})
+    |> remove_vars_scope(state_orig)
     |> remove_module
   end
 

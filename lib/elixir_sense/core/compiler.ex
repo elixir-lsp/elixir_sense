@@ -1499,8 +1499,6 @@ defmodule ElixirSense.Core.Compiler do
       |> new_vars_scope
       |> new_attributes_scope
 
-    # TODO magic with ElixirEnv instead of new_vars_scope?
-
     {state, _env} = maybe_add_protocol_behaviour(state, %{env | module: full})
 
     {_result, state, e_env} = expand(block, state, %{env | module: full})
@@ -1535,9 +1533,10 @@ defmodule ElixirSense.Core.Compiler do
       end)
 
     # restore vars from outer scope
+    # restore version counter
     state = state
       |> apply_optional_callbacks(%{env | module: full})
-      |> remove_vars_scope(state_orig)
+      |> remove_vars_scope(state_orig, true)
       |> remove_attributes_scope
       |> remove_module
 
@@ -1632,6 +1631,8 @@ defmodule ElixirSense.Core.Compiler do
     # based on :elixir_clauses.def
     {_e_args, state, env_for_expand} =
       expand_args(args, %{state | prematch: {%{}, 0, :none}}, %{env_for_expand | context: :match})
+
+    # TODO expand defaults
 
     {e_guard, state, env_for_expand} =
       __MODULE__.Clauses.guard(

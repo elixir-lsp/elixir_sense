@@ -810,6 +810,7 @@ defmodule ElixirSense.Core.State do
         scope_id_count: scope_id,
         vars_info: [%{} | state.vars_info],
         # elixir_ex entries
+        # each def starts versioning from 0
         unused: 0,
         vars: {%{}, false}
     }
@@ -819,9 +820,9 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | attributes: [[] | state.attributes], scope_attributes: [[]]}
   end
 
-  def remove_vars_scope(%__MODULE__{} = state, %{vars: vars}) do
+  def remove_vars_scope(%__MODULE__{} = state, %{vars: vars, unused: unused}, restore_version_counter \\ false) do
     state = maybe_move_vars_to_outer_scope(state)
-    %__MODULE__{
+    state = %__MODULE__{
       state
       | scope_ids: tl(state.scope_ids),
         vars_info: tl(state.vars_info),
@@ -829,9 +830,18 @@ defmodule ElixirSense.Core.State do
         # restore elixir_ex fields
         vars: vars
     }
+
+    if restore_version_counter do
+      # this is used by defmodule as module body does not affect outside versioning
+      %__MODULE__{
+        state
+        | unused: unused
+      }
+    else
+      state
+    end
   end
 
-  # TODO should we restore unused?
   def remove_func_vars_scope(%__MODULE__{} = state, %{vars: vars, unused: unused}) do
     %__MODULE__{
       state
@@ -840,6 +850,7 @@ defmodule ElixirSense.Core.State do
         vars_info_per_scope_id: update_vars_info_per_scope_id(state),
         # restore elixir_ex fields
         vars: vars,
+        # restore versioning
         unused: unused
     }
   end
