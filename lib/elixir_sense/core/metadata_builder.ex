@@ -24,7 +24,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
         end
     }
 
-    {_ast, state, _env} =Compiler.expand(ast, state_orig, Compiler.env())
+    {_ast, state, _env} = Compiler.expand(ast, state_orig, Compiler.env())
 
     state
     |> remove_attributes_scope

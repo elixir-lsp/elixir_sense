@@ -2661,14 +2661,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert [
-                %VarInfo{name: :_par5, positions: [{3, 57}], scope_id: scope_id_1},
-                %VarInfo{name: :par1, positions: [{3, 20}], scope_id: scope_id_1},
-                %VarInfo{name: :par2, positions: [{3, 33}], scope_id: scope_id_1},
-                %VarInfo{name: :par3, positions: [{3, 39}], scope_id: scope_id_1},
-                %VarInfo{name: :par4, positions: [{3, 51}], scope_id: scope_id_1},
-                %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id_1},
-                %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id_1}
-              ] = state |> get_line_vars(6)
+               %VarInfo{name: :_par5, positions: [{3, 57}], scope_id: scope_id_1},
+               %VarInfo{name: :par1, positions: [{3, 20}], scope_id: scope_id_1},
+               %VarInfo{name: :par2, positions: [{3, 33}], scope_id: scope_id_1},
+               %VarInfo{name: :par3, positions: [{3, 39}], scope_id: scope_id_1},
+               %VarInfo{name: :par4, positions: [{3, 51}], scope_id: scope_id_1},
+               %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id_1},
+               %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id_1}
+             ] = state |> get_line_vars(6)
 
       assert [
                %VarInfo{name: :arg, positions: [{8, 14}, {8, 24}]}
@@ -2715,12 +2715,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Map.keys(state.lines_to_env[5].versioned_vars) == [
-          {:var_in, nil}
-        ]
+               {:var_in, nil}
+             ]
 
-        assert [
-          %VarInfo{name: :var_in, positions: [{4, 5}]}
-        ] = state |> get_line_vars(5)
+      assert [
+               %VarInfo{name: :var_in, positions: [{4, 5}]}
+             ] = state |> get_line_vars(5)
 
       assert Map.keys(state.lines_to_env[8].versioned_vars) == [
                {:var_out1, nil},
@@ -3449,27 +3449,27 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ]
 
       assert [
-                %VarInfo{
-                  name: :_my_other,
-                  positions: [{2, 24}],
-                  scope_id: scope_id_1
-                },
-                %VarInfo{
-                  name: :abc,
-                  positions: [{3, 6}],
-                  scope_id: scope_id_1
-                },
-                %VarInfo{
-                  name: :my_var,
-                  positions: [{2, 13}],
-                  scope_id: scope_id_1
-                },
-                %VarInfo{
-                  name: :x,
-                  positions: [{2, 43}, {3, 14}],
-                  scope_id: scope_id_1
-                }
-              ] = state |> get_line_vars(4)
+               %VarInfo{
+                 name: :_my_other,
+                 positions: [{2, 24}],
+                 scope_id: scope_id_1
+               },
+               %VarInfo{
+                 name: :abc,
+                 positions: [{3, 6}],
+                 scope_id: scope_id_1
+               },
+               %VarInfo{
+                 name: :my_var,
+                 positions: [{2, 13}],
+                 scope_id: scope_id_1
+               },
+               %VarInfo{
+                 name: :x,
+                 positions: [{2, 43}, {3, 14}],
+                 scope_id: scope_id_1
+               }
+             ] = state |> get_line_vars(4)
     end
   end
 

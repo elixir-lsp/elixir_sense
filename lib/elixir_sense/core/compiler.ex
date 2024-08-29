@@ -1522,11 +1522,12 @@ defmodule ElixirSense.Core.Compiler do
         # elixir dispatches callbacks by raw dispatch and eval_forms
         # instead we expand a bock with require and possibly expand macros
         # we do not attempt to exec function callbacks
-        ast = {:__block__, [],
-        [
-          {:require, [], [hd(target)]},
-          {{:., [], target}, [], [env]}
-        ]}
+        ast =
+          {:__block__, [],
+           [
+             {:require, [], [hd(target)]},
+             {{:., [], target}, [], [env]}
+           ]}
 
         {_result, state, env} = expand(ast, state, env)
         {remove_func_vars_scope(state, state_orig), env}
@@ -1534,7 +1535,8 @@ defmodule ElixirSense.Core.Compiler do
 
     # restore vars from outer scope
     # restore version counter
-    state = state
+    state =
+      state
       |> apply_optional_callbacks(%{env | module: full})
       |> remove_vars_scope(state_orig, true)
       |> remove_attributes_scope
@@ -2142,8 +2144,7 @@ defmodule ElixirSense.Core.Compiler do
 
     {e_expr, se, _ee} = expand_for_do_block(expr, sc, ec, maybe_reduce)
 
-    {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]},
-    remove_vars_scope(se, s), e}
+    {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]}, remove_vars_scope(se, s), e}
   end
 
   defp expand_for_do_block([{:->, _, _} | _] = clauses, s, e, false) do

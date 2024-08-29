@@ -820,8 +820,13 @@ defmodule ElixirSense.Core.State do
     %__MODULE__{state | attributes: [[] | state.attributes], scope_attributes: [[]]}
   end
 
-  def remove_vars_scope(%__MODULE__{} = state, %{vars: vars, unused: unused}, restore_version_counter \\ false) do
+  def remove_vars_scope(
+        %__MODULE__{} = state,
+        %{vars: vars, unused: unused},
+        restore_version_counter \\ false
+      ) do
     state = maybe_move_vars_to_outer_scope(state)
+
     state = %__MODULE__{
       state
       | scope_ids: tl(state.scope_ids),
@@ -1254,8 +1259,9 @@ defmodule ElixirSense.Core.State do
   def default_env, do: %ElixirSense.Core.State.Env{}
 
   defp maybe_move_vars_to_outer_scope(
-        %__MODULE__{vars_info: [current_scope_vars, outer_scope_vars | other_scopes_vars]} = state
-      ) do
+         %__MODULE__{vars_info: [current_scope_vars, outer_scope_vars | other_scopes_vars]} =
+           state
+       ) do
     outer_scope_vars =
       for {key, _} <- outer_scope_vars,
           into: %{},
