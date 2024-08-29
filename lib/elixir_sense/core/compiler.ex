@@ -2150,14 +2150,7 @@ defmodule ElixirSense.Core.Compiler do
     {maybe_reduce, normalized_opts} =
       sanitize_for_options(e_opts, false, false, false, return, meta, e, [])
 
-    # TODO not sure new vars scope is actually needed
-    sc = sc |> new_vars_scope
     {e_expr, se, ee} = expand_for_do_block(expr, sc, ec, maybe_reduce)
-
-    se =
-      se
-      |> maybe_move_vars_to_outer_scope
-      |> remove_vars_scope
 
     {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]},
      __MODULE__.Env.merge_vars(se, s, ee), e}
@@ -2842,14 +2835,7 @@ defmodule ElixirSense.Core.Compiler do
       # we return empty expression
       expr = expr || []
 
-      # TODO not sure new vars scope is needed
-      acc = acc |> new_vars_scope
       {e_expr, s_acc, e_acc} = ElixirExpand.expand(expr, acc, e)
-
-      s_acc =
-        s_acc
-        |> maybe_move_vars_to_outer_scope
-        |> remove_vars_scope
 
       {e_expr, rest_opts, ElixirEnv.merge_vars(s_acc, s, e_acc)}
     end

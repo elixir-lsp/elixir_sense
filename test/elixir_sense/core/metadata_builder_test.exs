@@ -2767,7 +2767,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                 %VarInfo{
                   name: :var_in,
                   positions: [{5, 5}],
-                  scope_id: scope_id_3
+                  scope_id: scope_id_2
                 },
                 %VarInfo{
                   name: :var_on,
@@ -2785,7 +2785,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                   scope_id: scope_id_1
                 }
               ]
-              when scope_id_2 > scope_id_1 and scope_id_3 > scope_id_2) = get_line_vars(state, 6)
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 6)
 
       assert Map.keys(state.lines_to_env[9].versioned_vars) == [
                {:var_out1, nil},
@@ -2831,7 +2831,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                 %VarInfo{
                   name: :var_in,
                   positions: [{5, 5}],
-                  scope_id: scope_id_3
+                  scope_id: scope_id_2
                 },
                 %VarInfo{
                   name: :var_on,
@@ -2849,7 +2849,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                   scope_id: scope_id_1
                 }
               ]
-              when scope_id_2 > scope_id_1 and scope_id_3 > scope_id_2) = get_line_vars(state, 6)
+              when scope_id_2 > scope_id_1) = get_line_vars(state, 6)
 
       assert Map.keys(state.lines_to_env[9].versioned_vars) == [
                {:var_out1, nil},
