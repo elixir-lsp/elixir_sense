@@ -1630,11 +1630,26 @@ defmodule ElixirSense.Core.Compiler do
     # no need to reset versioned_vars - we never update it
     env_for_expand = %{env | function: {name, arity}}
 
-    # based on :elixir_clauses.def
-    {_e_args, state, env_for_expand} =
-      expand_args(args, %{state | prematch: {%{}, 0, :none}}, %{env_for_expand | context: :match})
+    # expand defaults and pass args without defaults to expand_args
+    {args_no_defaults, args, state} =
+      expand_defaults(args, state, %{env_for_expand | context: nil}, [], [])
 
-    # TODO expand defaults
+    # based on :elixir_clauses.def
+    {e_args_no_defaults, state, env_for_expand} =
+      expand_args(args_no_defaults, %{state | prematch: {%{}, 0, :none}}, %{
+        env_for_expand
+        | context: :match
+      })
+
+    args =
+      Enum.zip(args, e_args_no_defaults)
+      |> Enum.map(fn
+        {{:"\\\\", meta, [_, expanded_default]}, expanded_arg} ->
+          {:"\\\\", meta, [expanded_arg, expanded_default]}
+
+        {_, expanded_arg} ->
+          expanded_arg
+      end)
 
     {e_guard, state, env_for_expand} =
       __MODULE__.Clauses.guard(
@@ -1803,6 +1818,20 @@ defmodule ElixirSense.Core.Compiler do
     end
     |> String.to_atom()
   end
+
+  defp expand_defaults([{:"\\\\", meta, [expr, default]} | args], s, e, acc_no_defaults, acc) do
+    {expanded_default, se, _} = expand(default, s, e)
+
+    expand_defaults(args, se, e, [expr | acc_no_defaults], [
+      {:"\\\\", meta, [expr, expanded_default]} | acc
+    ])
+  end
+
+  defp expand_defaults([arg | args], s, e, acc_no_defaults, acc),
+    do: expand_defaults(args, s, e, [arg | acc_no_defaults], [arg | acc])
+
+  defp expand_defaults([], s, _e, acc_no_defaults, acc),
+    do: {Enum.reverse(acc_no_defaults), Enum.reverse(acc), s}
 
   # defmodule helpers
   # defmodule automatically defines aliases, we need to mirror this feature here.

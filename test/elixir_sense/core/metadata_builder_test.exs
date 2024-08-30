@@ -5596,7 +5596,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  type: :defmodule
                },
                {Proto.MyOtherStruct, :reverse, 1} => %ModFunInfo{
-                 params: [[{:term, [line: 6, column: 15], nil}]],
+                 params: [[{:term, _, nil}]],
                  type: :def
                },
                {Proto.MyStruct, nil, nil} => %ModFunInfo{
@@ -5604,7 +5604,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  type: :defmodule
                },
                {Proto.MyStruct, :reverse, 1} => %ModFunInfo{
-                 params: [[{:term, [line: 6, column: 15], nil}]],
+                 params: [[{:term, _, nil}]],
                  type: :def
                }
              } = state.mods_funs_to_positions
@@ -5717,7 +5717,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert %{
              {Reversible, :reverse, 1} => %ModFunInfo{
-               params: [[{:term, [line: 2, column: 15], nil}]],
+               params: [[{:term, _, nil}]],
                positions: [{2, 3}],
                type: :def
              }
@@ -5780,7 +5780,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  [nil],
                  [1],
                  [
-                   {:\\, [line: 2, column: 13], [{:a, [line: 2, column: 11], nil}, nil]}
+                   {:\\, _, [{:a, _, nil}, nil]}
                  ]
                ]
              }
@@ -5801,10 +5801,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {OuterModule, :abc, 4} => %ModFunInfo{
                params: [
                  [
-                   {:a, [line: 2, column: 11], nil},
-                   {:\\, [line: 2, column: 16], [{:b, [line: 2, column: 14], nil}, nil]},
-                   {:c, [line: 2, column: 24], nil},
-                   {:\\, [line: 2, column: 29], [{:d, [line: 2, column: 27], nil}, [1]]}
+                   {:a, _, nil},
+                   {:\\, _, [{:b, _, nil}, nil]},
+                   {:c, _, nil},
+                   {:\\, _, [{:d, _, nil}, [1]]}
                  ]
                ]
              }
@@ -6028,11 +6028,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
     assert %{
              {MyModule, :is_even, 1} => %{
-               params: [[{:value, [line: 2, column: 20], nil}]],
+               params: [[{:value, _, nil}]],
                positions: [{2, 3}]
              },
              {MyModule, :is_odd, 1} => %{
-               params: [[{:value, [line: 3, column: 20], nil}]],
+               params: [[{:value, _, nil}]],
                positions: [{3, 3}]
              },
              {MyModule, :useless, 0} => %{
@@ -6079,19 +6079,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: :defp
              },
              {MyModuleWithFuns, :is_even, 1} => %ModFunInfo{
-               params: [[{:value, [line: 16, column: 20], nil}]],
+               params: [[{:value, _, nil}]],
                type: :defguard
              },
              {MyModuleWithFuns, :is_evenp, 1} => %ModFunInfo{
-               params: [[{:value, [line: 17, column: 22], nil}]],
+               params: [[{:value, _, nil}]],
                type: :defguardp
              },
              {MyModuleWithFuns, :macro1, 1} => %ModFunInfo{
-               params: [[{:ast, [line: 10, column: 19], nil}]],
+               params: [[{:ast, _, nil}]],
                type: :defmacro
              },
              {MyModuleWithFuns, :macro1p, 1} => %ModFunInfo{
-               params: [[{:ast, [line: 13, column: 21], nil}]],
+               params: [[{:ast, _, nil}]],
                type: :defmacrop
              },
              {MyModuleWithFuns, nil, nil} => %ModFunInfo{
@@ -6107,7 +6107,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: :defmodule
              },
              {MyModuleWithFuns, :__info__, 1} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 3, column: 1], nil}]],
+               params: [[{:atom, _, nil}]],
                type: :def
              },
              {MyModuleWithFuns, :module_info, 0} => %ElixirSense.Core.State.ModFunInfo{
@@ -6115,11 +6115,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: :def
              },
              {MyModuleWithFuns, :module_info, 1} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 3, column: 1], nil}]],
+               params: [[{:atom, _, nil}]],
                type: :def
              },
              {MyModuleWithFuns.Nested, :__info__, 1} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 19, column: 3], nil}]],
+               params: [[{:atom, _, nil}]],
                type: :def
              },
              {MyModuleWithFuns.Nested, :module_info, 0} => %ElixirSense.Core.State.ModFunInfo{
@@ -6127,11 +6127,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: :def
              },
              {MyModuleWithFuns.Nested, :module_info, 1} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 19, column: 3], nil}]],
+               params: [[{:atom, _, nil}]],
                type: :def
              },
              {MyModuleWithoutFuns, :__info__, 1} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 1, column: 1], nil}]],
+               params: [[{:atom, _, nil}]],
                type: :def
              },
              {MyModuleWithoutFuns, :module_info, 0} => %ElixirSense.Core.State.ModFunInfo{
@@ -6139,7 +6139,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                type: :def
              },
              {MyModuleWithoutFuns, :module_info, 1} => %ElixirSense.Core.State.ModFunInfo{
-               params: [[{:atom, [line: 1, column: 1], nil}]],
+               params: [[{:atom, _, nil}]],
                type: :def
              }
            } = state.mods_funs_to_positions
@@ -6963,6 +6963,27 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   describe "calls" do
+    test "registers calls on default parameters" do
+      state =
+        """
+        defmodule NyModule do
+          def func1(a, b \\\\ some(), c \\\\ Some.other()), do: :ok
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %CallInfo{
+                 arity: 0,
+                 func: :other,
+                 mod: Some,
+                 position: {2, 39}
+               },
+               %CallInfo{arity: 0, position: {2, 21}, func: :some, mod: nil},
+               %CallInfo{arity: 2, position: {2, 3}, func: :def, mod: Kernel}
+             ] = state.calls[2]
+    end
+
     test "registers calls with __MODULE__" do
       state =
         """
@@ -8314,14 +8335,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{
                {My, :required, 1} => %ModFunInfo{
-                 params: [[{:var, [{:line, 2} | _], _}]],
+                 params: [[{:var, _, _}]],
                  positions: [{2, _}],
                  target: nil,
                  type: :defmacro,
                  overridable: {true, ElixirSenseExample.OverridableFunctions}
                },
                {My, :test, 2} => %ModFunInfo{
-                 params: [[{:x, [{:line, 2} | _], _}, {:y, [{:line, 2} | _], _}]],
+                 params: [[{:x, _, _}, {:y, _, _}]],
                  positions: [{2, _}],
                  target: nil,
                  type: :def,
@@ -8348,7 +8369,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  overridable: {true, ElixirSenseExample.OverridableImplementation}
                },
                {My, :bar, 1} => %ModFunInfo{
-                 params: [[{:var, [{:line, 2} | _], _}]],
+                 params: [[{:var, _, _}]],
                  positions: [{2, _}],
                  target: nil,
                  type: :defmacro,
@@ -8375,8 +8396,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{
                {My, :required, 1} => %ModFunInfo{
                  params: [
-                   [{:baz, [line: 8, column: 21], nil}],
-                   [{:var, [{:line, 2} | _], _}]
+                   [{:baz, _, nil}],
+                   [{:var, _, _}]
                  ],
                  positions: [{8, 3}, {2, _}],
                  target: nil,
@@ -8385,8 +8406,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                },
                {My, :test, 2} => %ModFunInfo{
                  params: [
-                   [{:a, [line: 4, column: 12], nil}, {:b, [line: 4, column: 15], nil}],
-                   [{:x, [{:line, 2} | _], _}, {:y, [{:line, 2} | _], _}]
+                   [{:a, _, nil}, {:b, _, nil}],
+                   [{:x, _, _}, {:y, _, _}]
                  ],
                  positions: [{4, 3}, {2, _}],
                  target: nil,
@@ -8421,8 +8442,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                },
                {My, :bar, 1} => %ModFunInfo{
                  params: [
-                   [{:baz, [line: 8, column: 16], nil}],
-                   [{:var, [{:line, 2} | _], _}]
+                   [{:baz, _, nil}],
+                   [{:var, _, _}]
                  ],
                  positions: [{8, 3}, {2, _}],
                  target: nil,
@@ -8450,8 +8471,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{
                {My, :required, 1} => %ModFunInfo{
                  params: [
-                   [{:baz, [line: 8, column: 22], nil}],
-                   [{:var, [{:line, 2} | _], _}]
+                   [{:baz, _, nil}],
+                   [{:var, _, _}]
                  ],
                  positions: [{8, 3}, {2, _}],
                  target: nil,
@@ -8460,8 +8481,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                },
                {My, :test, 2} => %ModFunInfo{
                  params: [
-                   [{:a, [line: 4, column: 13], nil}, {:b, [line: 4, column: 16], nil}],
-                   [{:x, [{:line, 2} | _], _}, {:y, [{:line, 2} | _], _}]
+                   [{:a, _, nil}, {:b, _, nil}],
+                   [{:x, _, _}, {:y, _, _}]
                  ],
                  positions: [{4, 3}, {2, _}],
                  target: nil,
