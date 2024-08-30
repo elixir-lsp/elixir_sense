@@ -86,12 +86,16 @@ defmodule ElixirSense.Core.Compiler do
     expand({:"__|__", meta, [left, right]}, s, e)
   end
 
+  defp do_expand({:"\\\\", meta, [left, right]}, s, e) do
+    # elixir doesn't match on naked default args operator
+    expand({:"__\\\\__", meta, [left, right]}, s, e)
+  end
+
   # __block__
 
   defp do_expand({:__block__, _meta, []}, s, e), do: {nil, s, e}
 
   defp do_expand({:__block__, _meta, [arg]}, s, e) do
-    # s = s |> add_current_env_to_line(Keyword.fetch!(meta, :line), e)
     expand(arg, s, e)
   end
 
