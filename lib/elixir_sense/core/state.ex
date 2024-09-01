@@ -150,6 +150,24 @@ defmodule ElixirSense.Core.State do
               context: nil,
               typespec: nil,
               scope_id: nil
+
+    def to_macro_env(%__MODULE__{} = env, file \\ "nofile", line \\ 1) do
+      # we omit lexical_tracker and tracers
+      %Macro.Env{
+        line: line,
+        file: file,
+        context: env.context,
+        module: env.module,
+        function: env.function,
+        context_modules: env.context_modules,
+        macros: env.macros,
+        functions: env.functions,
+        requires: env.requires,
+        aliases: env.aliases,
+        macro_aliases: env.macro_aliases,
+        versioned_vars: env.versioned_vars
+      }
+    end
   end
 
   defmodule VarInfo do

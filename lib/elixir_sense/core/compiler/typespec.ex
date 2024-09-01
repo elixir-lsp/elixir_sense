@@ -35,13 +35,10 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     # unless there are unquotes module vars are not accessible
     # TODO handle unquotes
     state_orig = state
-    state = new_func_vars_scope(state)
 
-    {ast, state, env} = do_expand_spec(ast, state, env)
+    {ast, state, env} = do_expand_spec(ast, new_func_vars_scope(state), env)
 
-    state = remove_func_vars_scope(state, state_orig)
-
-    {ast, state, env}
+    {ast, remove_func_vars_scope(state, state_orig), env}
   end
 
   defp do_expand_spec({:when, meta, [spec, guard]}, state, env) do
