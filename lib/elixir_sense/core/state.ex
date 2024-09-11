@@ -168,6 +168,23 @@ defmodule ElixirSense.Core.State do
         versioned_vars: env.versioned_vars
       }
     end
+
+    def update_from_macro_env(%__MODULE__{} = env, macro_env = %Macro.Env{}) do
+      # we omit lexical_tracker and tracers
+      %__MODULE__{
+        env
+        | context: macro_env.context,
+          module: macro_env.module,
+          function: macro_env.function,
+          context_modules: macro_env.context_modules,
+          macros: macro_env.macros,
+          functions: macro_env.functions,
+          requires: macro_env.requires,
+          aliases: macro_env.aliases,
+          macro_aliases: macro_env.macro_aliases,
+          versioned_vars: macro_env.versioned_vars
+      }
+    end
   end
 
   defmodule VarInfo do
@@ -343,8 +360,15 @@ defmodule ElixirSense.Core.State do
     current_scope_id = hd(state.scope_ids)
 
     # Macro.Env versioned_vars is not updated
-    # elixir keeps current vars instate
-    {versioned_vars, _} = state.vars
+    # elixir keeps current vars in state
+    # write vars are not really interesting (nor are write vars from upper write)
+    # only read vars are accessible
+    # NOTE definition/hover/references providers get all vars mapped to scope_id
+    # this means write vars are already closed
+    # completions provider do not need write vars at all
+    {read, _write} = state.vars
+    versioned_vars = read
+
     [current_vars_info | _] = state.vars_info
 
     # here we filter vars to only return the ones with nil context to maintain macro hygiene
@@ -886,15 +910,19 @@ defmodule ElixirSense.Core.State do
     for {scope_id, vars} <- state.vars_info_per_scope_id, into: %{} do
       updated_vars =
         for {key, var} <- vars, into: %{} do
-          updated_var = case Map.get(current_scope_vars, key) do
-            nil -> var
-            scope_var ->
-              if hd(scope_var.positions) == hd(var.positions) do
-                scope_var
-              else
+          updated_var =
+            case Map.get(current_scope_vars, key) do
+              nil ->
                 var
-              end
-          end
+
+              scope_var ->
+                if hd(scope_var.positions) == hd(var.positions) do
+                  scope_var
+                else
+                  var
+                end
+            end
+
           {key, updated_var}
         end
 
