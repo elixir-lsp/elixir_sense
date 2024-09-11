@@ -878,6 +878,7 @@ defmodule ElixirSense.Core.State do
     }
   end
 
+  # TODO check if we can get rid of this function
   defp update_vars_info_per_scope_id(state) do
     [scope_id | _other_scope_ids] = state.scope_ids
     [current_scope_vars | _other_scope_vars] = state.vars_info
@@ -885,7 +886,16 @@ defmodule ElixirSense.Core.State do
     for {scope_id, vars} <- state.vars_info_per_scope_id, into: %{} do
       updated_vars =
         for {key, var} <- vars, into: %{} do
-          {key, Map.get(current_scope_vars, key, var)}
+          updated_var = case Map.get(current_scope_vars, key) do
+            nil -> var
+            scope_var ->
+              if hd(scope_var.positions) == hd(var.positions) do
+                scope_var
+              else
+                var
+              end
+          end
+          {key, updated_var}
         end
 
       {scope_id, updated_vars}

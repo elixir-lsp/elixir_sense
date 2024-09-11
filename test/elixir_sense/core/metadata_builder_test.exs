@@ -185,6 +185,30 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              }
     end
 
+    test "rebinding in defs" do
+      state = """
+      defmodule MyModule do
+        def go(asd = 3, asd, x) do
+          :ok
+        end
+
+        def go(asd = 3, [2, asd], y) do
+          :ok
+        end
+      end
+      """
+      |> string_to_state
+
+      assert %{
+        {:x, 1} => %VarInfo{positions: [{2, 24}]},
+        {:asd, 0} => %VarInfo{positions: [{2, 10}, {2, 19}]}
+      } = state.vars_info_per_scope_id[2]
+      assert %{
+        {:y, 1} => %VarInfo{positions: [{6, 29}]},
+        {:asd, 0} => %VarInfo{positions: [{6, 10}, {6, 23}]}
+      } = state.vars_info_per_scope_id[3]
+    end
+
     test "binding in function call" do
       state =
         """
@@ -9074,7 +9098,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       env ->
         env.vars
-        # state.vars_info_per_scope_id[env.scope_id]
     end
     |> Enum.sort()
   end
