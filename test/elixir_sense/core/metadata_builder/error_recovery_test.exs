@@ -1732,6 +1732,48 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
     end
   end
 
+  describe "__ENV__, __MODULE__, __CALLER__, __STACKTRACE__, __DIR__" do
+    test "__ENV__ in match" do
+      code = """
+      __ENV__ = \
+      """
+
+      assert get_cursor_env(code)
+    end
+
+    test "__CALLER__ not in macro" do
+      code = """
+      inspect(__CALLER__, \
+      """
+
+      assert get_cursor_env(code)
+    end
+
+    test "__STACKTRACE__ outside of catch/rescue" do
+      code = """
+      inspect(__STACKTRACE__, \
+      """
+
+      assert get_cursor_env(code)
+    end
+
+    test "__MODULE__ outside of module" do
+      code = """
+      inspect(__MODULE__, \
+      """
+
+      assert get_cursor_env(code)
+    end
+
+    test "__DIR__ when nofile" do
+      code = """
+      inspect(__DIR__, \
+      """
+
+      assert get_cursor_env(code)
+    end
+  end
+
   describe "alias/import/require" do
     test "invalid alias expansion" do
       code = """
