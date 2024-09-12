@@ -931,6 +931,37 @@ defmodule ElixirSense.Core.State do
     |> Map.put(scope_id, current_scope_vars)
   end
 
+  def reset_read(%{vars: {_, write}} = s, %{vars: {read, _}}) do
+    %{s | vars: {read, write}}
+  end
+
+  def prepare_write(%{vars: {read, _}} = s) do
+    %{s | vars: {read, read}}
+  end
+
+  def close_write(%{vars: {_read, write}} = s, %{vars: {_, false}}) do
+    %{s | vars: {write, false}}
+  end
+
+  def close_write(%{vars: {_read, write}} = s, %{vars: {_, upper_write}}) do
+    %{s | vars: {write, merge_vars(upper_write, write)}}
+  end
+
+  defp merge_vars(v, v), do: v
+
+  defp merge_vars(v1, v2) do
+    :maps.fold(
+      fn k, m2, acc ->
+        case Map.fetch(acc, k) do
+          {:ok, m1} when m1 >= m2 -> acc
+          _ -> Map.put(acc, k, m2)
+        end
+      end,
+      v1,
+      v2
+    )
+  end
+
   def remove_attributes_scope(%__MODULE__{} = state) do
     attributes = tl(state.attributes)
     %__MODULE__{state | attributes: attributes, scope_attributes: attributes}

@@ -629,9 +629,8 @@ defmodule ElixirSense.Core.Compiler do
             {{name, meta, kind}, s, e}
 
           _ ->
-            # elixir raises here undefined_var
-            span_meta = __MODULE__.Env.calculate_span(meta, name)
-            {{name, span_meta, kind}, s, e}
+            # elixir raises here undefined_var and attaches span meta
+            {{name, meta, kind}, s, e}
         end
     end
   end
@@ -671,7 +670,7 @@ defmodule ElixirSense.Core.Compiler do
               {module, fun}
           end
 
-        expand_remote(ar, meta, af, meta, args, state, __MODULE__.Env.prepare_write(state), env)
+        expand_remote(ar, meta, af, meta, args, state, prepare_write(state), env)
 
       {:error, :not_found} ->
         expand_local(meta, fun, args, state, env)
@@ -694,7 +693,7 @@ defmodule ElixirSense.Core.Compiler do
        when (is_tuple(module) or is_atom(module)) and is_atom(fun) and is_list(meta) and
               is_list(args) do
     # dbg({module, fun, args})
-    {module, state_l, env} = expand(module, __MODULE__.Env.prepare_write(state), env)
+    {module, state_l, env} = expand(module, prepare_write(state), env)
     arity = length(args)
 
     if is_atom(module) do
@@ -772,9 +771,9 @@ defmodule ElixirSense.Core.Compiler do
 
   defp do_expand(list, s, e) when is_list(list) do
     {e_args, {se, _}, ee} =
-      expand_list(list, &expand_arg/3, {__MODULE__.Env.prepare_write(s), s}, e, [])
+      expand_list(list, &expand_arg/3, {prepare_write(s), s}, e, [])
 
-    {e_args, __MODULE__.Env.close_write(se, s), ee}
+    {e_args, close_write(se, s), ee}
   end
 
   defp do_expand(function, s, e) when is_function(function) do
@@ -1895,7 +1894,7 @@ defmodule ElixirSense.Core.Compiler do
            ) do
         {:ok, rewritten} ->
           s =
-            __MODULE__.Env.close_write(sa, s)
+            close_write(sa, s)
             |> add_call_to_line({receiver, right, length(e_args)}, meta)
             |> add_current_env_to_line(meta, e)
 
@@ -1904,7 +1903,7 @@ defmodule ElixirSense.Core.Compiler do
         {:error, _error} ->
           # elixir raises here elixir_rewrite
           s =
-            __MODULE__.Env.close_write(sa, s)
+            close_write(sa, s)
             |> add_call_to_line({receiver, right, length(e_args)}, meta)
             |> add_current_env_to_line(meta, e)
 
@@ -1918,7 +1917,7 @@ defmodule ElixirSense.Core.Compiler do
     {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {sl, s}, e, args)
 
     s =
-      __MODULE__.Env.close_write(sa, s)
+      close_write(sa, s)
       |> add_call_to_line({receiver, right, length(e_args)}, meta)
       |> add_current_env_to_line(meta, e)
 
@@ -2239,7 +2238,7 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_for_generator({:<-, meta, [left, right]}, s, e) do
     {e_right, sr, er} = expand(right, s, e)
-    sm = __MODULE__.Env.reset_read(sr, s)
+    sm = reset_read(sr, s)
     {[e_left], sl, el} = __MODULE__.Clauses.head([left], sm, er)
 
     match_context_r = TypeInference.type_of(e_right, e.context)
@@ -2256,7 +2255,7 @@ defmodule ElixirSense.Core.Compiler do
     case __MODULE__.Utils.split_last(args) do
       {left_start, {:<-, op_meta, [left_end, right]}} ->
         {e_right, sr, er} = expand(right, s, e)
-        sm = __MODULE__.Env.reset_read(sr, s)
+        sm = reset_read(sr, s)
 
         {e_left, sl, el} =
           __MODULE__.Clauses.match(
@@ -2391,7 +2390,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   def expand_arg(arg, {acc, s}, e) do
-    {e_arg, s_acc, e_acc} = expand(arg, __MODULE__.Env.reset_read(acc, s), e)
+    {e_arg, s_acc, e_acc} = expand(arg, reset_read(acc, s), e)
     {e_arg, {s_acc, s}, e_acc}
   end
 
@@ -2405,8 +2404,8 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   def expand_args(args, s, e) do
-    {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {__MODULE__.Env.prepare_write(s), s}, e, args)
-    {e_args, __MODULE__.Env.close_write(sa, s), ea}
+    {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {prepare_write(s), s}, e, args)
+    {e_args, close_write(sa, s), ea}
   end
 
   @internals [{:behaviour_info, 1}, {:module_info, 1}, {:module_info, 0}]
@@ -2437,52 +2436,6 @@ defmodule ElixirSense.Core.Compiler do
         else
           []
         end
-      end
-    end
-  end
-
-  defmodule Env do
-    alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
-
-    def reset_read(%{vars: {_, write}} = s, %{vars: {read, _}}) do
-      %{s | vars: {read, write}}
-    end
-
-    def prepare_write(%{vars: {read, _}} = s) do
-      %{s | vars: {read, read}}
-    end
-
-    def close_write(%{vars: {_read, write}} = s, %{vars: {_, false}}) do
-      %{s | vars: {write, false}}
-    end
-
-    def close_write(%{vars: {_read, write}} = s, %{vars: {_, upper_write}}) do
-      %{s | vars: {write, merge_vars(upper_write, write)}}
-    end
-
-    defp merge_vars(v, v), do: v
-
-    defp merge_vars(v1, v2) do
-      :maps.fold(
-        fn k, m2, acc ->
-          case Map.fetch(acc, k) do
-            {:ok, m1} when m1 >= m2 -> acc
-            _ -> Map.put(acc, k, m2)
-          end
-        end,
-        v1,
-        v2
-      )
-    end
-
-    def calculate_span(meta, name) do
-      case Keyword.fetch(meta, :column) do
-        {:ok, column} ->
-          span = {ElixirUtils.get_line(meta), column + String.length(Atom.to_string(name))}
-          [{:span, span} | meta]
-
-        _ ->
-          meta
       end
     end
   end
@@ -2549,7 +2502,6 @@ defmodule ElixirSense.Core.Compiler do
 
   defmodule Clauses do
     alias ElixirSense.Core.Compiler, as: ElixirExpand
-    alias ElixirSense.Core.Compiler.Env, as: ElixirEnv
     alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
     alias ElixirSense.Core.State
     alias ElixirSense.Core.TypeInference
@@ -2823,7 +2775,7 @@ defmodule ElixirSense.Core.Compiler do
 
     defp expand_with({:<-, meta, [left, right]}, {s, e}) do
       {e_right, sr, er} = ElixirExpand.expand(right, s, e)
-      sm = ElixirEnv.reset_read(sr, s)
+      sm = reset_read(sr, s)
       {[e_left], sl, el} = head([left], sm, er)
 
       match_context_r = TypeInference.type_of(e_right, e.context)
@@ -3100,7 +3052,6 @@ defmodule ElixirSense.Core.Compiler do
 
   defmodule Bitstring do
     alias ElixirSense.Core.Compiler, as: ElixirExpand
-    alias ElixirSense.Core.Compiler.Env, as: ElixirEnv
     alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
 
     defp expand_match(expr, {s, original_s}, e) do
@@ -3119,12 +3070,12 @@ defmodule ElixirSense.Core.Compiler do
           {{:<<>>, [{:alignment, alignment} | meta], e_args}, sa, ea}
 
         _ ->
-          pair_s = {ElixirEnv.prepare_write(s), s}
+          pair_s = {prepare_write(s), s}
 
           {e_args, alignment, {sa, _}, ea} =
             expand(meta, &ElixirExpand.expand_arg/3, args, [], pair_s, e, 0, require_size)
 
-          {{:<<>>, [{:alignment, alignment} | meta], e_args}, ElixirEnv.close_write(sa, s), ea}
+          {{:<<>>, [{:alignment, alignment} | meta], e_args}, close_write(sa, s), ea}
       end
     end
 
@@ -3451,7 +3402,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp expand_spec_arg(expr, s, original_s, e) do
-      ElixirExpand.expand(expr, ElixirEnv.reset_read(s, original_s), e)
+      ElixirExpand.expand(expr, reset_read(s, original_s), e)
     end
 
     defp size_and_unit(type, size, unit)
