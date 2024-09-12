@@ -1804,6 +1804,44 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert get_cursor_env(code)
     end
 
+    test "multi" do
+      code = """
+      alias ElixirSenseExample\
+      """
+
+      assert get_cursor_env(code)
+
+      code = """
+      alias ElixirSenseExample.\
+      """
+
+      assert get_cursor_env(code)
+
+      code = """
+      alias ElixirSenseExample.{\
+      """
+
+      assert get_cursor_env(code)
+
+      code = """
+      alias ElixirSenseExample.{S\
+      """
+
+      assert get_cursor_env(code)
+
+      code = """
+      alias ElixirSenseExample.{Some, \
+      """
+
+      assert get_cursor_env(code)
+
+      code = """
+      alias ElixirSenseExample.{Some, Mod\
+      """
+
+      assert get_cursor_env(code)
+    end
+
     test "invalid" do
       code = """
       alias A.a\

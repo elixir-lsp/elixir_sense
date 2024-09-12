@@ -2066,6 +2066,8 @@ defmodule ElixirSense.Core.Compiler do
       other, s, e ->
         # elixir raises here
         # expected_compile_time_module
+        # we search for cursor
+        {_, s, _} = expand(other, s, e)
         {other, s, e}
     end
 
