@@ -1586,6 +1586,14 @@ defmodule ElixirSense.Core.Compiler do
        )
        when module != nil and
               def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
+
+    state = case call do
+      {:__cursor__, _, list} when is_list(list) ->
+        {_, state, _} = expand(call, state, %{env | function: {:__unknown__, 0}})
+        state
+      _ -> state
+    end
+    
     state_orig = state
 
     unquoted_call = __MODULE__.Quote.has_unquotes(call)
