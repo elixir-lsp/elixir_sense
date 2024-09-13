@@ -861,6 +861,20 @@ defmodule ElixirSense.Core.Compiler do
          meta,
          Kernel,
          :@,
+         [{:__cursor__, _meta, list} = arg],
+         _callback,
+         state,
+         env
+       )
+       when is_list(list) do
+    {arg, state, _env} = expand(arg, state, env)
+    {{:@, meta, [arg]}, state, env}
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
+         :@,
          [{:behaviour, _meta, [arg]}],
          _callback,
          state,
@@ -1181,8 +1195,8 @@ defmodule ElixirSense.Core.Compiler do
 
         [_] ->
           # @attribute(arg)
-          if env.function, do: raise("cannot set attribute @#{name} inside function/macro")
-          if name == :behavior, do: raise("@behavior attribute is not supported")
+          # elixir validates env.function is nil
+          # elixir forbids behavior name
           {true, expand_args(args, state, env)}
 
         args ->
@@ -1593,7 +1607,7 @@ defmodule ElixirSense.Core.Compiler do
         state
       _ -> state
     end
-    
+
     state_orig = state
 
     unquoted_call = __MODULE__.Quote.has_unquotes(call)
@@ -1811,6 +1825,14 @@ defmodule ElixirSense.Core.Compiler do
         {{{:., meta, [module, fun]}, meta, args}, state, env}
     else
       ast ->
+        state = if __MODULE__.Utils.has_cursor?(args) and not __MODULE__.Utils.has_cursor?(ast) do
+          # in case there was cursor in the original args but it's not present in macro result
+          # expand a fake node
+          {_ast, state, _env} = expand({:__cursor__, [], []}, state, env)
+          state
+        else
+          state
+        end
         {ast, state, env} = expand(ast, state, env)
         {ast, state, env}
     end

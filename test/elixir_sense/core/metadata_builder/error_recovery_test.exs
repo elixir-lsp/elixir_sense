@@ -2727,4 +2727,56 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert env.module == :"Elixir.__Unknown__"
     end
   end
+
+  describe "attribute" do
+    test "after @" do
+      code = """
+      defmodule Abc do
+        @\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.module == Abc
+    end
+
+    test "in name" do
+      code = """
+      defmodule Abc do
+        @foo\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.module == Abc
+    end
+
+    test "after name" do
+      code = """
+      defmodule Abc do
+        @foo \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.module == Abc
+    end
+
+    test "outside module" do
+      code = """
+      @foo [\
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.module == Abc
+    end
+
+    test "setting inside def" do
+      code = """
+      defmodule Abc do
+        def go do
+          @foo \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.module == Abc
+    end
+  end
 end
