@@ -54,11 +54,11 @@ defmodule ElixirSense.Providers.Plugins.ModuleStore do
         ElixirSense.Plugin in behaviours or ElixirLS.LanguageServer.Plugin in behaviours or
           ElixirSense.Providers.Plugin in behaviours
 
-      {:is_elixir_sense_plugin, true} ->
-        true
+      {:is_elixir_sense_plugin, value} ->
+        true in List.wrap(value)
 
-      {:is_elixir_ls_plugin, true} ->
-        true
+      {:is_elixir_ls_plugin, value} ->
+        true in List.wrap(value)
 
       _ ->
         false
