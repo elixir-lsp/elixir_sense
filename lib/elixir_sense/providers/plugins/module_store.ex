@@ -51,7 +51,8 @@ defmodule ElixirSense.Providers.Plugins.ModuleStore do
     module.module_info(:attributes)
     |> Enum.any?(fn
       {:behaviour, behaviours} when is_list(behaviours) ->
-        ElixirSense.Plugin in behaviours or ElixirLS.LanguageServer.Plugin in behaviours
+        ElixirSense.Plugin in behaviours or ElixirLS.LanguageServer.Plugin in behaviours or
+          ElixirSense.Providers.Plugin in behaviours
 
       {:is_elixir_sense_plugin, true} ->
         true
