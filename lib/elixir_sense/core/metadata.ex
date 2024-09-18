@@ -80,11 +80,8 @@ defmodule ElixirSense.Core.Metadata do
               {end_line, end_column}
             ])
 
-          # IO.puts(metadata.source)
-          # dbg(needle)
           source_with_cursor = prefix <> "__cursor__(#{needle})" <> suffix
-          # IO.puts(source_with_cursor)
-          # dbg(metadata)
+
           {prefix, source_with_cursor}
 
         nil ->
@@ -97,8 +94,6 @@ defmodule ElixirSense.Core.Metadata do
 
           {prefix, source_with_cursor}
       end
-
-    # IO.puts(source_with_cursor)
 
     {meta, cursor_env} =
       case Code.string_to_quoted(source_with_cursor, columns: true, token_metadata: true) do
@@ -113,6 +108,7 @@ defmodule ElixirSense.Core.Metadata do
       if cursor_env != nil do
         {meta, cursor_env}
       else
+        # IO.puts(prefix <> "|")
         case NormalizedCode.Fragment.container_cursor_to_quoted(prefix,
                columns: true,
                token_metadata: true
@@ -129,8 +125,7 @@ defmodule ElixirSense.Core.Metadata do
       cursor_env
     else
       case metadata.closest_env do
-        {pos, dist, env} ->
-          dbg({pos, dist})
+        {_pos, _dist, env} ->
           env
 
         nil ->
@@ -263,30 +258,21 @@ defmodule ElixirSense.Core.Metadata do
     |> Enum.min(fn -> nil end)
   end
 
-  def add_scope_vars(
-        %State.Env{} = env,
+  def find_var(
         %__MODULE__{vars_info_per_scope_id: vars_info_per_scope_id},
-        {line, column},
-        predicate \\ fn _ -> true end
+        variable,
+        version,
+        position
       ) do
-    scope_vars = vars_info_per_scope_id[env.scope_id] || %{}
-    env_vars_keys = env.vars |> Enum.map(&{&1.name, &1.version})
-
-    scope_vars_missing_in_env =
-      scope_vars
-      |> Enum.filter(fn {key, var} ->
-        key not in env_vars_keys and Enum.min(var.positions) <= {line, column} and
-          predicate.(var)
+    vars_info_per_scope_id
+    |> Enum.find_value(fn {_scope_id, vars} ->
+      vars
+      |> Enum.find_value(fn {{n, v}, info} ->
+        if n == variable and (v == version or version == :any) and position in info.positions do
+          info
+        end
       end)
-      |> Enum.map(fn {_, value} -> value end)
-
-    env_vars =
-      for var <- env.vars do
-        key = {var.name, var.version}
-        Map.fetch!(scope_vars, key)
-      end
-
-    %{env | vars: env_vars ++ scope_vars_missing_in_env}
+    end)
   end
 
   @spec at_module_body?(State.Env.t()) :: boolean()

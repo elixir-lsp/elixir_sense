@@ -1600,13 +1600,15 @@ defmodule ElixirSense.Core.Compiler do
        )
        when module != nil and
               def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
+    state =
+      case call do
+        {:__cursor__, _, list} when is_list(list) ->
+          {_, state, _} = expand(call, state, %{env | function: {:__unknown__, 0}})
+          state
 
-    state = case call do
-      {:__cursor__, _, list} when is_list(list) ->
-        {_, state, _} = expand(call, state, %{env | function: {:__unknown__, 0}})
-        state
-      _ -> state
-    end
+        _ ->
+          state
+      end
 
     state_orig = state
 
@@ -1825,14 +1827,16 @@ defmodule ElixirSense.Core.Compiler do
         {{{:., meta, [module, fun]}, meta, args}, state, env}
     else
       ast ->
-        state = if __MODULE__.Utils.has_cursor?(args) and not __MODULE__.Utils.has_cursor?(ast) do
-          # in case there was cursor in the original args but it's not present in macro result
-          # expand a fake node
-          {_ast, state, _env} = expand({:__cursor__, [], []}, state, env)
-          state
-        else
-          state
-        end
+        state =
+          if __MODULE__.Utils.has_cursor?(args) and not __MODULE__.Utils.has_cursor?(ast) do
+            # in case there was cursor in the original args but it's not present in macro result
+            # expand a fake node
+            {_ast, state, _env} = expand({:__cursor__, [], []}, state, env)
+            state
+          else
+            state
+          end
+
         {ast, state, env} = expand(ast, state, env)
         {ast, state, env}
     end

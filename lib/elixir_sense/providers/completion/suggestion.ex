@@ -122,11 +122,6 @@ defmodule ElixirSense.Providers.Completion.Suggestion do
 
     env =
       Metadata.get_env(metadata, {line, column})
-      |> Metadata.add_scope_vars(
-        metadata,
-        {line, column},
-        &(to_string(&1.name) != hint)
-      )
 
     # if variable is rebound then in env there are many variables with the same name
     # find the one defined closest to cursor

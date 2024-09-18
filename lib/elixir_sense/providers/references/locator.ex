@@ -31,7 +31,6 @@ defmodule ElixirSense.Providers.References.Locator do
             module: module
           } =
           Metadata.get_env(metadata, {line, column})
-          |> Metadata.add_scope_vars(metadata, {line, column})
 
         # find last env of current module
         attributes = get_attributes(metadata, module)

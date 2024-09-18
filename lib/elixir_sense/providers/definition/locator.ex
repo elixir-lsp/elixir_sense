@@ -40,7 +40,6 @@ defmodule ElixirSense.Providers.Definition.Locator do
 
         env =
           Metadata.get_env(metadata, {line, column})
-          |> Metadata.add_scope_vars(metadata, {line, column})
 
         find(
           context,
