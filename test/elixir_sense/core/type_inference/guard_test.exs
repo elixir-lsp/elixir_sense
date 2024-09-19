@@ -60,7 +60,7 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
     test "infers type from naked var" do
       guard_expr = quote(do: x) |> expand()
       result = Guard.type_information_from_guards(guard_expr)
-      assert result == %{{:x, 0} => :boolean}
+      assert result == %{{:x, 0} => {:atom, true}}
     end
 
     # 1. Simple guards
@@ -270,7 +270,7 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       guard = quote(do: is_number(x) or is_atom(x) or (is_nil(x) or x)) |> expand()
 
       result = Guard.type_information_from_guards(guard)
-      assert result == %{{:x, 0} => {:union, [:number, :atom, {:atom, nil}, :boolean]}}
+      assert result == %{{:x, 0} => {:union, [:number, :atom, {:atom, nil}, {:atom, true}]}}
     end
 
     test "handles nested when" do
@@ -278,6 +278,46 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
 
       result = Guard.type_information_from_guards(guard)
       assert result == %{{:x, 0} => {:union, [:number, :binary]}}
+    end
+  end
+
+  describe "guard on map field" do
+    test "naked" do
+      guard = quote(do: x.foo) |> expand()
+
+      result = Guard.type_information_from_guards(guard)
+      assert result == %{{:x, 0} => {:map, [{:foo, {:atom, true}}], []}}
+    end
+
+    test "naked nested" do
+      guard = quote(do: x.foo.bar) |> expand()
+
+      result = Guard.type_information_from_guards(guard)
+      assert result == %{{:x, 0} => {:map, [{:foo, {:map, [{:bar, {:atom, true}}], []}}], []}}
+    end
+
+    test "simple" do
+      guard = quote(do: is_atom(x.foo)) |> expand()
+
+      result = Guard.type_information_from_guards(guard)
+      assert result == %{{:x, 0} => {:map, [{:foo, :atom}], []}}
+    end
+
+    test "nested" do
+      guard = quote(do: is_atom(x.foo.bar.baz)) |> expand()
+
+      result = Guard.type_information_from_guards(guard)
+
+      assert result == %{
+               {:x, 0} => {:map, [{:foo, {:map, [{:bar, {:map, [{:baz, :atom}], []}}], []}}], []}
+             }
+    end
+
+    test "with operator" do
+      guard = quote(do: x.foo == 1) |> expand()
+
+      result = Guard.type_information_from_guards(guard)
+      assert result == %{{:x, 0} => {:map, [{:foo, {:integer, 1}}], []}}
     end
   end
 end

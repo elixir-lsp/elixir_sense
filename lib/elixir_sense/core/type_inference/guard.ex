@@ -77,11 +77,19 @@ defmodule ElixirSense.Core.TypeInference.Guard do
     end)
   end
 
+  # {{:., _, [target, key]}, _, []}
+  def type_information_from_guards({{:., _, [target, key]}, _, []}) when is_atom(key) do
+    case extract_var_type(target, {:map, [{key, {:atom, true}}], []}) do
+      nil -> %{}
+      {var, type} -> %{var => type}
+    end
+  end
+
   # Standalone variable: func my_func(x) when x
   def type_information_from_guards({var, meta, context}) when is_atom(var) and is_atom(context) do
     case Keyword.fetch(meta, :version) do
       {:ok, version} ->
-        %{{var, version} => :boolean}
+        %{{var, version} => {:atom, true}}
 
       _ ->
         %{}
@@ -94,8 +102,7 @@ defmodule ElixirSense.Core.TypeInference.Guard do
         {{:., _dot_meta, [:erlang, fun]}, _call_meta, params}, acc
         when is_atom(fun) and is_list(params) ->
           with {type, binding} <- guard_predicate_type(fun, params),
-               {var, meta, context} when is_atom(var) and is_atom(context) <- binding,
-               {:ok, version} <- Keyword.fetch(meta, :version) do
+               {{var, version}, type} <- extract_var_type(binding, type) do
             # If we found the predicate type, we can prematurely exit traversing the subtree
             {nil, Map.put(acc, {var, version}, type)}
           else
@@ -114,6 +121,22 @@ defmodule ElixirSense.Core.TypeInference.Guard do
 
     acc
   end
+
+  defp extract_var_type({var, meta, context}, type) when is_atom(var) and is_atom(context) do
+    case Keyword.fetch(meta, :version) do
+      {:ok, version} ->
+        {{var, version}, type}
+
+      _ ->
+        nil
+    end
+  end
+
+  defp extract_var_type({{:., _, [target, key]}, _, []}, type) when is_atom(key) do
+    extract_var_type(target, {:map, [{key, type}], []})
+  end
+
+  defp extract_var_type(_, _), do: nil
 
   # TODO div and rem only work on first arg
   defp guard_predicate_type(p, [first | _])
@@ -221,8 +244,16 @@ defmodule ElixirSense.Core.TypeInference.Guard do
     {type_of(value), lhs}
   end
 
+  defp guard_predicate_type(p, [{{:., _, _}, _, []} = lhs, value]) when p in [:==, :===] do
+    {type_of(value), lhs}
+  end
+
   defp guard_predicate_type(p, [value, {variable, _, context} = rhs])
        when p in [:==, :===] and is_atom(variable) and is_atom(context) do
+    guard_predicate_type(p, [rhs, value])
+  end
+
+  defp guard_predicate_type(p, [value, {{:., _, _}, _, []} = rhs]) when p in [:==, :===] do
     guard_predicate_type(p, [rhs, value])
   end
 
