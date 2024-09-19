@@ -2778,5 +2778,24 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert {_, env} = get_cursor_env(code)
       assert env.module == Abc
     end
+
+    test "invalid args" do
+      code = """
+      defmodule Abc do
+        @
+        def init(id) do
+          {:ok,
+            %Some.Mod{
+              id: id,
+              events: [],
+              version: __cursor__()
+            }}
+        end
+        \
+      """
+
+      assert {_, env} = get_cursor_env(code)
+      assert env.module == Abc
+    end
   end
 end

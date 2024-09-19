@@ -1200,7 +1200,9 @@ defmodule ElixirSense.Core.Compiler do
           {true, expand_args(args, state, env)}
 
         args ->
-          raise "invalid @ call #{inspect(args)}"
+          # elixir raises "invalid @ call #{inspect(args)}"
+          {e_args, state, env} = expand_args(args, state, env)
+          {true, {[hd(e_args)], state, env}}
       end
 
     inferred_type =
