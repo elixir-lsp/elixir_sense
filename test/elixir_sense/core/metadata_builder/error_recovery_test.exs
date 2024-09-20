@@ -2620,7 +2620,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
-      assert env.function == {:foo, 1}
+      assert env.function == {:__unknown__, 0}
     end
 
     test "in def after," do
@@ -2665,7 +2665,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert env.context == :guard
     end
 
-    test "in def guard variale" do
+    test "in def guard variable" do
       code = """
       defmodule Abc do
         def foo(some) when some\
@@ -2697,7 +2697,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
-      assert env.module == Abc
+      assert env.module == nil
     end
 
     test "in defmodule alias" do
@@ -2706,12 +2706,21 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+      assert env.module == nil
+    end
+
+    test "in defmodule after do:" do
+      code = """
+      defmodule Abc, do: \
+      """
+
+      assert {_, env} = get_cursor_env(code)
       assert env.module == Abc
     end
 
     test "in defmodule after do" do
       code = """
-      defmodule Abc, do: \
+      defmodule Abc do\
       """
 
       assert {_, env} = get_cursor_env(code)
@@ -2765,7 +2774,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
-      assert env.module == Abc
+      assert env.module == nil
     end
 
     test "setting inside def" do
