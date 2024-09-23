@@ -990,8 +990,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:k, nil}, {:kv, nil}, {:v, nil}]
 
       # TODO we are not tracking usages in typespec
-      # TODO defdelegate
-      # TODO defguard 1.18
       assert [
                %VarInfo{name: :k, positions: [{3, 21}]},
                %VarInfo{name: :kv, positions: [{2, 3}, {3, 13}]},
@@ -5674,7 +5672,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                generated: [true],
                specs: ["@callback without_spec(t(), term()) :: term()"]
              },
-             #  TODO there is raw unquote in spec
+             # there is raw unquote in spec...
              {Proto, :__protocol__, 1} => %ElixirSense.Core.State.SpecInfo{
                kind: :spec,
                specs: [
@@ -6269,6 +6267,29 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {MyModuleWithFuns, nil, nil}
            ]
   end
+
+  test "registers unknown for defdelegate with unquote fragments in call" do
+    state =
+      """
+      defmodule MyModuleWithFuns do
+        kv = [foo: 1, bar: 2]
+        Enum.each(kv, fn {k, v} ->
+          defdelegate unquote(k)(), to: Foo
+        end)
+      end
+      """
+      |> string_to_state
+
+    assert Map.keys(state.mods_funs_to_positions) == [
+             {MyModuleWithFuns, :__info__, 1},
+             {MyModuleWithFuns, :__unknown__, 0},
+             {MyModuleWithFuns, :module_info, 0},
+             {MyModuleWithFuns, :module_info, 1},
+             {MyModuleWithFuns, nil, nil}
+           ]
+  end
+
+  # TODO test defguard with unquote fragment on 1.18
 
   test "registers builtin functions for protocols" do
     state =
@@ -7948,7 +7969,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              } = state.types
     end
 
-    # TODO check if variables are available in unquote
     test "store types as unknown when unquote fragments in call" do
       state =
         """
@@ -9082,8 +9102,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %ModFunInfo{meta: %{overridable: true}} =
                state.mods_funs_to_positions[{User, :constant, 0}]
     end
-
-    # TODO after_compile?, after_verify?, on_defined, on_load?
   end
 
   defp string_to_state(string) do
