@@ -1095,8 +1095,6 @@ defmodule ElixirSense.Core.Compiler do
 
     cursor_after? = state.cursor_env != nil
 
-    # TODO elixir does Macro.escape with unquote: true
-
     spec = TypeInfo.typespec_to_string(kind, expr)
 
     state =
@@ -2136,7 +2134,7 @@ defmodule ElixirSense.Core.Compiler do
             hidden = Map.get(info.meta, :hidden, false)
             # def meta is not used anyway so let's pass empty
             meta = []
-            # TODO count 1 hardcoded but that's probably OK
+            # we hardcode count to 1
             count = 1
 
             case hidden do
@@ -4682,15 +4680,12 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
-      :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args, guard_context(s))
+      # elixir uses guard context for error messages
+      :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args, "guard")
     end
 
     defp do_rewrite(_, receiver, dot_meta, right, meta, e_args, _s) do
       {:ok, :elixir_rewrite.rewrite(receiver, dot_meta, right, meta, e_args)}
     end
-
-    # TODO probably we can remove it/hardcode, used only for generating error message
-    defp guard_context(%{prematch: {_, _, {:bitsize, _}}}), do: "bitstring size specifier"
-    defp guard_context(_), do: "guard"
   end
 end
