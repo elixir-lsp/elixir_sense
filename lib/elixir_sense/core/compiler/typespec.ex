@@ -33,12 +33,17 @@ defmodule ElixirSense.Core.Compiler.Typespec do
 
   def expand_spec(ast, state, env) do
     # unless there are unquotes module vars are not accessible
-    # TODO handle unquotes
     state_orig = state
 
-    {ast, state, env} = do_expand_spec(ast, new_func_vars_scope(state), env)
+    unless ElixirExpand.Quote.has_unquotes(ast) do
+      {ast, state, env} = do_expand_spec(ast, new_func_vars_scope(state), env)
 
-    {ast, remove_func_vars_scope(state, state_orig), env}
+      {ast, remove_func_vars_scope(state, state_orig), env}
+    else
+      {ast, state, env} = do_expand_spec(ast, new_vars_scope(state), env)
+
+      {ast, remove_vars_scope(state, state_orig), env}
+    end
   end
 
   defp do_expand_spec({:when, meta, [spec, guard]}, state, env) do
@@ -151,12 +156,17 @@ defmodule ElixirSense.Core.Compiler.Typespec do
 
   def expand_type(ast, state, env) do
     # unless there are unquotes module vars are not accessible
-    # TODO handle unquotes
     state_orig = state
 
-    {ast, state, env} = do_expand_type(ast, new_func_vars_scope(state), env)
+    unless ElixirExpand.Quote.has_unquotes(ast) do
+      {ast, state, env} = do_expand_type(ast, new_func_vars_scope(state), env)
 
-    {ast, remove_func_vars_scope(state, state_orig), env}
+      {ast, remove_func_vars_scope(state, state_orig), env}
+    else
+      {ast, state, env} = do_expand_type(ast, new_vars_scope(state), env)
+
+      {ast, remove_vars_scope(state, state_orig), env}
+    end
   end
 
   defp do_expand_type({:"::", meta, [{name, name_meta, args}, definition]}, state, env) do
