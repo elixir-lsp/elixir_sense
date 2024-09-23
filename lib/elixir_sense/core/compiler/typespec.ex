@@ -128,6 +128,18 @@ defmodule ElixirSense.Core.Compiler.Typespec do
 
   defp do_expand_spec(other, guard, guard_meta, state, env) do
     case other do
+      {:"::", meta, [{{:unquote, _, unquote_args}, meta1, call_args}, definition]} ->
+        # replace unquote fragment and try to expand args to find variables
+        {_, state, env} = ElixirExpand.expand(unquote_args, state, env)
+
+        do_expand_spec(
+          {:"::", meta, [{:__unknown__, meta1, call_args}, definition]},
+          guard,
+          guard_meta,
+          state,
+          env
+        )
+
       {name, meta, args} when is_atom(name) and name != :"::" ->
         # invalid or incomplete spec
         # try to wrap in :: expression
@@ -169,7 +181,8 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     end
   end
 
-  defp do_expand_type({:"::", meta, [{name, name_meta, args}, definition]}, state, env) do
+  defp do_expand_type({:"::", meta, [{name, name_meta, args}, definition]}, state, env)
+       when is_atom(name) and name != :"::" do
     args =
       if is_atom(args) do
         []
@@ -196,6 +209,11 @@ defmodule ElixirSense.Core.Compiler.Typespec do
 
   defp do_expand_type(other, state, env) do
     case other do
+      {:"::", meta, [{{:unquote, _, unquote_args}, meta1, call_args}, definition]} ->
+        # replace unquote fragment and try to expand args to find variables
+        {_, state, env} = ElixirExpand.expand(unquote_args, state, env)
+        do_expand_type({:"::", meta, [{:__unknown__, meta1, call_args}, definition]}, state, env)
+
       {name, meta, args} when is_atom(name) and name != :"::" ->
         # invalid or incomplete type
         # try to wrap in :: expression
@@ -512,6 +530,12 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   defp typespec({name, meta, args}, :disabled, caller, state) when is_atom(name) do
     {args, state} = :lists.mapfoldl(&typespec(&1, :disabled, caller, &2), state, args)
     {{name, meta, args}, state}
+  end
+
+  # handle unquote fragment
+  defp typespec({:unquote, _, args}, _vars, caller, state) when is_list(args) do
+    {_, state, _env} = ElixirExpand.expand(args, state, caller)
+    {:__unknown__, state}
   end
 
   defp typespec({name, meta, args}, vars, caller, state) when is_atom(name) do

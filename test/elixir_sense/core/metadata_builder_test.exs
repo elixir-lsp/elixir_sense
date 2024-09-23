@@ -978,6 +978,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           kv = [foo: 1, bar: 2] |> IO.inspect
           Enum.each(kv, fn {k, v} ->
             @spec unquote(k)() :: unquote(v)
+            @type unquote(k)() :: unquote(v)
+            defdelegate unquote(k)(), to: Foo
             def unquote(k)() do
               unquote(v)
               record_env()
@@ -989,12 +991,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:k, nil}, {:kv, nil}, {:v, nil}]
 
-      # TODO we are not tracking usages in typespec
+      # TODO should we handle unquote_slicing in arg list?
+      # TODO defquard on 1.18
       assert [
-               %VarInfo{name: :k, positions: [{3, 21}]},
+               %VarInfo{name: :k, positions: [{3, 21}, {4, 19}, {5, 19}, {6, 25}, {7, 17}]},
                %VarInfo{name: :kv, positions: [{2, 3}, {3, 13}]},
-               %VarInfo{name: :v, positions: [{3, 24}, {6, 15}]}
-             ] = state |> get_line_vars(7)
+               %VarInfo{name: :v, positions: [{3, 24}, {4, 35}, {5, 35}, {8, 15}]}
+             ] = state |> get_line_vars(8)
     end
 
     test "in capture" do
@@ -1184,6 +1187,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [
                %VarInfo{name: :abc, positions: [{2, 11}, {3, 10}]}
              ] = state |> get_line_vars(3)
+    end
+
+    test "variables hygiene" do
+      state =
+        """
+        defmodule MyModule do
+          import ElixirSenseExample.Math
+          def func do
+            squared(5)
+            IO.puts ""
+          end
+        end
+        """
+        |> string_to_state
+
+      assert [] == state |> get_line_vars(5)
     end
 
     test "variables are added to environment" do
@@ -5678,7 +5697,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                specs: [
                  "@spec __protocol__(:impls) :: :not_consolidated | {:consolidated, list(module())}",
                  "@spec __protocol__(:consolidated?) :: boolean()",
-                 "@spec __protocol__(:functions) :: unquote(Protocol.__functions_spec__(@__functions__()))",
+                 "@spec __protocol__(:functions) :: :__unknown__",
                  "@spec __protocol__(:module) :: Proto"
                ]
              },
@@ -6221,7 +6240,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       |> string_to_state
 
     assert %{
-             {MyModuleWithFuns, :__unknown__, 0} => %ModFunInfo{
+             {MyModuleWithFuns, :__unknown__, 1} => %ModFunInfo{
                target: {List, :flatten},
                type: :defdelegate
              }
@@ -7964,7 +7983,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  positions: [{4, 5}],
                  end_positions: _,
                  generated: [false],
-                 specs: ["@type foo() :: unquote(v())"]
+                 specs: ["@type foo() :: :__unknown__"]
                }
              } = state.types
     end
@@ -7985,7 +8004,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {My, :__unknown__, 0} => %ElixirSense.Core.State.TypeInfo{
                  name: :__unknown__,
                  args: [[]],
-                 specs: ["@type unquote(k)() :: 123"],
+                 specs: ["@type __unknown__() :: 123"],
                  kind: :type,
                  positions: [{4, 5}],
                  end_positions: [{4, 30}],

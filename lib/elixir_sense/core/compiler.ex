@@ -831,12 +831,19 @@ defmodule ElixirSense.Core.Compiler do
       funs
       |> List.wrap()
       |> Enum.reduce(state, fn fun, state ->
-        fun =
+        {fun, state} =
           if __MODULE__.Quote.has_unquotes(fun) do
             # dynamic defdelegate - replace unquote expression with fake call
-            {:__unknown__, [], []}
+            case fun do
+              {{:unquote, _, unquote_args}, meta, args} ->
+                {_, state, _} = expand(unquote_args, state, env)
+                {{:__unknown__, meta, args}, state}
+
+              _ ->
+                {{:__unknown__, [], []}, state}
+            end
           else
-            fun
+            {fun, state}
           end
 
         {name, args, as, as_args} = Kernel.Utils.defdelegate_each(fun, opts)
@@ -1625,13 +1632,30 @@ defmodule ElixirSense.Core.Compiler do
 
     # elixir raises here if def is invalid, we try to continue with unknown
     # especially, we return unknown for calls with unquote fragments
-    {name, _meta_1, args} =
+    {{name, _meta_1, args}, state} =
       case name_and_args do
-        {n, m, a} when is_atom(n) and is_atom(a) -> {n, m, []}
-        {n, m, a} when is_atom(n) and is_list(a) -> {n, m, a}
-        {_n, m, a} when is_atom(a) -> {:__unknown__, m, []}
-        {_n, m, a} when is_list(a) -> {:__unknown__, m, a}
-        _ -> {:__unknown__, [], []}
+        {n, m, a} when is_atom(n) and is_atom(a) ->
+          {{n, m, []}, state}
+
+        {n, m, a} when is_atom(n) and is_list(a) ->
+          {{n, m, a}, state}
+
+        {{:unquote, _, unquote_args}, m, a} when is_atom(a) ->
+          {_, state, _} = expand(unquote_args, state, env)
+          {{:__unknown__, m, []}, state}
+
+        {{:unquote, _, unquote_args}, m, a} when is_list(a) ->
+          {_, state, _} = expand(unquote_args, state, env)
+          {{:__unknown__, m, a}, state}
+
+        {_n, m, a} when is_atom(a) ->
+          {{:__unknown__, m, []}, state}
+
+        {_n, m, a} when is_list(a) ->
+          {{:__unknown__, m, a}, state}
+
+        _ ->
+          {{:__unknown__, [], []}, state}
       end
 
     arity = length(args)
