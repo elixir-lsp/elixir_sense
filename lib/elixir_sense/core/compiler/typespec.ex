@@ -526,16 +526,17 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     end
   end
 
+  # handle unquote fragment
+  defp typespec({key, _, args}, _vars, caller, state)
+       when is_list(args) and key in [:unquote, :unquote_splicing] do
+    {_, state, _env} = ElixirExpand.expand(args, state, caller)
+    {:__unknown__, state}
+  end
+
   # Handle local calls
   defp typespec({name, meta, args}, :disabled, caller, state) when is_atom(name) do
     {args, state} = :lists.mapfoldl(&typespec(&1, :disabled, caller, &2), state, args)
     {{name, meta, args}, state}
-  end
-
-  # handle unquote fragment
-  defp typespec({:unquote, _, args}, _vars, caller, state) when is_list(args) do
-    {_, state, _env} = ElixirExpand.expand(args, state, caller)
-    {:__unknown__, state}
   end
 
   defp typespec({name, meta, args}, vars, caller, state) when is_atom(name) do

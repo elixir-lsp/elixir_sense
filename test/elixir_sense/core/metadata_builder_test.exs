@@ -985,11 +985,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
               record_env()
             end
           end)
+
+          keys = [{:foo, [], nil}, {:bar, [], nil}]
+          @spec foo_splicing(unquote_splicing(keys)) :: :ok
+          @type foo_splicing(unquote_splicing(keys)) :: :ok
+          defdelegate foo_splicing(unquote_splicing(keys)), to: Foo
+          def foo_splicing(unquote_splicing(keys)) do
+            record_env()
+          end
         end
         """
         |> string_to_state
 
-      assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:k, nil}, {:kv, nil}, {:v, nil}]
+      assert Map.keys(state.lines_to_env[9].versioned_vars) == [{:k, nil}, {:kv, nil}, {:v, nil}]
 
       # TODO should we handle unquote_slicing in arg list?
       # TODO defquard on 1.18
@@ -997,7 +1005,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :k, positions: [{3, 21}, {4, 19}, {5, 19}, {6, 25}, {7, 17}]},
                %VarInfo{name: :kv, positions: [{2, 3}, {3, 13}]},
                %VarInfo{name: :v, positions: [{3, 24}, {4, 35}, {5, 35}, {8, 15}]}
-             ] = state |> get_line_vars(8)
+             ] = state |> get_line_vars(9)
+
+      assert Map.keys(state.lines_to_env[18].versioned_vars) == [keys: nil, kv: nil]
+
+      # TODO should we handle unquote_slicing in arg list?
+      # TODO defquard on 1.18
+      assert [
+               %VarInfo{
+                 name: :keys,
+                 positions: [{13, 3}, {14, 39}, {15, 39}, {16, 45}, {17, 37}]
+               },
+               %VarInfo{name: :kv, positions: [{2, 3}, {3, 13}]}
+             ] = state |> get_line_vars(18)
     end
 
     test "in capture" do
@@ -6197,33 +6217,40 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         defdelegate func_delegated_erlang(par), to: :erlang_module
         defdelegate func_delegated_as(par), to: __MODULE__.Sub, as: :my_func
         defdelegate func_delegated_alias(par), to: E
+        defdelegate func_delegated_defaults(par \\\\ 123), to: E
       end
       """
       |> string_to_state
 
     assert %{
              {MyModuleWithFuns, :func_delegated, 1} => %ModFunInfo{
-               params: [[{:par, [line: 3, column: 30], nil}]],
+               params: [[{:par, _, nil}]],
                positions: [{3, 3}],
                target: {OtherModule, :func_delegated},
                type: :defdelegate
              },
              {MyModuleWithFuns, :func_delegated_alias, 1} => %ModFunInfo{
-               params: [[{:par, [line: 6, column: 36], nil}]],
+               params: [[{:par, _, nil}]],
                positions: [{6, 3}],
                target: {Enum, :func_delegated_alias},
                type: :defdelegate
              },
              {MyModuleWithFuns, :func_delegated_as, 1} => %ModFunInfo{
-               params: [[{:par, [line: 5, column: 33], nil}]],
+               params: [[{:par, _, nil}]],
                positions: [{5, 3}],
                target: {MyModuleWithFuns.Sub, :my_func},
                type: :defdelegate
              },
              {MyModuleWithFuns, :func_delegated_erlang, 1} => %ModFunInfo{
-               params: [[{:par, [line: 4, column: 37], nil}]],
+               params: [[{:par, _, nil}]],
                positions: [{4, 3}],
                target: {:erlang_module, :func_delegated_erlang},
+               type: :defdelegate
+             },
+             {MyModuleWithFuns, :func_delegated_defaults, 1} => %ModFunInfo{
+               params: [[{:\\, _, [{:par, _, nil}, 123]}]],
+               positions: [{7, 3}],
+               target: {Enum, :func_delegated_defaults},
                type: :defdelegate
              }
            } = state.mods_funs_to_positions

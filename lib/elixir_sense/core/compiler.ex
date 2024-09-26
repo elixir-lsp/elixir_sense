@@ -831,23 +831,60 @@ defmodule ElixirSense.Core.Compiler do
       funs
       |> List.wrap()
       |> Enum.reduce(state, fn fun, state ->
-        {fun, state} =
+        state_orig = state
+
+        {fun, state, has_unquotes} =
           if __MODULE__.Quote.has_unquotes(fun) do
+            state = new_vars_scope(state)
             # dynamic defdelegate - replace unquote expression with fake call
             case fun do
               {{:unquote, _, unquote_args}, meta, args} ->
                 {_, state, _} = expand(unquote_args, state, env)
-                {{:__unknown__, meta, args}, state}
+                {{:__unknown__, meta, args}, state, true}
 
               _ ->
-                {{:__unknown__, [], []}, state}
+                {fun, state, true}
             end
           else
-            {fun, state}
+            state = new_func_vars_scope(state)
+            {fun, state, false}
           end
 
-        {name, args, as, as_args} = Kernel.Utils.defdelegate_each(fun, opts)
+        {name, args, as, as_args} = __MODULE__.Utils.defdelegate_each(fun, opts)
         arity = length(args)
+
+        # no need to reset versioned_vars - we never update it
+        env_for_expand = %{env | function: {name, arity}}
+
+        # expand defaults and pass args without defaults to expand_args
+        {args_no_defaults, args, state} =
+          expand_defaults(args, state, %{env_for_expand | context: nil}, [], [])
+
+        # based on :elixir_clauses.def
+        {e_args_no_defaults, state, env_for_expand} =
+          expand_args(args_no_defaults, %{state | prematch: {%{}, 0, :none}}, %{
+            env_for_expand
+            | context: :match
+          })
+
+        args =
+          Enum.zip(args, e_args_no_defaults)
+          |> Enum.map(fn
+            {{:"\\\\", meta, [_, expanded_default]}, expanded_arg} ->
+              {:"\\\\", meta, [expanded_arg, expanded_default]}
+
+            {_, expanded_arg} ->
+              expanded_arg
+          end)
+
+        state =
+          unless has_unquotes do
+            # restore module vars
+            remove_func_vars_scope(state, state_orig)
+          else
+            # remove scope
+            remove_vars_scope(state, state_orig)
+          end
 
         state
         |> add_current_env_to_line(meta, %{env | context: nil, function: {name, arity}})
@@ -2558,6 +2595,42 @@ defmodule ElixirSense.Core.Compiler do
 
       result
     end
+
+    def defdelegate_each(fun, opts) when is_list(opts) do
+      # TODO: Remove on v2.0
+      append_first? = Keyword.get(opts, :append_first, false)
+
+      {name, args} =
+        case fun do
+          {:when, _, [_left, right]} ->
+            raise ArgumentError,
+                  "guards are not allowed in defdelegate/2, got: when #{Macro.to_string(right)}"
+
+          _ ->
+            case Macro.decompose_call(fun) do
+              {_, _} = pair -> pair
+              _ -> raise ArgumentError, "invalid syntax in defdelegate #{Macro.to_string(fun)}"
+            end
+        end
+
+      as = Keyword.get(opts, :as, name)
+      as_args = build_as_args(args, append_first?)
+
+      {name, args, as, as_args}
+    end
+
+    defp build_as_args(args, append_first?) do
+      as_args = :lists.map(&build_as_arg/1, args)
+
+      case append_first? do
+        true -> tl(as_args) ++ [hd(as_args)]
+        false -> as_args
+      end
+    end
+
+    # elixir validates arg
+    defp build_as_arg({:\\, _, [arg, _default_arg]}), do: arg
+    defp build_as_arg(arg), do: arg
   end
 
   defmodule Clauses do
