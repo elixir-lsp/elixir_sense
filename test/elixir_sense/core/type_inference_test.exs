@@ -488,5 +488,60 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       assert type_of("\"asd\"") == nil
       assert type_of("1.23") == nil
     end
+
+    test "__STACKTRACE__ returns {:list, nil}" do
+      assert type_of("__STACKTRACE__") == {:list, nil}
+    end
+
+    test "anonymous function returns nil" do
+      assert type_of("fn -> a end") == nil
+      assert type_of("fn x -> x + 1 end") == nil
+      assert type_of("fn x, y -> x * y end") == nil
+    end
+  end
+
+  describe "block expressions" do
+    test "non-empty block returns type of last expression" do
+      assert type_of("(a = 1; b = 2; c = 3)") == {:integer, 3}
+
+      assert type_of("""
+               (
+                 a = 1
+                 b = 2
+                 c = 3
+               )
+             """) == {:integer, 3}
+    end
+
+    test "empty block returns nil" do
+      assert type_of("( )") == nil
+    end
+
+    test "__CALLER__ returns {:struct, [], {:atom, Macro.Env}, nil}" do
+      assert type_of("__CALLER__") == {:struct, [], {:atom, Macro.Env}, nil}
+    end
+  end
+
+  describe "special forms" do
+    special_forms = [
+      "case a do\n  :ok -> 1\n  :error -> 2\nend",
+      "cond do\n  a -> 1\n  b -> 2\nend",
+      "try do\n  risky_operation()\nrescue\n  e -> handle(e)\nend",
+      "receive do\n  {:msg, msg} -> process(msg)\nend",
+      "for x <- list, do: x * 2",
+      "with {:ok, a} <- fetch_a(), {:ok, b} <- fetch_b(a), do: a + b",
+      "quote do: a + b",
+      "unquote(expr)",
+      "unquote_splicing(expr)",
+      "import Module",
+      "alias Module.SubModule",
+      "require Module"
+    ]
+
+    for form <- special_forms do
+      test "special form: #{inspect(form)} returns nil" do
+        assert type_of(unquote(form)) == nil
+      end
+    end
   end
 end

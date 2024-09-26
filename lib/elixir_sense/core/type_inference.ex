@@ -167,6 +167,54 @@ defmodule ElixirSense.Core.TypeInference do
     {:list, list |> Enum.map(&type_of(&1, context))}
   end
 
+  # block expressions
+  def type_of({:__block__, _meta, exprs}, context) do
+    case List.last(exprs) do
+      nil -> nil
+      last_expr -> type_of(last_expr, context)
+    end
+  end
+
+  # anonymous functions
+  def type_of({:fn, _meta, _clauses}, _context), do: nil
+
+  # special forms
+  # for case/cond/with/receive/for/try we have no idea what the type is going to be
+  # we don't support binaries
+  # TODO guard?
+  # other are not worth handling
+  def type_of({form, _meta, _clauses}, _context)
+      when form in [
+             :case,
+             :cond,
+             :try,
+             :receive,
+             :for,
+             :with,
+             :quote,
+             :unquote,
+             :unquote_splicing,
+             :import,
+             :alias,
+             :require,
+             :__aliases__,
+             :__cursor__,
+             :__DIR__,
+             :super,
+             :<<>>,
+             :"::"
+           ],
+      do: nil
+
+  # __ENV__ is already expanded to map
+  def type_of({form, _meta, _clauses}, _context) when form in [:__CALLER__] do
+    {:struct, [], {:atom, Macro.Env}, nil}
+  end
+
+  def type_of({:__STACKTRACE__, _meta, _clauses}, _context) do
+    {:list, nil}
+  end
+
   # local call
   def type_of({var, _, args}, context) when is_atom(var) and is_list(args) do
     {:local_call, var, Enum.map(args, &type_of(&1, context))}
