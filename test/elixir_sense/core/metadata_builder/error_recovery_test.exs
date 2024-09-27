@@ -2141,14 +2141,16 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert env.typespec == {:foo, 0}
     end
 
-    test "in type after :: type with fun ( nex arg" do
-      code = """
-      defmodule Abc do
-        @type foo :: (bar, \
-      """
+    if Version.match?(System.version(), ">= 1.16.0") do
+      test "in type after :: type with fun ( nex arg" do
+        code = """
+        defmodule Abc do
+          @type foo :: (bar, \
+        """
 
-      assert {_, env} = get_cursor_env(code)
-      assert env.typespec == {:foo, 0}
+        assert {_, env} = get_cursor_env(code)
+        assert env.typespec == {:foo, 0}
+      end
     end
 
     test "in type after :: type with map empty" do

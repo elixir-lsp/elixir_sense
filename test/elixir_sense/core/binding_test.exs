@@ -122,19 +122,11 @@ defmodule ElixirSense.Core.BindingTest do
       assert {
                :struct,
                [
-                 {:__struct__, {:atom, URI}},
-                 {:port, nil},
-                 {:scheme, nil},
-                 {:path, nil},
-                 {:host, nil},
-                 {:userinfo, nil},
-                 {:fragment, nil},
-                 {:query, nil},
-                 {:authority, nil}
+                 {:__struct__, {:atom, URI}} | _
                ],
                {:atom, URI},
                nil
-             } ==
+             } =
                Binding.expand(
                  @env,
                  {

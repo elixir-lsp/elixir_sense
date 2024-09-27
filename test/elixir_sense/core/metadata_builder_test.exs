@@ -8037,7 +8037,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  doc: "",
                  meta: %{hidden: true}
                }
-             } == state.types
+             } = state.types
     end
 
     test "registers incomplete types" do

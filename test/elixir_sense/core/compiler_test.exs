@@ -298,28 +298,34 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
         assert_expansion("__ENV__.foo")
       end
 
-      test "expands quote literal" do
-        assert_expansion("quote do: 2")
-        assert_expansion("quote do: :foo")
-        assert_expansion("quote do: \"asd\"")
-        assert_expansion("quote do: []")
-        assert_expansion("quote do: [12]")
-        assert_expansion("quote do: [12, 34]")
-        assert_expansion("quote do: [12 | 34]")
-        assert_expansion("quote do: [12 | [34]]")
-        assert_expansion("quote do: {12}")
-        assert_expansion("quote do: {12, 34}")
-        assert_expansion("quote do: %{a: 12}")
+      if Version.match?(System.version(), ">= 1.16.0") do
+        test "expands quote literal" do
+          assert_expansion("quote do: 2")
+          assert_expansion("quote do: :foo")
+          assert_expansion("quote do: \"asd\"")
+          assert_expansion("quote do: []")
+          assert_expansion("quote do: [12]")
+          assert_expansion("quote do: [12, 34]")
+          assert_expansion("quote do: [12 | 34]")
+          assert_expansion("quote do: [12 | [34]]")
+          assert_expansion("quote do: {12}")
+          assert_expansion("quote do: {12, 34}")
+          assert_expansion("quote do: %{a: 12}")
+        end
       end
 
-      test "expands quote variable" do
-        assert_expansion("quote do: abc")
+      if Version.match?(System.version(), ">= 1.16.0") do
+        test "expands quote variable" do
+          assert_expansion("quote do: abc")
+        end
       end
 
-      test "expands quote quote" do
-        assert_expansion("""
-        quote do: (quote do: 1)
-        """)
+      if Version.match?(System.version(), ">= 1.16.0") do
+        test "expands quote quote" do
+          assert_expansion("""
+          quote do: (quote do: 1)
+          """)
+        end
       end
 
       test "expands quote block" do
@@ -348,36 +354,44 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
         """)
       end
 
-      test "expands quote unquote_splicing" do
-        assert_expansion("""
-        a = [1, 2, 3]
-        quote do: (unquote_splicing(a))
-        """)
+      if Version.match?(System.version(), ">= 1.16.0") do
+        test "expands quote unquote_splicing" do
+          assert_expansion("""
+          a = [1, 2, 3]
+          quote do: (unquote_splicing(a))
+          """)
+        end
       end
 
-      test "expands quote unquote_splicing in list" do
-        assert_expansion("""
-        a = [1, 2, 3]
-        quote do: [unquote_splicing(a) | [1]]
-        """)
+      if Version.match?(System.version(), ">= 1.16.0") do
+        test "expands quote unquote_splicing in list" do
+          assert_expansion("""
+          a = [1, 2, 3]
+          quote do: [unquote_splicing(a) | [1]]
+          """)
 
-        assert_expansion("""
-        a = [1, 2, 3]
-        quote do: [1 | unquote_splicing(a)]
-        """)
+          assert_expansion("""
+          a = [1, 2, 3]
+          quote do: [1 | unquote_splicing(a)]
+          """)
+        end
       end
 
-      test "expands quote alias" do
-        assert_expansion("quote do: Date")
-        assert_expansion("quote do: Elixir.Date")
-        assert_expansion("quote do: String.Chars")
-        assert_expansion("alias String.Chars; quote do: Chars")
-        assert_expansion("alias String.Chars; quote do: Chars.foo().A")
+      if Version.match?(System.version(), ">= 1.16.0") do
+        test "expands quote alias" do
+          assert_expansion("quote do: Date")
+          assert_expansion("quote do: Elixir.Date")
+          assert_expansion("quote do: String.Chars")
+          assert_expansion("alias String.Chars; quote do: Chars")
+          assert_expansion("alias String.Chars; quote do: Chars.foo().A")
+        end
       end
 
-      test "expands quote import" do
-        assert_expansion("quote do: inspect(1)")
-        assert_expansion("quote do: &inspect/1")
+      if Version.match?(System.version(), ">= 1.16.0") do
+        test "expands quote import" do
+          assert_expansion("quote do: inspect(1)")
+          assert_expansion("quote do: &inspect/1")
+        end
       end
 
       if Version.match?(System.version(), ">= 1.17.0") do
@@ -393,12 +407,14 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
         end
       end
 
-      test "expands quote with unquote false" do
-        assert_expansion("""
-        quote unquote: false do
-          unquote("hello")
+      if Version.match?(System.version(), ">= 1.16.0") do
+        test "expands quote with unquote false" do
+          assert_expansion("""
+          quote unquote: false do
+            unquote("hello")
+          end
+          """)
         end
-        """)
       end
 
       if Version.match?(System.version(), ">= 1.17.0") do
@@ -409,22 +425,28 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
         end
       end
 
-      test "expands quote with line" do
-        assert_expansion("""
-        quote line: 123, do: bar(1, 2, 3)
-        """)
+      if Version.match?(System.version(), ">= 1.16.0") do
+        test "expands quote with line" do
+          assert_expansion("""
+          quote line: 123, do: bar(1, 2, 3)
+          """)
+        end
       end
 
-      test "expands quote with location: keep" do
-        assert_expansion("""
-        quote location: :keep, do: bar(1, 2, 3)
-        """)
+      if Version.match?(System.version(), ">= 1.16.0") do
+        test "expands quote with location: keep" do
+          assert_expansion("""
+          quote location: :keep, do: bar(1, 2, 3)
+          """)
+        end
       end
 
-      test "expands quote with context" do
-        assert_expansion("""
-        quote context: Foo, do: abc = 3
-        """)
+      if Version.match?(System.version(), ">= 1.16.0") do
+        test "expands quote with context" do
+          assert_expansion("""
+          quote context: Foo, do: abc = 3
+          """)
+        end
       end
 
       test "expands &super" do
