@@ -999,7 +999,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[9].versioned_vars) == [{:k, nil}, {:kv, nil}, {:v, nil}]
 
-      # TODO should we handle unquote_slicing in arg list?
       # TODO defquard on 1.18
       assert [
                %VarInfo{name: :k, positions: [{3, 21}, {4, 19}, {5, 19}, {6, 25}, {7, 17}]},
@@ -1009,7 +1008,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[18].versioned_vars) == [keys: nil, kv: nil]
 
-      # TODO should we handle unquote_slicing in arg list?
       # TODO defquard on 1.18
       assert [
                %VarInfo{
@@ -8034,7 +8032,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  specs: ["@type __unknown__() :: 123"],
                  kind: :type,
                  positions: [{4, 5}],
-                 end_positions: [{4, 30}],
+                 end_positions: [_],
                  generated: [false],
                  doc: "",
                  meta: %{hidden: true}

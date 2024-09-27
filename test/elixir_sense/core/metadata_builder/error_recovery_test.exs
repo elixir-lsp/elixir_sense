@@ -2807,4 +2807,13 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert env.module == Abc
     end
   end
+
+  test "defimpl for" do
+    code = """
+    defimpl Enumerable, for: \
+    """
+
+    assert {_, env} = get_cursor_env(code)
+    assert env.module == nil
+  end
 end

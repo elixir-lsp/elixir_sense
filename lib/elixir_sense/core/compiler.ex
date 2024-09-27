@@ -1454,13 +1454,20 @@ defmodule ElixirSense.Core.Compiler do
           raise ArgumentError, "defimpl/3 expects a :for option when declared outside a module"
       end)
 
-    # TODO how to look for cursor in for?
     for =
       __MODULE__.Macro.expand_literals(for, %{
         env
         | module: env.module || Elixir,
           function: {:__impl__, 1}
       })
+
+    {for, state} =
+      if is_atom(for) do
+        {for, state}
+      else
+        {_, state, _} = expand(for, state, env)
+        {:"Elixir.__UNKNOWN__", state}
+      end
 
     {protocol, state, _env} = expand(name, state, env)
 
@@ -1481,7 +1488,8 @@ defmodule ElixirSense.Core.Compiler do
     block =
       case opts do
         [] ->
-          raise ArgumentError, "defimpl expects a do-end block"
+          # elixir raises here
+          nil
 
         [do: block] ->
           block
