@@ -76,7 +76,13 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
     end
 
     defp state_to_map(%State{} = state) do
-      Map.take(state, [:caller, :prematch, :stacktrace, :unused, :runtime_modules, :vars])
+      res = Map.take(state, [:caller, :prematch, :stacktrace, :unused, :runtime_modules, :vars])
+
+      if Version.match?(System.version(), "< 1.15.0") do
+        res |> Map.put(:prematch, :warn)
+      else
+        res
+      end
     end
 
     defp expand(ast) do
@@ -172,15 +178,17 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
         assert_expansion("%x{} = %Date{year: 2024, month: 2, day: 18}")
       end
 
-      test "expands <<>>" do
-        assert_expansion("<<>>")
-        assert_expansion("<<1>>")
-        assert_expansion("<<x, rest::binary>> = \"\"")
-      end
+      if Version.match?(System.version(), ">= 1.15.0") do
+        test "expands <<>>" do
+          assert_expansion("<<>>")
+          assert_expansion("<<1>>")
+          assert_expansion("<<x, rest::binary>> = \"\"")
+        end
 
-      test "expands <<>> with modifier" do
-        assert_expansion("x = 1; y = 1; <<x::size(y)>>")
-        assert_expansion("x = 1; y = 1; <<x::size(y)>> = <<>>")
+        test "expands <<>> with modifier" do
+          assert_expansion("x = 1; y = 1; <<x::size(y)>>")
+          assert_expansion("x = 1; y = 1; <<x::size(y)>> = <<>>")
+        end
       end
 
       test "expands __block__" do
@@ -557,20 +565,22 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
         """)
       end
 
-      test "expands for with bitstring generator" do
-        assert_expansion("""
-        for <<r::8, g::8, b::8 <- "foo">> do
-          :ok
+      if Version.match?(System.version(), ">= 1.15.0") do
+        test "expands for with bitstring generator" do
+          assert_expansion("""
+          for <<r::8, g::8, b::8 <- "foo">> do
+            :ok
+          end
+          """)
         end
-        """)
-      end
 
-      test "expands for with reduce" do
-        assert_expansion("""
-        for <<x <- "AbCabCABc">>, x in ?a..?z, reduce: %{} do
-          acc -> acc
+        test "expands for with reduce" do
+          assert_expansion("""
+          for <<x <- "AbCabCABc">>, x in ?a..?z, reduce: %{} do
+            acc -> acc
+          end
+          """)
         end
-        """)
       end
 
       test "expands for in block" do
@@ -683,29 +693,31 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
         assert state_to_map(state) == elixir_ex_to_map(elixir_state)
       end
 
-      test "expands nullary call if_undefined: :warn" do
-        Code.put_compiler_option(:on_undefined_variable, :warn)
-        ast = {:self, [], nil}
+      if Version.match?(System.version(), ">= 1.15.0") do
+        test "expands nullary call if_undefined: :warn" do
+          Code.put_compiler_option(:on_undefined_variable, :warn)
+          ast = {:self, [], nil}
 
-        {expanded, state, env} =
-          Compiler.expand(
-            ast,
-            %State{
-              prematch: Code.get_compiler_option(:on_undefined_variable) || :warn
-            },
-            Compiler.env()
-          )
+          {expanded, state, env} =
+            Compiler.expand(
+              ast,
+              %State{
+                prematch: Code.get_compiler_option(:on_undefined_variable) || :warn
+              },
+              Compiler.env()
+            )
 
-        elixir_env = :elixir_env.new()
+          elixir_env = :elixir_env.new()
 
-        {elixir_expanded, elixir_state, elixir_env} =
-          :elixir_expand.expand(ast, :elixir_env.env_to_ex(elixir_env), elixir_env)
+          {elixir_expanded, elixir_state, elixir_env} =
+            :elixir_expand.expand(ast, :elixir_env.env_to_ex(elixir_env), elixir_env)
 
-        assert expanded == elixir_expanded
-        assert env == elixir_env
-        assert state_to_map(state) == elixir_ex_to_map(elixir_state)
-      after
-        Code.put_compiler_option(:on_undefined_variable, :raise)
+          assert expanded == elixir_expanded
+          assert env == elixir_env
+          assert state_to_map(state) == elixir_ex_to_map(elixir_state)
+        after
+          Code.put_compiler_option(:on_undefined_variable, :raise)
+        end
       end
 
       test "expands local call" do
