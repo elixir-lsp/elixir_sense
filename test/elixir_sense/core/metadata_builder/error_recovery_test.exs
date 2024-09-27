@@ -2141,7 +2141,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert env.typespec == {:foo, 0}
     end
 
-    if Version.match?(System.version(), ">= 1.16.0") do
+    if Version.match?(System.version(), ">= 1.17.0") do
       test "in type after :: type with fun ( nex arg" do
         code = """
         defmodule Abc do

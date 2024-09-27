@@ -1462,11 +1462,11 @@ defmodule ElixirSense.Core.Compiler do
       })
 
     {for, state} =
-      if is_atom(for) do
+      if is_atom(for) or (is_list(for) and Enum.all?(for, &is_atom/1)) do
         {for, state}
       else
         {_, state, _} = expand(for, state, env)
-        {:"Elixir.__UNKNOWN__", state}
+        {:"Elixir.__Unknown__", state}
       end
 
     {protocol, state, _env} = expand(name, state, env)
