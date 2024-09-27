@@ -3009,9 +3009,9 @@ defmodule ElixirSense.Core.Compiler do
       {ret, %{se | stacktrace: old_stacktrace}}
     end
 
-    defp expand_catch(meta, [{:when, when_meta, [a1, a2, a3, _ | _]}], s, e) do
+    defp expand_catch(meta, [{:when, when_meta, [a1, a2, a3, dh | dt]}], s, e) do
       # elixir raises here wrong_number_of_args_for_clause
-      # TODO expand dropped
+      {_, s, _} = ElixirExpand.expand([dh | dt], s, e)
       expand_catch(meta, [{:when, when_meta, [a1, a2, a3]}], s, e)
     end
 
@@ -3025,10 +3025,10 @@ defmodule ElixirSense.Core.Compiler do
       head(args, s, e)
     end
 
-    defp expand_catch(meta, [a1, a2 | _], s, e) do
+    defp expand_catch(meta, [a1, a2 | d], s, e) do
       # attempt to recover from error by taking 2 first args
       # elixir raises here wrong_number_of_args_for_clause
-      # TODO expand dropped
+      {_, s, _} = ElixirExpand.expand(d, s, e)
       expand_catch(meta, [a1, a2], s, e)
     end
 
@@ -3038,10 +3038,10 @@ defmodule ElixirSense.Core.Compiler do
       {[e_arg], sa, ea}
     end
 
-    defp expand_rescue(meta, [a1 | _], s, e) do
+    defp expand_rescue(meta, [a1 | d], s, e) do
       # try to recover from error by taking first argument only
       # elixir raises here wrong_number_of_args_for_clause
-      # TODO expand dropped
+      {_, s, _} = ElixirExpand.expand(d, s, e)
       expand_rescue(meta, [a1], s, e)
     end
 
