@@ -4792,9 +4792,15 @@ defmodule ElixirSense.Core.Compiler do
       :elixir_rewrite.match_rewrite(receiver, dot_meta, right, meta, e_args)
     end
 
-    defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
-      # elixir uses guard context for error messages
-      :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args, "guard")
+    if Version.match?(System.version(), "< 1.14.0") do
+      defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
+        :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args)
+      end
+    else
+      defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
+        # elixir uses guard context for error messages
+        :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args, "guard")
+      end
     end
 
     defp do_rewrite(_, receiver, dot_meta, right, meta, e_args, _s) do
