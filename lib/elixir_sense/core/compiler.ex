@@ -1943,8 +1943,16 @@ defmodule ElixirSense.Core.Compiler do
   # defmodule automatically defines aliases, we need to mirror this feature here.
 
   # defmodule Elixir.Alias
-  defp alias_defmodule({:__aliases__, _, [:"Elixir", _ | _]}, module, env),
-    do: {module, env}
+  if Version.match?(System.version(), "< 1.16.0-dev") do
+    # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
+    defp alias_defmodule({:__aliases__, meta, [:"Elixir", t] = x}, module, env) do
+      alias = String.to_atom("Elixir." <> Atom.to_string(t))
+      {:ok, env} = NormalizedMacroEnv.define_alias(env, meta, alias, as: alias, trace: false)
+      {module, env}
+    end
+  end
+
+  defp alias_defmodule({:__aliases__, _, [:"Elixir", _ | _] = x}, module, env), do: {module, env}
 
   # defmodule Alias in root
   defp alias_defmodule({:__aliases__, _, _}, module, %{module: nil} = env),
