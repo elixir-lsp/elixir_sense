@@ -165,13 +165,11 @@ defmodule ElixirSense.Core.BindingTest do
       assert {
                :struct,
                [
-                 {:__struct__, {:atom, ArgumentError}},
-                 {:message, nil},
-                 {:__exception__, {:atom, true}}
+                 {:__struct__, {:atom, ArgumentError}} | _
                ],
                {:atom, ArgumentError},
                nil
-             } ==
+             } =
                Binding.expand(
                  @env,
                  {

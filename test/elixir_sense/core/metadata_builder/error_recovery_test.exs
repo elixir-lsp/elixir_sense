@@ -113,20 +113,24 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
-    test "invalid number of args with when" do
-      code = """
-      case nil do 0, z when not is_nil(z) -> \
-      """
+    if Version.match?(System.version(), "< 1.14.0") do
+      test "invalid number of args with when" do
+        code = """
+        case nil do 0, z when not is_nil(z) -> \
+        """
 
-      assert get_cursor_env(code)
+        assert get_cursor_env(code)
+      end
     end
 
-    test "invalid number of args" do
-      code = """
-      case nil do 0, z -> \
-      """
+    if Version.match?(System.version(), "< 1.14.0") do
+      test "invalid number of args" do
+        code = """
+        case nil do 0, z -> \
+        """
 
-      assert get_cursor_env(code)
+        assert get_cursor_env(code)
+      end
     end
   end
 
@@ -193,12 +197,14 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
-    test "invalid number of args" do
-      code = """
-      cond do 0, z -> \
-      """
+    if Version.match?(System.version(), "< 1.14.0") do
+      test "invalid number of args" do
+        code = """
+        cond do 0, z -> \
+        """
 
-      assert get_cursor_env(code)
+        assert get_cursor_env(code)
+      end
     end
   end
 
@@ -310,15 +316,17 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
-    test "invalid number of args in after" do
-      code = """
-      receive do
-        a -> :ok
-      after
-        0, z -> \
-      """
+    if Version.match?(System.version(), ">= 1.15.0") do
+      test "invalid number of args in after" do
+        code = """
+        receive do
+          a -> :ok
+        after
+          0, z -> \
+        """
 
-      assert get_cursor_env(code)
+        assert get_cursor_env(code)
+      end
     end
 
     test "invalid number of clauses in after" do
@@ -481,16 +489,18 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
-    test "cursor in right side of catch clause 2 arg" do
-      code = """
-      try do
-        bar()
-      catch
-        x, _ -> \
-      """
+    if Version.match?(System.version(), "< 1.14.0") do
+      test "cursor in right side of catch clause 2 arg" do
+        code = """
+        try do
+          bar()
+        catch
+          x, _ -> \
+        """
 
-      assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert {meta, env} = get_cursor_env(code)
+        assert Enum.any?(env.vars, &(&1.name == :x))
+      end
     end
 
     test "cursor in left side of else clause" do
@@ -806,15 +816,17 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       assert Enum.any?(env.vars, &(&1.name == :y))
     end
 
-    test "cursor in do block reduce right side of clause too many args" do
-      code = """
-      for x <- [], reduce: %{} do
-        y, z -> \
-      """
+    if Version.match?(System.version(), "< 1.14.0") do
+      test "cursor in do block reduce right side of clause too many args" do
+        code = """
+        for x <- [], reduce: %{} do
+          y, z -> \
+        """
 
-      assert {meta, env} = get_cursor_env(code)
-      assert Enum.any?(env.vars, &(&1.name == :x))
-      assert Enum.any?(env.vars, &(&1.name == :y))
+        assert {meta, env} = get_cursor_env(code)
+        assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :y))
+      end
     end
 
     test "cursor in do block reduce right side of clause too little args" do

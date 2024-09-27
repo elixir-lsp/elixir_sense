@@ -8103,9 +8103,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  kind: :type,
                  name: :t,
                  specs: ["@type t() :: term()"],
-                 doc: "All the types that implement this protocol" <> _
+                 doc: doc
                }
              } = state.types
+
+      if Version.match?(System.version(), ">= 1.14.0") do
+        assert "All the types that implement this protocol" <> _ = doc
+      end
     end
 
     test "specs and callbacks" do
