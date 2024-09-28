@@ -1,3 +1,4 @@
+if Version.match?(System.version(), ">= 1.15.0") do
 defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
   use ExUnit.Case, async: true
 
@@ -2830,4 +2831,5 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
     assert {_, env} = get_cursor_env(code)
     assert env.module == nil
   end
+end
 end

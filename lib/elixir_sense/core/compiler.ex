@@ -1747,10 +1747,16 @@ defmodule ElixirSense.Core.Compiler do
           expanded_arg
       end)
 
+    prematch = if Version.match?(System.version(), ">= 1.15.0-dev") do
+      Code.get_compiler_option(:on_undefined_variable)
+    else
+      :warn
+    end
+
     {e_guard, state, env_for_expand} =
       __MODULE__.Clauses.guard(
         guards,
-        %{state | prematch: :raise},
+        %{state | prematch: prematch},
         %{env_for_expand | context: :guard}
       )
 
@@ -2521,7 +2527,11 @@ defmodule ElixirSense.Core.Compiler do
     {e_args, close_write(sa, s), ea}
   end
 
+  if Version.match?(System.version(), ">= 1.15.0-dev") do
   @internals [{:behaviour_info, 1}, {:module_info, 1}, {:module_info, 0}]
+  else
+    @internals [{:module_info, 1}, {:module_info, 0}]
+  end
   defp import_info_callback(module, state) do
     fn kind ->
       if Map.has_key?(state.mods_funs_to_positions, {module, nil, nil}) do

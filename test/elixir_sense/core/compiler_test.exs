@@ -76,26 +76,13 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
     end
 
     defp state_to_map(%State{} = state) do
-      res = Map.take(state, [:caller, :prematch, :stacktrace, :unused, :runtime_modules, :vars])
-
-      if Version.match?(System.version(), "< 1.15.0") do
-        res |> Map.put(:prematch, :warn)
-      else
-        res
-      end
+      Map.take(state, [:caller, :prematch, :stacktrace, :unused, :runtime_modules, :vars])
     end
 
     defp expand(ast) do
       Compiler.expand(
         ast,
-        %State{
-          prematch:
-            if Version.match?(System.version(), ">= 1.15.0-dev") do
-              Code.get_compiler_option(:on_undefined_variable)
-            else
-              :warn
-            end
-        },
+        state_with_prematch(),
         Compiler.env()
       )
     end
@@ -143,10 +130,21 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
       {:ok, %{}}
     end
 
+    defp state_with_prematch do
+      %State{
+        prematch:
+          if Version.match?(System.version(), ">= 1.15.0-dev") do
+            Code.get_compiler_option(:on_undefined_variable)
+          else
+            :warn
+          end
+      }
+    end
+
     test "initial" do
       elixir_env = :elixir_env.new()
       assert Compiler.env() == elixir_env
-      assert state_to_map(%State{}) == elixir_ex_to_map(:elixir_env.env_to_ex(elixir_env))
+      assert state_to_map(state_with_prematch()) == elixir_ex_to_map(:elixir_env.env_to_ex(elixir_env))
     end
 
     describe "special forms" do
@@ -227,7 +225,7 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
 
       test "expands __MODULE__" do
         ast = {:__MODULE__, [], nil}
-        {expanded, state, env} = Compiler.expand(ast, %State{}, %{Compiler.env() | module: Foo})
+        {expanded, state, env} = Compiler.expand(ast, state_with_prematch(), %{Compiler.env() | module: Foo})
         elixir_env = %{:elixir_env.new() | module: Foo}
 
         {elixir_expanded, elixir_state, elixir_env} =
@@ -242,7 +240,7 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
         ast = {:__DIR__, [], nil}
 
         {expanded, state, env} =
-          Compiler.expand(ast, %State{}, %{Compiler.env() | file: __ENV__.file})
+          Compiler.expand(ast, state_with_prematch(), %{Compiler.env() | file: __ENV__.file})
 
         elixir_env = %{:elixir_env.new() | file: __ENV__.file}
 
@@ -256,7 +254,7 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
 
       test "expands __CALLER__" do
         ast = {:__CALLER__, [], nil}
-        {expanded, state, env} = Compiler.expand(ast, %State{caller: true}, Compiler.env())
+        {expanded, state, env} = Compiler.expand(ast, %State{state_with_prematch() | caller: true}, Compiler.env())
         elixir_env = :elixir_env.new()
 
         {elixir_expanded, elixir_state, elixir_env} =
@@ -273,7 +271,7 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
 
       test "expands __STACKTRACE__" do
         ast = {:__STACKTRACE__, [], nil}
-        {expanded, state, env} = Compiler.expand(ast, %State{stacktrace: true}, Compiler.env())
+        {expanded, state, env} = Compiler.expand(ast, %State{state_with_prematch() | stacktrace: true}, Compiler.env())
         elixir_env = :elixir_env.new()
 
         {elixir_expanded, elixir_state, elixir_env} =
@@ -290,20 +288,27 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
 
       test "expands __ENV__" do
         ast = {:__ENV__, [], nil}
-        {expanded, state, env} = Compiler.expand(ast, %State{}, Compiler.env())
+        {expanded, state, env} = Compiler.expand(ast, state_with_prematch(), Compiler.env())
         elixir_env = :elixir_env.new()
 
         {elixir_expanded, elixir_state, elixir_env} =
           :elixir_expand.expand(ast, :elixir_env.env_to_ex(elixir_env), elixir_env)
 
-        assert expanded == elixir_expanded
+        assert {:%{}, [], expanded_fields} = expanded
+        assert {:%{}, [], elixir_fields} = elixir_expanded
+
+        assert Enum.sort(expanded_fields) == Enum.sort(elixir_fields)
         assert env == elixir_env
         assert state_to_map(state) == elixir_ex_to_map(elixir_state)
       end
 
       test "expands __ENV__.property" do
         assert_expansion("__ENV__.requires")
-        assert_expansion("__ENV__.foo")
+        if Version.match?(System.version(), ">= 1.15.0") do
+          # elixir 1.14 returns fields in different order
+          # we don't test that as the code is invalid anyway
+          assert_expansion("__ENV__.foo")
+        end
       end
 
       if Version.match?(System.version(), ">= 1.16.0") do
@@ -682,7 +687,7 @@ if true or Version.match?(System.version(), ">= 1.17.0-dev") do
 
       test "expands nullary call if_undefined: :apply" do
         ast = {:self, [if_undefined: :apply], nil}
-        {expanded, state, env} = Compiler.expand(ast, %State{}, Compiler.env())
+        {expanded, state, env} = Compiler.expand(ast, state_with_prematch(), Compiler.env())
         elixir_env = :elixir_env.new()
 
         {elixir_expanded, elixir_state, elixir_env} =

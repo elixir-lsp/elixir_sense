@@ -491,8 +491,14 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
         end)
       end
 
-      defp remove_internals(set) do
-        set -- [{:behaviour_info, 1}, {:module_info, 1}, {:module_info, 0}]
+      if Version.match?(System.version(), ">= 1.15.0-dev") do
+        defp remove_internals(set) do
+          set -- [{:behaviour_info, 1}, {:module_info, 1}, {:module_info, 0}]
+        end
+      else
+        defp remove_internals(set) do
+          set -- [{:module_info, 1}, {:module_info, 0}]
+        end
       end
 
       defp ensure_keyword_list([]) do
