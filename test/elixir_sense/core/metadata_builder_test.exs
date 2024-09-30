@@ -1672,11 +1672,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-        if Version.match?(System.version(), "< 1.15.0") do
-      assert [%VarInfo{type: {:intersection, [{:atom, :my_var}, {:local_call, :x, []}]}}] = state |> get_line_vars(3)
-        else
-          assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
-        end
+      if Version.match?(System.version(), "< 1.15.0") do
+        assert [%VarInfo{type: {:intersection, [{:atom, :my_var}, {:local_call, :x, []}]}}] =
+                 state |> get_line_vars(3)
+      else
+        assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
+      end
     end
 
     test "variable binding simple case match context reverse order" do
@@ -1690,9 +1691,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       if Version.match?(System.version(), "< 1.15.0") do
-        assert [%VarInfo{type: {:intersection, [{:atom, :my_var}, {:local_call, :x, []}]}}] = state |> get_line_vars(3)
+        assert [%VarInfo{type: {:intersection, [{:atom, :my_var}, {:local_call, :x, []}]}}] =
+                 state |> get_line_vars(3)
       else
-      assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
+        assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
       end
     end
 
@@ -2162,11 +2164,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :var5, type: {:local_call, :now, [{:atom, :abc}, {:integer, 5}]}}
              ] = state |> get_line_vars(16)
 
-             if Version.match?(System.version(), "< 1.15.0") do
-              assert maybe_local_call == {:local_call, :now, []}
-             else
-              assert maybe_local_call == nil
-             end
+      if Version.match?(System.version(), "< 1.15.0") do
+        assert maybe_local_call == {:local_call, :now, []}
+      else
+        assert maybe_local_call == nil
+      end
 
       assert [
                %VarInfo{name: :abc, type: nil},
@@ -7417,15 +7419,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-        assert %{
-                 4 => [
-                   %CallInfo{arity: 1, func: :func, position: {4, 11}, mod: {:attribute, :attr}},
-                   _
-                 ],
-                 5 => [
-                   %CallInfo{arity: 1, func: :func, position: {5, 9}, mod: {:variable, :var, 0}}
-                 ]
-               } = state.calls
+      assert %{
+               4 => [
+                 %CallInfo{arity: 1, func: :func, position: {4, 11}, mod: {:attribute, :attr}},
+                 _
+               ],
+               5 => [
+                 %CallInfo{arity: 1, func: :func, position: {5, 9}, mod: {:variable, :var, 0}}
+               ]
+             } = state.calls
     end
 
     test "registers calls on attribute and var without args" do
@@ -7441,21 +7443,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-        Enum.any?(
-          state.calls[4],
-          &match?(
-            %CallInfo{arity: 0, func: :func, position: {4, 11}, mod: {:attribute, :attr}},
-            &1
-          )
+      Enum.any?(
+        state.calls[4],
+        &match?(
+          %CallInfo{arity: 0, func: :func, position: {4, 11}, mod: {:attribute, :attr}},
+          &1
         )
+      )
 
-        Enum.any?(
-          state.calls[4],
-          &match?(
-            %CallInfo{arity: 0, func: :func, position: {5, 9}, mod: {:variable, :var, 0}},
-            &1
-          )
+      Enum.any?(
+        state.calls[4],
+        &match?(
+          %CallInfo{arity: 0, func: :func, position: {5, 9}, mod: {:variable, :var, 0}},
+          &1
         )
+      )
     end
 
     test "registers calls on attribute and var anonymous" do
@@ -7471,15 +7473,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-        assert %{
-                 4 => [
-                   %CallInfo{arity: 0, func: {:attribute, :attr}, position: {4, 11}, mod: nil},
-                   _
-                 ],
-                 5 => [
-                   %CallInfo{arity: 0, func: {:variable, :var, 0}, position: {5, 9}, mod: nil}
-                 ]
-               } = state.calls
+      assert %{
+               4 => [
+                 %CallInfo{arity: 0, func: {:attribute, :attr}, position: {4, 11}, mod: nil},
+                 _
+               ],
+               5 => [
+                 %CallInfo{arity: 0, func: {:variable, :var, 0}, position: {5, 9}, mod: nil}
+               ]
+             } = state.calls
     end
 
     test "registers calls pipe with __MODULE__ operator no parens" do

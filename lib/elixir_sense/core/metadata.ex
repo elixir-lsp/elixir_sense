@@ -73,9 +73,13 @@ defmodule ElixirSense.Core.Metadata do
       )
 
   def get_cursor_env(
-        %__MODULE__{cursor_env: cursor_env}, _, _) when cursor_env != nil do
-          cursor_env |> elem(1)
-        end
+        %__MODULE__{cursor_env: cursor_env},
+        _,
+        _
+      )
+      when cursor_env != nil do
+    cursor_env |> elem(1)
+  end
 
   def get_cursor_env(
         %__MODULE__{} = metadata,

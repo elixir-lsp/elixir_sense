@@ -113,9 +113,9 @@ defmodule ElixirSense.Core.ParserTest do
               error: {:error, :parse_error}
             }, %Env{functions: functions}} = parse(source, {3, 10})
 
-            if Version.match?(System.version(), ">= 1.15.0") do
-    assert Keyword.has_key?(functions, List)
-            end
+    if Version.match?(System.version(), ">= 1.15.0") do
+      assert Keyword.has_key?(functions, List)
+    end
   end
 
   test "parse_string with missing terminator \"\'\"" do
@@ -130,9 +130,9 @@ defmodule ElixirSense.Core.ParserTest do
               error: {:error, :parse_error}
             }, %Env{functions: functions}} = parse(source, {3, 10})
 
-            if Version.match?(System.version(), ">= 1.15.0") do
-    assert Keyword.has_key?(functions, List)
-            end
+    if Version.match?(System.version(), ">= 1.15.0") do
+      assert Keyword.has_key?(functions, List)
+    end
   end
 
   test "parse_string with missing heredoc terminator" do
@@ -208,12 +208,12 @@ defmodule ElixirSense.Core.ParserTest do
     {_metadata, env} = parse(source, {3, 23})
 
     if Version.match?(System.version(), ">= 1.15.0") do
-    assert %Env{
-             vars: [
-               %VarInfo{name: :x}
-             ]
-           } = env
-            end
+      assert %Env{
+               vars: [
+                 %VarInfo{name: :x}
+               ]
+             } = env
+    end
   end
 
   test "parse_string with missing terminator \"end\" attempts to insert `end` at correct indentation" do
@@ -365,16 +365,16 @@ defmodule ElixirSense.Core.ParserTest do
               vars: vars
             }} = parse(source, {5, 14})
 
-            if Version.match?(System.version(), "< 1.15.0") do
-              # container_cursor_to_quoted removes function body
-              assert [
-                %ElixirSense.Core.State.VarInfo{name: :y}
-              ] = Enum.sort(vars)
-            else
-    assert [
-             %ElixirSense.Core.State.VarInfo{name: :x},
-             %ElixirSense.Core.State.VarInfo{name: :y}
-           ] = Enum.sort(vars)
+    if Version.match?(System.version(), "< 1.15.0") do
+      # container_cursor_to_quoted removes function body
+      assert [
+               %ElixirSense.Core.State.VarInfo{name: :y}
+             ] = Enum.sort(vars)
+    else
+      assert [
+               %ElixirSense.Core.State.VarInfo{name: :x},
+               %ElixirSense.Core.State.VarInfo{name: :y}
+             ] = Enum.sort(vars)
     end
   end
 

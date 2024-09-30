@@ -78,8 +78,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -100,8 +101,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -114,8 +116,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -178,8 +181,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -190,8 +194,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -204,8 +209,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -279,8 +285,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -301,8 +308,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -437,8 +445,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -464,8 +473,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -506,8 +516,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -547,8 +558,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -561,8 +573,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -607,8 +620,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -619,8 +633,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -665,8 +680,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -679,8 +695,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
   end
@@ -712,8 +729,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -724,8 +742,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -745,8 +764,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -828,8 +848,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
 
       assert {meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, &(&1.name == :x))
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :y))
+        assert Enum.any?(env.vars, &(&1.name == :y))
       end
     end
 
@@ -855,8 +876,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
 
       assert {meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, &(&1.name == :x))
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :y))
+        assert Enum.any?(env.vars, &(&1.name == :y))
       end
     end
 
@@ -891,8 +913,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
 
       assert {meta, env} = get_cursor_env(code)
       assert Enum.any?(env.vars, &(&1.name == :x))
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :y))
+        assert Enum.any?(env.vars, &(&1.name == :y))
       end
     end
   end
@@ -908,8 +931,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -921,8 +945,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -933,8 +958,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -958,8 +984,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {meta, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert Enum.any?(env.vars, &(&1.name == :x))
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
   end
@@ -2104,8 +2131,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:__unknown__, 0}
+        assert env.typespec == {:__unknown__, 0}
       end
     end
 
@@ -2116,8 +2144,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:__unknown__, 0}
+        assert env.typespec == {:__unknown__, 0}
       end
     end
 
@@ -2128,8 +2157,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:foo, 0}
+        assert env.typespec == {:foo, 0}
       end
     end
 
@@ -2140,8 +2170,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:foo, 0}
+        assert env.typespec == {:foo, 0}
       end
     end
 
@@ -2152,8 +2183,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:foo, 0}
+        assert env.typespec == {:foo, 0}
       end
     end
 
@@ -2164,8 +2196,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:foo, 0}
+        assert env.typespec == {:foo, 0}
       end
     end
 
@@ -2176,8 +2209,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:foo, 0}
+        assert env.typespec == {:foo, 0}
       end
     end
 
@@ -2310,8 +2344,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:foo, 0}
+        assert env.typespec == {:foo, 0}
       end
     end
 
@@ -2322,8 +2357,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:foo, 0}
+        assert env.typespec == {:foo, 0}
       end
     end
 
@@ -2424,8 +2460,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:foo, 1}
+        assert env.typespec == {:foo, 1}
       end
     end
 
@@ -2496,8 +2533,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:__required__, 1}
+        assert env.typespec == {:__required__, 1}
       end
     end
 
@@ -2558,8 +2596,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:foo, 0}
+        assert env.typespec == {:foo, 0}
       end
     end
 
@@ -2610,8 +2649,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:foo, 0}
+        assert env.typespec == {:foo, 0}
       end
     end
 
@@ -2642,8 +2682,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:foo, 0}
+        assert env.typespec == {:foo, 0}
       end
     end
 
@@ -2654,8 +2695,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.typespec == {:foo, 1}
+        assert env.typespec == {:foo, 1}
       end
     end
   end
@@ -2678,8 +2720,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.function == {:__unknown__, 0}
+        assert env.function == {:__unknown__, 0}
       end
     end
 
@@ -2720,8 +2763,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.function == {:__unknown__, 0}
+        assert env.function == {:__unknown__, 0}
       end
     end
 
@@ -2763,9 +2807,10 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.function == {:foo, 1}
-      assert env.context == :guard
+        assert env.function == {:foo, 1}
+        assert env.context == :guard
       end
     end
 
@@ -2776,9 +2821,10 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       """
 
       assert {_, env} = get_cursor_env(code)
+
       if Version.match?(System.version(), ">= 1.15.0") do
-      assert env.function == {:foo, 1}
-      assert env.context == :guard
+        assert env.function == {:foo, 1}
+        assert env.context == :guard
       end
     end
 

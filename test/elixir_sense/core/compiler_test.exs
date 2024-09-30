@@ -20,15 +20,15 @@ defmodule ElixirSense.Core.CompilerTest do
     )
 
     defp elixir_ex_to_map(
-            elixir_ex(
-              caller: caller,
-              prematch: prematch,
-              stacktrace: stacktrace,
-              unused: {_, unused},
-              runtime_modules: runtime_modules,
-              vars: vars
-            )
-          ) do
+           elixir_ex(
+             caller: caller,
+             prematch: prematch,
+             stacktrace: stacktrace,
+             unused: {_, unused},
+             runtime_modules: runtime_modules,
+             vars: vars
+           )
+         ) do
       %{
         caller: caller,
         prematch: prematch,
@@ -55,14 +55,14 @@ defmodule ElixirSense.Core.CompilerTest do
     )
 
     defp elixir_ex_to_map(
-            elixir_ex(
-              caller: caller,
-              prematch: prematch,
-              stacktrace: stacktrace,
-              unused: {_, unused},
-              vars: vars
-            )
-          ) do
+           elixir_ex(
+             caller: caller,
+             prematch: prematch,
+             stacktrace: stacktrace,
+             unused: {_, unused},
+             vars: vars
+           )
+         ) do
       %{
         caller: caller,
         prematch: prematch,
@@ -143,7 +143,9 @@ defmodule ElixirSense.Core.CompilerTest do
   test "initial" do
     elixir_env = :elixir_env.new()
     assert Compiler.env() == elixir_env
-    assert state_to_map(state_with_prematch()) == elixir_ex_to_map(:elixir_env.env_to_ex(elixir_env))
+
+    assert state_to_map(state_with_prematch()) ==
+             elixir_ex_to_map(:elixir_env.env_to_ex(elixir_env))
   end
 
   describe "special forms" do
@@ -224,7 +226,10 @@ defmodule ElixirSense.Core.CompilerTest do
 
     test "expands __MODULE__" do
       ast = {:__MODULE__, [], nil}
-      {expanded, state, env} = Compiler.expand(ast, state_with_prematch(), %{Compiler.env() | module: Foo})
+
+      {expanded, state, env} =
+        Compiler.expand(ast, state_with_prematch(), %{Compiler.env() | module: Foo})
+
       elixir_env = %{:elixir_env.new() | module: Foo}
 
       {elixir_expanded, elixir_state, elixir_env} =
@@ -253,7 +258,10 @@ defmodule ElixirSense.Core.CompilerTest do
 
     test "expands __CALLER__" do
       ast = {:__CALLER__, [], nil}
-      {expanded, state, env} = Compiler.expand(ast, %State{state_with_prematch() | caller: true}, Compiler.env())
+
+      {expanded, state, env} =
+        Compiler.expand(ast, %State{state_with_prematch() | caller: true}, Compiler.env())
+
       elixir_env = :elixir_env.new()
 
       {elixir_expanded, elixir_state, elixir_env} =
@@ -270,7 +278,10 @@ defmodule ElixirSense.Core.CompilerTest do
 
     test "expands __STACKTRACE__" do
       ast = {:__STACKTRACE__, [], nil}
-      {expanded, state, env} = Compiler.expand(ast, %State{state_with_prematch() | stacktrace: true}, Compiler.env())
+
+      {expanded, state, env} =
+        Compiler.expand(ast, %State{state_with_prematch() | stacktrace: true}, Compiler.env())
+
       elixir_env = :elixir_env.new()
 
       {elixir_expanded, elixir_state, elixir_env} =
@@ -303,6 +314,7 @@ defmodule ElixirSense.Core.CompilerTest do
 
     test "expands __ENV__.property" do
       assert_expansion("__ENV__.requires")
+
       if Version.match?(System.version(), ">= 1.15.0") do
         # elixir 1.14 returns fields in different order
         # we don't test that as the code is invalid anyway
@@ -558,17 +570,17 @@ defmodule ElixirSense.Core.CompilerTest do
     end
 
     if Version.match?(System.version(), ">= 1.14.0") do
-    test "expands for" do
-      assert_expansion("""
-      for i <- [1, 2, 3] do
-        i
-      end
-      """)
+      test "expands for" do
+        assert_expansion("""
+        for i <- [1, 2, 3] do
+          i
+        end
+        """)
 
-      assert_expansion("""
-      for i <- [1, 2, 3], j <- [1, 2], true, into: %{}, do: {i, j}
-      """)
-    end
+        assert_expansion("""
+        for i <- [1, 2, 3], j <- [1, 2], true, into: %{}, do: {i, j}
+        """)
+      end
     end
 
     if Version.match?(System.version(), ">= 1.15.0") do
@@ -590,28 +602,28 @@ defmodule ElixirSense.Core.CompilerTest do
     end
 
     if Version.match?(System.version(), ">= 1.14.0") do
-    test "expands for in block" do
-      assert_expansion("""
-      for i <- [1, 2, 3] do
-        i
-      end
-      :ok
-      """)
+      test "expands for in block" do
+        assert_expansion("""
+        for i <- [1, 2, 3] do
+          i
+        end
+        :ok
+        """)
 
-      assert_expansion("""
-      for i <- [1, 2, 3], uniq: true do
-        i
-      end
-      :ok
-      """)
+        assert_expansion("""
+        for i <- [1, 2, 3], uniq: true do
+          i
+        end
+        :ok
+        """)
 
-      assert_expansion("""
-      _ = for i <- [1, 2, 3] do
-        i
+        assert_expansion("""
+        _ = for i <- [1, 2, 3] do
+          i
+        end
+        :ok
+        """)
       end
-      :ok
-      """)
-    end
     end
 
     test "expands with" do
