@@ -67,20 +67,30 @@ defmodule ElixirSense.Core.Metadata do
   end
 
   def get_cursor_env(
+        metadata,
+        position,
+        surround \\ nil
+      )
+
+  def get_cursor_env(
+        %__MODULE__{cursor_env: cursor_env}, _, _) when cursor_env != nil do
+          cursor_env |> elem(1)
+        end
+
+  def get_cursor_env(
         %__MODULE__{} = metadata,
         {line, column},
-        surround \\ nil
+        surround
       ) do
     {prefix, source_with_cursor} =
       case surround do
         {{begin_line, begin_column}, {end_line, end_column}} ->
-          [prefix, needle, suffix] =
+          [prefix, suffix] =
             ElixirSense.Core.Source.split_at(metadata.source, [
-              {begin_line, begin_column},
-              {end_line, end_column}
+              {begin_line, begin_column}
             ])
 
-          source_with_cursor = prefix <> "__cursor__(#{needle})" <> suffix
+          source_with_cursor = prefix <> "__cursor__();" <> suffix
 
           {prefix, source_with_cursor}
 
@@ -90,7 +100,7 @@ defmodule ElixirSense.Core.Metadata do
               {line, column}
             ])
 
-          source_with_cursor = prefix <> "__cursor__()" <> suffix
+          source_with_cursor = prefix <> "__cursor__();" <> suffix
 
           {prefix, source_with_cursor}
       end
