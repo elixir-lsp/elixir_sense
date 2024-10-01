@@ -2489,19 +2489,65 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_case(meta, expr, opts, s, e) do
     {e_expr, se, ee} = expand(expr, s, e)
 
-    r_opts = opts
-    # if proplists.get_value(:optimize_boolean, meta, false) do
-    #   if ElixirUtils.returns_boolean(e_expr) do
-    #     rewrite_case_clauses(opts)
-    #   else
-    #     generated_case_clauses(opts)
-    #   end
-    # else
-    #   opts
-    # end
+    r_opts =
+      if Keyword.get(meta, :optimize_boolean, false) do
+        if :elixir_utils.returns_boolean(e_expr) do
+          rewrite_case_clauses(opts)
+        else
+          generated_case_clauses(opts)
+        end
+      else
+        opts
+      end
 
     {e_opts, so, eo} = __MODULE__.Clauses.case(e_expr, r_opts, se, ee)
     {{:case, meta, [e_expr, e_opts]}, so, eo}
+  end
+
+  def rewrite_case_clauses(
+        do: [
+          {:->, false_meta,
+           [
+             [{:when, _, [var, {{:., _, [Kernel, :in]}, _, [var, [false, nil]]}]}],
+             false_expr
+           ]},
+          {:->, true_meta,
+           [
+             [{:_, _, _}],
+             true_expr
+           ]}
+        ]
+      ) do
+    rewrite_case_clauses(false_meta, false_expr, true_meta, true_expr)
+  end
+
+  def rewrite_case_clauses(
+        do: [
+          {:->, false_meta, [[false], false_expr]},
+          {:->, true_meta, [[true], true_expr]} | _
+        ]
+      ) do
+    rewrite_case_clauses(false_meta, false_expr, true_meta, true_expr)
+  end
+
+  def rewrite_case_clauses(other) do
+    generated_case_clauses(other)
+  end
+
+  defp rewrite_case_clauses(false_meta, false_expr, true_meta, true_expr) do
+    [
+      do: [
+        {:->, __MODULE__.Utils.generated(false_meta), [[false], false_expr]},
+        {:->, __MODULE__.Utils.generated(true_meta), [[true], true_expr]}
+      ]
+    ]
+  end
+
+  defp generated_case_clauses(do: clauses) do
+    r_clauses =
+      for {:->, meta, args} <- clauses, do: {:->, __MODULE__.Utils.generated(meta), args}
+
+    [do: r_clauses]
   end
 
   def expand_arg(arg, acc, e)
@@ -2566,6 +2612,9 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defmodule Utils do
+    def generated([{:generated, true} | _] = meta), do: meta
+    def generated(meta), do: [{:generated, true} | meta]
+
     def split_last([]), do: {[], []}
 
     def split_last(list), do: split_last(list, [])

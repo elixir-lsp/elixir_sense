@@ -750,8 +750,7 @@ defmodule ElixirSense.Core.CompilerTest do
     end
 
     test "expands local call macro" do
-      # TODO
-      # assert_expansion("if true, do: :ok")
+      assert_expansion("if true, do: :ok")
       assert_expansion("1 |> IO.inspect")
     end
 
@@ -855,7 +854,7 @@ defmodule ElixirSense.Core.CompilerTest do
     end
 
     test "context local macro" do
-      # TODO this does not expand the macro
+      # this does not expand the macro
       assert_expansion_env("""
       defmodule Abc do
         defmacro foo(x) do
@@ -872,7 +871,7 @@ defmodule ElixirSense.Core.CompilerTest do
     end
 
     test "context remote macro" do
-      # TODO this does not expand the macro
+      # this does not expand the macro
       assert_expansion_env("""
       defmodule Abc do
         defmacro foo(x) do
