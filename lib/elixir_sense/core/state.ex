@@ -1351,9 +1351,12 @@ defmodule ElixirSense.Core.State do
        ) do
     outer_scope_vars =
       for {key, _} <- outer_scope_vars,
-          into: %{},
-          # TODO merge type and positions?
-          do: {key, current_scope_vars[key]}
+          into: %{} do
+        # take type from outer scope as type narrowing in inner scope is not guaranteed to
+        # affect outer scope
+        type = outer_scope_vars[key].type
+        {key, %{current_scope_vars[key] | type: type}}
+      end
 
     vars_info = [current_scope_vars, outer_scope_vars | other_scopes_vars]
 

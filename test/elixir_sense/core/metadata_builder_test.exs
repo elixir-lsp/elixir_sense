@@ -3598,9 +3598,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 8)
 
-      # TODO this type should not leak outside clause
-      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 10)
-      assert [%VarInfo{name: :x, type: :number}] =
+      assert [%VarInfo{name: :x, type: nil}] =
                get_line_vars(state, 10)
     end
 
@@ -3649,10 +3647,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
 
-      # TODO this type should not leak outside clause
-      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
-      assert [%VarInfo{name: :x, type: :number}] =
-               get_line_vars(state, 12)
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
     end
 
     test "guards in with clauses" do
@@ -3693,9 +3688,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                get_line_vars(state, 8)
 
       assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
-      # TODO this type should not leak outside clause
-      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 12)
+
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
     end
 
     test "guards in receive clauses" do
@@ -3725,9 +3719,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ] = get_line_vars(state, 6)
 
       assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 8)
-      # TODO this type should not leak outside clause
-      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 10)
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
+
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 10)
     end
 
     test "guards in for generator clauses" do
@@ -3764,9 +3757,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :y, type: {:for_expression, {:variable, :a, 1}}}
              ] = get_line_vars(state, 5)
 
-      # TODO this type should not leak outside clause
-      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 7)
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 7)
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 7)
     end
 
     test "guards in for aggregate clauses" do
@@ -3808,9 +3799,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :x, type: :number}
              ] = get_line_vars(state, 10)
 
-      # TODO this type should not leak outside clause
-      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 12)
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
     end
 
     test "guards in try clauses" do
@@ -3850,9 +3839,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ] = get_line_vars(state, 11)
 
       assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 13)
-      # TODO this type should not leak outside clause
-      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 15)
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 15)
+
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 15)
     end
 
     test "guards in fn clauses" do
@@ -3889,9 +3877,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ] = get_line_vars(state, 8)
 
       assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
-      # TODO this type should not leak outside clause
-      # assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 12)
+      assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
     end
 
     test "number guards" do
