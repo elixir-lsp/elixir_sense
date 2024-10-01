@@ -861,7 +861,7 @@ defmodule ElixirSense.Core.Compiler do
           expand_defaults(args, state, %{env_for_expand | context: nil}, [], [])
 
         # based on :elixir_clauses.def
-        {e_args_no_defaults, state, env_for_expand} =
+        {e_args_no_defaults, state, _env_for_expand} =
           expand_args(args_no_defaults, %{state | prematch: {%{}, 0, :none}}, %{
             env_for_expand
             | context: :match
@@ -1959,7 +1959,7 @@ defmodule ElixirSense.Core.Compiler do
     end
   end
 
-  defp alias_defmodule({:__aliases__, _, [:"Elixir", _ | _] = x}, module, env), do: {module, env}
+  defp alias_defmodule({:__aliases__, _, [:"Elixir", _ | _]}, module, env), do: {module, env}
 
   # defmodule Alias in root
   defp alias_defmodule({:__aliases__, _, _}, module, %{module: nil} = env),
@@ -4858,7 +4858,7 @@ defmodule ElixirSense.Core.Compiler do
         :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args)
       end
     else
-      defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
+      defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, _s) do
         # elixir uses guard context for error messages
         :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args, "guard")
       end
