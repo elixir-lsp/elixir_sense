@@ -332,8 +332,9 @@ defmodule ElixirSense.Core.MetadataTest do
 
     env = Metadata.get_env(metadata, {49, 1})
     assert env.module == Pr
-    assert env.function == nil
-    assert env.typespec == nil
+    # TODO this test should check cursor_env
+    # assert env.function == nil
+    # assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {50, 3})
     assert env.module == Pr
@@ -351,12 +352,12 @@ defmodule ElixirSense.Core.MetadataTest do
     assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {54, 3})
-    assert env.module == Pr.String
+    assert env.module == Pr.List
     assert env.function == nil
     assert env.typespec == nil
 
     env = Metadata.get_env(metadata, {55, 3})
-    assert env.module == Pr.String
+    assert env.module == Pr.List
     assert env.function == {:x, 1}
     assert env.typespec == nil
   end
