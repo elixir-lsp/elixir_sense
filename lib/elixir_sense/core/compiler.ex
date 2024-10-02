@@ -3788,7 +3788,7 @@ defmodule ElixirSense.Core.Compiler do
     defp capture_import({atom, import_meta, args} = expr, s, e, sequential) do
       res =
         if sequential do
-          ElixirDispatch.import_function(import_meta, atom, length(args), e)
+          ElixirDispatch.import_function(import_meta, atom, length(args), s, e)
         else
           false
         end
@@ -3808,7 +3808,14 @@ defmodule ElixirSense.Core.Compiler do
                   {:remote, e_left, right, length(args)}
 
                 _ when is_atom(e_left) ->
-                  ElixirDispatch.require_function(require_meta, e_left, right, length(args), ee)
+                  ElixirDispatch.require_function(
+                    require_meta,
+                    e_left,
+                    right,
+                    length(args),
+                    s,
+                    ee
+                  )
 
                 _ ->
                   false
@@ -4515,24 +4522,22 @@ defmodule ElixirSense.Core.Compiler do
       imports
     end
 
-    def import_function(meta, name, arity, e) do
+    def import_function(meta, name, arity, s, e) do
       tuple = {name, arity}
 
       case find_import_by_name_arity(meta, tuple, [], e) do
         {:function, receiver} ->
-          # ElixirEnv.trace({:imported_function, meta, receiver, name, arity}, e)
-          # ElixirLocals.record_import(tuple, receiver, e.module, e.function)
           remote_function(meta, receiver, name, arity, e)
 
         {:macro, _receiver} ->
           false
 
         {:import, receiver} ->
-          require_function(meta, receiver, name, arity, e)
+          require_function(meta, receiver, name, arity, s, e)
 
         {:ambiguous, [first | _]} ->
           # elixir raises here, we return first matching
-          require_function(meta, first, name, arity, e)
+          require_function(meta, first, name, arity, s, e)
 
         false ->
           if Macro.special_form?(name, arity) do
@@ -4540,27 +4545,26 @@ defmodule ElixirSense.Core.Compiler do
           else
             function = e.function
 
-            # TODO the condition has this at the end
-            # and ElixirDef.local_for(meta, name, arity, [:defmacro, :defmacrop], e)
-            if function != nil and function != tuple do
+            mfa = {e.module, name, arity}
+
+            if function != nil and function != tuple and
+                 Enum.any?(s.mods_funs_to_positions, fn {key, info} ->
+                   key == mfa and State.ModFunInfo.get_category(info) == :macro
+                 end) do
               false
             else
-              # ElixirEnv.trace({:local_function, meta, name, arity}, e)
-              # ElixirLocals.record_local(tuple, e.module, function, meta, false)
-              # TODO we may want to record
               {:local, name, arity}
             end
           end
       end
     end
 
-    def require_function(meta, receiver, name, arity, e) do
+    def require_function(meta, receiver, name, arity, s, e) do
       required = receiver in e.requires
 
-      if is_macro(name, arity, receiver, required) do
+      if is_macro(name, arity, receiver, required, s) do
         false
       else
-        # ElixirEnv.trace({:remote_function, meta, receiver, name, arity}, e)
         remote_function(meta, receiver, name, arity, e)
       end
     end
@@ -4638,16 +4642,20 @@ defmodule ElixirSense.Core.Compiler do
       end
     end
 
-    defp is_macro(_name, _arity, _module, false), do: false
+    defp is_macro(_name, _arity, _module, false, _s), do: false
 
-    defp is_macro(name, arity, receiver, true) do
-      try do
-        # TODO is it OK for local requires?
-        macros = receiver.__info__(:macros)
-        {name, arity} in macros
-      rescue
-        _error -> false
-      end
+    defp is_macro(name, arity, receiver, true, s) do
+      mfa = {receiver, name, arity}
+
+      Enum.any?(s.mods_funs_to_positions, fn {key, info} ->
+        key == mfa and State.ModFunInfo.get_category(info) == :macro
+      end) ||
+        try do
+          macros = receiver.__info__(:macros)
+          {name, arity} in macros
+        rescue
+          _error -> false
+        end
     end
   end
 

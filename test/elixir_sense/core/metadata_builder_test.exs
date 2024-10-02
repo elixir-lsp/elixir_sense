@@ -7761,6 +7761,38 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              } = state.calls
     end
 
+    test "registers calls capture required macro" do
+      state =
+        """
+        defmodule Foo do
+          defmacro bar, do: :ok
+        end
+
+        defmodule NyModule do
+          require Foo
+          require ElixirSenseExample.Math
+          def func do
+            &Foo.bar/0
+            &ElixirSenseExample.Math.squared/1
+          end
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               9 => [%CallInfo{arity: 0, position: {9, 10}, func: :bar, mod: Foo}],
+               10 => [
+                 _,
+                 %CallInfo{
+                   arity: 1,
+                   position: {10, 30},
+                   func: :squared,
+                   mod: ElixirSenseExample.Math
+                 }
+               ]
+             } = state.calls
+    end
+
     test "registers calls capture expression external" do
       state =
         """
@@ -7809,21 +7841,46 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              } = state.calls
     end
 
-    test "registers calls capture operator local" do
+    test "registers calls capture import" do
       state =
         """
         defmodule NyModule do
+          import Node
           def func do
-            &func/1
-            &func/0
+            &list/0
+            &binding/0
           end
         end
         """
         |> string_to_state
 
       assert %{
-               3 => [%CallInfo{arity: 1, func: :func, position: {3, 6}, mod: nil}],
-               4 => [%CallInfo{arity: 0, func: :func, position: {4, 6}, mod: nil}]
+               4 => [%CallInfo{arity: 0, func: :nodes, position: {4, 6}, mod: :erlang}],
+               5 => [%CallInfo{arity: 0, func: :binding, position: {5, 6}, mod: Kernel}]
+             } = state.calls
+    end
+
+    test "registers calls capture operator local" do
+      state =
+        """
+        defmodule NyModule do
+          def foo, do: ok
+          defmacro bar, do: :ok
+          def func do
+            &func/1
+            &func/0
+            &foo/0
+            &bar/0
+          end
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               5 => [%CallInfo{arity: 1, func: :func, position: {5, 6}, mod: nil}],
+               6 => [%CallInfo{arity: 0, func: :func, position: {6, 6}, mod: nil}],
+               7 => [%CallInfo{arity: 0, func: :foo, position: {7, 6}, mod: nil}],
+               8 => [%CallInfo{arity: 0, func: :bar, position: {8, 6}, mod: nil}]
              } = state.calls
     end
 
