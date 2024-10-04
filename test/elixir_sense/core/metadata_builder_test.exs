@@ -7793,6 +7793,58 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              } = state.calls
     end
 
+    # TODO reenable when https://github.com/elixir-lang/elixir/issues/13878 is resolved
+    # test "registers calls capture quoted" do
+    #   state =
+    #     """
+    #     defmodule MyModule do
+    #       def aaa, do: :ok
+    #       defmacro bbb, do: :ok
+    #       defmacro foo do
+    #         quote do
+    #           aaa()
+    #           &aaa/0
+    #           bbb()
+    #           &bbb/0
+    #           inspect(1)
+    #           &inspect/1
+    #           Node.list()
+    #           &Node.list/0
+    #         end
+    #       end
+
+    #       def go do
+    #         foo()
+    #       end
+
+    #       def bar do
+    #         aaa()
+    #         &aaa/0
+    #         bbb()
+    #         &bbb/0
+    #         inspect(1)
+    #         &inspect/1
+    #         Node.list()
+    #         &Node.list/0
+    #       end
+    #     end
+    #     """
+    #     |> string_to_state
+
+    #   assert %{
+    #            9 => [%CallInfo{arity: 0, position: {9, 10}, func: :bar, mod: Foo}],
+    #            10 => [
+    #              _,
+    #              %CallInfo{
+    #                arity: 1,
+    #                position: {10, 30},
+    #                func: :squared,
+    #                mod: ElixirSenseExample.Math
+    #              }
+    #            ]
+    #          } = state.calls
+    # end
+
     test "registers calls capture expression external" do
       state =
         """

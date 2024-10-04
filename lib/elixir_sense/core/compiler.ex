@@ -109,17 +109,14 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:__aliases__, meta, [head | tail] = list}, state, env) do
     case NormalizedMacroEnv.expand_alias(env, meta, list, trace: false) do
       {:alias, alias} ->
-        # TODO?
-        # A compiler may want to emit a :alias_reference trace in here.
-        # Elixir also warns on easy to confuse aliases, such as True/False/Nil.
+        # TODO track alias
         {alias, state, env}
 
       :error ->
         {head, state, env} = expand(head, state, env)
 
         if is_atom(head) do
-          # TODO?
-          # A compiler may want to emit a :alias_reference trace in here.
+          # TODO track alias
           {Module.concat([head | tail]), state, env}
         else
           # elixir raises here invalid_alias
@@ -355,7 +352,7 @@ defmodule ElixirSense.Core.Compiler do
     unquote_opt = Keyword.get(e_opts, :unquote, default_unquote)
     generated = Keyword.get(e_opts, :generated, false)
 
-    # TODO this is a stub only
+    # alternative implementation
     # res = expand_quote(exprs, st, et)
     # res |> elem(0) |> IO.inspect
     # res
@@ -2674,7 +2671,7 @@ defmodule ElixirSense.Core.Compiler do
     end
 
     def defdelegate_each(fun, opts) when is_list(opts) do
-      # TODO: Remove on v2.0
+      # TODO Remove on elixir v2.0
       append_first? = Keyword.get(opts, :append_first, false)
 
       {name, args} =
@@ -4180,7 +4177,7 @@ defmodule ElixirSense.Core.Compiler do
          )
          when is_atom(f) and is_integer(a) and is_atom(c) and is_list(meta) do
       new_meta =
-        case ElixirDispatch.find_import(meta, f, a, e) do
+        case ElixirDispatch.find_import(meta, f, a, e) |> dbg do
           false ->
             meta
 
@@ -4491,6 +4488,7 @@ defmodule ElixirSense.Core.Compiler do
       case find_import_by_name_arity(meta, tuple, [], e) do
         {:function, receiver} ->
           # TODO trace call?
+          # TODO address when https://github.com/elixir-lang/elixir/issues/13878 is resolved
           # ElixirEnv.trace({:imported_function, meta, receiver, name, arity}, e)
           receiver
 
