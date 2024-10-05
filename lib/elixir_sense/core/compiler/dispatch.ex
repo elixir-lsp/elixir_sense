@@ -1,6 +1,6 @@
 defmodule ElixirSense.Core.Compiler.Dispatch do
   alias ElixirSense.Core.Compiler.Rewrite, as: ElixirRewrite
-  alias ElixirSense.Core.State
+  alias ElixirSense.Core.State.ModFunInfo
   import :ordsets, only: [is_element: 2]
 
   def find_import(meta, name, arity, e) do
@@ -68,7 +68,7 @@ defmodule ElixirSense.Core.Compiler.Dispatch do
 
           if function != nil and function != tuple and
                Enum.any?(s.mods_funs_to_positions, fn {key, info} ->
-                 key == mfa and State.ModFunInfo.get_category(info) == :macro
+                 key == mfa and ModFunInfo.get_category(info) == :macro
                end) do
             false
           else
@@ -167,7 +167,7 @@ defmodule ElixirSense.Core.Compiler.Dispatch do
     mfa = {receiver, name, arity}
 
     Enum.any?(s.mods_funs_to_positions, fn {key, info} ->
-      key == mfa and State.ModFunInfo.get_category(info) == :macro
+      key == mfa and ModFunInfo.get_category(info) == :macro
     end) ||
       try do
         macros = receiver.__info__(:macros)

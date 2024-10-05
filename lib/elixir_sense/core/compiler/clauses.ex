@@ -1,7 +1,7 @@
 defmodule ElixirSense.Core.Compiler.Clauses do
   alias ElixirSense.Core.Compiler, as: ElixirExpand
   alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
-  alias ElixirSense.Core.State
+  alias ElixirSense.Core.Compiler.State
   alias ElixirSense.Core.TypeInference
 
   def match(fun, expr, after_s, _before_s, %{context: :match} = e) do

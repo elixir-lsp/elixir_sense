@@ -1,12 +1,12 @@
 defmodule ElixirSense.Core.Compiler do
-  import ElixirSense.Core.State
-  alias ElixirSense.Core.State
+  alias ElixirSense.Core.Compiler.State
   require Logger
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.TypeInference
   alias ElixirSense.Core.TypeInference.Guard
   alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
+  alias ElixirSense.Core.State.ModFunInfo
 
   @env :elixir_env.new()
   def env, do: @env
@@ -17,8 +17,8 @@ defmodule ElixirSense.Core.Compiler do
         case ast do
           {_, meta, _} when is_list(meta) ->
             state
-            |> add_current_env_to_line(meta, env)
-            |> update_closest_env(meta, env)
+            |> State.add_current_env_to_line(meta, env)
+            |> State.update_closest_env(meta, env)
 
           # state
           _ ->
@@ -47,7 +47,7 @@ defmodule ElixirSense.Core.Compiler do
 
     vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, el.context)
 
-    sl = merge_inferred_types(sl, vars_with_inferred_types)
+    sl = State.merge_inferred_types(sl, vars_with_inferred_types)
 
     {e_expr, sl, el}
   end
@@ -148,8 +148,8 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:alias, meta, [arg, opts]}, state, env) do
     state =
       state
-      |> add_first_alias_positions(env, meta)
-      |> add_current_env_to_line(meta, env)
+      |> State.add_first_alias_positions(env, meta)
+      |> State.add_current_env_to_line(meta, env)
 
     # no need to call expand_without_aliases_report - we never report
     {arg, state, env} = expand(arg, state, env)
@@ -173,7 +173,7 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:require, meta, [arg, opts]}, state, env) do
     state =
       state
-      |> add_current_env_to_line(meta, env)
+      |> State.add_current_env_to_line(meta, env)
 
     # no need to call expand_without_aliases_report - we never report
     {arg, state, env} = expand(arg, state, env)
@@ -204,7 +204,7 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:import, meta, [arg, opts]}, state, env) do
     state =
       state
-      |> add_current_env_to_line(meta, env)
+      |> State.add_current_env_to_line(meta, env)
 
     # no need to call expand_without_aliases_report - we never report
     {arg, state, env} = expand(arg, state, env)
@@ -235,34 +235,34 @@ defmodule ElixirSense.Core.Compiler do
   # Compilation environment macros
 
   defp do_expand({:__MODULE__, meta, ctx}, state, env) when is_atom(ctx) do
-    state = add_current_env_to_line(state, meta, env)
+    state = State.add_current_env_to_line(state, meta, env)
 
     {env.module, state, env}
   end
 
   defp do_expand({:__DIR__, meta, ctx}, state, env) when is_atom(ctx) do
-    state = add_current_env_to_line(state, meta, env)
+    state = State.add_current_env_to_line(state, meta, env)
 
     {Path.dirname(env.file), state, env}
   end
 
   defp do_expand({:__CALLER__, meta, ctx} = caller, state, env) when is_atom(ctx) do
     # elixir checks if context is not match and if caller is allowed
-    state = add_current_env_to_line(state, meta, env)
+    state = State.add_current_env_to_line(state, meta, env)
 
     {caller, state, env}
   end
 
   defp do_expand({:__STACKTRACE__, meta, ctx} = stacktrace, state, env) when is_atom(ctx) do
     # elixir checks if context is not match and if stacktrace is allowed
-    state = add_current_env_to_line(state, meta, env)
+    state = State.add_current_env_to_line(state, meta, env)
 
     {stacktrace, state, env}
   end
 
   defp do_expand({:__ENV__, meta, ctx}, state, env) when is_atom(ctx) do
     # elixir checks if context is not match
-    state = add_current_env_to_line(state, meta, env)
+    state = State.add_current_env_to_line(state, meta, env)
 
     {escape_map(escape_env_entries(meta, state, env)), state, env}
   end
@@ -270,7 +270,7 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({{:., dot_meta, [{:__ENV__, meta, atom}, field]}, call_meta, []}, s, e)
        when is_atom(atom) and is_atom(field) do
     # elixir checks if context is not match
-    s = add_current_env_to_line(s, call_meta, e)
+    s = State.add_current_env_to_line(s, call_meta, e)
 
     env = escape_env_entries(meta, s, e)
 
@@ -287,7 +287,7 @@ defmodule ElixirSense.Core.Compiler do
     # elixir raises here unquote_outside_quote
     # we may have cursor there
     {arg, s, e} = expand(arg, s, e)
-    s = s |> add_current_env_to_line(meta, e)
+    s = s |> State.add_current_env_to_line(meta, e)
     {{unquote_call, meta, [arg]}, s, e}
   end
 
@@ -307,7 +307,7 @@ defmodule ElixirSense.Core.Compiler do
     # elixir raises here invalid_args
     # we may have cursor there
     {arg, s, e} = expand(arg, s, e)
-    s = s |> add_current_env_to_line(meta, e)
+    s = s |> State.add_current_env_to_line(meta, e)
     {{:quote, meta, [arg]}, s, e}
   end
 
@@ -364,7 +364,7 @@ defmodule ElixirSense.Core.Compiler do
     quoted = __MODULE__.Quote.quote(exprs, q)
     {e_quoted, es, eq} = expand(quoted, sc, ec)
 
-    es = es |> add_current_env_to_line(meta, eq)
+    es = es |> State.add_current_env_to_line(meta, eq)
 
     e_binding =
       for {k, v} <- binding do
@@ -411,8 +411,8 @@ defmodule ElixirSense.Core.Compiler do
       {kind, name, _} when kind in [:def, :defp] ->
         s =
           s
-          |> add_call_to_line({nil, name, arity}, super_meta)
-          |> add_current_env_to_line(super_meta, e)
+          |> State.add_call_to_line({nil, name, arity}, super_meta)
+          |> State.add_current_env_to_line(super_meta, e)
 
         {{:&, meta, [{:/, arity_meta, [{name, super_meta, context}, arity]}]}, s, e}
 
@@ -463,7 +463,7 @@ defmodule ElixirSense.Core.Compiler do
     s =
       unless s.cursor_env do
         s
-        |> add_cursor_env(meta, e)
+        |> State.add_cursor_env(meta, e)
       else
         s
       end
@@ -488,8 +488,8 @@ defmodule ElixirSense.Core.Compiler do
 
         sa =
           sa
-          |> add_call_to_line({nil, name, arity}, meta)
-          |> add_current_env_to_line(meta, ea)
+          |> State.add_call_to_line({nil, name, arity}, meta)
+          |> State.add_current_env_to_line(meta, ea)
 
         {{:super, [{:super, {kind, name}} | meta], e_args}, sa, ea}
 
@@ -510,7 +510,7 @@ defmodule ElixirSense.Core.Compiler do
     case expand(arg, no_match_s, %{e | context: nil}) do
       {{name, _var_meta, kind} = var, %{unused: unused}, _}
       when is_atom(name) and is_atom(kind) ->
-        s = add_var_read(s, var)
+        s = State.add_var_read(s, var)
         {{:^, meta, [var]}, %{s | unused: unused}, e}
 
       {arg, s, _e} ->
@@ -546,7 +546,7 @@ defmodule ElixirSense.Core.Compiler do
       %{^pair => var_version} when var_version >= prematch_version ->
         var = {name, [{:version, var_version} | meta], kind}
         # it's a write but for simplicity treat it as read
-        s = add_var_read(s, var)
+        s = State.add_var_read(s, var)
         {var, %{s | unused: version}, e}
 
       # Variable is being overridden now
@@ -554,7 +554,7 @@ defmodule ElixirSense.Core.Compiler do
         new_read = Map.put(read, pair, version)
         new_write = if write != false, do: Map.put(write, pair, version), else: write
         var = {name, [{:version, version} | meta], kind}
-        s = add_var_write(s, var)
+        s = State.add_var_write(s, var)
         {var, %{s | vars: {new_read, new_write}, unused: version + 1}, e}
 
       # Variable defined for the first time
@@ -562,7 +562,7 @@ defmodule ElixirSense.Core.Compiler do
         new_read = Map.put(read, pair, version)
         new_write = if write != false, do: Map.put(write, pair, version), else: write
         var = {name, [{:version, version} | meta], kind}
-        s = add_var_write(s, var)
+        s = State.add_var_write(s, var)
         {var, %{s | vars: {new_read, new_write}, unused: version + 1}, e}
     end
   end
@@ -602,7 +602,7 @@ defmodule ElixirSense.Core.Compiler do
     case result do
       {:ok, pair_version} ->
         var = {name, [{:version, pair_version} | meta], kind}
-        s = add_var_read(s, var)
+        s = State.add_var_read(s, var)
         {var, s, e}
 
       error ->
@@ -652,8 +652,8 @@ defmodule ElixirSense.Core.Compiler do
         # :elixir_env.env_to_ex(env) possibly losing some details. Jose Valim is convinced this is not a problem
         state =
           state
-          |> add_call_to_line({module, fun, length(args)}, meta)
-          |> add_current_env_to_line(meta, env)
+          |> State.add_call_to_line({module, fun, length(args)}, meta)
+          |> State.add_current_env_to_line(meta, env)
 
         expand_macro(meta, module, fun, args, callback, state, env)
 
@@ -667,7 +667,7 @@ defmodule ElixirSense.Core.Compiler do
               {module, fun}
           end
 
-        expand_remote(ar, meta, af, meta, args, state, prepare_write(state), env)
+        expand_remote(ar, meta, af, meta, args, state, State.prepare_write(state), env)
 
       {:error, :not_found} ->
         expand_local(meta, fun, args, state, env)
@@ -690,7 +690,7 @@ defmodule ElixirSense.Core.Compiler do
        when (is_tuple(module) or is_atom(module)) and is_atom(fun) and is_list(meta) and
               is_list(args) do
     # dbg({module, fun, args})
-    {module, state_l, env} = expand(module, prepare_write(state), env)
+    {module, state_l, env} = expand(module, State.prepare_write(state), env)
     arity = length(args)
 
     if is_atom(module) do
@@ -708,8 +708,8 @@ defmodule ElixirSense.Core.Compiler do
               # :elixir_env.env_to_ex(env) possibly losing some details. Jose Valim is convinced this is not a problem
               state =
                 state
-                |> add_call_to_line({module, fun, length(args)}, meta)
-                |> add_current_env_to_line(meta, env)
+                |> State.add_call_to_line({module, fun, length(args)}, meta)
+                |> State.add_current_env_to_line(meta, env)
 
               expand_macro(meta, module, fun, args, callback, state, env)
 
@@ -735,8 +735,8 @@ defmodule ElixirSense.Core.Compiler do
 
     sa =
       sa
-      |> add_call_to_line({nil, e_expr, length(e_args)}, dot_meta)
-      |> add_current_env_to_line(meta, e)
+      |> State.add_call_to_line({nil, e_expr, length(e_args)}, dot_meta)
+      |> State.add_current_env_to_line(meta, e)
 
     {{{:., dot_meta, [e_expr]}, meta, e_args}, sa, ea}
   end
@@ -768,9 +768,9 @@ defmodule ElixirSense.Core.Compiler do
 
   defp do_expand(list, s, e) when is_list(list) do
     {e_args, {se, _}, ee} =
-      expand_list(list, &expand_arg/3, {prepare_write(s), s}, e, [])
+      expand_list(list, &expand_arg/3, {State.prepare_write(s), s}, e, [])
 
-    {e_args, close_write(se, s), ee}
+    {e_args, State.close_write(se, s), ee}
   end
 
   defp do_expand(function, s, e) when is_function(function) do
@@ -832,7 +832,7 @@ defmodule ElixirSense.Core.Compiler do
 
         {fun, state, has_unquotes} =
           if __MODULE__.Quote.has_unquotes(fun) do
-            state = new_vars_scope(state)
+            state = State.new_vars_scope(state)
             # dynamic defdelegate - replace unquote expression with fake call
             case fun do
               {{:unquote, _, unquote_args}, meta, args} ->
@@ -843,7 +843,7 @@ defmodule ElixirSense.Core.Compiler do
                 {fun, state, true}
             end
           else
-            state = new_func_vars_scope(state)
+            state = State.new_func_vars_scope(state)
             {fun, state, false}
           end
 
@@ -877,19 +877,19 @@ defmodule ElixirSense.Core.Compiler do
         state =
           unless has_unquotes do
             # restore module vars
-            remove_func_vars_scope(state, state_orig)
+            State.remove_func_vars_scope(state, state_orig)
           else
             # remove scope
-            remove_vars_scope(state, state_orig)
+            State.remove_vars_scope(state, state_orig)
           end
 
         state
-        |> add_current_env_to_line(meta, %{env | context: nil, function: {name, arity}})
-        |> add_func_to_index(
+        |> State.add_current_env_to_line(meta, %{env | context: nil, function: {name, arity}})
+        |> State.add_func_to_index(
           env,
           name,
           args,
-          extract_range(meta),
+          State.extract_range(meta),
           :defdelegate,
           target: {target, as, length(as_args)}
         )
@@ -924,10 +924,10 @@ defmodule ElixirSense.Core.Compiler do
        when module != nil do
     state =
       state
-      |> add_current_env_to_line(meta, env)
+      |> State.add_current_env_to_line(meta, env)
 
     {arg, state, env} = expand(arg, state, env)
-    add_behaviour(arg, state, env)
+    State.add_behaviour(arg, state, env)
   end
 
   defp expand_macro(
@@ -942,17 +942,17 @@ defmodule ElixirSense.Core.Compiler do
        when module != nil do
     state =
       state
-      |> add_current_env_to_line(meta, env)
+      |> State.add_current_env_to_line(meta, env)
 
     {arg, state, env} = expand(arg, state, env)
 
     state =
       state
-      |> add_moduledoc_positions(
+      |> State.add_moduledoc_positions(
         env,
         meta
       )
-      |> register_doc(env, :moduledoc, arg)
+      |> State.register_doc(env, :moduledoc, arg)
 
     {{:@, meta, [{:moduledoc, doc_meta, [arg]}]}, state, env}
   end
@@ -969,13 +969,13 @@ defmodule ElixirSense.Core.Compiler do
        when doc in [:doc, :typedoc] and module != nil do
     state =
       state
-      |> add_current_env_to_line(meta, env)
+      |> State.add_current_env_to_line(meta, env)
 
     {arg, state, env} = expand(arg, state, env)
 
     state =
       state
-      |> register_doc(env, doc, arg)
+      |> State.register_doc(env, doc, arg)
 
     {{:@, meta, [{doc, doc_meta, [arg]}]}, state, env}
   end
@@ -992,14 +992,14 @@ defmodule ElixirSense.Core.Compiler do
        when module != nil do
     state =
       state
-      |> add_current_env_to_line(meta, env)
+      |> State.add_current_env_to_line(meta, env)
 
     {arg, state, env} = expand(arg, state, env)
 
     # impl adds sets :hidden by default
     state =
       state
-      |> register_doc(env, :doc, :impl)
+      |> State.register_doc(env, :doc, :impl)
 
     {{:@, meta, [{:impl, doc_meta, [arg]}]}, state, env}
   end
@@ -1016,13 +1016,13 @@ defmodule ElixirSense.Core.Compiler do
        when module != nil do
     state =
       state
-      |> add_current_env_to_line(meta, env)
+      |> State.add_current_env_to_line(meta, env)
 
     {arg, state, env} = expand(arg, state, env)
 
     state =
       state
-      |> register_optional_callbacks(arg)
+      |> State.register_optional_callbacks(arg)
 
     {{:@, meta, [{:optional_callbacks, doc_meta, [arg]}]}, state, env}
   end
@@ -1039,13 +1039,13 @@ defmodule ElixirSense.Core.Compiler do
        when module != nil do
     state =
       state
-      |> add_current_env_to_line(meta, env)
+      |> State.add_current_env_to_line(meta, env)
 
     {arg, state, env} = expand(arg, state, env)
 
     state =
       state
-      |> register_doc(env, :doc, deprecated: arg)
+      |> State.register_doc(env, :doc, deprecated: arg)
 
     {{:@, meta, [{:deprecated, doc_meta, [arg]}]}, state, env}
   end
@@ -1079,7 +1079,7 @@ defmodule ElixirSense.Core.Compiler do
               nil ->
                 # implementation for: Any not detected (is in other file etc.)
                 acc
-                |> add_module_to_index(mod, extract_range(meta), generated: true)
+                |> State.add_module_to_index(mod, State.extract_range(meta), generated: true)
 
               _any_mods_funs ->
                 # copy implementation for: Any
@@ -1140,10 +1140,10 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> add_type(env, name, type_args, spec, kind, extract_range(attr_meta))
-      |> with_typespec({name, length(type_args)})
-      |> add_current_env_to_line(attr_meta, env)
-      |> with_typespec(nil)
+      |> State.add_type(env, name, type_args, spec, kind, State.extract_range(attr_meta))
+      |> State.with_typespec({name, length(type_args)})
+      |> State.add_current_env_to_line(attr_meta, env)
+      |> State.with_typespec(nil)
 
     state =
       if not cursor_before? and cursor_after? do
@@ -1174,12 +1174,12 @@ defmodule ElixirSense.Core.Compiler do
     cursor_after? = state.cursor_env != nil
     spec = TypeInfo.typespec_to_string(kind, expr)
 
-    range = extract_range(attr_meta)
+    range = State.extract_range(attr_meta)
 
     state =
       if kind in [:callback, :macrocallback] do
         state
-        |> add_func_to_index(
+        |> State.add_func_to_index(
           env,
           :behaviour_info,
           [{:atom, attr_meta, nil}],
@@ -1195,10 +1195,10 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> add_spec(env, name, type_args, spec, kind, range)
-      |> with_typespec({name, length(type_args)})
-      |> add_current_env_to_line(attr_meta, env)
-      |> with_typespec(nil)
+      |> State.add_spec(env, name, type_args, spec, kind, range)
+      |> State.with_typespec({name, length(type_args)})
+      |> State.add_current_env_to_line(attr_meta, env)
+      |> State.with_typespec(nil)
 
     state =
       if not cursor_before? and cursor_after? do
@@ -1252,8 +1252,8 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> add_attribute(env, name, meta, e_args, inferred_type, is_definition)
-      |> add_current_env_to_line(meta, env)
+      |> State.add_attribute(env, name, meta, e_args, inferred_type, is_definition)
+      |> State.add_current_env_to_line(meta, env)
 
     {{:@, meta, [{name, name_meta, e_args}]}, state, env}
   end
@@ -1272,7 +1272,7 @@ defmodule ElixirSense.Core.Compiler do
 
     case arg do
       keyword when is_list(keyword) ->
-        {nil, make_overridable(state, env, keyword, meta[:context]), env}
+        {nil, State.make_overridable(state, env, keyword, meta[:context]), env}
 
       behaviour_module when is_atom(behaviour_module) ->
         if Code.ensure_loaded?(behaviour_module) and
@@ -1281,7 +1281,7 @@ defmodule ElixirSense.Core.Compiler do
             behaviour_module.behaviour_info(:callbacks)
             |> Enum.map(&Introspection.drop_macro_prefix/1)
 
-          {nil, make_overridable(state, env, keyword, meta[:context]), env}
+          {nil, State.make_overridable(state, env, keyword, meta[:context]), env}
         else
           {nil, state, env}
         end
@@ -1333,7 +1333,7 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> add_struct_or_exception(env, type, fields, extract_range(meta))
+      |> State.add_struct_or_exception(env, type, fields, State.extract_range(meta))
 
     {{type, meta, [fields]}, state, env}
   end
@@ -1348,7 +1348,7 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when call in [:defrecord, :defrecordp] and module != nil do
-    range = extract_range(meta)
+    range = State.extract_range(meta)
     {[name, _fields] = args, state, env} = expand(args, state, env)
 
     type =
@@ -1361,7 +1361,7 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> add_func_to_index(
+      |> State.add_func_to_index(
         env,
         name,
         [{:\\, [], [{:args, [], nil}, []]}],
@@ -1369,7 +1369,7 @@ defmodule ElixirSense.Core.Compiler do
         type,
         options
       )
-      |> add_func_to_index(
+      |> State.add_func_to_index(
         env,
         name,
         [{:record, [], nil}, {:args, [], nil}],
@@ -1377,7 +1377,7 @@ defmodule ElixirSense.Core.Compiler do
         type,
         options
       )
-      |> add_current_env_to_line(meta, env)
+      |> State.add_current_env_to_line(meta, env)
 
     {{{:., meta, [Record, call]}, meta, args}, state, env}
   end
@@ -1401,15 +1401,15 @@ defmodule ElixirSense.Core.Compiler do
     # generate callbacks as macro expansion currently fails
     state =
       state
-      |> add_func_to_index(
+      |> State.add_func_to_index(
         %{env | module: module},
         :behaviour_info,
         [:atom],
-        extract_range(meta),
+        State.extract_range(meta),
         :def,
         generated: true
       )
-      |> generate_protocol_callbacks(%{env | module: module})
+      |> State.generate_protocol_callbacks(%{env | module: module})
 
     {ast, state, env}
   end
@@ -1548,7 +1548,7 @@ defmodule ElixirSense.Core.Compiler do
           %{state | runtime_modules: [full | state.runtime_modules]}
       end
 
-    range = extract_range(meta)
+    range = State.extract_range(meta)
 
     module_functions =
       case state.protocol do
@@ -1558,14 +1558,14 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> add_module_to_index(full, range, [])
-      |> add_module
-      |> add_current_env_to_line(meta, %{env | module: full})
-      |> add_module_functions(%{env | module: full}, module_functions, range)
-      |> new_vars_scope
-      |> new_attributes_scope
+      |> State.add_module_to_index(full, range, [])
+      |> State.add_module()
+      |> State.add_current_env_to_line(meta, %{env | module: full})
+      |> State.add_module_functions(%{env | module: full}, module_functions, range)
+      |> State.new_vars_scope()
+      |> State.new_attributes_scope()
 
-    {state, _env} = maybe_add_protocol_behaviour(state, %{env | module: full})
+    {state, _env} = State.maybe_add_protocol_behaviour(state, %{env | module: full})
 
     {_result, state, e_env} = expand(block, state, %{env | module: full})
 
@@ -1583,7 +1583,7 @@ defmodule ElixirSense.Core.Compiler do
         # module vars are not accessible in module callbacks
         env = %{env | versioned_vars: %{}, line: meta[:line]}
         state_orig = state
-        state = new_func_vars_scope(state)
+        state = State.new_func_vars_scope(state)
 
         # elixir dispatches callbacks by raw dispatch and eval_forms
         # instead we expand a bock with require and possibly expand macros
@@ -1596,17 +1596,17 @@ defmodule ElixirSense.Core.Compiler do
            ]}
 
         {_result, state, env} = expand(ast, state, env)
-        {remove_func_vars_scope(state, state_orig), env}
+        {State.remove_func_vars_scope(state, state_orig), env}
       end)
 
     # restore vars from outer scope
     # restore version counter
     state =
       state
-      |> apply_optional_callbacks(%{env | module: full})
-      |> remove_vars_scope(state_orig, true)
-      |> remove_attributes_scope
-      |> remove_module
+      |> State.apply_optional_callbacks(%{env | module: full})
+      |> State.remove_vars_scope(state_orig, true)
+      |> State.remove_attributes_scope()
+      |> State.remove_module()
 
     # in elixir the result of defmodule expansion is
     # require (a module atom) and :elixir_module.compile dot call in block
@@ -1710,14 +1710,14 @@ defmodule ElixirSense.Core.Compiler do
           state
           | caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
         }
-        |> new_func_vars_scope()
+        |> State.new_func_vars_scope()
       else
         # make module variables accessible if there are unquote fragments in def body
         %{
           state
           | caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
         }
-        |> new_vars_scope()
+        |> State.new_vars_scope()
       end
 
     # no need to reset versioned_vars - we never update it
@@ -1760,18 +1760,18 @@ defmodule ElixirSense.Core.Compiler do
 
     type_info = Guard.type_information_from_guards(e_guard)
 
-    state = merge_inferred_types(state, type_info)
+    state = State.merge_inferred_types(state, type_info)
 
     env_for_expand = %{env_for_expand | context: nil}
 
     state =
       state
-      |> add_current_env_to_line(meta, env_for_expand)
-      |> add_func_to_index(
+      |> State.add_current_env_to_line(meta, env_for_expand)
+      |> State.add_func_to_index(
         env,
         name,
         args,
-        extract_range(meta),
+        State.extract_range(meta),
         def_kind
       )
 
@@ -1808,10 +1808,10 @@ defmodule ElixirSense.Core.Compiler do
     state =
       unless has_unquotes do
         # restore module vars
-        remove_func_vars_scope(state, state_orig)
+        State.remove_func_vars_scope(state, state_orig)
       else
         # remove scope
-        remove_vars_scope(state, state_orig)
+        State.remove_vars_scope(state, state_orig)
       end
 
     # result of def expansion is fa tuple
@@ -1990,8 +1990,8 @@ defmodule ElixirSense.Core.Compiler do
 
       sl =
         sl
-        |> add_call_to_line({receiver, right, length(args)}, meta)
-        |> add_current_env_to_line(meta, e)
+        |> State.add_call_to_line({receiver, right, length(args)}, meta)
+        |> State.add_current_env_to_line(meta, e)
 
       {{{:., dot_meta, [receiver, right]}, meta, []}, sl, e}
     else
@@ -2009,18 +2009,18 @@ defmodule ElixirSense.Core.Compiler do
            ) do
         {:ok, rewritten} ->
           s =
-            close_write(sa, s)
-            |> add_call_to_line({receiver, right, length(e_args)}, meta)
-            |> add_current_env_to_line(meta, e)
+            State.close_write(sa, s)
+            |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
+            |> State.add_current_env_to_line(meta, e)
 
           {rewritten, s, ea}
 
         {:error, _error} ->
           # elixir raises here elixir_rewrite
           s =
-            close_write(sa, s)
-            |> add_call_to_line({receiver, right, length(e_args)}, meta)
-            |> add_current_env_to_line(meta, e)
+            State.close_write(sa, s)
+            |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
+            |> State.add_current_env_to_line(meta, e)
 
           {{{:., dot_meta, [receiver, right]}, attached_meta, e_args}, s, ea}
       end
@@ -2032,9 +2032,9 @@ defmodule ElixirSense.Core.Compiler do
     {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {sl, s}, e, args)
 
     s =
-      close_write(sa, s)
-      |> add_call_to_line({receiver, right, length(e_args)}, meta)
-      |> add_current_env_to_line(meta, e)
+      State.close_write(sa, s)
+      |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
+      |> State.add_current_env_to_line(meta, e)
 
     {{{:., dot_meta, [receiver, right]}, meta, e_args}, s, ea}
   end
@@ -2076,8 +2076,8 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> add_call_to_line({nil, fun, length(args)}, meta)
-      |> add_current_env_to_line(meta, env)
+      |> State.add_call_to_line({nil, fun, length(args)}, meta)
+      |> State.add_current_env_to_line(meta, env)
 
     {args, state, env} = expand_args(args, state, env)
     {{fun, meta, args}, state, env}
@@ -2122,7 +2122,7 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_block([], acc, _meta, s, e), do: {Enum.reverse(acc), s, e}
 
   defp expand_block([h], acc, meta, s, e) do
-    # s = s |> add_current_env_to_line(meta, e)
+    # s = s |> State.add_current_env_to_line(meta, e)
     {eh, se, ee} = expand(h, s, e)
     expand_block([], [eh | acc], meta, se, ee)
   end
@@ -2140,7 +2140,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_block([h | t], acc, meta, s, e) do
-    # s = s |> add_current_env_to_line(meta, e)
+    # s = s |> State.add_current_env_to_line(meta, e)
     {eh, se, ee} = expand(h, s, e)
     expand_block(t, [eh | acc], meta, se, ee)
   end
@@ -2203,7 +2203,7 @@ defmodule ElixirSense.Core.Compiler do
         state.mods_funs_to_positions
 
         case state.mods_funs_to_positions[{module, name, arity}] do
-          %State.ModFunInfo{overridable: {true, _}} = info ->
+          %ModFunInfo{overridable: {true, _}} = info ->
             kind =
               case info.type do
                 :defdelegate -> :def
@@ -2247,8 +2247,8 @@ defmodule ElixirSense.Core.Compiler do
 
         se =
           se
-          |> add_call_to_line({remote, fun, arity}, attached_meta)
-          |> add_current_env_to_line(attached_meta, ee)
+          |> State.add_call_to_line({remote, fun, arity}, attached_meta)
+          |> State.add_current_env_to_line(attached_meta, ee)
 
         {{:&, meta, [{:/, [], [{{:., dot_meta, [remote, fun]}, attached_meta, []}, arity]}]}, se,
          ee}
@@ -2258,8 +2258,8 @@ defmodule ElixirSense.Core.Compiler do
 
         se =
           se
-          |> add_call_to_line({nil, fun, arity}, local_meta)
-          |> add_current_env_to_line(local_meta, ee)
+          |> State.add_call_to_line({nil, fun, arity}, local_meta)
+          |> State.add_current_env_to_line(local_meta, ee)
 
         {{:&, meta, [{:/, [], [{fun, local_meta, nil}, arity]}]}, se, ee}
 
@@ -2281,7 +2281,7 @@ defmodule ElixirSense.Core.Compiler do
           {do_expr, do_opts}
       end
 
-    {e_opts, so, eo} = expand(opts, new_vars_scope(s), e)
+    {e_opts, so, eo} = expand(opts, State.new_vars_scope(s), e)
     {e_cases, sc, ec} = map_fold(&expand_for_generator/3, so, eo, cases)
     # elixir raises here for_generator_start on invalid start generator
 
@@ -2293,7 +2293,8 @@ defmodule ElixirSense.Core.Compiler do
 
     {e_expr, se, _ee} = expand_for_do_block(expr, sc, ec, maybe_reduce)
 
-    {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]}, remove_vars_scope(se, s), e}
+    {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]}, State.remove_vars_scope(se, s),
+     e}
   end
 
   defp expand_for_do_block([{:->, _, _} | _] = clauses, s, e, false) do
@@ -2327,13 +2328,13 @@ defmodule ElixirSense.Core.Compiler do
         {_ast, sa, _e} = expand(discarded_args, sa, e)
 
         clause = {:->, clause_meta, [args, right]}
-        s_reset = new_vars_scope(sa)
+        s_reset = State.new_vars_scope(sa)
 
         # no point in doing type inference here, we are only certain of the initial value of the accumulator
         {e_clause, s_acc, _e_acc} =
           __MODULE__.Clauses.clause(&__MODULE__.Clauses.head/3, clause, s_reset, e)
 
-        {e_clause, remove_vars_scope(s_acc, sa)}
+        {e_clause, State.remove_vars_scope(s_acc, sa)}
     end
 
     {do_expr, sa} = Enum.map_reduce(clauses, s, transformer)
@@ -2355,7 +2356,7 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_for_generator({:<-, meta, [left, right]}, s, e) do
     {e_right, sr, er} = expand(right, s, e)
-    sm = reset_read(sr, s)
+    sm = State.reset_read(sr, s)
     {[e_left], sl, el} = __MODULE__.Clauses.head([left], sm, er)
 
     match_context_r = TypeInference.type_of(e_right, e.context)
@@ -2372,7 +2373,7 @@ defmodule ElixirSense.Core.Compiler do
     case __MODULE__.Utils.split_last(args) do
       {left_start, {:<-, op_meta, [left_end, right]}} ->
         {e_right, sr, er} = expand(right, s, e)
-        sm = reset_read(sr, s)
+        sm = State.reset_read(sr, s)
 
         {e_left, sl, el} =
           __MODULE__.Clauses.match(
@@ -2553,7 +2554,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   def expand_arg(arg, {acc, s}, e) do
-    {e_arg, s_acc, e_acc} = expand(arg, reset_read(acc, s), e)
+    {e_arg, s_acc, e_acc} = expand(arg, State.reset_read(acc, s), e)
     {e_arg, {s_acc, s}, e_acc}
   end
 
@@ -2567,8 +2568,8 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   def expand_args(args, s, e) do
-    {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {prepare_write(s), s}, e, args)
-    {e_args, close_write(sa, s), ea}
+    {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {State.prepare_write(s), s}, e, args)
+    {e_args, State.close_write(sa, s), ea}
   end
 
   if Version.match?(System.version(), ">= 1.15.0-dev") do
@@ -2584,8 +2585,8 @@ defmodule ElixirSense.Core.Compiler do
 
         for {{^module, fun, arity}, info} when fun != nil <- state.mods_funs_to_positions,
             {fun, arity} not in @internals,
-            State.ModFunInfo.get_category(info) == category,
-            not State.ModFunInfo.private?(info) do
+            ModFunInfo.get_category(info) == category,
+            not ModFunInfo.private?(info) do
           {fun, arity}
         end
       else

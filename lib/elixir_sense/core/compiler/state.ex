@@ -1,8 +1,4 @@
-defmodule ElixirSense.Core.State do
-  @moduledoc """
-  Core State
-  """
-
+defmodule ElixirSense.Core.Compiler.State do
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.State.Env
 
@@ -46,7 +42,7 @@ defmodule ElixirSense.Core.State do
   @type protocol_t :: {module, nonempty_list(module)}
   @type var_type :: nil | {:atom, atom} | {:map, keyword} | {:struct, keyword, module}
 
-  @type t :: %ElixirSense.Core.State{
+  @type t :: %__MODULE__{
           attributes: list(list(ElixirSense.Core.State.AttributeInfo.t())),
           scope_attributes: list(list(atom)),
           behaviours: %{optional(module) => [module]},
@@ -120,7 +116,7 @@ defmodule ElixirSense.Core.State do
             attribute_store: %{},
             cursor_position: nil
 
-  defp get_current_env(%__MODULE__{} = state, macro_env) do
+  def get_current_env(%__MODULE__{} = state, macro_env) do
     current_attributes = state |> get_current_attributes()
     current_behaviours = state.behaviours |> Map.get(macro_env.module, [])
 
@@ -1109,8 +1105,6 @@ defmodule ElixirSense.Core.State do
         ""
     end
   end
-
-  def default_env, do: %ElixirSense.Core.State.Env{}
 
   defp maybe_move_vars_to_outer_scope(
          %__MODULE__{vars_info: [current_scope_vars, outer_scope_vars | other_scopes_vars]} =

@@ -1,7 +1,6 @@
 defmodule ElixirSense.Core.ParserTest do
   use ExUnit.Case, async: true
 
-  import ExUnit.CaptureIO
   alias ElixirSense.Core.{Metadata, State.Env, State.VarInfo, State.CallInfo, Parser}
 
   defp parse(source, cursor) do

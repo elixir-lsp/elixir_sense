@@ -1,7 +1,7 @@
 defmodule ElixirSense.Core.CompilerTest do
   use ExUnit.Case, async: true
   alias ElixirSense.Core.Compiler
-  alias ElixirSense.Core.State
+  alias ElixirSense.Core.Compiler.State
   require Record
 
   defp to_quoted!(ast, true), do: ast

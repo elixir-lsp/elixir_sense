@@ -3,9 +3,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
   This module is responsible for building/retrieving environment information from an AST.
   """
 
-  import ElixirSense.Core.State
-
-  alias ElixirSense.Core.State
+  alias ElixirSense.Core.Compiler.State
   alias ElixirSense.Core.Compiler
 
   @doc """
@@ -14,7 +12,18 @@ defmodule ElixirSense.Core.MetadataBuilder do
   """
   @spec build(Macro.t(), nil | {pos_integer, pos_integer}) :: State.t()
   def build(ast, cursor_position \\ nil) do
-    state_orig = %State{
+    state_initial = initial_state(cursor_position)
+
+    {_ast, state, _env} = Compiler.expand(ast, state_initial, Compiler.env())
+
+    state
+    |> State.remove_attributes_scope()
+    |> State.remove_vars_scope(state_initial)
+    |> State.remove_module()
+  end
+
+  def initial_state(cursor_position) do
+    %State{
       cursor_position: cursor_position,
       prematch:
         if Version.match?(System.version(), ">= 1.15.0-dev") do
@@ -23,13 +32,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
           :warn
         end
     }
+  end
 
-    {_ast, state, _env} = Compiler.expand(ast, state_orig, Compiler.env())
-
-    state
-    |> remove_attributes_scope
-    |> remove_vars_scope(state_orig)
-    |> remove_module
+  def default_env(cursor_position \\ nil) do
+    macro_env = Compiler.env()
+    state_initial = initial_state(cursor_position)
+    State.get_current_env(state_initial, macro_env)
   end
 
   # defp post_string_literal(ast, _state, _line, str) do

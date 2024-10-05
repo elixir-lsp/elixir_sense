@@ -3,7 +3,7 @@ defmodule ElixirSense.Core.Compiler.Fn do
   alias ElixirSense.Core.Compiler.Clauses, as: ElixirClauses
   alias ElixirSense.Core.Compiler.Dispatch, as: ElixirDispatch
   alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
-  alias ElixirSense.Core.State
+  alias ElixirSense.Core.Compiler.State
 
   def expand(meta, clauses, s, e) when is_list(clauses) do
     transformer = fn

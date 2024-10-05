@@ -2,7 +2,7 @@ defmodule ElixirSense.Core.Compiler.TypespecTest do
   use ExUnit.Case, async: true
   alias ElixirSense.Core.Compiler.Typespec
   alias ElixirSense.Core.Compiler
-  alias ElixirSense.Core.State
+  alias ElixirSense.Core.Compiler.State
   alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
 
   defp default_state,

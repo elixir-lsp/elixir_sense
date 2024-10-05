@@ -1,7 +1,7 @@
 defmodule ElixirSense.Core.Compiler.Bitstring do
   alias ElixirSense.Core.Compiler, as: ElixirExpand
   alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
-  alias ElixirSense.Core.State
+  alias ElixirSense.Core.Compiler.State
 
   defp expand_match(expr, {s, original_s}, e) do
     {e_expr, se, ee} = ElixirExpand.expand(expr, s, e)

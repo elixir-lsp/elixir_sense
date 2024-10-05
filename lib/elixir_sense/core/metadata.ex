@@ -8,6 +8,7 @@ defmodule ElixirSense.Core.Metadata do
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.State
   alias ElixirSense.Core.BuiltinFunctions
+  alias ElixirSense.Core.MetadataBuilder
 
   @type t :: %ElixirSense.Core.Metadata{
           source: String.t(),
@@ -98,7 +99,7 @@ defmodule ElixirSense.Core.Metadata do
     {meta, cursor_env} =
       case Code.string_to_quoted(source_with_cursor, columns: true, token_metadata: true) do
         {:ok, ast} ->
-          ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
+          MetadataBuilder.build(ast).cursor_env || {[], nil}
 
         _ ->
           {[], nil}
@@ -114,7 +115,7 @@ defmodule ElixirSense.Core.Metadata do
                token_metadata: true
              ) do
           {:ok, ast} ->
-            ElixirSense.Core.MetadataBuilder.build(ast).cursor_env || {[], nil}
+            MetadataBuilder.build(ast).cursor_env || {[], nil}
 
           _ ->
             {[], nil}
@@ -219,7 +220,7 @@ defmodule ElixirSense.Core.Metadata do
       end,
       &>=/2,
       fn ->
-        {line, State.default_env()}
+        {line, MetadataBuilder.default_env({line, column})}
       end
     )
     |> elem(1)

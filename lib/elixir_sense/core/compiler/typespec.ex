@@ -1,7 +1,7 @@
 defmodule ElixirSense.Core.Compiler.Typespec do
   alias ElixirSense.Core.Compiler, as: ElixirExpand
   alias ElixirSense.Core.Compiler.Utils
-  import ElixirSense.Core.State
+  alias ElixirSense.Core.Compiler.State
   def spec_to_signature({:when, _, [spec, _]}), do: type_to_signature(spec)
   def spec_to_signature(other), do: type_to_signature(other)
 
@@ -36,13 +36,13 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     state_orig = state
 
     unless ElixirExpand.Quote.has_unquotes(ast) do
-      {ast, state, env} = do_expand_spec(ast, new_func_vars_scope(state), env)
+      {ast, state, env} = do_expand_spec(ast, State.new_func_vars_scope(state), env)
 
-      {ast, remove_func_vars_scope(state, state_orig), env}
+      {ast, State.remove_func_vars_scope(state, state_orig), env}
     else
-      {ast, state, env} = do_expand_spec(ast, new_vars_scope(state), env)
+      {ast, state, env} = do_expand_spec(ast, State.new_vars_scope(state), env)
 
-      {ast, remove_vars_scope(state, state_orig), env}
+      {ast, State.remove_vars_scope(state, state_orig), env}
     end
   end
 
@@ -87,7 +87,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
       Enum.reduce(guard, {state, []}, fn
         {name, _val}, {state, var_names} when is_atom(name) ->
           # guard is a keyword list so we don't have exact meta on keys
-          {add_var_write(state, {name, guard_meta, nil}), [name | var_names]}
+          {State.add_var_write(state, {name, guard_meta, nil}), [name | var_names]}
 
         _, acc ->
           # invalid entry
@@ -171,13 +171,13 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     state_orig = state
 
     unless ElixirExpand.Quote.has_unquotes(ast) do
-      {ast, state, env} = do_expand_type(ast, new_func_vars_scope(state), env)
+      {ast, state, env} = do_expand_type(ast, State.new_func_vars_scope(state), env)
 
-      {ast, remove_func_vars_scope(state, state_orig), env}
+      {ast, State.remove_func_vars_scope(state, state_orig), env}
     else
-      {ast, state, env} = do_expand_type(ast, new_vars_scope(state), env)
+      {ast, state, env} = do_expand_type(ast, State.new_vars_scope(state), env)
 
-      {ast, remove_vars_scope(state, state_orig), env}
+      {ast, State.remove_vars_scope(state, state_orig), env}
     end
   end
 
@@ -196,7 +196,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
       Enum.reduce(args, {state, []}, fn
         {name, meta, context}, {state, var_names}
         when is_atom(name) and is_atom(context) and name != :_ ->
-          {add_var_write(state, {name, meta, context}), [name | var_names]}
+          {State.add_var_write(state, {name, meta, context}), [name | var_names]}
 
         _other, acc ->
           # silently skip invalid typespec params
@@ -245,7 +245,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     state =
       unless state.cursor_env do
         state
-        |> add_cursor_env(meta, caller)
+        |> State.add_cursor_env(meta, caller)
       else
         state
       end
@@ -460,8 +460,8 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     # TODO Module.get_attribute(caller.module, attr)
     state =
       state
-      |> add_attribute(caller, attr, attr_meta, nil, nil, false)
-      |> add_call_to_line({Kernel, :@, 0}, attr_meta)
+      |> State.add_attribute(caller, attr, attr_meta, nil, nil, false)
+      |> State.add_call_to_line({Kernel, :@, 0}, attr_meta)
 
     case Map.get(state.attribute_store, {caller.module, attr}) do
       remote when is_atom(remote) and remote != nil ->
@@ -519,7 +519,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
 
   defp typespec({name, meta, atom} = node, vars, caller, state) when is_atom(atom) do
     if :lists.member(name, vars) do
-      state = add_var_read(state, node)
+      state = State.add_var_read(state, node)
       {{name, meta, atom}, state}
     else
       typespec({name, meta, []}, vars, caller, state)
@@ -543,7 +543,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     {args, state} = :lists.mapfoldl(&typespec(&1, vars, caller, &2), state, args)
     # elixir raises if type is not defined
 
-    state = add_call_to_line(state, {nil, name, length(args)}, meta)
+    state = State.add_call_to_line(state, {nil, name, length(args)}, meta)
 
     {{name, meta, args}, state}
   end
@@ -619,7 +619,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
 
   defp remote_type({{:., dot_meta, [remote_spec, name_spec]}, meta, args}, vars, caller, state) do
     {args, state} = :lists.mapfoldl(&typespec(&1, vars, caller, &2), state, args)
-    state = add_call_to_line(state, {remote_spec, name_spec, length(args)}, meta)
+    state = State.add_call_to_line(state, {remote_spec, name_spec, length(args)}, meta)
     {{{:., dot_meta, [remote_spec, name_spec]}, meta, args}, state}
   end
 
