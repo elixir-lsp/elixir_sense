@@ -55,7 +55,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
 
     if System.otp_release() |> String.to_integer() >= 23 do
       if System.otp_release() |> String.to_integer() >= 27 do
-        assert "This function is" <> _ = summary
+        assert "Select the _callback mode_" <> _ = summary
       else
         assert "- CallbackMode = " <> _ = summary
       end
@@ -146,25 +146,37 @@ defmodule ElixirSense.Core.IntrospectionTest do
   test "get_returns_from_callback (erlang specs)" do
     returns = get_returns_from_callback(:gen_fsm, :handle_event, 3)
 
-    assert returns == [
-             %{
-               description: "{:next_state, nextStateName, newStateData}",
-               snippet: "{:next_state, \"${1:nextStateName}$\", \"${2:newStateData}$\"}",
-               spec: "{:next_state, nextStateName :: atom(), newStateData :: term()}"
-             },
-             %{
-               description: "{:next_state, nextStateName, newStateData, timeout() | :hibernate}",
-               snippet:
-                 "{:next_state, \"${1:nextStateName}$\", \"${2:newStateData}$\", \"${3:timeout() | :hibernate}$\"}",
-               spec:
-                 "{:next_state, nextStateName :: atom(), newStateData :: term(), timeout() | :hibernate}"
-             },
-             %{
-               description: "{:stop, reason, newStateData}",
-               snippet: "{:stop, \"${1:reason}$\", \"${2:newStateData}$\"}",
-               spec: "{:stop, reason :: term(), newStateData :: term()}"
-             }
-           ]
+    if System.otp_release() |> String.to_integer() >= 27 do
+      assert returns == [
+               %{
+                 description: "result",
+                 snippet: "\"${1:result}$\"",
+                 spec:
+                   "result\nwhen event: term(),\n     stateName: atom(),\n     stateData: term(),\n     result:\n       {:next_state, nextStateName, newStateData}\n       | {:next_state, nextStateName, newStateData, timeout}\n       | {:next_state, nextStateName, newStateData, :hibernate}\n       | {:stop, reason, newStateData},\n     nextStateName: atom(),\n     newStateData: term(),\n     timeout: timeout(),\n     reason: term()"
+               }
+             ]
+    else
+      assert returns == [
+               %{
+                 description: "{:next_state, nextStateName, newStateData}",
+                 snippet: "{:next_state, \"${1:nextStateName}$\", \"${2:newStateData}$\"}",
+                 spec: "{:next_state, nextStateName :: atom(), newStateData :: term()}"
+               },
+               %{
+                 description:
+                   "{:next_state, nextStateName, newStateData, timeout() | :hibernate}",
+                 snippet:
+                   "{:next_state, \"${1:nextStateName}$\", \"${2:newStateData}$\", \"${3:timeout() | :hibernate}$\"}",
+                 spec:
+                   "{:next_state, nextStateName :: atom(), newStateData :: term(), timeout() | :hibernate}"
+               },
+               %{
+                 description: "{:stop, reason, newStateData}",
+                 snippet: "{:stop, \"${1:reason}$\", \"${2:newStateData}$\"}",
+                 spec: "{:stop, reason :: term(), newStateData :: term()}"
+               }
+             ]
+    end
   end
 
   test "actual_mod_fun Elixir proxy" do

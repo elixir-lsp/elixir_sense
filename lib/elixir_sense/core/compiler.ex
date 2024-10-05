@@ -4177,7 +4177,7 @@ defmodule ElixirSense.Core.Compiler do
          )
          when is_atom(f) and is_integer(a) and is_atom(c) and is_list(meta) do
       new_meta =
-        case ElixirDispatch.find_import(meta, f, a, e) |> dbg do
+        case ElixirDispatch.find_import(meta, f, a, e) do
           false ->
             meta
 
