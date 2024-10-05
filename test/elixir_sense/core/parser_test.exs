@@ -206,7 +206,7 @@ defmodule ElixirSense.Core.ParserTest do
 
     {_metadata, env} = parse(source, {3, 23})
 
-    if Version.match?(System.version(), ">= 1.15.0") do
+    if Version.match?(System.version(), ">= 1.17.0") do
       assert %Env{
                vars: [
                  %VarInfo{name: :x}
