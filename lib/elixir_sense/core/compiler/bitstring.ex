@@ -275,7 +275,7 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
 
     case e_right do
       {:binary, _, nil} ->
-        {alignment, alignment} = Keyword.fetch!(parts_meta, :alignment)
+        alignment = Keyword.fetch!(parts_meta, :alignment)
 
         if is_integer(alignment) do
           # elixir raises unaligned_binary if alignment != 0
