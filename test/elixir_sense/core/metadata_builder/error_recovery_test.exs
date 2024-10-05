@@ -122,7 +122,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       end
     end
 
-    if Version.match?(System.version(), ">= 1.14.0") do
+    if Version.match?(System.version(), ">= 1.15.0") do
       test "invalid number of args with when" do
         code = """
         case nil do 0, z when not is_nil(z) -> \
@@ -132,7 +132,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       end
     end
 
-    if Version.match?(System.version(), ">= 1.14.0") do
+    if Version.match?(System.version(), ">= 1.15.0") do
       test "invalid number of args" do
         code = """
         case nil do 0, z -> \
@@ -215,7 +215,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       end
     end
 
-    if Version.match?(System.version(), ">= 1.14.0") do
+    if Version.match?(System.version(), ">= 1.15.0") do
       test "invalid number of args" do
         code = """
         cond do 0, z -> \
@@ -522,7 +522,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       end
     end
 
-    if Version.match?(System.version(), ">= 1.14.0") do
+    if Version.match?(System.version(), ">= 1.15.0") do
       test "cursor in right side of catch clause 2 arg" do
         code = """
         try do
@@ -882,7 +882,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       end
     end
 
-    if Version.match?(System.version(), ">= 1.14.0") do
+    if Version.match?(System.version(), ">= 1.15.0") do
       test "cursor in do block reduce right side of clause too many args" do
         code = """
         for x <- [], reduce: %{} do
