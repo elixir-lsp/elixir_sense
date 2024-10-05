@@ -8,6 +8,7 @@ defmodule ElixirSense.Core.Binding do
   alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
 
+  # TODO refactor to use env
   defstruct structs: %{},
             variables: [],
             attributes: [],
@@ -83,20 +84,21 @@ defmodule ElixirSense.Core.Binding do
     expand(env, combined, stack)
   end
 
-  def do_expand(%Binding{variables: variables} = env, {:variable, variable}, stack) do
+  def do_expand(%Binding{variables: variables} = env, {:variable, variable, version}, stack) do
+    sorted_variables = Enum.sort_by(variables, &{&1.name, -&1.version})
+
     type =
-      case Enum.find(variables, fn %{name: name} -> name == variable end) do
+      case Enum.find(sorted_variables, fn %State.VarInfo{} = var ->
+             var.name == variable and (var.version == version or version == :any)
+           end) do
         nil ->
           # no variable found - treat a local call
-          expand(env, {:local_call, variable, []}, stack)
+          # this cannot happen if no parens call is missclassed as variable e.g. by
+          # Code.Fragment APIs
+          {:local_call, variable, []}
 
-        %State.VarInfo{name: name, type: type} ->
-          # filter underscored variables
-          if name |> Atom.to_string() |> String.starts_with?("_") do
-            :none
-          else
-            type
-          end
+        %State.VarInfo{type: type} ->
+          type
       end
 
     expand(env, type, stack)
@@ -339,11 +341,28 @@ defmodule ElixirSense.Core.Binding do
 
   def do_expand(_env, {:integer, integer}, _stack), do: {:integer, integer}
 
-  def do_expand(_env, {:union, [first | rest]} = u, _stack) do
-    if Enum.all?(rest, &(&1 == first)) do
-      first
-    else
-      u
+  def do_expand(_env, {:union, all}, _stack) do
+    # TODO implement union for maps and lists?
+    all = Enum.filter(all, &(&1 != :none))
+
+    cond do
+      all == [] ->
+        :none
+
+      Enum.any?(all, &(&1 == nil)) ->
+        nil
+
+      match?([_], all) ->
+        hd(all)
+
+      true ->
+        first = hd(all)
+
+        if Enum.all?(tl(all), &(&1 == first)) do
+          first
+        else
+          {:union, all}
+        end
     end
   end
 
@@ -380,6 +399,27 @@ defmodule ElixirSense.Core.Binding do
 
   defp expand_call(
          env,
+         {:atom, module},
+         name,
+         [list_candidate | _],
+         _include_private,
+         stack
+       )
+       when name in [:++, :--] and module in [Kernel, :erlang] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        {:list, type}
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
          {:atom, Kernel},
          :elem,
          [tuple_candidate, n_candidate],
@@ -398,17 +438,18 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  # rewritten elem
   defp expand_call(
          env,
-         {:atom, Kernel},
-         :hd,
-         [list_candidate],
+         {:atom, :erlang},
+         :element,
+         [n_candidate, tuple_candidate],
          _include_private,
          stack
        ) do
-    case expand(env, list_candidate, stack) do
-      {:list, type} ->
-        type
+    case expand(env, n_candidate, stack) do
+      {:integer, n} ->
+        expand(env, {:tuple_nth, tuple_candidate, n - 1}, stack)
 
       nil ->
         nil
@@ -421,11 +462,258 @@ defmodule ElixirSense.Core.Binding do
   defp expand_call(
          env,
          {:atom, Kernel},
+         :put_elem,
+         [tuple_candidate, n_candidate, value],
+         _include_private,
+         stack
+       ) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         {:integer, n} when n >= 0 and n < elems_count <- expand(env, n_candidate, stack),
+         expanded_value when expanded_value != :none <- expand(env, value, stack) do
+      {:tuple, elems_count, elems |> List.replace_at(n, expanded_value)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  # rewritten put_elem
+  defp expand_call(
+         env,
+         {:atom, :erlang},
+         :setelement,
+         [n_candidate, tuple_candidate, value],
+         _include_private,
+         stack
+       ) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         {:integer, n} when n >= 1 and n <= elems_count <- expand(env, n_candidate, stack),
+         expanded_value when expanded_value != :none <- expand(env, value, stack) do
+      {:tuple, elems_count, elems |> List.replace_at(n - 1, expanded_value)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, module},
+         fun,
+         [tuple_candidate, value],
+         _include_private,
+         stack
+       )
+       when (module == Tuple and fun == :append) or (module == :erlang and fun == :append_element) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         expanded_value when expanded_value != :none <- expand(env, value, stack) do
+      {:tuple, elems_count + 1, elems ++ [expanded_value]}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Tuple},
+         :delete_at,
+         [tuple_candidate, n_candidate],
+         _include_private,
+         stack
+       ) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         {:integer, n} when n >= 0 and n < elems_count <- expand(env, n_candidate, stack) do
+      {:tuple, elems_count - 1, elems |> List.delete_at(n)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  # rewritten Tuple.delete_at
+  defp expand_call(
+         env,
+         {:atom, :erlang},
+         :delete_element,
+         [n_candidate, tuple_candidate],
+         _include_private,
+         stack
+       ) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         {:integer, n} when n > 0 and n <= elems_count <- expand(env, n_candidate, stack) do
+      {:tuple, elems_count - 1, elems |> List.delete_at(n - 1)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, Tuple},
+         :insert_at,
+         [tuple_candidate, n_candidate, value],
+         _include_private,
+         stack
+       ) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         {:integer, n} when n >= 0 and n <= elems_count <- expand(env, n_candidate, stack),
+         expanded_value when expanded_value != :none <- expand(env, value, stack) do
+      {:tuple, elems_count + 1, elems |> List.insert_at(n, expanded_value)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  # rewritten Tuple.insert_at
+  defp expand_call(
+         env,
+         {:atom, :erlang},
+         :insert_element,
+         [n_candidate, tuple_candidate, value],
+         _include_private,
+         stack
+       ) do
+    with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
+         {:integer, n} when n > 0 and n <= elems_count + 1 <- expand(env, n_candidate, stack),
+         expanded_value when expanded_value != :none <- expand(env, value, stack) do
+      {:tuple, elems_count + 1, elems |> List.insert_at(n - 1, expanded_value)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, module},
+         fun,
+         [tuple_candidate],
+         _include_private,
+         stack
+       )
+       when (module == Tuple and fun == :to_list) or (module == :erlang and fun == :tuple_to_list) do
+    with {:tuple, _elems_count, elems} <- expand(env, tuple_candidate, stack) do
+      case elems do
+        [] -> {:list, :empty}
+        [first | _] -> {:list, first}
+      end
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, module},
+         :tuple_size,
+         [tuple_candidate],
+         _include_private,
+         stack
+       )
+       when module in [Kernel, :erlang] do
+    with {:tuple, elems_count, _elems} <- expand(env, tuple_candidate, stack) do
+      {:integer, elems_count}
+    else
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  defp expand_call(
+         env,
+         {:atom, module},
+         fun,
+         [value, n_candidate],
+         _include_private,
+         stack
+       )
+       when (module == Tuple and fun == :duplicate) or (module == :erlang and fun == :make_tuple) do
+    {value, n_candidate} =
+      if module == :erlang do
+        {n_candidate, value}
+      else
+        {value, n_candidate}
+      end
+
+    # limit to 5
+    with {:integer, n} when n >= 0 <- expand(env, n_candidate, stack),
+         expanded_value when expanded_value != :none <- expand(env, value, stack) do
+      {:tuple, n, expanded_value |> List.duplicate(n)}
+    else
+      nil ->
+        nil
+
+      {:integer, _n} ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  # hd is inlined
+  defp expand_call(
+         env,
+         {:atom, module},
+         :hd,
+         [list_candidate],
+         _include_private,
+         stack
+       )
+       when module in [Kernel, :erlang] do
+    case expand(env, list_candidate, stack) do
+      {:list, type} ->
+        type
+
+      nil ->
+        nil
+
+      _ ->
+        :none
+    end
+  end
+
+  # tl is inlined
+  defp expand_call(
+         env,
+         {:atom, module},
          :tl,
          [list_candidate],
          _include_private,
          stack
-       ) do
+       )
+       when module in [Kernel, :erlang] do
     case expand(env, list_candidate, stack) do
       {:list, type} ->
         {:list, type}
@@ -722,8 +1010,17 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, fun, [map, key], _include_private, stack)
-       when fun in [:fetch, :fetch!, :get] do
+  defp expand_call(env, {:atom, module}, fun, [map, key], _include_private, stack)
+       when (module == Map and fun in [:fetch, :fetch!, :get]) or
+              (module == :maps and fun in [:find, :get]) do
+    {map, key} =
+      if module == :maps do
+        # rewritten versions have different arg order
+        {key, map}
+      else
+        {map, key}
+      end
+
     fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
@@ -733,7 +1030,7 @@ defmodule ElixirSense.Core.Binding do
         {:atom, atom} ->
           value = fields |> Keyword.get(atom)
 
-          if fun == :fetch and value != nil do
+          if fun in [:fetch, :find] and value != nil do
             {:tuple, 2, [{:atom, :ok}, value]}
           else
             value
@@ -769,8 +1066,17 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private, stack)
-       when fun in [:put, :replace!] do
+  defp expand_call(env, {:atom, module}, fun, [map, key, value], _include_private, stack)
+       when (fun == :put and module in [Map, :maps]) or (fun == :update and module == :maps) or
+              (fun == :replace! and module == Map) do
+    {map, key, value} =
+      if module == :maps do
+        # rewritten versions have different parameter order
+        {value, map, key}
+      else
+        {map, key, value}
+      end
+
     fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
@@ -810,7 +1116,16 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, :delete, [map, key], _include_private, stack) do
+  defp expand_call(env, {:atom, module}, fun, [map, key], _include_private, stack)
+       when (module == Map and fun == :delete) or (module == :maps and fun == :remove) do
+    {map, key} =
+      if module == :maps do
+        # rewritten versions have different arg order
+        {key, map}
+      else
+        {map, key}
+      end
+
     fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
@@ -829,7 +1144,9 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, :merge, [map, other_map], _include_private, stack) do
+  # Map.merge/2 is inlined
+  defp expand_call(env, {:atom, module}, :merge, [map, other_map], _include_private, stack)
+       when module in [Map, :maps] do
     fields = expand_map_fields(env, map, stack)
 
     other_fields =
@@ -1074,7 +1391,7 @@ defmodule ElixirSense.Core.Binding do
       {:ok, {:@, _, [{_kind, _, [ast]}]}} ->
         case extract_type(ast) do
           {:ok, type} ->
-            parsed_type = parse_type(env, type, mod, include_private)
+            parsed_type = parse_type(env, type, mod, include_private, [])
             expand(env, parsed_type, stack)
 
           :error ->
@@ -1114,7 +1431,7 @@ defmodule ElixirSense.Core.Binding do
   defp get_return_from_spec(env, {{fun, _arity}, [ast]}, mod, include_private) do
     case Typespec.spec_to_quoted(fun, ast) |> extract_type do
       {:ok, type} ->
-        parse_type(env, type, mod, include_private)
+        parse_type(env, type, mod, include_private, [])
 
       :error ->
         nil
@@ -1130,8 +1447,8 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # union type
-  defp parse_type(env, {:|, _, variants}, mod, include_private) do
-    {:union, variants |> Enum.map(&parse_type(env, &1, mod, include_private))}
+  defp parse_type(env, {:|, _, variants}, mod, include_private, stack) do
+    {:union, variants |> Enum.map(&parse_type(env, &1, mod, include_private, stack))}
   end
 
   # struct
@@ -1143,12 +1460,13 @@ defmodule ElixirSense.Core.Binding do
             {:%{}, _, fields}
           ]},
          mod,
-         include_private
+         include_private,
+         stack
        ) do
     fields =
       for {field, type} <- fields,
           is_atom(field),
-          do: {field, parse_type(env, type, mod, include_private)}
+          do: {field, parse_type(env, type, mod, include_private, stack)}
 
     module =
       case struct_mod do
@@ -1163,57 +1481,58 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # map
-  defp parse_type(env, {:%{}, _, fields}, mod, include_private) do
+  defp parse_type(env, {:%{}, _, fields}, mod, include_private, stack) do
     fields =
       for {field, type} <- fields,
           field = drop_optional(field),
           is_atom(field),
-          do: {field, parse_type(env, type, mod, include_private)}
+          do: {field, parse_type(env, type, mod, include_private, stack)}
 
     {:map, fields, nil}
   end
 
-  defp parse_type(_env, {:map, _, []}, _mod, _include_private) do
+  defp parse_type(_env, {:map, _, []}, _mod, _include_private, _stack) do
     {:map, [], nil}
   end
 
-  defp parse_type(env, {:{}, _, fields}, mod, include_private) do
-    {:tuple, length(fields), fields |> Enum.map(&parse_type(env, &1, mod, include_private))}
+  defp parse_type(env, {:{}, _, fields}, mod, include_private, stack) do
+    {:tuple, length(fields),
+     fields |> Enum.map(&parse_type(env, &1, mod, include_private, stack))}
   end
 
-  defp parse_type(_env, [], _mod, _include_private) do
+  defp parse_type(_env, [], _mod, _include_private, _stack) do
     {:list, :empty}
   end
 
-  defp parse_type(env, [type | _], mod, include_private) do
-    {:list, parse_type(env, type, mod, include_private)}
+  defp parse_type(env, [type | _], mod, include_private, stack) do
+    {:list, parse_type(env, type, mod, include_private, stack)}
   end
 
   # for simplicity we skip terminator type
-  defp parse_type(env, {kind, _, [type, _]}, mod, include_private)
+  defp parse_type(env, {kind, _, [type, _]}, mod, include_private, stack)
        when kind in [:maybe_improper_list, :nonempty_improper_list, :nonempty_maybe_improper_list] do
-    {:list, parse_type(env, type, mod, include_private)}
+    {:list, parse_type(env, type, mod, include_private, stack)}
   end
 
-  defp parse_type(_env, {:list, _, []}, _mod, _include_private) do
+  defp parse_type(_env, {:list, _, []}, _mod, _include_private, _stack) do
     {:list, nil}
   end
 
-  defp parse_type(_env, {:keyword, _, []}, _mod, _include_private) do
-    # TODO no support for atom type for now
+  defp parse_type(_env, {:keyword, _, []}, _mod, _include_private, _stack) do
+    # no support for atom type for now
     {:list, {:tuple, 2, [nil, nil]}}
   end
 
-  defp parse_type(env, {:keyword, _, [type]}, mod, include_private) do
-    # TODO no support for atom type for now
-    {:list, {:tuple, 2, [nil, parse_type(env, type, mod, include_private)]}}
+  defp parse_type(env, {:keyword, _, [type]}, mod, include_private, stack) do
+    # no support for atom type for now
+    {:list, {:tuple, 2, [nil, parse_type(env, type, mod, include_private, stack)]}}
   end
 
   # remote user type
-  defp parse_type(env, {{:., _, [mod, atom]}, _, args}, _mod, _include_private)
+  defp parse_type(env, {{:., _, [mod, atom]}, _, args}, _mod, _include_private, stack)
        when is_atom(mod) and is_atom(atom) do
     # do not propagate include_private when expanding remote types
-    expand_type(env, mod, atom, args, false)
+    expand_type(env, mod, atom, args, false, stack)
   end
 
   # remote user type
@@ -1221,41 +1540,55 @@ defmodule ElixirSense.Core.Binding do
          env,
          {{:., _, [{:__aliases__, _, aliases}, atom]}, _, args},
          _mod,
-         _include_private
+         _include_private,
+         stack
        )
        when is_atom(atom) do
     # do not propagate include_private when expanding remote types
-    expand_type(env, Module.concat(aliases), atom, args, false)
+    expand_type(env, Module.concat(aliases), atom, args, false, stack)
   end
 
   # no_return
-  defp parse_type(_env, {:no_return, _, _}, _, _include_private), do: :none
+  defp parse_type(_env, {:no_return, _, _}, _, _include_private, _stack), do: :none
+
+  # term, any, dynamic
+  defp parse_type(_env, {kind, _, _}, _, _include_private, _stack)
+       when kind in [:term, :any, :dynamic],
+       do: nil
 
   # local user type
-  defp parse_type(env, {atom, _, args}, mod, include_private) when is_atom(atom) do
+  defp parse_type(env, {atom, _, args}, mod, include_private, stack) when is_atom(atom) do
     # propagate include_private when expanding local types
-    expand_type(env, mod, atom, args, include_private)
+    expand_type(env, mod, atom, args, include_private, stack)
   end
 
   # atom
-  defp parse_type(_env, atom, _, _include_private) when is_atom(atom), do: {:atom, atom}
+  defp parse_type(_env, atom, _, _include_private, _stack) when is_atom(atom), do: {:atom, atom}
 
-  defp parse_type(_env, integer, _, _include_private) when is_integer(integer) do
+  defp parse_type(_env, integer, _, _include_private, _stack) when is_integer(integer) do
     {:integer, integer}
   end
 
   # other
-  # defp parse_type(_env, t, _, _include_private) do
-  #   IO.inspect t
-  #   nil
-  # end
-  defp parse_type(_env, _, _, _include_private), do: nil
+  defp parse_type(_env, _type, _, _include_private, _stack), do: nil
 
-  defp expand_type(env, mod, type_name, args, include_private) do
+  defp expand_type(env, mod, type_name, args, include_private, stack) do
+    arity = length(args || [])
+    type = {mod, type_name, arity}
+
+    if type in stack do
+      # self referential type
+      nil
+    else
+      do_expand_type(env, mod, type_name, args, include_private, [type | stack])
+    end
+  end
+
+  defp do_expand_type(env, mod, type_name, args, include_private, stack) do
     arity = length(args || [])
 
-    case expand_type_from_metadata(env, mod, type_name, arity, include_private) do
-      nil -> expand_type_from_introspection(env, mod, type_name, arity, include_private)
+    case expand_type_from_metadata(env, mod, type_name, arity, include_private, stack) do
+      nil -> expand_type_from_introspection(env, mod, type_name, arity, include_private, stack)
       res -> res
     end
     |> drop_no_spec
@@ -1268,7 +1601,8 @@ defmodule ElixirSense.Core.Binding do
          mod,
          type_name,
          arity,
-         include_private
+         include_private,
+         stack
        ) do
     case types[{mod, type_name, arity}] do
       %State.TypeInfo{specs: [type_spec], kind: kind}
@@ -1277,7 +1611,7 @@ defmodule ElixirSense.Core.Binding do
           {:ok, {:@, _, [{_kind, _, [ast]}]}} ->
             case extract_type(ast) do
               {:ok, type} ->
-                parse_type(env, type, mod, include_private) || :no_spec
+                parse_type(env, type, mod, include_private, stack) || :no_spec
 
               :error ->
                 nil
@@ -1295,12 +1629,12 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_type_from_introspection(env, mod, type_name, arity, include_private) do
+  defp expand_type_from_introspection(env, mod, type_name, arity, include_private, stack) do
     case TypeInfo.get_type_spec(mod, type_name, arity) do
       {kind, spec} when type_is_public(kind, include_private) ->
-        {:"::", _, [_, type]} = Typespec.type_to_quoted(spec)
+        {:"::", _, [{_expanded_name, _, _}, type]} = Typespec.type_to_quoted(spec)
 
-        parse_type(env, type, mod, include_private)
+        parse_type(env, type, mod, include_private, stack)
 
       _ ->
         nil
@@ -1315,6 +1649,8 @@ defmodule ElixirSense.Core.Binding do
   defp combine_intersection(nil, type), do: type
   defp combine_intersection(type, nil), do: type
   defp combine_intersection(type, type), do: type
+
+  # NOTE intersection is not strict and does an union on map keys
 
   defp combine_intersection({:struct, fields_1, nil, nil}, {:struct, fields_2, nil, nil}) do
     keys = (safe_keys(fields_1) ++ safe_keys(fields_2)) |> Enum.uniq()

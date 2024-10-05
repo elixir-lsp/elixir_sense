@@ -8,7 +8,6 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
         apply(Code.Fragment, :cursor_context, [string, opts])
 
       true ->
-        # fall back to bundled on < 1.13
         # on 1.13 use our version as it has all the fixes from last 1.13 release
         apply(ElixirSense.Core.Normalized.Code.ElixirSense.Fragment, :cursor_context, [
           string,
@@ -34,7 +33,6 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
         apply(Code.Fragment, :surround_context, [fragment, position, options])
 
       true ->
-        # fall back to bundled on < 1.13
         # on 1.13 use our version as it has all the fixes from last 1.13 release
         apply(ElixirSense.Core.Normalized.Code.ElixirSense.Fragment, :surround_context, [
           fragment,
@@ -61,7 +59,6 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
         apply(Code.Fragment, :container_cursor_to_quoted, [fragment, opts])
 
       true ->
-        # fall back to bundled on < 1.13
         # on 1.13 use our version as it has all the fixes from last 1.13 release
         apply(
           ElixirSense.Core.Normalized.Code.ElixirSense.Fragment,

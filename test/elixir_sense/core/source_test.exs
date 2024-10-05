@@ -198,7 +198,13 @@ defmodule ElixirSense.Core.SourceTest do
 
       assert nil ==
                which_func("var = my_var.some(", %ElixirSense.Core.Binding{
-                 variables: [%{name: "my_var", type: {:atom, Some}}]
+                 variables: [
+                   %ElixirSense.Core.State.VarInfo{
+                     name: "my_var",
+                     version: 1,
+                     type: {:atom, Some}
+                   }
+                 ]
                })
     end
 
@@ -682,6 +688,74 @@ defmodule ElixirSense.Core.SourceTest do
     end
   end
 
+  describe "split_at/2" do
+    test "empty list" do
+      code = """
+      defmodule Abcd do
+        def go do
+          :ok
+        end
+      end
+      """
+
+      assert split_at(code, []) == [code]
+    end
+
+    test "one element list" do
+      code = """
+      defmodule Abcd do
+        def go do
+          :ok
+        end
+      end
+      """
+
+      parts = split_at(code, [{2, 3}])
+      assert parts == ["defmodule Abcd do\n  ", "def go do\n    :ok\n  end\nend\n"]
+      assert Enum.join(parts) == code
+    end
+
+    test "two element list same line" do
+      code = """
+      defmodule Abcd do
+        def go do
+          :ok
+        end
+      end
+      """
+
+      parts = split_at(code, [{2, 3}, {2, 6}])
+      assert parts == ["defmodule Abcd do\n  ", "def", " go do\n    :ok\n  end\nend\n"]
+      assert Enum.join(parts) == code
+    end
+
+    test "two element list different lines" do
+      code = """
+      defmodule Abcd do
+        def go do
+          :ok
+        end
+      end
+      """
+
+      parts = split_at(code, [{2, 3}, {4, 6}])
+      assert parts == ["defmodule Abcd do\n  ", "def go do\n    :ok\n  end", "\nend\n"]
+      assert Enum.join(parts) == code
+    end
+
+    test "handles positions at start and end of code" do
+      code = "abcdef"
+      positions = [{1, 1}, {1, 7}]
+      assert split_at(code, positions) == ["", "abcdef", ""]
+    end
+
+    test "handles positions beyond code length" do
+      code = "short"
+      positions = [{0, 0}, {10, 15}]
+      assert split_at(code, positions) == ["", "short", ""]
+    end
+  end
+
   describe "which_struct" do
     test "map" do
       code = """
@@ -700,7 +774,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %{asd |
       """
 
-      assert which_struct(code, MyMod) == {:map, [], {:variable, :asd}}
+      assert which_struct(code, MyMod) == {:map, [], {:variable, :asd, :any}}
     end
 
     test "map update attribute" do
@@ -720,7 +794,7 @@ defmodule ElixirSense.Core.SourceTest do
           var = %{asd | qwe: "ds",
       """
 
-      assert which_struct(code, MyMod) == {:map, [:qwe], {:variable, :asd}}
+      assert which_struct(code, MyMod) == {:map, [:qwe], {:variable, :asd, :any}}
     end
 
     test "patern match with _" do
@@ -893,10 +967,10 @@ defmodule ElixirSense.Core.SourceTest do
       """
 
       assert which_struct(text_before(code, 3, 23), MyMod) ==
-               {{:atom, Mod}, [], false, {:variable, :par1}}
+               {{:atom, Mod}, [], false, {:variable, :par1, :any}}
 
       assert which_struct(text_before(code, 5, 7), MyMod) ==
-               {{:atom, Mod}, [:field1], false, {:variable, :par1}}
+               {{:atom, Mod}, [:field1], false, {:variable, :par1, :any}}
     end
 
     test "struct update attribute syntax" do
@@ -1109,6 +1183,90 @@ defmodule ElixirSense.Core.SourceTest do
       """
 
       assert "integer-un" == bitstring_options(text)
+    end
+  end
+
+  describe "prefix/3" do
+    test "returns empty string when no prefix is found" do
+      code = "def example do\n  :ok\nend"
+      assert "" == prefix(code, 2, 3)
+    end
+
+    test "returns the correct prefix" do
+      code = "defmodule Test do\n  def example_func do\n    :ok\n  end\nend"
+      assert "example_f" == prefix(code, 2, 16)
+    end
+
+    test "handles line shorter than column" do
+      code = "short"
+      assert "" == prefix(code, 1, 10)
+    end
+
+    test "handles line outside range" do
+      code = "short"
+      assert "" == prefix(code, 3, 1)
+    end
+
+    test "returns prefix with special characters" do
+      code = "def example?!:@&^~+-<>=*/|\\() do\n  :ok\nend"
+      assert "example?!:@&^~+-<>=*/|\\" == prefix(code, 1, 28)
+    end
+
+    test "returns prefix at the end of line" do
+      code = "def example\ndef another"
+      assert "example" == prefix(code, 1, 12)
+    end
+
+    test "handles empty lines" do
+      code = "\n\ndef example"
+      assert "" == prefix(code, 2, 1)
+    end
+
+    test "returns prefix with numbers" do
+      code = "variable123 = 42"
+      assert "variable12" == prefix(code, 1, 11)
+    end
+  end
+
+  describe "prefix_suffix/3" do
+    test "returns empty string when no prefix is found" do
+      code = "def example do\n  :ok\nend"
+      assert {"", ":ok"} == prefix_suffix(code, 2, 3)
+    end
+
+    test "returns the correct prefix" do
+      code = "defmodule Test do\n  def example_func do\n    :ok\n  end\nend"
+      assert {"example_f", "unc"} == prefix_suffix(code, 2, 16)
+    end
+
+    test "handles line shorter than column" do
+      code = "short"
+      assert {"", ""} == prefix_suffix(code, 1, 10)
+    end
+
+    test "handles line outside range" do
+      code = "short"
+      assert {"", ""} == prefix_suffix(code, 3, 1)
+    end
+
+    test "returns prefix with special characters" do
+      code = "def example?!:@&^~+-<>=*/|\\() do\n  :ok\nend"
+      assert {"example?!:@&^~+-<>=*/", "|\\"} == prefix_suffix(code, 1, 26)
+    end
+
+    test "returns prefix at the end of line" do
+      code = "def example\ndef another"
+      assert {"example", ""} == prefix_suffix(code, 1, 12)
+    end
+
+    test "handles empty lines" do
+      code = "\n\ndef example"
+      assert {"", ""} == prefix_suffix(code, 2, 1)
+    end
+
+    test "returns prefix with numbers" do
+      code = "variable123 = 42"
+      assert {"variable12", "3"} == prefix_suffix(code, 1, 11)
     end
   end
 end

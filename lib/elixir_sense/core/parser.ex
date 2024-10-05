@@ -45,11 +45,15 @@ defmodule ElixirSense.Core.Parser do
       fallback_to_container_cursor_to_quoted: try_to_fix_parse_error
     ]
 
-    case string_to_ast(source, string_to_ast_options) do
-      {:ok, ast, modified_source, error} ->
-        acc = MetadataBuilder.build(ast)
+    # source_with_cursor = inject_cursor(source, cursor_position)
+    source_with_cursor = source
 
-        if cursor_position == nil or Map.has_key?(acc.lines_to_env, elem(cursor_position, 0)) or
+    case string_to_ast(source_with_cursor, string_to_ast_options) do
+      {:ok, ast, modified_source, error} ->
+        acc = MetadataBuilder.build(ast, cursor_position)
+
+        if cursor_position == nil or acc.cursor_env != nil or
+             Map.has_key?(acc.lines_to_env, elem(cursor_position, 0)) or
              !try_to_fix_line_not_found do
           create_metadata(source, {:ok, acc, error})
         else
@@ -186,6 +190,8 @@ defmodule ElixirSense.Core.Parser do
       specs: acc.specs,
       structs: acc.structs,
       mods_funs_to_positions: acc.mods_funs_to_positions,
+      cursor_env: acc.cursor_env,
+      closest_env: acc.closest_env,
       lines_to_env: acc.lines_to_env,
       vars_info_per_scope_id: acc.vars_info_per_scope_id,
       calls: acc.calls,
@@ -218,7 +224,7 @@ defmodule ElixirSense.Core.Parser do
     |> List.update_at(line_number - 1, fn line ->
       # try to replace token do with do: marker
       line
-      |> String.replace("do", "do: " <> marker(line_number), global: false)
+      |> String.replace("do", "do: " <> marker(), global: false)
     end)
     |> Enum.join("\n")
   end
@@ -325,7 +331,7 @@ defmodule ElixirSense.Core.Parser do
     |> List.update_at(line_number - 1, fn line ->
       # try to prepend unexpected terminator with marker
       line
-      |> String.replace(terminator, marker(line_number) <> " " <> terminator, global: false)
+      |> String.replace(terminator, marker() <> " " <> terminator, global: false)
     end)
     |> Enum.join("\n")
   end
@@ -448,7 +454,7 @@ defmodule ElixirSense.Core.Parser do
 
                 replaced_line =
                   case terminator do
-                    "end" -> previous <> "; " <> marker(length(rest)) <> "; end"
+                    "end" -> previous <> "; " <> marker() <> "; end"
                     _ -> previous <> " " <> terminator
                   end
 
@@ -515,7 +521,7 @@ defmodule ElixirSense.Core.Parser do
     |> Source.split_lines()
     # by replacing a line here we risk introducing a syntax error
     # instead we append marker to the existing line
-    |> List.update_at(line_number - 1, &(&1 <> "; " <> marker(line_number)))
+    |> List.update_at(line_number - 1, &(&1 <> "; " <> marker()))
     |> Enum.join("\n")
   end
 
@@ -523,7 +529,7 @@ defmodule ElixirSense.Core.Parser do
     # IO.puts :stderr, "REPLACING LINE: #{line}"
     source
     |> Source.split_lines()
-    |> List.replace_at(line_number - 1, marker(line_number))
+    |> List.replace_at(line_number - 1, marker())
     |> Enum.join("\n")
   end
 
@@ -535,7 +541,7 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
-  defp marker(line_number), do: "(__atom_elixir_marker_#{line_number}__())"
+  defp marker(), do: "(__cursor__())"
 
   defp get_line_from_meta(meta) when is_integer(meta), do: meta
   defp get_line_from_meta(meta), do: Keyword.fetch!(meta, :line)

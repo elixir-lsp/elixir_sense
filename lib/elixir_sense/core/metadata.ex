@@ -8,10 +8,16 @@ defmodule ElixirSense.Core.Metadata do
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   alias ElixirSense.Core.State
   alias ElixirSense.Core.BuiltinFunctions
+  alias ElixirSense.Core.MetadataBuilder
 
   @type t :: %ElixirSense.Core.Metadata{
           source: String.t(),
           mods_funs_to_positions: State.mods_funs_to_positions_t(),
+          cursor_env: nil | {keyword(), ElixirSense.Core.State.Env.t()},
+          closest_env:
+            nil
+            | {{pos_integer, pos_integer}, {non_neg_integer, non_neg_integer},
+               ElixirSense.Core.State.Env.t()},
           lines_to_env: State.lines_to_env_t(),
           calls: State.calls_t(),
           vars_info_per_scope_id: State.vars_info_per_scope_id_t(),
@@ -25,6 +31,8 @@ defmodule ElixirSense.Core.Metadata do
 
   defstruct source: "",
             mods_funs_to_positions: %{},
+            cursor_env: nil,
+            closest_env: nil,
             lines_to_env: %{},
             calls: %{},
             vars_info_per_scope_id: %{},
@@ -57,6 +65,88 @@ defmodule ElixirSense.Core.Metadata do
       first_alias_positions: acc.first_alias_positions,
       moduledoc_positions: acc.moduledoc_positions
     }
+  end
+
+  def get_cursor_env(
+        metadata,
+        position,
+        surround \\ nil
+      )
+
+  if Version.match?(System.version(), "< 1.15.0") do
+    # return early if cursor env already found by parser replacing line
+    # this helps on < 1.15 and braks tests on later versions
+    def get_cursor_env(%__MODULE__{cursor_env: {_, env}}, _position, _surround) do
+      env
+    end
+  end
+
+  def get_cursor_env(
+        %__MODULE__{} = metadata,
+        {line, column},
+        surround
+      ) do
+    {prefix, source_with_cursor} =
+      case surround do
+        {{begin_line, begin_column}, {end_line, end_column}} ->
+          [prefix, needle, suffix] =
+            ElixirSense.Core.Source.split_at(metadata.source, [
+              {begin_line, begin_column},
+              {end_line, end_column}
+            ])
+
+          source_with_cursor = prefix <> "__cursor__(#{needle})" <> suffix
+
+          {prefix, source_with_cursor}
+
+        nil ->
+          [prefix, suffix] =
+            ElixirSense.Core.Source.split_at(metadata.source, [
+              {line, column}
+            ])
+
+          source_with_cursor = prefix <> "__cursor__()" <> suffix
+
+          {prefix, source_with_cursor}
+      end
+
+    {meta, cursor_env} =
+      case Code.string_to_quoted(source_with_cursor, columns: true, token_metadata: true) do
+        {:ok, ast} ->
+          MetadataBuilder.build(ast).cursor_env || {[], nil}
+
+        _ ->
+          {[], nil}
+      end
+
+    {_meta, cursor_env} =
+      if cursor_env != nil do
+        {meta, cursor_env}
+      else
+        # IO.puts(prefix <> "|")
+        case NormalizedCode.Fragment.container_cursor_to_quoted(prefix,
+               columns: true,
+               token_metadata: true
+             ) do
+          {:ok, ast} ->
+            MetadataBuilder.build(ast).cursor_env || {[], nil}
+
+          _ ->
+            {[], nil}
+        end
+      end
+
+    if cursor_env != nil do
+      cursor_env
+    else
+      case metadata.closest_env do
+        {_pos, _dist, env} ->
+          env
+
+        nil ->
+          get_env(metadata, {line, column})
+      end
+    end
   end
 
   @spec get_env(__MODULE__.t(), {pos_integer, pos_integer}) :: State.Env.t()
@@ -144,7 +234,7 @@ defmodule ElixirSense.Core.Metadata do
       end,
       &>=/2,
       fn ->
-        {line, State.default_env()}
+        {line, MetadataBuilder.default_env({line, column})}
       end
     )
     |> elem(1)
@@ -183,23 +273,21 @@ defmodule ElixirSense.Core.Metadata do
     |> Enum.min(fn -> nil end)
   end
 
-  def add_scope_vars(
-        %State.Env{} = env,
+  def find_var(
         %__MODULE__{vars_info_per_scope_id: vars_info_per_scope_id},
-        {line, column},
-        predicate \\ fn _ -> true end
+        variable,
+        version,
+        position
       ) do
-    scope_vars = vars_info_per_scope_id[env.scope_id] || []
-    env_vars_names = env.vars |> Enum.map(& &1.name)
-
-    scope_vars_missing_in_env =
-      scope_vars
-      |> Enum.filter(fn var ->
-        var.name not in env_vars_names and Enum.min(var.positions) <= {line, column} and
-          predicate.(var)
+    vars_info_per_scope_id
+    |> Enum.find_value(fn {_scope_id, vars} ->
+      vars
+      |> Enum.find_value(fn {{n, v}, info} ->
+        if n == variable and (v == version or version == :any) and position in info.positions do
+          info
+        end
       end)
-
-    %{env | vars: env.vars ++ scope_vars_missing_in_env}
+    end)
   end
 
   @spec at_module_body?(State.Env.t()) :: boolean()
@@ -244,7 +332,12 @@ defmodule ElixirSense.Core.Metadata do
   def get_call_arity(%__MODULE__{}, _module, nil, _line, _column), do: nil
 
   def get_call_arity(
-        %__MODULE__{calls: calls, error: error, mods_funs_to_positions: mods_funs_to_positions},
+        %__MODULE__{
+          calls: calls,
+          error: error,
+          mods_funs_to_positions: mods_funs_to_positions,
+          types: types
+        },
         module,
         fun,
         line,
@@ -272,10 +365,26 @@ defmodule ElixirSense.Core.Metadata do
           end)
       end
 
+    result =
+      if result == nil do
+        mods_funs_to_positions
+        |> Enum.find_value(fn
+          {{^module, ^fun, arity}, %{positions: positions}} when not is_nil(arity) ->
+            if Enum.any?(positions, &match?({^line, _}, &1)) do
+              arity
+            end
+
+          _ ->
+            nil
+        end)
+      else
+        result
+      end
+
     if result == nil do
-      mods_funs_to_positions
+      types
       |> Enum.find_value(fn
-        {{^module, ^fun, arity}, %{positions: positions}} when not is_nil(arity) ->
+        {{^module, ^fun, arity}, %{positions: positions}} ->
           if Enum.any?(positions, &match?({^line, _}, &1)) do
             arity
           end
@@ -344,7 +453,7 @@ defmodule ElixirSense.Core.Metadata do
       when not is_nil(module) and not is_nil(type) do
     metadata.types
     |> Enum.filter(fn
-      {{^module, ^type, arity}, _type_info} when not is_nil(arity) -> true
+      {{^module, ^type, _arity}, _type_info} -> true
       _ -> false
     end)
     |> Enum.map(fn {_, %State.TypeInfo{} = type_info} ->

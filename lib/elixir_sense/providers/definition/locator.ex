@@ -40,7 +40,6 @@ defmodule ElixirSense.Providers.Definition.Locator do
 
         env =
           Metadata.get_env(metadata, {line, column})
-          |> Metadata.add_scope_vars(metadata, {line, column})
 
         find(
           context,
@@ -78,12 +77,13 @@ defmodule ElixirSense.Providers.Definition.Locator do
       {:keyword, _} ->
         nil
 
-      {:variable, variable} ->
+      {:variable, variable, version} ->
         var_info =
           vars
           |> Enum.find(fn
-            %VarInfo{name: name, positions: positions} ->
-              name == variable and context.begin in positions
+            %VarInfo{} = info ->
+              info.name == variable and (info.version == version or version == :any) and
+                context.begin in info.positions
           end)
 
         if var_info != nil do

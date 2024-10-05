@@ -73,7 +73,6 @@ defmodule ElixirSenseExample.ExampleBehaviour do
         """
       end
 
-      # TODO: Remove this on Elixir v2.0
       @before_compile UseWithCallbacks
 
       @doc false

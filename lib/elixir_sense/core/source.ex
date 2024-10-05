@@ -118,10 +118,62 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
+  @spec prefix_suffix(String.t(), pos_integer, pos_integer) :: {String.t(), String.t()}
+  def prefix_suffix(code, line, col) do
+    line = code |> split_lines() |> Enum.at(line - 1, "")
+
+    line =
+      if String.length(line) < col do
+        line_padding = for _ <- 1..(col - String.length(line)), into: "", do: " "
+        line <> line_padding
+      else
+        line
+      end
+
+    # Extract the prefix
+    line_str = line |> String.slice(0, col - 1)
+
+    prefix =
+      case Regex.run(~r/[\p{L}\p{N}\.\_\!\?\:\@\&\^\~\+\-\<\>\=\*\/\|\\]+$/u, line_str) do
+        nil -> ""
+        [prefix] when is_binary(prefix) -> prefix
+      end
+
+    # Extract the suffix
+    suffix =
+      line
+      |> String.slice((col - 1)..-1//1)
+      |> case do
+        nil ->
+          ""
+
+        str ->
+          case Regex.run(~r/^[\p{L}\p{N}\.\_\!\?\:\@\&\^\~\+\-\<\>\=\*\/\|\\]+/u, str) do
+            nil -> ""
+            [suffix] when is_binary(suffix) -> suffix
+          end
+      end
+
+    {prefix, suffix}
+  end
+
   @spec split_at(String.t(), pos_integer, pos_integer) :: {String.t(), String.t()}
   def split_at(code, line, col) do
-    pos = find_position(code, line, col, {0, 1, 1})
+    pos = find_position(code, max(line, 1), max(col, 1), {0, 1, 1})
     String.split_at(code, pos)
+  end
+
+  @spec split_at(String.t(), list({pos_integer, pos_integer})) :: list(String.t())
+  def split_at(code, list) do
+    do_split_at(code, Enum.reverse(list), [])
+  end
+
+  defp do_split_at(code, [], acc), do: [code | acc]
+
+  defp do_split_at(code, [{line, col} | rest], acc) do
+    pos = find_position(code, max(line, 1), max(col, 1), {0, 1, 1})
+    {text_before, text_after} = String.split_at(code, pos)
+    do_split_at(text_before, rest, [text_after | acc])
   end
 
   @spec text_before(String.t(), pos_integer, pos_integer) :: String.t()
@@ -163,7 +215,7 @@ defmodule ElixirSense.Core.Source do
     end)
   end
 
-  @type var_or_attr_t :: {:variable, atom} | {:attribute, atom} | nil
+  @type var_or_attr_t :: {:variable, atom, non_neg_integer | :any} | {:attribute, atom} | nil
 
   @spec which_struct(String.t(), nil | module) ::
           nil
@@ -251,8 +303,17 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  defp get_var_or_attr({var, _, nil}) when is_atom(var) and var != :__MODULE__ do
-    {:variable, var}
+  defp get_var_or_attr({var, meta, context})
+       when is_atom(var) and is_atom(context) and
+              var not in [
+                :__MODULE__,
+                :__DIR__,
+                :__ENV__,
+                :__CALLER__,
+                :__STACKTRACE__,
+                :_
+              ] do
+    {:variable, var, Keyword.get(meta, :version, :any)}
   end
 
   defp get_var_or_attr({:@, _, [{attr, _, nil}]}) when is_atom(attr) do
@@ -518,8 +579,10 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
-  def get_mod_fun([{name, _, nil}, fun], binding_env) when is_atom(name) do
-    case Binding.expand(binding_env, {:variable, name}) do
+  def get_mod_fun([{name, meta, context}, fun], binding_env)
+      when is_atom(name) and is_atom(context) and
+             name not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
+    case Binding.expand(binding_env, {:variable, name, Keyword.get(meta, :version, :any)}) do
       {:atom, atom} ->
         {{atom, false}, fun}
 
