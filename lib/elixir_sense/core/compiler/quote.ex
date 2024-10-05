@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Quote do
-  alias ElixirSense.Core.Compiler.Dispatch, as: ElixirDispatch
+  alias ElixirSense.Core.Compiler.Dispatch
   alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
 
   defstruct line: false,
@@ -244,7 +244,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
        )
        when is_atom(f) and is_integer(a) and is_atom(c) and is_list(meta) do
     new_meta =
-      case ElixirDispatch.find_import(meta, f, a, e) do
+      case Dispatch.find_import(meta, f, a, e) do
         false ->
           meta
 
@@ -309,7 +309,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   defp import_meta(meta, name, arity, q, e) do
     case Keyword.get(meta, :imports, false) == false &&
-           ElixirDispatch.find_imports(meta, name, e) do
+           Dispatch.find_imports(meta, name, e) do
       [_ | _] = imports ->
         keystore(:imports, keystore(:context, meta, q.context), imports)
 

@@ -1,10 +1,10 @@
 defmodule ElixirSense.Core.Compiler.Bitstring do
-  alias ElixirSense.Core.Compiler, as: ElixirExpand
-  alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
+  alias ElixirSense.Core.Compiler
+  alias ElixirSense.Core.Compiler.Utils
   alias ElixirSense.Core.Compiler.State
 
   defp expand_match(expr, {s, original_s}, e) do
-    {e_expr, se, ee} = ElixirExpand.expand(expr, s, e)
+    {e_expr, se, ee} = Compiler.expand(expr, s, e)
     {e_expr, {se, original_s}, ee}
   end
 
@@ -22,7 +22,7 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
         pair_s = {State.prepare_write(s), s}
 
         {e_args, alignment, {sa, _}, ea} =
-          expand(meta, &ElixirExpand.expand_arg/3, args, [], pair_s, e, 0, require_size)
+          expand(meta, &Compiler.expand_arg/3, args, [], pair_s, e, 0, require_size)
 
         {{:<<>>, [{:alignment, alignment} | meta], e_args}, State.close_write(sa, s), ea}
     end
@@ -177,7 +177,7 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
 
   defp expand_each_spec(meta, [{:__cursor__, _, args} = h | t], map, s, original_s, e)
        when is_list(args) do
-    {h, s, e} = ElixirExpand.expand(h, s, e)
+    {h, s, e} = Compiler.expand(h, s, e)
 
     args =
       case h do
@@ -206,7 +206,7 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
           end
 
         # TODO how to check for cursor here?
-        case ElixirExpand.Macro.expand(ha, Map.put(e, :line, ElixirUtils.get_line(meta))) do
+        case Compiler.Macro.expand(ha, Map.put(e, :line, Utils.get_line(meta))) do
           ^ha ->
             # elixir raises here undefined_bittype
             # we omit the spec
@@ -345,13 +345,13 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
     new_pre = {pre_read, pre_counter, {:bitsize, original_read}}
 
     {e_expr, se, ee} =
-      ElixirExpand.expand(expr, %{s | prematch: new_pre}, %{e | context: :guard})
+      Compiler.expand(expr, %{s | prematch: new_pre}, %{e | context: :guard})
 
     {e_expr, %{se | prematch: old_pre}, %{ee | context: :match}}
   end
 
   defp expand_spec_arg(expr, s, original_s, e) do
-    ElixirExpand.expand(expr, State.reset_read(s, original_s), e)
+    Compiler.expand(expr, State.reset_read(s, original_s), e)
   end
 
   defp size_and_unit(type, size, unit)

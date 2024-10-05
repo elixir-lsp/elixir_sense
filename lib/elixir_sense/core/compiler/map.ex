@@ -1,11 +1,11 @@
 defmodule ElixirSense.Core.Compiler.Map do
-  alias ElixirSense.Core.Compiler, as: ElixirExpand
+  alias ElixirSense.Core.Compiler
 
   def expand_struct(meta, left, {:%{}, map_meta, map_args}, s, %{context: context} = e) do
     clean_map_args = clean_struct_key_from_map_args(map_args)
 
     {[e_left, e_right], se, ee} =
-      ElixirExpand.expand_args([left, {:%{}, map_meta, clean_map_args}], s, e)
+      Compiler.expand_args([left, {:%{}, map_meta, clean_map_args}], s, e)
 
     case validate_struct(e_left, context) do
       true when is_atom(e_left) ->
@@ -18,7 +18,7 @@ defmodule ElixirSense.Core.Compiler.Map do
             without_keys = Elixir.Map.drop(struct, keys)
 
             struct_assocs =
-              ElixirExpand.Macro.escape(Enum.sort(Elixir.Map.to_list(without_keys)))
+              Compiler.Macro.escape(Enum.sort(Elixir.Map.to_list(without_keys)))
 
             {{:%, meta, [e_left, {:%{}, map_meta, struct_assocs ++ assocs}]}, se, ee}
 
@@ -59,13 +59,13 @@ defmodule ElixirSense.Core.Compiler.Map do
 
   def expand_map(meta, [{:|, update_meta, [left, right]}], s, e) do
     # elixir raises update_syntax_in_wrong_context if e.context is not nil
-    {[e_left | e_right], se, ee} = ElixirExpand.expand_args([left | right], s, e)
+    {[e_left | e_right], se, ee} = Compiler.expand_args([left | right], s, e)
     e_right = sanitize_kv(e_right, e)
     {{:%{}, meta, [{:|, update_meta, [e_left, e_right]}]}, se, ee}
   end
 
   def expand_map(meta, args, s, e) do
-    {e_args, se, ee} = ElixirExpand.expand_args(args, s, e)
+    {e_args, se, ee} = Compiler.expand_args(args, s, e)
     e_args = sanitize_kv(e_args, e)
     {{:%{}, meta, e_args}, se, ee}
   end

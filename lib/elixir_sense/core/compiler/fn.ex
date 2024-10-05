@@ -1,8 +1,8 @@
 defmodule ElixirSense.Core.Compiler.Fn do
-  alias ElixirSense.Core.Compiler, as: ElixirExpand
-  alias ElixirSense.Core.Compiler.Clauses, as: ElixirClauses
-  alias ElixirSense.Core.Compiler.Dispatch, as: ElixirDispatch
-  alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
+  alias ElixirSense.Core.Compiler
+  alias ElixirSense.Core.Compiler.Clauses
+  alias ElixirSense.Core.Compiler.Dispatch
+  alias ElixirSense.Core.Compiler.Utils
   alias ElixirSense.Core.Compiler.State
 
   def expand(meta, clauses, s, e) when is_list(clauses) do
@@ -13,7 +13,7 @@ defmodule ElixirSense.Core.Compiler.Fn do
 
         # no point in doing type inference here, we have no idea what the fn will be called with
         {e_clause, s_acc, _e_acc} =
-          ElixirClauses.clause(&ElixirClauses.head/3, clause, s_reset, e)
+          Clauses.clause(&Clauses.head/3, clause, s_reset, e)
 
         {e_clause, State.remove_vars_scope(s_acc, sa)}
     end
@@ -60,7 +60,7 @@ defmodule ElixirSense.Core.Compiler.Fn do
           {:"&1", meta, e.module}
 
         list ->
-          ElixirUtils.select_with_cursor(list) || hd(list)
+          Utils.select_with_cursor(list) || hd(list)
       end
 
     capture(meta, expr, s, e)
@@ -100,7 +100,7 @@ defmodule ElixirSense.Core.Compiler.Fn do
   defp capture_import({atom, import_meta, args} = expr, s, e, sequential) do
     res =
       if sequential do
-        ElixirDispatch.import_function(import_meta, atom, length(args), s, e)
+        Dispatch.import_function(import_meta, atom, length(args), s, e)
       else
         false
       end
@@ -111,7 +111,7 @@ defmodule ElixirSense.Core.Compiler.Fn do
   defp capture_require({{:., dot_meta, [left, right]}, require_meta, args}, s, e, sequential) do
     case escape(left, []) do
       {esc_left, []} ->
-        {e_left, se, ee} = ElixirExpand.expand(esc_left, s, e)
+        {e_left, se, ee} = Compiler.expand(esc_left, s, e)
 
         res =
           if sequential do
@@ -120,7 +120,7 @@ defmodule ElixirSense.Core.Compiler.Fn do
                 {:remote, e_left, right, length(args)}
 
               _ when is_atom(e_left) ->
-                ElixirDispatch.require_function(
+                Dispatch.require_function(
                   require_meta,
                   e_left,
                   right,

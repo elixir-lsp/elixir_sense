@@ -1,6 +1,6 @@
 defmodule ElixirSense.Core.Compiler.Clauses do
-  alias ElixirSense.Core.Compiler, as: ElixirExpand
-  alias ElixirSense.Core.Compiler.Utils, as: ElixirUtils
+  alias ElixirSense.Core.Compiler
+  alias ElixirSense.Core.Compiler.Utils
   alias ElixirSense.Core.Compiler.State
   alias ElixirSense.Core.TypeInference
 
@@ -50,7 +50,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
   def clause(fun, {:->, meta, [left, right]}, s, e) do
     {e_left, sl, el} = fun.(left, s, e)
-    {e_right, sr, er} = ElixirExpand.expand(right, sl, el)
+    {e_right, sr, er} = Compiler.expand(right, sl, el)
     {{:->, meta, [e_left, e_right]}, sr, er}
   end
 
@@ -61,13 +61,13 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   def head([{:when, meta, [_ | _] = all}], s, e) do
-    {args, guard} = ElixirUtils.split_last(all)
+    {args, guard} = Utils.split_last(all)
     prematch = s.prematch
 
     {{e_args, e_guard}, sg, eg} =
       match(
         fn _ok, sm, em ->
-          {e_args, sa, ea} = ElixirExpand.expand_args(args, sm, em)
+          {e_args, sa, ea} = Compiler.expand_args(args, sm, em)
 
           {e_guard, sg, eg} =
             guard(guard, %{sa | prematch: prematch}, %{ea | context: :guard})
@@ -88,7 +88,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   def head(args, s, e) do
-    match(&ElixirExpand.expand_args/3, args, s, s, e)
+    match(&Compiler.expand_args/3, args, s, s, e)
   end
 
   def guard({:when, meta, [left, right]}, s, e) do
@@ -98,7 +98,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   def guard(guard, s, e) do
-    {e_guard, sg, eg} = ElixirExpand.expand(guard, s, e)
+    {e_guard, sg, eg} = Compiler.expand(guard, s, e)
     {e_guard, sg, eg}
   end
 
@@ -115,12 +115,12 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   def case(_e_expr, opts, s, e) when not is_list(opts) do
     # elixir raises here invalid_args
     # there may be cursor
-    ElixirExpand.expand(opts, s, e)
+    Compiler.expand(opts, s, e)
   end
 
   def case(e_expr, opts, s, e) do
     # expand invalid opts in case there's cursor
-    {_ast, s, _e} = ElixirExpand.expand(opts |> Keyword.drop(@valid_case_opts), s, e)
+    {_ast, s, _e} = Compiler.expand(opts |> Keyword.drop(@valid_case_opts), s, e)
 
     opts = sanitize_opts(opts, @valid_case_opts)
 
@@ -169,12 +169,12 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   def cond(opts, s, e) when not is_list(opts) do
     # elixir raises here invalid_args
     # there may be cursor
-    ElixirExpand.expand(opts, s, e)
+    Compiler.expand(opts, s, e)
   end
 
   def cond(opts, s, e) do
     # expand invalid opts in case there's cursor
-    {_ast, s, _e} = ElixirExpand.expand(opts |> Keyword.drop(@valid_cond_opts), s, e)
+    {_ast, s, _e} = Compiler.expand(opts |> Keyword.drop(@valid_cond_opts), s, e)
 
     opts = sanitize_opts(opts, @valid_cond_opts)
 
@@ -187,7 +187,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   defp expand_cond({:do, _} = do_clause, s, e) do
-    expand_clauses(&ElixirExpand.expand_args/3, do_clause, s, e)
+    expand_clauses(&Compiler.expand_args/3, do_clause, s, e)
   end
 
   # receive
@@ -203,12 +203,12 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   def receive(opts, s, e) when not is_list(opts) do
     # elixir raises here invalid_args
     # there may be cursor
-    ElixirExpand.expand(opts, s, e)
+    Compiler.expand(opts, s, e)
   end
 
   def receive(opts, s, e) do
     # expand invalid opts in case there's cursor
-    {_ast, s, _e} = ElixirExpand.expand(opts |> Keyword.drop(@valid_receive_opts), s, e)
+    {_ast, s, _e} = Compiler.expand(opts |> Keyword.drop(@valid_receive_opts), s, e)
 
     opts = sanitize_opts(opts, @valid_receive_opts)
 
@@ -230,7 +230,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   defp expand_receive({:after, [_ | _]} = after_clause, s, e) do
-    expand_clauses(&ElixirExpand.expand_args/3, after_clause, s, e)
+    expand_clauses(&Compiler.expand_args/3, after_clause, s, e)
   end
 
   defp expand_receive({:after, expr}, s, e) when not is_list(expr) do
@@ -243,7 +243,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
       [first | discarded] ->
         # try to recover from error by taking first clause only
         # expand other in case there's cursor
-        {_ast, s, _e} = ElixirExpand.expand(discarded, s, e)
+        {_ast, s, _e} = Compiler.expand(discarded, s, e)
         expand_receive({:after, [first]}, s, e)
 
       [] ->
@@ -257,10 +257,10 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   @valid_with_opts [:do, :else]
 
   def with(meta, args, s, e) do
-    {exprs, opts0} = ElixirUtils.split_opts(args)
+    {exprs, opts0} = Utils.split_opts(args)
 
     # expand invalid opts in case there's cursor
-    {_ast, s, _e} = ElixirExpand.expand(opts0 |> Keyword.drop(@valid_with_opts), s, e)
+    {_ast, s, _e} = Compiler.expand(opts0 |> Keyword.drop(@valid_with_opts), s, e)
 
     opts0 = sanitize_opts(opts0, @valid_with_opts)
     s0 = State.new_vars_scope(s)
@@ -272,7 +272,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   defp expand_with({:<-, meta, [left, right]}, {s, e}) do
-    {e_right, sr, er} = ElixirExpand.expand(right, s, e)
+    {e_right, sr, er} = Compiler.expand(right, s, e)
     sm = State.reset_read(sr, s)
     {[e_left], sl, el} = head([left], sm, er)
 
@@ -285,7 +285,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   defp expand_with(expr, {s, e}) do
-    {e_expr, se, ee} = ElixirExpand.expand(expr, s, e)
+    {e_expr, se, ee} = Compiler.expand(expr, s, e)
     {e_expr, {se, ee}}
   end
 
@@ -295,7 +295,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     # we return empty expression
     expr = expr || []
 
-    {e_expr, s_acc, _e_acc} = ElixirExpand.expand(expr, acc, e)
+    {e_expr, s_acc, _e_acc} = Compiler.expand(expr, acc, e)
 
     {e_expr, rest_opts, State.remove_vars_scope(s_acc, s)}
   end
@@ -327,12 +327,12 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   def try(opts, s, e) when not is_list(opts) do
     # elixir raises here invalid_args
     # there may be cursor
-    ElixirExpand.expand(opts, s, e)
+    Compiler.expand(opts, s, e)
   end
 
   def try(opts, s, e) do
     # expand invalid opts in case there's cursor
-    {_ast, s, _e} = ElixirExpand.expand(opts |> Keyword.drop(@valid_try_opts), s, e)
+    {_ast, s, _e} = Compiler.expand(opts |> Keyword.drop(@valid_try_opts), s, e)
 
     opts = sanitize_opts(opts, @valid_try_opts)
 
@@ -345,12 +345,12 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   defp expand_try({:do, expr}, s, e) do
-    {e_expr, se, _ee} = ElixirExpand.expand(expr, State.new_vars_scope(s), e)
+    {e_expr, se, _ee} = Compiler.expand(expr, State.new_vars_scope(s), e)
     {{:do, e_expr}, State.remove_vars_scope(se, s)}
   end
 
   defp expand_try({:after, expr}, s, e) do
-    {e_expr, se, _ee} = ElixirExpand.expand(expr, State.new_vars_scope(s), e)
+    {e_expr, se, _ee} = Compiler.expand(expr, State.new_vars_scope(s), e)
     {{:after, e_expr}, State.remove_vars_scope(se, s)}
   end
 
@@ -376,7 +376,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
   defp expand_catch(meta, [{:when, when_meta, [a1, a2, a3, dh | dt]}], s, e) do
     # elixir raises here wrong_number_of_args_for_clause
-    {_, s, _} = ElixirExpand.expand([dh | dt], s, e)
+    {_, s, _} = Compiler.expand([dh | dt], s, e)
     expand_catch(meta, [{:when, when_meta, [a1, a2, a3]}], s, e)
   end
 
@@ -393,7 +393,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   defp expand_catch(meta, [a1, a2 | d], s, e) do
     # attempt to recover from error by taking 2 first args
     # elixir raises here wrong_number_of_args_for_clause
-    {_, s, _} = ElixirExpand.expand(d, s, e)
+    {_, s, _} = Compiler.expand(d, s, e)
     expand_catch(meta, [a1, a2], s, e)
   end
 
@@ -406,13 +406,13 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   defp expand_rescue(meta, [a1 | d], s, e) do
     # try to recover from error by taking first argument only
     # elixir raises here wrong_number_of_args_for_clause
-    {_, s, _} = ElixirExpand.expand(d, s, e)
+    {_, s, _} = Compiler.expand(d, s, e)
     expand_rescue(meta, [a1], s, e)
   end
 
   # rescue var
   defp expand_rescue({name, _, atom} = var, s, e) when is_atom(name) and is_atom(atom) do
-    {e_left, sl, el} = match(&ElixirExpand.expand/3, var, s, s, e)
+    {e_left, sl, el} = match(&Compiler.expand/3, var, s, s, e)
 
     match_context = {:struct, [], {:atom, Exception}, nil}
 
@@ -434,7 +434,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
          e
        )
        when is_atom(name) and is_atom(var_context) and is_atom(underscore_context) do
-    {e_left, sl, el} = match(&ElixirExpand.expand/3, var, s, s, e)
+    {e_left, sl, el} = match(&Compiler.expand/3, var, s, s, e)
 
     match_context = {:struct, [], {:atom, Exception}, nil}
 
@@ -446,8 +446,8 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
   # rescue var in (list() or atom())
   defp expand_rescue({:in, meta, [left, right]}, s, e) do
-    {e_left, sl, el} = match(&ElixirExpand.expand/3, left, s, s, e)
-    {e_right, sr, er} = ElixirExpand.expand(right, sl, el)
+    {e_left, sl, el} = match(&Compiler.expand/3, left, s, s, e)
+    {e_right, sr, er} = Compiler.expand(right, sl, el)
 
     case e_left do
       {name, _, atom} when is_atom(name) and is_atom(atom) ->
@@ -480,7 +480,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   # rescue expr() => rescue expanded_expr()
   defp expand_rescue({_, meta, _} = arg, s, e) do
     # TODO how to check for cursor here?
-    case ElixirExpand.Macro.expand_once(arg, %{e | line: ElixirUtils.get_line(meta)}) do
+    case Compiler.Macro.expand_once(arg, %{e | line: Utils.get_line(meta)}) do
       ^arg ->
         # elixir rejects this case
         # try to recover from error by generating fake expression

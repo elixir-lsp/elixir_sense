@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Typespec do
-  alias ElixirSense.Core.Compiler, as: ElixirExpand
+  alias ElixirSense.Core.Compiler
   alias ElixirSense.Core.Compiler.Utils
   alias ElixirSense.Core.Compiler.State
   def spec_to_signature({:when, _, [spec, _]}), do: type_to_signature(spec)
@@ -35,7 +35,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     # unless there are unquotes module vars are not accessible
     state_orig = state
 
-    unless ElixirExpand.Quote.has_unquotes(ast) do
+    unless Compiler.Quote.has_unquotes(ast) do
       {ast, state, env} = do_expand_spec(ast, State.new_func_vars_scope(state), env)
 
       {ast, State.remove_func_vars_scope(state, state_orig), env}
@@ -130,7 +130,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     case other do
       {:"::", meta, [{{:unquote, _, unquote_args}, meta1, call_args}, definition]} ->
         # replace unquote fragment and try to expand args to find variables
-        {_, state, env} = ElixirExpand.expand(unquote_args, state, env)
+        {_, state, env} = Compiler.expand(unquote_args, state, env)
 
         do_expand_spec(
           {:"::", meta, [{:__unknown__, meta1, call_args}, definition]},
@@ -170,7 +170,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     # unless there are unquotes module vars are not accessible
     state_orig = state
 
-    unless ElixirExpand.Quote.has_unquotes(ast) do
+    unless Compiler.Quote.has_unquotes(ast) do
       {ast, state, env} = do_expand_type(ast, State.new_func_vars_scope(state), env)
 
       {ast, State.remove_func_vars_scope(state, state_orig), env}
@@ -211,7 +211,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     case other do
       {:"::", meta, [{{:unquote, _, unquote_args}, meta1, call_args}, definition]} ->
         # replace unquote fragment and try to expand args to find variables
-        {_, state, env} = ElixirExpand.expand(unquote_args, state, env)
+        {_, state, env} = Compiler.expand(unquote_args, state, env)
         do_expand_type({:"::", meta, [{:__unknown__, meta1, call_args}, definition]}, state, env)
 
       {name, meta, args} when is_atom(name) and name != :"::" ->
@@ -303,11 +303,11 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   end
 
   defp typespec({:%, struct_meta, [name, {:%{}, meta, fields}]}, vars, caller, state) do
-    case ElixirExpand.Macro.expand(name, %{caller | function: {:__info__, 1}}) do
+    case Compiler.Macro.expand(name, %{caller | function: {:__info__, 1}}) do
       module when is_atom(module) ->
         # TODO register alias/struct
         struct =
-          ElixirExpand.Map.load_struct(module, [], state, caller)
+          Compiler.Map.load_struct(module, [], state, caller)
           |> Map.delete(:__struct__)
           |> Map.to_list()
 
@@ -363,7 +363,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
        when is_atom(tag) and is_list(field_specs) do
     # We cannot set a function name to avoid tracking
     # as a compile time dependency because for records it actually is one.
-    case ElixirExpand.Macro.expand({tag, [], [{:{}, [], []}]}, caller) do
+    case Compiler.Macro.expand({tag, [], [{:{}, [], []}]}, caller) do
       {_, _, [name, fields | _]} when is_list(fields) ->
         types =
           :lists.map(
@@ -529,7 +529,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   # handle unquote fragment
   defp typespec({key, _, args}, _vars, caller, state)
        when is_list(args) and key in [:unquote, :unquote_splicing] do
-    {_, state, _env} = ElixirExpand.expand(args, state, caller)
+    {_, state, _env} = Compiler.expand(args, state, caller)
     {:__unknown__, state}
   end
 

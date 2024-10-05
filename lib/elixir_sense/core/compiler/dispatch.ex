@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Dispatch do
-  alias ElixirSense.Core.Compiler.Rewrite, as: ElixirRewrite
+  alias ElixirSense.Core.Compiler.Rewrite
   alias ElixirSense.Core.State.ModFunInfo
   import :ordsets, only: [is_element: 2]
 
@@ -89,7 +89,7 @@ defmodule ElixirSense.Core.Compiler.Dispatch do
   end
 
   defp remote_function(_meta, receiver, name, arity, _e) do
-    case ElixirRewrite.inline(receiver, name, arity) do
+    case Rewrite.inline(receiver, name, arity) do
       {ar, an} -> {:remote, ar, an, arity}
       false -> {:remote, receiver, name, arity}
     end
