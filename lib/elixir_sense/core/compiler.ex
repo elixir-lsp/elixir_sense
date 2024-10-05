@@ -1096,7 +1096,7 @@ defmodule ElixirSense.Core.Compiler do
                 }
             end
 
-          :error ->
+          _other ->
             acc
         end
       end)

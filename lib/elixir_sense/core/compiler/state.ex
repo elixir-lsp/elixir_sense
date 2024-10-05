@@ -28,7 +28,7 @@ defmodule ElixirSense.Core.State do
         }
   @type vars_info_per_scope_id_t :: %{
           optional(scope_id_t) => [
-            %{optional({atom(), non_neg_integer()}) => ElixirSense.Core.State.VerInfo.t()}
+            %{optional({atom(), non_neg_integer()}) => ElixirSense.Core.State.VarInfo.t()}
           ]
         }
   @type structs_t :: %{optional(module) => ElixirSense.Core.State.StructInfo.t()}
