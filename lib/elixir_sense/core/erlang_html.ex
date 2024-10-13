@@ -1,7 +1,7 @@
 defmodule ElixirSense.Core.ErlangHtml do
   @moduledoc false
 
-  # those typedefs mimic erl_docgen types (as of OTP 26) to not introduce dependency
+  # those typedefs mimic edoc types (as of OTP 27) to not introduce dependency
   @type chunk_elements() :: [chunk_element()]
   @type chunk_element() ::
           {chunk_element_type(), chunk_element_attrs(), chunk_elements()}
@@ -33,6 +33,7 @@ defmodule ElixirSense.Core.ErlangHtml do
   Transform application/erlang+html AST into markdown string.
 
   Document AST is defined in http://erlang.org/doc/apps/erl_docgen/doc_storage.html
+  since OTP 27 definition moved to https://www.erlang.org/doc/apps/edoc/doc_storage.html
   """
 
   @spec to_markdown(chunk_element(), module(), atom()) :: String.t()
@@ -113,7 +114,21 @@ defmodule ElixirSense.Core.ErlangHtml do
         app
       ) do
     prefix = build_prefix(parents)
-    # TODO should we fence it as erlang?
+
+    "```\n" <>
+      prefix <>
+      to_markdown(inner, parents, :none, module, app) <> "\n" <> prefix <> "```\n" <> prefix
+  end
+
+  def to_markdown(
+        {:pre, _attrs1, [inner]},
+        parents,
+        _sanitize_mode,
+        module,
+        app
+      ) do
+    prefix = build_prefix(parents)
+
     "```\n" <>
       prefix <>
       to_markdown(inner, parents, :none, module, app) <> "\n" <> prefix <> "```\n" <> prefix

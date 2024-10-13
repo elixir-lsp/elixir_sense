@@ -297,6 +297,18 @@ defmodule ElixirSense.Core.ErlangHtmlTest do
            """ == to_markdown(ast)
   end
 
+  test "prerendered" do
+    ast = [
+      {:pre, [], ["var = asd()"]}
+    ]
+
+    assert """
+           ```
+           var = asd()
+           ```
+           """ == to_markdown(ast)
+  end
+
   test "link" do
     ast = [
       {:a, [href: "asd"], ["some link"]},

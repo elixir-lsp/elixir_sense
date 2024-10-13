@@ -189,8 +189,12 @@ defmodule ElixirSense.Core.Compiler.Quote do
        when is_atom(h) and h != Elixir and is_list(meta) do
     annotation =
       case NormalizedMacroEnv.expand_alias(e, meta, list, trace: false) do
-        {:alias, atom} -> atom
-        :error -> false
+        {:alias, atom} ->
+          # TODO track alias
+          atom
+
+        :error ->
+          false
       end
 
     alias_meta = keystore(:alias, Keyword.delete(meta, :counter), annotation)
@@ -249,6 +253,9 @@ defmodule ElixirSense.Core.Compiler.Quote do
           meta
 
         receiver ->
+          # TODO trace call here?
+          # import capture is precise
+          # elixir emits function/macro_imported
           keystore(:context, keystore(:imports, meta, [{a, receiver}]), q.context)
       end
 
@@ -266,6 +273,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
     import_meta = import_meta(meta, name, arity, q, e)
     annotated = annotate({name, import_meta, args_or_context}, q.context)
+    # TODO register call here? elixir emits import_quoted
     do_quote_tuple(annotated, q)
   end
 
@@ -327,6 +335,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
   defp do_quote_call(left, meta, expr, args, q) do
     all = [left, {:unquote, meta, [expr]}, args, q.context]
     tall = Enum.map(all, fn x -> do_quote(x, q) end)
+    # TODO track call? elixir does not emit remote_function in quoted
     {{:., meta, [:elixir_quote, :dot]}, meta, [meta(meta, q) | tall]}
   end
 

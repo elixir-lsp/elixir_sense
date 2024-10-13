@@ -857,6 +857,7 @@ defmodule ElixirSense.Core.Introspection do
       iex> ElixirSense.Core.Introspection.expand_alias(nil, [])
       nil
   """
+  # TODO remove this function
   def expand_alias(mod, aliases) do
     if elixir_module?(mod) do
       [mod_head | mod_tail] = Module.split(mod)
