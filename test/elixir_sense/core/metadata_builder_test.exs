@@ -7793,57 +7793,109 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              } = state.calls
     end
 
-    # TODO reenable when https://github.com/elixir-lang/elixir/issues/13878 is resolved
-    # test "registers calls capture quoted" do
-    #   state =
-    #     """
-    #     defmodule MyModule do
-    #       def aaa, do: :ok
-    #       defmacro bbb, do: :ok
-    #       defmacro foo do
-    #         quote do
-    #           aaa()
-    #           &aaa/0
-    #           bbb()
-    #           &bbb/0
-    #           inspect(1)
-    #           &inspect/1
-    #           Node.list()
-    #           &Node.list/0
-    #         end
-    #       end
+    defmodule QuotedCalls do
+      def aaa, do: :ok
+      defmacro bbb, do: :ok
 
-    #       def go do
-    #         foo()
-    #       end
+      defmacro foo do
+        quote do
+          aaa()
+          &aaa/0
+          bbb()
+          &bbb/0
+          inspect(1)
+          &inspect/1
+          Node.list()
+          &Node.list/0
+        end
+      end
+    end
 
-    #       def bar do
-    #         aaa()
-    #         &aaa/0
-    #         bbb()
-    #         &bbb/0
-    #         inspect(1)
-    #         &inspect/1
-    #         Node.list()
-    #         &Node.list/0
-    #       end
-    #     end
-    #     """
-    #     |> string_to_state
+    test "registers calls capture quoted expanded macro" do
+      state =
+        """
+        defmodule MyModule do
+          require ElixirSense.Core.MetadataBuilderTest.QuotedCalls, as: Q
+          def aaa, do: Q.foo()
+        end
+        """
+        |> string_to_state
 
-    #   assert %{
-    #            9 => [%CallInfo{arity: 0, position: {9, 10}, func: :bar, mod: Foo}],
-    #            10 => [
-    #              _,
-    #              %CallInfo{
-    #                arity: 1,
-    #                position: {10, 30},
-    #                func: :squared,
-    #                mod: ElixirSenseExample.Math
-    #              }
-    #            ]
-    #          } = state.calls
-    # end
+      assert [
+               %CallInfo{
+                 func: :nodes,
+                 mod: :erlang
+               },
+               %CallInfo{
+                 func: :nodes,
+                 mod: :erlang
+               },
+               %CallInfo{
+                 func: :inspect,
+                 mod: Kernel
+               },
+               %CallInfo{
+                 func: :inspect,
+                 mod: Kernel
+               },
+               %CallInfo{
+                 func: :bbb,
+                 mod: nil
+               },
+               %CallInfo{
+                 func: :bbb,
+                 mod: nil
+               },
+               %CallInfo{
+                 func: :aaa,
+                 mod: nil
+               },
+               %CallInfo{
+                 func: :aaa,
+                 mod: nil
+               },
+               _,
+               _
+             ] = state.calls[3]
+    end
+
+    test "registers calls capture quoted" do
+      state =
+        """
+        defmodule MyModule do
+          def aaa, do: :ok
+          defmacro bbb, do: :ok
+          defmacro foo do
+            quote do
+              aaa()
+              &aaa/0
+              bbb()
+              &bbb/0
+              inspect(1)
+              &inspect/1
+              Node.list()
+              &Node.list/0
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      # see https://github.com/elixir-lang/elixir/issues/13878 for discussion
+      # In elixir quoted only import capture is precise and has meaning
+      # It emits function/macro_imported. Import local call emits imported_quoted
+      # with all imported arities but this only indicates that import may be used.
+      # All other nodes are meaningless. They are traced as calls on macro expansion.
+      # Hence we trace call only on line with import capture
+
+      assert %{
+               11 => [%CallInfo{arity: 1, position: {11, 7}, func: :inspect, mod: Kernel}]
+             } = state.calls
+
+      for i <- Enum.to_list(5..10) ++ Enum.to_list(12..13) do
+        refute Map.has_key?(state.calls, i)
+      end
+    end
 
     test "registers calls capture expression external" do
       state =

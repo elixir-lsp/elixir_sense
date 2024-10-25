@@ -361,7 +361,7 @@ defmodule ElixirSense.Core.Compiler do
 
     {e_prelude, sp, ep} = expand(q_prelude, st, et)
     {e_context, sc, ec} = expand(q_context, sp, ep)
-    quoted = __MODULE__.Quote.quote(exprs, q)
+    {quoted, sc} = __MODULE__.Quote.quote(exprs, q, sc)
     {e_quoted, es, eq} = expand(quoted, sc, ec)
 
     es = es |> State.add_current_env_to_line(meta, eq)

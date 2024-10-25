@@ -17,8 +17,8 @@ defmodule ElixirSense.Core.Compiler.Map do
             keys = [:__struct__ | assoc_keys]
             without_keys = Elixir.Map.drop(struct, keys)
 
-            struct_assocs =
-              Compiler.Macro.escape(Enum.sort(Elixir.Map.to_list(without_keys)))
+            {struct_assocs, se} =
+              Compiler.Macro.escape(Enum.sort(Elixir.Map.to_list(without_keys)), se)
 
             {{:%, meta, [e_left, {:%{}, map_meta, struct_assocs ++ assocs}]}, se, ee}
 

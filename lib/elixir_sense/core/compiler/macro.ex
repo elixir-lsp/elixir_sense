@@ -191,10 +191,10 @@ defmodule ElixirSense.Core.Compiler.Macro do
   defp maybe_escape_map(map) when is_map(map), do: {:%{}, [], Map.to_list(map)}
   defp maybe_escape_map(other), do: other
 
-  @spec escape(term, keyword) :: Macro.t()
-  def escape(expr, opts \\ []) do
+  @spec escape(term, term, keyword) :: Macro.t()
+  def escape(expr, state, opts \\ []) do
     unquote = Keyword.get(opts, :unquote, false)
     kind = if Keyword.get(opts, :prune_metadata, false), do: :prune_metadata, else: :none
-    ElixirSense.Core.Compiler.Quote.escape(expr, kind, unquote)
+    ElixirSense.Core.Compiler.Quote.escape(expr, kind, unquote, state)
   end
 end
