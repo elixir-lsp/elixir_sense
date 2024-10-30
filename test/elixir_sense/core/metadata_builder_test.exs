@@ -4,7 +4,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
-  alias ElixirSense.Core.State.{VarInfo, CallInfo, StructInfo, ModFunInfo, AttributeInfo}
+
+  alias ElixirSense.Core.State.{
+    VarInfo,
+    CallInfo,
+    StructInfo,
+    ModFunInfo,
+    AttributeInfo,
+    RecordInfo
+  }
 
   describe "versioned_vars" do
     test "in block" do
@@ -8524,6 +8532,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
+               {MyRecords, :my_rec} => %RecordInfo{
+                 type: :defrecord,
+                 fields: []
+               },
+               {MyRecords, :user} => %RecordInfo{
+                 type: :defrecord,
+                 fields: [name: "meg", age: "25"]
+               },
+               {MyRecords, :userp} => %RecordInfo{
+                 type: :defrecordp,
+                 fields: [name: "meg", age: "25"]
+               }
+             } = state.records
+
+      assert %{
                {MyRecords, :user, 1} => %ModFunInfo{
                  params: [[{:\\, [], [{:args, [], nil}, []]}]],
                  positions: [{3, 10}],
@@ -8825,8 +8848,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       IO.puts ""
       """
       |> string_to_state
-
-    # dbg(state.lines_to_env |> Enum.map(fn {k, v} -> {k, %{module: v.module, function: v.function, typespec: v.typespec}} end))
 
     assert nil == get_line_typespec(state, 1)
     assert nil == get_line_function(state, 1)

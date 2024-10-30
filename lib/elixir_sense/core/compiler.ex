@@ -1349,7 +1349,14 @@ defmodule ElixirSense.Core.Compiler do
        )
        when call in [:defrecord, :defrecordp] and module != nil do
     range = State.extract_range(meta)
-    {[name, _fields] = args, state, env} = expand(args, state, env)
+    {[name, fields] = args, state, env} = expand(args, state, env)
+
+    fields =
+      if Keyword.keyword?(fields) do
+        fields
+      else
+        []
+      end
 
     type =
       case call do
@@ -1377,6 +1384,7 @@ defmodule ElixirSense.Core.Compiler do
         type,
         options
       )
+      |> State.add_record(env, call, name, fields)
       |> State.add_current_env_to_line(meta, env)
 
     {{{:., meta, [Record, call]}, meta, args}, state, env}

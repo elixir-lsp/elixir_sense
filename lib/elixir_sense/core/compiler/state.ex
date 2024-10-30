@@ -5,6 +5,7 @@ defmodule ElixirSense.Core.Compiler.State do
   alias ElixirSense.Core.State.{
     CallInfo,
     StructInfo,
+    RecordInfo,
     ModFunInfo,
     SpecInfo,
     TypeInfo,
@@ -39,6 +40,7 @@ defmodule ElixirSense.Core.Compiler.State do
           ]
         }
   @type structs_t :: %{optional(module) => ElixirSense.Core.State.StructInfo.t()}
+  @type records_t :: %{optional({module, atom}) => ElixirSense.Core.State.RecordInfo.t()}
   @type protocol_t :: {module, nonempty_list(module)}
   @type var_type :: nil | {:atom, atom} | {:map, keyword} | {:struct, keyword, module}
 
@@ -50,6 +52,7 @@ defmodule ElixirSense.Core.Compiler.State do
           types: types_t,
           mods_funs_to_positions: mods_funs_to_positions_t,
           structs: structs_t,
+          records: records_t,
           calls: calls_t,
           vars_info:
             list(%{optional({atom, non_neg_integer}) => ElixirSense.Core.State.VarInfo.t()}),
@@ -89,6 +92,7 @@ defmodule ElixirSense.Core.Compiler.State do
             types: %{},
             mods_funs_to_positions: %{},
             structs: %{},
+            records: %{},
             calls: %{},
             vars_info: [%{}],
             vars_info_per_scope_id: %{},
@@ -354,6 +358,14 @@ defmodule ElixirSense.Core.Compiler.State do
       |> Map.put(env.module, %StructInfo{type: type, fields: fields ++ [__struct__: env.module]})
 
     %__MODULE__{state | structs: structs}
+  end
+
+  def add_record(%__MODULE__{} = state, env, type, name, fields) do
+    records =
+      state.records
+      |> Map.put({env.module, name}, %RecordInfo{type: type, fields: fields})
+
+    %__MODULE__{state | records: records}
   end
 
   defp get_current_attributes(%__MODULE__{} = state) do

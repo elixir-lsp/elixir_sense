@@ -24,6 +24,7 @@ defmodule ElixirSense.Core.Metadata do
           types: State.types_t(),
           specs: State.specs_t(),
           structs: State.structs_t(),
+          records: State.records_t(),
           error: nil | term,
           first_alias_positions: map(),
           moduledoc_positions: map()
@@ -39,6 +40,7 @@ defmodule ElixirSense.Core.Metadata do
             types: %{},
             specs: %{},
             structs: %{},
+            records: %{},
             error: nil,
             first_alias_positions: %{},
             moduledoc_positions: %{}
@@ -58,6 +60,7 @@ defmodule ElixirSense.Core.Metadata do
       types: acc.types,
       specs: acc.specs,
       structs: acc.structs,
+      records: acc.records,
       mods_funs_to_positions: acc.mods_funs_to_positions,
       lines_to_env: acc.lines_to_env,
       vars_info_per_scope_id: acc.vars_info_per_scope_id,
