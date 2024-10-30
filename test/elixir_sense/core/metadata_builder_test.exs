@@ -2707,18 +2707,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert ([
-                %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: scope_id_1},
-                %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id_2}
-              ]
-              when scope_id_2 > scope_id_1) = state |> get_line_vars(6)
+      assert match?(
+               [
+                 %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: scope_id_1},
+                 %VarInfo{name: :var_in1, positions: [{4, 5}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_in2, positions: [{5, 5}], scope_id: scope_id_2}
+               ]
+               when scope_id_2 > scope_id_1,
+               state |> get_line_vars(6)
+             )
 
-      assert ([
-                %VarInfo{name: :var_after, positions: [{8, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = state |> get_line_vars(9)
+      assert match?(
+               [
+                 %VarInfo{name: :var_after, positions: [{8, 5}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_arg, positions: [{3, 12}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               state |> get_line_vars(9)
+             )
     end
 
     test "vars defined inside a function with params" do
@@ -2839,29 +2845,32 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{
-                  name: :var_in,
-                  positions: [{5, 5}],
-                  scope_id: scope_id_2
-                },
-                %VarInfo{
-                  name: :var_on,
-                  positions: [{4, 7}, {4, 24}, {4, 47}],
-                  scope_id: scope_id_2
-                },
-                %VarInfo{
-                  name: :var_on1,
-                  positions: [{4, 37}],
-                  scope_id: scope_id_2
-                },
-                %VarInfo{
-                  name: :var_out1,
-                  positions: [{2, 3}],
-                  scope_id: scope_id_1
-                }
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 6)
+      assert match?(
+               [
+                 %VarInfo{
+                   name: :var_in,
+                   positions: [{5, 5}],
+                   scope_id: scope_id_2
+                 },
+                 %VarInfo{
+                   name: :var_on,
+                   positions: [{4, 7}, {4, 24}, {4, 47}],
+                   scope_id: scope_id_2
+                 },
+                 %VarInfo{
+                   name: :var_on1,
+                   positions: [{4, 37}],
+                   scope_id: scope_id_2
+                 },
+                 %VarInfo{
+                   name: :var_out1,
+                   positions: [{2, 3}],
+                   scope_id: scope_id_1
+                 }
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 6)
+             )
 
       assert Map.keys(state.lines_to_env[9].versioned_vars) == [
                {:var_out1, nil},
@@ -2903,29 +2912,32 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{
-                  name: :var_in,
-                  positions: [{5, 5}],
-                  scope_id: scope_id_2
-                },
-                %VarInfo{
-                  name: :var_on,
-                  positions: [{4, 8}, {4, 25}, {4, 48}],
-                  scope_id: scope_id_2
-                },
-                %VarInfo{
-                  name: :var_on1,
-                  positions: [{4, 38}],
-                  scope_id: scope_id_2
-                },
-                %VarInfo{
-                  name: :var_out1,
-                  positions: [{2, 3}],
-                  scope_id: scope_id_1
-                }
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 6)
+      assert match?(
+               [
+                 %VarInfo{
+                   name: :var_in,
+                   positions: [{5, 5}],
+                   scope_id: scope_id_2
+                 },
+                 %VarInfo{
+                   name: :var_on,
+                   positions: [{4, 8}, {4, 25}, {4, 48}],
+                   scope_id: scope_id_2
+                 },
+                 %VarInfo{
+                   name: :var_on1,
+                   positions: [{4, 38}],
+                   scope_id: scope_id_2
+                 },
+                 %VarInfo{
+                   name: :var_out1,
+                   positions: [{2, 3}],
+                   scope_id: scope_id_1
+                 }
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 6)
+             )
 
       assert Map.keys(state.lines_to_env[9].versioned_vars) == [
                {:var_out1, nil},
@@ -2962,12 +2974,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_in_if, positions: [{4, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: scope_id_1},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 5)
+      assert match?(
+               [
+                 %VarInfo{name: :var_in_if, positions: [{4, 5}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: scope_id_1},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 5)
+             )
 
       assert Map.keys(state.lines_to_env[8].versioned_vars)
              |> Enum.reject(&(&1 |> elem(1) != nil)) == [
@@ -2976,12 +2991,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_in_else, positions: [{7, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: scope_id_1},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 8)
+      assert match?(
+               [
+                 %VarInfo{name: :var_in_else, positions: [{7, 5}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_on, positions: [{3, 6}], scope_id: scope_id_1},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 8)
+             )
 
       assert Map.keys(state.lines_to_env[11].versioned_vars) == [
                {:var_on, nil},
@@ -3017,24 +3035,27 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{
-                  name: :var_in,
-                  positions: [{4, 5}],
-                  scope_id: scope_id_2
-                },
-                %VarInfo{
-                  name: :var_on,
-                  positions: [{3, 6}],
-                  scope_id: scope_id_2
-                },
-                %VarInfo{
-                  name: :var_out1,
-                  positions: [{2, 3}],
-                  scope_id: scope_id_1
-                }
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 5)
+      assert match?(
+               [
+                 %VarInfo{
+                   name: :var_in,
+                   positions: [{4, 5}],
+                   scope_id: scope_id_2
+                 },
+                 %VarInfo{
+                   name: :var_on,
+                   positions: [{3, 6}],
+                   scope_id: scope_id_2
+                 },
+                 %VarInfo{
+                   name: :var_out1,
+                   positions: [{2, 3}],
+                   scope_id: scope_id_1
+                 }
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 5)
+             )
 
       assert Map.keys(state.lines_to_env[8].versioned_vars) == [
                {:var_out1, nil},
@@ -3074,29 +3095,32 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{
-                  name: :var_in1,
-                  positions: [{5, 7}],
-                  scope_id: scope_id_2
-                },
-                %VarInfo{
-                  name: :var_on0,
-                  positions: [{3, 8}],
-                  scope_id: scope_id_1
-                },
-                %VarInfo{
-                  name: :var_on1,
-                  positions: [{4, 6}],
-                  scope_id: scope_id_2
-                },
-                %VarInfo{
-                  name: :var_out1,
-                  positions: [{2, 3}, {3, 18}],
-                  scope_id: scope_id_1
-                }
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 6)
+      assert match?(
+               [
+                 %VarInfo{
+                   name: :var_in1,
+                   positions: [{5, 7}],
+                   scope_id: scope_id_2
+                 },
+                 %VarInfo{
+                   name: :var_on0,
+                   positions: [{3, 8}],
+                   scope_id: scope_id_1
+                 },
+                 %VarInfo{
+                   name: :var_on1,
+                   positions: [{4, 6}],
+                   scope_id: scope_id_2
+                 },
+                 %VarInfo{
+                   name: :var_out1,
+                   positions: [{2, 3}, {3, 18}],
+                   scope_id: scope_id_1
+                 }
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 6)
+             )
 
       assert Map.keys(state.lines_to_env[9].versioned_vars) == [
                {:var_in2, nil},
@@ -3105,13 +3129,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_in2, positions: [{8, 7}], scope_id: scope_id_2},
-                %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: scope_id_1},
-                %VarInfo{name: :var_on2, positions: [{7, 6}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 9)
+      assert match?(
+               [
+                 %VarInfo{name: :var_in2, positions: [{8, 7}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: scope_id_1},
+                 %VarInfo{name: :var_on2, positions: [{7, 6}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 9)
+             )
 
       assert Map.keys(state.lines_to_env[10].versioned_vars) == [
                {:var_on0, nil},
@@ -3119,12 +3146,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: scope_id_1},
-                %VarInfo{name: :var_on3, positions: [{10, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 10)
+      assert match?(
+               [
+                 %VarInfo{name: :var_on0, positions: [{3, 8}], scope_id: scope_id_1},
+                 %VarInfo{name: :var_on3, positions: [{10, 5}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}, {3, 18}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 10)
+             )
 
       assert Map.keys(state.lines_to_env[13].versioned_vars) == [
                {:var_on0, nil},
@@ -3163,33 +3193,42 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_in, positions: [{5, 7}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 6)
+      assert match?(
+               [
+                 %VarInfo{name: :var_in, positions: [{5, 7}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 6)
+             )
 
       assert Map.keys(state.lines_to_env[8].versioned_vars) == [
                {:var_in1, nil},
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_in1, positions: [{7, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 8)
+      assert match?(
+               [
+                 %VarInfo{name: :var_in1, positions: [{7, 5}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 8)
+             )
 
       assert Map.keys(state.lines_to_env[9].versioned_vars) == [
                {:var_in2, nil},
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_in2, positions: [{9, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 9)
+      assert match?(
+               [
+                 %VarInfo{name: :var_in2, positions: [{9, 5}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 9)
+             )
 
       assert Map.keys(state.lines_to_env[12].versioned_vars) == [
                {:var_out1, nil},
@@ -3240,19 +3279,25 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_in_try, positions: [{4, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 5)
+      assert match?(
+               [
+                 %VarInfo{name: :var_in_try, positions: [{4, 5}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 5)
+             )
 
       assert Map.keys(state.lines_to_env[7].versioned_vars) == [{:e1, nil}, {:var_out1, nil}]
 
-      assert ([
-                %VarInfo{name: :e1, positions: [{7, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 7)
+      assert match?(
+               [
+                 %VarInfo{name: :e1, positions: [{7, 5}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 7)
+             )
 
       assert Map.keys(state.lines_to_env[10].versioned_vars) == [
                {:e2, nil},
@@ -3260,23 +3305,29 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :e2, positions: [{8, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_in_rescue, positions: [{9, 7}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 10)
+      assert match?(
+               [
+                 %VarInfo{name: :e2, positions: [{8, 5}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_in_rescue, positions: [{9, 7}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 10)
+             )
 
       assert Map.keys(state.lines_to_env[12].versioned_vars) == [
                {:reason1, nil},
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :reason1, positions: [{12, 12}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 12)
+      assert match?(
+               [
+                 %VarInfo{name: :reason1, positions: [{12, 12}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 12)
+             )
 
       assert Map.keys(state.lines_to_env[15].versioned_vars) == [
                {:reason2, nil},
@@ -3284,45 +3335,57 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :reason2, positions: [{13, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_in_catch, positions: [{14, 7}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 15)
+      assert match?(
+               [
+                 %VarInfo{name: :reason2, positions: [{13, 5}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_in_catch, positions: [{14, 7}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 15)
+             )
 
       assert Map.keys(state.lines_to_env[17].versioned_vars) == [
                {:var_on_else, nil},
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_on_else, positions: [{17, 13}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 17)
+      assert match?(
+               [
+                 %VarInfo{name: :var_on_else, positions: [{17, 13}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 17)
+             )
 
       assert Map.keys(state.lines_to_env[20].versioned_vars) == [
                {:var_in_else, nil},
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_in_else, positions: [{19, 7}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 20)
+      assert match?(
+               [
+                 %VarInfo{name: :var_in_else, positions: [{19, 7}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 20)
+             )
 
       assert Map.keys(state.lines_to_env[23].versioned_vars) == [
                {:var_in_after, nil},
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_in_after, positions: [{22, 5}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 23)
+      assert match?(
+               [
+                 %VarInfo{name: :var_in_after, positions: [{22, 5}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 23)
+             )
 
       assert Map.keys(state.lines_to_env[26].versioned_vars) == [
                {:var_out1, nil},
@@ -3358,33 +3421,42 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[4].versioned_vars) == [{:msg1, nil}, {:var_out1, nil}]
 
-      assert ([
-                %VarInfo{name: :msg1, positions: [{4, 13}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 4)
+      assert match?(
+               [
+                 %VarInfo{name: :msg1, positions: [{4, 13}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 4)
+             )
 
       assert Map.keys(state.lines_to_env[7].versioned_vars) == [
                {:var_in, nil},
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_in, positions: [{6, 7}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 7)
+      assert match?(
+               [
+                 %VarInfo{name: :var_in, positions: [{6, 7}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 7)
+             )
 
       assert Map.keys(state.lines_to_env[11].versioned_vars) == [
                {:var_in_after, nil},
                {:var_out1, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :var_in_after, positions: [{10, 7}], scope_id: scope_id_2},
-                %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 11)
+      assert match?(
+               [
+                 %VarInfo{name: :var_in_after, positions: [{10, 7}], scope_id: scope_id_2},
+                 %VarInfo{name: :var_out1, positions: [{2, 3}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 11)
+             )
 
       assert Map.keys(state.lines_to_env[14].versioned_vars) == [
                {:var_out1, nil},
@@ -3450,11 +3522,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:top_level_var, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: scope_id_2},
-                %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 5)
+      assert match?(
+               [
+                 %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: scope_id_2},
+                 %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 5)
+             )
 
       assert Map.keys(state.lines_to_env[8].versioned_vars) == [
                {:inner_module_var, nil},
@@ -3462,12 +3537,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:top_level_var, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: scope_id_3},
-                %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: scope_id_2},
-                %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1 and scope_id_3 > scope_id_2) = get_line_vars(state, 8)
+      assert match?(
+               [
+                 %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: scope_id_3},
+                 %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: scope_id_2},
+                 %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1 and scope_id_3 > scope_id_2,
+               get_line_vars(state, 8)
+             )
 
       assert Map.keys(state.lines_to_env[11].versioned_vars) == [{:func_var, nil}]
 
@@ -3481,23 +3559,29 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                {:top_level_var, nil}
              ]
 
-      assert ([
-                %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: scope_id_3},
-                %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: scope_id_2},
-                %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1 and scope_id_3 > scope_id_2) = get_line_vars(state, 13)
+      assert match?(
+               [
+                 %VarInfo{name: :inner_module_var, positions: [{7, 5}], scope_id: scope_id_3},
+                 %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: scope_id_2},
+                 %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1 and scope_id_3 > scope_id_2,
+               get_line_vars(state, 13)
+             )
 
       assert Map.keys(state.lines_to_env[15].versioned_vars) == [
                outer_module_var: nil,
                top_level_var: nil
              ]
 
-      assert ([
-                %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: scope_id_2},
-                %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: scope_id_1}
-              ]
-              when scope_id_2 > scope_id_1) = get_line_vars(state, 15)
+      assert match?(
+               [
+                 %VarInfo{name: :outer_module_var, positions: [{4, 3}], scope_id: scope_id_2},
+                 %VarInfo{name: :top_level_var, positions: [{1, 1}], scope_id: scope_id_1}
+               ]
+               when scope_id_2 > scope_id_1,
+               get_line_vars(state, 15)
+             )
 
       assert Map.keys(state.lines_to_env[17].versioned_vars) == [{:top_level_var, nil}]
 
