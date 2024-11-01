@@ -353,47 +353,20 @@ defmodule ElixirSense.Core.Compiler.TypespecTest do
       Compiler.env()
       |> NormalizedMacroEnv.define_import([], ElixirSenseExample.ModuleWithRecord, trace: false)
 
-    assert {{
-              :{},
-              [],
-              [
-                :user,
-                {:"::", [], [{:name, [], nil}, {:term, [], []}]},
-                {:"::", [], [{:age, [], nil}, {:term, [], []}]}
-              ]
-            }, _state} = expand_typespec({:record, [], [:user]}, [], default_state(), env)
+    assert {{:record, [], [:user, []]}, _state} =
+             expand_typespec({:record, [], [:user]}, [], default_state(), env)
 
-    assert {{
-              :{},
-              [],
-              [
-                :user,
-                {:"::", [], [{:name, [], nil}, {:term, [], []}]},
-                {:"::", [], [{:age, [], nil}, :foo]}
-              ]
-            },
-            _state} =
+    assert {{:record, [], [:user, [age: :foo]]}, _state} =
              expand_typespec({:record, [], [:user, [age: :foo]]}, [], default_state(), env)
 
     # invalid record
     assert {{:record, [], [1, []]}, _} = expand_typespec({:record, [], [1]})
 
     # invalid field
-    assert {{
-              :{},
-              [],
-              [
-                :user,
-                {:"::", [], [{:name, [], nil}, {:term, [], []}]},
-                {:"::", [], [{:age, [], nil}, {:term, [], []}]}
-              ]
-            },
-            _state} =
+    assert {{:record, [], [:user, [invalid: :foo]]}, _state} =
              expand_typespec({:record, [], [:user, [invalid: :foo]]}, [], default_state(), env)
 
     # unknown record
     assert {{:record, [], [:foo, []]}, _} = expand_typespec({:record, [], [:foo]})
-
-    # TODO make it work with metadata records
   end
 end

@@ -361,41 +361,13 @@ defmodule ElixirSense.Core.Compiler.Typespec do
 
   defp typespec({:record, meta, [tag, field_specs]}, vars, caller, state)
        when is_atom(tag) and is_list(field_specs) do
-    # We cannot set a function name to avoid tracking
-    # as a compile time dependency because for records it actually is one.
-    case Compiler.Macro.expand({tag, [], [{:{}, [], []}]}, caller) do
-      {_, _, [name, fields | _]} when is_list(fields) ->
-        types =
-          :lists.map(
-            fn {field, _} ->
-              {:"::", [],
-               [
-                 {field, [], nil},
-                 Keyword.get(field_specs, field, quote(do: term()))
-               ]}
-            end,
-            fields
-          )
+    # elixir expands record macro to get fields and tag
+    # for simplicity only fields are expanded here
 
-        # look for cursor in invalid fields
-        # elixir raises if there are any
-        state =
-          field_specs
-          |> Enum.filter(fn {field, _} -> not Keyword.has_key?(fields, field) end)
-          |> Enum.reduce(state, fn {_, type}, acc ->
-            {_, acc} = typespec(type, vars, caller, acc)
-            acc
-          end)
+    {field_specs, state} =
+      :lists.mapfoldl(&typespec(&1, vars, caller, &2), state, field_specs)
 
-        typespec({:{}, meta, [name | types]}, vars, caller, state)
-
-      _ ->
-        # elixir raises here
-        {field_specs, state} =
-          :lists.mapfoldl(&typespec(&1, vars, caller, &2), state, field_specs)
-
-        {{:record, meta, [tag, field_specs]}, state}
-    end
+    {{:record, meta, [tag, field_specs]}, state}
   end
 
   # Handle ranges
