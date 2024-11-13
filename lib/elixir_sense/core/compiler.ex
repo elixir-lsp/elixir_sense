@@ -1897,11 +1897,7 @@ defmodule ElixirSense.Core.Compiler do
       callback.(meta, args)
     catch
       # If expanding the macro fails, we just give up.
-      kind, payload ->
-        Logger.warning(
-          "Unable to expand macro #{inspect(module)}.#{fun}/#{length(args)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
-        )
-
+      _kind, _payload ->
         # look for cursor in args
         {_ast, state, _env} = expand(args, state, env)
 
