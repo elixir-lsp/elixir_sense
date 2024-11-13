@@ -308,6 +308,8 @@ defmodule ElixirSense.Core.TypeInfo do
 
   # does not drop MACRO- prefix
   def get_function_specs(module, function, arity) when is_atom(module) and is_atom(function) do
+    # TODO this will not work correctly for :any arity in case many functions with the same name and different arities
+    # are implement different behaviours
     callback_specs =
       module
       |> Behaviours.get_module_behaviours()
@@ -475,7 +477,7 @@ defmodule ElixirSense.Core.TypeInfo do
     end)
   end
 
-  defp get_param_type_specs(func_specs, npar) do
+  def get_param_type_specs(func_specs, npar) do
     for func_spec <- func_specs,
         params_types <- extract_params_types_variants(func_spec),
         length(params_types) > npar do
