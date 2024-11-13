@@ -122,13 +122,6 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
   end
 
   def do_expand(code, %State.Env{} = env, %Metadata{} = metadata, cursor_position, opts \\ []) do
-    # TODO remove when we require elixir 1.13
-    only_structs =
-      case code do
-        [?% | _] -> true
-        _ -> false
-      end
-
     case NormalizedCode.Fragment.cursor_context(code) do
       {:alias, hint} when is_list(hint) ->
         expand_aliases(List.to_string(hint), env, metadata, cursor_position, false, opts)
@@ -147,7 +140,7 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
           env,
           metadata,
           cursor_position,
-          only_structs,
+          false,
           opts
         )
 
@@ -159,7 +152,7 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
           env,
           metadata,
           cursor_position,
-          only_structs,
+          false,
           opts
         )
 
@@ -196,7 +189,6 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
         # to provide signatures and falls back to expand_local_or_var
         expand_expr(env, metadata, cursor_position, opts)
 
-      # elixir >= 1.13
       {:operator, operator} ->
         case operator do
           [?^] -> expand_var("", env, metadata)
@@ -204,25 +196,20 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
           _ -> expand_local(List.to_string(operator), false, env, metadata, cursor_position)
         end
 
-      # elixir >= 1.13
       {:operator_arity, operator} ->
         expand_local(List.to_string(operator), true, env, metadata, cursor_position)
 
-      # elixir >= 1.13
       {:operator_call, _operator} ->
         expand_local_or_var("", env, metadata, cursor_position)
 
-      # elixir >= 1.13
       {:sigil, []} ->
         expand_sigil(env, metadata, cursor_position)
 
-      # elixir >= 1.13
       {:sigil, [_]} ->
         # {:yes, [], ~w|" """ ' ''' \( / < [ { \||c}
         # we choose to not provide sigil chars
         no()
 
-      # elixir >= 1.13
       {:struct, struct} when is_list(struct) ->
         expand_aliases(List.to_string(struct), env, metadata, cursor_position, true, opts)
 
@@ -856,6 +843,8 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
   end
 
   defp unquoted_atom_or_identifier?(atom) when is_atom(atom) do
+    # Version.match? is slow, we need to avoid it in a hot loop
+    # TODO remove this when we require elixir 1.14
     # Macro.classify_atom/1 was introduced in 1.14.0. If it's not available,
     # assume we're on an older version and fall back to a private API.
     if function_exported?(Macro, :classify_atom, 1) do
@@ -962,7 +951,7 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
   end
 
   defp get_modules(false, %State.Env{} = env, %Metadata{} = metadata) do
-    # TODO consider changing this to :code.all_available when otp 23 is required
+    # TODO consider changing this to :code.all_available when otp 23 (and elixir 1.14) is required
     modules = Enum.map(:code.all_loaded(), &Atom.to_string(elem(&1, 0)))
 
     # TODO it seems we only run in interactive mode - remove the check?
@@ -1033,7 +1022,7 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
       needed_requires =
         for func_kind <- func_kinds do
           if func_kind in [:macro, :defmacro, :defguard] and mod not in env.requires and
-               mod != Kernel.SpecialForms do
+               mod != Kernel.SpecialForms and mod != env.module do
             mod
           end
         end

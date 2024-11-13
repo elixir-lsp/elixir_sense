@@ -11,7 +11,6 @@ defmodule ElixirSense.Providers.Hover.Docs do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.SurroundContext
   alias ElixirSense.Core.State.ModFunInfo
-  alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.TypeInfo
   alias ElixirSense.Core.Parser
 
@@ -72,10 +71,11 @@ defmodule ElixirSense.Providers.Hover.Docs do
       %{begin: begin_pos, end: end_pos} = context ->
         metadata =
           Keyword.get_lazy(options, :metadata, fn ->
-            Parser.parse_string(code, true, true, {line, column})
+            Parser.parse_string(code, true, false, {line, column})
           end)
 
-        env = Metadata.get_env(metadata, {line, column})
+        env =
+          Metadata.get_cursor_env(metadata, {line, column}, {begin_pos, end_pos})
 
         case all(context, env, metadata) do
           [] ->
@@ -96,8 +96,7 @@ defmodule ElixirSense.Providers.Hover.Docs do
   defp all(
          context,
          %State.Env{
-           module: module,
-           vars: vars
+           module: module
          } = env,
          metadata
        ) do
@@ -128,15 +127,7 @@ defmodule ElixirSense.Providers.Hover.Docs do
         }
 
       {:variable, variable, version} ->
-        {line, column} = context.begin
-
-        var_info =
-          vars
-          |> Enum.find(fn
-            %VarInfo{} = info ->
-              info.name == variable and (info.version == version or version == :any) and
-                {line, column} in info.positions
-          end)
+        var_info = Metadata.find_var(metadata, variable, version, context.begin)
 
         if var_info != nil do
           %{
@@ -660,6 +651,7 @@ defmodule ElixirSense.Providers.Hover.Docs do
   end
 
   def expand({{:atom, module}, func}, aliases) do
+    # TODO use Macro.Env
     {Introspection.expand_alias(module, aliases), func}
   end
 

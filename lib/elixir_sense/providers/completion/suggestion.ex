@@ -65,6 +65,7 @@ defmodule ElixirSense.Providers.Completion.Suggestion do
           generic()
           | Reducers.CompleteEngine.t()
           | Reducers.Struct.field()
+          | Reducers.Record.field()
           | Reducers.Returns.return()
           | Reducers.Callbacks.callback()
           | Reducers.Protocol.protocol_function()
@@ -82,6 +83,7 @@ defmodule ElixirSense.Providers.Completion.Suggestion do
 
   @reducers [
     structs_fields: &Reducers.Struct.add_fields/5,
+    record_fields: &Reducers.Record.add_fields/5,
     returns: &Reducers.Returns.add_returns/5,
     callbacks: &Reducers.Callbacks.add_callbacks/5,
     protocol_functions: &Reducers.Protocol.add_functions/5,
@@ -103,44 +105,26 @@ defmodule ElixirSense.Providers.Completion.Suggestion do
 
   @spec suggestions(String.t(), pos_integer, pos_integer, keyword()) :: [Suggestion.suggestion()]
   def suggestions(code, line, column, options \\ []) do
-    hint = Source.prefix(code, line, column)
+    {prefix = hint, suffix} = Source.prefix_suffix(code, line, column)
 
     metadata =
       Keyword.get_lazy(options, :metadata, fn ->
-        Parser.parse_string(code, true, true, {line, column})
+        Parser.parse_string(code, true, false, {line, column})
       end)
 
     {text_before, text_after} = Source.split_at(code, line, column)
 
-    metadata =
-      maybe_fix_autocomple_on_cursor(
-        metadata,
-        text_before,
-        text_after,
-        {line, column}
-      )
+    # This works better than Code.Fragment.surround_context
+    surround =
+      case {prefix, suffix} do
+        {"", ""} ->
+          nil
 
-    env =
-      Metadata.get_env(metadata, {line, column})
+        _ ->
+          {{line, column - String.length(prefix)}, {line, column + String.length(suffix)}}
+      end
 
-    # if variable is rebound then in env there are many variables with the same name
-    # find the one defined closest to cursor
-    vars =
-      env.vars
-      |> Enum.group_by(fn %State.VarInfo{name: name} -> name end)
-      |> Enum.map(fn {_name, list} ->
-        list
-        |> Enum.max_by(fn
-          %State.VarInfo{positions: [_position]} ->
-            # variable is being defined - it's not a good candidate
-            {0, 0}
-
-          %State.VarInfo{positions: positions} ->
-            Enum.min(positions)
-        end)
-      end)
-
-    env = %{env | vars: vars}
+    env = Metadata.get_cursor_env(metadata, {line, column}, surround)
 
     module_store = ModuleStore.build()
 
@@ -152,61 +136,6 @@ defmodule ElixirSense.Providers.Completion.Suggestion do
     }
 
     find(hint, env, metadata, cursor_context, module_store, options)
-  end
-
-  # Provides a last attempt to fix a couple of parse errors that
-  # commonly appear when working with autocomplete on functions
-  # without parens.
-  #
-  # Note: This will be removed after refactoring the parser to
-  # allow unparsable nodes in the AST.
-  defp maybe_fix_autocomple_on_cursor(%Metadata{error: nil} = meta, _, _, _) do
-    meta
-  end
-
-  defp maybe_fix_autocomple_on_cursor(metadata, text_before, text_after, {line, column}) do
-    # Fix incomplete call, e.g. cursor after `var.`
-    fix_incomplete_call = fn text_before, text_after ->
-      if String.ends_with?(text_before, ".") do
-        text_before <> "__fake_call__" <> text_after
-      end
-    end
-
-    # Fix incomplete kw, e.g. cursor after `option1: 1,`
-    fix_incomplete_kw = fn text_before, text_after ->
-      if Regex.match?(~r/\,\s*$/u, text_before) do
-        text_before <> "__fake_key__: :__fake_value__" <> text_after
-      end
-    end
-
-    # Fix incomplete kw key, e.g. cursor after `option1: 1, opt`
-    fix_incomplete_kw_key = fn text_before, text_after ->
-      if Regex.match?(~r/\,\s*([\p{L}_][\p{L}\p{N}_@]*[?!]?)?$/u, text_before) do
-        text_before <> ": :__fake_value__" <> text_after
-      end
-    end
-
-    # TODO this may no longer be needed
-    # only fix_incomplete_call has some tests depending on it
-    fixers = [
-      fix_incomplete_call,
-      fix_incomplete_kw,
-      fix_incomplete_kw_key
-    ]
-
-    Enum.reduce_while(fixers, nil, fn fun, _ ->
-      new_buffer = fun.(text_before, text_after)
-
-      with true <- new_buffer != nil,
-           meta <- Parser.parse_string(new_buffer, false, true, {line, column}),
-           %Metadata{error: error} <- meta,
-           true <- error == nil do
-        {:halt, meta}
-      else
-        _ ->
-          {:cont, metadata}
-      end
-    end)
   end
 
   @doc """

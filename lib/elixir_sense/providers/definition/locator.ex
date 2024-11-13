@@ -1,9 +1,3 @@
-# This code has originally been a part of https://github.com/elixir-lsp/elixir_sense
-
-# Copyright (c) 2017 Marlus Saraiva
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the 'Software'), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
 defmodule ElixirSense.Providers.Definition.Locator do
   @moduledoc """
   Provides a function to find out where symbols are defined.
@@ -17,12 +11,11 @@ defmodule ElixirSense.Providers.Definition.Locator do
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.State
   alias ElixirSense.Core.State.ModFunInfo
-  alias ElixirSense.Core.State.TypeInfo
-  alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.SurroundContext
   alias ElixirSense.Providers.Location
   alias ElixirSense.Core.Parser
+  alias ElixirSense.Core.State.{ModFunInfo, TypeInfo}
 
   alias ElixirSense.Providers.Plugins.Phoenix.Scope
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
@@ -35,11 +28,10 @@ defmodule ElixirSense.Providers.Definition.Locator do
       context ->
         metadata =
           Keyword.get_lazy(options, :metadata, fn ->
-            Parser.parse_string(code, true, true, {line, column})
+            Parser.parse_string(code, true, false, {line, column})
           end)
 
-        env =
-          Metadata.get_env(metadata, {line, column})
+        env = Metadata.get_cursor_env(metadata, {line, column}, {context.begin, context.end})
 
         find(
           context,
@@ -61,7 +53,6 @@ defmodule ElixirSense.Providers.Definition.Locator do
         context,
         %State.Env{
           module: module,
-          vars: vars,
           attributes: attributes
         } = env,
         metadata
@@ -78,19 +69,21 @@ defmodule ElixirSense.Providers.Definition.Locator do
         nil
 
       {:variable, variable, version} ->
-        var_info =
-          vars
-          |> Enum.find(fn
-            %VarInfo{} = info ->
-              info.name == variable and (info.version == version or version == :any) and
-                context.begin in info.positions
-          end)
+        var_info = Metadata.find_var(metadata, variable, version, context.begin)
 
         if var_info != nil do
           {definition_line, definition_column} = Enum.min(var_info.positions)
 
-          %Location{type: :variable, file: nil, line: definition_line, column: definition_column}
+          %Location{
+            type: :variable,
+            file: nil,
+            line: definition_line,
+            column: definition_column,
+            end_line: definition_line,
+            end_column: definition_column + String.length(to_string(variable))
+          }
         else
+          # find local call
           find_function_or_module(
             {nil, variable},
             context,
@@ -108,7 +101,15 @@ defmodule ElixirSense.Providers.Definition.Locator do
 
         if attribute_info != nil do
           %State.AttributeInfo{positions: [{line, column} | _]} = attribute_info
-          %Location{type: :attribute, file: nil, line: line, column: column}
+
+          %Location{
+            type: :attribute,
+            file: nil,
+            line: line,
+            column: column,
+            end_line: line,
+            end_column: column + 1 + String.length(to_string(attribute))
+          }
         end
 
       {module, function} ->
@@ -143,14 +144,37 @@ defmodule ElixirSense.Providers.Definition.Locator do
   end
 
   defp do_find_function_or_module(
-         {{kind, _} = type, function},
+         {{:variable, _, _} = type, function},
          context,
          env,
          metadata,
          binding_env,
          visited
-       )
-       when kind in [:attribute, :variable] do
+       ) do
+    case Binding.expand(binding_env, type) do
+      {:atom, module} ->
+        do_find_function_or_module(
+          {{:atom, module}, function},
+          context,
+          env,
+          metadata,
+          binding_env,
+          visited
+        )
+
+      _ ->
+        nil
+    end
+  end
+
+  defp do_find_function_or_module(
+         {{:attribute, _} = type, function},
+         context,
+         env,
+         metadata,
+         binding_env,
+         visited
+       ) do
     case Binding.expand(binding_env, type) do
       {:atom, module} ->
         do_find_function_or_module(
@@ -229,15 +253,16 @@ defmodule ElixirSense.Providers.Definition.Locator do
           nil ->
             Location.find_mod_fun_source(mod, fun, call_arity)
 
-          %ModFunInfo{positions: positions} = mi ->
-            # for simplicity take last position here as positions are reversed
-            {line, column} = positions |> Enum.at(-1)
+          %ModFunInfo{} = info ->
+            {{line, column}, {end_line, end_column}} = Location.info_to_range(info)
 
             %Location{
               file: nil,
-              type: ModFunInfo.get_category(mi),
+              type: ModFunInfo.get_category(info),
               line: line,
-              column: column
+              column: column,
+              end_line: end_line,
+              end_column: end_column
             }
         end
 
@@ -252,15 +277,16 @@ defmodule ElixirSense.Providers.Definition.Locator do
           nil ->
             Location.find_type_source(mod, fun, call_arity)
 
-          %TypeInfo{positions: positions} ->
-            # for simplicity take last position here as positions are reversed
-            {line, column} = positions |> Enum.at(-1)
+          %TypeInfo{} = info ->
+            {{line, column}, {end_line, end_column}} = Location.info_to_range(info)
 
             %Location{
               file: nil,
               type: :typespec,
               line: line,
-              column: column
+              column: column,
+              end_line: end_line,
+              end_column: end_column
             }
         end
     end
