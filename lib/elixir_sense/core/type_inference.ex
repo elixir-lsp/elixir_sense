@@ -101,7 +101,7 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   # stepped range struct
-  def type_of({:..//, _, [first, last, step]}, context) do
+  def type_of({:"..//", _, [first, last, step]}, context) do
     {:struct,
      [
        first: type_of(first, context),
