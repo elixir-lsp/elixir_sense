@@ -264,10 +264,37 @@ defmodule ElixirSense.Core.SourceTest do
                options_so_far: []
              } = which_func("var = Enum.map([1")
 
-      assert nil == which_func("var = Enum.map([1,")
-      assert nil == which_func("var = Enum.map([1, ")
-      assert nil == which_func("var = Enum.map([1, 2")
-      assert nil == which_func("var = Enum.map([1,2,3")
+      assert %{
+               candidate: {Enum, :map},
+               cursor_at_option: true,
+               npar: 0,
+               option: nil,
+               options_so_far: []
+             } = which_func("var = Enum.map([1,")
+
+      assert %{
+               candidate: {Enum, :map},
+               cursor_at_option: true,
+               npar: 0,
+               option: nil,
+               options_so_far: []
+             } = which_func("var = Enum.map([1, ")
+
+      assert %{
+               candidate: {Enum, :map},
+               cursor_at_option: true,
+               npar: 0,
+               option: nil,
+               options_so_far: []
+             } = which_func("var = Enum.map([1, 2")
+
+      assert %{
+               candidate: {Enum, :map},
+               cursor_at_option: true,
+               npar: 0,
+               option: nil,
+               options_so_far: []
+             } = which_func("var = Enum.map([1,2,3")
     end
 
     test "inside a keyword list" do
@@ -350,10 +377,49 @@ defmodule ElixirSense.Core.SourceTest do
                option: :b,
                options_so_far: [:a]
              } = which_func("var = Enum.map([a: 1, b: ")
+
+      assert %{
+               candidate: {Enum, :map},
+               cursor_at_option: true,
+               npar: 0,
+               option: nil,
+               options_so_far: []
+             } = which_func("var = Enum.map([:a")
+
+      assert %{
+               candidate: {Enum, :map},
+               cursor_at_option: true,
+               npar: 0,
+               option: nil,
+               options_so_far: []
+             } = which_func("var = Enum.map([:a,")
+
+      assert %{
+               candidate: {Enum, :map},
+               cursor_at_option: true,
+               npar: 0,
+               option: nil,
+               options_so_far: []
+             } = which_func("var = Enum.map([:a, ")
+
+      assert %{
+               candidate: {Enum, :map},
+               cursor_at_option: false,
+               npar: 0,
+               option: :b,
+               options_so_far: []
+             } = which_func("var = Enum.map([:a, b: ")
     end
 
     test "inside a list with a list before" do
-      assert nil == which_func("var = Enum.map([1,2], [1, ")
+      assert %{
+               params: [[1, 2]],
+               candidate: {Enum, :map},
+               npar: 1,
+               cursor_at_option: true,
+               option: nil,
+               options_so_far: []
+             } = which_func("var = Enum.map([1,2], [1, ")
     end
 
     test "inside a keyword list as last arg" do

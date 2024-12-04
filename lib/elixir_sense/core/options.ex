@@ -1,64 +1,70 @@
 defmodule ElixirSense.Core.Options do
   alias ElixirSense.Core.Normalized.Typespec, as: NormalizedTypespec
+  alias ElixirSense.Core.Introspection
 
   def get_param_options(module, function, arity, metadata) do
+    spec_info = metadata.specs
+    |> Enum.find_value(fn
+      {{^module, ^function, ^arity}, spec_info} -> spec_info
+      {{^module, ^function, a}, spec_info} when a > arity ->
+        info = metadata.mods_funs_to_positions[{module, function, a}]
+
+        # assume function head is first in code and last in metadata
+        head_params = Enum.at(info.params, -1)
+        default_args = Introspection.count_defaults(head_params)
+
+        if a - default_args <= arity do
+          spec_info
+        end
+      _ -> false
+      end)
+      |> dbg
     # TODO is arity ok? what about default arg functions
     # TODO iterate over behaviours as well
-    case metadata.specs[{module, function, arity}] do
+    case spec_info do
       nil ->
         if Code.ensure_loaded?(module) do
-          NormalizedTypespec.get_specs(module) |> dbg
-          # does not drop MACRO- prefix
-          # TODO handle macro
           {_behaviour, specs} =
-            ElixirSense.Core.TypeInfo.get_function_specs(module, function, arity) |> dbg
+            if function_exported?(module, function, arity) do
+              ElixirSense.Core.TypeInfo.get_function_specs(module, function, arity)
+            else
+              ElixirSense.Core.TypeInfo.get_function_specs(
+                module,
+                :"MACRO-#{function}",
+                arity + 1
+              )
+            end
 
-          extracted = for {_, spec_entries} <- specs, spec <- spec_entries do
-            NormalizedTypespec.spec_to_quoted(function, spec)
-            |> Macro.prewalk(&drop_macro_env/1)
-            |> get_params_and_named_args()
-          end
+          extracted =
+            for {_, spec_entries} <- specs, spec <- spec_entries do
+              NormalizedTypespec.spec_to_quoted(function, spec)
+              |> Macro.prewalk(&drop_macro_env/1)
+              |> get_params_and_named_args()
+            end
 
-          case Enum.find(extracted, & match?({:ok, _, _}, &1)) do
+          case Enum.find(extracted, &match?({:ok, _, _}, &1)) do
             {:ok, type, named_args} ->
-              named_args = expand_type(named_args, metadata, module, [])
-
               type
               |> expand_type(metadata, module, named_args)
               |> extract_options([])
-            _ -> []
+
+            # |> dbg(limit: :infinity)
+            _ ->
+              []
           end
-
-          # with [spec] <- ElixirSense.Core.TypeInfo.get_param_type_specs(specs, arity - 1) |> dbg,
-          #      {:"::", _,
-          #       [
-          #         {:foo, _, []},
-          #         type
-          #       ]} <- NormalizedTypespec.type_to_quoted({:foo, spec, []}) |> dbg do
-          #   # TODO var args
-          #   named_args = []
-
-          #   type
-          #   |> expand_type(metadata, module, named_args)
-          #   |> extract_options([])
-          # else
-          #   _ -> []
-          # end
         else
           []
         end
 
       %ElixirSense.Core.State.SpecInfo{specs: [spec | _]} ->
         # TODO iterate over multiple specs
-        extract_options_from_spec(spec, metadata, module)
+        extract_options_from_spec(spec, metadata, module, arity - 1)
     end
   end
 
-  defp extract_options_from_spec(spec, metadata, module) do
+  defp extract_options_from_spec(spec, metadata, module, param_nr) do
     with {:ok, {:@, _, [{_kind, _, [ast]}]}} <- Code.string_to_quoted(spec),
-         {:ok, type, named_args} <- get_params_and_named_args(ast) do
-      named_args = expand_type(named_args, metadata, module, [])
-
+         {:ok, type, named_args} <- get_params_and_named_args(ast |> dbg, param_nr |> dbg) |> dbg do
       type
       |> expand_type(metadata, module, named_args)
       |> extract_options([])
@@ -68,25 +74,86 @@ defmodule ElixirSense.Core.Options do
     end
   end
 
-  defp get_params_and_named_args({:"::", _, [{_fun, _, params}, _]}) when is_list(params) do
-    {:ok, List.last(params), []}
+  defp get_params_and_named_args({:"::", _, [{_fun, _, params}, _]}, param_nr) when is_list(params) do
+    {:ok, Enum.at(params, param_nr), []}
   end
 
-  defp get_params_and_named_args({:when, _, [{:"::", _, [{_fun, _, params}, _]}, named_args]}) when is_list(params) and is_list(named_args) do
-    {:ok, List.last(params), named_args}
+  defp get_params_and_named_args({:when, _, [{:"::", _, [{_fun, _, params}, _], param_nr}, named_args]})
+       when is_list(params) and is_list(named_args) do
+    {:ok, Enum.at(params, param_nr), named_args}
   end
 
-  defp get_params_and_named_args(_), do: :error
+  defp get_params_and_named_args(_, _), do: :error
+
+  defp extract_options({:"::", _meta, [{name, _, context}, type]}, acc)
+       when is_atom(name) and is_atom(context),
+       do: extract_options(type, acc)
 
   defp extract_options({:list, _meta, [arg]}, acc),
     do: extract_options(arg, acc)
+
+  defp extract_options({:|, _, [atom1, atom2]}, acc)
+       when is_atom(atom1) and is_atom(atom2) do
+    [atom2, atom1 | acc]
+  end
+
+  defp extract_options({:|, _, [atom1, {atom2, type2}]}, acc)
+       when is_atom(atom1) and is_atom(atom2) do
+    [{atom2, type2}, atom1 | acc]
+  end
+
+  defp extract_options({:|, _, [{atom1, type1}, atom2]}, acc)
+       when is_atom(atom1) and is_atom(atom2) do
+    [atom2, {atom1, type1} | acc]
+  end
+
+  defp extract_options({:|, _, [{atom1, type1}, {atom2, type2}]}, acc)
+       when is_atom(atom1) and is_atom(atom2) do
+    [{atom2, type2}, {atom1, type1} | acc]
+  end
+
+  defp extract_options({:|, _, [atom, rest]}, acc)
+       when is_atom(atom) do
+    extract_options(rest, [atom | acc])
+  end
 
   defp extract_options({:|, _, [{atom, type}, rest]}, acc)
        when is_atom(atom) do
     extract_options(rest, [{atom, type} | acc])
   end
 
-  defp extract_options({:|, _meta, [_other, rest]}, acc) do
+  defp extract_options({:|, _, [atom1, {:{}, _, [atom2, type2]}]}, acc)
+       when is_atom(atom1) and is_atom(atom2) do
+    [{atom2, type2}, atom1 | acc]
+  end
+
+  defp extract_options({:|, _, [{:{}, _, [atom1, type1]}, atom2]}, acc)
+       when is_atom(atom1) and is_atom(atom2) do
+    [atom2, {atom1, type1} | acc]
+  end
+
+  defp extract_options({:|, _, [atom1, atom2]}, acc)
+       when is_atom(atom1) and is_atom(atom2) do
+    [atom2, atom1 | acc]
+  end
+
+  defp extract_options({:|, _, [{:{}, _, [atom1, type1]}, {:{}, _, [atom2, type2]}]}, acc)
+       when is_atom(atom1) and is_atom(atom2) do
+    [{atom2, type2}, {atom1, type1} | acc]
+  end
+
+  defp extract_options({:|, _, [atom, rest]}, acc)
+       when is_atom(atom) do
+    extract_options(rest, [atom | acc])
+  end
+
+  defp extract_options({:|, _, [{:{}, _, [atom, type]}, rest]}, acc)
+       when is_atom(atom) do
+    extract_options(rest, [{atom, type} | acc])
+  end
+
+  defp extract_options({:|, _meta, [other, rest]}, acc) do
+    acc = extract_options(other, acc)
     extract_options(rest, acc)
   end
 
@@ -95,9 +162,22 @@ defmodule ElixirSense.Core.Options do
     [{atom, type} | acc] |> Enum.sort()
   end
 
+  defp extract_options([atom | rest], acc)
+       when is_atom(atom) do
+    extract_options(rest, [atom | acc])
+  end
+
   defp extract_options([{atom, type} | rest], acc)
        when is_atom(atom) do
     extract_options(rest, [{atom, type} | acc])
+  end
+
+  defp extract_options([rest], acc) do
+    extract_options(rest, acc)
+  end
+
+  defp extract_options(atom, acc) when is_atom(atom) do
+    [atom | acc] |> Enum.sort()
   end
 
   defp extract_options({atom, type}, acc) when is_atom(atom) do
@@ -107,7 +187,7 @@ defmodule ElixirSense.Core.Options do
   defp extract_options(_other, acc), do: Enum.sort(acc)
 
   def expand_type(type, metadata, module, named_args) do
-    dbg(type)
+    # dbg(type)
     do_expand_type(type, metadata, module, named_args)
   end
 
@@ -149,7 +229,7 @@ defmodule ElixirSense.Core.Options do
     cond do
       match?({:ok, _}, named_arg) ->
         {:ok, expanded_arg} = named_arg
-        expanded_arg
+        expand_type(expanded_arg, metadata, module, named_args)
 
       :erl_internal.is_type(name, length(args)) ->
         {name, meta, args}
@@ -211,11 +291,35 @@ defmodule ElixirSense.Core.Options do
 
     case metadata.types[{module, name, length(args)}] do
       nil ->
-        # TODO find remote type
-        :error
+        if Code.ensure_loaded?(module) do
+          # dbg({module, name, length(args)})
+          case ElixirSense.Core.TypeInfo.get_type_spec(module, name, length(args)) do
+            {kind, spec} ->
+              {:"::", _,
+               [
+                 {_name, _, arg_names},
+                 type
+               ]} =
+                spec
+                |> NormalizedTypespec.type_to_quoted()
+
+              # |> dbg
+
+              # dbg(arg_names)
+              arg_names =
+                for {arg_name, _, context} when is_atom(context) <- arg_names, do: arg_name
+
+              {:ok, type, Enum.zip(arg_names, args)}
+
+            _ ->
+              :error
+          end
+        else
+          :error
+        end
 
       %ElixirSense.Core.State.TypeInfo{specs: [spec | _]} ->
-        dbg(spec)
+        # dbg(spec)
 
         with {:ok,
               {:@, _,
@@ -229,9 +333,9 @@ defmodule ElixirSense.Core.Options do
                      ]}
                   ]}
                ]}} <- Code.string_to_quoted(spec) do
-          dbg(arg_names)
+          # dbg(arg_names)
           arg_names = for {arg_name, _, context} when is_atom(context) <- arg_names, do: arg_name
-          {:ok, type, Enum.zip(arg_names, args)} |> dbg
+          {:ok, type, Enum.zip(arg_names, args)}
         else
           _ -> :error
         end
