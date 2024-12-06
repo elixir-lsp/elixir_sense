@@ -3,84 +3,125 @@ defmodule ElixirSense.Core.Options do
   alias ElixirSense.Core.Introspection
 
   def get_param_options(module, function, arity, metadata) do
-    spec_info = metadata.specs
-    |> Enum.find_value(fn
-      {{^module, ^function, ^arity}, spec_info} -> spec_info
-      {{^module, ^function, a}, spec_info} when a > arity ->
-        info = metadata.mods_funs_to_positions[{module, function, a}]
+    candidate =
+      metadata.specs
+      |> Enum.find_value(fn
+        {{^module, ^function, ^arity}, spec_info} ->
+          {spec_info, (arity - 1)..(arity - 1)}
 
-        # assume function head is first in code and last in metadata
-        head_params = Enum.at(info.params, -1)
-        default_args = Introspection.count_defaults(head_params)
+        {{^module, ^function, a}, spec_info} when a > arity ->
+          info = metadata.mods_funs_to_positions[{module, function, a}]
 
-        if a - default_args <= arity do
-          spec_info
-        end
-      _ -> false
+          # assume function head is first in code and last in metadata
+          head_params = Enum.at(info.params, -1)
+          default_args = Introspection.count_defaults(head_params)
+
+          if a - default_args <= arity do
+            # we can guess the position of keyword argument in params
+            {spec_info, (arity - 1)..min(arity - 1 + default_args, a - 1)}
+          end
+
+        _ ->
+          false
       end)
-      |> dbg
-    # TODO is arity ok? what about default arg functions
+
     # TODO iterate over behaviours as well
-    case spec_info do
+    case candidate do
       nil ->
         if Code.ensure_loaded?(module) do
-          {_behaviour, specs} =
-            if function_exported?(module, function, arity) do
-              ElixirSense.Core.TypeInfo.get_function_specs(module, function, arity)
-            else
+          candidate =
+            ElixirSense.Core.Normalized.Code.get_docs(module, :docs)
+            |> Enum.find_value(fn
+              {{^function, ^arity}, _, kind, _, _, _meta} ->
+                {kind, arity, (arity - 1)..(arity - 1)}
+
+              {{^function, a}, _, kind, _, _, %{defaults: default_args}}
+              when a > arity and a - default_args <= arity ->
+                # we can guess the position of keyword argument in params
+                {kind, a, (arity - 1)..min(arity - 1 + default_args, a - 1)}
+
+              _ ->
+                false
+            end)
+
+          if candidate do
+            {modified_function, modified_arity, parameter_position_range} =
+              case candidate do
+                {:function, arity, parameter_position_range} ->
+                  {function, arity, parameter_position_range}
+
+                {:macro, arity, parameter_position_range} ->
+                  # we need to add macro argument for typespec retrieval
+                  # no need to change parameter_position_range as we call drop_macro_env/1 later
+                  {:"MACRO-#{function}", arity + 1, parameter_position_range}
+              end
+
+            {_behaviour, specs} =
               ElixirSense.Core.TypeInfo.get_function_specs(
                 module,
-                :"MACRO-#{function}",
-                arity + 1
+                modified_function,
+                modified_arity
               )
-            end
 
-          extracted =
             for {_, spec_entries} <- specs, spec <- spec_entries do
               NormalizedTypespec.spec_to_quoted(function, spec)
               |> Macro.prewalk(&drop_macro_env/1)
-              |> get_params_and_named_args()
+              |> get_params_and_named_args(parameter_position_range)
             end
+            |> Enum.flat_map(fn
+              {:ok, params, named_args} ->
+                extract_from_params(params, named_args, metadata, module)
 
-          case Enum.find(extracted, &match?({:ok, _, _}, &1)) do
-            {:ok, type, named_args} ->
-              type
-              |> expand_type(metadata, module, named_args)
-              |> extract_options([])
-
-            # |> dbg(limit: :infinity)
-            _ ->
-              []
+              _ ->
+                []
+            end)
+          else
+            []
           end
         else
           []
         end
 
-      %ElixirSense.Core.State.SpecInfo{specs: [spec | _]} ->
-        # TODO iterate over multiple specs
-        extract_options_from_spec(spec, metadata, module, arity - 1)
+      {%ElixirSense.Core.State.SpecInfo{specs: specs}, parameter_position_range} ->
+        for spec <- specs do
+          case Code.string_to_quoted(spec) do
+            {:ok, {:@, _, [{_kind, _, [ast]}]}} ->
+              get_params_and_named_args(ast, parameter_position_range)
+
+            _ ->
+              :error
+          end
+        end
+        |> Enum.flat_map(fn
+          {:ok, params, named_args} ->
+            extract_from_params(params, named_args, metadata, module)
+
+          _ ->
+            []
+        end)
     end
   end
 
-  defp extract_options_from_spec(spec, metadata, module, param_nr) do
-    with {:ok, {:@, _, [{_kind, _, [ast]}]}} <- Code.string_to_quoted(spec),
-         {:ok, type, named_args} <- get_params_and_named_args(ast |> dbg, param_nr |> dbg) |> dbg do
-      type
+  defp extract_from_params(params, named_args, metadata, module) do
+    for param <- params do
+      param
       |> expand_type(metadata, module, named_args)
       |> extract_options([])
-    else
-      _ ->
-        []
     end
+    |> List.flatten()
   end
 
-  defp get_params_and_named_args({:"::", _, [{_fun, _, params}, _]}, param_nr) when is_list(params) do
-    {:ok, Enum.at(params, param_nr), []}
+  defp get_params_and_named_args({:"::", _, [{_fun, _, params}, _]}, parameter_position_range)
+       when is_list(params) do
+    {:ok, Enum.slice(params, parameter_position_range), []}
   end
 
-  defp get_params_and_named_args({:when, _, [{:"::", _, [{_fun, _, params}, _], param_nr}, named_args]})
+  defp get_params_and_named_args(
+         {:when, _, [{:"::", _, [{_fun, _, params}, _]}, named_args]},
+         parameter_position_range
+       )
        when is_list(params) and is_list(named_args) do
-    {:ok, Enum.at(params, param_nr), named_args}
+    {:ok, Enum.slice(params, parameter_position_range), named_args}
   end
 
   defp get_params_and_named_args(_, _), do: :error
@@ -185,6 +226,8 @@ defmodule ElixirSense.Core.Options do
   end
 
   defp extract_options(_other, acc), do: Enum.sort(acc)
+
+  # TODO protect against infinite expansion
 
   def expand_type(type, metadata, module, named_args) do
     # dbg(type)
@@ -294,7 +337,7 @@ defmodule ElixirSense.Core.Options do
         if Code.ensure_loaded?(module) do
           # dbg({module, name, length(args)})
           case ElixirSense.Core.TypeInfo.get_type_spec(module, name, length(args)) do
-            {kind, spec} ->
+            {_kind, spec} ->
               {:"::", _,
                [
                  {_name, _, arg_names},
