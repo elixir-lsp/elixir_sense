@@ -2,33 +2,53 @@ defmodule ElixirSense.Core.Options do
   alias ElixirSense.Core.Normalized.Typespec, as: NormalizedTypespec
   alias ElixirSense.Core.Introspection
 
-  def get_param_options(module, function, arity, metadata) do
+  defp get_spec(module, function, arity, behaviours, metadata) do
+    spec_info = Map.get(metadata.specs, {module, function, arity})
+    if spec_info do
+      spec_info
+    else
+      Enum.find_value(behaviours, fn behaviour ->
+        Map.get(metadata.specs, {behaviour, function, arity})
+      end)
+    end
+  end
+
+  def get_param_options(module, function, arity, env, metadata) do
+    behaviours = env.behaviours
+    # TODO filter instead of find_value
     candidate =
-      metadata.specs
+      metadata.mods_funs_to_positions
       |> Enum.find_value(fn
-        {{^module, ^function, ^arity}, spec_info} ->
-          {spec_info, (arity - 1)..(arity - 1)}
+        {{^module, ^function, ^arity}, _info} ->
+          spec_info = get_spec(module, function, arity, behaviours, metadata)
+          if spec_info do
+            {spec_info, (arity - 1)..(arity - 1)}
+          end
 
-        {{^module, ^function, a}, spec_info} when a > arity ->
-          info = metadata.mods_funs_to_positions[{module, function, a}]
-
+        {{^module, ^function, a}, info} when a > arity ->
           # assume function head is first in code and last in metadata
           head_params = Enum.at(info.params, -1)
           default_args = Introspection.count_defaults(head_params)
 
           if a - default_args <= arity do
-            # we can guess the position of keyword argument in params
-            {spec_info, (arity - 1)..min(arity - 1 + default_args, a - 1)}
+            spec_info = get_spec(module, function, a, behaviours, metadata)
+            if spec_info do
+              # we can guess the position of keyword argument in params
+              {spec_info, (arity - 1)..min(arity - 1 + default_args, a - 1)}
+            end
           end
 
         _ ->
           false
       end)
 
+    dbg(env)
+
     # TODO iterate over behaviours as well
     case candidate do
       nil ->
         if Code.ensure_loaded?(module) do
+          # TODO filter instead of find_value
           candidate =
             ElixirSense.Core.Normalized.Code.get_docs(module, :docs)
             |> Enum.find_value(fn
@@ -227,28 +247,32 @@ defmodule ElixirSense.Core.Options do
 
   defp extract_options(_other, acc), do: Enum.sort(acc)
 
-  # TODO protect against infinite expansion
-
-  def expand_type(type, metadata, module, named_args) do
+  def expand_type(type, metadata, module, named_args, stack \\ []) do
     # dbg(type)
-    do_expand_type(type, metadata, module, named_args)
+    if type in stack do
+      type
+    else
+      do_expand_type(type, metadata, module, named_args, [type | stack])
+    end
   end
 
   def do_expand_type(
         {:"::", meta, [{name, name_meta, context}, right]},
         metadata,
         module,
-        named_args
+        named_args,
+        stack
       )
       when is_atom(name) and is_atom(context) do
-    {:"::", meta, [{name, name_meta, context}, expand_type(right, metadata, module, named_args)]}
+    {:"::", meta, [{name, name_meta, context}, expand_type(right, metadata, module, named_args, stack)]}
   end
 
   def do_expand_type(
         {{:., dot_meta, [remote, type]}, call_meta, args},
         metadata,
         module,
-        named_args
+        named_args,
+        stack
       ) do
     remote =
       case remote do
@@ -258,21 +282,21 @@ defmodule ElixirSense.Core.Options do
 
     case find_type(remote, type, args, metadata) do
       {:ok, type, new_named_args} ->
-        expand_type(type, metadata, module, new_named_args ++ named_args)
+        expand_type(type, metadata, module, new_named_args ++ named_args, stack)
 
       :error ->
         {{:., dot_meta, [remote, type]}, call_meta, args}
     end
   end
 
-  def do_expand_type({name, meta, args}, metadata, module, named_args) when is_atom(name) do
-    args = (args || []) |> Enum.map(&expand_type(&1, metadata, module, named_args))
+  def do_expand_type({name, meta, args}, metadata, module, named_args, stack) when is_atom(name) do
+    args = (args || []) |> Enum.map(&expand_type(&1, metadata, module, named_args, stack))
     named_arg = Keyword.fetch(named_args, name)
 
     cond do
       match?({:ok, _}, named_arg) ->
         {:ok, expanded_arg} = named_arg
-        expand_type(expanded_arg, metadata, module, named_args)
+        expand_type(expanded_arg, metadata, module, named_args, stack)
 
       :erl_internal.is_type(name, length(args)) ->
         {name, meta, args}
@@ -310,7 +334,7 @@ defmodule ElixirSense.Core.Options do
       true ->
         case find_type(module, name, args, metadata) do
           {:ok, type, new_named_args} ->
-            expand_type(type, metadata, module, new_named_args ++ named_args)
+            expand_type(type, metadata, module, new_named_args ++ named_args, stack)
 
           :error ->
             {name, meta, args}
@@ -318,16 +342,16 @@ defmodule ElixirSense.Core.Options do
     end
   end
 
-  def do_expand_type(list, metadata, module, named_args) when is_list(list) do
-    list |> Enum.map(&expand_type(&1, metadata, module, named_args))
+  def do_expand_type(list, metadata, module, named_args, stack) when is_list(list) do
+    list |> Enum.map(&expand_type(&1, metadata, module, named_args, stack))
   end
 
-  def do_expand_type({left, right}, metadata, module, named_args) do
-    {expand_type(left, metadata, module, named_args),
-     expand_type(right, metadata, module, named_args)}
+  def do_expand_type({left, right}, metadata, module, named_args, stack) do
+    {expand_type(left, metadata, module, named_args, stack),
+     expand_type(right, metadata, module, named_args, stack)}
   end
 
-  def do_expand_type(literal, _metadata, _module, _named_args), do: literal
+  def do_expand_type(literal, _metadata, _module, _named_args, _stack), do: literal
 
   defp find_type(module, name, args, metadata) do
     args = args || []
