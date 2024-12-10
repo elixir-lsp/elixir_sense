@@ -72,10 +72,10 @@ defmodule ElixirSense.Core.Options do
 
   def get_param_options(module, function, arity, env, metadata) do
     behaviours = env.behaviours
-    # TODO filter instead of find_value?
-    candidate =
+
+    candidates =
       metadata.mods_funs_to_positions
-      |> Enum.find_value(fn
+      |> Enum.map(fn
         {{^module, ^function, ^arity}, info} ->
           kind = ModFunInfo.get_category(info)
           specs = get_spec(module, function, arity, kind, behaviours, metadata)
@@ -100,16 +100,16 @@ defmodule ElixirSense.Core.Options do
           end
 
         _ ->
-          false
+          nil
       end)
+      |> Enum.reject(&is_nil/1)
 
-    case candidate do
-      nil ->
+    case candidates do
+      [] ->
         if Code.ensure_loaded?(module) do
-          # TODO filter instead of find_value
-          candidate =
+          candidates =
             ElixirSense.Core.Normalized.Code.get_docs(module, :docs)
-            |> Enum.find_value(fn
+            |> Enum.map(fn
               {{^function, ^arity}, _, kind, _, _, _meta} ->
                 {kind, arity, (arity - 1)..(arity - 1)}
 
@@ -119,10 +119,11 @@ defmodule ElixirSense.Core.Options do
                 {kind, a, (arity - 1)..min(arity - 1 + default_args, a - 1)}
 
               _ ->
-                false
+                nil
             end)
+            |> Enum.reject(&is_nil/1)
 
-          if candidate do
+          for candidate <- candidates do
             {kind, modified_function, modified_arity, parameter_position_range} =
               case candidate do
                 {:function, arity, parameter_position_range} ->
@@ -154,15 +155,15 @@ defmodule ElixirSense.Core.Options do
               _ ->
                 []
             end)
-          else
-            []
           end
+          |> List.flatten()
         else
           []
         end
 
-      {specs, parameter_position_range} ->
-        for spec <- specs do
+      list ->
+        for {specs, parameter_position_range} <- list,
+            spec <- specs do
           get_params_and_named_args(spec, parameter_position_range)
         end
         |> Enum.flat_map(fn
