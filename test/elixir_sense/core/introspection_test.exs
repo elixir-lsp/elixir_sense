@@ -40,6 +40,31 @@ defmodule ElixirSense.Core.IntrospectionTest do
            ]
   end
 
+  test "get_callbacks_with_docs for macrocallbacks" do
+    assert get_callbacks_with_docs(ElixirSenseExample.BehaviourWithMacrocallback) == [
+             %{
+               name: :optional,
+               arity: 1,
+               callback: """
+               @macrocallback optional(a) :: Macro.t() when a: atom()\
+               """,
+               signature: "optional(a)",
+               doc: "An optional macrocallback\n",
+               metadata: %{optional: true, app: :elixir_sense},
+               kind: :macrocallback
+             },
+             %{
+               arity: 1,
+               name: :required,
+               signature: "required(atom)",
+               callback: "@macrocallback required(atom()) :: Macro.t()",
+               metadata: %{app: :elixir_sense, optional: false},
+               doc: "A required macrocallback\n",
+               kind: :macrocallback
+             }
+           ]
+  end
+
   test "get_callbacks_with_docs for erlang behaviours" do
     assert [
              %{

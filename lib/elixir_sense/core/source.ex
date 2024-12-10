@@ -517,32 +517,28 @@ defmodule ElixirSense.Core.Source do
       [keyword_list | rest] when is_list(keyword_list) ->
         case Enum.reverse(keyword_list) do
           [{:__cursor__, _, []} | kl_rest] ->
-            if Keyword.keyword?(kl_rest) do
-              {:ok,
-               %{
-                 call: call,
-                 params: Enum.reverse(rest),
-                 npar: length(rest),
-                 meta: meta,
-                 options: Enum.reverse(kl_rest) |> Enum.map(&elem(&1, 0)),
-                 cursor_at_option: true,
-                 option: nil
-               }}
-            end
+            {:ok,
+             %{
+               call: call,
+               params: Enum.reverse(rest),
+               npar: length(rest),
+               meta: meta,
+               options: take_options(kl_rest),
+               cursor_at_option: true,
+               option: nil
+             }}
 
           [{atom, {:__cursor__, _, []}} | kl_rest] when is_atom(atom) ->
-            if Keyword.keyword?(kl_rest) do
-              {:ok,
-               %{
-                 call: call,
-                 params: Enum.reverse(rest),
-                 npar: length(rest),
-                 meta: meta,
-                 options: Enum.reverse(kl_rest) |> Enum.map(&elem(&1, 0)),
-                 cursor_at_option: false,
-                 option: atom
-               }}
-            end
+            {:ok,
+             %{
+               call: call,
+               params: Enum.reverse(rest),
+               npar: length(rest),
+               meta: meta,
+               options: take_options(kl_rest),
+               cursor_at_option: false,
+               option: atom
+             }}
 
           _ ->
             nil
@@ -551,6 +547,16 @@ defmodule ElixirSense.Core.Source do
       _ ->
         nil
     end
+  end
+
+  defp take_options(kl_rest) do
+    Enum.reduce_while(kl_rest, [], fn
+      {atom, _value}, acc when is_atom(atom) ->
+        {:cont, [atom | acc]}
+
+      _, acc ->
+        {:halt, acc}
+    end)
   end
 
   def get_mod_fun(atom, _binding_env) when is_atom(atom), do: {{nil, false}, atom}
