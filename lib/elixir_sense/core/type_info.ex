@@ -308,39 +308,45 @@ defmodule ElixirSense.Core.TypeInfo do
 
   # does not drop MACRO- prefix
   def get_function_specs(module, function, arity) when is_atom(module) and is_atom(function) do
-    # TODO this will not work correctly for :any arity in case many functions with the same name and different arities
-    # are implement different behaviours
-    callback_specs =
-      module
-      |> Behaviours.get_module_behaviours()
-      |> Enum.reduce_while(nil, fn behaviour, acc ->
-        behaviour_specs = behaviour |> get_module_callbacks()
+    module_specs = module |> get_module_specs()
 
-        callback_specs =
-          for {{f, a}, spec} <- behaviour_specs, f == function, arity == :any or a == arity do
-            spec
-          end
+    function_specs =
+      for {{f, a}, spec} <- module_specs,
+          f == function,
+          Introspection.matches_arity?(a, arity) do
+        spec
+      end
 
-        if callback_specs != [] do
-          {:halt, {behaviour, callback_specs}}
-        else
-          {:cont, acc}
-        end
-      end)
-
-    if callback_specs == nil do
-      module_specs = module |> get_module_specs()
-
-      function_specs =
-        for {{f, a}, spec} <- module_specs,
-            f == function,
-            Introspection.matches_arity?(a, arity) do
-          spec
-        end
-
+    if function_specs != [] do
       {nil, function_specs}
     else
-      callback_specs
+      # TODO this will not work correctly for :any arity in case many functions with the same name and different arities
+      # are implement different behaviours
+      callback_specs =
+        module
+        |> Behaviours.get_module_behaviours()
+        |> Enum.reduce_while(nil, fn behaviour, acc ->
+          behaviour_specs = behaviour |> get_module_callbacks()
+
+          callback_specs =
+            for {{f, a}, spec} <- behaviour_specs,
+                f == function,
+                Introspection.matches_arity?(a, arity) do
+              spec
+            end
+
+          if callback_specs != [] do
+            {:halt, {behaviour, callback_specs}}
+          else
+            {:cont, acc}
+          end
+        end)
+
+      if callback_specs do
+        callback_specs
+      else
+        {nil, []}
+      end
     end
   end
 

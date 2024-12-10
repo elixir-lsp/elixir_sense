@@ -13,7 +13,6 @@ defmodule ElixirSense.Core.TypeAst do
 
   def extract_signature(ast) do
     ast
-    |> Macro.prewalk(&drop_macro_env/1)
     |> extract_spec_ast_parts
     |> Map.get(:name)
     |> Macro.to_string()
@@ -34,9 +33,4 @@ defmodule ElixirSense.Core.TypeAst do
   defp extract_return_part(ast, returns) do
     [ast | returns]
   end
-
-  defp drop_macro_env({name, meta, [{:"::", _, [{:env, _, _}, _ | _]} | args]}),
-    do: {name, meta, args}
-
-  defp drop_macro_env(other), do: other
 end

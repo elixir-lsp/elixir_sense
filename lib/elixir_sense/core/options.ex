@@ -1,40 +1,101 @@
 defmodule ElixirSense.Core.Options do
   alias ElixirSense.Core.Normalized.Typespec, as: NormalizedTypespec
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.State.ModFunInfo
 
-  defp get_spec(module, function, arity, behaviours, metadata) do
+  defp get_spec_ast_from_info(spec_info) do
+    for spec <- spec_info.specs do
+      case Code.string_to_quoted(spec) do
+        {:ok, {:@, _, [{_kind, _, [ast]}]}} -> ast
+        _ -> nil
+      end
+    end
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp maybe_unpack_caller(type, :function), do: type
+
+  defp maybe_unpack_caller(
+         {:type, line1, :fun, [{:type, line2, :product, [_ | args]} | tail]},
+         :macro
+       ) do
+    {:type, line1, :fun, [{:type, line2, :product, args} | tail]}
+  end
+
+  defp maybe_unpack_caller({:type, line, :bounded_fun, [head | tail]}, :macro) do
+    {:type, line, :bounded_fun, [maybe_unpack_caller(head, :macro) | tail]}
+  end
+
+  defp get_spec(module, function, arity, kind, behaviours, metadata) do
     spec_info = Map.get(metadata.specs, {module, function, arity})
+
     if spec_info do
-      spec_info
+      get_spec_ast_from_info(spec_info)
     else
       Enum.find_value(behaviours, fn behaviour ->
-        Map.get(metadata.specs, {behaviour, function, arity})
+        if Map.has_key?(metadata.mods_funs_to_positions, {behaviour, nil, nil}) do
+          spec_info = Map.get(metadata.specs, {behaviour, function, arity})
+
+          if spec_info do
+            get_spec_ast_from_info(spec_info)
+          end
+        else
+          if Code.ensure_loaded?(behaviour) do
+            behaviour_specs = ElixirSense.Core.TypeInfo.get_module_callbacks(behaviour)
+
+            {modified_function, modified_arity} =
+              case kind do
+                :function ->
+                  {function, arity}
+
+                :macro ->
+                  # modify name and arity for callback retrieval
+                  # caller arg is dropped in maybe_unpack_caller
+                  {:"MACRO-#{function}", arity + 1}
+              end
+
+            callback_specs =
+              for {{f, a}, {_, spec_entries}} <- behaviour_specs,
+                  f == modified_function,
+                  a == modified_arity,
+                  spec <- spec_entries do
+                spec = maybe_unpack_caller(spec, kind)
+                NormalizedTypespec.spec_to_quoted(function, spec)
+              end
+
+            callback_specs
+          end
+        end
       end)
     end
   end
 
   def get_param_options(module, function, arity, env, metadata) do
     behaviours = env.behaviours
-    # TODO filter instead of find_value
+    # TODO filter instead of find_value?
     candidate =
       metadata.mods_funs_to_positions
       |> Enum.find_value(fn
-        {{^module, ^function, ^arity}, _info} ->
-          spec_info = get_spec(module, function, arity, behaviours, metadata)
-          if spec_info do
-            {spec_info, (arity - 1)..(arity - 1)}
+        {{^module, ^function, ^arity}, info} ->
+          kind = ModFunInfo.get_category(info)
+          specs = get_spec(module, function, arity, kind, behaviours, metadata)
+
+          if specs do
+            {specs, (arity - 1)..(arity - 1)}
           end
 
         {{^module, ^function, a}, info} when a > arity ->
+          kind = ModFunInfo.get_category(info)
           # assume function head is first in code and last in metadata
           head_params = Enum.at(info.params, -1)
           default_args = Introspection.count_defaults(head_params)
 
           if a - default_args <= arity do
-            spec_info = get_spec(module, function, a, behaviours, metadata)
-            if spec_info do
+            specs = get_spec(module, function, a, kind, behaviours, metadata)
+
+            if specs do
               # we can guess the position of keyword argument in params
-              {spec_info, (arity - 1)..min(arity - 1 + default_args, a - 1)}
+              {specs, (arity - 1)..min(arity - 1 + default_args, a - 1)}
             end
           end
 
@@ -42,9 +103,6 @@ defmodule ElixirSense.Core.Options do
           false
       end)
 
-    dbg(env)
-
-    # TODO iterate over behaviours as well
     case candidate do
       nil ->
         if Code.ensure_loaded?(module) do
@@ -65,15 +123,15 @@ defmodule ElixirSense.Core.Options do
             end)
 
           if candidate do
-            {modified_function, modified_arity, parameter_position_range} =
+            {kind, modified_function, modified_arity, parameter_position_range} =
               case candidate do
                 {:function, arity, parameter_position_range} ->
-                  {function, arity, parameter_position_range}
+                  {:function, function, arity, parameter_position_range}
 
                 {:macro, arity, parameter_position_range} ->
                   # we need to add macro argument for typespec retrieval
-                  # no need to change parameter_position_range as we call drop_macro_env/1 later
-                  {:"MACRO-#{function}", arity + 1, parameter_position_range}
+                  # position range remains unchanged as we drop it in maybe_unpack_caller
+                  {:macro, :"MACRO-#{function}", arity + 1, parameter_position_range}
               end
 
             {_behaviour, specs} =
@@ -84,8 +142,9 @@ defmodule ElixirSense.Core.Options do
               )
 
             for {_, spec_entries} <- specs, spec <- spec_entries do
+              spec = maybe_unpack_caller(spec, kind)
+
               NormalizedTypespec.spec_to_quoted(function, spec)
-              |> Macro.prewalk(&drop_macro_env/1)
               |> get_params_and_named_args(parameter_position_range)
             end
             |> Enum.flat_map(fn
@@ -102,15 +161,9 @@ defmodule ElixirSense.Core.Options do
           []
         end
 
-      {%ElixirSense.Core.State.SpecInfo{specs: specs}, parameter_position_range} ->
+      {specs, parameter_position_range} ->
         for spec <- specs do
-          case Code.string_to_quoted(spec) do
-            {:ok, {:@, _, [{_kind, _, [ast]}]}} ->
-              get_params_and_named_args(ast, parameter_position_range)
-
-            _ ->
-              :error
-          end
+          get_params_and_named_args(spec, parameter_position_range)
         end
         |> Enum.flat_map(fn
           {:ok, params, named_args} ->
@@ -248,7 +301,6 @@ defmodule ElixirSense.Core.Options do
   defp extract_options(_other, acc), do: Enum.sort(acc)
 
   def expand_type(type, metadata, module, named_args, stack \\ []) do
-    # dbg(type)
     if type in stack do
       type
     else
@@ -264,7 +316,8 @@ defmodule ElixirSense.Core.Options do
         stack
       )
       when is_atom(name) and is_atom(context) do
-    {:"::", meta, [{name, name_meta, context}, expand_type(right, metadata, module, named_args, stack)]}
+    {:"::", meta,
+     [{name, name_meta, context}, expand_type(right, metadata, module, named_args, stack)]}
   end
 
   def do_expand_type(
@@ -289,7 +342,8 @@ defmodule ElixirSense.Core.Options do
     end
   end
 
-  def do_expand_type({name, meta, args}, metadata, module, named_args, stack) when is_atom(name) do
+  def do_expand_type({name, meta, args}, metadata, module, named_args, stack)
+      when is_atom(name) do
     args = (args || []) |> Enum.map(&expand_type(&1, metadata, module, named_args, stack))
     named_arg = Keyword.fetch(named_args, name)
 
@@ -359,7 +413,6 @@ defmodule ElixirSense.Core.Options do
     case metadata.types[{module, name, length(args)}] do
       nil ->
         if Code.ensure_loaded?(module) do
-          # dbg({module, name, length(args)})
           case ElixirSense.Core.TypeInfo.get_type_spec(module, name, length(args)) do
             {_kind, spec} ->
               {:"::", _,
@@ -370,9 +423,6 @@ defmodule ElixirSense.Core.Options do
                 spec
                 |> NormalizedTypespec.type_to_quoted()
 
-              # |> dbg
-
-              # dbg(arg_names)
               arg_names =
                 for {arg_name, _, context} when is_atom(context) <- arg_names, do: arg_name
 
@@ -386,8 +436,6 @@ defmodule ElixirSense.Core.Options do
         end
 
       %ElixirSense.Core.State.TypeInfo{specs: [spec | _]} ->
-        # dbg(spec)
-
         with {:ok,
               {:@, _,
                [
@@ -400,7 +448,6 @@ defmodule ElixirSense.Core.Options do
                      ]}
                   ]}
                ]}} <- Code.string_to_quoted(spec) do
-          # dbg(arg_names)
           arg_names = for {arg_name, _, context} when is_atom(context) <- arg_names, do: arg_name
           {:ok, type, Enum.zip(arg_names, args)}
         else
@@ -408,9 +455,4 @@ defmodule ElixirSense.Core.Options do
         end
     end
   end
-
-  defp drop_macro_env({name, meta, [{:"::", _, [_, {{:., _, [Macro.Env, :t]}, _, _}]} | args]}),
-    do: {name, meta, args}
-
-  defp drop_macro_env(other), do: other
 end

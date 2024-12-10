@@ -5,7 +5,7 @@ defmodule ElixirSense.Core.OptionsTest do
 
   defp get_options(code, module, function, arity) do
     metadata = Parser.parse_string(code, true, true, {1, 1})
-    Options.get_param_options(module, function, arity, metadata)
+    Options.get_param_options(module, function, arity, %ElixirSense.Core.State.Env{}, metadata)
   end
 
   describe "metadata" do

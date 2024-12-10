@@ -234,9 +234,7 @@ defmodule ElixirSense.Core.Introspection do
     case get_callbacks_and_docs(mod) do
       {callbacks, []} ->
         Enum.map(callbacks, fn {{name, arity}, [spec | _]} ->
-          spec_ast =
-            Typespec.spec_to_quoted(name, spec)
-            |> Macro.prewalk(&drop_macro_env/1)
+          spec_ast = Typespec.spec_to_quoted(name, spec)
 
           signature = get_typespec_signature(spec_ast, arity)
           definition = format_spec_ast(spec_ast)
@@ -315,7 +313,6 @@ defmodule ElixirSense.Core.Introspection do
   def format_spec_ast(spec_ast) do
     parts =
       spec_ast
-      |> Macro.prewalk(&drop_macro_env/1)
       |> extract_spec_ast_parts
 
     name_str = Macro.to_string(parts.name)
@@ -359,9 +356,7 @@ defmodule ElixirSense.Core.Introspection do
 
     case found do
       {{name, _}, [spec | _]} ->
-        ast =
-          Typespec.spec_to_quoted(name, spec)
-          |> Macro.prewalk(&drop_macro_env/1)
+        ast = Typespec.spec_to_quoted(name, spec)
 
         get_returns_from_spec_ast(ast)
 
@@ -444,9 +439,7 @@ defmodule ElixirSense.Core.Introspection do
         }
 
       {_, [spec | _]} ->
-        spec_ast =
-          Typespec.spec_to_quoted(spec_name, spec)
-          |> Macro.prewalk(&drop_macro_env/1)
+        spec_ast = Typespec.spec_to_quoted(spec_name, spec)
 
         spec_ast =
           if kind == :macrocallback do
@@ -476,11 +469,6 @@ defmodule ElixirSense.Core.Introspection do
 
     {callbacks, docs || []}
   end
-
-  defp drop_macro_env({name, meta, [{:"::", _, [_, {{:., _, [Macro.Env, :t]}, _, _}]} | args]}),
-    do: {name, meta, args}
-
-  defp drop_macro_env(other), do: other
 
   defp get_typespec_signature({:when, _, [{:"::", _, [{name, meta, args}, _]}, _]}, arity) do
     to_string_with_parens({name, meta, strip_types(args, arity)})
@@ -787,9 +775,7 @@ defmodule ElixirSense.Core.Introspection do
 
     specs
     |> Enum.map_join("\n", fn spec ->
-      quoted =
-        Typespec.spec_to_quoted(name, spec)
-        |> Macro.prewalk(&drop_macro_env/1)
+      quoted = Typespec.spec_to_quoted(name, spec)
 
       quoted =
         if is_macro do
