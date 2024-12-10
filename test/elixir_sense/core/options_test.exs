@@ -31,8 +31,8 @@ defmodule ElixirSense.Core.OptionsTest do
       """
 
       assert [
-               option1: {:integer, _, []},
-               option2: {{:., _, [String, :t]}, _, []}
+               option2: {:binary, _, []},
+               option1: {:integer, _, []}
              ] = get_options(code, Foo, :bar, 1)
     end
 
@@ -45,8 +45,8 @@ defmodule ElixirSense.Core.OptionsTest do
       """
 
       assert [
-               option1: {:integer, _, []},
-               option2: {{:., _, [String, :t]}, _, []}
+               option2: {:binary, _, []},
+               option1: {:integer, _, []}
              ] = get_options(code, Foo, :bar, 1)
     end
 
@@ -59,12 +59,12 @@ defmodule ElixirSense.Core.OptionsTest do
       """
 
       assert [
-               option1: {:integer, _, []},
-               option2: {{:., _, [String, :t]}, _, []}
+               option2: {:binary, _, []},
+               option1: {:integer, _, []}
              ] = get_options(code, Foo, :bar, 1)
     end
 
-    test "skips non option types in list" do
+    test "non option types in list" do
       code = """
       defmodule Foo do
         @spec bar([:foo | {:option1, integer()} | 1]) :: :ok
@@ -72,9 +72,7 @@ defmodule ElixirSense.Core.OptionsTest do
       end
       """
 
-      assert [
-               option1: {:integer, _, []}
-             ] = get_options(code, Foo, :bar, 1)
+      assert [:foo, option1: {:integer, _, []}] = get_options(code, Foo, :bar, 1)
     end
 
     test "skips non option types" do
@@ -108,8 +106,8 @@ defmodule ElixirSense.Core.OptionsTest do
       """
 
       assert [
-               option1: {:integer, _, []},
-               option2: {{:., _, [String, :t]}, _, []}
+               option2: {:binary, _, []},
+               option1: {:integer, _, []}
              ] = get_options(code, Foo, :bar, 1)
     end
 
@@ -122,8 +120,8 @@ defmodule ElixirSense.Core.OptionsTest do
       """
 
       assert [
-               option1: {:integer, _, []},
-               option2: {{:., _, [String, :t]}, _, []}
+               option2: {:binary, _, []},
+               option1: {:integer, _, []}
              ] = get_options(code, Foo, :bar, 1)
     end
 
@@ -138,8 +136,8 @@ defmodule ElixirSense.Core.OptionsTest do
       """
 
       assert [
-               option1: {:integer, _, []},
-               option2: {{:., _, [String, :t]}, _, []}
+               option2: {:binary, _, []},
+               option1: {:integer, _, []}
              ] = get_options(code, Foo, :bar, 1)
     end
   end
@@ -154,14 +152,14 @@ defmodule ElixirSense.Core.OptionsTest do
     test "gets options" do
       assert [
                option1: {:integer, _, []},
-               option2: {{:., _, [String, :t]}, _, []}
+               option2: {:binary, _, []}
              ] = get_options("", ElixirSenseExample.Options.Foo, :bar, 1)
     end
 
     test "gets options expands with" do
       assert [
                option1: {:integer, _, []},
-               option2: {{:., _, [String, :t]}, _, []}
+               option2: {:binary, _, []}
              ] = get_options("", ElixirSenseExample.Options.With, :bar, 1)
     end
   end
