@@ -12,9 +12,7 @@ defmodule ElixirSense.Providers.Completion.Reducers.Params do
           subtype: :keyword | :atom,
           name: String.t(),
           origin: String.t(),
-          type_spec: String.t(),
-          doc: String.t(),
-          expanded_spec: String.t()
+          type_spec: String.t()
         }
 
   @doc """
@@ -54,10 +52,8 @@ defmodule ElixirSense.Providers.Completion.Reducers.Params do
                 expanded_spec = Introspection.to_string_with_parens(type)
 
                 %{
-                  doc: "",
-                  expanded_spec: expanded_spec,
                   name: name |> Atom.to_string(),
-                  origin: inspect(mod),
+                  origin: "#{inspect(mod)}.#{fun}",
                   type: :param_option,
                   subtype: :keyword,
                   type_spec: expanded_spec
@@ -69,10 +65,8 @@ defmodule ElixirSense.Providers.Completion.Reducers.Params do
               if options_so_far == [] and cursor_at_option == true and
                    Matcher.match?(inspect(name), hint) do
                 %{
-                  doc: "",
-                  expanded_spec: "",
                   name: name |> Atom.to_string(),
-                  origin: inspect(mod),
+                  origin: "#{inspect(mod)}.#{fun}",
                   type: :param_option,
                   subtype: :atom,
                   type_spec: ""
