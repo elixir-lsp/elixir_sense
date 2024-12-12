@@ -482,6 +482,8 @@ defmodule ElixirSense.Core.Introspection do
     to_string_with_parens({name, meta, strip_types(args, arity)})
   end
 
+  def to_string_with_parens({:..., _, _args}), do: "..."
+
   def to_string_with_parens({name, meta, args}) when is_atom(name) do
     if ElixirSense.Core.Normalized.Code.Formatter.local_without_parens?(
          name,
