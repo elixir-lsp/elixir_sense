@@ -415,7 +415,7 @@ defmodule ElixirSense.Core.Options do
       nil ->
         if Code.ensure_loaded?(module) do
           case ElixirSense.Core.TypeInfo.get_type_spec(module, name, length(args)) do
-            {_kind, spec} ->
+            {kind, spec} when kind in [:type, :typep] ->
               {:"::", _,
                [
                  {_name, _, arg_names},
@@ -436,8 +436,9 @@ defmodule ElixirSense.Core.Options do
           :error
         end
 
-      %ElixirSense.Core.State.TypeInfo{specs: [spec | _]} ->
-        with {:ok,
+      %ElixirSense.Core.State.TypeInfo{specs: [spec | _], kind: kind} ->
+        with true <- kind in [:type, :typep],
+             {:ok,
               {:@, _,
                [
                  {_kind, _,
