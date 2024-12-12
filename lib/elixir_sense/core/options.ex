@@ -336,7 +336,7 @@ defmodule ElixirSense.Core.Options do
 
     case find_type(remote, type, args, metadata) do
       {:ok, type, new_named_args} ->
-        expand_type(type, metadata, module, new_named_args ++ named_args, stack)
+        expand_type(type, metadata, remote, new_named_args ++ named_args, stack)
 
       :error ->
         {{:., dot_meta, [remote, type]}, call_meta, args}
