@@ -499,10 +499,12 @@ defmodule ElixirSense.Core.Introspection do
     else
       Macro.to_string({name, meta, args})
     end
+    |> String.replace("...()", "...")
   end
 
   def to_string_with_parens(ast) do
     Macro.to_string(ast)
+    |> String.replace("...()", "...")
   end
 
   defp strip_types(args, arity) do
