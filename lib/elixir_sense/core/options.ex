@@ -324,7 +324,7 @@ defmodule ElixirSense.Core.Options do
   def do_expand_type(
         {{:., dot_meta, [remote, type]}, call_meta, args},
         metadata,
-        module,
+        _module,
         named_args,
         stack
       ) do
