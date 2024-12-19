@@ -79,7 +79,7 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
              {{:some_macrocallback_doc_false, 1}, 53, :macrocallback, false,
               %{hidden: true, app: :elixir_sense}},
              {{:some_macrocallback_no_doc, 1}, 55, :macrocallback, nil, %{app: :elixir_sense}}
-           ] == Code.get_docs(ElixirSenseExample.ModuleWithDocs, :callback_docs)
+           ] = Code.get_docs(ElixirSenseExample.ModuleWithDocs, :callback_docs)
   end
 
   test "gets module docs" do

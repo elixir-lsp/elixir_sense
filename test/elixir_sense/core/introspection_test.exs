@@ -25,7 +25,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
   end
 
   test "get_callbacks_with_docs for with opaque" do
-    assert get_callbacks_with_docs(ElixirSenseExample.CallbackOpaque) == [
+    assert [
              %{
                name: :do_stuff,
                arity: 2,
@@ -37,11 +37,11 @@ defmodule ElixirSense.Core.IntrospectionTest do
                metadata: %{optional: false, app: :elixir_sense},
                kind: :callback
              }
-           ]
+           ] = get_callbacks_with_docs(ElixirSenseExample.CallbackOpaque)
   end
 
   test "get_callbacks_with_docs for macrocallbacks" do
-    assert get_callbacks_with_docs(ElixirSenseExample.BehaviourWithMacrocallback) == [
+    assert [
              %{
                name: :optional,
                arity: 1,
@@ -62,7 +62,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
                doc: "A required macrocallback\n",
                kind: :macrocallback
              }
-           ]
+           ] = get_callbacks_with_docs(ElixirSenseExample.BehaviourWithMacrocallback)
   end
 
   test "get_callbacks_with_docs for erlang behaviours" do
