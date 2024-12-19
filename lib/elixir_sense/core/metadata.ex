@@ -76,6 +76,16 @@ defmodule ElixirSense.Core.Metadata do
         surround \\ nil
       )
 
+  if Version.match?(System.version(), "< 1.18.0-dev") do
+    def container_cursor_to_quoted_options(_trailing_fragment) do
+      [columns: true, token_metadata: true]
+    end
+  else
+    def container_cursor_to_quoted_options(trailing_fragment) do
+      [columns: true, token_metadata: true, trailing_fragment: trailing_fragment]
+    end
+  end
+
   if Version.match?(System.version(), "< 1.15.0") do
     # return early if cursor env already found by parser replacing line
     # this helps on < 1.15 and braks tests on later versions
@@ -89,7 +99,7 @@ defmodule ElixirSense.Core.Metadata do
         {line, column},
         surround
       ) do
-    {prefix, source_with_cursor} =
+    {{prefix, needle, suffix}, source_with_cursor} =
       case surround do
         {{begin_line, begin_column}, {end_line, end_column}} ->
           [prefix, needle, suffix] =
@@ -100,7 +110,7 @@ defmodule ElixirSense.Core.Metadata do
 
           source_with_cursor = prefix <> "__cursor__(#{needle})" <> suffix
 
-          {prefix, source_with_cursor}
+          {{prefix, needle, suffix}, source_with_cursor}
 
         nil ->
           [prefix, suffix] =
@@ -110,7 +120,7 @@ defmodule ElixirSense.Core.Metadata do
 
           source_with_cursor = prefix <> "__cursor__()" <> suffix
 
-          {prefix, source_with_cursor}
+          {{prefix, "", suffix}, source_with_cursor}
       end
 
     {meta, cursor_env} =
@@ -127,10 +137,9 @@ defmodule ElixirSense.Core.Metadata do
         {meta, cursor_env}
       else
         # IO.puts(prefix <> "|")
-        case NormalizedCode.Fragment.container_cursor_to_quoted(prefix,
-               columns: true,
-               token_metadata: true
-             ) do
+        options = container_cursor_to_quoted_options(needle <> suffix)
+
+        case NormalizedCode.Fragment.container_cursor_to_quoted(prefix, options) do
           {:ok, ast} ->
             MetadataBuilder.build(ast).cursor_env || {[], nil}
 

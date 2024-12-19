@@ -4,7 +4,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
   alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
-  defp get_cursor_env(code, use_string_to_quoted \\ false) do
+  defp get_cursor_env(code, use_string_to_quoted \\ false, trailing_fragment \\ "") do
     {:ok, ast} =
       if use_string_to_quoted do
         Code.string_to_quoted(code,
@@ -12,10 +12,9 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
           token_metadata: true
         )
       else
-        NormalizedCode.Fragment.container_cursor_to_quoted(code,
-          columns: true,
-          token_metadata: true
-        )
+        options = ElixirSense.Core.Metadata.container_cursor_to_quoted_options(trailing_fragment)
+        IO.puts(code <> trailing_fragment)
+        NormalizedCode.Fragment.container_cursor_to_quoted(code, options |> dbg)
       end
 
     # dbg(ast)
@@ -480,30 +479,58 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
     end
 
     if Version.match?(System.version(), ">= 1.17.0") do
-      test "cursor in left side of catch clause after type" do
-        code = """
-        try do
-          bar()
-        catch
-          x, \
-        """
+      if Version.match?(System.version(), ">= 1.18.0") do
+        test "cursor in left side of catch clause after type" do
+          code = """
+          try do
+            bar()
+          catch
+            x, \
+          """
 
-        assert {_meta, env} = get_cursor_env(code)
-        assert Enum.any?(env.vars, &(&1.name == :x))
+          assert {_meta, env} = get_cursor_env(code, false, " -> :ok\nend")
+          assert Enum.any?(env.vars, &(&1.name == :x))
+        end
+      else
+        test "cursor in left side of catch clause after type" do
+          code = """
+          try do
+            bar()
+          catch
+            x, \
+          """
+
+          assert {_meta, env} = get_cursor_env(code)
+          assert Enum.any?(env.vars, &(&1.name == :x))
+        end
       end
     end
 
     if Version.match?(System.version(), ">= 1.17.0") do
-      test "cursor in left side of catch clause 2 arg guard" do
-        code = """
-        try do
-          bar()
-        catch
-          x, _ when \
-        """
+      if Version.match?(System.version(), ">= 1.18.0") do
+        test "cursor in left side of catch clause 2 arg guard" do
+          code = """
+          try do
+            bar()
+          catch
+            x, _ when \
+          """
 
-        assert {_meta, env} = get_cursor_env(code)
-        assert Enum.any?(env.vars, &(&1.name == :x))
+          assert {_meta, env} = get_cursor_env(code, false, " -> :ok\nend")
+          assert Enum.any?(env.vars, &(&1.name == :x))
+        end
+      else
+        test "cursor in left side of catch clause 2 arg guard" do
+          code = """
+          try do
+            bar()
+          catch
+            x, _ when \
+          """
+
+          assert {_meta, env} = get_cursor_env(code)
+          assert Enum.any?(env.vars, &(&1.name == :x))
+        end
       end
     end
 
@@ -861,8 +888,14 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
           y, \
         """
 
-        assert {_meta, env} = get_cursor_env(code)
-        assert Enum.any?(env.vars, &(&1.name == :x))
+        if Version.match?(System.version(), ">= 1.18.0") do
+          assert {_meta, env} = get_cursor_env(code, false, " -> :ok\nend")
+          assert Enum.any?(env.vars, &(&1.name == :x))
+        else
+          assert {_meta, env} = get_cursor_env(code)
+          assert Enum.any?(env.vars, &(&1.name == :x))
+        end
+
         # this test fails
         # assert Enum.any?(env.vars, &(&1.name == :y))
       end
@@ -957,22 +990,39 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       fn \
       """
 
-      assert {_meta, env} = get_cursor_env(code)
-
-      if Version.match?(System.version(), ">= 1.15.0") do
+      if Version.match?(System.version(), ">= 1.18.0") do
+        assert {_meta, env} = get_cursor_env(code, false, " -> :ok end")
         assert Enum.any?(env.vars, &(&1.name == :x))
+      else
+        assert {_meta, env} = get_cursor_env(code)
+
+        if Version.match?(System.version(), ">= 1.15.0") do
+          assert Enum.any?(env.vars, &(&1.name == :x))
+        end
       end
     end
 
     if Version.match?(System.version(), ">= 1.17.0") do
-      test "incomplete clause left side guard" do
-        code = """
-        fn
-          x when \
-        """
+      if Version.match?(System.version(), ">= 1.18.0") do
+        test "incomplete clause left side guard" do
+          code = """
+          fn
+            x when \
+          """
 
-        assert {_meta, env} = get_cursor_env(code)
-        assert Enum.any?(env.vars, &(&1.name == :x))
+          assert {_meta, env} = get_cursor_env(code, false, " -> :ok\nend")
+          assert Enum.any?(env.vars, &(&1.name == :x))
+        end
+      else
+        test "incomplete clause left side guard" do
+          code = """
+          fn
+            x when \
+          """
+
+          assert {_meta, env} = get_cursor_env(code)
+          assert Enum.any?(env.vars, &(&1.name == :x))
+        end
       end
     end
 
@@ -2256,14 +2306,26 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
     end
 
     if Version.match?(System.version(), ">= 1.17.0") do
-      test "in type after :: type with fun ( nex arg" do
-        code = """
-        defmodule Abc do
-          @type foo :: (bar, \
-        """
+      if Version.match?(System.version(), ">= 1.18.0") do
+        test "in type after :: type with fun ( next arg" do
+          code = """
+          defmodule Abc do
+            @type foo :: (bar, \
+          """
 
-        assert {_, env} = get_cursor_env(code)
-        assert env.typespec == {:foo, 0}
+          assert {_, env} = get_cursor_env(code, false, ")\nend")
+          assert env.typespec == {:foo, 0}
+        end
+      else
+        test "in type after :: type with fun ( next arg" do
+          code = """
+          defmodule Abc do
+            @type foo :: (bar, \
+          """
+
+          assert {_, env} = get_cursor_env(code)
+          assert env.typespec == {:foo, 0}
+        end
       end
     end
 
