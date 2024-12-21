@@ -70,12 +70,6 @@ defmodule ElixirSense.Core.Metadata do
     }
   end
 
-  def get_cursor_env(
-        metadata,
-        position,
-        surround \\ nil
-      )
-
   if Version.match?(System.version(), "< 1.18.0-dev") do
     def container_cursor_to_quoted_options(_trailing_fragment) do
       [columns: true, token_metadata: true]
@@ -85,6 +79,12 @@ defmodule ElixirSense.Core.Metadata do
       [columns: true, token_metadata: true, trailing_fragment: trailing_fragment]
     end
   end
+
+  def get_cursor_env(
+        metadata,
+        position,
+        surround \\ nil
+      )
 
   if Version.match?(System.version(), "< 1.15.0") do
     # return early if cursor env already found by parser replacing line
