@@ -333,6 +333,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
     case Keyword.get(meta, :imports, false) == false &&
            Dispatch.find_imports(meta, name, e) do
       [_ | _] = imports ->
+        # trace_import_quoted(Imports, Meta, Name, E)
         keystore(:imports, keystore(:context, meta, q.context), imports)
 
       _ ->

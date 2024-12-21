@@ -37,7 +37,6 @@ defmodule ElixirSense.Core.Compiler.Dispatch do
     acc2 = find_imports_by_name(macs, acc1, name, meta, e)
 
     imports = acc2 |> Map.to_list() |> Enum.sort()
-    # trace_import_quoted(imports, meta, name, e)
     imports
   end
 
