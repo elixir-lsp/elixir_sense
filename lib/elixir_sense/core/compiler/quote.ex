@@ -497,7 +497,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
   defp annotate_def(other, _context), do: other
 
   defp do_escape({left, meta, right}, q = %{op: :prune_metadata}, state) when is_list(meta) do
-    tm = for {k, v} <- meta, k == :no_parens or k == :line, do: {k, v}
+    tm = for {k, v} <- meta, k == :no_parens or k == :line or k == :delimiter, do: {k, v}
     {tl, state} = do_quote(left, q, state)
     {tr, state} = do_quote(right, q, state)
     {{:{}, [], [tl, tm, tr]}, state}
