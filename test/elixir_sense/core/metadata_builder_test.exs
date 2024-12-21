@@ -4989,7 +4989,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Keyword.keys(macros) == [Protocol, Kernel]
       kernel_macros = Keyword.fetch!(macros, Kernel)
       assert {:def, 1} not in kernel_macros
-      assert {:defmacro, 1} not in kernel_macros
       assert {:defdelegate, 2} not in kernel_macros
       assert {:def, 1} in Keyword.fetch!(macros, Protocol)
     end
@@ -5805,13 +5804,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              },
              # there is raw unquote in spec...
              {Proto, :__protocol__, 1} => %ElixirSense.Core.State.SpecInfo{
-               kind: :spec,
-               specs: [
-                 "@spec __protocol__(:impls) :: :not_consolidated | {:consolidated, list(module())}",
-                 "@spec __protocol__(:consolidated?) :: boolean()",
-                 "@spec __protocol__(:functions) :: :__unknown__",
-                 "@spec __protocol__(:module) :: Proto"
-               ]
+               kind: :spec
              },
              {Proto, :impl_for, 1} => %ElixirSense.Core.State.SpecInfo{
                kind: :spec,

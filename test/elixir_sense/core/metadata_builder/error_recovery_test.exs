@@ -13,8 +13,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         )
       else
         options = ElixirSense.Core.Metadata.container_cursor_to_quoted_options(trailing_fragment)
-        IO.puts(code <> trailing_fragment)
-        NormalizedCode.Fragment.container_cursor_to_quoted(code, options |> dbg)
+        NormalizedCode.Fragment.container_cursor_to_quoted(code, options)
       end
 
     # dbg(ast)

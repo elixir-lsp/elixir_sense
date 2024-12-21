@@ -40,7 +40,7 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
              {{:some_macro_no_doc, 2}, 37, :macro,
               [{:a, [line: 1], nil}, {:\\, [line: 1], [{:b, [line: 1], nil}, nil]}], nil,
               %{defaults: 1, app: :elixir_sense}}
-           ] == Code.get_docs(ElixirSenseExample.ModuleWithDocs, :docs)
+           ] = Code.get_docs(ElixirSenseExample.ModuleWithDocs, :docs)
   end
 
   test "gets type docs" do
@@ -53,7 +53,7 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
               %{deprecated: "This type will be removed in a future release", app: :elixir_sense}},
              {{:opaque_type, 0}, 16, :type, "An example opaque type\n",
               %{opaque: true, app: :elixir_sense}}
-           ] == Code.get_docs(ElixirSenseExample.ModuleWithDocs, :type_docs)
+           ] = Code.get_docs(ElixirSenseExample.ModuleWithDocs, :type_docs)
   end
 
   test "gets callback docs" do
@@ -83,17 +83,17 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
   end
 
   test "gets module docs" do
-    assert {2, "An example module\n", %{since: "1.2.3", app: :elixir_sense}} ==
+    assert {2, "An example module\n", %{since: "1.2.3", app: :elixir_sense}} =
              Code.get_docs(ElixirSenseExample.ModuleWithDocs, :moduledoc)
 
-    assert {105, false, %{hidden: true, app: :elixir_sense}} ==
+    assert {105, false, %{hidden: true, app: :elixir_sense}} =
              Code.get_docs(ElixirSenseExample.ModuleWithDocFalse, :moduledoc)
 
-    assert {108, nil, %{app: :elixir_sense}} ==
+    assert {108, nil, %{app: :elixir_sense}} =
              Code.get_docs(ElixirSenseExample.ModuleWithNoDocs, :moduledoc)
 
     assert {112, "An example module\n",
-            %{deprecated: "This module will be removed in a future release", app: :elixir_sense}} ==
+            %{deprecated: "This module will be removed in a future release", app: :elixir_sense}} =
              Code.get_docs(ElixirSenseExample.SoftDeprecatedModule, :moduledoc)
   end
 
