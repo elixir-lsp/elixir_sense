@@ -113,7 +113,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
           :maps.update_with(
             pair,
             fn current ->
-              :maps.merge_with(fn _, _, _ -> :error end, current, depends_on)
+              Map.merge(current, depends_on, fn _, _, _ -> :error end)
             end,
             depends_on,
             acc_cycles
