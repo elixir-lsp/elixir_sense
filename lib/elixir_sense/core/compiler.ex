@@ -2539,12 +2539,8 @@ defmodule ElixirSense.Core.Compiler do
     {e_expr, se, ee} = expand(expr, s, e)
 
     r_opts =
-      if Keyword.get(meta, :optimize_boolean, false) do
-        if :elixir_utils.returns_boolean(e_expr) do
-          rewrite_case_clauses(opts)
-        else
-          generated_case_clauses(opts)
-        end
+      if Keyword.get(meta, :optimize_boolean, false) and :elixir_utils.returns_boolean(e_expr) do
+        rewrite_case_clauses(opts)
       else
         opts
       end
@@ -2579,24 +2575,15 @@ defmodule ElixirSense.Core.Compiler do
     rewrite_case_clauses(false_meta, false_expr, true_meta, true_expr)
   end
 
-  def rewrite_case_clauses(other) do
-    generated_case_clauses(other)
-  end
+  def rewrite_case_clauses(opts), do: opts
 
   defp rewrite_case_clauses(false_meta, false_expr, true_meta, true_expr) do
     [
       do: [
-        {:->, __MODULE__.Utils.generated(false_meta), [[false], false_expr]},
-        {:->, __MODULE__.Utils.generated(true_meta), [[true], true_expr]}
+        {:->, false_meta, [[false], false_expr]},
+        {:->, true_meta, [[true], true_expr]}
       ]
     ]
-  end
-
-  defp generated_case_clauses(do: clauses) do
-    r_clauses =
-      for {:->, meta, args} <- clauses, do: {:->, __MODULE__.Utils.generated(meta), args}
-
-    [do: r_clauses]
   end
 
   def expand_arg(arg, acc, e)
