@@ -27,7 +27,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
       cursor_position: cursor_position,
       prematch:
         if Version.match?(System.version(), ">= 1.15.0-dev") do
-          Code.get_compiler_option(:on_undefined_variable)
+          if(Version.match?(System.version(), ">= 1.18.0-dev"),
+            do: :none,
+            else: Code.get_compiler_option(:on_undefined_variable)
+          )
         else
           :warn
         end

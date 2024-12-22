@@ -607,8 +607,6 @@ defmodule ElixirSense.Core.Compiler do
           end
 
         _ ->
-          # prematch
-
           case e do
             %{context: :guard} ->
               :raise
@@ -845,6 +843,7 @@ defmodule ElixirSense.Core.Compiler do
          env = %{module: module}
        )
        when module != nil do
+    state_orig_prematch = state.prematch
     {opts, state, env} = expand(opts, state, env)
     # elixir does validation here
     target = Keyword.get(opts, :to, :__unknown__)
@@ -921,7 +920,7 @@ defmodule ElixirSense.Core.Compiler do
         )
       end)
 
-    {[], state, env}
+    {[], %{state | prematch: state_orig_prematch}, env}
   end
 
   defp expand_macro(
@@ -1780,21 +1779,22 @@ defmodule ElixirSense.Core.Compiler do
           expanded_arg
       end)
 
-    prematch =
-      if Version.match?(System.version(), ">= 1.15.0-dev") do
-        if Version.match?(System.version(), ">= 1.18.0-dev") do
-          :none
-        else
-          Code.get_compiler_option(:on_undefined_variable)
-        end
+    guard_prematch =
+      if Version.match?(System.version(), ">= 1.18.0-dev") do
+        :none
       else
-        :warn
+        if Version.match?(System.version(), ">= 1.15.0-dev") do
+          # Code.get_compiler_option(:on_undefined_variable)
+          :raise
+        else
+          :warn
+        end
       end
 
     {e_guard, state, env_for_expand} =
       __MODULE__.Clauses.guard(
         guards,
-        %{state | prematch: prematch},
+        %{state | prematch: guard_prematch},
         %{env_for_expand | context: :guard}
       )
 
@@ -1804,8 +1804,19 @@ defmodule ElixirSense.Core.Compiler do
 
     env_for_expand = %{env_for_expand | context: nil}
 
+    prematch =
+      if Version.match?(System.version(), ">= 1.18.0-dev") do
+        state.prematch
+      else
+        if Version.match?(System.version(), ">= 1.15.0-dev") do
+          Code.get_compiler_option(:on_undefined_variable)
+        else
+          :warn
+        end
+      end
+
     state =
-      state
+      %{state | prematch: prematch}
       |> State.add_current_env_to_line(meta, env_for_expand)
       |> State.add_func_to_index(
         env,
@@ -1855,7 +1866,7 @@ defmodule ElixirSense.Core.Compiler do
       end
 
     # result of def expansion is fa tuple
-    {{name, arity}, state, env}
+    {{name, arity}, %{state | prematch: state_orig.prematch}, env}
   end
 
   defp expand_macro(

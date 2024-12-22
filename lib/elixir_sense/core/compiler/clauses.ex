@@ -5,16 +5,10 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   alias ElixirSense.Core.TypeInference
 
   def parallel_match(meta, expr, s, e = %{context: :match}) do
-    # #elixir_ex{vars={_Read, Write}} = S,
-    # becomes pattern-matching on our struct:
     %{vars: {_read, write}} = s
 
     matches = unpack_match(expr, meta, [])
 
-    # {[{_, EHead} | ETail], EWrites, SM, EM} =
-    #   lists:foldl(fun(...) -> ... end, {[], [], S, E}, Matches),
-    #
-    # in Elixir we use Enum.reduce/3:
     # {[{_, e_head} | e_tail], e_writes, sm, em} =
     #   Enum.reduce(matches, {[], [], s, e}, fn {e_meta, match}, {acc_matches, acc_writes, si, ei} ->
     #     # #elixir_ex{vars={Read, _Write}} = SI
@@ -66,19 +60,13 @@ defmodule ElixirSense.Core.Compiler.Clauses do
         e_tail
       )
 
-    # #elixir_ex{vars={VRead, _}, prematch={PRead, Cycles, PInfo}} = SM,
     %{vars: {v_read, _}, prematch: {p_read, cycles, p_info}} = sm
 
-    # {PCycles, PWrites} = store_cycles(EWrites, Cycles, #{}),
     {p_cycles, p_writes} = store_cycles(e_writes, cycles, %{})
 
-    # VWrite = (Write /= false) andalso elixir_env:merge_vars(Write, PWrites),
-    # In Erlang, "/=" is "not equal to" and "andalso" is a short-circuit AND.
-    # In Elixir, we do "!=" and "and".
     v_write =
       write != false && State.merge_vars(write, p_writes)
 
-    # {EMatch, SM#elixir_ex{vars={VRead, VWrite}, prematch={PRead, PCycles, PInfo}}, EM}.
     updated_sm = %{
       sm
       | vars: {v_read, v_write},
@@ -216,10 +204,15 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   defp guarded_head(when_meta, args, guard, s, e) do
-    prematch = s.prematch
-
     {e_args, sa, ea} = match(&Compiler.expand_args/3, args, s, s, e)
-    # TODO should we restore prematch? 1.18 does not do that
+
+    prematch =
+      if Version.match?(System.version(), ">= 1.18.0-dev") do
+        sa.prematch
+      else
+        s.prematch
+      end
+
     {e_guard, sg, eg} = guard(guard, %{sa | prematch: prematch}, %{ea | context: :guard})
 
     type_info = TypeInference.Guard.type_information_from_guards(e_guard)
