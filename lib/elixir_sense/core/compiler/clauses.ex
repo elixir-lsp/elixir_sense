@@ -183,6 +183,14 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
   def head([{:when, when_meta, [_ | _] = all}], s, e) do
     {args, guard} = Utils.split_last(all)
+    guarded_head(when_meta, args, guard, s, e)
+  end
+
+  def head(args, s, e) do
+    match(&Compiler.expand_args/3, args, s, s, e)
+  end
+
+  defp guarded_head(when_meta, args, guard, s, e) do
     prematch = s.prematch
 
     {e_args, sa, ea} = match(&Compiler.expand_args/3, args, s, s, e)
@@ -193,32 +201,6 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     sg = State.merge_inferred_types(sg, type_info)
 
     {[{:when, when_meta, e_args ++ [e_guard]}], sg, %{eg | context: nil}}
-
-    # {{e_args, e_guard}, sg, eg} =
-    #   match(
-    #     fn _ok, sm, em ->
-    #       {e_args, sa, ea} = Compiler.expand_args(args, sm, em)
-
-    #       {e_guard, sg, eg} =
-    #         guard(guard, %{sa | prematch: prematch}, %{ea | context: :guard})
-
-    #       type_info = TypeInference.Guard.type_information_from_guards(e_guard)
-
-    #       sg = State.merge_inferred_types(sg, type_info)
-
-    #       {{e_args, e_guard}, sg, eg}
-    #     end,
-    #     :ok,
-    #     s,
-    #     s,
-    #     e
-    #   )
-
-    # {[{:when, meta, e_args ++ [e_guard]}], sg, eg}
-  end
-
-  def head(args, s, e) do
-    match(&Compiler.expand_args/3, args, s, s, e)
   end
 
   def guard({:when, meta, [left, right]}, s, e) do
@@ -510,10 +492,12 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     expand_catch(meta, [{:when, when_meta, [a1, a2, a3]}], s, e)
   end
 
-  defp expand_catch(_meta, args = [_], s, e) do
-    # no point in doing type inference here, we have no idea what throw we caught
-    head(args, s, e)
-  end
+  defp expand_catch(_meta, [{:when, when_meta, [arg1, arg2, guard]}], s, e), do:
+    guarded_head(when_meta, [arg1, arg2], guard, s, e)
+  defp expand_catch(_meta, [{:when, when_meta, [arg1, guard]}], s, e), do:
+    guarded_head(when_meta, [arg1], guard, s, e)
+  defp expand_catch(_meta, [arg], s, e), do:
+    head([:throw, arg], s, e)
 
   defp expand_catch(_meta, args = [_, _], s, e) do
     # TODO is it worth to infer type of the first arg? :error | :exit | :throw | {:EXIT, pid()}
