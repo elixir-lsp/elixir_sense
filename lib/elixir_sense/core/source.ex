@@ -102,9 +102,11 @@ defmodule ElixirSense.Core.Source do
   def prefix(code, line, col) do
     line = code |> split_lines |> Enum.at(line - 1, "")
 
+    length = String.length(line)
+
     line =
-      if String.length(line) < col do
-        line_padding = for _ <- 1..(String.length(line) - col), into: "", do: " "
+      if length < col do
+        line_padding = for _ <- 1..(col - length)//1, into: "", do: " "
         line <> line_padding
       else
         line
