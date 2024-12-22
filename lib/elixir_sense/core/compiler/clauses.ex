@@ -79,10 +79,13 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     {e_match, updated_sm, em}
   end
 
-  defp unpack_match({:'=', meta, [left, right]}, _meta2, acc) do
-    unpack_match(left, meta, unpack_match(right, meta, acc))
+  defp unpack_match({:=, meta, [{_, _var_meta, _} = node, node]}, _meta, acc) do
+    # TODO: remove this clause on Elixir v1.23
+    # elixir warns here on duplicate_match
+    unpack_match(node, meta, acc)
   end
-
+  defp unpack_match({:=, meta, [left, right]}, _meta, acc), do:
+    unpack_match(left, meta, unpack_match(right, meta, acc))
   defp unpack_match(node, meta, acc) do
     [{meta, node} | acc]
   end

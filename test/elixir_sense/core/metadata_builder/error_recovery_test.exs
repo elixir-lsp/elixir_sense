@@ -2156,7 +2156,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
 
     test "match in guard" do
       code = """
-      cond do
+      case 1 do
         x when x = \
       """
 
@@ -2166,6 +2166,15 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
     test "stacktrace in match" do
       code = """
       __STACKTRACE__ = \
+      """
+
+      assert get_cursor_env(code)
+    end
+
+    test "duplicate match" do
+      code = """
+      case 1 do
+        (x = x) = :ok -> \
       """
 
       assert get_cursor_env(code)

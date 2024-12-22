@@ -554,7 +554,7 @@ defmodule ElixirSense.Core.Compiler do
     case read do
       # Variable was already overridden
       %{^pair => var_version} when var_version >= prematch_version ->
-        new_write = (write != false) && %{write | pair => version}
+        new_write = (write != false) && Map.put(write, pair, version)
         var = {name, [{:version, var_version} | meta], kind}
         # it's a write but for simplicity treat it as read
         s = State.add_var_read(s, var)
