@@ -554,7 +554,7 @@ defmodule ElixirSense.Core.Compiler do
     case read do
       # Variable was already overridden
       %{^pair => var_version} when var_version >= prematch_version ->
-        new_write = (write != false) && Map.put(write, pair, version)
+        new_write = write != false && Map.put(write, pair, version)
         var = {name, [{:version, var_version} | meta], kind}
         # it's a write but for simplicity treat it as read
         s = State.add_var_read(s, var)
@@ -610,8 +610,12 @@ defmodule ElixirSense.Core.Compiler do
           # prematch
 
           case e do
-            %{context: :guard} -> :raise
-            %{} when s.prematch == :pin -> :pin
+            %{context: :guard} ->
+              :raise
+
+            %{} when s.prematch == :pin ->
+              :pin
+
             _ ->
               # TODO
               :elixir_config.get(:on_undefined_variable)
@@ -2015,37 +2019,37 @@ defmodule ElixirSense.Core.Compiler do
        when is_atom(receiver) or is_tuple(receiver) do
     cond do
       context == :guard and is_tuple(receiver) ->
-      # elixir raises parens_map_lookup unless no_parens is set in meta
-      # look for cursor in discarded args
-      {_ast, sl, _env} = expand(args, sl, e)
+        # elixir raises parens_map_lookup unless no_parens is set in meta
+        # look for cursor in discarded args
+        {_ast, sl, _env} = expand(args, sl, e)
 
-      sl =
-        sl
-        |> State.add_call_to_line({receiver, right, length(args)}, meta)
-        |> State.add_current_env_to_line(meta, e)
+        sl =
+          sl
+          |> State.add_call_to_line({receiver, right, length(args)}, meta)
+          |> State.add_current_env_to_line(meta, e)
 
-      {{{:., dot_meta, [receiver, right]}, meta, []}, sl, e}
+        {{{:., dot_meta, [receiver, right]}, meta, []}, sl, e}
 
-    context == nil ->
-      attached_meta = attach_runtime_module(receiver, meta, s, e)
-      {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {sl, s}, e, args)
+      context == nil ->
+        attached_meta = attach_runtime_module(receiver, meta, s, e)
+        {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {sl, s}, e, args)
 
-      case __MODULE__.Rewrite.rewrite(
-             context,
-             receiver,
-             dot_meta,
-             right,
-             attached_meta,
-             e_args,
-             s
-           ) do
-        {:ok, rewritten} ->
-          s =
-            State.close_write(sa, s)
-            |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
-            |> State.add_current_env_to_line(meta, e)
+        case __MODULE__.Rewrite.rewrite(
+               context,
+               receiver,
+               dot_meta,
+               right,
+               attached_meta,
+               e_args,
+               s
+             ) do
+          {:ok, rewritten} ->
+            s =
+              State.close_write(sa, s)
+              |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
+              |> State.add_current_env_to_line(meta, e)
 
-          {rewritten, s, ea}
+            {rewritten, s, ea}
 
           {:error, _error} ->
             # elixir raises here elixir_rewrite
@@ -2053,28 +2057,35 @@ defmodule ElixirSense.Core.Compiler do
               State.close_write(sa, s)
               |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
               |> State.add_current_env_to_line(meta, e)
-  
+
             {{{:., dot_meta, [receiver, right]}, attached_meta, e_args}, s, ea}
         end
-  
-    true ->
-      case {receiver, right, args} do
-        {:erlang, :+, [arg]} when is_number(arg) -> {+arg, sl, e}
-        {:erlang, :-, [arg]} when is_number(arg) -> {-arg, sl, e}
-        _ ->
-          {e_args, sa, ea} = map_fold(&expand/3, sl, e, args)
 
-          case __MODULE__.Rewrite.rewrite(context, receiver, dot_meta, right, meta, e_args, s) do
-            {:ok, rewritten} -> {rewritten, sa, ea}
-            {:error, _error} ->
-              # elixir raises here elixir_rewrite
-                s = sa
-                |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
-                |> State.add_current_env_to_line(meta, e)
+      true ->
+        case {receiver, right, args} do
+          {:erlang, :+, [arg]} when is_number(arg) ->
+            {+arg, sl, e}
 
-              {{{:., dot_meta, [receiver, right]}, meta, e_args}, s, ea}
-          end
-      end
+          {:erlang, :-, [arg]} when is_number(arg) ->
+            {-arg, sl, e}
+
+          _ ->
+            {e_args, sa, ea} = map_fold(&expand/3, sl, e, args)
+
+            case __MODULE__.Rewrite.rewrite(context, receiver, dot_meta, right, meta, e_args, s) do
+              {:ok, rewritten} ->
+                {rewritten, sa, ea}
+
+              {:error, _error} ->
+                # elixir raises here elixir_rewrite
+                s =
+                  sa
+                  |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
+                  |> State.add_current_env_to_line(meta, e)
+
+                {{{:., dot_meta, [receiver, right]}, meta, e_args}, s, ea}
+            end
+        end
     end
   end
 

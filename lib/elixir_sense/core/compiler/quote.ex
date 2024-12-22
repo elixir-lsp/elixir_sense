@@ -184,7 +184,12 @@ defmodule ElixirSense.Core.Compiler.Quote do
     {{:{}, [], [:quote, meta(new_meta, q), [t_opts, t_arg]]}, state}
   end
 
-  defp do_quote({:unquote, meta, [expr]}, %__MODULE__{unquote: true, shallow_validate: validate}, state) when is_list(meta) do
+  defp do_quote(
+         {:unquote, meta, [expr]},
+         %__MODULE__{unquote: true, shallow_validate: validate},
+         state
+       )
+       when is_list(meta) do
     if validate do
       {{{:., meta, [:elixir_quote, :shallow_validate_ast]}, meta, [expr]}, state}
     else

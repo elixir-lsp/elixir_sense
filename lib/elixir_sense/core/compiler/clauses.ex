@@ -37,12 +37,16 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     #   end)
 
     {[{_, e_head} | e_tail], e_writes, sm, em} =
-      :lists.foldl(fn {e_meta, match}, {acc_matches, acc_writes, si, ei} ->
-        %{vars: {read, _write}} = si
-        {e_match, sm, em} = Compiler.expand(match, %{si | vars: {read, %{}}}, ei)
-        %{vars: {_, e_write}} = sm
-        {[{e_meta, e_match} | acc_matches], [e_write | acc_writes], sm, em}
-      end, {[], [], s, e}, matches)
+      :lists.foldl(
+        fn {e_meta, match}, {acc_matches, acc_writes, si, ei} ->
+          %{vars: {read, _write}} = si
+          {e_match, sm, em} = Compiler.expand(match, %{si | vars: {read, %{}}}, ei)
+          %{vars: {_, e_write}} = sm
+          {[{e_meta, e_match} | acc_matches], [e_write | acc_writes], sm, em}
+        end,
+        {[], [], s, e},
+        matches
+      )
 
     # EMatch =
     #   lists:foldl(fun({EMeta, EMatch}, Acc) ->
@@ -54,9 +58,13 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     #   end)
 
     e_match =
-      :lists.foldl(fn {e_meta, e_match}, acc ->
-        {:=, e_meta, [e_match, acc]}
-      end, e_head, e_tail)
+      :lists.foldl(
+        fn {e_meta, e_match}, acc ->
+          {:=, e_meta, [e_match, acc]}
+        end,
+        e_head,
+        e_tail
+      )
 
     # #elixir_ex{vars={VRead, _}, prematch={PRead, Cycles, PInfo}} = SM,
     %{vars: {v_read, _}, prematch: {p_read, cycles, p_info}} = sm
@@ -68,11 +76,12 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     # In Erlang, "/=" is "not equal to" and "andalso" is a short-circuit AND.
     # In Elixir, we do "!=" and "and".
     v_write =
-      (write != false) && State.merge_vars(write, p_writes)
+      write != false && State.merge_vars(write, p_writes)
 
     # {EMatch, SM#elixir_ex{vars={VRead, VWrite}, prematch={PRead, PCycles, PInfo}}, EM}.
     updated_sm = %{
-      sm | vars: {v_read, v_write},
+      sm
+      | vars: {v_read, v_write},
         prematch: {p_read, p_cycles, p_info}
     }
 
@@ -84,8 +93,10 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     # elixir warns here on duplicate_match
     unpack_match(node, meta, acc)
   end
-  defp unpack_match({:=, meta, [left, right]}, _meta, acc), do:
-    unpack_match(left, meta, unpack_match(right, meta, acc))
+
+  defp unpack_match({:=, meta, [left, right]}, _meta, acc),
+    do: unpack_match(left, meta, unpack_match(right, meta, acc))
+
   defp unpack_match(node, meta, acc) do
     [{meta, node} | acc]
   end
@@ -97,7 +108,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     #     Map.merge(a, w)
     #   end)
 
-      depends_on = :lists.foldl(&:maps.merge/2, acc, writes)
+    depends_on = :lists.foldl(&:maps.merge/2, acc, writes)
 
     # For each variable on a sibling, store it inside the graph (Cycles)
     # acc_cycles =
@@ -108,12 +119,21 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     #     end)
     #   end)
 
-      acc_cycles =
-        :maps.fold(fn pair, _, acc_cycles ->
-          :maps.update_with(pair, fn current ->
-            :maps.merge_with(fn _, _, _ -> :error end, current, depends_on)
-          end, depends_on, acc_cycles)
-        end, cycles, write)
+    acc_cycles =
+      :maps.fold(
+        fn pair, _, acc_cycles ->
+          :maps.update_with(
+            pair,
+            fn current ->
+              :maps.merge_with(fn _, _, _ -> :error end, current, depends_on)
+            end,
+            depends_on,
+            acc_cycles
+          )
+        end,
+        cycles,
+        write
+      )
 
     # The SkipList logic
     acc_skip_list =
@@ -123,7 +143,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
       end
 
     # store_cycles(writes, {acc_cycles, acc_skip_list}, Map.merge(acc, write))
-    store_cycles(writes, {acc_cycles, acc_skip_list}, :maps.merge(acc, write));
+    store_cycles(writes, {acc_cycles, acc_skip_list}, :maps.merge(acc, write))
   end
 
   defp store_cycles([], cycles, acc) do
@@ -169,11 +189,13 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   def clause(fun, {:->, meta, [left, right]}, s, e) do
-    {e_left, sl, el} = if is_function(fun, 4) do
-      fun.(meta, left, s, e)
-    else
-      fun.(left, s, e)
-    end
+    {e_left, sl, el} =
+      if is_function(fun, 4) do
+        fun.(meta, left, s, e)
+      else
+        fun.(left, s, e)
+      end
+
     {e_right, sr, er} = Compiler.expand(right, sl, el)
     {{:->, meta, [e_left, e_right]}, sr, er}
   end
@@ -495,12 +517,13 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     expand_catch(meta, [{:when, when_meta, [a1, a2, a3]}], s, e)
   end
 
-  defp expand_catch(_meta, [{:when, when_meta, [arg1, arg2, guard]}], s, e), do:
-    guarded_head(when_meta, [arg1, arg2], guard, s, e)
-  defp expand_catch(_meta, [{:when, when_meta, [arg1, guard]}], s, e), do:
-    guarded_head(when_meta, [:throw, arg1], guard, s, e)
-  defp expand_catch(_meta, [arg], s, e), do:
-    head([:throw, arg], s, e)
+  defp expand_catch(_meta, [{:when, when_meta, [arg1, arg2, guard]}], s, e),
+    do: guarded_head(when_meta, [arg1, arg2], guard, s, e)
+
+  defp expand_catch(_meta, [{:when, when_meta, [arg1, guard]}], s, e),
+    do: guarded_head(when_meta, [:throw, arg1], guard, s, e)
+
+  defp expand_catch(_meta, [arg], s, e), do: head([:throw, arg], s, e)
 
   defp expand_catch(_meta, args = [_, _], s, e) do
     # TODO is it worth to infer type of the first arg? :error | :exit | :throw | {:EXIT, pid()}

@@ -104,8 +104,7 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
     end
   end
 
-  defp expand_expr(component, fun, s, e), do:
-    fun.(component, s, e)
+  defp expand_expr(component, fun, s, e), do: fun.(component, s, e)
 
   defp expand_specs(expr_type, meta, info, s, original_s, e, expect_size) do
     default =
