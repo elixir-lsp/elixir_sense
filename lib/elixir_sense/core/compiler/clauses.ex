@@ -495,7 +495,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   defp expand_catch(_meta, [{:when, when_meta, [arg1, arg2, guard]}], s, e), do:
     guarded_head(when_meta, [arg1, arg2], guard, s, e)
   defp expand_catch(_meta, [{:when, when_meta, [arg1, guard]}], s, e), do:
-    guarded_head(when_meta, [arg1], guard, s, e)
+    guarded_head(when_meta, [:throw, arg1], guard, s, e)
   defp expand_catch(_meta, [arg], s, e), do:
     head([:throw, arg], s, e)
 
