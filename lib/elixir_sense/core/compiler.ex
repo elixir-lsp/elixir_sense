@@ -617,8 +617,11 @@ defmodule ElixirSense.Core.Compiler do
               :pin
 
             _ ->
-              # TODO
-              :elixir_config.get(:on_undefined_variable)
+              if Version.match?(System.version(), ">= 1.15.0-dev") do
+                Code.get_compiler_option(:on_undefined_variable)
+              else
+                :warn
+              end
           end
       end
 
