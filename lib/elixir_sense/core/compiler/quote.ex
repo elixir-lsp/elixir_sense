@@ -10,7 +10,8 @@ defmodule ElixirSense.Core.Compiler.Quote do
             aliases_hygiene: nil,
             imports_hygiene: nil,
             unquote: true,
-            generated: false
+            generated: false,
+            shallow_validate: false
 
   def fun_to_quoted(function) do
     {:module, module} = :erlang.fun_info(function, :module)
@@ -81,7 +82,8 @@ defmodule ElixirSense.Core.Compiler.Quote do
       file: v_file,
       unquote: unquote,
       context: v_context,
-      generated: generated
+      generated: generated,
+      shallow_validate: true
     }
 
     {q, v_context, acc3}
@@ -182,8 +184,13 @@ defmodule ElixirSense.Core.Compiler.Quote do
     {{:{}, [], [:quote, meta(new_meta, q), [t_opts, t_arg]]}, state}
   end
 
-  defp do_quote({:unquote, meta, [expr]}, %__MODULE__{unquote: true}, state) when is_list(meta),
-    do: {expr, state}
+  defp do_quote({:unquote, meta, [expr]}, %__MODULE__{unquote: true, shallow_validate: validate}, state) when is_list(meta) do
+    if validate do
+      {{{:., meta, [:elixir_quote, :shallow_validate_ast]}, meta, [expr]}, state}
+    else
+      {expr, state}
+    end
+  end
 
   # Aliases
 
