@@ -547,7 +547,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
     end
   end
 
-  defp do_escape(other, _, state) when is_number(other) or is_pid(other) or is_atom(other),
+  defp do_escape(other, _, state) when is_number(other) or is_atom(other) or is_pid(other),
     do: {other, state}
 
   defp do_escape(fun, _, state) when is_function(fun) do

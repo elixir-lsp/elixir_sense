@@ -792,6 +792,10 @@ defmodule ElixirSense.Core.Compiler do
     {e_args, State.close_write(se, s), ee}
   end
 
+  defp do_expand(other, s, e) when is_number(other) or is_atom(other) or is_binary(other) do
+    {other, s, e}
+  end
+
   defp do_expand(function, s, e) when is_function(function) do
     type_info = :erlang.fun_info(function, :type)
     env_info = :erlang.fun_info(function, :env)
@@ -815,10 +819,6 @@ defmodule ElixirSense.Core.Compiler do
         # elixir plans to error here invalid_pid_in_function on 2.0
         {pid, s, e}
     end
-  end
-
-  defp do_expand(other, s, e) when is_number(other) or is_atom(other) or is_binary(other) do
-    {other, s, e}
   end
 
   defp do_expand(_other, s, e) do
