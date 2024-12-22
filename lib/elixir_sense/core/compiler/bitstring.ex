@@ -42,7 +42,7 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
         alignment,
         require_size
       ) do
-    {e_left, {sl, original_s}, el} = expand_expr(meta, left, fun, s, e)
+    {e_left, {sl, original_s}, el} = expand_expr(left, fun, s, e)
 
     match_or_require_size = require_size or is_match_size(t, el)
     e_type = expr_type(e_left)
@@ -73,7 +73,7 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
 
   def expand(bitstr_meta, fun, [h | t], acc, s, e, alignment, require_size) do
     meta = extract_meta(h, bitstr_meta)
-    {e_left, {ss, original_s}, es} = expand_expr(meta, h, fun, s, e)
+    {e_left, {ss, original_s}, es} = expand_expr(h, fun, s, e)
 
     e_type = expr_type(e_left)
     e_right = infer_spec(e_type, meta)
@@ -92,7 +92,6 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
   end
 
   defp expand_expr(
-         _meta,
          {{:., _, [mod, :to_string]}, _, [arg]} = ast,
          fun,
          s,
@@ -105,17 +104,8 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
     end
   end
 
-  defp expand_expr(_meta, component, fun, s, e) do
-    case fun.(component, s, e) do
-      {e_component, s, e} when is_list(e_component) or is_atom(e_component) ->
-        # elixir raises here invalid_literal
-        # try to recover from error by replacing it with ""
-        {"", s, e}
-
-      expanded ->
-        expanded
-    end
-  end
+  defp expand_expr(component, fun, s, e), do:
+    fun.(component, s, e)
 
   defp expand_specs(expr_type, meta, info, s, original_s, e, expect_size) do
     default =
@@ -340,9 +330,9 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
   end
 
   defp expand_spec_arg(expr, s, original_s, %{context: :match} = e) do
-    %{prematch: {pre_read, pre_counter, _} = old_pre} = s
+    %{prematch: {pre_read, pre_cycle, _} = old_pre} = s
     %{vars: {original_read, _}} = original_s
-    new_pre = {pre_read, pre_counter, {:bitsize, original_read}}
+    new_pre = {pre_read, pre_cycle, {:bitsize, original_read}}
 
     {e_expr, se, ee} =
       Compiler.expand(expr, %{s | prematch: new_pre}, %{e | context: :guard})

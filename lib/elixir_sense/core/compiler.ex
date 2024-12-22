@@ -38,6 +38,16 @@ defmodule ElixirSense.Core.Compiler do
 
   # =/2
 
+  defp do_expand({:=, meta, [_, _]} = expr, s, e = %{context: :match}) do
+    {e_expr, se, ee} = __MODULE__.Clauses.parallel_match(meta, expr, s, e)
+
+    vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, :match)
+
+    se = State.merge_inferred_types(se, vars_with_inferred_types)
+
+    {e_expr, se, ee}
+  end
+
   defp do_expand({:=, meta, [left, right]}, s, e) do
     # elixir validates we are not in guard context
     {e_right, sr, er} = expand(right, s, e)
@@ -534,7 +544,7 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({name, meta, kind}, s, %{context: :match} = e)
        when is_atom(name) and is_atom(kind) do
     %{
-      prematch: {_, prematch_version, _},
+      prematch: {_, _, prematch_version},
       unused: version,
       vars: {read, write}
     } = s
@@ -544,10 +554,11 @@ defmodule ElixirSense.Core.Compiler do
     case read do
       # Variable was already overridden
       %{^pair => var_version} when var_version >= prematch_version ->
+        new_write = (write != false) && %{write | pair => version}
         var = {name, [{:version, var_version} | meta], kind}
         # it's a write but for simplicity treat it as read
         s = State.add_var_read(s, var)
-        {var, %{s | unused: version}, e}
+        {var, %{s | vars: {read, new_write}, unused: version}, e}
 
       # Variable is being overridden now
       %{^pair => _} ->
@@ -575,7 +586,7 @@ defmodule ElixirSense.Core.Compiler do
       case read do
         %{^pair => current_version} ->
           case prematch do
-            {pre, _counter, {_bitsize, original}} ->
+            {pre, _cycle, {_bitsize, original}} ->
               cond do
                 Map.get(pre, pair) != current_version ->
                   {:ok, current_version}
@@ -596,7 +607,15 @@ defmodule ElixirSense.Core.Compiler do
           end
 
         _ ->
-          prematch
+          # prematch
+
+          case e do
+            %{context: :guard} -> :raise
+            %{} when s.prematch == :pin -> :pin
+            _ ->
+              # TODO
+              :elixir_config.get(:on_undefined_variable)
+          end
       end
 
     case result do
@@ -667,7 +686,7 @@ defmodule ElixirSense.Core.Compiler do
               {module, fun}
           end
 
-        expand_remote(ar, meta, af, meta, args, state, State.prepare_write(state), env)
+        expand_remote(ar, meta, af, meta, args, state, State.prepare_write(state, env), env)
 
       {:error, :not_found} ->
         expand_local(meta, fun, args, state, env)
@@ -690,7 +709,7 @@ defmodule ElixirSense.Core.Compiler do
        when (is_tuple(module) or is_atom(module)) and is_atom(fun) and is_list(meta) and
               is_list(args) do
     # dbg({module, fun, args})
-    {module, state_l, env} = expand(module, State.prepare_write(state), env)
+    {module, state_l, env} = expand(module, State.prepare_write(state, env), env)
     arity = length(args)
 
     if is_atom(module) do
@@ -859,7 +878,7 @@ defmodule ElixirSense.Core.Compiler do
 
         # based on :elixir_clauses.def
         {e_args_no_defaults, state, _env_for_expand} =
-          expand_args(args_no_defaults, %{state | prematch: {%{}, 0, :none}}, %{
+          expand_args(args_no_defaults, %{state | prematch: {%{}, {%{}, []}, 0}}, %{
             env_for_expand
             | context: :match
           })
@@ -1737,10 +1756,12 @@ defmodule ElixirSense.Core.Compiler do
 
     # based on :elixir_clauses.def
     {e_args_no_defaults, state, env_for_expand} =
-      expand_args(args_no_defaults, %{state | prematch: {%{}, 0, :none}}, %{
+      expand_args(args_no_defaults, %{state | prematch: {%{}, {%{}, []}, 0}}, %{
         env_for_expand
         | context: :match
       })
+
+    # elixir calls validate_cycles here
 
     args =
       Enum.zip(args, e_args_no_defaults)
@@ -1754,7 +1775,11 @@ defmodule ElixirSense.Core.Compiler do
 
     prematch =
       if Version.match?(System.version(), ">= 1.15.0-dev") do
-        Code.get_compiler_option(:on_undefined_variable)
+        if Version.match?(System.version(), ">= 1.18.0-dev") do
+          :none
+        else
+          Code.get_compiler_option(:on_undefined_variable)
+        end
       else
         :warn
       end
@@ -1897,7 +1922,8 @@ defmodule ElixirSense.Core.Compiler do
       callback.(meta, args)
     catch
       # If expanding the macro fails, we just give up.
-      _kind, _payload ->
+      kind, payload ->
+        Logger.warning(Exception.format(kind, payload, __STACKTRACE__))
         # look for cursor in args
         {_ast, state, _env} = expand(args, state, env)
 
@@ -1987,7 +2013,8 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_remote(receiver, dot_meta, right, meta, args, s, sl, %{context: context} = e)
        when is_atom(receiver) or is_tuple(receiver) do
-    if context == :guard and is_tuple(receiver) do
+    cond do
+      context == :guard and is_tuple(receiver) ->
       # elixir raises parens_map_lookup unless no_parens is set in meta
       # look for cursor in discarded args
       {_ast, sl, _env} = expand(args, sl, e)
@@ -1998,7 +2025,8 @@ defmodule ElixirSense.Core.Compiler do
         |> State.add_current_env_to_line(meta, e)
 
       {{{:., dot_meta, [receiver, right]}, meta, []}, sl, e}
-    else
+
+    context == nil ->
       attached_meta = attach_runtime_module(receiver, meta, s, e)
       {e_args, {sa, _}, ea} = map_fold(&expand_arg/3, {sl, s}, e, args)
 
@@ -2019,14 +2047,33 @@ defmodule ElixirSense.Core.Compiler do
 
           {rewritten, s, ea}
 
-        {:error, _error} ->
-          # elixir raises here elixir_rewrite
-          s =
-            State.close_write(sa, s)
-            |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
-            |> State.add_current_env_to_line(meta, e)
+          {:error, _error} ->
+            # elixir raises here elixir_rewrite
+            s =
+              State.close_write(sa, s)
+              |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
+              |> State.add_current_env_to_line(meta, e)
+  
+            {{{:., dot_meta, [receiver, right]}, attached_meta, e_args}, s, ea}
+        end
+  
+    true ->
+      case {receiver, right, args} do
+        {:erlang, :+, [arg]} when is_number(arg) -> {+arg, sl, e}
+        {:erlang, :-, [arg]} when is_number(arg) -> {-arg, sl, e}
+        _ ->
+          {e_args, sa, ea} = map_fold(&expand/3, sl, e, args)
 
-          {{{:., dot_meta, [receiver, right]}, attached_meta, e_args}, s, ea}
+          case __MODULE__.Rewrite.rewrite(context, receiver, dot_meta, right, meta, e_args, s) do
+            {:ok, rewritten} -> {rewritten, sa, ea}
+            {:error, _error} ->
+              # elixir raises here elixir_rewrite
+                s = sa
+                |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
+                |> State.add_current_env_to_line(meta, e)
+
+              {{{:., dot_meta, [receiver, right]}, meta, e_args}, s, ea}
+          end
       end
     end
   end

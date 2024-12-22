@@ -710,8 +710,15 @@ defmodule ElixirSense.Core.Compiler.State do
     %{s | vars: {read, write}}
   end
 
+  def prepare_write(s, %{context: nil}), do: prepare_write(s)
+  def prepare_write(s, _), do: s
+
   def prepare_write(%{vars: {read, _}} = s) do
     %{s | vars: {read, read}}
+  end
+
+  def close_write(%{vars: {_read, false}}, _) do
+    raise ArgumentError, message: "prepare_write not called"
   end
 
   def close_write(%{vars: {_read, write}} = s, %{vars: {_, false}}) do
@@ -722,9 +729,9 @@ defmodule ElixirSense.Core.Compiler.State do
     %{s | vars: {write, merge_vars(upper_write, write)}}
   end
 
-  defp merge_vars(v, v), do: v
+  def merge_vars(v, v), do: v
 
-  defp merge_vars(v1, v2) do
+  def merge_vars(v1, v2) do
     :maps.fold(
       fn k, m2, acc ->
         case Map.fetch(acc, k) do

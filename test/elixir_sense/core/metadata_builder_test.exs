@@ -2384,8 +2384,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  type: {
                    :intersection,
                    [
-                     {:map, [bar: {:integer, 1}], nil},
                      {:map, [foo: {:integer, 1}], nil},
+                     {:map, [bar: {:integer, 1}], nil},
                      {:atom, :ok}
                    ]
                  }
@@ -2395,8 +2395,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  type: {
                    :intersection,
                    [
-                     {:map, [bar: {:integer, 1}], nil},
                      {:map, [foo: {:integer, 1}], nil},
+                     {:map, [bar: {:integer, 1}], nil},
                      {:atom, :ok}
                    ]
                  }
@@ -2420,14 +2420,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  name: :state,
                  type: {
                    :intersection,
-                   [{:map, [bar: {:integer, 1}], nil}, {:map, [foo: {:integer, 1}], nil}]
+                   [{:map, [foo: {:integer, 1}], nil}, {:map, [bar: {:integer, 1}], nil}]
                  }
                },
                %VarInfo{
                  name: :x,
                  type: {
                    :intersection,
-                   [{:map, [bar: {:integer, 1}], nil}, {:map, [foo: {:integer, 1}], nil}]
+                   [{:map, [foo: {:integer, 1}], nil}, {:map, [bar: {:integer, 1}], nil}]
                  }
                }
              ] = state |> get_line_vars(3)
@@ -2453,8 +2453,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  type:
                    {:intersection,
                     [
-                      {:map, [bar: {:integer, 1}], nil},
                       {:map, [foo: {:integer, 1}], nil},
+                      {:map, [bar: {:integer, 1}], nil},
                       {:atom, :ok}
                     ]}
                },
@@ -2463,8 +2463,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  type:
                    {:intersection,
                     [
-                      {:map, [bar: {:integer, 1}], nil},
                       {:map, [foo: {:integer, 1}], nil},
+                      {:map, [bar: {:integer, 1}], nil},
                       {:atom, :ok}
                     ]}
                }
