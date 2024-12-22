@@ -3,6 +3,8 @@ defmodule ElixirSense.Core.Compiler.Rewrite do
     :elixir_rewrite.inline(module, fun, arity)
   end
 
+  # TODO this is gone on 1.18
+
   def rewrite(context, receiver, dot_meta, right, meta, e_args, s) do
     do_rewrite(context, receiver, dot_meta, right, meta, e_args, s)
   end
