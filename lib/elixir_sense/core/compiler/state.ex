@@ -1378,7 +1378,7 @@ defmodule ElixirSense.Core.Compiler.State do
               end_of_expression_meta ->
                 {
                   Keyword.fetch!(end_of_expression_meta, :line),
-                  Keyword.fetch!(end_of_expression_meta, :column)
+                  Keyword.get(end_of_expression_meta, :column, 1)
                 }
             end
 
