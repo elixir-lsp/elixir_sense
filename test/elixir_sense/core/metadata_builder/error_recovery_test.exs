@@ -2318,7 +2318,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         test "in type after :: type with fun ( next arg" do
           code = """
           defmodule Abc do
-            @type foo :: (bar, \
+            @type foo :: a(bar, \
           """
 
           assert {_, env} = get_cursor_env(code, false, ")\nend")
@@ -2328,7 +2328,7 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
         test "in type after :: type with fun ( next arg" do
           code = """
           defmodule Abc do
-            @type foo :: (bar, \
+            @type foo :: a(bar, \
           """
 
           assert {_, env} = get_cursor_env(code)
