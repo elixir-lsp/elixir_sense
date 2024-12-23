@@ -230,7 +230,7 @@ defmodule ElixirSense.Core.SourceTest do
     end
 
     test "inside fn body" do
-      if Version.match?(System.version(), ">= 1.17.0-rc.0") do
+      if Version.match?(System.version(), ">= 1.17.0") do
         assert %{
                  candidate: {nil, :*},
                  elixir_prefix: false,

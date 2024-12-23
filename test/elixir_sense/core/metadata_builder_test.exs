@@ -1007,7 +1007,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[9].versioned_vars) == [{:k, nil}, {:kv, nil}, {:v, nil}]
 
-      # TODO defquard on 1.18
       assert [
                %VarInfo{name: :k, positions: [{3, 21}, {4, 19}, {5, 19}, {6, 25}, {7, 17}]},
                %VarInfo{name: :kv, positions: [{2, 3}, {3, 13}]},
@@ -1016,7 +1015,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Map.keys(state.lines_to_env[18].versioned_vars) == [keys: nil, kv: nil]
 
-      # TODO defquard on 1.18
       assert [
                %VarInfo{
                  name: :keys,
@@ -1024,6 +1022,48 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                },
                %VarInfo{name: :kv, positions: [{2, 3}, {3, 13}]}
              ] = state |> get_line_vars(18)
+    end
+
+    if Version.match?(System.version(), ">= 1.18.0") do
+      test "in unquote fragment defguard" do
+        state =
+          """
+          defmodule MyModuleWithFuns do
+            kv = [foo: 1, bar: 2] |> IO.inspect
+            Enum.each(kv, fn {k, v} ->
+              defguard unquote(k)(a) when is_integer(unquote(v)) and record_env()
+            end)
+
+            keys = [{:foo, [], nil}, {:bar, [], nil}]
+            defguard foo_splicing(unquote_splicing(keys)) when record_env()
+          end
+          """
+          |> string_to_state
+
+        assert Map.keys(state.lines_to_env[4].versioned_vars) == [
+                 {:a, nil},
+                 {:k, nil},
+                 {:kv, nil},
+                 {:v, nil}
+               ]
+
+        assert [
+                 %VarInfo{name: :a, positions: [{4, 25}]},
+                 %VarInfo{name: :k, positions: [{3, 21}, {4, 22}]},
+                 %VarInfo{name: :kv, positions: [{2, 3}, {3, 13}]},
+                 %VarInfo{name: :v, positions: [{3, 24}, {4, 52}]}
+               ] = state |> get_line_vars(4)
+
+        assert Map.keys(state.lines_to_env[8].versioned_vars) == [keys: nil, kv: nil]
+
+        assert [
+                 %VarInfo{
+                   name: :keys,
+                   positions: [{7, 3}, {8, 42}]
+                 },
+                 %VarInfo{name: :kv, positions: [{2, 3}, {3, 13}]}
+               ] = state |> get_line_vars(8)
+      end
     end
 
     test "in capture" do
@@ -4463,7 +4503,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
 
-      if Version.match?(System.version(), "< 1.16.0-dev") do
+      if Version.match?(System.version(), "< 1.16.0") do
         assert get_line_aliases(state, 5) == []
         assert get_line_aliases(state, 7) == []
       else
@@ -6069,7 +6109,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), ">= 1.18.0-dev") do
+      if Version.match?(System.version(), ">= 1.18.0") do
         assert get_line_behaviours(state, 3) == [Protocol]
       else
         assert get_line_behaviours(state, 3) == []
@@ -6416,6 +6456,48 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
            ]
   end
 
+  if Version.match?(System.version(), ">= 1.18.0") do
+    test "registers defguard with unquote fragments in when" do
+      state =
+        """
+        defmodule MyModuleWithFuns do
+          kv = [foo: 1]
+          Enum.each(kv, fn {k, v} ->
+            defguard foo(a) when is_integer(unquote(v))
+          end)
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               {MyModuleWithFuns, :foo, 1} => %ModFunInfo{
+                 params: [[{:a, _, _}]]
+               }
+             } = state.mods_funs_to_positions
+    end
+
+    test "registers unknown for defguard with unquote fragments in call" do
+      state =
+        """
+        defmodule MyModuleWithFuns do
+          kv = [foo: 1, bar: 2]
+          Enum.each(kv, fn {k, v} ->
+            defguard unquote(k)(a) when is_integer(a)
+          end)
+        end
+        """
+        |> string_to_state
+
+      assert Map.keys(state.mods_funs_to_positions) == [
+               {MyModuleWithFuns, :__info__, 1},
+               {MyModuleWithFuns, :__unknown__, 1},
+               {MyModuleWithFuns, :module_info, 0},
+               {MyModuleWithFuns, :module_info, 1},
+               {MyModuleWithFuns, nil, nil}
+             ]
+    end
+  end
+
   test "registers unknown for defdelegate with unquote fragments in call" do
     state =
       """
@@ -6436,8 +6518,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              {MyModuleWithFuns, nil, nil}
            ]
   end
-
-  # TODO test defguard with unquote fragment on 1.18
 
   test "registers builtin functions for protocols" do
     state =
@@ -9530,7 +9610,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   defp maybe_reject_typespec(requires) do
-    if Version.match?(System.version(), ">= 1.17.0-dev") do
+    if Version.match?(System.version(), ">= 1.17.0") do
       requires -- [Kernel.Typespec]
     else
       requires

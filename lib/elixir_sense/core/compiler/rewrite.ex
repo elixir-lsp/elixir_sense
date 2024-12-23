@@ -21,7 +21,7 @@ defmodule ElixirSense.Core.Compiler.Rewrite do
     end
   end
 
-  if Version.match?(System.version(), "< 1.14.0") do
+  if Version.match?(System.version(), "< 1.14.0-dev") do
     defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
       :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args)
     end

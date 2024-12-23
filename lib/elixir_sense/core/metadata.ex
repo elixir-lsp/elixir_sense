@@ -86,7 +86,7 @@ defmodule ElixirSense.Core.Metadata do
         surround \\ nil
       )
 
-  if Version.match?(System.version(), "< 1.15.0") do
+  if Version.match?(System.version(), "< 1.15.0-dev") do
     # return early if cursor env already found by parser replacing line
     # this helps on < 1.15 and braks tests on later versions
     def get_cursor_env(%__MODULE__{cursor_env: {_, env}}, _position, _surround) do

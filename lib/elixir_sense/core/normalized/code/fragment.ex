@@ -16,7 +16,7 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
     end
   rescue
     e ->
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.18.0-dev") do
         Logger.error(
           "Code.Fragment.cursor_context raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
         )
@@ -42,7 +42,7 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
     end
   rescue
     e ->
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.18.0-dev") do
         Logger.error(
           "Code.Fragment.surround_context raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
         )
@@ -68,7 +68,7 @@ defmodule ElixirSense.Core.Normalized.Code.Fragment do
     end
   rescue
     e ->
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.18.0-dev") do
         try do
           Logger.error(
             "Code.Fragment.container_cursor_to_quoted raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."

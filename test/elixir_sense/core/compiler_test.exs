@@ -9,10 +9,10 @@ defmodule ElixirSense.Core.CompilerTest do
   defp to_quoted!(string, false),
     do: Code.string_to_quoted!(string, columns: true, token_metadata: true)
 
-  if Version.match?(System.version(), ">= 1.17.0-dev") do
+  if Version.match?(System.version(), ">= 1.17.0") do
     Record.defrecordp(:elixir_ex,
       caller: false,
-      prematch: if(Version.match?(System.version(), ">= 1.18.0-dev"), do: :none, else: :raise),
+      prematch: if(Version.match?(System.version(), ">= 1.18.0"), do: :none, else: :raise),
       stacktrace: false,
       unused: {%{}, 0},
       runtime_modules: [],
@@ -43,7 +43,7 @@ defmodule ElixirSense.Core.CompilerTest do
       caller: false,
       prematch: %State{
         prematch:
-          if Version.match?(System.version(), ">= 1.15.0-dev") do
+          if Version.match?(System.version(), ">= 1.15.0") do
             Code.get_compiler_option(:on_undefined_variable)
           else
             :warn
@@ -132,8 +132,8 @@ defmodule ElixirSense.Core.CompilerTest do
   defp state_with_prematch do
     %State{
       prematch:
-        if Version.match?(System.version(), ">= 1.15.0-dev") do
-          if(Version.match?(System.version(), ">= 1.18.0-dev"),
+        if Version.match?(System.version(), ">= 1.15.0") do
+          if(Version.match?(System.version(), ">= 1.18.0"),
             do: :none,
             else: Code.get_compiler_option(:on_undefined_variable)
           )
@@ -726,7 +726,7 @@ defmodule ElixirSense.Core.CompilerTest do
             ast,
             %State{
               prematch:
-                if(Version.match?(System.version(), ">= 1.18.0-dev"),
+                if(Version.match?(System.version(), ">= 1.18.0"),
                   do: :none,
                   else: Code.get_compiler_option(:on_undefined_variable)
                 ) || :warn

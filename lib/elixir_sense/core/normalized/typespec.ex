@@ -13,7 +13,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
       # workaround for crash
       # Keyword.fetch({:error, :beam_lib, {:not_a_beam_file, ""}}, :module)
       # fixed in elixir 1.16.0
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.18.0-dev") do
         Logger.error(
           "Code.Typespec.fetch_specs raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
         )
@@ -33,7 +33,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
       # workaround for crash
       # Keyword.fetch({:error, :beam_lib, {:not_a_beam_file, ""}}, :module)
       # fixed in elixir 1.16.0
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.18.0-dev") do
         Logger.error(
           "Code.Typespec.fetch_types raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
         )
@@ -53,7 +53,7 @@ defmodule ElixirSense.Core.Normalized.Typespec do
       # workaround for crash
       # Keyword.fetch({:error, :beam_lib, {:not_a_beam_file, ""}}, :module)
       # fixed in elixir 1.16.0
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.18.0-dev") do
         Logger.error(
           "Code.Typespec.fetch_callbacks raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
         )

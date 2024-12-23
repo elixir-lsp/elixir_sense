@@ -36,7 +36,7 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
     end
   rescue
     e ->
-      if Version.match?(System.version(), ">= 1.17.0-dev") do
+      if Version.match?(System.version(), ">= 1.18.0-dev") do
         Logger.error(
           ":elixir_tokenizer.tokenize raised #{Exception.format(:error, e, __STACKTRACE__)}. Please report that to elixir project."
         )
