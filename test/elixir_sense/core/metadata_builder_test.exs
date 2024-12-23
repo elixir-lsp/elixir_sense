@@ -6058,6 +6058,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert get_line_behaviours(state, 4) == [Some.Module]
     end
+
+    test "defprotocol implements Protocol" do
+      state =
+        """
+        defprotocol Some do
+          def foo(t)
+          IO.puts ""
+        end
+        """
+        |> string_to_state
+
+      if Version.match?(System.version(), ">= 1.18.0-dev") do
+        assert get_line_behaviours(state, 3) == [Protocol]
+      else
+        assert get_line_behaviours(state, 3) == []
+      end
+    end
   end
 
   test "current scope" do
