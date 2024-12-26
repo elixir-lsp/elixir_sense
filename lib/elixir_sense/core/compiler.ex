@@ -1639,7 +1639,7 @@ defmodule ElixirSense.Core.Compiler do
       |> State.apply_optional_callbacks(%{env | module: full})
       |> State.remove_vars_scope(state_orig, true)
       |> State.remove_attributes_scope()
-      |> State.remove_module()
+      |> State.remove_module(%{env | module: full})
 
     # in elixir the result of defmodule expansion is
     # require (a module atom) and :elixir_module.compile dot call in block

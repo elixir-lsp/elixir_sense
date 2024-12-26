@@ -9370,6 +9370,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
   end
 
   describe "meta" do
+    test "behaviours" do
+      state =
+        """
+        defmodule Some do
+          @behaviour Other
+        end
+        """
+        |> string_to_state
+
+      assert %{meta: %{behaviours: [Other]}} =
+               state.mods_funs_to_positions[{Some, nil, nil}]
+    end
+
     test "guard" do
       state =
         """

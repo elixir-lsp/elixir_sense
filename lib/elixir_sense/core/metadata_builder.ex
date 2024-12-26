@@ -14,12 +14,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
   def build(ast, cursor_position \\ nil) do
     state_initial = initial_state(cursor_position)
 
-    {_ast, state, _env} = Compiler.expand(ast, state_initial, Compiler.env())
+    {_ast, state, env} = Compiler.expand(ast, state_initial, Compiler.env())
 
     state
     |> State.remove_attributes_scope()
     |> State.remove_vars_scope(state_initial)
-    |> State.remove_module()
+    |> State.remove_module(env)
   end
 
   def initial_state(cursor_position) do

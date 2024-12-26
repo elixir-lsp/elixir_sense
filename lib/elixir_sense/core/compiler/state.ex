@@ -452,12 +452,28 @@ defmodule ElixirSense.Core.Compiler.State do
     }
   end
 
-  def remove_module(%__MODULE__{} = state) do
+  def remove_module(%__MODULE__{} = state, env) do
+    current_module = env.module
+
+    mods_funs_to_positions =
+      if current_module do
+        state.mods_funs_to_positions
+        |> Map.update!({current_module, nil, nil}, fn info = %ModFunInfo{} ->
+          %{
+            info
+            | meta: Map.put(info.meta, :behaviours, Map.get(state.behaviours, current_module, []))
+          }
+        end)
+      else
+        state.mods_funs_to_positions
+      end
+
     %{
       state
       | doc_context: tl(state.doc_context),
         typedoc_context: tl(state.typedoc_context),
-        optional_callbacks_context: tl(state.optional_callbacks_context)
+        optional_callbacks_context: tl(state.optional_callbacks_context),
+        mods_funs_to_positions: mods_funs_to_positions
     }
   end
 
