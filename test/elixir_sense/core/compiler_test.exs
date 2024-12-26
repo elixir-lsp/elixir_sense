@@ -552,7 +552,7 @@ defmodule ElixirSense.Core.CompilerTest do
         e in ArgumentError ->
           e
       catch
-        {k, e} ->
+        k, e ->
           {k, e}
       else
         _ -> :ok
@@ -951,6 +951,13 @@ defmodule ElixirSense.Core.CompilerTest do
   defp clean_capture_arg(ast) do
     {ast, _} =
       Macro.prewalk(ast, nil, fn
+        {{:., _, [:elixir_quote, :shallow_validate_ast]}, _, [inner]} = node, state ->
+          if Version.match?(System.version(), "< 1.18.0") do
+            {inner, state}
+          else
+            {node, state}
+          end
+
         {{:., dot_meta, target}, call_meta, args}, state ->
           dot_meta = Keyword.delete(dot_meta, :column_correction)
           {{{:., dot_meta, target}, call_meta, args}, state}
@@ -977,6 +984,16 @@ defmodule ElixirSense.Core.CompilerTest do
   defp clean_capture_arg_elixir(ast) do
     {ast, _} =
       Macro.prewalk(ast, nil, fn
+        {:->, meta, args}, state ->
+          meta =
+            if Version.match?(System.version(), "< 1.18.0") do
+              Keyword.delete(meta, :generated)
+            else
+              meta
+            end
+
+          {{:->, meta, args}, state}
+
         {:capture, meta, nil} = _node, state ->
           # elixir changes the name to capture and does different counter tracking
           meta = Keyword.delete(meta, :counter)
