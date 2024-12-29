@@ -18,6 +18,7 @@ defmodule ElixirSense.Core.BuiltinAttributes do
     after_verify
     before_compile
     fallback_to_any
+    undefined_impl_description
     type
     typep
     opaque

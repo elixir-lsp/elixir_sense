@@ -4,18 +4,149 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   alias ElixirSense.Core.Compiler.State
   alias ElixirSense.Core.TypeInference
 
-  def match(fun, expr, after_s, _before_s, %{context: :match} = e) do
-    fun.(expr, after_s, e)
+  def parallel_match(meta, expr, s, e = %{context: :match}) do
+    %{vars: {_read, write}} = s
+
+    matches = unpack_match(expr, meta, [])
+
+    # {[{_, e_head} | e_tail], e_writes, sm, em} =
+    #   Enum.reduce(matches, {[], [], s, e}, fn {e_meta, match}, {acc_matches, acc_writes, si, ei} ->
+    #     # #elixir_ex{vars={Read, _Write}} = SI
+    #     %{vars: {read, _write}} = si
+
+    #     # {EMatch, SM, EM} = elixir_expand:expand(Match, SI#elixir_ex{vars={Read, #{}}}, EI)
+    #     {e_match, s_m, e_m} =
+    #       Compiler.expand(match, %{si | vars: {read, %{}}}, ei)
+
+    #     # #elixir_ex{vars={_, EWrite}} = SM
+    #     %{vars: {_, e_write}} = s_m
+
+    #     # {[{EMeta, EMatch} | AccMatches], [EWrite | AccWrites], SM, EM}
+    #     {
+    #       [{e_meta, e_match} | acc_matches],
+    #       [e_write | acc_writes],
+    #       s_m,
+    #       e_m
+    #     }
+    #   end)
+
+    {[{_, e_head} | e_tail], e_writes, sm, em} =
+      :lists.foldl(
+        fn {e_meta, match}, {acc_matches, acc_writes, si, ei} ->
+          %{vars: {read, _write}} = si
+          {e_match, sm, em} = Compiler.expand(match, %{si | vars: {read, %{}}}, ei)
+          %{vars: {_, e_write}} = sm
+          {[{e_meta, e_match} | acc_matches], [e_write | acc_writes], sm, em}
+        end,
+        {[], [], s, e},
+        matches
+      )
+
+    # EMatch =
+    #   lists:foldl(fun({EMeta, EMatch}, Acc) ->
+    #     {'=', EMeta, [EMatch, Acc]}
+    #   end, EHead, ETail),
+    # e_match =
+    #   Enum.reduce(e_tail, e_head, fn {e_meta, e_m}, acc ->
+    #     {:'=', e_meta, [e_m, acc]}
+    #   end)
+
+    e_match =
+      :lists.foldl(
+        fn {e_meta, e_match}, acc ->
+          {:=, e_meta, [e_match, acc]}
+        end,
+        e_head,
+        e_tail
+      )
+
+    %{vars: {v_read, _}, prematch: {p_read, cycles, p_info}} = sm
+
+    {p_cycles, p_writes} = store_cycles(e_writes, cycles, %{})
+
+    v_write =
+      write != false && State.merge_vars(write, p_writes)
+
+    updated_sm = %{
+      sm
+      | vars: {v_read, v_write},
+        prematch: {p_read, p_cycles, p_info}
+    }
+
+    {e_match, updated_sm, em}
+  end
+
+  defp unpack_match({:=, meta, [{_, _var_meta, _} = node, node]}, _meta, acc) do
+    # TODO: remove this clause on Elixir v1.23
+    # elixir warns here on duplicate_match
+    unpack_match(node, meta, acc)
+  end
+
+  defp unpack_match({:=, meta, [left, right]}, _meta, acc),
+    do: unpack_match(left, meta, unpack_match(right, meta, acc))
+
+  defp unpack_match(node, meta, acc) do
+    [{meta, node} | acc]
+  end
+
+  defp store_cycles([write | writes], {cycles, skip_list}, acc) do
+    # Compute the variables this parallel pattern depends on
+    # depends_on =
+    #   Enum.reduce(writes, acc, fn w, a ->
+    #     Map.merge(a, w)
+    #   end)
+
+    depends_on = :lists.foldl(&:maps.merge/2, acc, writes)
+
+    # For each variable on a sibling, store it inside the graph (Cycles)
+    # acc_cycles =
+    #   Enum.reduce(write, cycles, fn {pair, _}, acc_cycles ->
+    #     Map.update(acc_cycles, pair, depends_on, fn current ->
+    #       # maps:merge_with(fun(_, _, _) -> error end, Current, DependsOn)
+    #       Map.merge(current, depends_on, fn _, _, _ -> :error end)
+    #     end)
+    #   end)
+
+    acc_cycles =
+      :maps.fold(
+        fn pair, _, acc_cycles ->
+          :maps.update_with(
+            pair,
+            fn current ->
+              Map.merge(current, depends_on, fn _, _, _ -> :error end)
+            end,
+            depends_on,
+            acc_cycles
+          )
+        end,
+        cycles,
+        write
+      )
+
+    # The SkipList logic
+    acc_skip_list =
+      case map_size(depends_on) > 1 do
+        true -> [depends_on | skip_list]
+        false -> skip_list
+      end
+
+    # store_cycles(writes, {acc_cycles, acc_skip_list}, Map.merge(acc, write))
+    store_cycles(writes, {acc_cycles, acc_skip_list}, :maps.merge(acc, write))
+  end
+
+  defp store_cycles([], cycles, acc) do
+    {cycles, acc}
   end
 
   def match(fun, expr, after_s, before_s, e) do
-    %{vars: current, unused: unused} = after_s
+    # elixir validates if context is not guard
+    %{vars: current, unused: counter} = after_s
     %{vars: {read, _write}, prematch: prematch} = before_s
 
     call_s = %{
       before_s
-      | prematch: {read, unused, :none},
-        unused: unused,
+      | prematch: {read, {%{}, []}, counter},
+        unused: counter,
         vars: current,
         calls: after_s.calls,
         lines_to_env: after_s.lines_to_env,
@@ -26,6 +157,8 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
     call_e = Map.put(e, :context, :match)
     {e_expr, %{vars: new_current, unused: new_unused} = s_expr, ee} = fun.(expr, call_s, call_e)
+
+    # elixir calls validate_cycles here
 
     end_s = %{
       after_s
@@ -43,13 +176,14 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     {e_expr, end_s, end_e}
   end
 
-  def clause(fun, {:->, clause_meta, [_, _]} = clause, s, e)
-      when is_function(fun, 4) do
-    clause(fn x, sa, ea -> fun.(clause_meta, x, sa, ea) end, clause, s, e)
-  end
-
   def clause(fun, {:->, meta, [left, right]}, s, e) do
-    {e_left, sl, el} = fun.(left, s, e)
+    {e_left, sl, el} =
+      if is_function(fun, 4) do
+        fun.(meta, left, s, e)
+      else
+        fun.(left, s, e)
+      end
+
     {e_right, sr, er} = Compiler.expand(right, sl, el)
     {{:->, meta, [e_left, e_right]}, sr, er}
   end
@@ -60,35 +194,31 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     clause(fun, {:->, [], [[expr], :ok]}, s, e)
   end
 
-  def head([{:when, meta, [_ | _] = all}], s, e) do
+  def head([{:when, when_meta, [_ | _] = all}], s, e) do
     {args, guard} = Utils.split_last(all)
-    prematch = s.prematch
-
-    {{e_args, e_guard}, sg, eg} =
-      match(
-        fn _ok, sm, em ->
-          {e_args, sa, ea} = Compiler.expand_args(args, sm, em)
-
-          {e_guard, sg, eg} =
-            guard(guard, %{sa | prematch: prematch}, %{ea | context: :guard})
-
-          type_info = TypeInference.Guard.type_information_from_guards(e_guard)
-
-          sg = State.merge_inferred_types(sg, type_info)
-
-          {{e_args, e_guard}, sg, eg}
-        end,
-        :ok,
-        s,
-        s,
-        e
-      )
-
-    {[{:when, meta, e_args ++ [e_guard]}], sg, eg}
+    guarded_head(when_meta, args, guard, s, e)
   end
 
   def head(args, s, e) do
     match(&Compiler.expand_args/3, args, s, s, e)
+  end
+
+  defp guarded_head(when_meta, args, guard, s, e) do
+    {e_args, sa, ea} = match(&Compiler.expand_args/3, args, s, s, e)
+
+    prematch =
+      if Version.match?(System.version(), ">= 1.18.0-dev") do
+        sa.prematch
+      else
+        s.prematch
+      end
+
+    {e_guard, sg, eg} = guard(guard, %{sa | prematch: prematch}, %{ea | context: :guard})
+
+    type_info = TypeInference.Guard.type_information_from_guards(e_guard)
+    sg = State.merge_inferred_types(sg, type_info)
+
+    {[{:when, when_meta, e_args ++ [e_guard]}], sg, %{eg | context: nil}}
   end
 
   def guard({:when, meta, [left, right]}, s, e) do
@@ -380,10 +510,13 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     expand_catch(meta, [{:when, when_meta, [a1, a2, a3]}], s, e)
   end
 
-  defp expand_catch(_meta, args = [_], s, e) do
-    # no point in doing type inference here, we have no idea what throw we caught
-    head(args, s, e)
-  end
+  defp expand_catch(_meta, [{:when, when_meta, [arg1, arg2, guard]}], s, e),
+    do: guarded_head(when_meta, [arg1, arg2], guard, s, e)
+
+  defp expand_catch(_meta, [{:when, when_meta, [arg1, guard]}], s, e),
+    do: guarded_head(when_meta, [:throw, arg1], guard, s, e)
+
+  defp expand_catch(_meta, [arg], s, e), do: head([:throw, arg], s, e)
 
   defp expand_catch(_meta, args = [_, _], s, e) do
     # TODO is it worth to infer type of the first arg? :error | :exit | :throw | {:EXIT, pid()}

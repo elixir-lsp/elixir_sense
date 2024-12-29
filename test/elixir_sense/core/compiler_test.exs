@@ -9,10 +9,10 @@ defmodule ElixirSense.Core.CompilerTest do
   defp to_quoted!(string, false),
     do: Code.string_to_quoted!(string, columns: true, token_metadata: true)
 
-  if Version.match?(System.version(), ">= 1.17.0-dev") do
+  if Version.match?(System.version(), ">= 1.17.0") do
     Record.defrecordp(:elixir_ex,
       caller: false,
-      prematch: :raise,
+      prematch: if(Version.match?(System.version(), ">= 1.18.0"), do: :none, else: :raise),
       stacktrace: false,
       unused: {%{}, 0},
       runtime_modules: [],
@@ -43,7 +43,7 @@ defmodule ElixirSense.Core.CompilerTest do
       caller: false,
       prematch: %State{
         prematch:
-          if Version.match?(System.version(), ">= 1.15.0-dev") do
+          if Version.match?(System.version(), ">= 1.15.0") do
             Code.get_compiler_option(:on_undefined_variable)
           else
             :warn
@@ -132,8 +132,11 @@ defmodule ElixirSense.Core.CompilerTest do
   defp state_with_prematch do
     %State{
       prematch:
-        if Version.match?(System.version(), ">= 1.15.0-dev") do
-          Code.get_compiler_option(:on_undefined_variable)
+        if Version.match?(System.version(), ">= 1.15.0") do
+          if(Version.match?(System.version(), ">= 1.18.0"),
+            do: :none,
+            else: Code.get_compiler_option(:on_undefined_variable)
+          )
         else
           :warn
         end
@@ -477,7 +480,7 @@ defmodule ElixirSense.Core.CompilerTest do
       assert_expansion_env("""
       defmodule Abc do
         use ElixirSense.Core.CompilerTest.Overridable
-        
+
         def foo(a) do
           &super/1
         end
@@ -487,7 +490,7 @@ defmodule ElixirSense.Core.CompilerTest do
       assert_expansion_env("""
       defmodule Abc do
         use ElixirSense.Core.CompilerTest.Overridable
-        
+
         def foo(a) do
           &super(&1)
         end
@@ -549,7 +552,7 @@ defmodule ElixirSense.Core.CompilerTest do
         e in ArgumentError ->
           e
       catch
-        {k, e} ->
+        k, e ->
           {k, e}
       else
         _ -> :ok
@@ -662,7 +665,7 @@ defmodule ElixirSense.Core.CompilerTest do
       assert_expansion_env("""
       defmodule Abc do
         use ElixirSense.Core.CompilerTest.Overridable
-        
+
         def foo(a) do
           super(a + 1)
         end
@@ -722,7 +725,11 @@ defmodule ElixirSense.Core.CompilerTest do
           Compiler.expand(
             ast,
             %State{
-              prematch: Code.get_compiler_option(:on_undefined_variable) || :warn
+              prematch:
+                if(Version.match?(System.version(), ">= 1.18.0"),
+                  do: :none,
+                  else: Code.get_compiler_option(:on_undefined_variable)
+                ) || :warn
             },
             Compiler.env()
           )
@@ -944,6 +951,13 @@ defmodule ElixirSense.Core.CompilerTest do
   defp clean_capture_arg(ast) do
     {ast, _} =
       Macro.prewalk(ast, nil, fn
+        {{:., _, [:elixir_quote, :shallow_validate_ast]}, _, [inner]} = node, state ->
+          if Version.match?(System.version(), "< 1.18.0") do
+            {inner, state}
+          else
+            {node, state}
+          end
+
         {{:., dot_meta, target}, call_meta, args}, state ->
           dot_meta = Keyword.delete(dot_meta, :column_correction)
           {{{:., dot_meta, target}, call_meta, args}, state}
@@ -970,6 +984,16 @@ defmodule ElixirSense.Core.CompilerTest do
   defp clean_capture_arg_elixir(ast) do
     {ast, _} =
       Macro.prewalk(ast, nil, fn
+        {:->, meta, args}, state ->
+          meta =
+            if Version.match?(System.version(), "< 1.18.0") do
+              Keyword.delete(meta, :generated)
+            else
+              meta
+            end
+
+          {{:->, meta, args}, state}
+
         {:capture, meta, nil} = _node, state ->
           # elixir changes the name to capture and does different counter tracking
           meta = Keyword.delete(meta, :counter)

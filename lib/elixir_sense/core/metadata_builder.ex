@@ -14,12 +14,12 @@ defmodule ElixirSense.Core.MetadataBuilder do
   def build(ast, cursor_position \\ nil) do
     state_initial = initial_state(cursor_position)
 
-    {_ast, state, _env} = Compiler.expand(ast, state_initial, Compiler.env())
+    {_ast, state, env} = Compiler.expand(ast, state_initial, Compiler.env())
 
     state
     |> State.remove_attributes_scope()
     |> State.remove_vars_scope(state_initial)
-    |> State.remove_module()
+    |> State.remove_module(env)
   end
 
   def initial_state(cursor_position) do
@@ -27,7 +27,10 @@ defmodule ElixirSense.Core.MetadataBuilder do
       cursor_position: cursor_position,
       prematch:
         if Version.match?(System.version(), ">= 1.15.0-dev") do
-          Code.get_compiler_option(:on_undefined_variable)
+          if(Version.match?(System.version(), ">= 1.18.0-dev"),
+            do: :none,
+            else: Code.get_compiler_option(:on_undefined_variable)
+          )
         else
           :warn
         end

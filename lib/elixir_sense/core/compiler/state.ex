@@ -452,12 +452,28 @@ defmodule ElixirSense.Core.Compiler.State do
     }
   end
 
-  def remove_module(%__MODULE__{} = state) do
+  def remove_module(%__MODULE__{} = state, env) do
+    current_module = env.module
+
+    mods_funs_to_positions =
+      if current_module do
+        state.mods_funs_to_positions
+        |> Map.update!({current_module, nil, nil}, fn info = %ModFunInfo{} ->
+          %{
+            info
+            | meta: Map.put(info.meta, :behaviours, Map.get(state.behaviours, current_module, []))
+          }
+        end)
+      else
+        state.mods_funs_to_positions
+      end
+
     %{
       state
       | doc_context: tl(state.doc_context),
         typedoc_context: tl(state.typedoc_context),
-        optional_callbacks_context: tl(state.optional_callbacks_context)
+        optional_callbacks_context: tl(state.optional_callbacks_context),
+        mods_funs_to_positions: mods_funs_to_positions
     }
   end
 
@@ -710,8 +726,15 @@ defmodule ElixirSense.Core.Compiler.State do
     %{s | vars: {read, write}}
   end
 
+  def prepare_write(s, %{context: nil}), do: prepare_write(s)
+  def prepare_write(s, _), do: s
+
   def prepare_write(%{vars: {read, _}} = s) do
     %{s | vars: {read, read}}
+  end
+
+  def close_write(%{vars: {_read, false}}, _) do
+    raise ArgumentError, message: "prepare_write not called"
   end
 
   def close_write(%{vars: {_read, write}} = s, %{vars: {_, false}}) do
@@ -722,9 +745,9 @@ defmodule ElixirSense.Core.Compiler.State do
     %{s | vars: {write, merge_vars(upper_write, write)}}
   end
 
-  defp merge_vars(v, v), do: v
+  def merge_vars(v, v), do: v
 
-  defp merge_vars(v1, v2) do
+  def merge_vars(v1, v2) do
     :maps.fold(
       fn k, m2, acc ->
         case Map.fetch(acc, k) do
@@ -1371,7 +1394,7 @@ defmodule ElixirSense.Core.Compiler.State do
               end_of_expression_meta ->
                 {
                   Keyword.fetch!(end_of_expression_meta, :line),
-                  Keyword.fetch!(end_of_expression_meta, :column)
+                  Keyword.get(end_of_expression_meta, :column, 1)
                 }
             end
 

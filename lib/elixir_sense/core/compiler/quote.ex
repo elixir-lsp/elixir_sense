@@ -10,7 +10,8 @@ defmodule ElixirSense.Core.Compiler.Quote do
             aliases_hygiene: nil,
             imports_hygiene: nil,
             unquote: true,
-            generated: false
+            generated: false,
+            shallow_validate: false
 
   def fun_to_quoted(function) do
     {:module, module} = :erlang.fun_info(function, :module)
@@ -81,7 +82,8 @@ defmodule ElixirSense.Core.Compiler.Quote do
       file: v_file,
       unquote: unquote,
       context: v_context,
-      generated: generated
+      generated: generated,
+      shallow_validate: true
     }
 
     {q, v_context, acc3}
@@ -182,8 +184,18 @@ defmodule ElixirSense.Core.Compiler.Quote do
     {{:{}, [], [:quote, meta(new_meta, q), [t_opts, t_arg]]}, state}
   end
 
-  defp do_quote({:unquote, meta, [expr]}, %__MODULE__{unquote: true}, state) when is_list(meta),
-    do: {expr, state}
+  defp do_quote(
+         {:unquote, meta, [expr]},
+         %__MODULE__{unquote: true, shallow_validate: validate},
+         state
+       )
+       when is_list(meta) do
+    if validate do
+      {{{:., meta, [:elixir_quote, :shallow_validate_ast]}, meta, [expr]}, state}
+    else
+      {expr, state}
+    end
+  end
 
   # Aliases
 
@@ -333,6 +345,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
     case Keyword.get(meta, :imports, false) == false &&
            Dispatch.find_imports(meta, name, e) do
       [_ | _] = imports ->
+        # trace_import_quoted(Imports, Meta, Name, E)
         keystore(:imports, keystore(:context, meta, q.context), imports)
 
       _ ->
@@ -496,7 +509,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
   defp annotate_def(other, _context), do: other
 
   defp do_escape({left, meta, right}, q = %{op: :prune_metadata}, state) when is_list(meta) do
-    tm = for {k, v} <- meta, k == :no_parens or k == :line, do: {k, v}
+    tm = for {k, v} <- meta, k == :no_parens or k == :line or k == :delimiter, do: {k, v}
     {tl, state} = do_quote(left, q, state)
     {tr, state} = do_quote(right, q, state)
     {{:{}, [], [tl, tm, tr]}, state}
@@ -546,7 +559,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
     end
   end
 
-  defp do_escape(other, _, state) when is_number(other) or is_pid(other) or is_atom(other),
+  defp do_escape(other, _, state) when is_number(other) or is_atom(other) or is_pid(other),
     do: {other, state}
 
   defp do_escape(fun, _, state) when is_function(fun) do

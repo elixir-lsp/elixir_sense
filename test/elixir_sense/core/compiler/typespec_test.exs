@@ -8,7 +8,7 @@ defmodule ElixirSense.Core.Compiler.TypespecTest do
   defp default_state,
     do: %State{
       prematch:
-        if Version.match?(System.version(), ">= 1.15.0-dev") do
+        if Version.match?(System.version(), ">= 1.15.0") do
           Code.get_compiler_option(:on_undefined_variable)
         else
           :warn

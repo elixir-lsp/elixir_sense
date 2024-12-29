@@ -41,6 +41,10 @@ defmodule ElixirSense.Core.SurroundContext do
     {:variable, :"#{charlist}", :any}
   end
 
+  defp to_binding_impl({:capture_arg, charlist}, _current_module) do
+    {:variable, :"#{charlist}", :any}
+  end
+
   defp to_binding_impl({:local_arity, charlist}, _current_module) do
     {nil, :"#{charlist}"}
   end
@@ -75,6 +79,10 @@ defmodule ElixirSense.Core.SurroundContext do
   end
 
   defp to_binding_impl({:unquoted_atom, charlist}, _current_module) do
+    {{:atom, :"#{charlist}"}, nil}
+  end
+
+  defp to_binding_impl({:key, charlist}, _current_module) do
     {{:atom, :"#{charlist}"}, nil}
   end
 

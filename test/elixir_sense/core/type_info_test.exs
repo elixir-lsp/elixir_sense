@@ -1,7 +1,6 @@
 defmodule ElixirSense.Core.TypeInfoTest do
   use ExUnit.Case, async: true
   alias ElixirSense.Core.TypeInfo
-  alias ElixirSenseExample.ModuleWithTypespecs.{Local, Remote}
 
   test "builtin_type_documentation" do
     assert [%{name: "any", params: [], spec: "@type any"}] =
