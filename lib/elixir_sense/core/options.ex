@@ -328,16 +328,17 @@ defmodule ElixirSense.Core.Options do
         named_args,
         stack
       ) do
-    remote =
+    maybe_remote_module =
       case remote do
-        atom when is_atom(atom) -> remote
-        {:__aliases__, _, list} -> Module.concat(list)
+        atom when is_atom(atom) -> {:ok, remote}
+        {:__aliases__, _, list} -> {:ok, Module.concat(list)}
+        _ -> :error
       end
 
-    case find_type(remote, type, args, metadata) do
-      {:ok, type, new_named_args} ->
-        expand_type(type, metadata, remote, new_named_args ++ named_args, stack)
-
+    with {:ok, remote_module} <- maybe_remote_module,
+         {:ok, type, new_named_args} <- find_type(remote, type, args, metadata) do
+      expand_type(type, metadata, remote, new_named_args ++ named_args, stack)
+    else
       :error ->
         {{:., dot_meta, [remote, type]}, call_meta, args}
     end
