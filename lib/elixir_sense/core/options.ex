@@ -108,7 +108,7 @@ defmodule ElixirSense.Core.Options do
       [] ->
         if Code.ensure_loaded?(module) do
           candidates =
-            ElixirSense.Core.Normalized.Code.get_docs(module, :docs)
+            (ElixirSense.Core.Normalized.Code.get_docs(module, :docs) || [])
             |> Enum.map(fn
               {{^function, ^arity}, _, kind, _, _, _meta} ->
                 {kind, arity, (arity - 1)..(arity - 1)}
