@@ -336,8 +336,8 @@ defmodule ElixirSense.Core.Options do
       end
 
     with {:ok, remote_module} <- maybe_remote_module,
-         {:ok, type, new_named_args} <- find_type(remote, type, args, metadata) do
-      expand_type(type, metadata, remote, new_named_args ++ named_args, stack)
+         {:ok, type, new_named_args} <- find_type(remote_module, type, args, metadata) do
+      expand_type(type, metadata, remote_module, new_named_args ++ named_args, stack)
     else
       :error ->
         {{:., dot_meta, [remote, type]}, call_meta, args}

@@ -224,7 +224,8 @@ defmodule ElixirSense.Core.OptionsTest do
       end
       """
 
-      assert {{:., _, [Foo, :foo]}, _, []} = expand(code, "Foo.foo()", Bar)
+      assert {{:., _, [{:__aliases__, [line: 1], [:Foo]}, :foo]}, _, []} =
+               expand(code, "Foo.foo()", Bar)
     end
 
     test "nested metadata type" do
