@@ -1240,6 +1240,36 @@ defmodule ElixirSense.Core.BindingTest do
                      %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
                    ],
                    current_module: MyMod,
+                   function: {:some, 0},
+                   specs: %{
+                     {MyMod, :fun, 0} => %SpecInfo{
+                       specs: ["@spec fun() :: %MyMod{}"]
+                     }
+                   },
+                   mods_funs: %{
+                     {MyMod, :fun, 0} => %ModFunInfo{
+                       params: [[]],
+                       type: :defp
+                     }
+                   },
+                   structs: %{
+                     MyMod => %StructInfo{
+                       fields: [abc: nil, __struct__: MyMod]
+                     }
+                   }
+                 }),
+                 {:variable, :ref, 1}
+               )
+
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   variables: [
+                     %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
+                   ],
+                   current_module: MyMod,
+                   function: nil,
                    specs: %{
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: %MyMod{}"]
@@ -1270,6 +1300,7 @@ defmodule ElixirSense.Core.BindingTest do
                      %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
                    ],
                    current_module: MyMod,
+                   function: {:some, 0},
                    specs: %{
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: t()"]
@@ -1305,6 +1336,7 @@ defmodule ElixirSense.Core.BindingTest do
                      %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
                    ],
                    current_module: MyMod,
+                   function: {:some, 0},
                    specs: %{
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: t()"]
@@ -1443,6 +1475,7 @@ defmodule ElixirSense.Core.BindingTest do
         @env
         |> Map.merge(%{
           current_module: MyMod,
+          function: {:some, 0},
           specs: %{
             {MyMod, :fun, 3} => %SpecInfo{
               specs: ["@spec fun(integer(), integer(), any()) :: %MyMod{}"]

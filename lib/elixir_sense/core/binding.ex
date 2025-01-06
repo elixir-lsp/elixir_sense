@@ -13,6 +13,7 @@ defmodule ElixirSense.Core.Binding do
             variables: [],
             attributes: [],
             current_module: nil,
+            function: nil,
             functions: [],
             macros: [],
             specs: %{},
@@ -28,6 +29,7 @@ defmodule ElixirSense.Core.Binding do
       macros: env.macros,
       specs: metadata.specs,
       current_module: env.module,
+      function: env.function,
       types: metadata.types,
       mods_funs: metadata.mods_funs_to_positions
     }
@@ -308,7 +310,13 @@ defmodule ElixirSense.Core.Binding do
         {functions, macros}
         |> Introspection.combine_imports()
 
-      candidate_targets = List.wrap(current_module) ++ combined_imports ++ [Kernel.SpecialForms]
+      candidate_targets =
+        if current_module && env.function do
+          # locals are available only in defs
+          [current_module]
+        else
+          []
+        end ++ combined_imports ++ [Kernel.SpecialForms]
 
       # take first matching
       Enum.find_value(candidate_targets, fn
