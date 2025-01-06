@@ -998,6 +998,7 @@ defmodule ElixirSense.Core.Introspection do
          {nil, fun},
          %State.Env{
            module: current_module,
+           function: function,
            functions: functions,
            macros: macros
          },
@@ -1005,14 +1006,16 @@ defmodule ElixirSense.Core.Introspection do
          cursor_position
        ) do
     found_in_metadata =
-      Enum.any?(mods_funs, fn
-        {{^current_module, ^fun, _}, info} ->
-          State.ModFunInfo.get_category(info) != :macro or
-            List.last(info.positions) < cursor_position
+      if current_module && function do
+        Enum.any?(mods_funs, fn
+          {{^current_module, ^fun, _}, info} ->
+            State.ModFunInfo.get_category(info) != :macro or
+              List.last(info.positions) < cursor_position
 
-        _ ->
-          false
-      end)
+          _ ->
+            false
+        end)
+      end
 
     if found_in_metadata do
       {current_module, fun}

@@ -321,7 +321,17 @@ defmodule ElixirSense.Core.IntrospectionTest do
         assert {nil, :not_existing, false, nil} =
                  actual_mod_fun(
                    {nil, :not_existing},
-                   %Env{module: MyModule},
+                   %Env{module: MyModule, function: {:foo, 1}},
+                   mod_fun,
+                   %{},
+                   {1, 1},
+                   false
+                 )
+
+        assert {nil, :info, false, nil} =
+                 actual_mod_fun(
+                   {nil, :info},
+                   %Env{module: MyModule, function: nil},
                    mod_fun,
                    %{},
                    {1, 1},
@@ -331,7 +341,7 @@ defmodule ElixirSense.Core.IntrospectionTest do
         assert {MyModule, :info, true, :mod_fun} =
                  actual_mod_fun(
                    {nil, :info},
-                   %Env{module: MyModule},
+                   %Env{module: MyModule, function: {:foo, 1}},
                    mod_fun,
                    %{},
                    {1, 1},
