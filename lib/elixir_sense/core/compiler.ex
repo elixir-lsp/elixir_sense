@@ -855,6 +855,25 @@ defmodule ElixirSense.Core.Compiler do
       |> Enum.reduce(state, fn fun, state ->
         state_orig = state
 
+        {fun, state} =
+          case fun do
+            {:__cursor__, _, list} when is_list(list) ->
+              fa =
+                case list do
+                  [{f, _, a} | _] ->
+                    {f, length(a || [])}
+
+                  _ ->
+                    {:__unknown__, 0}
+                end
+
+              {expanded_fun, state, _} = expand(fun, state, %{env | function: fa})
+              {expanded_fun, state}
+
+            _ ->
+              {fun, state}
+          end
+
         {fun, state, has_unquotes} =
           if __MODULE__.Quote.has_unquotes(fun) do
             state = State.new_vars_scope(state)
@@ -1682,14 +1701,23 @@ defmodule ElixirSense.Core.Compiler do
        )
        when module != nil and
               def_kind in [:def, :defp, :defmacro, :defmacrop, :defguard, :defguardp] do
-    state =
+    {call, state} =
       case call do
         {:__cursor__, _, list} when is_list(list) ->
-          {_, state, _} = expand(call, state, %{env | function: {:__unknown__, 0}})
-          state
+          fa =
+            case list do
+              [{f, _, a} | _] ->
+                {f, length(a || [])}
+
+              _ ->
+                {:__unknown__, 0}
+            end
+
+          {expanded_call, state, _} = expand(call, state, %{env | function: fa})
+          {expanded_call, state}
 
         _ ->
-          state
+          {call, state}
       end
 
     state_orig = state

@@ -504,7 +504,7 @@ defmodule ElixirSense.Core.Source do
 
   defp find_cursor_in_params(params, call, meta) do
     case Enum.reverse(params) do
-      [{:__cursor__, _, []} | rest] ->
+      [{:__cursor__, _, list} | rest] when is_list(list) ->
         {:ok,
          %{
            call: call,
@@ -518,7 +518,7 @@ defmodule ElixirSense.Core.Source do
 
       [keyword_list | rest] when is_list(keyword_list) ->
         case Enum.reverse(keyword_list) do
-          [{:__cursor__, _, []} | kl_rest] ->
+          [{:__cursor__, _, list} | kl_rest] when is_list(list) ->
             {:ok,
              %{
                call: call,
@@ -530,7 +530,7 @@ defmodule ElixirSense.Core.Source do
                option: nil
              }}
 
-          [{atom, {:__cursor__, _, []}} | kl_rest] when is_atom(atom) ->
+          [{atom, {:__cursor__, _, list}} | kl_rest] when is_atom(atom) and is_list(list) ->
             {:ok,
              %{
                call: call,

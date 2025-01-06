@@ -11,8 +11,14 @@ defmodule ElixirSense.Core.Compiler.Typespec do
 
   def type_to_signature({:"::", _, [{:__cursor__, _, args}, _]})
       when is_list(args) do
-    # type name replaced by cursor
-    {:__unknown__, []}
+    case args do
+      [{n, _, a} | _] ->
+        {n, a || []}
+
+      _ ->
+        # type name replaced by cursor
+        {:__unknown__, []}
+    end
   end
 
   def type_to_signature({:"::", _, [{name, _, args}, _]})
@@ -20,8 +26,14 @@ defmodule ElixirSense.Core.Compiler.Typespec do
       do: {name, args}
 
   def type_to_signature({:__cursor__, _, args}) when is_list(args) do
-    # type name replaced by cursor
-    {:__unknown__, []}
+    case args do
+      [{n, _, a} | _] ->
+        {n, a || []}
+
+      _ ->
+        # type name replaced by cursor
+        {:__unknown__, []}
+    end
   end
 
   def type_to_signature({name, _, args}) when is_atom(name) and name != :"::" do

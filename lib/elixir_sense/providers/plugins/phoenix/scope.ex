@@ -16,7 +16,7 @@ defmodule ElixirSense.Providers.Plugins.Phoenix.Scope do
   end
 
   defp get_scopes(ast) do
-    path = Macro.path(ast, &match?({:__cursor__, _, _}, &1))
+    path = Macro.path(ast, &match?({:__cursor__, _, list} when is_list(list), &1))
 
     scopes =
       path
