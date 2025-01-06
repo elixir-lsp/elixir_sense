@@ -572,8 +572,8 @@ defmodule ElixirSense.Core.Source do
   end
 
   def get_mod_fun([{:__MODULE__, _, nil}, fun], binding_env) do
-    if binding_env.current_module != nil do
-      {{binding_env.current_module, false}, fun}
+    if binding_env.module != nil do
+      {{binding_env.module, false}, fun}
     end
   end
 
@@ -607,9 +607,9 @@ defmodule ElixirSense.Core.Source do
   end
 
   def get_mod([{:__MODULE__, _, nil} | rest], binding_env) do
-    if binding_env.current_module != nil do
+    if binding_env.module != nil do
       mod =
-        binding_env.current_module
+        binding_env.module
         |> Module.split()
         |> Kernel.++(rest)
         |> Module.concat()

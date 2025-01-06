@@ -256,7 +256,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :v,
@@ -302,7 +302,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :abc} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [%VarInfo{version: 1, name: :v, type: {:atom, :abc}}]),
+                 |> Map.put(:vars, [%VarInfo{version: 1, name: :v, type: {:atom, :abc}}]),
                  {:variable, :v, 1}
                )
     end
@@ -311,7 +311,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :abc} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :v, type: {:atom, :foo}},
                    %VarInfo{version: 3, name: :v, type: {:atom, :abc}},
                    %VarInfo{version: 2, name: :v, type: {:atom, :bar}}
@@ -324,7 +324,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert nil ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [%VarInfo{version: 1, name: :v, type: {:variable, :v, 1}}]),
+                 |> Map.put(:vars, [%VarInfo{version: 1, name: :v, type: {:variable, :v, 1}}]),
                  {:variable, :v, 1}
                )
     end
@@ -335,7 +335,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [%VarInfo{version: 1, name: :v, type: {:integer, 1}}]),
+                 |> Map.put(:vars, [%VarInfo{version: 1, name: :v, type: {:integer, 1}}]),
                  {:variable, :v, 2}
                )
     end
@@ -364,7 +364,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 2, [nil, {:atom, :abc}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :tuple,
@@ -380,7 +380,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :a} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{version: 1, name: :ref, type: {:tuple_nth, {:variable, :tuple, 1}, 1}}
                  ]),
@@ -392,7 +392,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :abc}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :list, type: {:list, {:variable, :a, 1}}},
                    %VarInfo{version: 1, name: :a, type: {:atom, :abc}}
                  ]),
@@ -404,7 +404,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :abc} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :map,
@@ -418,7 +418,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :abc} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :struct,
@@ -438,7 +438,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert nil ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :map,
@@ -452,7 +452,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert nil ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :map, type: {:map_key, {:variable, :a, 1}, nil}},
                    %VarInfo{version: 1, name: :a, type: {:map, [x: {:atom, :abc}], nil}}
                  ]),
@@ -464,7 +464,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :abc} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :list, type: {:for_expression, {:variable, :a, 1}}},
                    %VarInfo{version: 1, name: :a, type: {:list, {:atom, :abc}}}
                  ]),
@@ -474,7 +474,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 2, [nil, {:atom, :abc}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :map, type: {:for_expression, {:variable, :a, 1}}},
                    %VarInfo{version: 1, name: :a, type: {:map, [x: {:atom, :abc}], nil}}
                  ]),
@@ -484,7 +484,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :list, type: {:list_head, {:variable, :a, 1}}},
                    %VarInfo{version: 1, name: :a, type: {:list, :empty}}
                  ]),
@@ -496,7 +496,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :abc} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :list, type: {:list_head, {:variable, :a, 1}}},
                    %VarInfo{version: 1, name: :a, type: {:list, {:atom, :abc}}}
                  ]),
@@ -506,7 +506,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :list, type: {:list_head, {:variable, :a, 1}}},
                    %VarInfo{version: 1, name: :a, type: {:list, :empty}}
                  ]),
@@ -518,7 +518,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :abc}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :list, type: {:list_tail, {:variable, :a, 1}}},
                    %VarInfo{version: 1, name: :a, type: {:list, {:atom, :abc}}}
                  ]),
@@ -528,7 +528,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :list, type: {:list_tail, {:variable, :a, 1}}},
                    %VarInfo{version: 1, name: :a, type: {:list, :empty}}
                  ]),
@@ -540,7 +540,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :a} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :map, type: {:map, [field: {:atom, :a}], nil}},
                    %VarInfo{
                      version: 1,
@@ -556,7 +556,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :map, type: {:map, [field: {:atom, :a}], nil}},
                    %VarInfo{
                      version: 1,
@@ -572,7 +572,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert nil ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :map, type: {:map, [field: {:atom, :a}], nil}},
                    %VarInfo{
                      version: 1,
@@ -588,7 +588,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :abc} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :map,
@@ -610,7 +610,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert nil ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :map,
@@ -632,7 +632,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :map,
@@ -654,7 +654,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert nil ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :ref, type: {:call, nil, :not_existing, []}}
                  ]),
                  {:variable, :ref, 1}
@@ -663,7 +663,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :ref, type: {:call, :none, :not_existing, []}}
                  ]),
                  {:variable, :ref, 1}
@@ -672,7 +672,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -685,7 +685,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -700,7 +700,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -717,7 +717,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -733,7 +733,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -749,7 +749,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert nil ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -764,7 +764,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :asd} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -779,7 +779,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 2, [atom: :ok, atom: :abc]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -794,7 +794,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, :empty} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -808,7 +808,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, nil} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -822,7 +822,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, nil} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -836,7 +836,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -850,7 +850,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -864,7 +864,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -878,7 +878,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -892,7 +892,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -906,7 +906,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -920,7 +920,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :ok}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -934,7 +934,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:tuple, 2, [nil, nil]}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -948,7 +948,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:tuple, 2, [nil, {:atom, :ok}]}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -962,7 +962,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:tuple, 2, [{:atom, :some}, {:atom, :ok}]}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -978,7 +978,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert nil ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -993,7 +993,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:integer, 44} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1013,7 +1013,7 @@ defmodule ElixirSense.Core.BindingTest do
               nil} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1031,7 +1031,7 @@ defmodule ElixirSense.Core.BindingTest do
               nil} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1049,7 +1049,7 @@ defmodule ElixirSense.Core.BindingTest do
               nil} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1064,7 +1064,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:map, [{:abc, {:atom, :asd}}, {:cde, {:atom, :asd}}], nil} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1079,7 +1079,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:map, [abc: nil], nil} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1094,7 +1094,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:map, [abc: nil], nil} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1109,7 +1109,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:union, [{:map, [abc: {:atom, String}], nil}, {:atom, nil}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1124,7 +1124,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, String} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1142,7 +1142,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:map, [abc: nil], nil} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1158,7 +1158,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:union, [{:map, [abc: nil], nil}, {:atom, nil}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1173,7 +1173,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1190,7 +1190,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert nil ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1204,7 +1204,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert nil ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1220,7 +1220,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:map, [abc: nil], nil} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1236,17 +1236,17 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
                    ],
-                   current_module: MyMod,
+                   module: MyMod,
                    function: {:some, 0},
                    specs: %{
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: %MyMod{}"]
                      }
                    },
-                   mods_funs: %{
+                   mods_funs_to_positions: %{
                      {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :defp
@@ -1265,17 +1265,17 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
                    ],
-                   current_module: MyMod,
+                   module: MyMod,
                    function: nil,
                    specs: %{
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: %MyMod{}"]
                      }
                    },
-                   mods_funs: %{
+                   mods_funs_to_positions: %{
                      {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :defp
@@ -1296,17 +1296,17 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
                    ],
-                   current_module: MyMod,
+                   module: MyMod,
                    function: {:some, 0},
                    specs: %{
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: t()"]
                      }
                    },
-                   mods_funs: %{
+                   mods_funs_to_positions: %{
                      {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :def
@@ -1332,17 +1332,17 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
                    ],
-                   current_module: MyMod,
+                   module: MyMod,
                    function: {:some, 0},
                    specs: %{
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: t()"]
                      }
                    },
-                   mods_funs: %{
+                   mods_funs_to_positions: %{
                      {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :def
@@ -1369,16 +1369,16 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{version: 1, name: :ref, type: {:call, {:atom, MyMod}, :fun, []}}
                    ],
-                   current_module: SomeMod,
+                   module: SomeMod,
                    specs: %{
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: t()"]
                      }
                    },
-                   mods_funs: %{
+                   mods_funs_to_positions: %{
                      {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :def
@@ -1404,16 +1404,16 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{version: 1, name: :ref, type: {:call, {:atom, MyMod}, :fun, []}}
                    ],
-                   current_module: SomeMod,
+                   module: SomeMod,
                    specs: %{
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: t()"]
                      }
                    },
-                   mods_funs: %{
+                   mods_funs_to_positions: %{
                      {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :def
@@ -1440,16 +1440,16 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{version: 1, name: :ref, type: {:call, {:atom, MyMod}, :fun, []}}
                    ],
-                   current_module: SomeMod,
+                   module: SomeMod,
                    specs: %{
                      {MyMod, :fun, 0} => %SpecInfo{
                        specs: ["@spec fun() :: t()"]
                      }
                    },
-                   mods_funs: %{
+                   mods_funs_to_positions: %{
                      {MyMod, :fun, 0} => %ModFunInfo{
                        params: [[]],
                        type: :defp
@@ -1474,14 +1474,14 @@ defmodule ElixirSense.Core.BindingTest do
       env =
         @env
         |> Map.merge(%{
-          current_module: MyMod,
+          module: MyMod,
           function: {:some, 0},
           specs: %{
             {MyMod, :fun, 3} => %SpecInfo{
               specs: ["@spec fun(integer(), integer(), any()) :: %MyMod{}"]
             }
           },
-          mods_funs: %{
+          mods_funs_to_positions: %{
             {MyMod, :fun, 3} => %ModFunInfo{
               params: [
                 [
@@ -1503,7 +1503,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
                  ]),
                  {:variable, :ref, 1}
@@ -1512,7 +1512,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
                Binding.expand(
                  env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, [nil]}}
                  ]),
                  {:variable, :ref, 1}
@@ -1521,7 +1521,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
                Binding.expand(
                  env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, [nil, nil]}}
                  ]),
                  {:variable, :ref, 1}
@@ -1530,7 +1530,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
                Binding.expand(
                  env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, [nil, nil, nil]}}
                  ]),
                  {:variable, :ref, 1}
@@ -1539,7 +1539,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1554,7 +1554,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1567,7 +1567,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, String} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1581,7 +1581,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, String} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1596,7 +1596,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, String} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1611,7 +1611,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert :none ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{
                      version: 1,
                      name: :ref,
@@ -1629,7 +1629,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{version: 1, name: :ref, type: {:local_call, :f02, []}}
                    ],
                    functions: [{ElixirSenseExample.FunctionsWithReturnSpec, [{:f02, 0}]}]
@@ -1643,7 +1643,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{version: 1, name: :ref, type: {:local_call, :f02, []}}
                    ]
                  }),
@@ -1656,7 +1656,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{version: 1, name: :ref, type: {:variable, :f02, 1}}
                    ],
                    functions: [{ElixirSenseExample.FunctionsWithReturnSpec, [{:f02, 0}]}]
@@ -1670,7 +1670,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{
                        version: 1,
                        name: :ref,
@@ -1690,7 +1690,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{
                        version: 1,
                        name: :ref,
@@ -1710,7 +1710,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env
                  |> Map.merge(%{
-                   variables: [
+                   vars: [
                      %VarInfo{
                        version: 1,
                        name: :ref,
@@ -1755,7 +1755,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:integer, 1}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :a, type: {:integer, 1}},
                    %VarInfo{version: 1, name: :b, type: {:integer, 2}}
                  ]),
@@ -1765,7 +1765,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:integer, 1}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :a, type: {:integer, 1}},
                    %VarInfo{version: 1, name: :b, type: {:integer, 2}}
                  ]),
@@ -1778,7 +1778,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :a} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -1792,7 +1792,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :a} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -1810,7 +1810,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 2, [{:atom, :b}, {:atom, :a}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -1826,7 +1826,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 2, [{:atom, :b}, {:atom, :a}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -1844,7 +1844,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:integer, 2} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -1858,7 +1858,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:integer, 2} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -1874,7 +1874,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :a} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :list, type: {:list, {:atom, :a}}},
                    %VarInfo{
                      version: 1,
@@ -1888,7 +1888,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:atom, :a} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :list, type: {:list, {:atom, :a}}},
                    %VarInfo{
                      version: 1,
@@ -1904,7 +1904,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :a}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :list, type: {:list, {:atom, :a}}},
                    %VarInfo{
                      version: 1,
@@ -1918,7 +1918,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :a}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :list, type: {:list, {:atom, :a}}},
                    %VarInfo{
                      version: 1,
@@ -1936,7 +1936,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 3, [nil, {:atom, :a}, {:atom, :b}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -1950,7 +1950,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 3, [nil, {:atom, :a}, {:atom, :b}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -1968,7 +1968,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 1, [{:atom, :a}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -1984,7 +1984,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 1, [{:atom, :a}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -2002,7 +2002,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 3, [{:atom, :b}, nil, {:atom, :a}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -2018,7 +2018,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 3, [{:atom, :b}, nil, {:atom, :a}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 2, [nil, {:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -2036,7 +2036,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :a}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 1, [{:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -2050,7 +2050,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, :empty} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 0, []}},
                    %VarInfo{
                      version: 1,
@@ -2064,7 +2064,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:list, {:atom, :a}} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:tuple, 1, [{:atom, :a}]}},
                    %VarInfo{
                      version: 1,
@@ -2080,7 +2080,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 2, [{:atom, :a}, {:atom, :a}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:atom, :a}},
                    %VarInfo{
                      version: 1,
@@ -2096,7 +2096,7 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:tuple, 2, [{:atom, :a}, {:atom, :a}]} ==
                Binding.expand(
                  @env
-                 |> Map.put(:variables, [
+                 |> Map.put(:vars, [
                    %VarInfo{version: 1, name: :tuple, type: {:atom, :a}},
                    %VarInfo{
                      version: 1,
@@ -2430,7 +2430,7 @@ defmodule ElixirSense.Core.BindingTest do
                        fields: [abc: nil, formatted: nil, __struct__: State]
                      }
                    },
-                   variables: [
+                   vars: [
                      %VarInfo{version: 1, name: :socket, type: nil}
                    ]
                  }),

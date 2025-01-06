@@ -10,28 +10,28 @@ defmodule ElixirSense.Core.Binding do
 
   # TODO refactor to use env
   defstruct structs: %{},
-            variables: [],
+            vars: [],
             attributes: [],
-            current_module: nil,
+            module: nil,
             function: nil,
             functions: [],
             macros: [],
             specs: %{},
             types: %{},
-            mods_funs: %{}
+            mods_funs_to_positions: %{}
 
   def from_env(%State.Env{} = env, %ElixirSense.Core.Metadata{} = metadata) do
     %Binding{
-      variables: env.vars,
+      vars: env.vars,
       attributes: env.attributes,
       structs: metadata.structs,
       functions: env.functions,
       macros: env.macros,
       specs: metadata.specs,
-      current_module: env.module,
+      module: env.module,
       function: env.function,
       types: metadata.types,
-      mods_funs: metadata.mods_funs_to_positions
+      mods_funs_to_positions: metadata.mods_funs_to_positions
     }
   end
 
@@ -86,7 +86,7 @@ defmodule ElixirSense.Core.Binding do
     expand(env, combined, stack)
   end
 
-  def do_expand(%Binding{variables: variables} = env, {:variable, variable, version}, stack) do
+  def do_expand(%Binding{vars: variables} = env, {:variable, variable, version}, stack) do
     sorted_variables = Enum.sort_by(variables, &{&1.name, -&1.version})
 
     type =
@@ -299,7 +299,7 @@ defmodule ElixirSense.Core.Binding do
 
   # local call
   def do_expand(
-        %Binding{functions: functions, macros: macros, current_module: current_module} = env,
+        %Binding{functions: functions, macros: macros} = env,
         {:local_call, function, arguments},
         stack
       ) do
@@ -311,9 +311,9 @@ defmodule ElixirSense.Core.Binding do
         |> Introspection.combine_imports()
 
       candidate_targets =
-        if current_module && env.function do
+        if env.module && env.function do
           # locals are available only in defs
-          [current_module]
+          [env.module]
         else
           []
         end ++ combined_imports ++ [Kernel.SpecialForms]
@@ -329,7 +329,7 @@ defmodule ElixirSense.Core.Binding do
 
         candidate ->
           # include private from current module
-          include_private = candidate == current_module
+          include_private = candidate == env.module
           expand_call(env, {:atom, candidate}, function, arguments, include_private, stack)
       end)
       |> drop_no_spec
@@ -1324,7 +1324,7 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp expand_call_from_metadata(
-         %Binding{specs: specs, mods_funs: mods_funs} = env,
+         %Binding{specs: specs, mods_funs_to_positions: mods_funs_to_positions} = env,
          mod,
          fun,
          arity,
@@ -1332,7 +1332,7 @@ defmodule ElixirSense.Core.Binding do
          stack
        ) do
     arity =
-      Enum.find_value(mods_funs, nil, fn
+      Enum.find_value(mods_funs_to_positions, nil, fn
         {{^mod, ^fun, _}, %State.ModFunInfo{type: fun_type} = info}
         when (include_private and fun_type != :def) or
                fun_type in [:def, :defmacro, :defguard, :defdelegate] ->

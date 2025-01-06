@@ -65,7 +65,7 @@ defmodule ElixirSense.Core.SourceTest do
                pos: {{1, 17}, {1, nil}}
              } =
                which_func("var = __MODULE__.func(param1, par", %ElixirSense.Core.Binding{
-                 current_module: Mod
+                 module: Mod
                })
 
       assert %{
@@ -75,7 +75,7 @@ defmodule ElixirSense.Core.SourceTest do
                pos: {{1, 21}, {1, nil}}
              } =
                which_func("var = __MODULE__.Sub.func(param1, par", %ElixirSense.Core.Binding{
-                 current_module: Mod
+                 module: Mod
                })
     end
 
@@ -198,7 +198,7 @@ defmodule ElixirSense.Core.SourceTest do
 
       assert nil ==
                which_func("var = my_var.some(", %ElixirSense.Core.Binding{
-                 variables: [
+                 vars: [
                    %ElixirSense.Core.State.VarInfo{
                      name: "my_var",
                      version: 1,
