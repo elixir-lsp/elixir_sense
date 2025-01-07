@@ -464,7 +464,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "local call" do
-      assert type_of("foo(a)") == {:local_call, :foo, [{:variable, :a, 1}]}
+      assert type_of("foo(a)") == {:local_call, :foo, {1, 1}, [{:variable, :a, 1}]}
     end
 
     test "remote call" do

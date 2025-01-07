@@ -696,6 +696,41 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "remote call macro" do
+      # required
+      assert nil ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:vars, [
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.SameModuleWithSecMacro},
+                        :some_test_macro, []}
+                   }
+                 ])
+                 |> Map.put(:requires, [ElixirSenseExample.SameModuleWithSecMacro]),
+                 {:variable, :ref, 1}
+               )
+
+      # not required
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:vars, [
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type:
+                       {:call, {:atom, ElixirSenseExample.SameModuleWithSecMacro},
+                        :some_test_macro, []}
+                   }
+                 ]),
+                 {:variable, :ref, 1}
+               )
+    end
+
     test "remote call not existing fun" do
       assert :none ==
                Binding.expand(
@@ -1237,7 +1272,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.merge(%{
                    vars: [
-                     %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
+                     %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, {1, 1}, []}}
                    ],
                    module: MyMod,
                    function: {:some, 0},
@@ -1266,7 +1301,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.merge(%{
                    vars: [
-                     %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
+                     %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, {1, 1}, []}}
                    ],
                    module: MyMod,
                    function: nil,
@@ -1291,13 +1326,108 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "local call metadata macro returning struct" do
+      # before definition
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   vars: [
+                     %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, {1, 1}, []}}
+                   ],
+                   module: MyMod,
+                   function: {:some, 0},
+                   specs: %{
+                     {MyMod, :fun, 0} => %SpecInfo{
+                       specs: ["@spec fun() :: Macro.t()"]
+                     }
+                   },
+                   mods_funs_to_positions: %{
+                     {MyMod, :fun, 0} => %ModFunInfo{
+                       params: [[]],
+                       positions: [{10, 1}],
+                       type: :defmacrop
+                     }
+                   },
+                   structs: %{
+                     MyMod => %StructInfo{
+                       fields: [abc: nil, __struct__: MyMod]
+                     }
+                   }
+                 }),
+                 {:variable, :ref, 1}
+               )
+
+      # after definition - we do not return Macro as AST return type is generally dynamic
+      assert nil ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   vars: [
+                     %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, {20, 1}, []}}
+                   ],
+                   module: MyMod,
+                   function: {:some, 0},
+                   specs: %{
+                     {MyMod, :fun, 0} => %SpecInfo{
+                       specs: ["@spec fun() :: Macro.t()"]
+                     }
+                   },
+                   mods_funs_to_positions: %{
+                     {MyMod, :fun, 0} => %ModFunInfo{
+                       params: [[]],
+                       positions: [{10, 1}],
+                       type: :defmacrop
+                     }
+                   },
+                   structs: %{
+                     MyMod => %StructInfo{
+                       fields: [abc: nil, __struct__: MyMod]
+                     }
+                   }
+                 }),
+                 {:variable, :ref, 1}
+               )
+
+      # in module body
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   vars: [
+                     %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, {20, 1}, []}}
+                   ],
+                   module: MyMod,
+                   function: nil,
+                   specs: %{
+                     {MyMod, :fun, 0} => %SpecInfo{
+                       specs: ["@spec fun() :: %MyMod{}"]
+                     }
+                   },
+                   mods_funs_to_positions: %{
+                     {MyMod, :fun, 0} => %ModFunInfo{
+                       params: [[]],
+                       positions: [{10, 1}],
+                       type: :defp
+                     }
+                   },
+                   structs: %{
+                     MyMod => %StructInfo{
+                       fields: [abc: nil, __struct__: MyMod]
+                     }
+                   }
+                 }),
+                 {:variable, :ref, 1}
+               )
+    end
+
     test "local call metadata fun returning local type expanding to struct" do
       assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
                    vars: [
-                     %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
+                     %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, {1, 1}, []}}
                    ],
                    module: MyMod,
                    function: {:some, 0},
@@ -1333,7 +1463,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.merge(%{
                    vars: [
-                     %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
+                     %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, {1, 1}, []}}
                    ],
                    module: MyMod,
                    function: {:some, 0},
@@ -1392,6 +1522,58 @@ defmodule ElixirSense.Core.BindingTest do
                    types: %{
                      {MyMod, :t, 0} => %TypeInfo{
                        specs: ["@type t() :: %MyMod{}"]
+                     }
+                   }
+                 }),
+                 {:variable, :ref, 1}
+               )
+    end
+
+    test "remote call metadata public macro" do
+      # required
+      assert nil ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   vars: [
+                     %VarInfo{version: 1, name: :ref, type: {:call, {:atom, MyMod}, :fun, []}}
+                   ],
+                   module: SomeMod,
+                   requires: [MyMod],
+                   specs: %{
+                     {MyMod, :fun, 0} => %SpecInfo{
+                       specs: ["@spec fun() :: Macro.t()"]
+                     }
+                   },
+                   mods_funs_to_positions: %{
+                     {MyMod, :fun, 0} => %ModFunInfo{
+                       params: [[]],
+                       type: :defmacro
+                     }
+                   }
+                 }),
+                 {:variable, :ref, 1}
+               )
+
+      # not required
+      assert :none ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   vars: [
+                     %VarInfo{version: 1, name: :ref, type: {:call, {:atom, MyMod}, :fun, []}}
+                   ],
+                   module: SomeMod,
+                   requires: [],
+                   specs: %{
+                     {MyMod, :fun, 0} => %SpecInfo{
+                       specs: ["@spec fun() :: Macro.t()"]
+                     }
+                   },
+                   mods_funs_to_positions: %{
+                     {MyMod, :fun, 0} => %ModFunInfo{
+                       params: [[]],
+                       type: :defmacro
                      }
                    }
                  }),
@@ -1504,7 +1686,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  env
                  |> Map.put(:vars, [
-                   %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, []}}
+                   %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, {1, 1}, []}}
                  ]),
                  {:variable, :ref, 1}
                )
@@ -1513,7 +1695,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  env
                  |> Map.put(:vars, [
-                   %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, [nil]}}
+                   %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, {1, 1}, [nil]}}
                  ]),
                  {:variable, :ref, 1}
                )
@@ -1522,7 +1704,7 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  env
                  |> Map.put(:vars, [
-                   %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, [nil, nil]}}
+                   %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, {1, 1}, [nil, nil]}}
                  ]),
                  {:variable, :ref, 1}
                )
@@ -1531,7 +1713,11 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  env
                  |> Map.put(:vars, [
-                   %VarInfo{version: 1, name: :ref, type: {:local_call, :fun, [nil, nil, nil]}}
+                   %VarInfo{
+                     version: 1,
+                     name: :ref,
+                     type: {:local_call, :fun, {1, 1}, [nil, nil, nil]}
+                   }
                  ]),
                  {:variable, :ref, 1}
                )
@@ -1543,7 +1729,7 @@ defmodule ElixirSense.Core.BindingTest do
                    %VarInfo{
                      version: 1,
                      name: :ref,
-                     type: {:local_call, :fun, [nil, nil, nil, nil]}
+                     type: {:local_call, :fun, {1, 1}, [nil, nil, nil, nil]}
                    }
                  ]),
                  {:variable, :ref, 1}
@@ -1630,7 +1816,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.merge(%{
                    vars: [
-                     %VarInfo{version: 1, name: :ref, type: {:local_call, :f02, []}}
+                     %VarInfo{version: 1, name: :ref, type: {:local_call, :f02, {1, 1}, []}}
                    ],
                    functions: [{ElixirSenseExample.FunctionsWithReturnSpec, [{:f02, 0}]}]
                  }),
@@ -1644,7 +1830,7 @@ defmodule ElixirSense.Core.BindingTest do
                  @env
                  |> Map.merge(%{
                    vars: [
-                     %VarInfo{version: 1, name: :ref, type: {:local_call, :f02, []}}
+                     %VarInfo{version: 1, name: :ref, type: {:local_call, :f02, {1, 1}, []}}
                    ]
                  }),
                  {:variable, :ref, 1}
@@ -1759,7 +1945,7 @@ defmodule ElixirSense.Core.BindingTest do
                    %VarInfo{version: 1, name: :a, type: {:integer, 1}},
                    %VarInfo{version: 1, name: :b, type: {:integer, 2}}
                  ]),
-                 {:local_call, :++, [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
+                 {:local_call, :++, {1, 1}, [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
                )
 
       assert {:list, {:integer, 1}} ==
@@ -1783,7 +1969,7 @@ defmodule ElixirSense.Core.BindingTest do
                    %VarInfo{
                      version: 1,
                      name: :ref,
-                     type: {:local_call, :elem, [{:variable, :tuple, 1}, {:integer, 1}]}
+                     type: {:local_call, :elem, {1, 1}, [{:variable, :tuple, 1}, {:integer, 1}]}
                    }
                  ]),
                  {:variable, :ref, 1}
@@ -1816,7 +2002,7 @@ defmodule ElixirSense.Core.BindingTest do
                      version: 1,
                      name: :ref,
                      type:
-                       {:local_call, :put_elem,
+                       {:local_call, :put_elem, {1, 1},
                         [{:variable, :tuple, 1}, {:integer, 0}, {:atom, :b}]}
                    }
                  ]),
@@ -1849,7 +2035,7 @@ defmodule ElixirSense.Core.BindingTest do
                    %VarInfo{
                      version: 1,
                      name: :ref,
-                     type: {:local_call, :tuple_size, [{:variable, :tuple, 1}]}
+                     type: {:local_call, :tuple_size, {1, 1}, [{:variable, :tuple, 1}]}
                    }
                  ]),
                  {:variable, :ref, 1}
@@ -1879,7 +2065,7 @@ defmodule ElixirSense.Core.BindingTest do
                    %VarInfo{
                      version: 1,
                      name: :ref,
-                     type: {:local_call, :hd, [{:variable, :list, 1}]}
+                     type: {:local_call, :hd, {1, 1}, [{:variable, :list, 1}]}
                    }
                  ]),
                  {:variable, :ref, 1}
@@ -1909,7 +2095,7 @@ defmodule ElixirSense.Core.BindingTest do
                    %VarInfo{
                      version: 1,
                      name: :ref,
-                     type: {:local_call, :tl, [{:variable, :list, 1}]}
+                     type: {:local_call, :tl, {1, 1}, [{:variable, :list, 1}]}
                    }
                  ]),
                  {:variable, :ref, 1}

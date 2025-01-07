@@ -16,6 +16,7 @@ defmodule ElixirSense.Core.Binding do
             function: nil,
             functions: [],
             macros: [],
+            requires: [],
             specs: %{},
             types: %{},
             mods_funs_to_positions: %{}
@@ -27,6 +28,7 @@ defmodule ElixirSense.Core.Binding do
       structs: metadata.structs,
       functions: env.functions,
       macros: env.macros,
+      requires: env.requires,
       specs: metadata.specs,
       module: env.module,
       function: env.function,
@@ -94,10 +96,11 @@ defmodule ElixirSense.Core.Binding do
              var.name == variable and (var.version == version or version == :any)
            end) do
         nil ->
-          # no variable found - treat a local call
-          # this cannot happen if no parens call is missclassed as variable e.g. by
+          # no variable found - treat as a local call
+          # this can happen if no parens call is missclassed as variable e.g. by
           # Code.Fragment APIs
-          {:local_call, variable, []}
+          # TODO pass cursor position
+          {:local_call, variable, {1, 1}, []}
 
         %State.VarInfo{type: type} ->
           type
@@ -292,7 +295,7 @@ defmodule ElixirSense.Core.Binding do
     else
       expanded_target = expand(env, target, stack)
       # do not include private funs on remote call
-      expand_call(env, expanded_target, function, arguments, false, stack)
+      expand_call(env, expanded_target, function, arguments, false, nil, stack)
       |> drop_no_spec
     end
   end
@@ -300,7 +303,7 @@ defmodule ElixirSense.Core.Binding do
   # local call
   def do_expand(
         %Binding{functions: functions, macros: macros} = env,
-        {:local_call, function, arguments},
+        {:local_call, function, position, arguments},
         stack
       ) do
     if :none in arguments do
@@ -322,15 +325,22 @@ defmodule ElixirSense.Core.Binding do
       Enum.find_value(candidate_targets, fn
         {candidate, imported} ->
           if {function, length(arguments)} in imported do
-            expand_call(env, {:atom, candidate}, function, arguments, false, stack)
-          else
-            :none
+            expand_call(env, {:atom, candidate}, function, arguments, false, position, stack)
           end
 
         candidate ->
           # include private from current module
           include_private = candidate == env.module
-          expand_call(env, {:atom, candidate}, function, arguments, include_private, stack)
+
+          expand_call(
+            env,
+            {:atom, candidate},
+            function,
+            arguments,
+            include_private,
+            position,
+            stack
+          )
       end)
       |> drop_no_spec
     end
@@ -382,11 +392,11 @@ defmodule ElixirSense.Core.Binding do
   defp drop_no_spec(other), do: other
 
   # not supported
-  defp expand_call(_env, nil, _, _, _, _stack), do: nil
-  defp expand_call(_env, :none, _, _, _, _stack), do: :none
+  defp expand_call(_env, nil, _, _, _, _, _stack), do: nil
+  defp expand_call(_env, :none, _, _, _, _, _stack), do: :none
 
   # map field access
-  defp expand_call(env, {:map, fields, _}, field, arity, _, stack) do
+  defp expand_call(env, {:map, fields, _}, field, arity, _, _, stack) do
     # field access is a call with arity 0, other are not allowed
     if arity == [] do
       expand(env, fields[field], stack)
@@ -396,7 +406,7 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # struct field access
-  defp expand_call(env, {:struct, fields, _, _}, field, arity, _, stack) do
+  defp expand_call(env, {:struct, fields, _, _}, field, arity, _, _, stack) do
     # field access is a call with arity 0, other are not allowed
     if arity == [] do
       expand(env, fields[field], stack)
@@ -411,6 +421,7 @@ defmodule ElixirSense.Core.Binding do
          name,
          [list_candidate | _],
          _include_private,
+         _,
          stack
        )
        when name in [:++, :--] and module in [Kernel, :erlang] do
@@ -432,6 +443,7 @@ defmodule ElixirSense.Core.Binding do
          :elem,
          [tuple_candidate, n_candidate],
          _include_private,
+         _,
          stack
        ) do
     case expand(env, n_candidate, stack) do
@@ -453,6 +465,7 @@ defmodule ElixirSense.Core.Binding do
          :element,
          [n_candidate, tuple_candidate],
          _include_private,
+         _,
          stack
        ) do
     case expand(env, n_candidate, stack) do
@@ -473,6 +486,7 @@ defmodule ElixirSense.Core.Binding do
          :put_elem,
          [tuple_candidate, n_candidate, value],
          _include_private,
+         _,
          stack
        ) do
     with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
@@ -495,6 +509,7 @@ defmodule ElixirSense.Core.Binding do
          :setelement,
          [n_candidate, tuple_candidate, value],
          _include_private,
+         _,
          stack
        ) do
     with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
@@ -516,6 +531,7 @@ defmodule ElixirSense.Core.Binding do
          fun,
          [tuple_candidate, value],
          _include_private,
+         _,
          stack
        )
        when (module == Tuple and fun == :append) or (module == :erlang and fun == :append_element) do
@@ -537,6 +553,7 @@ defmodule ElixirSense.Core.Binding do
          :delete_at,
          [tuple_candidate, n_candidate],
          _include_private,
+         _,
          stack
        ) do
     with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
@@ -558,6 +575,7 @@ defmodule ElixirSense.Core.Binding do
          :delete_element,
          [n_candidate, tuple_candidate],
          _include_private,
+         _,
          stack
        ) do
     with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
@@ -578,6 +596,7 @@ defmodule ElixirSense.Core.Binding do
          :insert_at,
          [tuple_candidate, n_candidate, value],
          _include_private,
+         _,
          stack
        ) do
     with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
@@ -600,6 +619,7 @@ defmodule ElixirSense.Core.Binding do
          :insert_element,
          [n_candidate, tuple_candidate, value],
          _include_private,
+         _,
          stack
        ) do
     with {:tuple, elems_count, elems} <- expand(env, tuple_candidate, stack),
@@ -621,6 +641,7 @@ defmodule ElixirSense.Core.Binding do
          fun,
          [tuple_candidate],
          _include_private,
+         _,
          stack
        )
        when (module == Tuple and fun == :to_list) or (module == :erlang and fun == :tuple_to_list) do
@@ -644,6 +665,7 @@ defmodule ElixirSense.Core.Binding do
          :tuple_size,
          [tuple_candidate],
          _include_private,
+         _,
          stack
        )
        when module in [Kernel, :erlang] do
@@ -664,6 +686,7 @@ defmodule ElixirSense.Core.Binding do
          fun,
          [value, n_candidate],
          _include_private,
+         _,
          stack
        )
        when (module == Tuple and fun == :duplicate) or (module == :erlang and fun == :make_tuple) do
@@ -697,6 +720,7 @@ defmodule ElixirSense.Core.Binding do
          :hd,
          [list_candidate],
          _include_private,
+         _,
          stack
        )
        when module in [Kernel, :erlang] do
@@ -719,6 +743,7 @@ defmodule ElixirSense.Core.Binding do
          :tl,
          [list_candidate],
          _include_private,
+         _,
          stack
        )
        when module in [Kernel, :erlang] do
@@ -740,6 +765,7 @@ defmodule ElixirSense.Core.Binding do
          name,
          [list_candidate | _],
          _include_private,
+         _,
          stack
        )
        when name in [:at, :fetch, :fetch!, :find, :max, :max_by, :min, :min_by, :random] do
@@ -765,6 +791,7 @@ defmodule ElixirSense.Core.Binding do
          name,
          [list_candidate | _],
          _include_private,
+         _,
          stack
        )
        when name in [:split, :split_while] do
@@ -786,6 +813,7 @@ defmodule ElixirSense.Core.Binding do
          name,
          [list_candidate | _],
          _include_private,
+         _,
          stack
        )
        when name in [:min_max, :min_max_by] do
@@ -807,6 +835,7 @@ defmodule ElixirSense.Core.Binding do
          name,
          [list_candidate | _],
          _include_private,
+         _,
          stack
        )
        when name in [:chunk_by, :chunk_every, :chunk_while] do
@@ -828,6 +857,7 @@ defmodule ElixirSense.Core.Binding do
          :concat,
          [list_candidate],
          _include_private,
+         _,
          stack
        ) do
     case expand(env, list_candidate, stack) do
@@ -848,6 +878,7 @@ defmodule ElixirSense.Core.Binding do
          name,
          [list_candidate | _],
          _include_private,
+         _,
          stack
        )
        when name in [
@@ -892,6 +923,7 @@ defmodule ElixirSense.Core.Binding do
          name,
          [list_candidate | _],
          _include_private,
+         _,
          stack
        )
        when name in [:delete, :delete_at, :insert_at, :replace_at, :update_at] do
@@ -913,6 +945,7 @@ defmodule ElixirSense.Core.Binding do
          name,
          [list_candidate | _],
          _include_private,
+         _,
          stack
        )
        when name in [:flatten] do
@@ -934,6 +967,7 @@ defmodule ElixirSense.Core.Binding do
          name,
          [list_candidate | _],
          _include_private,
+         _,
          stack
        )
        when name in [:wrap] do
@@ -961,6 +995,7 @@ defmodule ElixirSense.Core.Binding do
          name,
          [list_candidate | _],
          _include_private,
+         _,
          stack
        )
        when name in [:pop_at] do
@@ -982,6 +1017,7 @@ defmodule ElixirSense.Core.Binding do
          name,
          [list_candidate | _],
          _include_private,
+         _,
          stack
        )
        when name in [:first, :last] do
@@ -1003,6 +1039,7 @@ defmodule ElixirSense.Core.Binding do
          name,
          [element | _],
          _include_private,
+         _,
          stack
        )
        when name in [:duplicate] do
@@ -1018,7 +1055,7 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, module}, fun, [map, key], _include_private, stack)
+  defp expand_call(env, {:atom, module}, fun, [map, key], _include_private, _, stack)
        when (module == Map and fun in [:fetch, :fetch!, :get]) or
               (module == :maps and fun in [:find, :get]) do
     {map, key} =
@@ -1053,7 +1090,7 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, fun, [map, key, default], _include_private, stack)
+  defp expand_call(env, {:atom, Map}, fun, [map, key, default], _include_private, _, stack)
        when fun in [:get, :get_lazy] do
     fields = expand_map_fields(env, map, stack)
 
@@ -1074,7 +1111,7 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, module}, fun, [map, key, value], _include_private, stack)
+  defp expand_call(env, {:atom, module}, fun, [map, key, value], _include_private, _, stack)
        when (fun == :put and module in [Map, :maps]) or (fun == :update and module == :maps) or
               (fun == :replace! and module == Map) do
     {map, key, value} =
@@ -1103,7 +1140,7 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private, stack)
+  defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private, _, stack)
        when fun in [:put_new, :put_new_lazy] do
     fields = expand_map_fields(env, map, stack)
 
@@ -1124,7 +1161,7 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, module}, fun, [map, key], _include_private, stack)
+  defp expand_call(env, {:atom, module}, fun, [map, key], _include_private, _, stack)
        when (module == Map and fun == :delete) or (module == :maps and fun == :remove) do
     {map, key} =
       if module == :maps do
@@ -1153,7 +1190,7 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # Map.merge/2 is inlined
-  defp expand_call(env, {:atom, module}, :merge, [map, other_map], _include_private, stack)
+  defp expand_call(env, {:atom, module}, :merge, [map, other_map], _include_private, _, stack)
        when module in [Map, :maps] do
     fields = expand_map_fields(env, map, stack)
 
@@ -1171,7 +1208,7 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, :merge, [map, other_map, _fun], _include_private, stack) do
+  defp expand_call(env, {:atom, Map}, :merge, [map, other_map, _fun], _include_private, _, stack) do
     fields = expand_map_fields(env, map, stack)
 
     other_fields = expand_map_fields(env, other_map, stack)
@@ -1197,6 +1234,7 @@ defmodule ElixirSense.Core.Binding do
          :update,
          [map, key, _initial, _fun],
          _include_private,
+         _,
          stack
        ) do
     fields = expand_map_fields(env, map, stack)
@@ -1217,7 +1255,7 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, :update!, [map, key, _fun], _include_private, stack) do
+  defp expand_call(env, {:atom, Map}, :update!, [map, key, _fun], _include_private, _, stack) do
     fields = expand_map_fields(env, map, stack)
 
     if :none in fields do
@@ -1236,7 +1274,7 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp expand_call(env, {:atom, Map}, :from_struct, [struct], _include_private, stack) do
+  defp expand_call(env, {:atom, Map}, :from_struct, [struct], _include_private, _, stack) do
     fields =
       case expand(env, struct, stack) do
         {:struct, fields, _, nil} ->
@@ -1265,23 +1303,23 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # function call
-  defp expand_call(env, {:atom, mod}, fun, arguments, include_private, stack)
+  defp expand_call(env, {:atom, mod}, fun, arguments, include_private, position, stack)
        when mod not in [nil, true, false] and fun not in [nil, true, false] do
     arity = length(arguments)
 
-    case expand_call_from_metadata(env, mod, fun, arity, include_private, stack) do
-      result when result not in [nil, :none] -> result
+    case expand_call_from_metadata(env, mod, fun, arity, include_private, position, stack) do
+      result when result not in [:none] -> result
       _ -> expand_call_from_introspection(env, mod, fun, arity, include_private, stack)
     end
   end
 
   # not a module
-  defp expand_call(_env, {:atom, _mod}, _fun, _arity, _include_private, _stack), do: :none
+  defp expand_call(_env, {:atom, _mod}, _fun, _arity, _include_private, _, _stack), do: :none
 
-  defp expand_call(env, {:union, variants}, fun, arity, include_private, stack) do
+  defp expand_call(env, {:union, variants}, fun, arity, include_private, position, stack) do
     # TODO choose variant by args?
     Enum.find_value(variants, fn variant ->
-      res = expand_call(env, variant, fun, arity, include_private, stack)
+      res = expand_call(env, variant, fun, arity, include_private, position, stack)
 
       if res != :none do
         res
@@ -1289,14 +1327,14 @@ defmodule ElixirSense.Core.Binding do
     end)
   end
 
-  defp expand_call(_env, _target, _fun, _arity, _include_private, _stack), do: nil
+  defp expand_call(_env, _target, _fun, _arity, _include_private, _, _stack), do: nil
 
   defp call_arity_match?(fun_arity, fun_defaults, call_arity) do
     fun_arity - fun_defaults <= call_arity and call_arity <= fun_arity
   end
 
   defp expand_call_from_introspection(env, mod, fun, arity, include_private, stack) do
-    arity =
+    maybe_kind_arity =
       case ElixirSense.Core.Normalized.Code.get_docs(mod, :docs) do
         nil ->
           # no docs - use call arity if fun exported
@@ -1307,19 +1345,27 @@ defmodule ElixirSense.Core.Binding do
         list ->
           # correct arity for calls with default params
           list
-          |> Enum.find_value(nil, fn {{f, a}, _, _, _, _, map} ->
-            if f == fun and call_arity_match?(a, Map.get(map, :defaults, 0), arity) do
-              a
+          |> Enum.find_value(nil, fn {{f, a}, _, kind, _, _, map} ->
+            if f == fun and call_arity_match?(a, Map.get(map, :defaults, 0), arity) and
+                 (kind != :macro or mod in env.requires) do
+              {kind, a}
             end
           end)
       end
 
-    if arity do
-      type = TypeInfo.get_function_spec(mod, fun, arity)
-      return_type = get_return_from_spec(env, type, mod, include_private)
-      expand(env, return_type, stack) || :no_spec
-    else
-      :none
+    case maybe_kind_arity do
+      nil ->
+        # def not found
+        :none
+
+      {:macro, _} ->
+        # do not expand macro result types
+        :no_spec
+
+      {:function, arity} ->
+        type = TypeInfo.get_function_spec(mod, fun, arity)
+        return_type = get_return_from_spec(env, type, mod, include_private)
+        expand(env, return_type, stack) || :no_spec
     end
   end
 
@@ -1329,46 +1375,60 @@ defmodule ElixirSense.Core.Binding do
          fun,
          arity,
          include_private,
+         position,
          stack
        ) do
-    arity =
+    maybe_kind_arity =
       Enum.find_value(mods_funs_to_positions, nil, fn
-        {{^mod, ^fun, _}, %State.ModFunInfo{type: fun_type} = info}
-        when (include_private and fun_type != :def) or
-               fun_type in [:def, :defmacro, :defguard, :defdelegate] ->
-          # correct arity for calls with default params
-          State.ModFunInfo.get_arities(info)
-          |> Enum.find_value(nil, fn {a, defaults} ->
-            if call_arity_match?(a, defaults, arity) do
-              a
+        {{^mod, ^fun, _}, %State.ModFunInfo{type: fun_type} = info} ->
+          visible? =
+            cond do
+              include_private and
+                  (State.ModFunInfo.get_category(info) != :macro or
+                     List.last(info.positions) < position) ->
+                true
+
+              not include_private and Introspection.is_pub(fun_type) and
+                  (State.ModFunInfo.get_category(info) != :macro or mod in env.requires) ->
+                true
+
+              true ->
+                false
             end
-          end)
+
+          if visible? do
+            # correct arity for calls with default params
+            State.ModFunInfo.get_arities(info)
+            |> Enum.find_value(nil, fn {a, defaults} ->
+              if call_arity_match?(a, defaults, arity) do
+                {State.ModFunInfo.get_category(info), a}
+              end
+            end)
+          end
 
         _ ->
           false
       end)
 
-    case {arity, specs[{mod, fun, arity}]} do
-      {nil, _} ->
-        # fun not found
+    case maybe_kind_arity do
+      nil ->
+        # def not found
         :none
 
-      {_, %State.SpecInfo{} = spec} ->
-        get_return_from_metadata(env, mod, spec, include_private, stack) || :no_spec
-
-      _ ->
+      {:macro, _} ->
+        # do not expand macro result types
         :no_spec
+
+      {:function, arity} ->
+        case specs[{mod, fun, arity}] do
+          nil ->
+            :no_spec
+
+          %State.SpecInfo{} = spec ->
+            get_return_from_metadata(env, mod, spec, include_private, stack) || :no_spec
+        end
     end
   end
-
-  {:spec, [line: 1],
-   [
-     {:handle, [line: 1],
-      [
-        {:t, [line: 1], []},
-        {{:., [line: 1], [{:__aliases__, [line: 1], [:Order]}, :t]}, [line: 1], []}
-      ]}
-   ]}
 
   defp extract_type({:"::", _, [_, type]}), do: {:ok, type}
 
@@ -1482,6 +1542,7 @@ defmodule ElixirSense.Core.Binding do
           m
 
         {:__aliases__, _, list} ->
+          # TODO type may be expanded
           Module.concat(list)
       end
 
@@ -1544,6 +1605,7 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # remote user type
+  # TODO the alias may be already expanded
   defp parse_type(
          env,
          {{:., _, [{:__aliases__, _, aliases}, atom]}, _, args},

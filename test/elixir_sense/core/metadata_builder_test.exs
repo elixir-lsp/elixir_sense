@@ -188,7 +188,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  positions: [{2, 1}],
                  scope_id: 0,
                  version: 1,
-                 type: {:local_call, :foo, []}
+                 type: {:local_call, :foo, {2, 7}, []}
                }
              }
     end
@@ -2206,10 +2206,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :var1, type: maybe_local_call},
-               %VarInfo{name: :var2, type: {:local_call, :now, []}},
-               %VarInfo{name: :var3, type: {:local_call, :now, [{:atom, :abc}]}},
-               %VarInfo{name: :var4, type: {:local_call, :now, [{:atom, :abc}]}},
-               %VarInfo{name: :var5, type: {:local_call, :now, [{:atom, :abc}, {:integer, 5}]}}
+               %VarInfo{name: :var2, type: {:local_call, :now, {12, 12}, []}},
+               %VarInfo{name: :var3, type: {:local_call, :now, {13, 12}, [{:atom, :abc}]}},
+               %VarInfo{name: :var4, type: {:local_call, :now, {14, 20}, [{:atom, :abc}]}},
+               %VarInfo{
+                 name: :var5,
+                 type: {:local_call, :now, {15, 20}, [{:atom, :abc}, {:integer, 5}]}
+               }
              ] = state |> get_line_vars(16)
 
       if Version.match?(System.version(), "< 1.15.0") do

@@ -30,9 +30,11 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   # remote call
-  def type_of({{:., _, [target, fun]}, _, args}, context)
+  def type_of({{:., _, [target, fun]}, meta, args}, context)
       when is_atom(fun) and is_list(args) do
     target = type_of(target, context)
+    line = Keyword.get(meta, :line, 1)
+    column = Keyword.get(meta, :column, 1)
     {:call, target, fun, Enum.map(args, &type_of(&1, context))}
   end
 
@@ -216,8 +218,10 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   # local call
-  def type_of({var, _, args}, context) when is_atom(var) and is_list(args) do
-    {:local_call, var, Enum.map(args, &type_of(&1, context))}
+  def type_of({var, meta, args}, context) when is_atom(var) and is_list(args) do
+    line = Keyword.get(meta, :line, 1)
+    column = Keyword.get(meta, :column, 1)
+    {:local_call, var, {line, column}, Enum.map(args, &type_of(&1, context))}
   end
 
   # integer
