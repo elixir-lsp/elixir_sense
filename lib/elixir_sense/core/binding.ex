@@ -1542,11 +1542,15 @@ defmodule ElixirSense.Core.Binding do
           m
 
         {:__aliases__, _, list} ->
-          # TODO type may be expanded
           Module.concat(list)
+
+        _ ->
+          nil
       end
 
-    {:struct, fields, {:atom, module}, nil}
+    if module do
+      {:struct, fields, {:atom, module}, nil}
+    end
   end
 
   # map
@@ -1598,24 +1602,23 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # remote user type
-  defp parse_type(env, {{:., _, [mod, atom]}, _, args}, _mod, _include_private, stack)
-       when is_atom(mod) and is_atom(atom) do
-    # do not propagate include_private when expanding remote types
-    expand_type(env, mod, atom, args, false, stack)
-  end
+  defp parse_type(env, {{:., _, [remote, type]}, _, args}, _mod, _include_private, stack) do
+    module =
+      case remote do
+        m when is_atom(m) ->
+          m
 
-  # remote user type
-  # TODO the alias may be already expanded
-  defp parse_type(
-         env,
-         {{:., _, [{:__aliases__, _, aliases}, atom]}, _, args},
-         _mod,
-         _include_private,
-         stack
-       )
-       when is_atom(atom) do
-    # do not propagate include_private when expanding remote types
-    expand_type(env, Module.concat(aliases), atom, args, false, stack)
+        {:__aliases__, _, list} ->
+          Module.concat(list)
+
+        _ ->
+          nil
+      end
+
+    if remote && is_atom(type) do
+      # do not propagate include_private when expanding remote types
+      expand_type(env, module, type, args, false, stack)
+    end
   end
 
   # no_return
