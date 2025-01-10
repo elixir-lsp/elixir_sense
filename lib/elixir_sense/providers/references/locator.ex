@@ -79,7 +79,7 @@ defmodule ElixirSense.Providers.References.Locator do
         } = metadata,
         trace
       ) do
-    binding_env = Binding.from_env(env, metadata)
+    binding_env = Binding.from_env(env, metadata, context.begin)
 
     type = SurroundContext.to_binding(context.context, module)
 
@@ -108,7 +108,7 @@ defmodule ElixirSense.Providers.References.Locator do
             |> Enum.map(fn call ->
               env = Metadata.get_cursor_env(metadata, call.position)
 
-              binding_env = Binding.from_env(env, metadata)
+              binding_env = Binding.from_env(env, metadata, call.position)
 
               found =
                 {call.mod, function}

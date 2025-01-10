@@ -19,9 +19,10 @@ defmodule ElixirSense.Core.Binding do
             requires: [],
             specs: %{},
             types: %{},
-            mods_funs_to_positions: %{}
+            mods_funs_to_positions: %{},
+            cursor_position: {1, 1}
 
-  def from_env(%State.Env{} = env, %ElixirSense.Core.Metadata{} = metadata) do
+  def from_env(%State.Env{} = env, %ElixirSense.Core.Metadata{} = metadata, cursor_position) do
     %Binding{
       vars: env.vars,
       attributes: env.attributes,
@@ -33,7 +34,8 @@ defmodule ElixirSense.Core.Binding do
       module: env.module,
       function: env.function,
       types: metadata.types,
-      mods_funs_to_positions: metadata.mods_funs_to_positions
+      mods_funs_to_positions: metadata.mods_funs_to_positions,
+      cursor_position: cursor_position
     }
   end
 
@@ -99,8 +101,7 @@ defmodule ElixirSense.Core.Binding do
           # no variable found - treat as a local call
           # this can happen if no parens call is missclassed as variable e.g. by
           # Code.Fragment APIs
-          # TODO pass cursor position
-          {:local_call, variable, {1, 1}, []}
+          {:local_call, variable, env.cursor_position, []}
 
         %State.VarInfo{type: type} ->
           type

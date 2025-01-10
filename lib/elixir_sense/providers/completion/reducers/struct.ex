@@ -23,7 +23,7 @@ defmodule ElixirSense.Providers.Completion.Reducers.Struct do
   def add_fields(hint, env, buffer_metadata, context, acc) do
     text_before = context.text_before
 
-    case find_struct_fields(hint, text_before, env, buffer_metadata) do
+    case find_struct_fields(hint, text_before, env, buffer_metadata, context.cursor_position) do
       {[], _} ->
         {:cont, acc}
 
@@ -51,9 +51,10 @@ defmodule ElixirSense.Providers.Completion.Reducers.Struct do
            module: module,
            aliases: aliases
          } = env,
-         %Metadata{} = buffer_metadata
+         %Metadata{} = buffer_metadata,
+         cursor_position
        ) do
-    binding_env = ElixirSense.Core.Binding.from_env(env, buffer_metadata)
+    binding_env = ElixirSense.Core.Binding.from_env(env, buffer_metadata, cursor_position)
 
     case Source.which_struct(text_before, module) do
       {type, fields_so_far, elixir_prefix, var} ->
