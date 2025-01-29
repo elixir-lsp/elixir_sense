@@ -487,7 +487,7 @@ defmodule ElixirSense.Core.Introspection do
   def to_string_with_parens({name, meta, args}) when is_atom(name) do
     if ElixirSense.Core.Normalized.Code.Formatter.local_without_parens?(
          name,
-         length(args || []),
+         if(is_list(args), do: length(args), else: 0),
          ElixirSense.Core.Normalized.Code.Formatter.locals_without_parens()
        ) do
       # Macro.to_string formats some locals without parens
@@ -688,7 +688,7 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   def extract_fun_args({{_fun, _}, _line, _kind, args, _doc, _metadata}) do
-    (args || [])
+    if(is_list(args), do: args, else: [])
     |> Enum.map(&format_doc_arg(&1))
   end
 
@@ -736,7 +736,7 @@ defmodule ElixirSense.Core.Introspection do
       spec = Map.get(specs, {f, a})
 
       formatted_args =
-        (args || [])
+        if(is_list(args), do: args, else: [])
         |> Enum.map(&format_doc_arg(&1))
 
       desc = extract_summary_from_docs(doc)

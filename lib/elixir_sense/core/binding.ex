@@ -1647,7 +1647,7 @@ defmodule ElixirSense.Core.Binding do
   defp parse_type(_env, _type, _, _include_private, _stack), do: nil
 
   defp expand_type(env, mod, type_name, args, include_private, stack) do
-    arity = length(args || [])
+    arity = if(is_list(args), do: length(args), else: 0)
     type = {mod, type_name, arity}
 
     if type in stack do
@@ -1659,7 +1659,7 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp do_expand_type(env, mod, type_name, args, include_private, stack) do
-    arity = length(args || [])
+    arity = if(is_list(args), do: length(args), else: 0)
 
     case expand_type_from_metadata(env, mod, type_name, arity, include_private, stack) do
       nil -> expand_type_from_introspection(env, mod, type_name, arity, include_private, stack)

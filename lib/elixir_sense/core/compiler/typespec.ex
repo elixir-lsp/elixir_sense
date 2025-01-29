@@ -13,7 +13,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
       when is_list(args) do
     case args do
       [{n, _, a} | _] ->
-        {n, a || []}
+        {n, if(is_list(a), do: a, else: [])}
 
       _ ->
         # type name replaced by cursor
@@ -28,7 +28,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   def type_to_signature({:__cursor__, _, args}) when is_list(args) do
     case args do
       [{n, _, a} | _] ->
-        {n, a || []}
+        {n, if(is_list(a), do: a, else: [])}
 
       _ ->
         # type name replaced by cursor

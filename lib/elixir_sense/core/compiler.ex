@@ -861,7 +861,7 @@ defmodule ElixirSense.Core.Compiler do
               fa =
                 case list do
                   [{f, _, a} | _] ->
-                    {f, length(a || [])}
+                    {f, if(is_list(a), do: length(a), else: 0)}
 
                   _ ->
                     {:__unknown__, 0}
@@ -1707,7 +1707,7 @@ defmodule ElixirSense.Core.Compiler do
           fa =
             case list do
               [{f, _, a} | _] ->
-                {f, length(a || [])}
+                {f, if(is_list(a), do: length(a), else: 0)}
 
               _ ->
                 {:__unknown__, 0}
