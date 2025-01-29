@@ -718,7 +718,7 @@ defmodule ElixirSense.Core.Source do
       {line, column, _} ->
         prefix
         |> split_lines
-        |> Enum.at(line - 1)
+        |> Enum.at(line - 1, "")
         |> String.slice((column + 1)..-1//1)
     end
   end

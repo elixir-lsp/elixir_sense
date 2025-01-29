@@ -360,7 +360,7 @@ defmodule ElixirSense.Core.Parser do
 
     case source
          |> Source.split_lines()
-         |> Enum.at(line - 1)
+         |> Enum.at(line - 1, "")
          |> Tokenizer.tokenize()
          |> Enum.at(-1) do
       {:identifier, _, ident} when ident in [:with, :for] ->

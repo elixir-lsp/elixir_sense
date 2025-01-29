@@ -536,7 +536,7 @@ defmodule ElixirSense.Core.Normalized.Code.ElixirSense.Fragment do
   def surround_context(binary, {line, column}, opts) when is_binary(binary) do
     binary
     |> String.split("\n")
-    |> Enum.at(line - 1, ~c"")
+    |> Enum.at(line - 1, "")
     |> String.to_charlist()
     |> position_surround_context(line, column, opts)
   end
