@@ -231,14 +231,11 @@ defmodule ElixirSense.Core.TypeInfo do
       rescue
         e ->
           if Version.match?(System.version(), ">= 1.18.0-dev") do
-            Logger.error(
-              "Macro.to_string(#{inspect(sanitized)}) returned invalid code. Please report that to elixir project."
+            Logger.warning(
+              "Macro.to_string(#{inspect(sanitized)}) returned invalid code. If you believe this to be an error please report that to elixir project."
             )
-
-            reraise e, __STACKTRACE__
-          else
-            string
           end
+          string
       end
 
     string
