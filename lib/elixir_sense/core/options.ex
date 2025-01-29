@@ -346,7 +346,10 @@ defmodule ElixirSense.Core.Options do
 
   def do_expand_type({name, meta, args}, metadata, module, named_args, stack)
       when is_atom(name) do
-    args = if(is_list(args), do: args, else: []) |> Enum.map(&expand_type(&1, metadata, module, named_args, stack))
+    args =
+      if(is_list(args), do: args, else: [])
+      |> Enum.map(&expand_type(&1, metadata, module, named_args, stack))
+
     named_arg = Keyword.fetch(named_args, name)
 
     cond do

@@ -235,6 +235,7 @@ defmodule ElixirSense.Core.TypeInfo do
               "Macro.to_string(#{inspect(sanitized)}) returned invalid code. If you believe this to be an error please report that to elixir project."
             )
           end
+
           string
       end
 

@@ -27,6 +27,10 @@ defmodule ElixirSense.Core.SurroundContext do
   defp to_binding_impl({:alias, {:module_attribute, _charlist1}, _charlist}, _current_module),
     do: nil
 
+  # this probably only existed on 1.14
+  defp to_binding_impl({:alias, {:dot, _, _}, _charlist}, _current_module),
+    do: nil
+
   defp to_binding_impl({:dot, inside_dot, charlist}, current_module) do
     {inside_dot_to_binding(inside_dot, current_module), :"#{charlist}"}
   end
