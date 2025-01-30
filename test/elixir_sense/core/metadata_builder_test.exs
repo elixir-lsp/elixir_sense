@@ -1721,7 +1721,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       if Version.match?(System.version(), "< 1.15.0") do
-        assert [%VarInfo{type: {:intersection, [{:atom, :my_var}, {:local_call, :x, []}]}}] =
+        assert [%VarInfo{type: {:intersection, [{:atom, :my_var}, {:local_call, :x, _, []}]}}] =
                  state |> get_line_vars(3)
       else
         assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
@@ -1739,7 +1739,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       if Version.match?(System.version(), "< 1.15.0") do
-        assert [%VarInfo{type: {:intersection, [{:atom, :my_var}, {:local_call, :x, []}]}}] =
+        assert [%VarInfo{type: {:intersection, [{:atom, :my_var}, {:local_call, :x, _, []}]}}] =
                  state |> get_line_vars(3)
       else
         assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
@@ -2216,7 +2216,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              ] = state |> get_line_vars(16)
 
       if Version.match?(System.version(), "< 1.15.0") do
-        assert maybe_local_call == {:local_call, :now, []}
+        assert maybe_local_call == {:local_call, :now, {11, 12}, []}
       else
         assert maybe_local_call == nil
       end
