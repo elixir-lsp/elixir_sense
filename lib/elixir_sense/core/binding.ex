@@ -1340,7 +1340,7 @@ defmodule ElixirSense.Core.Binding do
         nil ->
           # no docs - use call arity if fun exported
           if function_exported?(mod, fun, arity) do
-            arity
+            {:function, arity}
           end
 
         list ->
