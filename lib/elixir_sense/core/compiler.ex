@@ -523,10 +523,11 @@ defmodule ElixirSense.Core.Compiler do
         s = State.add_var_read(s, var)
         {{:^, meta, [var]}, %{s | unused: unused}, e}
 
-      {arg, s, _e} ->
+      {arg, ss, _e} ->
         # elixir raises here invalid_arg_for_pin
         # we may have cursor in arg
-        {{:^, meta, [arg]}, s, e}
+        # restore prematch and vars
+        {{:^, meta, [arg]}, %{ss | prematch: s.prematch, vars: s.vars}, e}
     end
   end
 
