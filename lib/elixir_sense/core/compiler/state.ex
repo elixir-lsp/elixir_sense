@@ -693,7 +693,6 @@ defmodule ElixirSense.Core.Compiler.State do
     }
   end
 
-  # TODO check if we can get rid of this function
   defp update_vars_info_per_scope_id(state) do
     [scope_id | _other_scope_ids] = state.scope_ids
     [current_scope_vars | _other_scope_vars] = state.vars_info
