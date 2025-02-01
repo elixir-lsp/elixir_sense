@@ -184,10 +184,10 @@ defmodule ElixirSense.Core.Introspection do
 
   defp get_spec_from_typespec(mod, fun) do
     # TypeInfo.get_function_specs does fallback to behaviours
-    {behaviour, specs} = TypeInfo.get_function_specs(mod, fun, :any)
+    function_specs = TypeInfo.get_function_specs(mod, fun, :any)
 
     results =
-      for {{_name, _arity}, [params | _]} = spec <- specs do
+      for {behaviour, specs} <- function_specs, {{_name, _arity}, [params | _]} = spec <- specs do
         params = TypeInfo.extract_params(params)
 
         %{

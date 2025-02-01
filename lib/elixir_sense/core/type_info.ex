@@ -316,14 +316,12 @@ defmodule ElixirSense.Core.TypeInfo do
       end
 
     if function_specs != [] do
-      {nil, function_specs}
+      [{nil, function_specs}]
     else
-      # TODO this will not work correctly for :any arity in case many functions with the same name and different arities
-      # are implement different behaviours
       callback_specs =
         module
         |> Behaviours.get_module_behaviours()
-        |> Enum.reduce_while(nil, fn behaviour, acc ->
+        |> Enum.reduce_while([], fn behaviour, acc ->
           behaviour_specs = behaviour |> get_module_callbacks()
 
           callback_specs =
@@ -334,7 +332,11 @@ defmodule ElixirSense.Core.TypeInfo do
             end
 
           if callback_specs != [] do
-            {:halt, {behaviour, callback_specs}}
+            if arity == :any do
+              {:halt, [{behaviour, callback_specs}]}
+            else
+              {:cont, [{behaviour, callback_specs} | acc]}
+            end
           else
             {:cont, acc}
           end
@@ -343,7 +345,7 @@ defmodule ElixirSense.Core.TypeInfo do
       if callback_specs do
         callback_specs
       else
-        {nil, []}
+        [{nil, []}]
       end
     end
   end

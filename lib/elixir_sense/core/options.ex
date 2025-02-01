@@ -135,14 +135,16 @@ defmodule ElixirSense.Core.Options do
                   {:macro, :"MACRO-#{function}", arity + 1, parameter_position_range}
               end
 
-            {_behaviour, specs} =
+            function_specs =
               ElixirSense.Core.TypeInfo.get_function_specs(
                 module,
                 modified_function,
                 modified_arity
               )
 
-            for {_, spec_entries} <- specs, spec <- spec_entries do
+            for {_behaviour, specs} <- function_specs,
+                {_, spec_entries} <- specs,
+                spec <- spec_entries do
               spec = maybe_unpack_caller(spec, kind)
 
               NormalizedTypespec.spec_to_quoted(function, spec)
