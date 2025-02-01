@@ -229,7 +229,7 @@ defmodule ElixirSense.Core.TypeInfo do
         |> Code.format_string!(line_length: line_length)
         |> to_string()
       rescue
-        e ->
+        _ ->
           if Version.match?(System.version(), ">= 1.18.0-dev") do
             Logger.warning(
               "Macro.to_string(#{inspect(sanitized)}) returned invalid code. If you believe this to be an error please report that to elixir project."

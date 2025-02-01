@@ -1965,6 +1965,8 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_macro_callback(meta, module, fun, args, callback, state, env) do
     # dbg({module, fun, args})
+    {args, state, env} = expand_macro_arg_cursor(args, state, env)
+
     try do
       callback.(meta, args)
     catch
@@ -1993,10 +1995,39 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_macro_callback!(meta, _module, _fun, args, callback, state, env) do
+    {args, state, env} = expand_macro_arg_cursor(args, state, env)
+
     ast = callback.(meta, args)
+
+    state =
+      if __MODULE__.Utils.has_cursor?(args) and not __MODULE__.Utils.has_cursor?(ast) do
+        # in case there was cursor in the original args but it's not present in macro result
+        # expand a fake node
+        {_ast, state, _env} = expand({:__cursor__, [], []}, state, env)
+        state
+      else
+        state
+      end
+
     {ast, state, env} = expand(ast, state, env)
     {ast, state, env}
   end
+
+  defp expand_macro_arg_cursor(args, state, env) when is_list(args) do
+    {args, state} =
+      Enum.reduce(args, {[], state}, fn arg, {acc, state} ->
+        {arg, state, _env} = expand_macro_arg_cursor(arg, state, env)
+        {[arg | acc], state}
+      end)
+
+    {Enum.reverse(args), state, env}
+  end
+
+  defp expand_macro_arg_cursor({:__cursor__, _, list} = ast, state, env) when is_list(list) do
+    expand(ast, state, env)
+  end
+
+  defp expand_macro_arg_cursor(arg, state, env), do: {arg, state, env}
 
   defp ex_unit_test_name(state, name) do
     case state.ex_unit_describe do
