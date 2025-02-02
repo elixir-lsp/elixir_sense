@@ -489,10 +489,14 @@ defmodule ElixirSense.Core.Compiler.State do
     updated_specs =
       list
       |> Enum.reduce(state.specs, fn {fun, arity}, acc ->
-        acc
-        |> Map.update!({module, fun, arity}, fn spec_info = %SpecInfo{} ->
-          %{spec_info | meta: spec_info.meta |> Map.put(:optional, true)}
-        end)
+        case acc[{module, fun, arity}] do
+          nil ->
+            acc
+
+          spec_info = %SpecInfo{} ->
+            spec_info = %{spec_info | meta: spec_info.meta |> Map.put(:optional, true)}
+            Map.put(acc, {module, fun, arity}, spec_info)
+        end
       end)
 
     %{state | specs: updated_specs}
