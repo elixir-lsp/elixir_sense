@@ -1065,9 +1065,11 @@ defmodule ElixirSense.Core.Compiler do
 
     {arg, state, env} = expand(arg, state, env)
 
-    state =
+    state = if Keyword.keyword?(arg) do
+      State.register_optional_callbacks(state, arg)
+    else
       state
-      |> State.register_optional_callbacks(arg)
+    end
 
     {{:@, meta, [{:optional_callbacks, doc_meta, [arg]}]}, state, env}
   end
