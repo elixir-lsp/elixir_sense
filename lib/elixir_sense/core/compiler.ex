@@ -871,6 +871,19 @@ defmodule ElixirSense.Core.Compiler do
               {expanded_fun, state, _} = expand(fun, state, %{env | function: fa})
               {expanded_fun, state}
 
+            # sometimes cursor turns the AST around and transforms function head node into a 2-tuple
+            {{:__cursor__, cursor_meta, [{fun, _, context}]}, meta, args}
+            when (is_atom(fun) and is_atom(context) and is_list(args)) or is_atom(args) ->
+              fa = {fun, if(is_list(args), do: length(args), else: 0)}
+
+              {expanded_fun, state, _} =
+                expand({:__cursor__, cursor_meta, [{fun, meta, args}]}, state, %{
+                  env
+                  | function: fa
+                })
+
+              {expanded_fun, state}
+
             _ ->
               {fun, state}
           end
@@ -1065,11 +1078,12 @@ defmodule ElixirSense.Core.Compiler do
 
     {arg, state, env} = expand(arg, state, env)
 
-    state = if Keyword.keyword?(arg) do
-      State.register_optional_callbacks(state, arg)
-    else
-      state
-    end
+    state =
+      if Keyword.keyword?(arg) do
+        State.register_optional_callbacks(state, arg)
+      else
+        state
+      end
 
     {{:@, meta, [{:optional_callbacks, doc_meta, [arg]}]}, state, env}
   end
@@ -1717,6 +1731,19 @@ defmodule ElixirSense.Core.Compiler do
             end
 
           {expanded_call, state, _} = expand(call, state, %{env | function: fa})
+          {expanded_call, state}
+
+        # sometimes cursor turns the AST around and transforms function head node into a 2-tuple
+        {{:__cursor__, cursor_meta, [{fun, _, context}]}, meta, args}
+        when (is_atom(fun) and is_atom(context) and is_list(args)) or is_atom(args) ->
+          fa = {fun, if(is_list(args), do: length(args), else: 0)}
+
+          {expanded_call, state, _} =
+            expand({:__cursor__, cursor_meta, [{fun, meta, args}]}, state, %{
+              env
+              | function: fa
+            })
+
           {expanded_call, state}
 
         _ ->
