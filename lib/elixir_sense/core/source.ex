@@ -159,23 +159,84 @@ defmodule ElixirSense.Core.Source do
     {prefix, suffix}
   end
 
+  @doc """
+  Splits the given source `src` into a list of lines using all common newline forms.
+  """
+  def split_lines(src, opts \\ []) do
+    String.split(src, ["\r\n", "\r", "\n"], opts)
+  end
+
+  @doc """
+  Splits `src` at the given `line` and `col`.
+
+  If the specified column is past the end of the line,
+  the text before the split is padded with spaces.
+  """
   @spec split_at(String.t(), pos_integer, pos_integer) :: {String.t(), String.t()}
-  def split_at(code, line, col) do
-    pos = find_position(code, max(line, 1), max(col, 1), {0, 1, 1})
-    String.split_at(code, pos)
+  def split_at(src, line, col) do
+    # Ensure minimum line and column are 1.
+    line = max(line, 1)
+    col = max(col, 1)
+    lines = split_lines(src, trim: false)
+    {prefix, target, suffix} = extract_line(lines, line)
+
+    target_len = String.length(target)
+
+    {before_target, after_target} =
+      if col - 1 <= target_len do
+        {
+          String.slice(target, 0, col - 1),
+          String.slice(target, col - 1, target_len - (col - 1))
+        }
+      else
+        pad = String.duplicate(" ", col - 1 - target_len)
+        {target <> pad, ""}
+      end
+
+    before_part =
+      case prefix do
+        [] -> before_target
+        _ -> Enum.join(prefix, "\n") <> "\n" <> before_target
+      end
+
+    after_part =
+      if suffix == [] do
+        after_target
+      else
+        after_target <> "\n" <> Enum.join(suffix, "\n")
+      end
+
+    {before_part, after_part}
   end
 
+  # If the requested line is beyond the number of lines,
+  # we use the last line as the target.
+  defp extract_line(lines, line) do
+    if line > length(lines) do
+      {Enum.slice(lines, 0, length(lines) - 1), List.last(lines) || "", []}
+    else
+      {prefix, [target | suffix]} = Enum.split(lines, line - 1)
+      {prefix, target, suffix}
+    end
+  end
+
+  @doc """
+  Splits `src` into segments at multiple positions.
+
+  The positions should be given as a list of `{line, col}` tuples.
+  Splitting is performed from the end of the source backwards,
+  so the final result is a list of segments.
+  """
   @spec split_at(String.t(), list({pos_integer, pos_integer})) :: list(String.t())
-  def split_at(code, list) do
-    do_split_at(code, Enum.reverse(list), [])
+  def split_at(src, positions) when is_list(positions) do
+    do_split_at(src, Enum.reverse(positions), [])
   end
 
-  defp do_split_at(code, [], acc), do: [code | acc]
+  defp do_split_at(src, [], acc), do: [src | acc]
 
-  defp do_split_at(code, [{line, col} | rest], acc) do
-    pos = find_position(code, max(line, 1), max(col, 1), {0, 1, 1})
-    {text_before, text_after} = String.split_at(code, pos)
-    do_split_at(text_before, rest, [text_after | acc])
+  defp do_split_at(src, [{line, col} | rest], acc) do
+    {before, after_cursor} = split_at(src, line, col)
+    do_split_at(before, rest, [after_cursor | acc])
   end
 
   @spec text_before(String.t(), pos_integer, pos_integer) :: String.t()
@@ -412,33 +473,6 @@ defmodule ElixirSense.Core.Source do
           end
 
         do_walk_text(new_rest, func, new_line, new_col, new_acc)
-    end
-  end
-
-  defp find_position(_text, line, col, {pos, line, col}) do
-    pos
-  end
-
-  defp find_position(text, line, col, {pos, current_line, current_col}) do
-    case String.next_grapheme(text) do
-      {grapheme, rest} ->
-        {new_pos, new_line, new_col} =
-          if grapheme in @line_break do
-            if current_line == line do
-              # this is the line we're lookin for
-              # but it's shorter than expected
-              {pos, current_line, col}
-            else
-              {pos + 1, current_line + 1, 1}
-            end
-          else
-            {pos + 1, current_line, current_col + 1}
-          end
-
-        find_position(rest, line, col, {new_pos, new_line, new_col})
-
-      nil ->
-        pos
     end
   end
 
@@ -681,6 +715,7 @@ defmodule ElixirSense.Core.Source do
     end
   end
 
+  # TODO remove
   def concat_module_parts([{:__MODULE__, _, nil} | rest], current_module, aliases)
       when is_atom(current_module) and current_module != nil do
     case concat_module_parts(rest, current_module, aliases) do
@@ -703,10 +738,6 @@ defmodule ElixirSense.Core.Source do
   def concat_module_parts([_ | _], _, _), do: :error
 
   def concat_module_parts([], _, _), do: :error
-
-  def split_lines(src, opts \\ []) do
-    String.split(src, ["\r\n", "\r", "\n"], opts)
-  end
 
   def bitstring_options(prefix) do
     tokens = Tokenizer.tokenize(prefix)

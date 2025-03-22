@@ -781,6 +781,22 @@ defmodule ElixirSense.Core.SourceTest do
       assert Enum.join(parts) == code
     end
 
+    test "one element list past line length" do
+      code = """
+      defmodule Abcd do
+        def go do
+          :ok
+        end
+      end
+      """
+
+      parts = split_at(code, [{2, 12}])
+      assert parts == ["defmodule Abcd do\n  def go do", "\n    :ok\n  end\nend\n"]
+
+      parts = split_at(code, [{2, 13}])
+      assert parts == ["defmodule Abcd do\n  def go do ", "\n    :ok\n  end\nend\n"]
+    end
+
     test "two element list same line" do
       code = """
       defmodule Abcd do
@@ -818,7 +834,7 @@ defmodule ElixirSense.Core.SourceTest do
     test "handles positions beyond code length" do
       code = "short"
       positions = [{0, 0}, {10, 15}]
-      assert split_at(code, positions) == ["", "short", ""]
+      assert split_at(code, positions) == ["", "short         ", ""]
     end
   end
 
