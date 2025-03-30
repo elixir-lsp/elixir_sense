@@ -7257,6 +7257,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  mod: Some,
                  position: {2, 39}
                },
+               %CallInfo{
+                 arity: nil,
+                 position: {2, 34},
+                 mod: Some,
+                 func: nil
+               },
                %CallInfo{arity: 0, position: {2, 21}, func: :some, mod: nil},
                %CallInfo{arity: 2, position: {2, 3}, func: :def, mod: Kernel}
              ] = state.calls[2]
@@ -7282,7 +7288,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                5 => [%CallInfo{arity: 0, func: :func1, position: {5, 16}, mod: NyModule}],
                6 => [%CallInfo{arity: 0, func: :func1, position: {6, 16}, mod: NyModule}],
                7 => [%CallInfo{arity: 1, func: :func2, position: {7, 16}, mod: NyModule}],
-               8 => [%CallInfo{arity: 1, func: :func2, position: {8, 20}, mod: NyModule.Sub}]
+               8 => [
+                 %CallInfo{arity: 1, func: :func2, position: {8, 20}, mod: NyModule.Sub},
+                 %CallInfo{arity: nil, position: {8, 15}, func: nil, mod: NyModule.Sub}
+               ]
              } = state.calls
     end
 
@@ -7338,7 +7347,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod}]
+               3 => [
+                 %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod},
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: nil,
+                   position: {3, 5},
+                   mod: MyMod,
+                   func: nil
+                 }
+               ]
              } = state.calls
     end
 
@@ -7354,7 +7371,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               3 => [%CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod}]
+               3 => [
+                 %CallInfo{arity: 0, func: :func, position: {3, 11}, mod: MyMod},
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: nil,
+                   position: {3, 5},
+                   mod: MyMod,
+                   func: nil
+                 }
+               ]
              } = state.calls
     end
 
@@ -7399,11 +7424,25 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{
                1 => [%CallInfo{arity: 2, position: {1, 1}, func: :defmodule, mod: Kernel}],
                2 => [%CallInfo{arity: 1, position: {2, 3}, func: :@, mod: Kernel}],
+               3 => [
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: nil,
+                   func: nil,
+                   mod: Record,
+                   position: {3, 3}
+                 }
+               ],
                4 => [%CallInfo{arity: 2, position: {4, 10}, func: :defrecord, mod: Record}],
                5 => [%CallInfo{arity: 2, position: {5, 3}, func: :def, mod: Kernel}],
                6 => [
                  %CallInfo{arity: 1, position: {6, 8}, func: :inspect, mod: IO},
-                 %CallInfo{arity: 0, position: {6, 16}, func: :binding, mod: Kernel}
+                 %CallInfo{arity: 0, position: {6, 16}, func: :binding, mod: Kernel},
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: nil,
+                   position: {6, 5},
+                   mod: IO,
+                   func: nil
+                 }
                ]
              } == state.calls
     end
@@ -7573,7 +7612,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               3 => [%CallInfo{arity: 1, func: :func, position: {3, 11}, mod: MyMod}]
+               3 => [
+                 %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: MyMod},
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: nil,
+                   position: {3, 5},
+                   mod: MyMod,
+                   func: nil
+                 }
+               ]
              } = state.calls
     end
 
@@ -7891,7 +7938,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert [_, %CallInfo{arity: 2, position: {5, 20}, func: :test, mod: nil}, _] =
+      assert [_, %CallInfo{arity: 2, position: {5, 20}, func: :test, mod: nil}, _, _] =
                state.calls[5]
     end
 
@@ -7908,7 +7955,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert [_, %CallInfo{arity: 2, position: {5, 31}, func: :test, mod: nil}, _] =
+      assert [_, %CallInfo{arity: 2, position: {5, 31}, func: :test, mod: nil}, _, _] =
                state.calls[5]
     end
 
@@ -7926,7 +7973,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{
                3 => [%CallInfo{arity: 1, position: {3, 17}, func: :func, mod: NyModule}],
-               4 => [%CallInfo{arity: 1, position: {4, 21}, func: :func, mod: NyModule.Sub}]
+               4 => [
+                 %CallInfo{arity: 1, position: {4, 21}, func: :func, mod: NyModule.Sub},
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: nil,
+                   position: {4, 16},
+                   mod: NyModule.Sub,
+                   func: nil
+                 }
+               ]
              } = state.calls
     end
 
@@ -7942,7 +7997,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               3 => [%CallInfo{arity: 1, position: {3, 12}, func: :func, mod: MyMod}]
+               3 => [
+                 %CallInfo{arity: 1, position: {3, 12}, func: :func, mod: MyMod},
+                 %CallInfo{arity: nil, position: {3, 6}, func: nil, mod: MyMod}
+               ]
              } = state.calls
     end
 
@@ -7965,7 +8023,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               9 => [%CallInfo{arity: 0, position: {9, 10}, func: :bar, mod: Foo}],
+               9 => [
+                 %CallInfo{arity: 0, position: {9, 10}, func: :bar, mod: Foo},
+                 %CallInfo{
+                   arity: nil,
+                   position: {9, 6},
+                   mod: Foo,
+                   func: nil
+                 }
+               ],
                10 => [
                  _,
                  %CallInfo{
@@ -7973,6 +8039,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    position: {10, 30},
                    func: :squared,
                    mod: ElixirSenseExample.Math
+                 },
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: nil,
+                   position: {10, 6},
+                   mod: ElixirSenseExample.Math,
+                   func: nil
                  }
                ]
              } = state.calls
@@ -8011,9 +8083,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  func: :nodes,
                  mod: :erlang
                },
+               %ElixirSense.Core.State.CallInfo{
+                 arity: nil,
+                 position: {3, nil},
+                 mod: Node,
+                 func: nil
+               },
                %CallInfo{
                  func: :nodes,
                  mod: :erlang
+               },
+               %ElixirSense.Core.State.CallInfo{
+                 arity: nil,
+                 position: {3, nil},
+                 mod: Node,
+                 func: nil
                },
                %CallInfo{
                  func: :inspect,
@@ -8094,7 +8178,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               3 => [%CallInfo{arity: 2, position: {3, 12}, func: :func, mod: MyMod}]
+               3 => [
+                 %CallInfo{arity: 2, position: {3, 12}, func: :func, mod: MyMod},
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: nil,
+                   position: {3, 6},
+                   mod: MyMod,
+                   func: nil
+                 }
+               ]
              } = state.calls
     end
 

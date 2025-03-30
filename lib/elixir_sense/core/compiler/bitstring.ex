@@ -195,7 +195,10 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
           end
 
         # TODO how to check for cursor here?
-        case Compiler.Macro.expand(ha, Map.put(e, :line, Utils.get_line(meta))) do
+        expanded = Compiler.Macro.expand(ha, Map.put(e, :line, Utils.get_line(meta)))
+        s = Compiler.collect_traces(s)
+
+        case expanded do
           ^ha ->
             # elixir raises here undefined_bittype
             # we omit the spec

@@ -8,8 +8,60 @@ defmodule ElixirSense.Core.Compiler do
   alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
   alias ElixirSense.Core.State.ModFunInfo
 
-  @env :elixir_env.new()
-  def env, do: @env
+  @trace_key :elixir_sense_trace
+
+  def trace(event, env) do
+    trace = get_trace()
+    Process.put(@trace_key, [{event, env} | trace])
+    :ok
+  end
+
+  defp get_trace do
+    Process.get(@trace_key, [])
+  end
+
+  defp clear_trace do
+    Process.delete(@trace_key)
+  end
+
+  def collect_traces(state) do
+    trace = get_trace()
+
+    state =
+      Enum.reduce(trace, state, fn {event, env}, acc ->
+        case event do
+          {:alias_reference, meta, alias} ->
+            # emitted by Macro.expand/2 and Macro.expand_once/2
+            acc
+            |> State.add_call_to_line({alias, nil, nil}, meta)
+            |> State.add_current_env_to_line(meta, env)
+
+          {:alias, meta, module, _as, _opts} ->
+            # emitted by Macro.Env.define_alias/3 and Macro.Env.define_require/3
+            acc
+            |> State.add_call_to_line({module, nil, nil}, meta)
+            |> State.add_current_env_to_line(meta, env)
+
+          {kind, meta, module, _opts} when kind in [:import, :require] ->
+            # emitted by Macro.Env.define_import/3 and Macro.Env.define_require/3
+            acc
+            |> State.add_call_to_line({module, nil, nil}, meta)
+            |> State.add_current_env_to_line(meta, env)
+
+          _ ->
+            Logger.warning("Unhandled trace event: #{inspect(event)}")
+            acc
+        end
+      end)
+
+    clear_trace()
+    state
+  end
+
+  def env do
+    env = :elixir_env.new()
+    %{env | tracers: [__MODULE__]}
+  end
 
   def expand(ast, state, env) do
     try do
@@ -116,23 +168,8 @@ defmodule ElixirSense.Core.Compiler do
 
   # __aliases__
 
-  defp do_expand({:__aliases__, meta, [head | tail] = list}, state, env) do
-    case NormalizedMacroEnv.expand_alias(env, meta, list, trace: false) do
-      {:alias, alias} ->
-        # TODO track alias
-        {alias, state, env}
-
-      :error ->
-        {head, state, env} = expand(head, state, env)
-
-        if is_atom(head) do
-          # TODO track alias
-          {Module.concat([head | tail]), state, env}
-        else
-          # elixir raises here invalid_alias
-          {{:__aliases__, meta, [head | tail]}, state, env}
-        end
-    end
+  defp do_expand({:__aliases__, _, _} = alias, state, env) do
+    expand_aliases(alias, state, env, true)
   end
 
   # require, alias, import
@@ -161,13 +198,13 @@ defmodule ElixirSense.Core.Compiler do
       |> State.add_first_alias_positions(env, meta)
       |> State.add_current_env_to_line(meta, env)
 
-    # no need to call expand_without_aliases_report - we never report
-    {arg, state, env} = expand(arg, state, env)
+    {arg, state, env} = expand_without_aliases_report(arg, state, env)
     {opts, state, env} = expand_opts([:as, :warn], no_alias_opts(opts), state, env)
 
     if is_atom(arg) do
-      case NormalizedMacroEnv.define_alias(env, meta, arg, [trace: false] ++ opts) do
+      case NormalizedMacroEnv.define_alias(env, meta, arg, [trace: true] ++ opts) do
         {:ok, env} ->
+          state = collect_traces(state)
           {arg, state, env}
 
         {:error, _} ->
@@ -185,8 +222,7 @@ defmodule ElixirSense.Core.Compiler do
       state
       |> State.add_current_env_to_line(meta, env)
 
-    # no need to call expand_without_aliases_report - we never report
-    {arg, state, env} = expand(arg, state, env)
+    {arg, state, env} = expand_without_aliases_report(arg, state, env)
 
     {opts, state, env} =
       expand_opts([:as, :warn], no_alias_opts(opts), state, env)
@@ -197,8 +233,9 @@ defmodule ElixirSense.Core.Compiler do
     if is_atom(arg) do
       # elixir calls here :elixir_aliases.ensure_loaded(meta, e_ref, et)
       # and optionally waits until required module is compiled
-      case NormalizedMacroEnv.define_require(env, meta, arg, [trace: false] ++ opts) do
+      case NormalizedMacroEnv.define_require(env, meta, arg, [trace: true] ++ opts) do
         {:ok, env} ->
+          state = collect_traces(state)
           {arg, state, env}
 
         {:error, _} ->
@@ -216,21 +253,21 @@ defmodule ElixirSense.Core.Compiler do
       state
       |> State.add_current_env_to_line(meta, env)
 
-    # no need to call expand_without_aliases_report - we never report
-    {arg, state, env} = expand(arg, state, env)
+    {arg, state, env} = expand_without_aliases_report(arg, state, env)
     {opts, state, env} = expand_opts([:only, :except, :warn], opts, state, env)
 
     if is_atom(arg) do
       opts =
         opts
         |> Keyword.merge(
-          trace: false,
+          trace: true,
           emit_warnings: false,
           info_callback: import_info_callback(arg, state)
         )
 
       case NormalizedMacroEnv.define_import(env, meta, arg, opts) do
         {:ok, env} ->
+          state = collect_traces(state)
           {arg, state, env}
 
         _ ->
@@ -274,7 +311,7 @@ defmodule ElixirSense.Core.Compiler do
     # elixir checks if context is not match
     state = State.add_current_env_to_line(state, meta, env)
 
-    {escape_map(escape_env_entries(meta, state, env)), state, env}
+    {escape_map(escape_env_entries(meta, state, %{env | tracers: []})), state, env}
   end
 
   defp do_expand({{:., dot_meta, [{:__ENV__, meta, atom}, field]}, call_meta, []}, s, e)
@@ -282,7 +319,7 @@ defmodule ElixirSense.Core.Compiler do
     # elixir checks if context is not match
     s = State.add_current_env_to_line(s, call_meta, e)
 
-    env = escape_env_entries(meta, s, e)
+    env = escape_env_entries(meta, s, %{e | tracers: []})
 
     case Map.fetch(env, field) do
       {:ok, value} -> {value, s, e}
@@ -1527,6 +1564,8 @@ defmodule ElixirSense.Core.Compiler do
           function: {:__impl__, 1}
       })
 
+    state = collect_traces(state)
+
     {for, state} =
       if is_atom(for) or (is_list(for) and Enum.all?(for, &is_atom/1)) do
         {for, state}
@@ -1601,6 +1640,8 @@ defmodule ElixirSense.Core.Compiler do
         # elixir raises here
         {:"Elixir.__Unknown__", env}
       end
+
+    state = collect_traces(state)
 
     # elixir emits a special require directive with :defined key set in meta
     # require expand does alias, updates context_modules and runtime_modules
@@ -2088,7 +2129,7 @@ defmodule ElixirSense.Core.Compiler do
     # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
     defp alias_defmodule({:__aliases__, meta, [:"Elixir", t] = x}, module, env) do
       alias = String.to_atom("Elixir." <> Atom.to_string(t))
-      {:ok, env} = NormalizedMacroEnv.define_alias(env, meta, alias, as: alias, trace: false)
+      {:ok, env} = NormalizedMacroEnv.define_alias(env, meta, alias, as: alias, trace: true)
       {module, env}
     end
   end
@@ -2103,7 +2144,7 @@ defmodule ElixirSense.Core.Compiler do
   defp alias_defmodule({:__aliases__, meta, [h | t]}, _module, env) when is_atom(h) do
     module = Module.concat([env.module, h])
     alias = String.to_atom("Elixir." <> Atom.to_string(h))
-    {:ok, env} = NormalizedMacroEnv.define_alias(env, meta, module, as: alias, trace: false)
+    {:ok, env} = NormalizedMacroEnv.define_alias(env, meta, module, as: alias, trace: true)
 
     case t do
       [] -> {module, env}
@@ -2334,7 +2375,7 @@ defmodule ElixirSense.Core.Compiler do
   # end
 
   defp expand_multi_alias_call(kind, meta, base, refs, opts, state, env) do
-    {base_ref, state, env} = expand(base, state, env)
+    {base_ref, state, env} = expand_without_aliases_report(base, state, env)
 
     fun = fn
       {:__aliases__, _, ref}, state, env ->
@@ -2728,6 +2769,51 @@ defmodule ElixirSense.Core.Compiler do
     @internals [{:behaviour_info, 1}, {:module_info, 1}, {:module_info, 0}]
   else
     @internals [{:module_info, 1}, {:module_info, 0}]
+  end
+
+  defp expand_without_aliases_report({:__aliases__, _, _} = alias, state, env) do
+    expand_aliases(alias, state, env, false)
+  end
+
+  defp expand_without_aliases_report(other, state, env) do
+    expand(other, state, env)
+  end
+
+  defp expand_aliases({:__aliases__, meta, [head | tail] = list}, state, env, report) do
+    case NormalizedMacroEnv.expand_alias(env, meta, list, trace: false) do
+      {:alias, alias} ->
+        state =
+          if report do
+            state
+            |> State.add_call_to_line({alias, nil, nil}, meta)
+            |> State.add_current_env_to_line(meta, env)
+          else
+            state
+          end
+
+        {alias, state, env}
+
+      :error ->
+        {head, state, env} = expand(head, state, env)
+
+        if is_atom(head) do
+          alias = Module.concat([head | tail])
+
+          state =
+            if report do
+              state
+              |> State.add_call_to_line({alias, nil, nil}, meta)
+              |> State.add_current_env_to_line(meta, env)
+            else
+              state
+            end
+
+          {alias, state, env}
+        else
+          # elixir raises here invalid_alias
+          {{:__aliases__, meta, [head | tail]}, state, env}
+        end
+    end
   end
 
   defp import_info_callback(module, state) do

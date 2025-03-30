@@ -613,7 +613,10 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   # rescue expr() => rescue expanded_expr()
   defp expand_rescue({_, meta, _} = arg, s, e) do
     # TODO how to check for cursor here?
-    case Compiler.Macro.expand_once(arg, %{e | line: Utils.get_line(meta)}) do
+    expanded = Compiler.Macro.expand_once(arg, %{e | line: Utils.get_line(meta)})
+    s = Compiler.collect_traces(s)
+
+    case expanded do
       ^arg ->
         # elixir rejects this case
         # try to recover from error by generating fake expression

@@ -97,7 +97,11 @@ defmodule ElixirSense.Core.CompilerTest do
       {elixir_expanded, elixir_state, elixir_env} = elixir_expand(ast)
       # dbg(elixir_expanded)
       {expanded, state, env} = expand(ast)
+      env = %{env | tracers: []}
+      # dbg(env.tracers)
       # dbg(expanded)
+
+      assert env.tracers == elixir_env.tracers
 
       assert clean_capture_arg(expanded) == clean_capture_arg_elixir(elixir_expanded)
       assert env == elixir_env
@@ -112,6 +116,7 @@ defmodule ElixirSense.Core.CompilerTest do
       # dbg(elixir_expanded)
       # dbg(elixir_ex_to_map(elixir_state))
       {expanded, state, env} = expand(ast)
+      env = %{env | tracers: []}
       # dbg(expanded)
       # dbg(state_to_map(state))
 
@@ -145,7 +150,8 @@ defmodule ElixirSense.Core.CompilerTest do
 
   test "initial" do
     elixir_env = :elixir_env.new()
-    assert Compiler.env() == elixir_env
+    env = %{Compiler.env() | tracers: []}
+    assert env == elixir_env
 
     assert state_to_map(state_with_prematch()) ==
              elixir_ex_to_map(:elixir_env.env_to_ex(elixir_env))
@@ -233,6 +239,7 @@ defmodule ElixirSense.Core.CompilerTest do
       {expanded, state, env} =
         Compiler.expand(ast, state_with_prematch(), %{Compiler.env() | module: Foo})
 
+      env = %{env | tracers: []}
       elixir_env = %{:elixir_env.new() | module: Foo}
 
       {elixir_expanded, elixir_state, elixir_env} =
@@ -249,6 +256,7 @@ defmodule ElixirSense.Core.CompilerTest do
       {expanded, state, env} =
         Compiler.expand(ast, state_with_prematch(), %{Compiler.env() | file: __ENV__.file})
 
+      env = %{env | tracers: []}
       elixir_env = %{:elixir_env.new() | file: __ENV__.file}
 
       {elixir_expanded, elixir_state, elixir_env} =
@@ -265,6 +273,7 @@ defmodule ElixirSense.Core.CompilerTest do
       {expanded, state, env} =
         Compiler.expand(ast, %State{state_with_prematch() | caller: true}, Compiler.env())
 
+      env = %{env | tracers: []}
       elixir_env = :elixir_env.new()
 
       {elixir_expanded, elixir_state, elixir_env} =
@@ -285,6 +294,8 @@ defmodule ElixirSense.Core.CompilerTest do
       {expanded, state, env} =
         Compiler.expand(ast, %State{state_with_prematch() | stacktrace: true}, Compiler.env())
 
+      env = %{env | tracers: []}
+
       elixir_env = :elixir_env.new()
 
       {elixir_expanded, elixir_state, elixir_env} =
@@ -302,6 +313,7 @@ defmodule ElixirSense.Core.CompilerTest do
     test "expands __ENV__" do
       ast = {:__ENV__, [], nil}
       {expanded, state, env} = Compiler.expand(ast, state_with_prematch(), Compiler.env())
+      env = %{env | tracers: []}
       elixir_env = :elixir_env.new()
 
       {elixir_expanded, elixir_state, elixir_env} =
@@ -706,6 +718,7 @@ defmodule ElixirSense.Core.CompilerTest do
     test "expands nullary call if_undefined: :apply" do
       ast = {:self, [if_undefined: :apply], nil}
       {expanded, state, env} = Compiler.expand(ast, state_with_prematch(), Compiler.env())
+      env = %{env | tracers: []}
       elixir_env = :elixir_env.new()
 
       {elixir_expanded, elixir_state, elixir_env} =
@@ -733,6 +746,8 @@ defmodule ElixirSense.Core.CompilerTest do
             },
             Compiler.env()
           )
+
+        env = %{env | tracers: []}
 
         elixir_env = :elixir_env.new()
 

@@ -271,7 +271,7 @@ defmodule ElixirSense.Core.ParserTest do
     assert {%Metadata{
               error: {:error, :parse_error},
               calls: %{
-                2 => [%CallInfo{func: :inspect}]
+                2 => [%CallInfo{func: :inspect}, %CallInfo{mod: IO}]
               }
             },
             %Env{module: MyModule}} =
@@ -292,7 +292,7 @@ defmodule ElixirSense.Core.ParserTest do
     assert {%Metadata{
               error: {:error, :parse_error},
               calls: %{
-                2 => [%CallInfo{func: :inspect}]
+                2 => [%CallInfo{func: :inspect}, %CallInfo{mod: IO}]
               }
             },
             %Env{module: MyModule}} =

@@ -327,7 +327,10 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   end
 
   defp typespec({:%, struct_meta, [name, {:%{}, meta, fields}]}, vars, caller, state) do
-    case Compiler.Macro.expand(name, %{caller | function: {:__info__, 1}}) do
+    expanded = Compiler.Macro.expand(name, %{caller | function: {:__info__, 1}})
+    state = Compiler.collect_traces(state)
+
+    case expanded do
       module when is_atom(module) ->
         # TODO register alias/struct
         struct =

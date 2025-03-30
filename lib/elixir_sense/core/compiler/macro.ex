@@ -85,7 +85,7 @@ defmodule ElixirSense.Core.Compiler.Macro do
   defp do_expand_once({:__aliases__, meta, [head | tail] = list} = alias, env) do
     case NormalizedMacroEnv.expand_alias(env, meta, list, trace: false) do
       {:alias, alias} ->
-        # TODO track alias
+        :elixir_env.trace({:alias_reference, meta, alias}, env)
         {alias, true}
 
       :error ->
@@ -93,7 +93,7 @@ defmodule ElixirSense.Core.Compiler.Macro do
 
         if is_atom(head) do
           receiver = Module.concat([head | tail])
-          # TODO track alias
+          :elixir_env.trace({:alias_reference, meta, receiver}, env)
           {receiver, true}
         else
           {alias, false}
