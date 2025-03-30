@@ -27,7 +27,7 @@ defmodule ElixirSense.Core.References.Tracer do
     end)
   end
 
-  def trace({kind, meta, module, name, arity}, env)
+  def trace({kind, meta, module, name, arity}, %Macro.Env{} = env)
       when kind in [:imported_function, :imported_macro, :remote_function, :remote_macro] do
     register_call(%{
       callee: {module, name, arity},
@@ -39,7 +39,7 @@ defmodule ElixirSense.Core.References.Tracer do
     :ok
   end
 
-  def trace({kind, meta, name, arity}, env)
+  def trace({kind, meta, name, arity}, %Macro.Env{} = env)
       when kind in [:local_function, :local_macro] do
     register_call(%{
       callee: {env.module, name, arity},
@@ -49,6 +49,33 @@ defmodule ElixirSense.Core.References.Tracer do
     })
 
     :ok
+  end
+
+  def trace({:alias_reference, meta, module}, %Macro.Env{} = env) do
+    register_call(%{
+      callee: {module, nil, nil},
+      file: env.file |> Path.relative_to_cwd(),
+      line: meta[:line],
+      column: meta[:column]
+    })
+  end
+
+  def trace({:alias, meta, module, _as, _opts}, %Macro.Env{} = env) do
+    register_call(%{
+      callee: {module, nil, nil},
+      file: env.file |> Path.relative_to_cwd(),
+      line: meta[:line],
+      column: meta[:column]
+    })
+  end
+
+  def trace({kind, meta, module, _opts}, %Macro.Env{} = env) when kind in [:import, :require] do
+    register_call(%{
+      callee: {module, nil, nil},
+      file: env.file |> Path.relative_to_cwd(),
+      line: meta[:line],
+      column: meta[:column]
+    })
   end
 
   def trace(_trace, _env) do
