@@ -768,12 +768,12 @@ defmodule ElixirSense.Core.Compiler do
             {:macro, module, callback} ->
               # NOTE there is a subtle difference - callback will call expander with state derived from env via
               # :elixir_env.env_to_ex(env) possibly losing some details. Jose Valim is convinced this is not a problem
-              state =
-                state
+              state_l =
+                state_l
                 |> State.add_call_to_line({module, fun, length(args)}, meta)
                 |> State.add_current_env_to_line(meta, env)
 
-              expand_macro(meta, module, fun, args, callback, state, env)
+              expand_macro(meta, module, fun, args, callback, state_l, env)
 
             :error ->
               expand_remote(module, dot_meta, fun, meta, args, state, state_l, env)
