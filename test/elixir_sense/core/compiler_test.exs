@@ -584,18 +584,16 @@ defmodule ElixirSense.Core.CompilerTest do
       """)
     end
 
-    if Version.match?(System.version(), ">= 1.14.0") do
-      test "expands for" do
-        assert_expansion("""
-        for i <- [1, 2, 3] do
-          i
-        end
-        """)
-
-        assert_expansion("""
-        for i <- [1, 2, 3], j <- [1, 2], true, into: %{}, do: {i, j}
-        """)
+    test "expands for" do
+      assert_expansion("""
+      for i <- [1, 2, 3] do
+        i
       end
+      """)
+
+      assert_expansion("""
+      for i <- [1, 2, 3], j <- [1, 2], true, into: %{}, do: {i, j}
+      """)
     end
 
     if Version.match?(System.version(), ">= 1.15.0") do
@@ -616,29 +614,27 @@ defmodule ElixirSense.Core.CompilerTest do
       end
     end
 
-    if Version.match?(System.version(), ">= 1.14.0") do
-      test "expands for in block" do
-        assert_expansion("""
-        for i <- [1, 2, 3] do
-          i
-        end
-        :ok
-        """)
-
-        assert_expansion("""
-        for i <- [1, 2, 3], uniq: true do
-          i
-        end
-        :ok
-        """)
-
-        assert_expansion("""
-        _ = for i <- [1, 2, 3] do
-          i
-        end
-        :ok
-        """)
+    test "expands for in block" do
+      assert_expansion("""
+      for i <- [1, 2, 3] do
+        i
       end
+      :ok
+      """)
+
+      assert_expansion("""
+      for i <- [1, 2, 3], uniq: true do
+        i
+      end
+      :ok
+      """)
+
+      assert_expansion("""
+      _ = for i <- [1, 2, 3] do
+        i
+      end
+      :ok
+      """)
     end
 
     test "expands with" do
