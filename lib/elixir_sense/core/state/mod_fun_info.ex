@@ -53,4 +53,18 @@ defmodule ElixirSense.Core.State.ModFunInfo do
   def get_category(%ModFunInfo{}), do: :module
 
   def private?(%ModFunInfo{type: type}), do: type in [:defp, :defmacrop, :defguardp]
+
+  def get_def_kind(%ModFunInfo{type: type})
+      when type in [:defmacro, :defguard],
+      do: :defmacro
+
+  def get_def_kind(%ModFunInfo{type: type})
+      when type in [:defmacrop, :defguardp],
+      do: :defmacrop
+
+  def get_def_kind(%ModFunInfo{type: type}) when type in [:def, :defdelegate],
+    do: :def
+
+  def get_def_kind(%ModFunInfo{type: type}) when type in [:defp],
+    do: :defp
 end

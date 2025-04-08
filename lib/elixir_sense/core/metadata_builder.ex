@@ -17,6 +17,7 @@ defmodule ElixirSense.Core.MetadataBuilder do
     {_ast, state, env} = Compiler.expand(ast, state_initial, Compiler.env())
 
     state
+    |> Compiler.collect_traces()
     |> State.remove_attributes_scope()
     |> State.remove_vars_scope(state_initial)
     |> State.remove_module(env)

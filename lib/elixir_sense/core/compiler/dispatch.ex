@@ -8,14 +8,11 @@ defmodule ElixirSense.Core.Compiler.Dispatch do
 
     case find_import_by_name_arity(meta, tuple, [], e) do
       {:function, receiver} ->
-        # TODO trace call?
-        # TODO address when https://github.com/elixir-lang/elixir/issues/13878 is resolved
-        # ElixirEnv.trace({:imported_function, meta, receiver, name, arity}, e)
+        :elixir_env.trace({:imported_function, meta, receiver, name, arity}, e)
         receiver
 
       {:macro, receiver} ->
-        # TODO trace call?
-        # ElixirEnv.trace({:imported_macro, meta, receiver, name, arity}, e)
+        :elixir_env.trace({:imported_macro, meta, receiver, name, arity}, e)
         receiver
 
       {:ambiguous, [head | _]} ->
@@ -45,6 +42,7 @@ defmodule ElixirSense.Core.Compiler.Dispatch do
 
     case find_import_by_name_arity(meta, tuple, [], e) do
       {:function, receiver} ->
+        :elixir_env.trace({:imported_function, meta, receiver, name, arity}, e)
         remote_function(meta, receiver, name, arity, e)
 
       {:macro, _receiver} ->
@@ -67,10 +65,12 @@ defmodule ElixirSense.Core.Compiler.Dispatch do
 
           if function != nil and function != tuple and
                Enum.any?(s.mods_funs_to_positions, fn {key, info} ->
-                 key == mfa and ModFunInfo.get_category(info) == :macro
+                 key == mfa and ModFunInfo.get_category(info) == :macro and
+                   info.positions |> List.first() |> elem(0) <= meta |> Keyword.get(:line)
                end) do
             false
           else
+            :elixir_env.trace({:local_function, meta, name, arity}, e)
             {:local, name, arity}
           end
         end
@@ -83,6 +83,7 @@ defmodule ElixirSense.Core.Compiler.Dispatch do
     if is_macro(name, arity, receiver, required, s) do
       false
     else
+      :elixir_env.trace({:remote_function, meta, receiver, name, arity}, e)
       remote_function(meta, receiver, name, arity, e)
     end
   end

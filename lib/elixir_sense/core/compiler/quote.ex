@@ -205,10 +205,10 @@ defmodule ElixirSense.Core.Compiler.Quote do
          state
        )
        when is_atom(h) and h != Elixir and is_list(meta) do
+    # TODO pass true to track alias_expansion?
     annotation =
       case NormalizedMacroEnv.expand_alias(e, meta, list, trace: false) do
         {:alias, atom} ->
-          # TODO track alias
           atom
 
         :error ->
@@ -276,11 +276,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
         receiver ->
           # import capture is precise
-          # elixir emits function/macro_imported
-          state =
-            state
-            |> State.add_call_to_line({receiver, f, a}, meta)
-
+          # elixir emits function/macro_imported in Dispatch.find_import
           meta = keystore(:context, keystore(:imports, meta, [{a, receiver}]), q.context)
           {meta, state}
       end
@@ -299,7 +295,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
     import_meta = import_meta(meta, name, arity, q, e)
     annotated = annotate({name, import_meta, args_or_context}, q.context)
-    # elixir emits import_quoted
+
     do_quote_tuple(annotated, q, state)
   end
 
@@ -345,7 +341,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
     case Keyword.get(meta, :imports, false) == false &&
            Dispatch.find_imports(meta, name, e) do
       [_ | _] = imports ->
-        # trace_import_quoted(Imports, Meta, Name, E)
+        trace_import_quoted(imports, meta, name, e)
         keystore(:imports, keystore(:context, meta, q.context), imports)
 
       _ ->
@@ -591,5 +587,27 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   defp keystore(key, meta, value) do
     :lists.keystore(key, 1, meta, {key, value})
+  end
+
+  defp trace_import_quoted([{arity, mod} | imports], meta, name, e) do
+    {rest, arities} = collect_trace_import_quoted(imports, mod, [], [arity])
+    :elixir_env.trace({:imported_quoted, meta, mod, name, arities}, e)
+    trace_import_quoted(rest, meta, name, e)
+  end
+
+  defp trace_import_quoted([], _meta, _name, _e) do
+    :ok
+  end
+
+  defp collect_trace_import_quoted([{arity, mod} | imports], mod, acc, arities) do
+    collect_trace_import_quoted(imports, mod, acc, [arity | arities])
+  end
+
+  defp collect_trace_import_quoted([import | imports], mod, acc, arities) do
+    collect_trace_import_quoted(imports, mod, [import | acc], arities)
+  end
+
+  defp collect_trace_import_quoted([], _mod, acc, arities) do
+    {Enum.reverse(acc), Enum.reverse(arities)}
   end
 end

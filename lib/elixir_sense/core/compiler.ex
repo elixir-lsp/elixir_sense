@@ -33,20 +33,35 @@ defmodule ElixirSense.Core.Compiler do
           {:alias_reference, meta, alias} ->
             # emitted by Macro.expand/2 and Macro.expand_once/2
             acc
-            |> State.add_call_to_line({alias, nil, nil}, meta)
-            |> State.add_current_env_to_line(meta, env)
+            |> State.add_call_to_line({alias, nil, nil}, meta, :alias_reference)
 
           {:alias, meta, module, _as, _opts} ->
             # emitted by Macro.Env.define_alias/3 and Macro.Env.define_require/3
             acc
-            |> State.add_call_to_line({module, nil, nil}, meta)
-            |> State.add_current_env_to_line(meta, env)
+            |> State.add_call_to_line({module, nil, nil}, meta, :alias)
 
           {kind, meta, module, _opts} when kind in [:import, :require] ->
             # emitted by Macro.Env.define_import/3 and Macro.Env.define_require/3
             acc
-            |> State.add_call_to_line({module, nil, nil}, meta)
-            |> State.add_current_env_to_line(meta, env)
+            |> State.add_call_to_line({module, nil, nil}, meta, kind)
+
+          {kind, meta, receiver, name, arity}
+          when kind in [:remote_function, :remote_macro, :imported_function, :imported_macro] ->
+            # emitted by MacroEnv.expand_require/6, MacroEnv.expand_import/5
+            acc
+            |> State.add_call_to_line({receiver, name, arity}, meta, kind)
+
+          {:imported_quoted, meta, module, name, arities} ->
+            for arity <- arities, reduce: acc do
+              acc ->
+                acc
+                |> State.add_call_to_line({module, name, arity}, meta, :imported_quoted)
+            end
+
+          {kind, meta, name, arity} when kind in [:local_function, :local_macro] ->
+            # emitted by MacroEnv.expand_require/6, MacroEnv.expand_import/5
+            acc
+            |> State.add_call_to_line({env.module, name, arity}, meta, kind)
 
           _ ->
             Logger.warning("Unhandled trace event: #{inspect(event)}")
@@ -204,7 +219,6 @@ defmodule ElixirSense.Core.Compiler do
     if is_atom(arg) do
       case NormalizedMacroEnv.define_alias(env, meta, arg, [trace: true] ++ opts) do
         {:ok, env} ->
-          state = collect_traces(state)
           {arg, state, env}
 
         {:error, _} ->
@@ -235,7 +249,6 @@ defmodule ElixirSense.Core.Compiler do
       # and optionally waits until required module is compiled
       case NormalizedMacroEnv.define_require(env, meta, arg, [trace: true] ++ opts) do
         {:ok, env} ->
-          state = collect_traces(state)
           {arg, state, env}
 
         {:error, _} ->
@@ -267,7 +280,6 @@ defmodule ElixirSense.Core.Compiler do
 
       case NormalizedMacroEnv.define_import(env, meta, arg, opts) do
         {:ok, env} ->
-          state = collect_traces(state)
           {arg, state, env}
 
         _ ->
@@ -456,12 +468,7 @@ defmodule ElixirSense.Core.Compiler do
        when is_atom(context) and is_integer(arity) do
     case resolve_super(meta, arity, s, e) do
       {kind, name, _} when kind in [:def, :defp] ->
-        s =
-          s
-          |> State.add_call_to_line({nil, name, arity}, super_meta)
-          |> State.add_current_env_to_line(super_meta, e)
-
-        {{:&, meta, [{:/, arity_meta, [{name, super_meta, context}, arity]}]}, s, e}
+        expand({:&, meta, [{:/, arity_meta, [{name, super_meta, context}, arity]}]}, s, e)
 
       _ ->
         expand_fn_capture(meta, expr, s, e)
@@ -535,7 +542,7 @@ defmodule ElixirSense.Core.Compiler do
 
         sa =
           sa
-          |> State.add_call_to_line({nil, name, arity}, meta)
+          |> State.add_call_to_line({e.module, name, arity}, meta, :local_function)
           |> State.add_current_env_to_line(meta, ea)
 
         {{:super, [{:super, {kind, name}} | meta], e_args}, sa, ea}
@@ -705,17 +712,38 @@ defmodule ElixirSense.Core.Compiler do
     allow_locals = match?({n, a} when fun != n or arity != a, env.function)
 
     case NormalizedMacroEnv.expand_import(env, meta, fun, arity,
-           trace: false,
+           trace: true,
            allow_locals: allow_locals,
-           check_deprecations: false
+           check_deprecations: false,
+           local_for_callback: fn meta, name, arity, kinds, e ->
+             case state.mods_funs_to_positions[{e.module, name, arity}] do
+               nil ->
+                 false
+
+               %ModFunInfo{} = info ->
+                 category = ModFunInfo.get_category(info)
+                 definition_line = info.positions |> List.first() |> elem(0)
+                 usage_line = meta |> Keyword.get(:line)
+
+                 if ModFunInfo.get_def_kind(info) in kinds and
+                      (category != :macro or usage_line >= definition_line) do
+                   if macro_exported?(e.module, name, arity) do
+                     proper_name = :"MACRO-#{name}"
+                     proper_arity = arity + 1
+                     Function.capture(e.module, proper_name, proper_arity)
+                   else
+                     # return a fake macro
+                     true
+                   end
+                 else
+                   false
+                 end
+             end
+           end
          ) do
       {:macro, module, callback} ->
         # NOTE there is a subtle difference - callback will call expander with state derived from env via
         # :elixir_env.env_to_ex(env) possibly losing some details. Jose Valim is convinced this is not a problem
-        state =
-          state
-          |> State.add_call_to_line({module, fun, length(args)}, meta)
-          |> State.add_current_env_to_line(meta, env)
 
         expand_macro(meta, module, fun, args, callback, state, env)
 
@@ -751,35 +779,55 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({{:., dot_meta, [module, fun]}, meta, args}, state, env)
        when (is_tuple(module) or is_atom(module)) and is_atom(fun) and is_list(meta) and
               is_list(args) do
-    # dbg({module, fun, args})
     {module, state_l, env} = expand(module, State.prepare_write(state, env), env)
     arity = length(args)
 
     if is_atom(module) do
       case __MODULE__.Rewrite.inline(module, fun, arity) do
         {ar, an} ->
+          state_l =
+            state_l
+            |> State.add_call_to_line({module, fun, arity}, meta, :remote_function)
+            |> State.add_current_env_to_line(meta, env)
+
           expand_remote(ar, dot_meta, an, meta, args, state, state_l, env)
 
         false ->
           case NormalizedMacroEnv.expand_require(env, meta, module, fun, arity,
-                 trace: false,
+                 trace: true,
                  check_deprecations: false
                ) do
             {:macro, module, callback} ->
               # NOTE there is a subtle difference - callback will call expander with state derived from env via
               # :elixir_env.env_to_ex(env) possibly losing some details. Jose Valim is convinced this is not a problem
-              state_l =
+              # elixir expands the macro with original state, we pass state after left expand and need to revert some props
+              state_l = %{
                 state_l
-                |> State.add_call_to_line({module, fun, length(args)}, meta)
-                |> State.add_current_env_to_line(meta, env)
+                | vars: state.vars,
+                  prematch: state.prematch,
+                  unused: state.unused,
+                  stacktrace: state.stacktrace,
+                  caller: state.caller,
+                  runtime_modules: state.runtime_modules
+              }
 
               expand_macro(meta, module, fun, args, callback, state_l, env)
 
             :error ->
+              state_l =
+                state_l
+                |> State.add_call_to_line({module, fun, arity}, meta, :remote_function)
+                |> State.add_current_env_to_line(meta, env)
+
               expand_remote(module, dot_meta, fun, meta, args, state, state_l, env)
           end
       end
     else
+      state_l =
+        state_l
+        |> State.add_call_to_line({module, fun, arity}, meta, :remote_function)
+        |> State.add_current_env_to_line(meta, env)
+
       expand_remote(module, dot_meta, fun, meta, args, state, state_l, env)
     end
   end
@@ -797,7 +845,7 @@ defmodule ElixirSense.Core.Compiler do
 
     sa =
       sa
-      |> State.add_call_to_line({nil, e_expr, length(e_args)}, dot_meta)
+      |> State.add_call_to_line({nil, e_expr, length(e_args)}, dot_meta, :anonymous_function)
       |> State.add_current_env_to_line(meta, e)
 
     {{{:., dot_meta, [e_expr]}, meta, e_args}, sa, ea}
@@ -1502,6 +1550,8 @@ defmodule ElixirSense.Core.Compiler do
     {ast, state, env} =
       expand_macro_callback!(meta, Kernel, :defprotocol, args, callback, state, env)
 
+    # TODO
+    # [warning] Unable to expand ast node {:defprotocol, [end_of_expression: [newlines: 1, line: 3, column: 4], do: [line: 1, column: 19], end: [line: 3, column: 1], line: 1, column: 1], [{:__aliases__, [last: [line: 1, column: 13], line: 1, column: 13], [:Proto]}, [do: {:def, [end_of_expression: [newlines: 1, line: 2, column: 20], line: 2, column: 3], [{:reverse, [closing: [line: 2, column: 19], line: 2, column: 7], [{:term, [line: 2, column: 15], nil}]}]}]]}: ** (MatchError) no match of right hand side value: []
     [module] = env.context_modules -- original_env.context_modules
     # add behaviour_info builtin
     # generate callbacks as macro expansion currently fails
@@ -1563,8 +1613,6 @@ defmodule ElixirSense.Core.Compiler do
         | module: env.module || Elixir,
           function: {:__impl__, 1}
       })
-
-    state = collect_traces(state)
 
     {for, state} =
       if is_atom(for) or (is_list(for) and Enum.all?(for, &is_atom/1)) do
@@ -1640,8 +1688,6 @@ defmodule ElixirSense.Core.Compiler do
         # elixir raises here
         {:"Elixir.__Unknown__", env}
       end
-
-    state = collect_traces(state)
 
     # elixir emits a special require directive with :defined key set in meta
     # require expand does alias, updates context_modules and runtime_modules
@@ -2167,11 +2213,6 @@ defmodule ElixirSense.Core.Compiler do
         # look for cursor in discarded args
         {_ast, sl, _env} = expand(args, sl, e)
 
-        sl =
-          sl
-          |> State.add_call_to_line({receiver, right, length(args)}, meta)
-          |> State.add_current_env_to_line(meta, e)
-
         {{{:., dot_meta, [receiver, right]}, meta, []}, sl, e}
 
       context == nil ->
@@ -2190,7 +2231,6 @@ defmodule ElixirSense.Core.Compiler do
           {:ok, rewritten} ->
             s =
               State.close_write(sa, s)
-              |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
               |> State.add_current_env_to_line(meta, e)
 
             {rewritten, s, ea}
@@ -2199,7 +2239,6 @@ defmodule ElixirSense.Core.Compiler do
             # elixir raises here elixir_rewrite
             s =
               State.close_write(sa, s)
-              |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
               |> State.add_current_env_to_line(meta, e)
 
             {{{:., dot_meta, [receiver, right]}, attached_meta, e_args}, s, ea}
@@ -2224,7 +2263,6 @@ defmodule ElixirSense.Core.Compiler do
                 # elixir raises here elixir_rewrite
                 s =
                   sa
-                  |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
                   |> State.add_current_env_to_line(meta, e)
 
                 {{{:., dot_meta, [receiver, right]}, meta, e_args}, s, ea}
@@ -2239,7 +2277,6 @@ defmodule ElixirSense.Core.Compiler do
 
     s =
       State.close_write(sa, s)
-      |> State.add_call_to_line({receiver, right, length(e_args)}, meta)
       |> State.add_current_env_to_line(meta, e)
 
     {{{:., dot_meta, [receiver, right]}, meta, e_args}, s, ea}
@@ -2282,7 +2319,7 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> State.add_call_to_line({nil, fun, length(args)}, meta)
+      |> State.add_call_to_line({env.module, fun, length(args)}, meta, :local_function)
       |> State.add_current_env_to_line(meta, env)
 
     {args, state, env} = expand_args(args, state, env)
@@ -2410,13 +2447,7 @@ defmodule ElixirSense.Core.Compiler do
 
         case state.mods_funs_to_positions[{module, name, arity}] do
           %ModFunInfo{overridable: {true, _}} = info ->
-            kind =
-              case info.type do
-                :defdelegate -> :def
-                :defguard -> :defmacro
-                :defguardp -> :defmacrop
-                other -> other
-              end
+            kind = ModFunInfo.get_def_kind(info)
 
             hidden = Map.get(info.meta, :hidden, false)
             # def meta is not used anyway so let's pass empty
@@ -2451,21 +2482,11 @@ defmodule ElixirSense.Core.Compiler do
       {{:remote, remote, fun, arity}, require_meta, dot_meta, se, ee} ->
         attached_meta = attach_runtime_module(remote, require_meta, s, e)
 
-        se =
-          se
-          |> State.add_call_to_line({remote, fun, arity}, attached_meta)
-          |> State.add_current_env_to_line(attached_meta, ee)
-
         {{:&, meta, [{:/, [], [{{:., dot_meta, [remote, fun]}, attached_meta, []}, arity]}]}, se,
          ee}
 
       {{:local, fun, arity}, local_meta, _, se, ee} ->
         # elixir raises undefined_local_capture if ee.function is nil
-
-        se =
-          se
-          |> State.add_call_to_line({nil, fun, arity}, local_meta)
-          |> State.add_current_env_to_line(local_meta, ee)
 
         {{:&, meta, [{:/, [], [{fun, local_meta, nil}, arity]}]}, se, ee}
 
@@ -2780,13 +2801,13 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_aliases({:__aliases__, meta, [head | tail] = list}, state, env, report) do
+    # TODO pass true to track alias_expansion?
     case NormalizedMacroEnv.expand_alias(env, meta, list, trace: false) do
       {:alias, alias} ->
         state =
           if report do
             state
-            |> State.add_call_to_line({alias, nil, nil}, meta)
-            |> State.add_current_env_to_line(meta, env)
+            |> State.add_call_to_line({alias, nil, nil}, meta, :alias_reference)
           else
             state
           end
@@ -2802,8 +2823,7 @@ defmodule ElixirSense.Core.Compiler do
           state =
             if report do
               state
-              |> State.add_call_to_line({alias, nil, nil}, meta)
-              |> State.add_current_env_to_line(meta, env)
+              |> State.add_call_to_line({alias, nil, nil}, meta, :alias_reference)
             else
               state
             end

@@ -1,15 +1,17 @@
 defmodule ElixirSense.Core.State.CallInfo do
   @moduledoc """
-  Function call info
+  Reference info
   """
   @type t :: %ElixirSense.Core.State.CallInfo{
           arity: non_neg_integer,
-          position: ElixirSense.Core.State.position_t(),
+          position: {non_neg_integer, pos_integer | nil},
           func: atom,
-          mod: module | {:attribute, atom}
+          mod: module | {:attribute, atom},
+          kind: atom
         }
   defstruct arity: 0,
             position: {1, 1},
             func: nil,
-            mod: Elixir
+            mod: Elixir,
+            kind: nil
 end

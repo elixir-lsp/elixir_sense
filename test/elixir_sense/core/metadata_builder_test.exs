@@ -6633,6 +6633,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       defmacro go do
         quote do
           self()
+          Node.list()
         end
       end
 
@@ -6651,7 +6652,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         defmodule ElixirSense.Core.MetadataBuilderTest.SomeCompiledMod do
           defmacro go do
             quote do
-              self()
+              self(); Node.list()
             end
           end
 
@@ -6669,10 +6670,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert [%CallInfo{func: :self}, %CallInfo{func: :go}] = state.calls[15]
+      # NOTE remote call is abstract so no event, import call is imprecise
+      assert [%CallInfo{func: :self, kind: :imported_quoted}] = state.calls[4]
 
-      # NOTE as of elixir 1.17 MacroEnv.expand_import relies on module.__info__(:macros) for locals
-      # this means only public local macros are returned in our case
+      # import in quoted expression emits remote function call on expansion
+      assert [
+               %CallInfo{func: :go, kind: :local_macro},
+               %CallInfo{mod: Kernel, func: :self, kind: :remote_function},
+               %CallInfo{func: :list, kind: :remote_function},
+               %CallInfo{kind: :alias_reference}
+             ] = state.calls[15]
+
+      # NOTE we rely on module.__info__(:macros) for local macros and assume the loaded one is the same
+      # as the one currently expanded
+      # this means only public local macros are expandable
       # making it work for all locals would require hooking into :elixir_def and compiling the code
       assert [%CallInfo{func: :go_priv}] = state.calls[16]
     end
@@ -7251,20 +7262,28 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert [
+               _,
                %CallInfo{
                  arity: 0,
                  func: :other,
                  mod: Some,
-                 position: {2, 39}
+                 position: {2, 39},
+                 kind: :remote_function
                },
                %CallInfo{
                  arity: nil,
                  position: {2, 34},
                  mod: Some,
-                 func: nil
+                 func: nil,
+                 kind: :alias_reference
                },
-               %CallInfo{arity: 0, position: {2, 21}, func: :some, mod: nil},
-               %CallInfo{arity: 2, position: {2, 3}, func: :def, mod: Kernel}
+               %CallInfo{
+                 arity: 0,
+                 position: {2, 21},
+                 func: :some,
+                 mod: NyModule,
+                 kind: :local_function
+               }
              ] = state.calls[2]
     end
 
@@ -7422,26 +7441,79 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               1 => [%CallInfo{arity: 2, position: {1, 1}, func: :defmodule, mod: Kernel}],
-               2 => [%CallInfo{arity: 1, position: {2, 3}, func: :@, mod: Kernel}],
+               1 => [
+                 %CallInfo{
+                   arity: 2,
+                   position: {1, 1},
+                   func: :defmodule,
+                   mod: Kernel,
+                   kind: :imported_macro
+                 }
+               ],
+               2 => [
+                 %CallInfo{
+                   arity: 1,
+                   position: {2, 3},
+                   func: :@,
+                   mod: Kernel,
+                   kind: :imported_macro
+                 }
+               ],
                3 => [
-                 %ElixirSense.Core.State.CallInfo{
+                 %CallInfo{
                    arity: nil,
                    func: nil,
                    mod: Record,
-                   position: {3, 3}
+                   position: {3, 3},
+                   kind: :require
                  }
                ],
-               4 => [%CallInfo{arity: 2, position: {4, 10}, func: :defrecord, mod: Record}],
-               5 => [%CallInfo{arity: 2, position: {5, 3}, func: :def, mod: Kernel}],
+               4 => [
+                 %CallInfo{
+                   arity: 2,
+                   position: {4, 10},
+                   func: :defrecord,
+                   mod: Record,
+                   kind: :remote_macro
+                 },
+                 %CallInfo{
+                   arity: nil,
+                   position: {4, 3},
+                   mod: Record,
+                   func: nil,
+                   kind: :alias_reference
+                 }
+               ],
+               5 => [
+                 %CallInfo{
+                   arity: 2,
+                   position: {5, 3},
+                   func: :def,
+                   mod: Kernel,
+                   kind: :imported_macro
+                 }
+               ],
                6 => [
-                 %CallInfo{arity: 1, position: {6, 8}, func: :inspect, mod: IO},
-                 %CallInfo{arity: 0, position: {6, 16}, func: :binding, mod: Kernel},
-                 %ElixirSense.Core.State.CallInfo{
+                 %CallInfo{
+                   arity: 0,
+                   position: {6, 16},
+                   func: :binding,
+                   mod: Kernel,
+                   kind: :imported_macro
+                 },
+                 %CallInfo{
+                   arity: 1,
+                   position: {6, 8},
+                   func: :inspect,
+                   mod: IO,
+                   kind: :remote_function
+                 },
+                 %CallInfo{
                    arity: nil,
                    position: {6, 5},
                    mod: IO,
-                   func: nil
+                   func: nil,
+                   kind: :alias_reference
                  }
                ]
              } == state.calls
@@ -7460,8 +7532,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{
                2 => [
-                 %CallInfo{arity: 0, func: :integer, position: {2, 14}, mod: nil},
-                 _
+                 _,
+                 %CallInfo{
+                   arity: 0,
+                   func: :integer,
+                   position: {2, 14},
+                   mod: nil,
+                   kind: :builtin_typespec
+                 }
                ]
              } = state.calls
     end
@@ -7477,8 +7555,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{
                2 => [
-                 %CallInfo{arity: 0, func: :integer, position: {2, 16}, mod: nil},
-                 _
+                 _,
+                 %CallInfo{
+                   arity: 0,
+                   func: :integer,
+                   position: {2, 16},
+                   mod: nil,
+                   kind: :builtin_typespec
+                 }
                ]
              } = state.calls
     end
@@ -7494,8 +7578,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{
                2 => [
-                 %CallInfo{arity: 0, func: :t, position: {2, 19}, mod: Enum},
-                 _
+                 _,
+                 _,
+                 %CallInfo{
+                   arity: 0,
+                   func: :t,
+                   position: {2, 19},
+                   mod: Enum,
+                   kind: :remote_typespec
+                 }
                ]
              } = state.calls
     end
@@ -7512,12 +7603,26 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{
                2 => [
-                 %CallInfo{arity: 0, func: :t, position: {2, 21}, mod: Enum},
-                 _
+                 %CallInfo{arity: 1, func: :@, position: {2, 3}, mod: Kernel},
+                 %CallInfo{kind: :alias_reference},
+                 %CallInfo{
+                   arity: 0,
+                   func: :t,
+                   position: {2, 21},
+                   mod: Enum,
+                   kind: :remote_typespec
+                 }
                ],
                3 => [
-                 %CallInfo{arity: 0, func: :t, position: {3, 23}, mod: Enum},
-                 _
+                 %CallInfo{arity: 1, func: :@, position: {3, 3}, mod: Kernel},
+                 %CallInfo{kind: :alias_reference},
+                 %CallInfo{
+                   arity: 0,
+                   func: :t,
+                   position: {3, 23},
+                   mod: Enum,
+                   kind: :remote_typespec
+                 }
                ]
              } = state.calls
     end
@@ -7526,18 +7631,37 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       state =
         """
         defmodule NyModule do
-          @callback a(b, c, d) :: {b, integer(), c} when b: map(), c: var, d: pos_integer
+          @type foo :: integer()
+          @callback a(b, c, d) :: {b, integer(), c} when b: foo(), c: var, d: pos_integer
         end
         """
         |> string_to_state
 
       # NOTE var is not a type but a special variable
       assert %{
-               2 => [
-                 %CallInfo{arity: 0, func: :pos_integer, position: {2, 71}, mod: nil},
-                 %CallInfo{arity: 0, func: :map, position: {2, 53}, mod: nil},
-                 %CallInfo{arity: 0, func: :integer, position: {2, 31}, mod: nil},
-                 _
+               3 => [
+                 %CallInfo{arity: 1, func: :@, position: {3, 3}, mod: Kernel},
+                 %CallInfo{
+                   arity: 0,
+                   func: :pos_integer,
+                   position: {3, 71},
+                   mod: nil,
+                   kind: :builtin_typespec
+                 },
+                 %CallInfo{
+                   arity: 0,
+                   func: :foo,
+                   position: {3, 53},
+                   mod: NyModule,
+                   kind: :local_typespec
+                 },
+                 %CallInfo{
+                   arity: 0,
+                   func: :integer,
+                   position: {3, 31},
+                   mod: nil,
+                   kind: :builtin_typespec
+                 }
                ]
              } = state.calls
     end
@@ -7554,15 +7678,61 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{
                2 => [
-                 %CallInfo{arity: 0, func: :integer, position: {2, 84}, mod: nil},
-                 %CallInfo{arity: 0, func: :integer, position: {2, 72}, mod: nil},
-                 %CallInfo{arity: 0, func: :integer, position: {2, 56}, mod: nil},
-                 %CallInfo{arity: 0, func: :integer, position: {2, 38}, mod: nil} | _
+                 %CallInfo{arity: 1, func: :@, position: {2, 3}, mod: Kernel},
+                 %CallInfo{
+                   arity: 0,
+                   func: :integer,
+                   position: {2, 84},
+                   mod: nil,
+                   kind: :builtin_typespec
+                 },
+                 %CallInfo{
+                   arity: 0,
+                   func: :integer,
+                   position: {2, 72},
+                   mod: nil,
+                   kind: :builtin_typespec
+                 },
+                 %CallInfo{
+                   arity: 0,
+                   func: :integer,
+                   position: {2, 56},
+                   mod: nil,
+                   kind: :builtin_typespec
+                 },
+                 %CallInfo{
+                   arity: 0,
+                   func: :integer,
+                   position: {2, 38},
+                   mod: nil,
+                   kind: :builtin_typespec
+                 }
+                 | _
                ],
                3 => [
-                 %CallInfo{arity: 0, func: :integer, position: {3, 61}, mod: nil},
-                 %CallInfo{arity: 0, func: :integer, position: {3, 44}, mod: nil},
-                 %CallInfo{arity: 0, func: :integer, position: {3, 26}, mod: nil} | _
+                 %CallInfo{arity: 1, func: :@, position: {3, 3}, mod: Kernel},
+                 %CallInfo{
+                   arity: 0,
+                   func: :integer,
+                   position: {3, 61},
+                   mod: nil,
+                   kind: :builtin_typespec
+                 },
+                 %CallInfo{
+                   arity: 0,
+                   func: :integer,
+                   position: {3, 44},
+                   mod: nil,
+                   kind: :builtin_typespec
+                 },
+                 %CallInfo{
+                   arity: 0,
+                   func: :integer,
+                   position: {3, 26},
+                   mod: nil,
+                   kind: :builtin_typespec
+                 }
+                 | _
                ]
              } = state.calls
     end
@@ -7580,7 +7750,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               4 => [%CallInfo{arity: 0, func: :func_1, position: {4, 5}, mod: nil}]
+               4 => [
+                 %CallInfo{
+                   arity: 0,
+                   func: :func_1,
+                   position: {4, 5},
+                   mod: NyModule,
+                   kind: :local_function
+                 }
+               ]
              } = state.calls
     end
 
@@ -7596,7 +7774,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               3 => [%CallInfo{arity: 1, func: :func_1, position: {3, 5}, mod: nil}]
+               3 => [
+                 %CallInfo{
+                   arity: 1,
+                   func: :func_1,
+                   position: {3, 5},
+                   mod: NyModule,
+                   kind: :local_function
+                 }
+               ]
              } = state.calls
     end
 
@@ -7613,12 +7799,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{
                3 => [
-                 %CallInfo{arity: 1, func: :func, position: {3, 11}, mod: MyMod},
-                 %ElixirSense.Core.State.CallInfo{
+                 %CallInfo{
+                   arity: 1,
+                   func: :func,
+                   position: {3, 11},
+                   mod: MyMod,
+                   kind: :remote_function
+                 },
+                 %CallInfo{
                    arity: nil,
                    position: {3, 5},
                    mod: MyMod,
-                   func: nil
+                   func: nil,
+                   kind: :alias_reference
                  }
                ]
              } = state.calls
@@ -7639,11 +7832,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{
                4 => [
-                 %CallInfo{arity: 1, func: :func, position: {4, 11}, mod: {:attribute, :attr}},
-                 _
+                 %CallInfo{mod: Kernel, func: :@},
+                 %CallInfo{
+                   arity: 1,
+                   func: :func,
+                   position: {4, 11},
+                   mod: {:attribute, :attr},
+                   kind: :remote_function
+                 }
                ],
                5 => [
-                 %CallInfo{arity: 1, func: :func, position: {5, 9}, mod: {:variable, :var, 0}}
+                 %CallInfo{
+                   arity: 1,
+                   func: :func,
+                   position: {5, 9},
+                   mod: {:variable, :var, 0},
+                   kind: :remote_function
+                 }
                ]
              } = state.calls
     end
@@ -7693,11 +7898,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{
                4 => [
-                 %CallInfo{arity: 0, func: {:attribute, :attr}, position: {4, 11}, mod: nil},
-                 _
+                 %CallInfo{mod: Kernel, func: :@},
+                 %CallInfo{
+                   arity: 0,
+                   func: {:attribute, :attr},
+                   position: {4, 11},
+                   mod: nil,
+                   kind: :anonymous_function
+                 }
                ],
                5 => [
-                 %CallInfo{arity: 0, func: {:variable, :var, 0}, position: {5, 9}, mod: nil}
+                 %CallInfo{
+                   arity: 0,
+                   func: {:variable, :var, 0},
+                   position: {5, 9},
+                   mod: nil,
+                   kind: :anonymous_function
+                 }
                ]
              } = state.calls
     end
@@ -7817,7 +8034,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Enum.any?(
                state.calls[3],
-               &match?(%CallInfo{arity: 2, position: {3, 15}, func: :func, mod: nil}, &1)
+               &match?(%CallInfo{arity: 2, position: {3, 15}, func: :func, mod: NyModule}, &1)
              )
     end
 
@@ -7839,7 +8056,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Enum.any?(
                state.calls[3],
-               &match?(%CallInfo{arity: 1, position: {3, 31}, func: :other, mod: nil}, &1)
+               &match?(%CallInfo{arity: 1, position: {3, 31}, func: :other, mod: NyModule}, &1)
              )
     end
 
@@ -7878,7 +8095,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Enum.any?(
                state.calls[3],
-               &match?(%CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil}, &1)
+               &match?(%CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: NyModule}, &1)
              )
 
       assert Enum.any?(
@@ -7900,12 +8117,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert Enum.any?(
                state.calls[3],
-               &match?(%CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: nil}, &1)
+               &match?(%CallInfo{arity: 1, position: {3, 15}, func: :func_1, mod: NyModule}, &1)
              )
 
       assert Enum.any?(
                state.calls[3],
-               &match?(%CallInfo{arity: 1, position: {3, 27}, func: :other, mod: nil}, &1)
+               &match?(%CallInfo{arity: 1, position: {3, 27}, func: :other, mod: NyModule}, &1)
              )
     end
 
@@ -7922,7 +8139,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls[5] == [%CallInfo{arity: 2, position: {5, 5}, func: :test, mod: nil}]
+      assert state.calls[5] == [
+               %CallInfo{arity: 2, position: {5, 5}, func: :test, mod: My, kind: :local_function}
+             ]
     end
 
     test "registers super capture expression" do
@@ -7938,7 +8157,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert [_, %CallInfo{arity: 2, position: {5, 20}, func: :test, mod: nil}, _, _] =
+      assert [
+               _,
+               %CallInfo{
+                 arity: 2,
+                 position: {5, 20},
+                 func: :test,
+                 mod: My,
+                 kind: :local_function
+               },
+               _,
+               _
+             ] =
                state.calls[5]
     end
 
@@ -7955,7 +8185,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert [_, %CallInfo{arity: 2, position: {5, 31}, func: :test, mod: nil}, _, _] =
+      assert [
+               _,
+               %CallInfo{
+                 arity: 2,
+                 position: {5, 31},
+                 func: :test,
+                 mod: My,
+                 kind: :local_function
+               },
+               _,
+               _
+             ] =
                state.calls[5]
     end
 
@@ -8024,27 +8265,42 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert %{
                9 => [
-                 %CallInfo{arity: 0, position: {9, 10}, func: :bar, mod: Foo},
+                 %CallInfo{
+                   arity: 0,
+                   position: {9, 10},
+                   func: :bar,
+                   mod: Foo,
+                   kind: :remote_function
+                 },
                  %CallInfo{
                    arity: nil,
                    position: {9, 6},
                    mod: Foo,
-                   func: nil
+                   func: nil,
+                   kind: :alias_reference
                  }
                ],
                10 => [
-                 _,
                  %CallInfo{
                    arity: 1,
                    position: {10, 30},
                    func: :squared,
-                   mod: ElixirSenseExample.Math
+                   mod: ElixirSenseExample.Math,
+                   kind: :remote_macro
+                 },
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 2,
+                   func: :*,
+                   kind: :remote_function,
+                   mod: Kernel,
+                   position: {10, nil}
                  },
                  %ElixirSense.Core.State.CallInfo{
                    arity: nil,
                    position: {10, 6},
                    mod: ElixirSenseExample.Math,
-                   func: nil
+                   func: nil,
+                   kind: :alias_reference
                  }
                ]
              } = state.calls
@@ -8073,58 +8329,90 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         defmodule MyModule do
           require ElixirSense.Core.MetadataBuilderTest.QuotedCalls, as: Q
-          def aaa, do: Q.foo()
+          def aasa, do: Q.foo()
         end
         """
         |> string_to_state
 
       assert [
-               %CallInfo{
-                 func: :nodes,
-                 mod: :erlang
+               %ElixirSense.Core.State.CallInfo{
+                 func: :def,
+                 kind: :imported_macro,
+                 mod: Kernel,
+                 arity: 2
+               },
+               %ElixirSense.Core.State.CallInfo{
+                 func: :foo,
+                 kind: :remote_macro,
+                 mod: ElixirSense.Core.MetadataBuilderTest.QuotedCalls,
+                 arity: 0
+               },
+               %ElixirSense.Core.State.CallInfo{
+                 func: :aaa,
+                 kind: :local_function,
+                 mod: MyModule,
+                 arity: 0
+               },
+               %ElixirSense.Core.State.CallInfo{
+                 func: :bbb,
+                 kind: :local_function,
+                 mod: MyModule,
+                 arity: 0
+               },
+               %ElixirSense.Core.State.CallInfo{
+                 func: :inspect,
+                 mod: Kernel,
+                 arity: 1,
+                 kind: :remote_function
+               },
+               %ElixirSense.Core.State.CallInfo{
+                 arity: 1,
+                 position: {3, nil},
+                 mod: Kernel,
+                 func: :inspect,
+                 kind: :remote_function
+               },
+               %ElixirSense.Core.State.CallInfo{
+                 arity: 0,
+                 func: :list,
+                 mod: Node,
+                 kind: :remote_function
+               },
+               %ElixirSense.Core.State.CallInfo{
+                 func: nil,
+                 kind: :alias_reference,
+                 mod: Node,
+                 arity: nil
+               },
+               %ElixirSense.Core.State.CallInfo{
+                 func: :list,
+                 mod: Node,
+                 arity: 0,
+                 kind: :remote_function
                },
                %ElixirSense.Core.State.CallInfo{
                  arity: nil,
-                 position: {3, nil},
+                 func: nil,
                  mod: Node,
-                 func: nil
-               },
-               %CallInfo{
-                 func: :nodes,
-                 mod: :erlang
+                 kind: :alias_reference
                },
                %ElixirSense.Core.State.CallInfo{
-                 arity: nil,
-                 position: {3, nil},
-                 mod: Node,
-                 func: nil
-               },
-               %CallInfo{
-                 func: :inspect,
-                 mod: Kernel
-               },
-               %CallInfo{
-                 func: :inspect,
-                 mod: Kernel
-               },
-               %CallInfo{
                  func: :bbb,
-                 mod: nil
+                 kind: :local_function,
+                 mod: MyModule,
+                 arity: 0
                },
-               %CallInfo{
-                 func: :bbb,
-                 mod: nil
-               },
-               %CallInfo{
+               %ElixirSense.Core.State.CallInfo{
                  func: :aaa,
-                 mod: nil
+                 kind: :local_function,
+                 mod: MyModule,
+                 arity: 0
                },
-               %CallInfo{
-                 func: :aaa,
-                 mod: nil
-               },
-               _,
-               _
+               %ElixirSense.Core.State.CallInfo{
+                 func: nil,
+                 kind: :alias_reference,
+                 mod: ElixirSense.Core.MetadataBuilderTest.QuotedCalls
+               }
              ] = state.calls[3]
     end
 
@@ -8158,10 +8446,82 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       # Hence we trace call only on line with import capture
 
       assert %{
-               11 => [%CallInfo{arity: 1, position: {11, 7}, func: :inspect, mod: Kernel}]
+               7 => [
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 2,
+                   position: {7, 11},
+                   func: :/,
+                   mod: Kernel,
+                   kind: :imported_quoted
+                 }
+               ],
+               9 => [
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 2,
+                   position: {9, 11},
+                   func: :/,
+                   mod: Kernel,
+                   kind: :imported_quoted
+                 }
+               ],
+               10 => [
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 2,
+                   position: {10, 7},
+                   func: :inspect,
+                   mod: Kernel,
+                   kind: :imported_quoted
+                 },
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 1,
+                   position: {10, 7},
+                   func: :inspect,
+                   mod: Kernel,
+                   kind: :imported_quoted
+                 }
+               ],
+               11 => [
+                 %CallInfo{
+                   arity: 1,
+                   position: {11, 7},
+                   func: :inspect,
+                   mod: Kernel,
+                   kind: :imported_function
+                 },
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 2,
+                   position: {11, 15},
+                   mod: Kernel,
+                   func: :/,
+                   kind: :imported_quoted
+                 },
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 2,
+                   position: {11, 8},
+                   mod: Kernel,
+                   func: :inspect,
+                   kind: :imported_quoted
+                 },
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 1,
+                   position: {11, 8},
+                   mod: Kernel,
+                   func: :inspect,
+                   kind: :imported_quoted
+                 }
+               ],
+               13 => [
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 2,
+                   position: {13, 17},
+                   func: :/,
+                   mod: Kernel,
+                   kind: :imported_quoted
+                 }
+               ]
              } = state.calls
 
-      for i <- Enum.to_list(5..10) ++ Enum.to_list(12..13) do
+      for i <- [5, 6, 8, 12] do
         refute Map.has_key?(state.calls, i)
       end
     end
@@ -8236,8 +8596,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               4 => [%CallInfo{arity: 0, func: :nodes, position: {4, 6}, mod: :erlang}],
-               5 => [%CallInfo{arity: 0, func: :binding, position: {5, 6}, mod: Kernel}]
+               4 => [
+                 %CallInfo{
+                   arity: 0,
+                   func: :list,
+                   position: {4, 6},
+                   mod: Node,
+                   kind: :imported_function
+                 }
+               ],
+               5 => [
+                 %CallInfo{
+                   arity: 0,
+                   func: :binding,
+                   position: {5, 6},
+                   mod: Kernel,
+                   kind: :imported_macro
+                 }
+               ]
              } = state.calls
     end
 
@@ -8258,10 +8634,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               5 => [%CallInfo{arity: 1, func: :func, position: {5, 6}, mod: nil}],
-               6 => [%CallInfo{arity: 0, func: :func, position: {6, 6}, mod: nil}],
-               7 => [%CallInfo{arity: 0, func: :foo, position: {7, 6}, mod: nil}],
-               8 => [%CallInfo{arity: 0, func: :bar, position: {8, 6}, mod: nil}]
+               5 => [%CallInfo{arity: 1, func: :func, position: {5, 6}, mod: NyModule}],
+               6 => [%CallInfo{arity: 0, func: :func, position: {6, 6}, mod: NyModule}],
+               7 => [%CallInfo{arity: 0, func: :foo, position: {7, 6}, mod: NyModule}],
+               8 => [%CallInfo{arity: 0, func: :bar, position: {8, 6}, mod: NyModule}]
              } = state.calls
     end
 
@@ -8277,7 +8653,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert %{
-               3 => [%CallInfo{arity: 2, func: :func, position: {3, 6}, mod: nil}]
+               3 => [%CallInfo{arity: 2, func: :func, position: {3, 6}, mod: NyModule}]
              } = state.calls
     end
 
@@ -8695,7 +9071,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
              ] = state.lines_to_env[4].attributes
 
-      assert [%CallInfo{position: {3, 25}}, %CallInfo{position: {3, 3}}] =
+      assert [%CallInfo{position: {3, 3}}, %CallInfo{position: {3, 25}}] =
                state.calls[3] |> Enum.filter(&(&1.func == :@))
     end
   end

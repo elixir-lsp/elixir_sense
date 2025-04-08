@@ -33,8 +33,23 @@ defmodule ElixirSense.Core.References.Tracer do
       callee: {module, name, arity},
       file: env.file |> Path.relative_to_cwd(),
       line: meta[:line],
-      column: meta[:column]
+      column: meta[:column],
+      kind: kind
     })
+
+    :ok
+  end
+
+  def trace({:imported_quoted, meta, module, name, arities}, %Macro.Env{} = env) do
+    for arity <- arities do
+      register_call(%{
+        callee: {module, name, arity},
+        file: env.file |> Path.relative_to_cwd(),
+        line: meta[:line],
+        column: meta[:column],
+        kind: :imported_quoted
+      })
+    end
 
     :ok
   end
@@ -45,7 +60,8 @@ defmodule ElixirSense.Core.References.Tracer do
       callee: {env.module, name, arity},
       file: env.file |> Path.relative_to_cwd(),
       line: meta[:line],
-      column: meta[:column]
+      column: meta[:column],
+      kind: kind
     })
 
     :ok
@@ -56,8 +72,11 @@ defmodule ElixirSense.Core.References.Tracer do
       callee: {module, nil, nil},
       file: env.file |> Path.relative_to_cwd(),
       line: meta[:line],
-      column: meta[:column]
+      column: meta[:column],
+      kind: :alias_reference
     })
+
+    :ok
   end
 
   def trace({:alias, meta, module, _as, _opts}, %Macro.Env{} = env) do
@@ -65,8 +84,11 @@ defmodule ElixirSense.Core.References.Tracer do
       callee: {module, nil, nil},
       file: env.file |> Path.relative_to_cwd(),
       line: meta[:line],
-      column: meta[:column]
+      column: meta[:column],
+      kind: :alias
     })
+
+    :ok
   end
 
   def trace({kind, meta, module, _opts}, %Macro.Env{} = env) when kind in [:import, :require] do
@@ -74,8 +96,23 @@ defmodule ElixirSense.Core.References.Tracer do
       callee: {module, nil, nil},
       file: env.file |> Path.relative_to_cwd(),
       line: meta[:line],
-      column: meta[:column]
+      column: meta[:column],
+      kind: kind
     })
+
+    :ok
+  end
+
+  def trace(:defmodule, %Macro.Env{} = env) do
+    register_call(%{
+      callee: {Kernel, :defmodule, 2},
+      file: env.file |> Path.relative_to_cwd(),
+      line: env.line,
+      column: 1,
+      kind: :imported_macro
+    })
+
+    :ok
   end
 
   def trace(_trace, _env) do

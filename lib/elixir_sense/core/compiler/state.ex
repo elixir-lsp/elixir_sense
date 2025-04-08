@@ -285,54 +285,60 @@ defmodule ElixirSense.Core.Compiler.State do
   def add_call_to_line(
         %__MODULE__{} = state,
         {{:@, _meta, [{name, _name_meta, nil}]}, func, arity},
-        meta
+        meta,
+        kind
       )
       when is_atom(name) do
-    do_add_call_to_line(state, {{:attribute, name}, func, arity}, meta)
+    do_add_call_to_line(state, {{:attribute, name}, func, arity}, meta, kind)
   end
 
   def add_call_to_line(
         %__MODULE__{} = state,
         {{name, var_meta, args}, func, arity},
-        meta
+        meta,
+        kind
       )
       when is_atom(name) and is_atom(args) and
              name not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
     do_add_call_to_line(
       state,
       {{:variable, name, Keyword.get(var_meta, :version, :any)}, func, arity},
-      meta
+      meta,
+      kind
     )
   end
 
   def add_call_to_line(
         %__MODULE__{} = state,
         {nil, {:@, _meta, [{name, _name_meta, _args}]}, arity},
-        meta
+        meta,
+        kind
       )
       when is_atom(name) do
-    do_add_call_to_line(state, {nil, {:attribute, name}, arity}, meta)
+    do_add_call_to_line(state, {nil, {:attribute, name}, arity}, meta, kind)
   end
 
   def add_call_to_line(
         %__MODULE__{} = state,
         {nil, {name, var_meta, args}, arity},
-        meta
+        meta,
+        kind
       )
       when is_atom(name) and is_atom(args) and
              name not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] do
     do_add_call_to_line(
       state,
       {nil, {:variable, name, Keyword.get(var_meta, :version, :any)}, arity},
-      meta
+      meta,
+      kind
     )
   end
 
-  def add_call_to_line(state, call, meta) do
-    do_add_call_to_line(state, call, meta)
+  def add_call_to_line(state, call, meta, kind) do
+    do_add_call_to_line(state, call, meta, kind)
   end
 
-  defp do_add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, meta) do
+  defp do_add_call_to_line(%__MODULE__{} = state, {mod, func, arity}, meta, kind) do
     # extract_position is not suitable here, we need to handle invalid lines
     line = Keyword.get(meta, :line, 0)
     column = Keyword.get(meta, :column, nil)
@@ -342,7 +348,7 @@ defmodule ElixirSense.Core.Compiler.State do
         column + Keyword.get(meta, :column_correction, 0)
       end
 
-    call = %CallInfo{mod: mod, func: func, arity: arity, position: {line, column}}
+    call = %CallInfo{mod: mod, func: func, arity: arity, position: {line, column}, kind: kind}
 
     calls =
       Map.update(state.calls, line, [call], fn line_calls ->

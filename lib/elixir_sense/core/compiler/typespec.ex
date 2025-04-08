@@ -328,7 +328,6 @@ defmodule ElixirSense.Core.Compiler.Typespec do
 
   defp typespec({:%, struct_meta, [name, {:%{}, meta, fields}]}, vars, caller, state) do
     expanded = Compiler.Macro.expand(name, %{caller | function: {:__info__, 1}})
-    state = Compiler.collect_traces(state)
 
     case expanded do
       module when is_atom(module) ->
@@ -460,7 +459,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     state =
       state
       |> State.add_attribute(caller, attr, attr_meta, nil, nil, false)
-      |> State.add_call_to_line({Kernel, :@, 0}, attr_meta)
+      |> State.add_call_to_line({Kernel, :@, 0}, attr_meta, :imported_macro)
 
     case Map.get(state.attribute_store, {caller.module, attr}) do
       remote when is_atom(remote) and remote != nil ->
@@ -542,7 +541,14 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     {args, state} = :lists.mapfoldl(&typespec(&1, vars, caller, &2), state, args)
     # elixir raises if type is not defined
 
-    state = State.add_call_to_line(state, {nil, name, length(args)}, meta)
+    arity = length(args)
+
+    {remote, kind} =
+      if not :erl_internal.is_type(name, arity),
+        do: {caller.module, :local_typespec},
+        else: {nil, :builtin_typespec}
+
+    state = State.add_call_to_line(state, {remote, name, arity}, meta, kind)
 
     {{name, meta, args}, state}
   end
@@ -612,13 +618,19 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     {nil, state}
   end
 
-  # TODO trace alias?
-  # TODO trace calls in expand
   defdelegate expand_remote(other, env), to: ElixirSense.Core.Compiler.Macro, as: :expand
 
   defp remote_type({{:., dot_meta, [remote_spec, name_spec]}, meta, args}, vars, caller, state) do
     {args, state} = :lists.mapfoldl(&typespec(&1, vars, caller, &2), state, args)
-    state = State.add_call_to_line(state, {remote_spec, name_spec, length(args)}, meta)
+
+    state =
+      State.add_call_to_line(
+        state,
+        {remote_spec, name_spec, length(args)},
+        meta,
+        :remote_typespec
+      )
+
     {{{:., dot_meta, [remote_spec, name_spec]}, meta, args}, state}
   end
 
