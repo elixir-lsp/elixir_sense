@@ -1679,7 +1679,7 @@ defmodule ElixirSense.Core.Compiler do
     state_orig = state
     original_env = env
 
-    {expanded, _state, _env} = expand(alias, state, env)
+    {expanded, _state, _env} = expand_without_aliases_report(alias, state, env)
 
     {full, env} =
       if is_atom(expanded) do
