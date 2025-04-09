@@ -1,7 +1,6 @@
 defmodule ElixirSense.Core.Compiler.Quote do
   alias ElixirSense.Core.Compiler.Dispatch
   alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
-  alias ElixirSense.Core.Compiler.State
 
   defstruct line: false,
             file: nil,

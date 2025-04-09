@@ -7579,7 +7579,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{
                2 => [
                  _,
-                 _,
                  %CallInfo{
                    arity: 0,
                    func: :t,
@@ -7604,7 +7603,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{
                2 => [
                  %CallInfo{arity: 1, func: :@, position: {2, 3}, mod: Kernel},
-                 %CallInfo{kind: :alias_reference},
                  %CallInfo{
                    arity: 0,
                    func: :t,
@@ -7615,7 +7613,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                ],
                3 => [
                  %CallInfo{arity: 1, func: :@, position: {3, 3}, mod: Kernel},
-                 %CallInfo{kind: :alias_reference},
                  %CallInfo{
                    arity: 0,
                    func: :t,

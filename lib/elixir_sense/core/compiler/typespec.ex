@@ -2,6 +2,8 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   alias ElixirSense.Core.Compiler
   alias ElixirSense.Core.Compiler.Utils
   alias ElixirSense.Core.Compiler.State
+  alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
+
   def spec_to_signature({:when, _, [spec, _]}), do: type_to_signature(spec)
   def spec_to_signature(other), do: type_to_signature(other)
 
@@ -618,7 +620,27 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     {nil, state}
   end
 
-  defdelegate expand_remote(other, env), to: ElixirSense.Core.Compiler.Macro, as: :expand
+  # This is a modified backport of Macro.expand/2 because we want to expand
+  # aliases but we don't them to become compile-time references.
+  defp expand_remote({:__aliases__, meta, [head | tail] = list} = alias, env) do
+    # TODO pass true to track alias_expansion?
+    case NormalizedMacroEnv.expand_alias(env, meta, list, trace: false) do
+      {:alias, alias} ->
+        alias
+
+      :error ->
+        head = ElixirSense.Core.Compiler.Macro.expand(head, env)
+
+        if is_atom(head) do
+          Module.concat([head | tail])
+        else
+          # elixir raises here
+          alias
+        end
+    end
+  end
+
+  defp expand_remote(other, env), do: ElixirSense.Core.Compiler.Macro.expand(other, env)
 
   defp remote_type({{:., dot_meta, [remote_spec, name_spec]}, meta, args}, vars, caller, state) do
     {args, state} = :lists.mapfoldl(&typespec(&1, vars, caller, &2), state, args)

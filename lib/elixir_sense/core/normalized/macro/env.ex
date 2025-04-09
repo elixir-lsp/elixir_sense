@@ -25,7 +25,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
         false ->
           allow_locals = Keyword.get(opts, :allow_locals, true)
           trace = Keyword.get(opts, :trace, true)
-          module = env.module
+          # module = env.module
 
           # elixir version passes module.__info__(:macros) as extra, we do not need that
           # instead we override local_for_callback
@@ -638,7 +638,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
       fn args, caller -> expand_macro_fun(meta, fun, receiver, name, args, caller, e) end
     end
 
-    defp expand_macro_fun(_meta, fun, _receiver, name, args, caller, _e) do
+    defp expand_macro_fun(_meta, fun, _receiver, _name, args, caller, _e) do
       # elixir applies local macro via apply/2
       # we need to check if the macro is a function as we return a fake for local macros
       if is_function(fun) do
