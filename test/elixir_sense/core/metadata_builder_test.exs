@@ -4844,7 +4844,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                },
                MyModule.Second => %StructInfo{
                  fields: [
-                   baz: {:%, [], [MyModule.First, {:%{}, [], [{:foo, :bar}]}]},
+                   baz: {:%, [{:line, 1}], [MyModule.First, {:%{}, [{:line, 1}], [{:foo, :bar}]}]},
                    __struct__: MyModule.Second
                  ]
                }
@@ -7519,7 +7519,74 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              } == state.calls
     end
 
-    # TODO track Kernel.SpecialForms calls?
+    defmodule ModuleCallbacks do
+      defmacro __before_compile_macro__(_env) do
+        quote do
+          def hello, do: "world"
+        end
+      end
+    
+      def __before_compile__(env) do
+        IO.inspect(env)
+      end
+    
+      def __after_compile__(env, _bytecode) do
+        IO.inspect(env)
+      end
+    
+      def __after_verify__(module) do
+        IO.inspect(module)
+        :ok
+      end
+    end
+
+    test "registers module callback calls" do
+      state =
+        """
+        defmodule WithCallbacks do
+          @before_compile {ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks, :__before_compile_macro__}
+          @before_compile ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks
+          @after_compile ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks
+          @after_verify ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks
+        end
+        """
+        |> string_to_state
+
+      assert state.calls[1] |> Enum.any?(fn info -> match?(%ElixirSense.Core.State.CallInfo{
+        arity: 1,
+        position: {1, nil},
+        mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
+        func: :__before_compile_macro__,
+        kind: :remote_macro
+      }, info) end)
+
+      assert state.calls[1] |> Enum.any?(fn info -> match?(%ElixirSense.Core.State.CallInfo{
+        arity: 1,
+        position: {1, nil},
+        mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
+        func: :__before_compile__,
+        kind: :remote_function
+      }, info) end)
+
+        assert state.calls[1] |> Enum.any?(fn info -> match?(%ElixirSense.Core.State.CallInfo{
+          arity: 2,
+          position: {1, nil},
+          mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
+          func: :__after_compile__,
+          kind: :remote_function
+        }, info) end)
+
+        assert state.calls[1] |> Enum.any?(fn info -> match?(%ElixirSense.Core.State.CallInfo{
+          arity: 1,
+          position: {1, nil},
+          mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
+          func: :__after_verify__,
+          kind: :remote_function
+        }, info) end)
+      # TODO: on_load and on_definition callbacks are not registered
+      # https://github.com/elixir-lang/elixir/issues/14427
+      # assert [] = state.calls[1]
+    end
 
     test "registers typespec no parens calls" do
       state =

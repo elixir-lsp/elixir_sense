@@ -1728,11 +1728,12 @@ defmodule ElixirSense.Core.Compiler do
     # here we handle module callbacks. Only before_compile macro callbacks are expanded as they
     # affect module body. Func before_compile callbacks are not executed. after_compile and after_verify
     # are not executed as we do not preform a real compilation
-    {state, _e_env} =
-      for args <- Map.get(state.attribute_store, {full, :before_compile}, []) do
+    {state, _e_env} = ~w(before_compile after_compile after_verify)a
+    |> Enum.reduce({state, e_env}, fn attribute, {state, env} ->
+      for args <- Map.get(state.attribute_store, {full, attribute}, []) do
         case args do
           {module, fun} -> [module, fun]
-          module -> [module, :__before_compile__]
+          module -> [module, :"__#{attribute}__"]
         end
       end
       |> Enum.reduce({state, e_env}, fn target, {state, env} ->
@@ -1744,16 +1745,23 @@ defmodule ElixirSense.Core.Compiler do
         # elixir dispatches callbacks by raw dispatch and eval_forms
         # instead we expand a bock with require and possibly expand macros
         # we do not attempt to exec function callbacks
+        args = case attribute do
+          :before_compile -> [env]
+          :after_compile -> [env, <<>>]
+          :after_verify -> [full]
+        end
+
         ast =
           {:__block__, [],
            [
              {:require, [], [hd(target)]},
-             {{:., [], target}, [], [env]}
+             {{:., [line: meta[:line]], target}, [line: meta[:line]], args}
            ]}
 
         {_result, state, env} = expand(ast, state, env)
         {State.remove_func_vars_scope(state, state_orig), env}
       end)
+    end)
 
     # restore vars from outer scope
     # restore version counter
