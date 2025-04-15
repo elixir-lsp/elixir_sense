@@ -9,11 +9,10 @@ defmodule ElixirSense.Core.Compiler.Map do
 
     case validate_struct(e_left, context) do
       true when is_atom(e_left) ->
-        # TODO register alias/struct
         case extract_struct_assocs(e_right) do
           {:expand, map_meta, assocs} when context != :match ->
             assoc_keys = Enum.map(assocs, fn {k, _} -> k end)
-            struct = load_struct(e_left, [assocs], se, ee)
+            struct = load_struct(meta, e_left, [assocs], se, ee)
             keys = [:__struct__ | assoc_keys]
             without_keys = Elixir.Map.drop(struct, keys)
 
@@ -22,7 +21,8 @@ defmodule ElixirSense.Core.Compiler.Map do
 
             {{:%, meta, [e_left, {:%{}, map_meta, struct_assocs ++ assocs}]}, se, ee}
 
-          {_, _, _assocs} ->
+          {_, _, assocs} ->
+            :elixir_env.trace({:struct_expansion, meta, e_left, assocs}, e)
             # elixir validates assocs against struct keys
             # we don't need to validate keys
             {{:%, meta, [e_left, e_right]}, se, ee}
@@ -151,25 +151,29 @@ defmodule ElixirSense.Core.Compiler.Map do
     Keyword.delete(assocs, :__struct__)
   end
 
-  def load_struct(name, assocs, s, _e) do
+  def load_struct(meta, name, assocs, s, e) do
     case s.structs[name] do
       nil ->
         try do
           apply(name, :__struct__, assocs)
         else
           %{:__struct__ => ^name} = struct ->
+            :elixir_env.trace({:struct_expansion, meta, name, assocs}, e)
             struct
 
           _ ->
+            :elixir_env.trace({:struct_expansion, meta, name, assocs}, e)
             # recover from invalid return value
             [__struct__: name] |> merge_assocs(assocs)
         rescue
           _ ->
+            :elixir_env.trace({:struct_expansion, meta, name, assocs}, e)
             # recover from error by building the fake struct
             [__struct__: name] |> merge_assocs(assocs)
         end
 
       info ->
+        :elixir_env.trace({:struct_expansion, meta, name, assocs}, e)
         info.fields |> merge_assocs(assocs)
     end
   end

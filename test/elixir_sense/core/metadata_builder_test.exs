@@ -4844,7 +4844,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                },
                MyModule.Second => %StructInfo{
                  fields: [
-                   baz: {:%, [{:line, 1}], [MyModule.First, {:%{}, [{:line, 1}], [{:foo, :bar}]}]},
+                   baz:
+                     {:%, [{:line, 1}], [MyModule.First, {:%{}, [{:line, 1}], [{:foo, :bar}]}]},
                    __struct__: MyModule.Second
                  ]
                }
@@ -7525,15 +7526,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           def hello, do: "world"
         end
       end
-    
+
       def __before_compile__(env) do
         IO.inspect(env)
       end
-    
+
       def __after_compile__(env, _bytecode) do
         IO.inspect(env)
       end
-    
+
       def __after_verify__(module) do
         IO.inspect(module)
         :ok
@@ -7552,40 +7553,157 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert state.calls[1] |> Enum.any?(fn info -> match?(%ElixirSense.Core.State.CallInfo{
-        arity: 1,
-        position: {1, nil},
-        mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
-        func: :__before_compile_macro__,
-        kind: :remote_macro
-      }, info) end)
+      assert state.calls[1]
+             |> Enum.any?(fn info ->
+               match?(
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 1,
+                   position: {1, nil},
+                   mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
+                   func: :__before_compile_macro__,
+                   kind: :remote_macro
+                 },
+                 info
+               )
+             end)
 
-      assert state.calls[1] |> Enum.any?(fn info -> match?(%ElixirSense.Core.State.CallInfo{
-        arity: 1,
-        position: {1, nil},
-        mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
-        func: :__before_compile__,
-        kind: :remote_function
-      }, info) end)
+      assert state.calls[1]
+             |> Enum.any?(fn info ->
+               match?(
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 1,
+                   position: {1, nil},
+                   mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
+                   func: :__before_compile__,
+                   kind: :remote_function
+                 },
+                 info
+               )
+             end)
 
-        assert state.calls[1] |> Enum.any?(fn info -> match?(%ElixirSense.Core.State.CallInfo{
-          arity: 2,
-          position: {1, nil},
-          mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
-          func: :__after_compile__,
-          kind: :remote_function
-        }, info) end)
+      assert state.calls[1]
+             |> Enum.any?(fn info ->
+               match?(
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 2,
+                   position: {1, nil},
+                   mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
+                   func: :__after_compile__,
+                   kind: :remote_function
+                 },
+                 info
+               )
+             end)
 
-        assert state.calls[1] |> Enum.any?(fn info -> match?(%ElixirSense.Core.State.CallInfo{
-          arity: 1,
-          position: {1, nil},
-          mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
-          func: :__after_verify__,
-          kind: :remote_function
-        }, info) end)
+      assert state.calls[1]
+             |> Enum.any?(fn info ->
+               match?(
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 1,
+                   position: {1, nil},
+                   mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
+                   func: :__after_verify__,
+                   kind: :remote_function
+                 },
+                 info
+               )
+             end)
+
       # TODO: on_load and on_definition callbacks are not registered
       # https://github.com/elixir-lang/elixir/issues/14427
       # assert [] = state.calls[1]
+    end
+
+    defmodule StructExpansion do
+      defstruct [:foo]
+    end
+
+    test "registers struct expansion" do
+      state =
+        """
+        defmodule MyModule do
+          defstruct [:foo]
+        end
+
+        defmodule Foo do
+          @spec bar(%MyModule{}) :: %ElixirSense.Core.MetadataBuilderTest.StructExpansion{}
+          def bar(x) do
+            a = %ElixirSense.Core.MetadataBuilderTest.StructExpansion{foo: "bar"}
+            b = %MyModule{x | foo: "baz"}
+            a
+          end
+        end
+        """
+        |> string_to_state
+
+      assert %{
+               6 => [
+                 %CallInfo{
+                   mod: Kernel,
+                   func: :@
+                 },
+                 %CallInfo{
+                   arity: nil,
+                   position: {6, 14},
+                   mod: MyModule,
+                   func: nil,
+                   kind: :alias_reference
+                 },
+                 %CallInfo{
+                   arity: nil,
+                   position: {6, 13},
+                   mod: MyModule,
+                   func: nil,
+                   kind: :struct_expansion
+                 },
+                 %CallInfo{
+                   arity: nil,
+                   position: {6, 30},
+                   mod: ElixirSense.Core.MetadataBuilderTest.StructExpansion,
+                   func: nil,
+                   kind: :alias_reference
+                 },
+                 %CallInfo{
+                   arity: nil,
+                   position: {6, 29},
+                   mod: ElixirSense.Core.MetadataBuilderTest.StructExpansion,
+                   func: nil,
+                   kind: :struct_expansion
+                 }
+               ],
+               8 => [
+                 %CallInfo{
+                   arity: nil,
+                   position: {8, 9},
+                   mod: ElixirSense.Core.MetadataBuilderTest.StructExpansion,
+                   func: nil,
+                   kind: :struct_expansion
+                 },
+                 %CallInfo{
+                   arity: nil,
+                   position: {8, 10},
+                   mod: ElixirSense.Core.MetadataBuilderTest.StructExpansion,
+                   func: nil,
+                   kind: :alias_reference
+                 }
+               ],
+               9 => [
+                 %CallInfo{
+                   arity: nil,
+                   position: {9, 9},
+                   mod: MyModule,
+                   func: nil,
+                   kind: :struct_expansion
+                 },
+                 %CallInfo{
+                   arity: nil,
+                   position: {9, 10},
+                   mod: MyModule,
+                   func: nil,
+                   kind: :alias_reference
+                 }
+               ]
+             } = state.calls
     end
 
     test "registers typespec no parens calls" do

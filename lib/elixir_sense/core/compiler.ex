@@ -9,11 +9,24 @@ defmodule ElixirSense.Core.Compiler do
   alias ElixirSense.Core.State.ModFunInfo
 
   @trace_key :elixir_sense_trace
+  @trace_paused_key :elixir_sense_trace_paused
+
+  def pause_trace do
+    Process.put(@trace_paused_key, true)
+  end
+
+  def resume_trace do
+    Process.delete(@trace_paused_key)
+  end
 
   def trace(event, env) do
-    trace = get_trace()
-    Process.put(@trace_key, [{event, env} | trace])
-    :ok
+    if Process.get(@trace_paused_key) do
+      :ok
+    else
+      trace = get_trace()
+      Process.put(@trace_key, [{event, env} | trace])
+      :ok
+    end
   end
 
   defp get_trace do
@@ -62,6 +75,12 @@ defmodule ElixirSense.Core.Compiler do
             # emitted by MacroEnv.expand_require/6, MacroEnv.expand_import/5
             acc
             |> State.add_call_to_line({env.module, name, arity}, meta, kind)
+
+          {:struct_expansion, meta, name, _assocs} ->
+            acc
+            |> State.add_call_to_line({name, nil, nil}, meta, :struct_expansion)
+
+          # TODO: handle :alias_expansion
 
           _ ->
             Logger.warning("Unhandled trace event: #{inspect(event)}")
@@ -1728,40 +1747,42 @@ defmodule ElixirSense.Core.Compiler do
     # here we handle module callbacks. Only before_compile macro callbacks are expanded as they
     # affect module body. Func before_compile callbacks are not executed. after_compile and after_verify
     # are not executed as we do not preform a real compilation
-    {state, _e_env} = ~w(before_compile after_compile after_verify)a
-    |> Enum.reduce({state, e_env}, fn attribute, {state, env} ->
-      for args <- Map.get(state.attribute_store, {full, attribute}, []) do
-        case args do
-          {module, fun} -> [module, fun]
-          module -> [module, :"__#{attribute}__"]
+    {state, _e_env} =
+      ~w(before_compile after_compile after_verify)a
+      |> Enum.reduce({state, e_env}, fn attribute, {state, env} ->
+        for args <- Map.get(state.attribute_store, {full, attribute}, []) do
+          case args do
+            {module, fun} -> [module, fun]
+            module -> [module, :"__#{attribute}__"]
+          end
         end
-      end
-      |> Enum.reduce({state, e_env}, fn target, {state, env} ->
-        # module vars are not accessible in module callbacks
-        env = %{env | versioned_vars: %{}, line: meta[:line]}
-        state_orig = state
-        state = State.new_func_vars_scope(state)
+        |> Enum.reduce({state, e_env}, fn target, {state, env} ->
+          # module vars are not accessible in module callbacks
+          env = %{env | versioned_vars: %{}, line: meta[:line]}
+          state_orig = state
+          state = State.new_func_vars_scope(state)
 
-        # elixir dispatches callbacks by raw dispatch and eval_forms
-        # instead we expand a bock with require and possibly expand macros
-        # we do not attempt to exec function callbacks
-        args = case attribute do
-          :before_compile -> [env]
-          :after_compile -> [env, <<>>]
-          :after_verify -> [full]
-        end
+          # elixir dispatches callbacks by raw dispatch and eval_forms
+          # instead we expand a bock with require and possibly expand macros
+          # we do not attempt to exec function callbacks
+          args =
+            case attribute do
+              :before_compile -> [env]
+              :after_compile -> [env, <<>>]
+              :after_verify -> [full]
+            end
 
-        ast =
-          {:__block__, [],
-           [
-             {:require, [], [hd(target)]},
-             {{:., [line: meta[:line]], target}, [line: meta[:line]], args}
-           ]}
+          ast =
+            {:__block__, [],
+             [
+               {:require, [], [hd(target)]},
+               {{:., [line: meta[:line]], target}, [line: meta[:line]], args}
+             ]}
 
-        {_result, state, env} = expand(ast, state, env)
-        {State.remove_func_vars_scope(state, state_orig), env}
+          {_result, state, env} = expand(ast, state, env)
+          {State.remove_func_vars_scope(state, state_orig), env}
+        end)
       end)
-    end)
 
     # restore vars from outer scope
     # restore version counter

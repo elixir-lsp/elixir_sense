@@ -3,7 +3,7 @@ defmodule ElixirSense.Core.State.CallInfo do
   Reference info
   """
   @type t :: %ElixirSense.Core.State.CallInfo{
-          arity: non_neg_integer,
+          arity: non_neg_integer | nil,
           position: {non_neg_integer, pos_integer | nil},
           func: atom,
           mod: module | {:attribute, atom},

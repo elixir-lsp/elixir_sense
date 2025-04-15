@@ -115,6 +115,18 @@ defmodule ElixirSense.Core.References.Tracer do
     :ok
   end
 
+  def trace({:struct_expansion, meta, name, _assocs}, %Macro.Env{} = env) do
+    register_call(%{
+      callee: {name, nil, nil},
+      file: env.file |> Path.relative_to_cwd(),
+      line: meta[:line],
+      column: meta[:column],
+      kind: :struct_expansion
+    })
+
+    :ok
+  end
+
   def trace(_trace, _env) do
     :ok
   end

@@ -98,7 +98,15 @@ defmodule ElixirSense.Core.Compiler.Typespec do
       end
       |> sanitize_args()
 
-    {_, state} = expand_typespec({name, name_meta, args}, :disabled, state, env)
+    Compiler.pause_trace()
+
+    state =
+      try do
+        {_, state} = expand_typespec({name, name_meta, args}, :disabled, state, env)
+        state
+      after
+        Compiler.resume_trace()
+      end
 
     {guard, state, env} =
       if is_list(guard) do
@@ -216,7 +224,15 @@ defmodule ElixirSense.Core.Compiler.Typespec do
         args
       end
 
-    {_, state} = expand_typespec({name, name_meta, args}, :disabled, state, env)
+    Compiler.pause_trace()
+
+    state =
+      try do
+        {_, state} = expand_typespec({name, name_meta, args}, :disabled, state, env)
+        state
+      after
+        Compiler.resume_trace()
+      end
 
     {state, var_names} =
       Enum.reduce(args, {state, []}, fn
@@ -333,9 +349,8 @@ defmodule ElixirSense.Core.Compiler.Typespec do
 
     case expanded do
       module when is_atom(module) ->
-        # TODO register alias/struct
         struct =
-          Compiler.Map.load_struct(module, [], state, caller)
+          Compiler.Map.load_struct(struct_meta, module, [], state, caller)
           |> Map.delete(:__struct__)
           |> Map.to_list()
 
