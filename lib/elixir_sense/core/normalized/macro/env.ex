@@ -599,7 +599,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
           end
 
         false when module == Kernel ->
-          case Compiler.Rewrite.inline(module, name, arity) do
+          case ElixirSense.Core.Compiler.Rewrite.inline(module, name, arity) do
             {ar, an} -> {:function, ar, an}
             false -> :not_found
           end
