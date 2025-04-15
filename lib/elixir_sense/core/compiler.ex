@@ -1749,7 +1749,7 @@ defmodule ElixirSense.Core.Compiler do
     # are not executed as we do not preform a real compilation
     {state, _e_env} =
       ~w(before_compile after_compile after_verify)a
-      |> Enum.reduce({state, e_env}, fn attribute, {state, env} ->
+      |> Enum.reduce({state, e_env}, fn attribute, {state, e_env} ->
         for args <- Map.get(state.attribute_store, {full, attribute}, []) do
           case args do
             {module, fun} -> [module, fun]
