@@ -1,4 +1,54 @@
 defmodule ElixirSense.Core.Normalized.Macro.Env do
+  def expand_import(env, meta, name, arity, opts \\ [])
+      when is_list(meta) and is_atom(name) and is_integer(arity) and is_list(opts) do
+    local_for_callback =
+      Keyword.get(opts, :local_for_callback, fn meta, name, arity, kinds, e ->
+        if Version.match?(System.version(), ">= 1.14.0-dev") do
+          :elixir_def.local_for(meta, name, arity, kinds, e)
+        else
+          :elixir_def.local_for(e.module, name, arity, kinds)
+        end
+      end)
+
+    case Macro.special_form?(name, arity) do
+      true ->
+        {:error, :not_found}
+
+      false ->
+        allow_locals = Keyword.get(opts, :allow_locals, true)
+        trace = Keyword.get(opts, :trace, true)
+        # module = env.module
+
+        # elixir version passes module.__info__(:macros) as extra, we do not need that
+        # instead we override local_for_callback
+        extra = []
+        # case allow_locals and function_exported?(module, :__info__, 1) do
+        #   true -> [{module, module.__info__(:macros)}]
+        #   false -> []
+        # end
+
+        case __MODULE__.Dispatch.expand_import(
+               meta,
+               name,
+               arity,
+               env,
+               extra,
+               allow_locals,
+               trace,
+               local_for_callback
+             ) do
+          {:macro, receiver, expander} ->
+            {:macro, receiver, wrap_expansion(receiver, expander, meta, name, arity, env, opts)}
+
+          {:function, receiver, name} ->
+            {:function, receiver, name}
+
+          error ->
+            {:error, error}
+        end
+    end
+  end
+
   defp wrap_expansion(receiver, expander, _meta, _name, _arity, env, _opts) do
     fn expansion_meta, args ->
       quoted = expander.(args, env)
@@ -15,7 +65,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
       end
     end
   end
-  
+
   if Version.match?(System.version(), ">= 1.17.0-dev") do
     # defdelegate expand_import(env, meta, fun, arity, opts), to: Macro.Env
     defdelegate expand_require(env, meta, module, fun, arity, opts), to: Macro.Env
@@ -23,56 +73,6 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
     defdelegate define_alias(env, meta, arg, opts), to: Macro.Env
     defdelegate define_require(env, meta, arg, opts), to: Macro.Env
     defdelegate define_import(env, meta, arg, opts), to: Macro.Env
-
-    def expand_import(env, meta, name, arity, opts \\ [])
-        when is_list(meta) and is_atom(name) and is_integer(arity) and is_list(opts) do
-      local_for_callback =
-        Keyword.get(opts, :local_for_callback, fn meta, name, arity, kinds, e ->
-          if Version.match?(System.version(), ">= 1.14.0-dev") do
-            :elixir_def.local_for(meta, name, arity, kinds, e)
-          else
-            :elixir_def.local_for(e.module, name, arity, kinds)
-          end
-        end)
-
-      case Macro.special_form?(name, arity) do
-        true ->
-          {:error, :not_found}
-
-        false ->
-          allow_locals = Keyword.get(opts, :allow_locals, true)
-          trace = Keyword.get(opts, :trace, true)
-          # module = env.module
-
-          # elixir version passes module.__info__(:macros) as extra, we do not need that
-          # instead we override local_for_callback
-          extra = []
-          # case allow_locals and function_exported?(module, :__info__, 1) do
-          #   true -> [{module, module.__info__(:macros)}]
-          #   false -> []
-          # end
-
-          case __MODULE__.Dispatch.expand_import(
-                 meta,
-                 name,
-                 arity,
-                 env,
-                 extra,
-                 allow_locals,
-                 trace,
-                 local_for_callback
-               ) do
-            {:macro, receiver, expander} ->
-              {:macro, receiver, wrap_expansion(receiver, expander, meta, name, arity, env, opts)}
-
-            {:function, receiver, name} ->
-              {:function, receiver, name}
-
-            error ->
-              {:error, error}
-          end
-      end
-    end
   else
     def fake_expand_callback(_meta, _args) do
       {:__block__, [], []}
