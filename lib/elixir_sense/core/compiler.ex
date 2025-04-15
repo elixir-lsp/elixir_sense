@@ -80,7 +80,10 @@ defmodule ElixirSense.Core.Compiler do
             acc
             |> State.add_call_to_line({name, nil, nil}, meta, :struct_expansion)
 
-          # TODO: handle :alias_expansion
+          {:alias_expansion, meta, as, alias} ->
+            acc
+            |> State.add_call_to_line({as, nil, nil}, meta, :alias_expansion_as)
+            |> State.add_call_to_line({alias, nil, nil}, meta, :alias_expansion)
 
           _ ->
             Logger.warning("Unhandled trace event: #{inspect(event)}")
@@ -2830,8 +2833,7 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_aliases({:__aliases__, meta, [head | tail] = list}, state, env, report) do
-    # TODO pass true to track alias_expansion?
-    case NormalizedMacroEnv.expand_alias(env, meta, list, trace: false) do
+    case NormalizedMacroEnv.expand_alias(env, meta, list, trace: true) do
       {:alias, alias} ->
         state =
           if report do

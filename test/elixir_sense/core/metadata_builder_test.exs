@@ -8524,6 +8524,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  arity: 2
                },
                %ElixirSense.Core.State.CallInfo{
+                 arity: nil,
+                 position: {3, 17},
+                 mod: ElixirSense.Core.MetadataBuilderTest.QuotedCalls,
+                 func: nil,
+                 kind: :alias_expansion
+               },
+               %ElixirSense.Core.State.CallInfo{
+                 arity: nil,
+                 position: {3, 17},
+                 mod: Q,
+                 func: nil,
+                 kind: :alias_expansion_as
+               },
+               %ElixirSense.Core.State.CallInfo{
                  func: :foo,
                  kind: :remote_macro,
                  mod: ElixirSense.Core.MetadataBuilderTest.QuotedCalls,

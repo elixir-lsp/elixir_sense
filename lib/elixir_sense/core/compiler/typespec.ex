@@ -638,8 +638,7 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   # This is a modified backport of Macro.expand/2 because we want to expand
   # aliases but we don't them to become compile-time references.
   defp expand_remote({:__aliases__, meta, [head | tail] = list} = alias, env) do
-    # TODO pass true to track alias_expansion?
-    case NormalizedMacroEnv.expand_alias(env, meta, list, trace: false) do
+    case NormalizedMacroEnv.expand_alias(env, meta, list, trace: true) do
       {:alias, alias} ->
         alias
 

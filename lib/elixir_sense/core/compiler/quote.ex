@@ -204,9 +204,8 @@ defmodule ElixirSense.Core.Compiler.Quote do
          state
        )
        when is_atom(h) and h != Elixir and is_list(meta) do
-    # TODO pass true to track alias_expansion?
     annotation =
-      case NormalizedMacroEnv.expand_alias(e, meta, list, trace: false) do
+      case NormalizedMacroEnv.expand_alias(e, meta, list, trace: true) do
         {:alias, atom} ->
           atom
 

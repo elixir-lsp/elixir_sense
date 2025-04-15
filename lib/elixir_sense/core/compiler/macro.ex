@@ -83,8 +83,7 @@ defmodule ElixirSense.Core.Compiler.Macro do
   end
 
   defp do_expand_once({:__aliases__, meta, [head | tail] = list} = alias, env) do
-    # TODO pass true to track alias_expansion?
-    case NormalizedMacroEnv.expand_alias(env, meta, list, trace: false) do
+    case NormalizedMacroEnv.expand_alias(env, meta, list, trace: true) do
       {:alias, alias} ->
         :elixir_env.trace({:alias_reference, meta, alias}, env)
         {alias, true}
