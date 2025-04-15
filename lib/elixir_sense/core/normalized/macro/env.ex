@@ -1,4 +1,21 @@
 defmodule ElixirSense.Core.Normalized.Macro.Env do
+  defp wrap_expansion(receiver, expander, _meta, _name, _arity, env, _opts) do
+    fn expansion_meta, args ->
+      quoted = expander.(args, env)
+      next = :elixir_module.next_counter(env.module)
+
+      if Version.match?(System.version(), ">= 1.14.0-dev") do
+        :elixir_quote.linify_with_context_counter(expansion_meta, {receiver, next}, quoted)
+      else
+        :elixir_quote.linify_with_context_counter(
+          expansion_meta |> Keyword.get(:line, 0),
+          {receiver, next},
+          quoted
+        )
+      end
+    end
+  end
+  
   if Version.match?(System.version(), ">= 1.17.0-dev") do
     # defdelegate expand_import(env, meta, fun, arity, opts), to: Macro.Env
     defdelegate expand_require(env, meta, module, fun, arity, opts), to: Macro.Env
@@ -54,23 +71,6 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
             error ->
               {:error, error}
           end
-      end
-    end
-
-    defp wrap_expansion(receiver, expander, _meta, _name, _arity, env, _opts) do
-      fn expansion_meta, args ->
-        quoted = expander.(args, env)
-        next = :elixir_module.next_counter(env.module)
-
-        if Version.match?(System.version(), ">= 1.14.0-dev") do
-          :elixir_quote.linify_with_context_counter(expansion_meta, {receiver, next}, quoted)
-        else
-          :elixir_quote.linify_with_context_counter(
-            expansion_meta |> Keyword.get(:line, 0),
-            {receiver, next},
-            quoted
-          )
-        end
       end
     end
   else
