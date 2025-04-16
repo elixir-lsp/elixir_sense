@@ -802,7 +802,7 @@ defmodule ElixirSense.Core.Introspection do
   @spec actual_module(
           nil | module,
           ElixirSense.Core.State.Env.t(),
-          ElixirSense.Core.State.mods_funs_to_positions_t(),
+          ElixirSense.Core.Compiler.State.mods_funs_to_positions_t(),
           boolean
         ) :: {nil | module, boolean}
   def actual_module(module, env, mods_funs, expand_aliases?) do
@@ -891,8 +891,8 @@ defmodule ElixirSense.Core.Introspection do
   @spec actual_mod_fun(
           {nil | module, nil | atom},
           ElixirSense.Core.State.Env.t(),
-          ElixirSense.Core.State.mods_funs_to_positions_t(),
-          ElixirSense.Core.State.types_t(),
+          ElixirSense.Core.Compiler.State.mods_funs_to_positions_t(),
+          ElixirSense.Core.Compiler.State.types_t(),
           {pos_integer, pos_integer},
           boolean
         ) :: {nil | module, nil | atom, boolean, nil | :mod_fun | :type}

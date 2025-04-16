@@ -7,8 +7,8 @@ defmodule ElixirSense.Core.State.ModFunInfo do
 
   @type t :: %ElixirSense.Core.State.ModFunInfo{
           params: list(list(term)),
-          positions: list(ElixirSense.Core.State.position_t()),
-          end_positions: list(ElixirSense.Core.State.position_t() | nil),
+          positions: list(ElixirSense.Core.Compiler.State.position_t()),
+          end_positions: list(ElixirSense.Core.Compiler.State.position_t() | nil),
           target: nil | {module, atom},
           overridable: false | {true, module},
           generated: list(boolean),

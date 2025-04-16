@@ -4,14 +4,14 @@ defmodule ElixirSense.Core.Struct do
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State
 
-  @spec is_struct(module | nil, State.structs_t()) :: boolean
+  @spec is_struct(module | nil, ElixirSense.Core.Compiler.State.structs_t()) :: boolean
   def is_struct(nil, _metadata_structs), do: false
 
   def is_struct(module, metadata_structs) do
     Map.has_key?(metadata_structs, module) or Introspection.module_is_struct?(module)
   end
 
-  @spec get_fields(module, State.structs_t()) :: [atom]
+  @spec get_fields(module, ElixirSense.Core.Compiler.State.structs_t()) :: [atom]
   def get_fields(module, metadata_structs) do
     case metadata_structs[module] do
       %State.StructInfo{fields: fields} ->

@@ -57,7 +57,7 @@ defmodule ElixirSense do
           boolean,
           keyword
         ) ::
-          {:ok, Macro.t()} | {:error, :parse_error}
+          {:ok, Macro.t()} | {:error, any()}
   def string_to_quoted(
         source,
         cursor_position \\ nil,
@@ -74,7 +74,7 @@ defmodule ElixirSense do
 
     case Parser.string_to_ast(source, string_to_ast_options) do
       {:ok, ast, _source, _error} -> {:ok, ast}
-      other -> other
+      other = {:error, _} -> other
     end
   end
 

@@ -7,8 +7,8 @@ defmodule ElixirSense.Core.State.TypeInfo do
           args: list(list(String.t())),
           specs: [String.t()],
           kind: :type | :typep | :opaque,
-          positions: [ElixirSense.Core.State.position_t()],
-          end_positions: [ElixirSense.Core.State.position_t() | nil],
+          positions: [ElixirSense.Core.Compiler.State.position_t()],
+          end_positions: [ElixirSense.Core.Compiler.State.position_t() | nil],
           doc: String.t(),
           meta: map(),
           generated: list(boolean)

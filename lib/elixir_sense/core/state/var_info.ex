@@ -5,10 +5,10 @@ defmodule ElixirSense.Core.State.VarInfo do
 
   @type t :: %ElixirSense.Core.State.VarInfo{
           name: atom,
-          positions: list(ElixirSense.Core.State.position_t()),
-          scope_id: nil | ElixirSense.Core.State.scope_id_t(),
+          positions: list(ElixirSense.Core.Compiler.State.position_t()),
+          scope_id: nil | ElixirSense.Core.Compiler.State.scope_id_t(),
           version: non_neg_integer(),
-          type: ElixirSense.Core.State.var_type()
+          type: ElixirSense.Core.Compiler.State.var_type()
         }
   defstruct name: nil,
             positions: [],

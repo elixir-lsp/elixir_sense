@@ -12,19 +12,19 @@ defmodule ElixirSense.Core.Metadata do
 
   @type t :: %ElixirSense.Core.Metadata{
           source: String.t(),
-          mods_funs_to_positions: State.mods_funs_to_positions_t(),
+          mods_funs_to_positions: ElixirSense.Core.Compiler.State.mods_funs_to_positions_t(),
           cursor_env: nil | {keyword(), ElixirSense.Core.State.Env.t()},
           closest_env:
             nil
             | {{pos_integer, pos_integer}, {non_neg_integer, non_neg_integer},
                ElixirSense.Core.State.Env.t()},
-          lines_to_env: State.lines_to_env_t(),
-          calls: State.calls_t(),
-          vars_info_per_scope_id: State.vars_info_per_scope_id_t(),
-          types: State.types_t(),
-          specs: State.specs_t(),
-          structs: State.structs_t(),
-          records: State.records_t(),
+          lines_to_env: ElixirSense.Core.Compiler.State.lines_to_env_t(),
+          calls: ElixirSense.Core.Compiler.State.calls_t(),
+          vars_info_per_scope_id: ElixirSense.Core.Compiler.State.vars_info_per_scope_id_t(),
+          types: ElixirSense.Core.Compiler.State.types_t(),
+          specs: ElixirSense.Core.Compiler.State.specs_t(),
+          structs: ElixirSense.Core.Compiler.State.structs_t(),
+          records: ElixirSense.Core.Compiler.State.records_t(),
           error: nil | term,
           first_alias_positions: map(),
           moduledoc_positions: map()

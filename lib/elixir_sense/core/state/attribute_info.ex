@@ -4,8 +4,8 @@ defmodule ElixirSense.Core.State.AttributeInfo do
   """
   @type t :: %ElixirSense.Core.State.AttributeInfo{
           name: atom,
-          positions: list(ElixirSense.Core.State.position_t()),
-          type: ElixirSense.Core.State.var_type()
+          positions: list(ElixirSense.Core.Compiler.State.position_t()),
+          type: ElixirSense.Core.Compiler.State.var_type()
         }
   defstruct name: nil, positions: [], type: nil
 end

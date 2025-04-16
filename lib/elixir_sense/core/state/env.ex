@@ -7,19 +7,19 @@ defmodule ElixirSense.Core.State.Env do
           functions: [{module, [{atom, arity}]}],
           macros: [{module, [{atom, arity}]}],
           requires: list(module),
-          aliases: list(ElixirSense.Core.State.alias_t()),
+          aliases: list(ElixirSense.Core.Compiler.State.alias_t()),
           macro_aliases: [{module, {term, module}}],
           context: nil | :match | :guard,
           module: nil | module,
           function: nil | {atom, arity},
-          protocol: nil | ElixirSense.Core.State.protocol_t(),
+          protocol: nil | ElixirSense.Core.Compiler.State.protocol_t(),
           versioned_vars: %{optional({atom, atom}) => non_neg_integer},
           vars: list(ElixirSense.Core.State.VarInfo.t()),
           attributes: list(ElixirSense.Core.State.AttributeInfo.t()),
           behaviours: list(module),
           context_modules: list(module),
           typespec: nil | {atom, arity},
-          scope_id: nil | ElixirSense.Core.State.scope_id_t()
+          scope_id: nil | ElixirSense.Core.Compiler.State.scope_id_t()
         }
   defstruct functions: [],
             macros: [],
