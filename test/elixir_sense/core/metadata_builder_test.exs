@@ -7418,10 +7418,21 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       if Version.match?(System.version(), ">= 1.15.0") do
         assert state.calls
                |> Enum.flat_map(fn {_line, info} -> info end)
-               |> Enum.filter(fn info -> info.mod != Kernel end) == []
+               |> Enum.filter(fn info -> info.kind == :local_function end) == []
       else
         assert %{
-                 4 => [%CallInfo{arity: 0, func: :func_1, position: {4, 5}, mod: nil}]
+                 4 => [
+                   _,
+                   _,
+                   _,
+                   %CallInfo{
+                     arity: 0,
+                     func: :func_1,
+                     position: {4, 5},
+                     mod: NyModule,
+                     kind: :local_function
+                   }
+                 ]
                } = state.calls
       end
     end
