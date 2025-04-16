@@ -135,11 +135,12 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
   end
 
   defmodule Aliases do
-    def require(_meta, ref, _opts, e, _trace) do
+    def require(meta, ref, opts, e, trace) do
+      trace && :elixir_env.trace({:require, meta, ref, opts}, e)
       %{e | requires: :ordsets.add_element(ref, e.requires)}
     end
 
-    def alias(meta, ref, include_by_default, opts, e, _trace) do
+    def alias(meta, ref, include_by_default, opts, e, trace) do
       %{aliases: aliases, macro_aliases: macro_aliases} = e
 
       case expand_as(:lists.keyfind(:as, 1, opts), include_by_default, ref) do
@@ -152,6 +153,8 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
            }}
 
         {:ok, new} ->
+          trace && :elixir_env.trace({:alias, meta, ref, new, opts}, e)
+
           {:ok,
            %{
              e
@@ -256,7 +259,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
       end
     end
 
-    def expand(meta, [h | t], aliases, _e, _trace) do
+    def expand(meta, [h | t], aliases, e, trace) do
       lookup = String.to_atom("Elixir." <> Atom.to_string(h))
 
       counter =
@@ -270,6 +273,8 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
           [h | t]
 
         atom ->
+          trace && :elixir_env.trace({:alias_expansion, meta, lookup, atom}, e)
+
           case t do
             [] -> atom
             _ -> Module.concat([atom | t])
