@@ -7422,9 +7422,6 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       else
         assert %{
                  4 => [
-                   _,
-                   _,
-                   _,
                    %CallInfo{
                      arity: 0,
                      func: :func_1,
