@@ -124,7 +124,11 @@ defmodule ElixirSense.Core.Metadata do
       end
 
     {meta, cursor_env} =
-      case Code.string_to_quoted(source_with_cursor, columns: true, token_metadata: true) do
+      case Code.string_to_quoted(source_with_cursor,
+             columns: true,
+             token_metadata: true,
+             emit_warnings: false
+           ) do
         {:ok, ast} ->
           MetadataBuilder.build(ast).cursor_env || {[], nil}
 

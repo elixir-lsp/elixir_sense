@@ -6,20 +6,22 @@ defmodule ElixirSense.Core.Normalized.Tokenizer do
   """
   require Logger
 
-  @spec tokenize(String.t()) :: [tuple]
-  def tokenize(prefix) do
+  @spec tokenize(String.t(), Keyword.t()) :: [tuple]
+  def tokenize(prefix, options \\ []) do
+    options = options |> Keyword.put(:emit_warnings, false)
+
     prefix
     |> String.to_charlist()
-    |> do_tokenize()
+    |> do_tokenize(options)
   end
 
-  defp do_tokenize(prefix_charlist) do
+  defp do_tokenize(prefix_charlist, options) do
     result =
       if Version.match?(System.version(), ">= 1.14.0-dev") do
-        :elixir_tokenizer.tokenize(prefix_charlist, 1, [])
+        :elixir_tokenizer.tokenize(prefix_charlist, 1, options)
       else
         # on 1.13 use our version as it has all the fixes from last 1.13 release
-        :elixir_sense_tokenizer.tokenize(prefix_charlist, 1, [])
+        :elixir_sense_tokenizer.tokenize(prefix_charlist, 1, options)
       end
 
     case result do

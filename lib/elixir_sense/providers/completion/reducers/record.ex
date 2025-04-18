@@ -142,7 +142,7 @@ defmodule ElixirSense.Providers.Completion.Reducers.Record do
     with %TypeInfo{specs: [spec | _]} <-
            types[{module, record, 0}] || types[{module, :"#{record}_t", 0}] ||
              types[{module, :t, 0}],
-         {:ok, ast} <- Code.string_to_quoted(spec),
+         {:ok, ast} <- Code.string_to_quoted(spec, emit_warnings: false),
          {:@, _,
           [
             {kind, _,
@@ -172,7 +172,7 @@ defmodule ElixirSense.Providers.Completion.Reducers.Record do
           end
 
         with [info | _] <- candidates,
-             {:ok, ast} <- Code.string_to_quoted(info.spec),
+             {:ok, ast} <- Code.string_to_quoted(info.spec, emit_warnings: false),
              {:@, _,
               [
                 {kind, _,

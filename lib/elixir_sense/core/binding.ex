@@ -1456,7 +1456,7 @@ defmodule ElixirSense.Core.Binding do
          include_private,
          stack
        ) do
-    case Code.string_to_quoted(func_spec) do
+    case Code.string_to_quoted(func_spec, emit_warnings: false) do
       {:ok, {:@, _, [{_kind, _, [ast]}]}} ->
         case extract_type(ast) do
           {:ok, type} ->
@@ -1681,7 +1681,7 @@ defmodule ElixirSense.Core.Binding do
     case types[{mod, type_name, arity}] do
       %State.TypeInfo{specs: [type_spec], kind: kind}
       when type_is_public(kind, include_private) ->
-        case Code.string_to_quoted(type_spec) do
+        case Code.string_to_quoted(type_spec, emit_warnings: false) do
           {:ok, {:@, _, [{_kind, _, [ast]}]}} ->
             case extract_type(ast) do
               {:ok, type} ->

@@ -21,7 +21,7 @@ defmodule ElixirSense.Providers.Utils.Field do
     case types[{mod, :t, 0}] do
       %State.TypeInfo{specs: [type_spec], kind: kind}
       when type_is_public(kind, include_private) ->
-        case Code.string_to_quoted(type_spec) do
+        case Code.string_to_quoted(type_spec, emit_warnings: false) do
           {:ok, {:@, _, [{_kind, _, [spec]}]}} ->
             spec
             |> get_fields_from_struct_spec()

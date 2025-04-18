@@ -32,7 +32,9 @@ defmodule ElixirSense.Providers.Completion.Reducers.Returns do
 
         %State.SpecInfo{specs: info_specs} ->
           for spec <- info_specs,
-              {:ok, {:@, _, [{_, _, [quoted]}]}} <- [Code.string_to_quoted(spec)],
+              {:ok, {:@, _, [{_, _, [quoted]}]}} <- [
+                Code.string_to_quoted(spec, emit_warnings: false)
+              ],
               return <- Introspection.get_returns_from_spec_ast(quoted) do
             format_return(return)
           end
@@ -49,7 +51,9 @@ defmodule ElixirSense.Providers.Completion.Reducers.Returns do
 
           %State.SpecInfo{specs: info_specs} ->
             for spec <- info_specs,
-                {:ok, {:@, _, [{_, _, [quoted]}]}} <- [Code.string_to_quoted(spec)],
+                {:ok, {:@, _, [{_, _, [quoted]}]}} <- [
+                  Code.string_to_quoted(spec, emit_warnings: false)
+                ],
                 return <- Introspection.get_returns_from_spec_ast(quoted) do
               format_return(return)
             end
@@ -68,7 +72,9 @@ defmodule ElixirSense.Providers.Completion.Reducers.Returns do
 
             %State.SpecInfo{specs: info_specs} ->
               for spec <- info_specs,
-                  {:ok, {:@, _, [{:callback, _, [quoted]}]}} <- [Code.string_to_quoted(spec)],
+                  {:ok, {:@, _, [{:callback, _, [quoted]}]}} <- [
+                    Code.string_to_quoted(spec, emit_warnings: false)
+                  ],
                   return <- Introspection.get_returns_from_spec_ast(quoted) do
                 format_return(return)
               end

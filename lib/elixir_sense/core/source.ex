@@ -86,7 +86,7 @@ defmodule ElixirSense.Core.Source do
   def split_module_and_func("", _current_module, _aliases), do: {nil, nil}
 
   def split_module_and_func(call, current_module, aliases) do
-    case Code.string_to_quoted(call) do
+    case Code.string_to_quoted(call, emit_warnings: false) do
       {:error, _} ->
         {nil, nil}
 
@@ -293,7 +293,7 @@ defmodule ElixirSense.Core.Source do
            result
            |> Enum.join()
            |> Kernel.<>("_: _}")
-           |> Code.string_to_quoted() do
+           |> Code.string_to_quoted(emit_warnings: false) do
       extract_struct_module(ast, current_module)
     else
       _ -> nil
@@ -307,7 +307,7 @@ defmodule ElixirSense.Core.Source do
              ~r/(alias|require|import|use)\s+(?<module>[^\s^\{^\}]+?)\.\{[^\}]*?$/u,
              text_before
            ),
-         {:ok, ast} <- Code.string_to_quoted(module_str),
+         {:ok, ast} <- Code.string_to_quoted(module_str, emit_warnings: false),
          {:ok, module, elixir_prefix} <- extract_module(ast, current_module) do
       if elixir_prefix and module != Elixir do
         "Elixir." <> inspect(module)

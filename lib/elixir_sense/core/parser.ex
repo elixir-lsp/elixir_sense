@@ -71,7 +71,7 @@ defmodule ElixirSense.Core.Parser do
     end
   end
 
-  @default_parser_options [columns: true, token_metadata: true]
+  @default_parser_options [columns: true, token_metadata: true, emit_warnings: false]
 
   def string_to_ast(source, options \\ []) when is_binary(source) do
     errors_threshold = Keyword.get(options, :errors_threshold, 6)

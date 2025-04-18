@@ -253,7 +253,7 @@ defmodule ElixirSense.Providers.Plugins.Ecto.Query do
     matches = from_matches ++ join_matches
 
     Enum.reduce(matches, %{}, fn [_, _, var, expr], bindings ->
-      case Code.string_to_quoted(expr) do
+      case Code.string_to_quoted(expr, emit_warnings: false) do
         {:ok, expr_ast} ->
           type = infer_type(expr_ast, bindings, env, buffer_metadata, {line, col})
           Map.put(bindings, var, %{type: type})

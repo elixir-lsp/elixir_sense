@@ -5,7 +5,7 @@ defmodule ElixirSense.Core.Options do
 
   defp get_spec_ast_from_info(spec_info) do
     for spec <- spec_info.specs do
-      case Code.string_to_quoted(spec) do
+      case Code.string_to_quoted(spec, emit_warnings: false) do
         {:ok, {:@, _, [{_kind, _, [ast]}]}} -> ast
         _ -> nil
       end
@@ -455,7 +455,7 @@ defmodule ElixirSense.Core.Options do
                        type
                      ]}
                   ]}
-               ]}} <- Code.string_to_quoted(spec) do
+               ]}} <- Code.string_to_quoted(spec, emit_warnings: false) do
           arg_names = for {arg_name, _, context} when is_atom(context) <- arg_names, do: arg_name
           {:ok, type, Enum.zip(arg_names, args)}
         else

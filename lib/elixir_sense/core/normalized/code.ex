@@ -78,7 +78,7 @@ defmodule ElixirSense.Core.Normalized.Code do
         args_quoted =
           signatures
           |> Enum.join(" ")
-          |> Code.string_to_quoted()
+          |> Code.string_to_quoted(emit_warnings: false)
           |> case do
             {:ok, {^name, _, args}} -> args
             _ -> []
