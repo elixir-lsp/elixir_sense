@@ -1748,15 +1748,16 @@ defmodule ElixirSense.Core.Compiler do
     {_result, state, e_env} = expand(block, state, %{env | module: full})
 
     # here we handle module callbacks. Only before_compile macro callbacks are expanded as they
-    # affect module body. Func before_compile callbacks are not executed. after_compile and after_verify
+    # affect module body. Func before_compile callbacks are not executed. on_definition after_compile and after_verify
     # are not executed as we do not preform a real compilation
     {state, _e_env} =
-      ~w(before_compile after_compile after_verify)a
+      ~w(before_compile after_compile after_verify on_definition on_load)a
       |> Enum.reduce({state, e_env}, fn attribute, {state, e_env} ->
         for args <- Map.get(state.attribute_store, {full, attribute}, []) do
-          case args do
-            {module, fun} -> [module, fun]
-            module -> [module, :"__#{attribute}__"]
+          case {attribute, args} do
+            {:on_load, function} -> function
+            {_, {module, fun}} -> [module, fun]
+            {_, module} -> [module, :"__#{attribute}__"]
           end
         end
         |> Enum.reduce({state, e_env}, fn target, {state, env} ->
@@ -1773,14 +1774,25 @@ defmodule ElixirSense.Core.Compiler do
               :before_compile -> [env]
               :after_compile -> [env, <<>>]
               :after_verify -> [full]
+              :on_definition -> [env, nil, nil, [], [], []]
+              :on_load -> []
             end
 
           ast =
-            {:__block__, [],
-             [
-               {:require, [], [hd(target)]},
-               {{:., [line: meta[:line]], target}, [line: meta[:line]], args}
-             ]}
+            case target do
+              function when is_atom(function) ->
+                {:__block__, [],
+                 [
+                   {function, [line: meta[:line]], args}
+                 ]}
+
+              [module, _function] ->
+                {:__block__, [],
+                 [
+                   {:require, [], [module]},
+                   {{:., [line: meta[:line]], target}, [line: meta[:line]], args}
+                 ]}
+            end
 
           {_result, state, env} = expand(ast, state, env)
           {State.remove_func_vars_scope(state, state_orig), env}

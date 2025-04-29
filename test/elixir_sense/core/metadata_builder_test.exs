@@ -7547,6 +7547,15 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         IO.inspect(module)
         :ok
       end
+
+      def __on_definition__(env, kind, name, args, guards, body) do
+        IO.inspect(env)
+        IO.inspect(kind)
+        IO.inspect(name)
+        IO.inspect(args)
+        IO.inspect(guards)
+        IO.inspect(body)
+      end
     end
 
     test "registers module callback calls" do
@@ -7557,6 +7566,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
           @before_compile ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks
           @after_compile ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks
           @after_verify ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks
+          @on_definition ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks
+          @on_load :load_check
+
+          def load_check do
+            :ok
+          end
         end
         """
         |> string_to_state
@@ -7617,9 +7632,33 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                )
              end)
 
-      # TODO: on_load and on_definition callbacks are not registered
-      # https://github.com/elixir-lang/elixir/issues/14427
-      # assert [] = state.calls[1]
+      assert state.calls[1]
+             |> Enum.any?(fn info ->
+               match?(
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 6,
+                   position: {1, nil},
+                   mod: ElixirSense.Core.MetadataBuilderTest.ModuleCallbacks,
+                   func: :__on_definition__,
+                   kind: :remote_function
+                 },
+                 info
+               )
+             end)
+
+      assert state.calls[1]
+             |> Enum.any?(fn info ->
+               match?(
+                 %ElixirSense.Core.State.CallInfo{
+                   arity: 0,
+                   position: {1, nil},
+                   mod: WithCallbacks,
+                   func: :load_check,
+                   kind: :local_function
+                 },
+                 info
+               )
+             end)
     end
 
     defmodule StructExpansion do
