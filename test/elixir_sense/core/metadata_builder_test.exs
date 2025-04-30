@@ -7661,6 +7661,27 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              end)
     end
 
+    test "registers behaviour_info call on @behaviour" do
+      state =
+        """
+        defmodule NyModule do
+          @behaviour MyBehaviour
+        end
+        """
+        |> string_to_state
+
+      assert [
+               %CallInfo{func: :defmodule},
+               %CallInfo{
+                 arity: 1,
+                 position: {1, nil},
+                 mod: MyBehaviour,
+                 func: :behaviour_info,
+                 kind: :remote_function
+               }
+             ] = state.calls[1]
+    end
+
     defmodule StructExpansion do
       defstruct [:foo]
     end

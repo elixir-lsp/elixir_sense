@@ -1799,6 +1799,18 @@ defmodule ElixirSense.Core.Compiler do
         end)
       end)
 
+    # elixir forces runtime dependency on behaviour via Module.force_behaviour_dependencies
+    # which emits a trace for a fake behaviour_info call
+    state =
+      Enum.reduce(state.behaviours[full], state, fn behaviour, state ->
+        state
+        |> State.add_call_to_line(
+          {behaviour, :behaviour_info, 1},
+          [line: meta[:line]],
+          :remote_function
+        )
+      end)
+
     # restore vars from outer scope
     # restore version counter
     state =
