@@ -66,17 +66,19 @@ defmodule ElixirSense.Core.TypeInfo do
   def get_signatures(mod, type, code_docs) when not is_nil(mod) and not is_nil(type) do
     case code_docs || NormalizedCode.get_docs(mod, :type_docs) do
       docs when is_list(docs) ->
-        for {{t, arity}, _, _, text, _metadata} <- docs, t == type do
+        for {{t, arity}, _, _, text, metadata} <- docs, t == type do
           {_kind, {_name, _def, args}} = get_type_spec(mod, type, arity)
           type_args = Enum.map(args, &(&1 |> elem(2) |> Atom.to_string()))
           type_str = Atom.to_string(type)
           doc = Introspection.extract_summary_from_docs(text)
           typedef = get_type_spec(mod, type, arity)
           spec = format_type_spec(typedef, line_length: @param_option_spec_line_length)
-          %{name: type_str, params: type_args, documentation: doc, spec: spec}
+          %{name: type_str, params: type_args, documentation: doc, spec: spec, metadata: metadata}
         end
 
       nil ->
+        app = ElixirSense.Core.Applications.get_application(mod)
+
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(mod),
             name == type,
             kind in [:type, :opaque] do
@@ -86,7 +88,8 @@ defmodule ElixirSense.Core.TypeInfo do
             name: Atom.to_string(name),
             params: type_args,
             documentation: "",
-            spec: format_type_spec(typedef)
+            spec: format_type_spec(typedef),
+            metadata: %{app: app}
           }
         end
     end
@@ -104,7 +107,8 @@ defmodule ElixirSense.Core.TypeInfo do
               %{spec: ast} -> spec_ast_to_string(ast)
               %{signature: signature} -> signature
               _ -> "#{type}"
-            end
+            end,
+        metadata: %{builtin: true}
       }
     end
   end

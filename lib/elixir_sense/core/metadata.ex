@@ -88,7 +88,7 @@ defmodule ElixirSense.Core.Metadata do
 
   if Version.match?(System.version(), "< 1.15.0-dev") do
     # return early if cursor env already found by parser replacing line
-    # this helps on < 1.15 and braks tests on later versions
+    # this helps on < 1.15 and breaks tests on later versions
     def get_cursor_env(%__MODULE__{cursor_env: {_, env}}, _position, _surround) do
       env
     end
@@ -429,7 +429,8 @@ defmodule ElixirSense.Core.Metadata do
         name: Atom.to_string(function),
         params: args,
         documentation: Introspection.extract_summary_from_docs(docs),
-        spec: spec
+        spec: spec,
+        metadata: %{builtin: true}
       }
     end
   end
@@ -459,7 +460,8 @@ defmodule ElixirSense.Core.Metadata do
         name: Atom.to_string(function),
         params: params |> Enum.with_index() |> Enum.map(&Introspection.param_to_var/1),
         documentation: Introspection.extract_summary_from_docs(function_info.doc),
-        spec: spec
+        spec: spec,
+        metadata: function_info.meta
       }
     end)
   end
@@ -485,7 +487,8 @@ defmodule ElixirSense.Core.Metadata do
         name: Atom.to_string(type),
         params: type_info.args |> List.last(),
         documentation: Introspection.extract_summary_from_docs(type_info.doc),
-        spec: spec
+        spec: spec,
+        metadata: type_info.meta
       }
     end)
   end
@@ -495,17 +498,17 @@ defmodule ElixirSense.Core.Metadata do
       NormalizedCode.callback_documentation(behaviour)
       |> Map.new()
 
-    meta = %{implementing: behaviour}
-    spec = Introspection.get_spec_as_string(nil, f, a, kind, meta)
     app = ElixirSense.Core.Applications.get_application(behaviour)
+    meta = %{implementing: behaviour, implementing_module_app: app}
+
+    spec = Introspection.get_spec_as_string(nil, f, a, kind, meta)
 
     case docs[{f, a}] do
       nil ->
         {spec, "", meta}
 
       {_signatures, docs, callback_meta, mime_type} ->
-        {spec, docs |> NormalizedCode.extract_docs(mime_type, behaviour, app),
-         callback_meta |> Map.merge(meta)}
+        {spec, docs |> NormalizedCode.extract_docs(mime_type, behaviour, app), callback_meta}
     end
   end
 

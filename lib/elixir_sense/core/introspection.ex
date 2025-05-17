@@ -150,7 +150,14 @@ defmodule ElixirSense.Core.Introspection do
     for {f, a} <- BuiltinFunctions.all(), f == fun do
       spec = BuiltinFunctions.get_specs({f, a}) |> Enum.join("\n")
       params = BuiltinFunctions.get_args({f, a})
-      %{name: Atom.to_string(fun), params: params, documentation: "Built-in function", spec: spec}
+
+      %{
+        name: Atom.to_string(fun),
+        params: params,
+        documentation: "Built-in function",
+        spec: spec,
+        metadata: %{builtin: true}
+      }
     end
   end
 
@@ -165,7 +172,7 @@ defmodule ElixirSense.Core.Introspection do
             doc = extract_summary_from_docs(text)
 
             spec = get_spec_as_string(mod, fun, arity, kind, metadata)
-            %{name: fun_str, params: fun_args, documentation: doc, spec: spec}
+            %{name: fun_str, params: fun_args, documentation: doc, spec: spec, metadata: metadata}
           end
 
         case results do
@@ -185,6 +192,7 @@ defmodule ElixirSense.Core.Introspection do
   defp get_spec_from_typespec(mod, fun) do
     # TypeInfo.get_function_specs does fallback to behaviours
     function_specs = TypeInfo.get_function_specs(mod, fun, :any)
+    app = ElixirSense.Core.Applications.get_application(mod)
 
     results =
       for {behaviour, specs} <- function_specs, {{_name, _arity}, [params | _]} = spec <- specs do
@@ -194,7 +202,8 @@ defmodule ElixirSense.Core.Introspection do
           name: Atom.to_string(fun),
           params: params,
           documentation: "",
-          spec: spec |> spec_to_string(if(behaviour, do: :callback, else: :spec))
+          spec: spec |> spec_to_string(if(behaviour, do: :callback, else: :spec)),
+          metadata: if(behaviour, do: %{implementing: behaviour, app: app}, else: %{app: app})
         }
       end
 
@@ -216,11 +225,20 @@ defmodule ElixirSense.Core.Introspection do
         f == fun do
       dummy_params = if a == 0, do: [], else: Enum.map(1..a, fn _ -> "term" end)
 
+      metadata =
+        if {f, a} in BuiltinFunctions.erlang_builtin_functions(mod) do
+          %{builtin: true, app: :erts}
+        else
+          app = ElixirSense.Core.Applications.get_application(mod)
+          %{app: app}
+        end
+
       %{
         name: Atom.to_string(fun),
         params: dummy_params,
         documentation: "",
-        spec: ""
+        spec: "",
+        metadata: metadata
       }
     end
   end
