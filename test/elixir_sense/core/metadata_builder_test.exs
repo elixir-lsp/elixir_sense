@@ -7250,6 +7250,31 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
              }
     end
+
+    test "captures documentation and since metadata" do
+      state =
+        """
+        defmodule MyStruct do
+          @moduledoc "Module documentation"
+          @doc "Struct documentation"
+          @doc since: "1.2.3"
+          defstruct [:some_field, a_field: 1]
+        end
+        """
+        |> string_to_state
+
+      assert state.structs == %{
+               MyStruct => %StructInfo{
+                 type: :defstruct,
+                 fields: [some_field: nil, a_field: 1, __struct__: MyStruct],
+                 doc: "Struct documentation",
+                 meta: %{since: "1.2.3"}
+               }
+             }
+
+      assert %{meta: %{since: "1.2.3"}, doc: "Struct documentation"} =
+               state.mods_funs_to_positions[{MyStruct, :__struct__, 0}]
+    end
   end
 
   describe "calls" do

@@ -5,7 +5,9 @@ defmodule ElixirSense.Core.State.StructInfo do
   @type field_t :: {atom, any}
   @type t :: %ElixirSense.Core.State.StructInfo{
           type: :defstruct | :defexception,
-          fields: list(field_t)
+          fields: list(field_t),
+          doc: String.t(),
+          meta: map()
         }
-  defstruct type: :defstruct, fields: []
+  defstruct type: :defstruct, fields: [], doc: "", meta: %{}
 end

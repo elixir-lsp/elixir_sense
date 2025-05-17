@@ -358,10 +358,15 @@ defmodule ElixirSense.Core.Compiler.State do
     %__MODULE__{state | calls: calls}
   end
 
-  defp add_struct(%__MODULE__{} = state, env, type, fields) do
+  defp add_struct(%__MODULE__{} = state, env, type, fields, doc \\ "", meta \\ %{}) do
     structs =
       state.structs
-      |> Map.put(env.module, %StructInfo{type: type, fields: fields ++ [__struct__: env.module]})
+      |> Map.put(env.module, %StructInfo{
+        type: type,
+        fields: fields ++ [__struct__: env.module],
+        doc: doc,
+        meta: meta
+      })
 
     %__MODULE__{state | structs: structs}
   end
@@ -538,11 +543,16 @@ defmodule ElixirSense.Core.Compiler.State do
     arity = length(params)
 
     {state, {doc, meta}} =
-      if Keyword.get(options, :generated, false) do
-        # do not consume docs on generated functions
-        {state, {"", %{generated: true}}}
-      else
-        consume_doc_context(state)
+      cond do
+        func in [:__info__, :module_info, :behaviour_info] ->
+          # do not consume docs on built-in functions
+          {state, {"", %{generated: true}}}
+
+        Keyword.has_key?(options, :doc) ->
+          {state, {Keyword.get(options, :doc), Keyword.get(options, :meta, %{})}}
+
+        true ->
+          consume_doc_context(state)
       end
 
     hidden = Map.get(meta, :hidden)
@@ -1213,6 +1223,7 @@ defmodule ElixirSense.Core.Compiler.State do
       end
 
     meta = [line: line || 0] ++ if(column > 0, do: [column: column], else: [])
+    {state, {doc, doc_meta}} = consume_doc_context(state)
 
     fields =
       fields ++
@@ -1260,7 +1271,14 @@ defmodule ElixirSense.Core.Compiler.State do
       else
         state
       end
-      |> add_func_to_index(env, :__struct__, [], range, :def, options)
+      |> add_func_to_index(
+        env,
+        :__struct__,
+        [],
+        range,
+        :def,
+        options |> Keyword.put(:doc, doc) |> Keyword.put(:meta, doc_meta)
+      )
       |> add_func_to_index(
         env,
         :__struct__,
@@ -1271,7 +1289,7 @@ defmodule ElixirSense.Core.Compiler.State do
       )
 
     state
-    |> add_struct(env, type, fields)
+    |> add_struct(env, type, fields, doc, doc_meta)
   end
 
   def generate_protocol_callbacks(state, env) do
