@@ -358,7 +358,7 @@ defmodule ElixirSense.Core.Compiler.State do
     %__MODULE__{state | calls: calls}
   end
 
-  defp add_struct(%__MODULE__{} = state, env, type, fields, doc \\ "", meta \\ %{}) do
+  defp add_struct(%__MODULE__{} = state, env, type, fields, doc, meta) do
     structs =
       state.structs
       |> Map.put(env.module, %StructInfo{
