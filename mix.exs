@@ -42,7 +42,8 @@ defmodule ElixirSense.MixProject do
     [
       {:excoveralls, "~> 0.17", only: :test},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
-      {:credo, "~> 1.0", only: [:dev], runtime: false},
+      # TODO: Uncomment this when we have a credo version that supports OTP 28
+      # {:credo, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.18", only: [:dev], runtime: false}
     ]
   end

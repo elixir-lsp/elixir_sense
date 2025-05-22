@@ -2361,11 +2361,19 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :var2, type: {:struct, _, {:atom, Time}, nil}},
                %VarInfo{name: :var3, type: {:struct, _, {:atom, DateTime}, nil}},
                %VarInfo{name: :var4, type: {:struct, _, {:atom, NaiveDateTime}, nil}},
-               %VarInfo{name: :var5, type: {:struct, _, {:atom, Regex}, nil}},
-               %VarInfo{name: :var6, type: {:struct, _, {:atom, Regex}, nil}},
+               %VarInfo{name: :var5, type: regex_type_1},
+               %VarInfo{name: :var6, type: regex_type_2},
                %VarInfo{name: :var7, type: {:struct, _, {:atom, Range}, nil}},
                %VarInfo{name: :var8, type: {:struct, _, {:atom, Range}, nil}}
              ] = state |> get_line_vars(11)
+
+      if Version.match?(System.version(), "< 1.18.4") do
+        assert {:struct, _, {:atom, Regex}, nil} = regex_type_1
+        assert {:struct, _, {:atom, Regex}, nil} = regex_type_2
+      else
+        assert {:call, {:atom, Regex}, :compile!, [nil, nil]} = regex_type_1
+        assert {:call, {:atom, Regex}, :compile!, [nil, nil]} = regex_type_2
+      end
     end
 
     test "struct binding understands stepped ranges" do
