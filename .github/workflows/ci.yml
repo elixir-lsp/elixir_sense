@@ -63,7 +63,9 @@ jobs:
           - elixir: 1.18.x
             otp: 27.x
             tests_may_fail: false
-            
+          - elixir: 1.18.x
+            otp: 28.x
+            tests_may_fail: false
     env:
       MIX_ENV: test
     steps:
@@ -134,6 +136,9 @@ jobs:
             tests_may_fail: false
           - elixir: 1.18.x
             otp: 27.x
+            tests_may_fail: false
+          - elixir: 1.18.x
+            otp: 28.x
             tests_may_fail: false
     env:
       MIX_ENV: test
