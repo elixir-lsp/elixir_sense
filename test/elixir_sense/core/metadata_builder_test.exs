@@ -9458,6 +9458,32 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
              } = state.types
     end
+
+    test "defrecord consumes doc and meta" do
+      state =
+        """
+        defmodule MyRecords do
+          import Record
+          @doc "User record"
+          @doc since: "1.0.0"
+          defrecord(:user, name: "meg", age: "25")
+        end
+        """
+        |> string_to_state
+
+      assert %ModFunInfo{
+               type: :defmacro,
+               doc: "User record",
+               meta: %{since: "1.0.0"}
+             } = state.mods_funs_to_positions[{MyRecords, :user, 1}]
+
+      assert %RecordInfo{
+               meta: %{since: "1.0.0"},
+               type: :defrecord,
+               doc: "User record",
+               fields: [name: "meg", age: "25"]
+             } = state.records[{MyRecords, :user}]
+    end
   end
 
   test "gets ExUnit imports from `use ExUnit.Case`" do

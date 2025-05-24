@@ -1532,6 +1532,7 @@ defmodule ElixirSense.Core.Compiler do
         :defrecordp -> :defmacrop
       end
 
+    {state, {doc, doc_meta}} = State.consume_doc_context(state)
     options = [generated: true]
 
     state =
@@ -1542,7 +1543,7 @@ defmodule ElixirSense.Core.Compiler do
         [{:\\, [], [{:args, [], nil}, []]}],
         range,
         type,
-        options
+        options |> Keyword.put(:doc, doc) |> Keyword.put(:meta, doc_meta)
       )
       |> State.add_func_to_index(
         env,
@@ -1552,7 +1553,7 @@ defmodule ElixirSense.Core.Compiler do
         type,
         options
       )
-      |> State.add_record(env, call, name, fields)
+      |> State.add_record(env, call, name, fields, doc, doc_meta)
       |> State.add_current_env_to_line(meta, env)
 
     {{{:., meta, [Record, call]}, meta, args}, state, env}

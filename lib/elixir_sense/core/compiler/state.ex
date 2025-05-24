@@ -371,10 +371,10 @@ defmodule ElixirSense.Core.Compiler.State do
     %__MODULE__{state | structs: structs}
   end
 
-  def add_record(%__MODULE__{} = state, env, type, name, fields) do
+  def add_record(%__MODULE__{} = state, env, type, name, fields, doc, meta) do
     records =
       state.records
-      |> Map.put({env.module, name}, %RecordInfo{type: type, fields: fields})
+      |> Map.put({env.module, name}, %RecordInfo{type: type, fields: fields, doc: doc, meta: meta})
 
     %__MODULE__{state | records: records}
   end
@@ -1082,7 +1082,7 @@ defmodule ElixirSense.Core.Compiler.State do
     %{state | typedoc_context: [[doc_arg | doc_context] | doc_context_rest]}
   end
 
-  defp consume_doc_context(%__MODULE__{} = state) do
+  def consume_doc_context(%__MODULE__{} = state) do
     [doc_context | doc_context_rest] = state.doc_context
     state = %{state | doc_context: [[] | doc_context_rest]}
 
