@@ -1768,7 +1768,7 @@ defmodule ElixirSense.Core.Compiler do
           state = State.new_func_vars_scope(state)
 
           # elixir dispatches callbacks by raw dispatch and eval_forms
-          # instead we expand a bock with require and possibly expand macros
+          # instead we expand a block with require and possibly expand macros
           # we do not attempt to exec function callbacks
           args =
             case attribute do
