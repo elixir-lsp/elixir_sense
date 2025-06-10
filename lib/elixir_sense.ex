@@ -1,9 +1,10 @@
 defmodule ElixirSense do
   @moduledoc """
-  ElxirSense is a Elixir library that implements useful features for any editor/tool that needs
-  to introspect context-aware information about Elixir source code.
+  ElixirSense is an Elixir library that implements useful features for any editor
+  or tool that needs to introspect context-aware information about Elixir source code.
 
-  This module provides the basic functionality for context-aware code completion, docs, signature info and more.
+  This module provides basic functionality for context-aware code completion,
+  docs, signature info, and more.
   """
 
   alias ElixirSense.Core.Applications
