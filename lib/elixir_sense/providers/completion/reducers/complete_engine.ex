@@ -11,7 +11,7 @@ defmodule ElixirSense.Providers.Completion.Reducers.CompleteEngine do
 
   @doc """
   A reducer that populates the context with the suggestions provided by
-  the `ElixirLS.Utils.CompletionEngine` module.
+  the `ElixirSense.Providers.Completion.CompletionEngine` module.
 
   The suggestions are grouped by type and saved in the context under the
   `:complete_engine_suggestions_by_type` key and can be accessed by any reducer
