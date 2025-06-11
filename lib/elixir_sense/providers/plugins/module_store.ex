@@ -1,11 +1,11 @@
 defmodule ElixirSense.Providers.Plugins.ModuleStore do
   @moduledoc """
-  Caches the module list and a list of modules keyed by the behaviour they implement.
+  Caches the module list and a set of modules keyed by the behaviour they implement.
   """
   defstruct by_behaviour: %{}, list: [], plugins: []
 
   @type t :: %__MODULE__{
-          by_behaviour: %{optional(atom) => module},
+          by_behaviour: %{optional(atom) => MapSet.t(module)},
           list: list(module),
           plugins: list(module)
         }
