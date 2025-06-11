@@ -153,7 +153,7 @@ defmodule ElixirSense.Core.Compiler.State do
           nil
 
         {protocol, for_list} ->
-          # check wether we are in implementation or implementation child module
+          # check whether we are in implementation or implementation child module
           if Enum.any?(for_list, fn for -> macro_env.module == Module.concat(protocol, for) end) do
             {protocol, for_list}
           end
