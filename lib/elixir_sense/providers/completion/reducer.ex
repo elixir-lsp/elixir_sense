@@ -1,7 +1,7 @@
 defmodule ElixirSense.Providers.Completion.Reducer do
-  @moduledoc !"""
-             Provides common functions for reducers.
-             """
+  @moduledoc """
+  Provides common functions for reducers.
+  """
 
   def put_context(acc, key, value) do
     updated_context = Map.put(acc.context, key, value)
