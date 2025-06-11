@@ -12,7 +12,7 @@ defmodule ElixirSense.Providers.Plugin do
         }
 
   @callback reduce(
-              hint :: String,
+              hint :: String.t(),
               env :: State.Env.t(),
               buffer_metadata :: Metadata.t(),
               cursor_context,
