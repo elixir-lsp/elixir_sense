@@ -879,7 +879,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_struct(code, MyMod) == {:map, [:qwe], {:variable, :asd, :any}}
     end
 
-    test "patern match with _" do
+    test "pattern match with _" do
       code = """
       defmodule MyMod do
         def my_func(%_{
@@ -888,7 +888,7 @@ defmodule ElixirSense.Core.SourceTest do
       assert which_struct(code, MyMod) == {nil, [], false, nil}
     end
 
-    test "patern match with variable name" do
+    test "pattern match with variable name" do
       code = """
       defmodule MyMod do
         def my_func(%my_var{
