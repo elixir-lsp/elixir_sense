@@ -59,10 +59,15 @@ defmodule ElixirSense.Providers.Hover.Docs do
 
   @type doc :: module_doc | function_doc | type_doc | variable_doc | attribute_doc | keyword_doc
 
+  @type position :: {pos_integer, pos_integer}
+  @type range :: %{begin: position, end: position}
+  @type docs_info :: %{docs: [doc], range: range}
+
   @builtin_functions BuiltinFunctions.all()
                      |> Enum.map(&elem(&1, 0))
                      |> Kernel.--([:exception, :message])
 
+  @spec docs(String.t(), pos_integer, pos_integer, keyword()) :: docs_info | nil
   def docs(code, line, column, options \\ []) do
     case NormalizedCode.Fragment.surround_context(code, {line, column}) do
       :none ->
