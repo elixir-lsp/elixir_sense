@@ -40,12 +40,16 @@ defmodule ElixirSense.MixProject do
 
   defp deps do
     [
-      {:excoveralls, "~> 0.17", only: :test},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       # TODO: Uncomment this when we have a credo version that supports OTP 28
       # {:credo, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.18", only: [:dev], runtime: false}
-    ]
+    ] ++
+      if System.get_env("HEX_MIRROR") != "https://cdn.jsdelivr.net/hex" do
+        [{:excoveralls, "~> 0.17", only: :test}]
+      else
+        []
+      end
   end
 
   defp docs do
