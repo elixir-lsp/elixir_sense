@@ -273,7 +273,7 @@ defmodule ElixirSense.Core.Parser do
       |> Source.split_lines()
       |> List.update_at(cursor_line_number - 1, fn line ->
         if cursor_line_number != line_number do
-          # try to close the line with with missing terminator
+          # try to close the line with missing terminator
           line <> " " <> terminator
         else
           # try to prepend first occurrence of unexpected token with missing terminator
