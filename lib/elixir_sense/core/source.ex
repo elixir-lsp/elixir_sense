@@ -146,9 +146,6 @@ defmodule ElixirSense.Core.Source do
       line
       |> String.slice((col - 1)..-1//1)
       |> case do
-        nil ->
-          ""
-
         str ->
           case Regex.run(~r/^[\p{L}\p{N}\.\_\!\?\:\@\&\^\~\+\-\<\>\=\*\/\|\\]+/u, str) do
             nil -> ""
