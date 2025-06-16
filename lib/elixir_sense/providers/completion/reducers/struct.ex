@@ -7,6 +7,7 @@ defmodule ElixirSense.Providers.Completion.Reducers.Struct do
   alias ElixirSense.Core.Source
   alias ElixirSense.Core.State
   alias ElixirSense.Providers.Utils.Matcher
+  alias ElixirSense.Providers.Completion.Suggestion
 
   @type field :: %{
           type: :field,
@@ -20,6 +21,13 @@ defmodule ElixirSense.Providers.Completion.Reducers.Struct do
   @doc """
   A reducer that adds suggestions of struct fields.
   """
+  @spec add_fields(
+          hint :: String.t(),
+          env :: State.Env.t(),
+          metadata :: Metadata.t(),
+          context :: Suggestion.cursor_context(),
+          Suggestion.acc()
+        ) :: {:cont | :halt, Suggestion.acc()}
   def add_fields(hint, env, buffer_metadata, context, acc) do
     text_before = context.text_before
 
