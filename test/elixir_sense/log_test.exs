@@ -33,7 +33,6 @@ defmodule ElixirSense.LogTest do
 
     test "warn emits no output" do
       assert capture_log(fn -> warn("hello") end) == ""
-      assert capture_log(fn -> warn("hello") end) == ""
     end
 
     test "error emits no output" do
