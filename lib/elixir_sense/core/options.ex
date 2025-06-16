@@ -70,6 +70,13 @@ defmodule ElixirSense.Core.Options do
     end
   end
 
+  @spec get_param_options(
+          module,
+          atom,
+          non_neg_integer,
+          ElixirSense.Core.State.Env.t(),
+          ElixirSense.Core.Metadata.t()
+        ) :: [atom | {atom, Macro.t()}]
   def get_param_options(module, function, arity, env, metadata) do
     behaviours = env.behaviours
 
