@@ -10,31 +10,31 @@ defmodule ElixirSense.Providers.Utils.Matcher do
 
   ## Examples
 
-      iex> ElixirLS.Utils.Matcher.match?("map", "map")
+    iex> ElixirSense.Providers.Utils.Matcher.match?("map", "map")
       true
 
-      iex> ElixirLS.Utils.Matcher.match?("map", "m")
+    iex> ElixirSense.Providers.Utils.Matcher.match?("map", "m")
       true
 
-      iex> ElixirLS.Utils.Matcher.match?("map", "ma")
+    iex> ElixirSense.Providers.Utils.Matcher.match?("map", "ma")
       true
 
-      iex> ElixirLS.Utils.Matcher.match?("map", "mp")
+    iex> ElixirSense.Providers.Utils.Matcher.match?("map", "mp")
       true
 
-      iex> ElixirLS.Utils.Matcher.match?("map", "")
+    iex> ElixirSense.Providers.Utils.Matcher.match?("map", "")
       true
 
-      iex> ElixirLS.Utils.Matcher.match?("map", "ap")
+    iex> ElixirSense.Providers.Utils.Matcher.match?("map", "ap")
       false
 
-      iex> ElixirLS.Utils.Matcher.match?("", "")
+    iex> ElixirSense.Providers.Utils.Matcher.match?("", "")
       true
 
-      iex> ElixirLS.Utils.Matcher.match?("chunk_by", "chub")
+    iex> ElixirSense.Providers.Utils.Matcher.match?("chunk_by", "chub")
       true
 
-      iex> ElixirLS.Utils.Matcher.match?("chunk_by", "chug")
+    iex> ElixirSense.Providers.Utils.Matcher.match?("chunk_by", "chug")
       false
   """
   @spec match?(name :: String.t(), hint :: String.t()) :: boolean()
