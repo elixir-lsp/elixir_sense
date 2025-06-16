@@ -20,7 +20,7 @@ defmodule ElixirSense.Core.Normalized.Code do
   Shim to replicate the behavior of deprecated `Code.get_docs/2`
   """
   @spec get_docs(module, :docs) :: nil | [fun_doc_entry_t]
-  @spec get_docs(module, :callback_docs | :type_docs) :: nil | [:doc_entry_t]
+  @spec get_docs(module, :callback_docs | :type_docs) :: nil | [doc_entry_t]
   @spec get_docs(module, :moduledoc) :: nil | moduledoc_entry_t
   def get_docs(module, category) do
     case fetch_docs(module) do
