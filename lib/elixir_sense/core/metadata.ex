@@ -53,6 +53,7 @@ defmodule ElixirSense.Core.Metadata do
           documentation: String.t()
         }
 
+  @spec fill(String.t(), ElixirSense.Core.Compiler.State.t()) :: t()
   def fill(source, acc) do
     %__MODULE__{
       source: source,
