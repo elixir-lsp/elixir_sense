@@ -2367,7 +2367,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :var8, type: {:struct, _, {:atom, Range}, nil}}
              ] = state |> get_line_vars(11)
 
-      if String.to_integer(System.otp_release()) >= 28 do
+      if Version.match?(System.version(), ">= 1.18.4") do
         assert {:struct, _, {:atom, Regex}, nil} = regex_type_1
         assert {:struct, _, {:atom, Regex}, nil} = regex_type_2
       else
