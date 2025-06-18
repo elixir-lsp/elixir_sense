@@ -165,11 +165,16 @@ defmodule ElixirSense.Core.Compiler.Fn do
         fn_expr = {:fn, meta, [{:->, meta, [[], e_expr]}]}
         {:expand, fn_expr, s, e}
 
+      {{{:., _, [_, _]} = dot, _, args}, []} ->
+        meta = Keyword.delete(meta, :no_parens)
+        fn_expr = {:fn, meta, [{:->, meta, [[], {dot, meta, args}]}]}
+        {:expand, fn_expr, s, e}
+
       {e_expr, e_dict} ->
         # elixir raises capture_arg_without_predecessor here
         # if argument vars are not consecutive
         e_vars = Enum.map(e_dict, &elem(&1, 1))
-        fn_expr = {:fn, meta, [{:->, meta, [e_vars, e_expr]}]}
+        fn_expr = {:fn, [{:capture, true} | meta], [{:->, meta, [e_vars, e_expr]}]}
         {:expand, fn_expr, s, e}
     end
   end
@@ -189,7 +194,7 @@ defmodule ElixirSense.Core.Compiler.Fn do
         # but we are not compiling and do not need to keep count in module scope
         # elixir 1.17 also renames the var to `capture`
         next = System.unique_integer()
-        var = {:"&#{pos}", [{:counter, next} | meta], nil}
+        var = {:"&#{pos}", [{:counter, next}, {:capture, pos} | meta], nil}
         {var, :orddict.store(pos, var, dict)}
     end
   end
