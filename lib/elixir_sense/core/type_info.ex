@@ -231,7 +231,7 @@ defmodule ElixirSense.Core.TypeInfo do
       try do
         string
         |> Code.format_string!(line_length: line_length)
-        |> to_string()
+        |> IO.iodata_to_binary()
       rescue
         _ ->
           if Version.match?(System.version(), ">= 1.18.0-dev") do
