@@ -13,6 +13,13 @@ defmodule ElixirSense.Providers.References.Locator do
   alias ElixirSense.Core.SurroundContext
   alias ElixirSense.Core.Parser
 
+  @spec references(
+          String.t(),
+          pos_integer,
+          pos_integer,
+          ElixirSense.call_trace_t(),
+          keyword()
+        ) :: [reference_info()]
   def references(code, line, column, trace, options \\ []) do
     case NormalizedCode.Fragment.surround_context(code, {line, column}) do
       :none ->
