@@ -432,24 +432,16 @@ defmodule ElixirSense.Core.Compiler.State do
 
   defp process_option(
          _state,
-         info,
+         %ModFunInfo{} = info,
          :defdelegate,
          {:target, {target, as, _as_arity}}
        ) do
     # TODO remove this and rely on meta
-
-    %ModFunInfo{
-      info
-      | target: {target, as}
-    }
+    %{info | target: {target, as}}
   end
 
-  defp process_option(_state, info, _, {:overridable, {true, module}}) do
-    %ModFunInfo{
-      info
-      | overridable: {true, module},
-        meta: Map.put(info.meta, :overridable, true)
-    }
+  defp process_option(_state, %ModFunInfo{} = info, _, {:overridable, {true, module}}) do
+    %{info | overridable: {true, module}, meta: Map.put(info.meta, :overridable, true)}
   end
 
   defp process_option(_state, info, _type, _option), do: info
@@ -678,9 +670,9 @@ defmodule ElixirSense.Core.Compiler.State do
         %{vars: vars, unused: unused},
         restore_version_counter \\ false
       ) do
-    state = maybe_move_vars_to_outer_scope(state)
+    %__MODULE__{} = state = maybe_move_vars_to_outer_scope(state)
 
-    state = %__MODULE__{
+    state = %{
       state
       | scope_ids: tl(state.scope_ids),
         vars_info: tl(state.vars_info),
@@ -942,11 +934,8 @@ defmodule ElixirSense.Core.Compiler.State do
       nil ->
         state
 
-      info ->
-        info = %VarInfo{
-          info
-          | positions: (info.positions ++ [extract_position(meta)]) |> Enum.uniq()
-        }
+      %VarInfo{} = info ->
+        info = %{info | positions: (info.positions ++ [extract_position(meta)]) |> Enum.uniq()}
 
         vars_from_scope = Map.put(vars_from_scope, {name, version}, info)
 
@@ -985,13 +974,13 @@ defmodule ElixirSense.Core.Compiler.State do
 
         index ->
           attributes_from_scope
-          |> List.update_at(index, fn existing ->
+          |> List.update_at(index, fn %AttributeInfo{} = existing ->
             type = if is_definition, do: type, else: existing.type
 
-            %AttributeInfo{
+            # TODO this is wrong for accumulating attributes
+            %{
               existing
-              | # TODO this is wrong for accumulating attributes
-                type: type,
+              | type: type,
                 positions: (existing.positions ++ [position]) |> Enum.uniq() |> Enum.sort()
             }
           end)

@@ -205,8 +205,7 @@ defmodule ElixirSense.Core.Compiler.TypespecTest do
                 :"::",
                 [],
                 [{:some, [], nil}, {:"::", [], [{:other, [], nil}, {:any, [], []}]}]
-              },
-              _state} =
+              }, _state} =
                expand_typespec(
                  {:"::", [],
                   [{:some, [], nil}, {:"::", [], [{:other, [], nil}, {:any, [], nil}]}]}
@@ -226,8 +225,7 @@ defmodule ElixirSense.Core.Compiler.TypespecTest do
               :|,
               [],
               [{:some, [], []}, {:|, [], [{:other, [], []}, {:any, [], []}]}]
-            },
-            _state} =
+            }, _state} =
              expand_typespec(
                {:|, [], [{:some, [], nil}, {:|, [], [{:other, [], nil}, {:any, [], nil}]}]}
              )
@@ -280,8 +278,7 @@ defmodule ElixirSense.Core.Compiler.TypespecTest do
                    year: {:term, [], []}
                  ]}
               ]
-            },
-            _state} =
+            }, _state} =
              expand_typespec({:%, [], [{:__aliases__, [], [:Date]}, {:%{}, [], [day: :foo]}]})
 
     # non atom key
@@ -298,8 +295,7 @@ defmodule ElixirSense.Core.Compiler.TypespecTest do
                    year: {:term, [], []}
                  ]}
               ]
-            },
-            _state} =
+            }, _state} =
              expand_typespec({:%, [], [{:__aliases__, [], [:Date]}, {:%{}, [], [{"day", :foo}]}]})
 
     # invalid key
@@ -316,8 +312,7 @@ defmodule ElixirSense.Core.Compiler.TypespecTest do
                    year: {:term, [], []}
                  ]}
               ]
-            },
-            _state} =
+            }, _state} =
              expand_typespec({:%, [], [{:__aliases__, [], [:Date]}, {:%{}, [], [{:baz, :foo}]}]})
 
     # non atom

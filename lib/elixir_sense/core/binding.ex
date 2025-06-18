@@ -1484,15 +1484,15 @@ defmodule ElixirSense.Core.Binding do
        ) do
     {:union,
      variants
-     |> Enum.map(
-       &get_return_from_metadata(
+     |> Enum.map(fn variant ->
+       get_return_from_metadata(
          env,
          mod,
-         %State.SpecInfo{spec | specs: [&1]},
+         %{spec | specs: [variant]},
          include_private,
          stack
        )
-     )}
+     end)}
   end
 
   defp get_return_from_spec(_env, nil, _, _include_private), do: nil

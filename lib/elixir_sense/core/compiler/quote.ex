@@ -152,8 +152,8 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   # quote/unquote
 
-  defp do_quote({:quote, meta, [arg]}, q, state) when is_list(meta) do
-    {t_arg, state} = do_quote(arg, %__MODULE__{q | unquote: false}, state)
+  defp do_quote({:quote, meta, [arg]}, %__MODULE__{} = q, state) when is_list(meta) do
+    {t_arg, state} = do_quote(arg, %{q | unquote: false}, state)
 
     new_meta =
       case q do
@@ -167,9 +167,9 @@ defmodule ElixirSense.Core.Compiler.Quote do
     {{:{}, [], [:quote, meta(new_meta, q), [t_arg]]}, state}
   end
 
-  defp do_quote({:quote, meta, [opts, arg]}, q, state) when is_list(meta) do
+  defp do_quote({:quote, meta, [opts, arg]}, %__MODULE__{} = q, state) when is_list(meta) do
     {t_opts, state} = do_quote(opts, q, state)
-    {t_arg, state} = do_quote(arg, %__MODULE__{q | unquote: false}, state)
+    {t_arg, state} = do_quote(arg, %{q | unquote: false}, state)
 
     new_meta =
       case q do
