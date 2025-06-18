@@ -4,6 +4,7 @@ defmodule ElixirSense.Providers.Utils.Field do
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.TypeInfo
 
+  @spec get_field_types(Metadata.t(), module, boolean) :: %{optional(atom) => Macro.t()}
   def get_field_types(%Metadata{} = metadata, mod, include_private) when is_atom(mod) do
     case get_field_types_from_metadata(metadata, mod, include_private) do
       nil -> get_field_types_from_introspection(mod, include_private)
