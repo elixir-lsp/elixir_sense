@@ -276,7 +276,6 @@ defmodule ElixirSense.Core.BuiltinTypes do
     @types[type_key(type, n_args)][:spec]
   end
 
-  # TODO fuzzy match?
   defp match_key?(type_name, key) do
     key == "#{type_name}" || String.starts_with?(key, "#{type_name}/")
   end
