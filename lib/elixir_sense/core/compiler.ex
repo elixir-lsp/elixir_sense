@@ -116,10 +116,10 @@ defmodule ElixirSense.Core.Compiler do
 
       do_expand(ast, state, env)
     catch
-      kind, payload ->
-        Logger.warning(
-          "Unable to expand ast node #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
-        )
+      _kind, _payload ->
+        # Logger.warning(
+        #   "Unable to expand ast node #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
+        # )
 
         {ast, state, env}
     end
@@ -2149,8 +2149,8 @@ defmodule ElixirSense.Core.Compiler do
       callback.(meta, args)
     catch
       # If expanding the macro fails, we just give up.
-      kind, payload ->
-        Logger.warning(Exception.format(kind, payload, __STACKTRACE__))
+      _kind, _payload ->
+        # Logger.warning(Exception.format(kind, payload, __STACKTRACE__))
         # look for cursor in args
         {_ast, state, _env} = expand(args, state, env)
 

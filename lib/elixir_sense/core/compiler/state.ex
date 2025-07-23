@@ -1122,28 +1122,28 @@ defmodule ElixirSense.Core.Compiler.State do
             to_string(list)
           end
 
-        other ->
-          Logger.warning("""
-          Unable to format docstring expression:
+        _other ->
+          # Logger.warning("""
+          # Unable to format docstring expression:
 
-          #{inspect(quoted, pretty: true)}
+          # #{inspect(quoted, pretty: true)}
 
-          Eval resulted in:
+          # Eval resulted in:
 
-          #{inspect(other)}
-          """)
+          # #{inspect(other)}
+          # """)
 
           ""
       end
     rescue
-      e ->
-        Logger.warning("""
-        Unable to format docstring expression:
+      _e ->
+        # Logger.warning("""
+        # Unable to format docstring expression:
 
-        #{inspect(quoted, pretty: true)}
+        # #{inspect(quoted, pretty: true)}
 
-        #{Exception.format(:error, e, __STACKTRACE__)}
-        """)
+        # #{Exception.format(:error, e, __STACKTRACE__)}
+        # """)
 
         ""
     end
