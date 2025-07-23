@@ -1,51 +1,47 @@
 defmodule ElixirSense.Core.Normalized.Macro.Env do
-  def expand_import(env, meta, name, arity, opts \\ [])
-      when is_list(meta) and is_atom(name) and is_integer(arity) and is_list(opts) do
-    local_for_callback =
-      Keyword.get(opts, :local_for_callback, fn meta, name, arity, kinds, e ->
-        if Version.match?(System.version(), ">= 1.14.0-dev") do
-          :elixir_def.local_for(meta, name, arity, kinds, e)
-        else
-          :elixir_def.local_for(e.module, name, arity, kinds)
-        end
-      end)
+  if Version.match?(System.version(), ">= 1.19.0-rc.1") do
+    defdelegate expand_import(env, meta, name, arity, opts), to: Macro.Env
+  else
+    def expand_import(env, meta, name, arity, opts \\ [])
+        when is_list(meta) and is_atom(name) and is_integer(arity) and is_list(opts) do
+      case Macro.special_form?(name, arity) do
+        true ->
+          {:error, :not_found}
 
-    case Macro.special_form?(name, arity) do
-      true ->
-        {:error, :not_found}
+        false ->
+          allow_locals = Keyword.get(opts, :allow_locals, true)
+          trace = Keyword.get(opts, :trace, true)
+          module = env.module
 
-      false ->
-        allow_locals = Keyword.get(opts, :allow_locals, true)
-        trace = Keyword.get(opts, :trace, true)
-        # module = env.module
+          extra =
+            if is_function(allow_locals, 0) do
+              []
+            else
+              case allow_locals and function_exported?(module, :__info__, 1) do
+                true -> [{module, module.__info__(:macros)}]
+                false -> []
+              end
+            end
 
-        # elixir version passes module.__info__(:macros) as extra, we do not need that
-        # instead we override local_for_callback
-        extra = []
-        # case allow_locals and function_exported?(module, :__info__, 1) do
-        #   true -> [{module, module.__info__(:macros)}]
-        #   false -> []
-        # end
+          case __MODULE__.Dispatch.expand_import(
+                 meta,
+                 name,
+                 arity,
+                 env,
+                 extra,
+                 allow_locals,
+                 trace
+               ) do
+            {:macro, receiver, expander} ->
+              {:macro, receiver, wrap_expansion(receiver, expander, meta, name, arity, env, opts)}
 
-        case __MODULE__.Dispatch.expand_import(
-               meta,
-               name,
-               arity,
-               env,
-               extra,
-               allow_locals,
-               trace,
-               local_for_callback
-             ) do
-          {:macro, receiver, expander} ->
-            {:macro, receiver, wrap_expansion(receiver, expander, meta, name, arity, env, opts)}
+            {:function, receiver, name} ->
+              {:function, receiver, name}
 
-          {:function, receiver, name} ->
-            {:function, receiver, name}
-
-          error ->
-            {:error, error}
-        end
+            error ->
+              {:error, error}
+          end
+      end
     end
   end
 
@@ -553,7 +549,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
   end
 
   defmodule Dispatch do
-    def expand_import(meta, name, arity, e, extra, allow_locals, trace, local_for_callback) do
+    def expand_import(meta, name, arity, e, extra, allow_locals, trace) do
       tuple = {name, arity}
       module = e.module
       dispatch = find_import_by_name_arity(meta, tuple, extra, e)
@@ -567,7 +563,20 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
 
         _ ->
           local =
-            allow_locals and local_for_callback.(meta, name, arity, [:defmacro, :defmacrop], e)
+            case allow_locals do
+              false ->
+                false
+
+              true ->
+                if Version.match?(System.version(), ">= 1.14.0-dev") do
+                  :elixir_def.local_for(meta, name, arity, [:defmacro, :defmacrop], e)
+                else
+                  :elixir_def.local_for(e.module, name, arity, [:defmacro, :defmacrop])
+                end
+
+              fun when is_function(fun, 0) ->
+                allow_locals.()
+            end
 
           case dispatch do
             {_, receiver} when local != false and receiver != module ->
@@ -643,16 +652,36 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
       fn args, caller -> expand_macro_fun(meta, fun, receiver, name, args, caller, e) end
     end
 
-    defp expand_macro_fun(_meta, fun, _receiver, _name, args, caller, _e) do
-      # elixir applies local macro via apply/2
-      # we need to check if the macro is a function as we return a fake for local macros
-      if is_function(fun) do
+    defp expand_macro_fun(meta, fun, receiver, name, args, caller, e) do
+      try do
         apply(fun, [caller | args])
-      else
-        # we return a fake value and omit expansion
-        :ok
+      catch
+        kind, reason ->
+          arity = length(args)
+          mfa = {receiver, :"MACRO-#{name}", arity + 1}
+
+          info = [
+            {receiver, name, arity, [{:file, ~c"expanding macro"}]},
+            caller(Keyword.get(meta, :line), e)
+          ]
+
+          :erlang.raise(kind, reason, prune_stacktrace(__STACKTRACE__, mfa, info, {:ok, caller}))
       end
     end
+
+    defp caller(line, e) do
+      :elixir_utils.caller(line, e.file, e.module, e.function)
+    end
+
+    defp prune_stacktrace([{_, _, [caller | _], _} | _], _mfa, info, {:ok, caller}), do: info
+    defp prune_stacktrace([{m, f, a, _} | _], {m, f, a}, info, _e), do: info
+
+    defp prune_stacktrace([{mod, _, _, _} | _], _mfa, info, _e)
+         when mod in [:elixir_dispatch, :elixir_exp, __MODULE__],
+         do: info
+
+    defp prune_stacktrace([h | t], mfa, info, e), do: [h | prune_stacktrace(t, mfa, info, e)]
+    defp prune_stacktrace([], _mfa, info, _e), do: info
 
     defp is_macro(_name, _arity, _module, false), do: false
 

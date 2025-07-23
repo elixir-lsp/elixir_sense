@@ -273,7 +273,8 @@ defmodule ElixirSense.Core.ParserTest do
               calls: %{
                 2 => [%CallInfo{func: :inspect}, %CallInfo{mod: IO}]
               }
-            }, %Env{module: MyModule}} =
+            },
+            %Env{module: MyModule}} =
              parse(source, {5, 10})
   end
 
@@ -293,7 +294,8 @@ defmodule ElixirSense.Core.ParserTest do
               calls: %{
                 2 => [%CallInfo{func: :inspect}, %CallInfo{mod: IO}]
               }
-            }, %Env{module: MyModule}} =
+            },
+            %Env{module: MyModule}} =
              parse(source, {5, 12})
   end
 

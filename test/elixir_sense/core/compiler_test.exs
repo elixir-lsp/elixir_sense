@@ -973,11 +973,24 @@ defmodule ElixirSense.Core.CompilerTest do
           dot_meta = Keyword.delete(dot_meta, :column_correction)
           {{{:., dot_meta, target}, call_meta, args}, state}
 
+        {:fn, meta, args} = _node, state ->
+          meta =
+            if Version.match?(System.version(), "< 1.19.0") do
+              Keyword.delete(meta, :capture)
+            else
+              meta
+            end
+
+          {{:fn, meta, args}, state}
+
         {atom, meta, nil} = node, state when is_atom(atom) ->
           # elixir changes the name to capture and does different counter tracking
           node =
             with "&" <> int <- to_string(atom), {_, ""} <- Integer.parse(int) do
-              meta = Keyword.delete(meta, :counter)
+              meta =
+                Keyword.delete(meta, :counter)
+                |> Keyword.delete(:capture)
+
               {:capture, meta, nil}
             else
               _ -> node

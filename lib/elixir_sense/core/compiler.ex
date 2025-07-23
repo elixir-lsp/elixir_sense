@@ -735,33 +735,38 @@ defmodule ElixirSense.Core.Compiler do
 
     case NormalizedMacroEnv.expand_import(env, meta, fun, arity,
            trace: true,
-           allow_locals: allow_locals,
            check_deprecations: false,
-           local_for_callback: fn meta, name, arity, kinds, e ->
-             case state.mods_funs_to_positions[{e.module, name, arity}] do
-               nil ->
-                 false
+           allow_locals:
+             allow_locals &&
+               fn ->
+                 case state.mods_funs_to_positions[{env.module, fun, arity}] do
+                   nil ->
+                     false
 
-               %ModFunInfo{} = info ->
-                 category = ModFunInfo.get_category(info)
-                 definition_line = info.positions |> List.first() |> elem(0)
-                 usage_line = meta |> Keyword.get(:line)
+                   %ModFunInfo{} = info ->
+                     category = ModFunInfo.get_category(info)
+                     definition_line = info.positions |> List.first() |> elem(0)
+                     usage_line = meta |> Keyword.get(:line)
 
-                 if ModFunInfo.get_def_kind(info) in kinds and
-                      (category != :macro or usage_line >= definition_line) do
-                   if macro_exported?(e.module, name, arity) do
-                     proper_name = :"MACRO-#{name}"
-                     proper_arity = arity + 1
-                     Function.capture(e.module, proper_name, proper_arity)
-                   else
-                     # return a fake macro
-                     true
-                   end
-                 else
-                   false
+                     if category == :macro and usage_line >= definition_line do
+                       proper_arity = arity + 1
+                       proper_name = :"MACRO-#{fun}"
+
+                       if Code.ensure_loaded?(env.module) and
+                            macro_exported?(env.module, fun, arity) do
+                         Function.capture(env.module, proper_name, proper_arity)
+                       else
+                         Function.capture(
+                           ElixirSense.Core.Compiler.FakeLocal,
+                           :ok_fun,
+                           proper_arity
+                         )
+                       end
+                     else
+                       false
+                     end
                  end
-             end
-           end
+               end
          ) do
       {:macro, module, callback} ->
         # NOTE there is a subtle difference - callback will call expander with state derived from env via

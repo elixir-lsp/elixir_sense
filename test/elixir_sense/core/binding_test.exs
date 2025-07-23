@@ -98,7 +98,8 @@ defmodule ElixirSense.Core.BindingTest do
                 __struct__: {:atom, ElixirSenseExample.ModuleWithTypedStruct},
                 other: nil,
                 typed_field: nil
-              ], {:atom, ElixirSenseExample.ModuleWithTypedStruct}, nil} ==
+              ], {:atom, ElixirSenseExample.ModuleWithTypedStruct},
+              nil} ==
                Binding.expand(
                  @env,
                  {:struct, [], {:atom, ElixirSenseExample.ModuleWithTypedStruct}, nil}
@@ -204,7 +205,8 @@ defmodule ElixirSense.Core.BindingTest do
                 __struct__: {:atom, ElixirSenseExample.ModuleWithTypedStruct},
                 other: {:atom, :a},
                 typed_field: {:atom, :b}
-              ], {:atom, ElixirSenseExample.ModuleWithTypedStruct}, nil} ==
+              ], {:atom, ElixirSenseExample.ModuleWithTypedStruct},
+              nil} ==
                Binding.expand(
                  @env,
                  {:struct, [typed_field: {:atom, :b}],
@@ -220,7 +222,8 @@ defmodule ElixirSense.Core.BindingTest do
                 __struct__: {:atom, ElixirSenseExample.ModuleWithTypedStruct},
                 other: {:atom, :a},
                 typed_field: {:atom, :b}
-              ], {:atom, ElixirSenseExample.ModuleWithTypedStruct}, nil} ==
+              ], {:atom, ElixirSenseExample.ModuleWithTypedStruct},
+              nil} ==
                Binding.expand(
                  @env,
                  {:map, [typed_field: {:atom, :b}],
@@ -235,7 +238,8 @@ defmodule ElixirSense.Core.BindingTest do
                 __struct__: {:atom, ElixirSenseExample.ModuleWithTypedStruct},
                 other: nil,
                 typed_field: nil
-              ], {:atom, ElixirSenseExample.ModuleWithTypedStruct}, nil} ==
+              ], {:atom, ElixirSenseExample.ModuleWithTypedStruct},
+              nil} ==
                Binding.expand(
                  @env
                  |> Map.put(:attributes, [
@@ -1040,7 +1044,8 @@ defmodule ElixirSense.Core.BindingTest do
               [
                 __struct__: {:atom, ElixirSenseExample.FunctionsWithReturnSpec},
                 abc: {:map, [key: {:atom, nil}], nil}
-              ], {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, nil} ==
+              ], {:atom, ElixirSenseExample.FunctionsWithReturnSpec},
+              nil} ==
                Binding.expand(
                  @env
                  |> Map.put(:vars, [
@@ -1057,7 +1062,8 @@ defmodule ElixirSense.Core.BindingTest do
     test "remote call fun with spec remote t expanding to struct" do
       assert {:struct,
               [__struct__: {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}, abc: nil],
-              {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}, nil} ==
+              {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote},
+              nil} ==
                Binding.expand(
                  @env
                  |> Map.put(:vars, [
@@ -1074,7 +1080,8 @@ defmodule ElixirSense.Core.BindingTest do
     test "remote call fun with spec struct" do
       assert {:struct,
               [__struct__: {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, abc: nil],
-              {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, nil} ==
+              {:atom, ElixirSenseExample.FunctionsWithReturnSpec},
+              nil} ==
                Binding.expand(
                  @env
                  |> Map.put(:vars, [
@@ -2599,7 +2606,8 @@ defmodule ElixirSense.Core.BindingTest do
                 {:__struct__, {:atom, State}},
                 {:abc, nil},
                 {:formatted, {:variable, :formatted, 1}}
-              ], {:atom, State}, nil} ==
+              ], {:atom, State},
+              nil} ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -2700,7 +2708,8 @@ defmodule ElixirSense.Core.BindingTest do
                 {:__struct__, {:atom, State}},
                 {:abc, {:atom, X}},
                 {:formatted, {:variable, :formatted, 1}}
-              ], {:atom, State}, nil} ==
+              ], {:atom, State},
+              nil} ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -2722,7 +2731,8 @@ defmodule ElixirSense.Core.BindingTest do
                 {:__struct__, {:atom, State}},
                 {:abc, {:atom, X}},
                 {:formatted, {:variable, :formatted, 1}}
-              ], {:atom, State}, nil} ==
+              ], {:atom, State},
+              nil} ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -2747,7 +2757,8 @@ defmodule ElixirSense.Core.BindingTest do
                 {:formatted, {:variable, :formatted, 1}},
                 {:not_existing, nil},
                 {:abc, {:atom, X}}
-              ], nil, nil} ==
+              ], nil,
+              nil} ==
                Binding.expand(
                  @env,
                  {:intersection,
@@ -2765,7 +2776,8 @@ defmodule ElixirSense.Core.BindingTest do
                 {:formatted, {:variable, :formatted, 1}},
                 {:not_existing, nil},
                 {:abc, {:atom, X}}
-              ], nil, nil} ==
+              ], nil,
+              nil} ==
                Binding.expand(
                  @env,
                  {:intersection,
@@ -2782,7 +2794,8 @@ defmodule ElixirSense.Core.BindingTest do
                 {:__struct__, {:atom, State}},
                 {:abc, {:atom, X}},
                 {:formatted, {:variable, :formatted, 1}}
-              ], {:atom, State}, nil} ==
+              ], {:atom, State},
+              nil} ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -2804,7 +2817,8 @@ defmodule ElixirSense.Core.BindingTest do
                 {:__struct__, {:atom, State}},
                 {:abc, {:atom, X}},
                 {:formatted, {:variable, :formatted, 1}}
-              ], {:atom, State}, nil} ==
+              ], {:atom, State},
+              nil} ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -2828,7 +2842,8 @@ defmodule ElixirSense.Core.BindingTest do
                 {:__struct__, {:atom, State}},
                 {:abc, {:atom, X}},
                 {:formatted, {:variable, :formatted, 1}}
-              ], {:atom, State}, nil} ==
+              ], {:atom, State},
+              nil} ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
