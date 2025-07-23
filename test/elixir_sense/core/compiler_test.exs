@@ -1018,9 +1018,24 @@ defmodule ElixirSense.Core.CompilerTest do
 
           {{:->, meta, args}, state}
 
+        {:fn, meta, args} = _node, state ->
+          meta =
+            if Version.match?(System.version(), ">= 1.19.0-rc.0") do
+              Keyword.delete(meta, :capture)
+            else
+              meta
+            end
+          {{:fn, meta, args}, state}
+
         {:capture, meta, nil} = _node, state ->
           # elixir changes the name to capture and does different counter tracking
           meta = Keyword.delete(meta, :counter)
+          meta =
+            if Version.match?(System.version(), ">= 1.19.0-rc.0") do
+              Keyword.delete(meta, :capture)
+            else
+              meta
+            end
           {{:capture, meta, nil}, state}
 
         node, state ->
