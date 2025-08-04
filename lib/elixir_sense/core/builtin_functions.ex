@@ -1,5 +1,6 @@
 defmodule ElixirSense.Core.BuiltinFunctions do
   @moduledoc false
+  require ElixirSense.Core.Introspection, as: Introspection
 
   @functions %{
     {:exception, 1} => %{specs: [quote(do: exception(term) :: Exception.t())], args: ["msg"]},
@@ -209,6 +210,43 @@ defmodule ElixirSense.Core.BuiltinFunctions do
   }
 
   @all Map.keys(@functions)
+
+  @doc """
+  Returns a list of all builtin functions matching the given function name and arity.
+
+  ## Parameters
+    - function: The function name (atom or string)
+    - arity: The arity (integer) or :any for all arities
+    
+  ## Returns
+    A list of tuples {function_name, arity, doc, specs} for all matching functions.
+    
+  ## Examples
+    
+      iex> get_builtin_functions_doc(:module_info, :any)
+      [{"module_info", 0, "The `module_info/0` function...", ["@spec module_info() :: ..."]},
+       {"module_info", 1, "The call `module_info(Key)`...", ["@spec module_info(:module) :: ..."]}]
+      
+      iex> get_builtin_functions_doc(:module_info, 1)
+      [{"module_info", 1, "The call `module_info(Key)`...", ["@spec module_info(:module) :: ..."]}]
+      
+      iex> get_builtin_functions_doc(:module_info, 0)
+      [{"module_info", 0, "The `module_info/0` function...", ["@spec module_info() :: ..."]}]
+  """
+  def get_builtin_functions_doc(function, arity) do
+    function_atom = if is_atom(function), do: function, else: String.to_atom(to_string(function))
+
+    @functions
+    |> Enum.filter(fn {{f, a}, _value} ->
+      f == function_atom and Introspection.matches_arity?(a, arity)
+    end)
+    |> Enum.map(fn {{f, a}, %{specs: specs}} ->
+      doc = Map.get(@docs, {f, a}, "")
+      formatted_specs = specs |> Enum.map(&"@spec #{Macro.to_string(&1)}")
+      {to_string(f), a, doc, formatted_specs}
+    end)
+    |> Enum.sort_by(fn {_name, arity, _doc, _specs} -> arity end)
+  end
 
   for {{f, a}, %{specs: specs}} <- @functions do
     def get_specs({unquote(f), unquote(a)}),

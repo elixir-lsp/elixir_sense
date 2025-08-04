@@ -1,5 +1,6 @@
 defmodule ElixirSense.Core.BuiltinTypes do
   @moduledoc false
+  require ElixirSense.Core.Introspection, as: Introspection
 
   @basic_types %{
     "any" => %{
@@ -255,6 +256,58 @@ defmodule ElixirSense.Core.BuiltinTypes do
       doc ->
         doc
     end
+  end
+
+  @doc """
+  Returns a list of all builtin types matching the given type name and arity.
+
+  ## Parameters
+    - type: The type name (atom or string)
+    - arity: The arity (integer) or nil for all arities
+    
+  ## Returns
+    A list of tuples {type_name, arity, doc} for all matching types.
+    
+  ## Examples
+    
+      iex> get_builtin_types_doc(:list, :any)
+      [{"list", 0, "A list"}, {"list", 1, "Proper list ([]-terminated)"}]
+      
+      iex> get_builtin_types_doc(:list, 1)
+      [{"list", 1, "Proper list ([]-terminated)"}]
+      
+      iex> get_builtin_types_doc(:list, 0)
+      [{"list", 0, "A list"}]
+  """
+  def get_builtin_types_doc(type, arity) do
+    type_str = to_string(type)
+
+    @types
+    |> Enum.filter(fn {key, _value} ->
+      case String.split(key, "/") do
+        [^type_str] ->
+          # Type without arity (e.g., "list")
+          Introspection.matches_arity?(0, arity)
+
+        [^type_str, arity_str] ->
+          Introspection.matches_arity?(String.to_integer(arity_str), arity)
+
+        # Type with arity (e.g., "list/1")
+
+        _ ->
+          false
+      end
+    end)
+    |> Enum.map(fn {key, %{doc: doc}} ->
+      case String.split(key, "/") do
+        [type_name] ->
+          {type_name, 0, doc}
+
+        [type_name, arity_str] ->
+          {type_name, String.to_integer(arity_str), doc}
+      end
+    end)
+    |> Enum.sort_by(fn {_name, arity, _doc} -> arity end)
   end
 
   def all do
