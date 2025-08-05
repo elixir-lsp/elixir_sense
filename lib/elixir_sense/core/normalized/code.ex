@@ -6,6 +6,7 @@ defmodule ElixirSense.Core.Normalized.Code do
   alias ElixirSense.Core.Behaviours
   alias ElixirSense.Core.ErlangHtml
   alias ElixirSense.Core.Normalized.Path, as: PathNormalized
+  require Logger
 
   @type doc_t :: nil | false | String.t()
   @type fun_doc_entry_t ::
@@ -305,6 +306,13 @@ defmodule ElixirSense.Core.Normalized.Code do
     else
       _ -> :error
     end
+  catch
+    kind, reason ->
+      Logger.warning(
+        "Failed to fetch docs for #{inspect(module)}: #{Exception.format(kind, reason, __STACKTRACE__)}"
+      )
+
+      :error
   end
 
   @docs_chunk [?D, ?o, ?c, ?s]
