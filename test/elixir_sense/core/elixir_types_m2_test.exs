@@ -233,8 +233,10 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       # Result should either be a type or nil (graceful fallback)
       case result do
-        nil -> :ok  # Fallback is acceptable for M2
-        type when is_tuple(type) -> :ok  # Got a type result
+        # Fallback is acceptable for M2
+        nil -> :ok
+        # Got a type result
+        type when is_tuple(type) -> :ok
         other -> flunk("Unexpected result: #{inspect(other)}")
       end
     end

@@ -2962,16 +2962,93 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   # Helper to merge ElixirTypes pattern variable refinements
-  defp merge_elixir_types_pattern_vars(existing_vars, _expr_ast, _state) do
-    # Stub implementation for M1 - just return existing vars
-    # In M1.5, this would call ElixirTypes.of_match and merge results
-    if ElixirSense.Core.ElixirTypes.enabled?() do
-      # For M1, we don't implement pattern matching yet
-      # This is where we would call ElixirTypes.of_match(pattern_ast, expected, expr_ast)
-      # and merge the refined variables
-      existing_vars
-    else
-      existing_vars
+  defp merge_elixir_types_pattern_vars(
+         existing_vars,
+         {:=, meta, [pattern_ast, _]} = match_ast,
+         state
+       ) do
+    cond do
+      existing_vars == [] ->
+        existing_vars
+
+      not ElixirSense.Core.ElixirTypes.enabled?() ->
+        existing_vars
+
+      true ->
+        env = env_for_meta(state, meta)
+        module = env && env.module
+        function = env && env.function
+        file = Keyword.get(meta, :file) || module_file(module)
+
+        target_keys = Enum.map(existing_vars, &elem(&1, 0))
+
+        case ElixirSense.Core.ElixirTypes.of_match(
+               pattern_ast,
+               nil,
+               match_ast,
+               module,
+               function,
+               file,
+               :dynamic,
+               target_keys: target_keys
+             ) do
+          {:ok, refined} when map_size(refined) > 0 ->
+            merge_pattern_types(existing_vars, refined)
+
+          _ ->
+            existing_vars
+        end
+    end
+  end
+
+  defp merge_elixir_types_pattern_vars(existing_vars, _expr_ast, _state), do: existing_vars
+
+  defp merge_pattern_types(existing_vars, refined_map) do
+    existing_map = Map.new(existing_vars)
+
+    merged_map =
+      Enum.reduce(refined_map, existing_map, fn {key, new_type}, acc ->
+        case Map.fetch(acc, key) do
+          {:ok, existing_type} ->
+            Map.put(acc, key, TypeInference.intersect(existing_type, new_type))
+
+          :error ->
+            Map.put(acc, key, new_type)
+        end
+      end)
+
+    ordered_keys = Enum.map(existing_vars, &elem(&1, 0))
+
+    ordered = Enum.map(ordered_keys, fn key -> {key, Map.get(merged_map, key)} end)
+
+    additional =
+      merged_map
+      |> Enum.reject(fn {key, _} -> key in ordered_keys end)
+
+    ordered ++ additional
+  end
+
+  defp env_for_meta(state, meta) do
+    line = Keyword.get(meta, :line, 0)
+
+    cond do
+      is_integer(line) and line > 0 ->
+        Map.get(state.lines_to_env, line) || closest_env(state)
+
+      true ->
+        closest_env(state)
+    end
+  end
+
+  defp closest_env(%State{closest_env: {{_, _}, _dist, env}}) when not is_nil(env), do: env
+  defp closest_env(_), do: nil
+
+  defp module_file(nil), do: nil
+
+  defp module_file(module) when is_atom(module) do
+    case :code.which(module) do
+      path when is_list(path) -> List.to_string(path)
+      _ -> nil
     end
   end
 
