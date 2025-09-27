@@ -133,7 +133,8 @@ defmodule ElixirSense.Core.Compiler do
     vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, :match)
 
     # Augment with ElixirTypes pattern refinement if available
-    vars_with_inferred_types = merge_elixir_types_pattern_vars(vars_with_inferred_types, e_expr, se)
+    vars_with_inferred_types =
+      merge_elixir_types_pattern_vars(vars_with_inferred_types, e_expr, se)
 
     se = State.merge_inferred_types(se, vars_with_inferred_types)
 
@@ -150,7 +151,8 @@ defmodule ElixirSense.Core.Compiler do
     vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, el.context)
 
     # Augment with ElixirTypes pattern refinement if available
-    vars_with_inferred_types = merge_elixir_types_pattern_vars(vars_with_inferred_types, e_expr, sl)
+    vars_with_inferred_types =
+      merge_elixir_types_pattern_vars(vars_with_inferred_types, e_expr, sl)
 
     sl = State.merge_inferred_types(sl, vars_with_inferred_types)
 
