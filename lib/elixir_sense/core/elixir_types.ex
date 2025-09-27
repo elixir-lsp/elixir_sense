@@ -102,7 +102,13 @@ defmodule ElixirSense.Core.ElixirTypes do
   @doc """
   Creates a Module.Types stack for typing operations.
   """
-  def init_stack(module \\ nil, function \\ nil, file \\ nil, mode \\ :dynamic, local_sigs_map \\ nil) do
+  def init_stack(
+        module \\ nil,
+        function \\ nil,
+        file \\ nil,
+        mode \\ :dynamic,
+        local_sigs_map \\ nil
+      ) do
     if available?() do
       handler =
         if local_sigs_map && map_size(local_sigs_map) > 0 do
@@ -179,7 +185,14 @@ defmodule ElixirSense.Core.ElixirTypes do
       {:ok, %{tuple: [closed: [%{bitmap: 4}, %{atom: {:union, %{ok: []}}}]]}}
 
   """
-  def of_expr(ast, module \\ nil, function \\ nil, file \\ nil, mode \\ :dynamic, local_sigs_map \\ nil) do
+  def of_expr(
+        ast,
+        module \\ nil,
+        function \\ nil,
+        file \\ nil,
+        mode \\ :dynamic,
+        local_sigs_map \\ nil
+      ) do
     if available?() do
       try do
         stack = init_stack(module, function, file, mode, local_sigs_map)
@@ -210,21 +223,54 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   @doc """
-  Types a pattern match to extract variable refinements.
+  Types a pattern match to refine variable types.
 
-  Stub implementation for M1 - returns :error.
-  Will be implemented in M1.5 if time permits.
+  Returns `{:ok, map}` with entries keyed by `{var_name, version}` and values
+  converted to ElixirSense shapes. Returns `:error` when typing fails or
+  Module.Types cannot be used.
   """
   def of_match(
-        _pattern_ast,
-        _expected_descr,
-        _expr_ast,
-        _module \\ nil,
-        _function \\ nil,
-        _file \\ nil,
-        _mode \\ :dynamic
+        pattern_ast,
+        expected_descr,
+        match_ast,
+        module \\ nil,
+        function \\ nil,
+        file \\ nil,
+        mode \\ :dynamic,
+        opts \\ []
       ) do
-    :error
+    if available?() do
+      targets = targets_from_opts(opts)
+
+      try do
+        stack = init_stack(module, function, file, mode)
+
+        if stack do
+          stack = %{stack | refine_vars: true}
+          context = init_context()
+
+          {pattern_ast, value_ast, full_match} = normalize_match(pattern_ast, match_ast)
+          expected_descr = expected_descr || Module.Types.Descr.term()
+
+          expected_fun = fn _pattern_type, ctx ->
+            Module.Types.Expr.of_expr(value_ast, expected_descr, full_match, stack, ctx)
+          end
+
+          {_type, %{vars: vars_map}} =
+            Module.Types.Pattern.of_match(pattern_ast, expected_fun, full_match, stack, context)
+
+          {:ok, extract_var_shapes(vars_map, targets)}
+        else
+          :error
+        end
+      rescue
+        _ -> :error
+      catch
+        _ -> :error
+      end
+    else
+      :error
+    end
   end
 
   @doc """
@@ -470,10 +516,16 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   defp extract_var_shapes(vars_map, targets) do
     Enum.reduce(vars_map, %{}, fn
-      {version, %{name: name, type: descr}}, acc when include_var?(targets, {name, version}) ->
-        case descr_to_shape(descr) do
-          nil -> acc
-          shape -> Map.put(acc, {name, version}, shape)
+      {version, %{name: name, type: descr}}, acc ->
+        key = {name, version}
+
+        if include_var?(targets, key) do
+          case descr_to_shape(descr) do
+            nil -> acc
+            shape -> Map.put(acc, key, shape)
+          end
+        else
+          acc
         end
 
       _, acc ->
@@ -615,7 +667,6 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   def build_local_sigs_map(_metadata, _module), do: %{}
-
 
   @doc """
   Create a closure-based local handler from a signatures map.
