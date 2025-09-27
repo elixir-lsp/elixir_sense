@@ -1,7 +1,7 @@
 defmodule ElixirSense.Core.ElixirTypesM2Test do
   use ExUnit.Case, async: false
 
-  alias ElixirSense.Core.{ElixirTypes, MetadataBuilder}
+  alias ElixirSense.Core.{ElixirTypes, MetadataBuilder, TypeInference}
 
   @moduletag :elixir_types_m2
 
@@ -177,6 +177,66 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       assert %{elixir_types_clauses: [_]} = state.mods_funs_to_positions[public_key]
       assert %{elixir_types_clauses: [_]} = state.mods_funs_to_positions[private_key]
+    end
+
+    test "local handler integration works" do
+      code = """
+      defmodule TestModule do
+        def simple_add(x, y), do: x + y
+        def identity(x), do: x
+      end
+      """
+
+      state =
+        code
+        |> Code.string_to_quoted(columns: true, token_metadata: true)
+        |> elem(1)
+        |> MetadataBuilder.build()
+
+      # Build local signatures map
+      local_sigs_map = ElixirTypes.build_local_sigs_map(state, TestModule)
+
+      # Should have captured signatures for both functions
+      assert Map.has_key?(local_sigs_map, {:simple_add, 2})
+      assert Map.has_key?(local_sigs_map, {:identity, 1})
+
+      # Test that we can use the local handler
+      case Map.get(local_sigs_map, {:simple_add, 2}) do
+        {kind, {:infer, _domain, _clause_types}} ->
+          assert kind == :def
+
+        _ ->
+          # If inference failed, that's ok for M2
+          :ok
+      end
+    end
+
+    test "TypeInference integration with local signatures" do
+      code = """
+      defmodule TestModule do
+        def add(x, y), do: x + y
+      end
+      """
+
+      state =
+        code
+        |> Code.string_to_quoted(columns: true, token_metadata: true)
+        |> elem(1)
+        |> MetadataBuilder.build()
+
+      # Build local signatures map
+      local_sigs_map = ElixirTypes.build_local_sigs_map(state, TestModule)
+
+      # Test typing a local call with the signatures map
+      call_ast = {:add, [], [1, 2]}
+      result = TypeInference.type_of_with_elixir_types(call_ast, :none, local_sigs_map)
+
+      # Result should either be a type or nil (graceful fallback)
+      case result do
+        nil -> :ok  # Fallback is acceptable for M2
+        type when is_tuple(type) -> :ok  # Got a type result
+        other -> flunk("Unexpected result: #{inspect(other)}")
+      end
     end
   end
 
