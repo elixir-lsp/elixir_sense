@@ -107,15 +107,18 @@ defmodule ElixirSense.Core.ElixirTypes do
         function \\ nil,
         file \\ nil,
         mode \\ :dynamic,
-        local_sigs_map \\ nil
+        local_sigs_map \\ nil,
+        metadata \\ nil
       ) do
     if available?() do
-      handler =
+      local_handler =
         if local_sigs_map && map_size(local_sigs_map) > 0 do
           local_handler_from(local_sigs_map)
         else
           &__MODULE__.local_handler/4
         end
+
+      remote_handler = remote_handler_from(metadata)
 
       Module.Types.stack(
         mode,
@@ -123,8 +126,8 @@ defmodule ElixirSense.Core.ElixirTypes do
         module || ElixirSense.ElixirTypes,
         function || {:__info__, 1},
         :all,
-        nil,
-        handler
+        remote_handler,
+        local_handler
       )
     else
       nil
@@ -191,11 +194,12 @@ defmodule ElixirSense.Core.ElixirTypes do
         function \\ nil,
         file \\ nil,
         mode \\ :dynamic,
-        local_sigs_map \\ nil
+        local_sigs_map \\ nil,
+        metadata \\ nil
       ) do
     if available?() do
       try do
-        stack = init_stack(module, function, file, mode, local_sigs_map)
+        stack = init_stack(module, function, file, mode, local_sigs_map, metadata)
         context = init_context()
 
         if stack && context do
@@ -699,6 +703,24 @@ defmodule ElixirSense.Core.ElixirTypes do
     end
   end
 
+  @doc """
+  Creates a remote handler closure that looks up ExCk signatures for remote calls.
+
+  The handler attempts to find type signatures in BEAM ExCk chunks and falls back
+  to ElixirSense metadata if unavailable.
+  """
+  def remote_handler_from(metadata \\ nil) do
+    fn module, function, arity, _meta, _stack, context ->
+      case ElixirSense.Core.ExCkReader.lookup_signature(module, function, arity) do
+        {:ok, info} ->
+          apply_exck_signature(info, context)
+
+        :error ->
+          apply_metadata_fallback(metadata, module, function, arity, context)
+      end
+    end
+  end
+
   # Helper to convert ElixirSense def types to Module.Types kinds
   defp get_def_kind_for_types(:def), do: :def
   defp get_def_kind_for_types(:defp), do: :defp
@@ -706,4 +728,44 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp get_def_kind_for_types(:defmacrop), do: :defmacrop
   # For other types, default to :def
   defp get_def_kind_for_types(_), do: :def
+
+  # Apply ExCk signature information to typing context
+  defp apply_exck_signature(info, context) do
+    case Map.get(info, :sig) do
+      nil ->
+        false
+
+      sig_info ->
+        # For M2, we'll extract basic type information from the signature
+        # In future versions, this could be enhanced with full signature application
+        return_type = extract_return_type_from_sig(sig_info)
+        {:def, return_type, context}
+    end
+  end
+
+  # Extract return type from ExCk signature (simplified for M2)
+  defp extract_return_type_from_sig(_sig_info) do
+    # For M2, we'll return :dynamic as a placeholder
+    # In future versions, this should parse the actual signature format
+    # Always return dynamic descriptor, never nil
+    Module.Types.Descr.dynamic()
+  end
+
+  # Fallback to ElixirSense metadata for remote function typing
+  defp apply_metadata_fallback(nil, _module, _function, _arity, _context), do: false
+
+  defp apply_metadata_fallback(metadata, module, function, arity, context) do
+    # Look up function in ElixirSense metadata
+    case lookup_remote_in_metadata(metadata, module, function, arity) do
+      nil -> false
+      type_info -> {:def, type_info, context}
+    end
+  end
+
+  # Look up remote function in ElixirSense metadata (placeholder for M2)
+  defp lookup_remote_in_metadata(_metadata, _module, _function, _arity) do
+    # For M2, return nil to indicate no metadata available
+    # In future versions, this could integrate with ElixirSense's existing type info
+    nil
+  end
 end
