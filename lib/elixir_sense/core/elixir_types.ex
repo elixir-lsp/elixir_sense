@@ -55,7 +55,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   - Local function calls remain dynamic (no local_handler implementation)
   - Remote function calls remain dynamic (no ExCk cache)
-  - Pattern matching uses stubs (of_match returns :error)
+  - Pattern matching relies on best-effort conversion and may skip complex types
   - Conservative shape conversion (only handles clear, simple cases)
 
   These limitations will be addressed in future milestones (M2-M4).
@@ -102,8 +102,15 @@ defmodule ElixirSense.Core.ElixirTypes do
   @doc """
   Creates a Module.Types stack for typing operations.
   """
-  def init_stack(module \\ nil, function \\ nil, file \\ nil, mode \\ :dynamic) do
+  def init_stack(module \\ nil, function \\ nil, file \\ nil, mode \\ :dynamic, local_sigs_map \\ nil) do
     if available?() do
+      handler =
+        if local_sigs_map && map_size(local_sigs_map) > 0 do
+          local_handler_from(local_sigs_map)
+        else
+          &__MODULE__.local_handler/4
+        end
+
       Module.Types.stack(
         mode,
         file || "nofile",
@@ -111,7 +118,7 @@ defmodule ElixirSense.Core.ElixirTypes do
         function || {:__info__, 1},
         :all,
         nil,
-        &__MODULE__.local_handler/4
+        handler
       )
     else
       nil
@@ -172,10 +179,10 @@ defmodule ElixirSense.Core.ElixirTypes do
       {:ok, %{tuple: [closed: [%{bitmap: 4}, %{atom: {:union, %{ok: []}}}]]}}
 
   """
-  def of_expr(ast, module \\ nil, function \\ nil, file \\ nil, mode \\ :dynamic) do
+  def of_expr(ast, module \\ nil, function \\ nil, file \\ nil, mode \\ :dynamic, local_sigs_map \\ nil) do
     if available?() do
       try do
-        stack = init_stack(module, function, file, mode)
+        stack = init_stack(module, function, file, mode, local_sigs_map)
         context = init_context()
 
         if stack && context do
@@ -442,6 +449,50 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp unwrap_dynamic(%{dynamic: dynamic}) when is_map(dynamic), do: dynamic
   defp unwrap_dynamic(descr), do: descr
 
+  defp targets_from_opts(opts) do
+    case Keyword.get(opts, :target_keys) || Keyword.get(opts, :target_versions) do
+      nil -> :all
+      %MapSet{} = set -> set
+      list when is_list(list) -> MapSet.new(list)
+      single -> MapSet.new([single])
+    end
+  end
+
+  defp normalize_match(pattern_ast, {:=, _, [lhs, rhs]} = match) do
+    pattern = pattern_ast || lhs
+    {pattern, rhs, match}
+  end
+
+  defp normalize_match(pattern_ast, rhs) do
+    match = {:=, [], [pattern_ast, rhs]}
+    {pattern_ast, rhs, match}
+  end
+
+  defp extract_var_shapes(vars_map, targets) do
+    Enum.reduce(vars_map, %{}, fn
+      {version, %{name: name, type: descr}}, acc when include_var?(targets, {name, version}) ->
+        case descr_to_shape(descr) do
+          nil -> acc
+          shape -> Map.put(acc, {name, version}, shape)
+        end
+
+      _, acc ->
+        acc
+    end)
+  end
+
+  defp include_var?(:all, _), do: true
+  defp include_var?(%MapSet{} = set, key), do: MapSet.member?(set, key)
+  defp include_var?(_, _), do: false
+
+  defp descr_to_shape(descr) do
+    cond do
+      Module.Types.Descr.empty?(descr) -> :none
+      shape = to_shape(descr) -> shape
+      true -> nil
+    end
+  end
+
   @doc """
   Best-effort signature inference for local functions.
 
@@ -542,4 +593,66 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp normalise_clause(%{meta: meta, args: args, guards: guards, body: body}) do
     %{meta: meta || [], args: args || [], guards: guards, body: body || {:__block__, [], []}}
   end
+
+  @doc """
+  Build a local signatures map from metadata for a specific module.
+
+  Returns a map of `{function, arity} => {kind, signature}` for use with local_handler.
+  """
+  def build_local_sigs_map(metadata, module) when is_atom(module) and is_map(metadata) do
+    metadata.mods_funs_to_positions
+    |> Enum.filter(fn {{mod, _fun, _arity}, _info} -> mod == module end)
+    |> Enum.reduce(%{}, fn {{_mod, fun, arity}, info}, acc ->
+      case info do
+        %{elixir_types_sig: sig, type: type} when sig != nil ->
+          kind = get_def_kind_for_types(type)
+          Map.put(acc, {fun, arity}, {kind, sig})
+
+        _ ->
+          acc
+      end
+    end)
+  end
+
+  def build_local_sigs_map(_metadata, _module), do: %{}
+
+
+  @doc """
+  Create a closure-based local handler from a signatures map.
+  """
+  def local_handler_from(local_sigs_map) when is_map(local_sigs_map) do
+    fn meta, {fun, arity} = fun_arity, stack, context ->
+      case Map.get(local_sigs_map, fun_arity) do
+        {kind, {:infer, domain, clause_types}} ->
+          # Apply inferred signature based on argument count and types
+          # For M2, we'll use a simplified approach with the domain
+          case domain do
+            nil when length(clause_types) == 1 ->
+              # Single clause - use its return type directly
+              {_args, return_type} = hd(clause_types)
+              {kind, return_type, context}
+
+            domain when is_list(domain) ->
+              # Multiple clauses - use union of return types for now
+              return_types = Enum.map(clause_types, &elem(&1, 1))
+              union_type = Enum.reduce(return_types, &Module.Types.Descr.union/2)
+              {kind, union_type, context}
+
+            _ ->
+              false
+          end
+
+        _ ->
+          false
+      end
+    end
+  end
+
+  # Helper to convert ElixirSense def types to Module.Types kinds
+  defp get_def_kind_for_types(:def), do: :def
+  defp get_def_kind_for_types(:defp), do: :defp
+  defp get_def_kind_for_types(:defmacro), do: :defmacro
+  defp get_def_kind_for_types(:defmacrop), do: :defmacrop
+  # For other types, default to :def
+  defp get_def_kind_for_types(_), do: :def
 end

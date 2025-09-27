@@ -234,8 +234,14 @@ defmodule ElixirSense.Core.TypeInference do
 
   # Helper to use ElixirTypes adaptor as fallback
   defp type_of_with_elixir_types(ast, _context) do
+    type_of_with_elixir_types(ast, _context, nil)
+  end
+
+  # Helper to use ElixirTypes adaptor with optional local signatures
+  def type_of_with_elixir_types(ast, _context, local_sigs_map) do
     if ElixirSense.Core.ElixirTypes.enabled?() do
-      case ElixirSense.Core.ElixirTypes.of_expr(ast) do
+      # For M2, we'll pass local_sigs_map via the init_stack when available
+      case type_expr_with_local_sigs(ast, local_sigs_map) do
         {:ok, descr} ->
           ElixirSense.Core.ElixirTypes.to_shape(descr)
 
@@ -245,6 +251,29 @@ defmodule ElixirSense.Core.TypeInference do
     else
       nil
     end
+  end
+
+  # Helper to type an expression with local signatures
+  defp type_expr_with_local_sigs(ast, local_sigs_map) do
+    if local_sigs_map && map_size(local_sigs_map) > 0 do
+      # Extract module from local_sigs_map keys if available
+      module =
+        case Enum.find(local_sigs_map, fn _ -> true end) do
+          nil -> nil
+          _ -> extract_module_from_context(ast)
+        end
+
+      ElixirSense.Core.ElixirTypes.of_expr(ast, module, nil, nil, :dynamic, local_sigs_map)
+    else
+      ElixirSense.Core.ElixirTypes.of_expr(ast)
+    end
+  end
+
+  # Helper to extract module context from AST (simplified for M2)
+  defp extract_module_from_context(_ast) do
+    # For M2, we'll use a default module
+    # In M3, this could be enhanced to extract from AST context
+    ElixirSense.ElixirTypes
   end
 
   # Helper to merge existing ElixirSense type with ElixirTypes result
