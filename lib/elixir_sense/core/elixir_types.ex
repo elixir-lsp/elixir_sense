@@ -369,6 +369,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp extract_list_element(descr) when is_map(descr) do
+    descr = unwrap_dynamic(descr)
     # This is a simplified extraction - Module.Types list structure is complex
     # For M1, we'll be conservative and only handle clear cases
     case Map.get(descr, :list) do
@@ -380,8 +381,10 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp extract_list_element(_), do: nil
 
   defp extract_tuple_elements(descr) when is_map(descr) do
+    descr = unwrap_dynamic(descr)
+
     case Map.get(descr, :tuple) do
-      [closed: elements] when is_list(elements) and length(elements) <= 10 ->
+      [{:closed, elements}] when is_list(elements) and length(elements) <= 10 ->
         elements
 
       _ ->
@@ -392,6 +395,8 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp extract_tuple_elements(_), do: nil
 
   defp extract_map_fields(descr) when is_map(descr) do
+    descr = unwrap_dynamic(descr)
+
     case Map.get(descr, :map) do
       [{:closed, fields, []}] when is_map(fields) ->
         # Only handle maps with atom keys and no constraints
@@ -412,6 +417,8 @@ defmodule ElixirSense.Core.ElixirTypes do
     try do
       converted =
         for {key, value_descr} <- fields do
+          value_descr = unwrap_dynamic(value_descr)
+
           case to_shape(value_descr) do
             nil -> {key, nil}
             shape -> {key, shape}
@@ -431,4 +438,7 @@ defmodule ElixirSense.Core.ElixirTypes do
       _ -> true
     end)
   end
+
+  defp unwrap_dynamic(%{dynamic: dynamic}) when is_map(dynamic), do: dynamic
+  defp unwrap_dynamic(descr), do: descr
 end
