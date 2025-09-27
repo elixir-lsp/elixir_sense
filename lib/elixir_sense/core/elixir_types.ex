@@ -5,10 +5,73 @@ defmodule ElixirSense.Core.ElixirTypes do
   This module provides a stable interface to Elixir's evolving type system,
   allowing ElixirSense to benefit from precise type inference while maintaining
   compatibility and fallback behavior.
+
+  ## Usage
+
+  The adaptor is disabled by default. To enable it:
+
+      config :elixir_sense, :use_elixir_types, true
+
+  When enabled, ElixirSense will use Elixir's Module.Types for enhanced type
+  inference in addition to its own type system.
+
+  ## Requirements
+
+  - Elixir 1.17+ with Module.Types support
+  - The feature is automatically disabled if Module.Types is not available
+
+  ## Supported Types
+
+  The adaptor currently supports shape conversion for:
+  - Basic types: integers, floats, binaries, atoms
+  - Collections: lists, tuples, maps (with atom keys)
+  - Nested structures with conservative fallbacks
+
+  ## Integration Points
+
+  - **TypeInference**: Enhanced expression typing for literals and AST nodes
+  - **Compiler**: Pattern matching refinement (stubbed in M1)
+
+  ## Examples
+
+      # Check availability
+      ElixirTypes.available?()
+      #=> true
+
+      # Type an expression
+      ElixirTypes.of_expr(42)
+      #=> {:ok, %{bitmap: 4}}
+
+      # Convert to ElixirSense shape
+      {:ok, descr} = ElixirTypes.of_expr([1, 2, 3])
+      ElixirTypes.to_shape(descr)
+      #=> {:list, {:integer, nil}}
+
+      # Shape merging
+      ElixirTypes.merge_shapes({:integer, nil}, {:integer, 42})
+      #=> {:integer, 42}
+
+  ## Limitations (M1)
+
+  - Local function calls remain dynamic (no local_handler implementation)
+  - Remote function calls remain dynamic (no ExCk cache)
+  - Pattern matching uses stubs (of_match returns :error)
+  - Conservative shape conversion (only handles clear, simple cases)
+
+  These limitations will be addressed in future milestones (M2-M4).
   """
 
   @doc """
   Returns true if Module.Types.Expr is available and has of_expr/5.
+
+  This function checks if the current Elixir installation includes the
+  Module.Types infrastructure required for the adaptor.
+
+  ## Examples
+
+      iex> ElixirTypes.available?()
+      true
+
   """
   def available?() do
     Code.ensure_loaded?(Module.Types.Expr) and
@@ -17,6 +80,20 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   @doc """
   Returns true if adaptor is enabled via config and Module.Types is available.
+
+  This combines the availability check with the configuration setting.
+
+  ## Examples
+
+      # With feature disabled (default)
+      iex> ElixirTypes.enabled?()
+      false
+
+      # After enabling in config
+      iex> Application.put_env(:elixir_sense, :use_elixir_types, true)
+      iex> ElixirTypes.enabled?()  # if Module.Types is available
+      true
+
   """
   def enabled?() do
     Application.get_env(:elixir_sense, :use_elixir_types, false) and available?()
@@ -64,7 +141,36 @@ defmodule ElixirSense.Core.ElixirTypes do
   @doc """
   Types an expression using Module.Types.Expr.of_expr/5.
 
-  Returns {:ok, descr} on success or :error on failure.
+  Takes an AST node and returns a Module.Types descriptor representing
+  the type of the expression.
+
+  ## Parameters
+
+  - `ast` - The AST node to type (must be valid Elixir AST)
+  - `module` - Optional module context (defaults to nil)
+  - `function` - Optional function context (defaults to nil)
+  - `file` - Optional file context (defaults to nil)
+  - `mode` - Typing mode, :dynamic (default) or :traversal
+
+  ## Returns
+
+  - `{:ok, descr}` - Success with Module.Types descriptor
+  - `:error` - Failure (Module.Types unavailable, invalid AST, etc.)
+
+  ## Examples
+
+      # Type a literal
+      iex> ElixirTypes.of_expr(42)
+      {:ok, %{bitmap: 4}}
+
+      # Type a list
+      iex> ElixirTypes.of_expr([1, 2, 3])
+      {:ok, %{list: [{%{bitmap: 4}, %{bitmap: 2}, []}]}}
+
+      # Type a tuple (requires AST form)
+      iex> ElixirTypes.of_expr({:{}, [], [1, :ok]})
+      {:ok, %{tuple: [closed: [%{bitmap: 4}, %{atom: {:union, %{ok: []}}}]]}}
+
   """
   def of_expr(ast, module \\ nil, function \\ nil, file \\ nil, mode \\ :dynamic) do
     if available?() do
@@ -73,13 +179,15 @@ defmodule ElixirSense.Core.ElixirTypes do
         context = init_context()
 
         if stack && context do
-          {descr, _context} = Module.Types.Expr.of_expr(
-            ast,
-            Module.Types.Descr.term(),
-            ast,
-            stack,
-            context
-          )
+          {descr, _context} =
+            Module.Types.Expr.of_expr(
+              ast,
+              Module.Types.Descr.term(),
+              ast,
+              stack,
+              context
+            )
+
           {:ok, descr}
         else
           :error
@@ -100,7 +208,15 @@ defmodule ElixirSense.Core.ElixirTypes do
   Stub implementation for M1 - returns :error.
   Will be implemented in M1.5 if time permits.
   """
-  def of_match(_pattern_ast, _expected_descr, _expr_ast, _module \\ nil, _function \\ nil, _file \\ nil, _mode \\ :dynamic) do
+  def of_match(
+        _pattern_ast,
+        _expected_descr,
+        _expr_ast,
+        _module \\ nil,
+        _function \\ nil,
+        _file \\ nil,
+        _mode \\ :dynamic
+      ) do
     :error
   end
 
@@ -144,7 +260,8 @@ defmodule ElixirSense.Core.ElixirTypes do
           # Closed tuples with small arity
           tuple_elements = extract_tuple_elements(descr) ->
             element_shapes = Enum.map(tuple_elements, &to_shape/1)
-            if Enum.all?(element_shapes, & &1 != nil) do
+
+            if Enum.all?(element_shapes, &(&1 != nil)) do
               {:tuple, length(element_shapes), element_shapes}
             else
               {:tuple, length(element_shapes), Enum.map(element_shapes, &(&1 || nil))}
@@ -176,22 +293,33 @@ defmodule ElixirSense.Core.ElixirTypes do
   def merge_shapes(existing, new) do
     case {existing, new} do
       # Keep :none
-      {:none, _} -> :none
+      {:none, _} ->
+        :none
 
       # Use new if existing is nil
-      {nil, new} -> new
+      {nil, new} ->
+        new
 
       # Keep existing if new is nil or :none
-      {existing, nil} -> existing
-      {existing, :none} -> existing
+      {existing, nil} ->
+        existing
+
+      {existing, :none} ->
+        existing
 
       # Prefer literal integers over generic
-      {{:integer, value}, {:integer, nil}} when value != nil -> existing
-      {{:integer, nil}, {:integer, value}} when value != nil -> new
+      {{:integer, value}, {:integer, nil}} when value != nil ->
+        existing
+
+      {{:integer, nil}, {:integer, value}} when value != nil ->
+        new
 
       # Prefer more specific list types
-      {{:list, type1}, {:list, type2}} when type1 != nil and type2 == nil -> existing
-      {{:list, type1}, {:list, type2}} when type1 == nil and type2 != nil -> new
+      {{:list, type1}, {:list, type2}} when type1 != nil and type2 == nil ->
+        existing
+
+      {{:list, type1}, {:list, type2}} when type1 == nil and type2 != nil ->
+        new
 
       # Prefer tuples with more concrete element shapes
       {{:tuple, arity, elems1}, {:tuple, arity, elems2}} ->
@@ -210,7 +338,8 @@ defmodule ElixirSense.Core.ElixirTypes do
         end
 
       # Default: keep existing to avoid surprises
-      _ -> existing
+      _ ->
+        existing
     end
   end
 
@@ -222,6 +351,7 @@ defmodule ElixirSense.Core.ElixirTypes do
       _ -> false
     end
   end
+
   defp is_single_atom?(_), do: false
 
   defp extract_single_atom(descr) when is_map(descr) do
@@ -232,7 +362,9 @@ defmodule ElixirSense.Core.ElixirTypes do
         else
           nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
 
@@ -244,15 +376,19 @@ defmodule ElixirSense.Core.ElixirTypes do
       _ -> nil
     end
   end
+
   defp extract_list_element(_), do: nil
 
   defp extract_tuple_elements(descr) when is_map(descr) do
     case Map.get(descr, :tuple) do
-      [{:closed, elements}] when is_list(elements) and length(elements) <= 10 ->
+      [closed: elements] when is_list(elements) and length(elements) <= 10 ->
         elements
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
+
   defp extract_tuple_elements(_), do: nil
 
   defp extract_map_fields(descr) when is_map(descr) do
@@ -264,9 +400,12 @@ defmodule ElixirSense.Core.ElixirTypes do
         else
           nil
         end
-      _ -> nil
+
+      _ ->
+        nil
     end
   end
+
   defp extract_map_fields(_), do: nil
 
   defp convert_map_fields(fields) when is_map(fields) do

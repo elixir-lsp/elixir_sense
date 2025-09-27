@@ -235,6 +235,7 @@ defmodule ElixirSense.Core.TypeInference do
       case ElixirSense.Core.ElixirTypes.of_expr(ast) do
         {:ok, descr} ->
           ElixirSense.Core.ElixirTypes.to_shape(descr)
+
         :error ->
           nil
       end
@@ -250,6 +251,7 @@ defmodule ElixirSense.Core.TypeInference do
         {:ok, descr} ->
           new_shape = ElixirSense.Core.ElixirTypes.to_shape(descr)
           ElixirSense.Core.ElixirTypes.merge_shapes(existing, new_shape)
+
         :error ->
           existing
       end

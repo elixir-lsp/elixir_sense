@@ -31,6 +31,101 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
   end
 
+  describe "expression typing with feature enabled" do
+    setup do
+      # Save original value and enable feature
+      original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+
+      on_exit(fn ->
+        Application.put_env(:elixir_sense, :use_elixir_types, original_value)
+      end)
+
+      # Only run tests if Module.Types is available
+      if ElixirTypes.available?() do
+        :ok
+      else
+        :skip
+      end
+    end
+
+    test "types integer literals" do
+      result = ElixirTypes.of_expr(42)
+      assert {:ok, descr} = result
+      assert ElixirTypes.to_shape(descr) == {:integer, nil}
+    end
+
+    test "types float literals" do
+      result = ElixirTypes.of_expr(3.14)
+      assert {:ok, descr} = result
+      assert ElixirTypes.to_shape(descr) == {:float, nil}
+    end
+
+    test "types binary literals" do
+      result = ElixirTypes.of_expr("test")
+      assert {:ok, descr} = result
+      assert ElixirTypes.to_shape(descr) == {:binary, nil}
+    end
+
+    test "types atom literals" do
+      result = ElixirTypes.of_expr(:test_atom)
+      assert {:ok, descr} = result
+      assert ElixirTypes.to_shape(descr) == {:atom, :test_atom}
+    end
+
+    test "types list literals" do
+      # List with integers
+      list_ast = [1, 2, 3]
+      result = ElixirTypes.of_expr(list_ast)
+      assert {:ok, descr} = result
+      assert ElixirTypes.to_shape(descr) == {:list, {:integer, nil}}
+
+      # Empty list
+      empty_ast = []
+      result = ElixirTypes.of_expr(empty_ast)
+      assert {:ok, descr} = result
+      assert ElixirTypes.to_shape(descr) == {:list, :empty}
+    end
+
+    test "types tuple AST" do
+      # Tuple AST: {1, :ok}
+      tuple_ast = {:{}, [], [1, :ok]}
+      result = ElixirTypes.of_expr(tuple_ast)
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(descr)
+      assert {:tuple, 2, elements} = shape
+      assert elements == [{:integer, nil}, {:atom, :ok}]
+    end
+
+    test "types map AST" do
+      # Map AST: %{key: :value}
+      map_ast = {:%{}, [], [key: :value]}
+      result = ElixirTypes.of_expr(map_ast)
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(descr)
+      assert {:map, fields, nil} = shape
+      assert fields == [key: {:atom, :value}]
+    end
+
+    test "handles complex nested structures" do
+      # Nested tuple with list: {[1, 2], :ok}
+      nested_ast = {:{}, [], [[1, 2], :ok]}
+      result = ElixirTypes.of_expr(nested_ast)
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(descr)
+      assert {:tuple, 2, elements} = shape
+      assert elements == [{:list, {:integer, nil}}, {:atom, :ok}]
+    end
+
+    test "handles unknown expressions gracefully" do
+      # Try with a complex AST that might not be fully supported
+      complex_ast = {:some_unknown_call, [], []}
+      result = ElixirTypes.of_expr(complex_ast)
+      # Should either succeed or fail gracefully
+      assert result == :error or match?({:ok, _}, result)
+    end
+  end
+
   describe "shape merging" do
     test "merge_shapes/2 prefers more specific types" do
       # Test integer literal vs generic
