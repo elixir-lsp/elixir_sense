@@ -132,6 +132,9 @@ defmodule ElixirSense.Core.Compiler do
 
     vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, :match)
 
+    # Augment with ElixirTypes pattern refinement if available
+    vars_with_inferred_types = merge_elixir_types_pattern_vars(vars_with_inferred_types, e_expr, se)
+
     se = State.merge_inferred_types(se, vars_with_inferred_types)
 
     {e_expr, se, ee}
@@ -145,6 +148,9 @@ defmodule ElixirSense.Core.Compiler do
     e_expr = {:=, meta, [e_left, e_right]}
 
     vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, el.context)
+
+    # Augment with ElixirTypes pattern refinement if available
+    vars_with_inferred_types = merge_elixir_types_pattern_vars(vars_with_inferred_types, e_expr, sl)
 
     sl = State.merge_inferred_types(sl, vars_with_inferred_types)
 
@@ -2932,6 +2938,20 @@ defmodule ElixirSense.Core.Compiler do
           []
         end
       end
+    end
+  end
+
+  # Helper to merge ElixirTypes pattern variable refinements
+  defp merge_elixir_types_pattern_vars(existing_vars, _expr_ast, _state) do
+    # Stub implementation for M1 - just return existing vars
+    # In M1.5, this would call ElixirTypes.of_match and merge results
+    if ElixirSense.Core.ElixirTypes.enabled?() do
+      # For M1, we don't implement pattern matching yet
+      # This is where we would call ElixirTypes.of_match(pattern_ast, expected, expr_ast)
+      # and merge the refined variables
+      existing_vars
+    else
+      existing_vars
     end
   end
 end

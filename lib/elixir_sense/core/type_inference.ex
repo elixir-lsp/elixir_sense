@@ -143,8 +143,9 @@ defmodule ElixirSense.Core.TypeInference do
     type_of({:{}, [], Tuple.to_list(ast)}, context)
   end
 
-  def type_of({:{}, _, list}, context) do
-    {:tuple, length(list), list |> Enum.map(&type_of(&1, context))}
+  def type_of({:{}, _, list} = ast, context) do
+    existing = {:tuple, length(list), list |> Enum.map(&type_of(&1, context))}
+    merge_with_elixir_types(existing, ast, context)
   end
 
   def type_of(list, context) when is_list(list) do
@@ -160,7 +161,8 @@ defmodule ElixirSense.Core.TypeInference do
           type_of(head, context)
       end
 
-    {:list, type}
+    existing = {:list, type}
+    merge_with_elixir_types(existing, list, context)
   end
 
   def type_of(list, context) when is_list(list) do
@@ -228,7 +230,36 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   # other
-  def type_of(_, _), do: nil
+  def type_of(ast, context), do: type_of_with_elixir_types(ast, context)
+
+  # Helper to use ElixirTypes adaptor as fallback
+  defp type_of_with_elixir_types(ast, _context) do
+    if ElixirSense.Core.ElixirTypes.enabled?() do
+      case ElixirSense.Core.ElixirTypes.of_expr(ast) do
+        {:ok, descr} ->
+          ElixirSense.Core.ElixirTypes.to_shape(descr)
+        :error ->
+          nil
+      end
+    else
+      nil
+    end
+  end
+
+  # Helper to merge existing ElixirSense type with ElixirTypes result
+  defp merge_with_elixir_types(existing, ast, _context) do
+    if ElixirSense.Core.ElixirTypes.enabled?() do
+      case ElixirSense.Core.ElixirTypes.of_expr(ast) do
+        {:ok, descr} ->
+          new_shape = ElixirSense.Core.ElixirTypes.to_shape(descr)
+          ElixirSense.Core.ElixirTypes.merge_shapes(existing, new_shape)
+        :error ->
+          existing
+      end
+    else
+      existing
+    end
+  end
 
   defp get_fields_type(fields, context) do
     for {field, value} <- fields,
