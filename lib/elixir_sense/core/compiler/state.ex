@@ -429,7 +429,11 @@ defmodule ElixirSense.Core.Compiler.State do
       doc: doc,
       meta: meta,
       generated: [Keyword.get(options, :generated, false) | current_info.generated],
-      overridable: overridable
+      overridable: overridable,
+      # M2: Preserve ElixirTypes fields from existing info
+      elixir_types_clauses: current_info.elixir_types_clauses || [],
+      elixir_types_sig: current_info.elixir_types_sig,
+      elixir_types_status: current_info.elixir_types_status || :skipped
     }
 
     info =
@@ -1432,6 +1436,49 @@ defmodule ElixirSense.Core.Compiler.State do
         end
 
       {position, end_position}
+    end
+  end
+
+  @doc """
+  Accumulate the raw clause AST for later signature inference.
+  """
+  def add_clause_ast(%__MODULE__{} = state, %{module: module}, {fun, arity}, clause)
+      when is_atom(module) and is_atom(fun) and is_integer(arity) do
+    key = {module, fun, arity}
+
+    update_mod_fun(state, key, fn %ModFunInfo{} = info ->
+      clauses = info.elixir_types_clauses || []
+      %ModFunInfo{info | elixir_types_clauses: [clause | clauses]}
+    end)
+  end
+
+  def add_clause_ast(state, _env, _fun_arity, _clause), do: state
+
+  @doc """
+  Persist the inferred Module.Types signature (or clear it after failure).
+  """
+  def put_elixir_types_sig(%__MODULE__{} = state, {module, fun, arity}, sig, status)
+      when is_atom(module) and is_atom(fun) and is_integer(arity) do
+    key = {module, fun, arity}
+
+    update_mod_fun(state, key, fn %ModFunInfo{} = info ->
+      %ModFunInfo{
+        info
+        | elixir_types_sig: sig,
+          elixir_types_status: status,
+          elixir_types_clauses: info.elixir_types_clauses || []
+      }
+    end)
+  end
+
+  defp update_mod_fun(state, key, fun) do
+    case state.mods_funs_to_positions do
+      %{^key => %ModFunInfo{} = info} ->
+        updated_info = fun.(info)
+        put_in(state.mods_funs_to_positions[key], updated_info)
+
+      _ ->
+        state
     end
   end
 end

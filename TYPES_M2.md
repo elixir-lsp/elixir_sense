@@ -1,61 +1,85 @@
-# M2 Implementation Plan: Local Functions & Remote Signatures
+# M2 Implementation Plan: Local Functions & Remote Signatures (Refined)
 
 ## Overview
 
-M2 builds upon the M1 scaffolding to add real type inference capabilities:
-1. **Local function typing** via ElixirSense's module metadata
+M2 builds upon the M1 scaffolding to add real type inference capabilities under ElixirSense's best-effort AST expansion model:
+
+1. **Local function typing** via best-effort signature inference from AST
 2. **Remote function typing** via ExCk BEAM chunk reading
 3. **Enhanced shape conversion** for more complex types
-4. **Pattern matching refinement** (partial implementation)
+4. **Pattern matching refinement** (basic implementation)
+
+**Key Insight**: ElixirSense doesn't do real compilation - dynamic code isn't executed, local macros often aren't expanded, compile callbacks are skipped. We must infer types from the partial AST we see during expansion.
 
 ## Success Criteria
 
-- [ ] Local function calls return typed results from module metadata
+- [ ] Local function calls return inferred types from captured AST
 - [ ] Remote function calls return types from ExCk chunks
+- [ ] Inferred signatures stored in ModFunInfo with quality status
 - [ ] Shape conversion handles 80%+ of common type patterns
 - [ ] Pattern matching refines variable types in simple cases
 - [ ] No performance regression in normal usage
 - [ ] All M1 tests continue passing
 
-## Implementation Tasks
+## Implementation Phases
 
-### 1. Local Function Handler (~3-4 hours)
+### Phase 1: Data Model & State (~2-3 hours)
 
-**File:** `lib/elixir_sense/core/elixir_types.ex`
+**ModFunInfo Extension**: Add three new fields for type inference
+```elixir
+defstruct ...,
+          elixir_types_clauses: [],      # Captured clause ASTs
+          elixir_types_sig: nil,         # Inferred signature
+          elixir_types_status: :skipped  # Quality indicator
+```
 
-**Task:** Implement `local_handler/4` to use ElixirSense's metadata
+**State Helpers**: Add clause capture and signature storage
+```elixir
+def add_clause_ast(state, env, {fun, arity}, clause_map)
+def put_elixir_types_sig(state, {module, fun, arity}, sig, status)
+```
+
+### Phase 2: Inference Engine (~4-5 hours)
+
+**Best-effort Signature Inference**: Process captured AST clauses
 
 ```elixir
-def local_handler(meta, {fun, arity}, stack, context) do
-  # Extract module from stack
-  module = Module.Types.stack_module(stack)
-
-  # Look up function in ElixirSense metadata
-  case lookup_local_function(module, fun, arity, meta) do
-    {:ok, type_info} ->
-      # Convert ElixirSense type to Module.Types descriptor
-      convert_to_descriptor(type_info)
-
-    :error ->
-      false  # Let Module.Types handle it
-  end
+def infer_local_signature(module, {fun, arity}, clauses, file, mode \\ :infer) do
+  # For each clause: Pattern.of_head + Expr.of_expr
+  # Build domain from multi-clause unions
+  # Return {:infer, domain, clause_types} | :error
 end
 ```
 
-**Implementation details:**
-- Use `State.ModFunInfo` to find function specs/types
-- Convert from ElixirSense shapes to Module.Types descriptors
-- Cache conversions for performance
-- Handle recursive functions gracefully
+**Key features:**
+- Uses Module.Types.Pattern.of_head for argument typing
+- Uses Module.Types.Expr.of_expr for return type
+- Handles best-effort AST (missing expansions)
+- Disables local handler during inference to avoid recursion
 
-**Test cases:**
-- Local function with @spec
-- Local function with inferred type
-- Private function
-- Macro
-- Undefined function (fallback)
+### Phase 3: Compiler Integration (~3-4 hours)
 
-### 2. ExCk BEAM Chunk Reader (~4-5 hours)
+**Clause Capture**: Hook def/defp expansion to store AST
+
+**Location**: `lib/elixir_sense/core/compiler.ex` in def/defp handlers
+- Capture clause after expansion: `%{meta: meta, args: args, guards: guards, body: body}`
+- Call `State.add_clause_ast/4` to accumulate clauses
+- Run inference after processing all clauses for a function
+- Store result with quality status (:ok/:partial/:skipped)
+
+### Phase 4: Local Handler Implementation (~3-4 hours)
+
+**Closure-based Local Handler**: Build signatures map and install custom handler
+
+```elixir
+def build_local_sigs_map(metadata, module)
+def init_stack(module, function, file, mode, local_sigs_map \\ nil)
+def local_handler_from(local_sigs_map) # Returns closure
+```
+
+**Integration**: Pass local signatures to `of_expr` calls in TypeInference
+
+### Phase 5: ExCk BEAM Chunk Reader (~4-5 hours)
 
 **New file:** `lib/elixir_sense/core/exck_reader.ex`
 

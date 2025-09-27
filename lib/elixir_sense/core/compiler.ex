@@ -2066,8 +2066,26 @@ defmodule ElixirSense.Core.Compiler do
           end
       end
 
-    {_e_body, state, _env_for_expand} =
+    {e_body, state, _env_for_expand} =
       expand(expr, state, env_for_expand)
+
+    # M2: Capture clause AST for ElixirTypes inference
+    state =
+      if ElixirSense.Core.ElixirTypes.enabled?() and def_kind in [:def, :defp] and
+           not has_unquotes and name != :__unknown__ do
+        clause_ast = %{
+          meta: meta,
+          args: e_args_no_defaults,
+          guards: e_guard,
+          body: e_body
+        }
+
+        state
+        |> State.add_clause_ast(env, {name, arity}, clause_ast)
+        |> maybe_infer_local_signature(env, {name, arity})
+      else
+        state
+      end
 
     # restore vars from outer scope
     state =
@@ -2956,4 +2974,36 @@ defmodule ElixirSense.Core.Compiler do
       existing_vars
     end
   end
+
+  # M2: Maybe infer local function signature from accumulated clauses
+  defp maybe_infer_local_signature(state, %{module: module, file: file}, {fun, arity})
+       when is_atom(module) and is_atom(fun) and is_integer(arity) do
+    if ElixirSense.Core.ElixirTypes.enabled?() do
+      key = {module, fun, arity}
+
+      case state.mods_funs_to_positions[key] do
+        %{elixir_types_clauses: clauses} when is_list(clauses) and clauses != [] ->
+          # Run inference on accumulated clauses
+          case ElixirSense.Core.ElixirTypes.infer_local_signature(
+                 module,
+                 {fun, arity},
+                 clauses,
+                 file
+               ) do
+            {:infer, _domain, _clause_types} = sig ->
+              State.put_elixir_types_sig(state, key, sig, :ok)
+
+            :error ->
+              State.put_elixir_types_sig(state, key, nil, :skipped)
+          end
+
+        _ ->
+          state
+      end
+    else
+      state
+    end
+  end
+
+  defp maybe_infer_local_signature(state, _env, _fun_arity), do: state
 end
