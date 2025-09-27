@@ -230,15 +230,15 @@ defmodule ElixirSense.Core.TypeInference do
   def type_of(ast, context), do: type_of_with_elixir_types(ast, context)
 
   # Helper to use ElixirTypes adaptor as fallback
-  defp type_of_with_elixir_types(ast, _context) do
-    type_of_with_elixir_types(ast, _context, nil)
+  defp type_of_with_elixir_types(ast, context) do
+    type_of_with_elixir_types(ast, context, nil, nil)
   end
 
-  # Helper to use ElixirTypes adaptor with optional local signatures
-  def type_of_with_elixir_types(ast, _context, local_sigs_map) do
+  # Helper to use ElixirTypes adaptor with optional local signatures and metadata
+  def type_of_with_elixir_types(ast, context, local_sigs_map, metadata \\ nil) do
     if ElixirSense.Core.ElixirTypes.enabled?() do
-      # For M2, we'll pass local_sigs_map via the init_stack when available
-      case type_expr_with_local_sigs(ast, local_sigs_map) do
+      # For M2, we'll pass local_sigs_map and metadata via the init_stack when available
+      case type_expr_with_local_sigs(ast, local_sigs_map, metadata) do
         {:ok, descr} ->
           ElixirSense.Core.ElixirTypes.to_shape(descr)
 
@@ -250,8 +250,8 @@ defmodule ElixirSense.Core.TypeInference do
     end
   end
 
-  # Helper to type an expression with local signatures
-  defp type_expr_with_local_sigs(ast, local_sigs_map) do
+  # Helper to type an expression with local signatures and metadata
+  defp type_expr_with_local_sigs(ast, local_sigs_map, metadata \\ nil) do
     if local_sigs_map && map_size(local_sigs_map) > 0 do
       # Extract module from local_sigs_map keys if available
       module =
@@ -260,9 +260,9 @@ defmodule ElixirSense.Core.TypeInference do
           _ -> extract_module_from_context(ast)
         end
 
-      ElixirSense.Core.ElixirTypes.of_expr(ast, module, nil, nil, :dynamic, local_sigs_map)
+      ElixirSense.Core.ElixirTypes.of_expr(ast, module, nil, nil, :dynamic, local_sigs_map, metadata)
     else
-      ElixirSense.Core.ElixirTypes.of_expr(ast)
+      ElixirSense.Core.ElixirTypes.of_expr(ast, nil, nil, nil, :dynamic, nil, metadata)
     end
   end
 
