@@ -441,4 +441,105 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   defp unwrap_dynamic(%{dynamic: dynamic}) when is_map(dynamic), do: dynamic
   defp unwrap_dynamic(descr), do: descr
+
+  @doc """
+  Best-effort signature inference for local functions.
+
+  Each `clause` entry should be a map with at least:
+    %{meta: meta, args: [ast], guards: guards_ast | nil, body: ast}
+
+  Returns {:infer, domain, clauses} or :error when nothing useful could be inferred.
+  """
+  def infer_local_signature(module, {fun, arity} = fun_arity, clauses, file, mode \\ :infer)
+      when is_atom(module) and is_atom(fun) and is_integer(arity) do
+    with true <- enabled?(),
+         true <- arity >= 0,
+         false <- clauses == [] do
+      expected = List.duplicate(Module.Types.Descr.dynamic(), arity)
+
+      stack =
+        init_stack(module, fun_arity, file || "nofile", mode)
+        |> maybe_disable_local_handler()
+
+      case stack do
+        nil ->
+          :error
+
+        _stack ->
+          context = init_context()
+          reduced = do_infer_local_signature(stack, context, clauses, expected)
+
+          case reduced do
+            [] ->
+              :error
+
+            clause_types ->
+              domain = build_domain(clause_types)
+              {:infer, domain, clause_types}
+          end
+      end
+    else
+      _ -> :error
+    end
+  end
+
+  defp maybe_disable_local_handler(nil), do: nil
+
+  defp maybe_disable_local_handler(stack) do
+    # prevent recursive lookups while we are inferring the function itself
+    %{stack | local_handler: fn _, _, _, context -> {:def, :none, context} end}
+  end
+
+  defp do_infer_local_signature(stack, context, clauses, expected) do
+    Enum.reduce_while(clauses, [], fn clause, acc ->
+      %{meta: meta, args: args, guards: guards, body: body} = normalise_clause(clause)
+
+      try do
+        {trees, clause_ctx} =
+          Module.Types.Pattern.of_head(
+            args,
+            guards || [],
+            expected,
+            {:infer, expected},
+            meta,
+            stack,
+            context
+          )
+
+        {return_type, clause_ctx} =
+          Module.Types.Expr.of_expr(body, Module.Types.Descr.term(), body, stack, clause_ctx)
+
+        arg_types =
+          case stack.mode do
+            :traversal -> expected
+            _ -> Module.Types.Pattern.of_domain(trees, expected, clause_ctx)
+          end
+
+        {:cont, [{arg_types, return_type} | acc]}
+      rescue
+        _ -> {:cont, acc}
+      catch
+        _ -> {:cont, acc}
+      end
+    end)
+    |> Enum.reverse()
+  end
+
+  defp build_domain([]), do: nil
+  defp build_domain([_]), do: nil
+
+  defp build_domain(clause_types) do
+    clause_types
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.zip()
+    |> Enum.map(fn tuple ->
+      tuple
+      |> Tuple.to_list()
+      |> Enum.reduce(&Module.Types.Descr.union/2)
+    end)
+  end
+
+  defp normalise_clause(%{meta: meta, args: args, guards: guards, body: body}) do
+    %{meta: meta || [], args: args || [], guards: guards, body: body || {:__block__, [], []}}
+  end
 end

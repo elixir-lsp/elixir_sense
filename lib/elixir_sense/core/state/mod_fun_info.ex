@@ -23,7 +23,11 @@ defmodule ElixirSense.Core.State.ModFunInfo do
             | :defdelegate
             | :defguard
             | :defguardp
-            | :defmodule
+            | :defmodule,
+          # ElixirTypes M2 fields
+          elixir_types_clauses: list(map()),
+          elixir_types_sig: nil | {:infer, term(), list()},
+          elixir_types_status: :ok | :partial | :skipped
         }
 
   defstruct params: [],
@@ -34,7 +38,11 @@ defmodule ElixirSense.Core.State.ModFunInfo do
             generated: [],
             overridable: false,
             doc: "",
-            meta: %{}
+            meta: %{},
+            # ElixirTypes M2 fields
+            elixir_types_clauses: [],
+            elixir_types_sig: nil,
+            elixir_types_status: :skipped
 
   def get_arities(%ModFunInfo{params: params_variants}) do
     params_variants
