@@ -2,6 +2,7 @@ defmodule ElixirSense.Core.Binding do
   @moduledoc false
 
   alias ElixirSense.Core.Binding
+  alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.State
@@ -20,9 +21,17 @@ defmodule ElixirSense.Core.Binding do
             specs: %{},
             types: %{},
             mods_funs_to_positions: %{},
-            cursor_position: {1, 1}
+            cursor_position: {1, 1},
+            elixir_types_local_sigs: %{}
 
   def from_env(%State.Env{} = env, %ElixirSense.Core.Metadata{} = metadata, cursor_position) do
+    local_sigs =
+      if ElixirTypes.enabled?() and env.module do
+        ElixirTypes.build_local_sigs_map(metadata, env.module)
+      else
+        %{}
+      end
+
     %Binding{
       vars: env.vars,
       attributes: env.attributes,
@@ -35,7 +44,8 @@ defmodule ElixirSense.Core.Binding do
       function: env.function,
       types: metadata.types,
       mods_funs_to_positions: metadata.mods_funs_to_positions,
-      cursor_position: cursor_position
+      cursor_position: cursor_position,
+      elixir_types_local_sigs: local_sigs
     }
   end
 
@@ -343,6 +353,7 @@ defmodule ElixirSense.Core.Binding do
             stack
           )
       end)
+      |> maybe_refine_local_call(env, function, arguments)
       |> drop_no_spec
     end
   end
@@ -391,6 +402,59 @@ defmodule ElixirSense.Core.Binding do
 
   defp drop_no_spec(:no_spec), do: nil
   defp drop_no_spec(other), do: other
+
+  defp maybe_refine_local_call(result, %Binding{} = env, fun, arguments) do
+    with true <- ElixirTypes.enabled?(),
+         _module when is_atom(env.module) <- env.module,
+         local_sigs when is_map(local_sigs) and local_sigs != %{} <- env.elixir_types_local_sigs,
+         entry when not is_nil(entry) <- Map.get(local_sigs, {fun, length(arguments)}),
+         {kind, {:infer, _domain, clause_types}} when kind in [:def, :defp] <- entry,
+         {:ok, return_descr} <- merge_clause_returns(clause_types),
+         shape when shape != nil <- ElixirTypes.to_shape(return_descr) do
+      merge_binding_shape(result, shape)
+    else
+      _ -> result
+    end
+  end
+
+  defp merge_clause_returns([]), do: :error
+
+  defp merge_clause_returns(clause_types) when is_list(clause_types) do
+    returns =
+      clause_types
+      |> Enum.map(&elem(&1, 1))
+      |> Enum.reject(&is_nil/1)
+
+    case returns do
+      [] ->
+        :error
+
+      [single] ->
+        {:ok, single}
+
+      [first | rest] ->
+        Enum.reduce_while(rest, {:ok, first}, fn descr, {:ok, acc} ->
+          try do
+            {:cont, {:ok, Module.Types.Descr.union(acc, descr)}}
+          rescue
+            _ -> {:halt, :error}
+          catch
+            _ -> {:halt, :error}
+          end
+        end)
+    end
+  end
+
+  defp merge_binding_shape(:no_spec, shape), do: shape
+  defp merge_binding_shape(:none, _shape), do: :none
+  defp merge_binding_shape(nil, shape), do: shape
+  defp merge_binding_shape({:union, _} = result, _shape), do: result
+
+  defp merge_binding_shape(result, shape) when is_tuple(result) do
+    ElixirTypes.merge_shapes(result, shape)
+  end
+
+  defp merge_binding_shape(result, _shape), do: result
 
   # not supported
   defp expand_call(_env, nil, _, _, _, _, _stack), do: nil
