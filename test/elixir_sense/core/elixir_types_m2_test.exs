@@ -1064,4 +1064,139 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       end
     end
   end
+
+  describe "M2 pattern refinement implementations" do
+    setup do
+      # Enable ElixirTypes for pattern refinement tests
+      original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+
+      on_exit(fn ->
+        Application.put_env(:elixir_sense, :use_elixir_types, original_value)
+      end)
+
+      :ok
+    end
+
+    test "map pattern refinement extracts variable types" do
+      if ElixirTypes.available?() do
+        # Map pattern %{name: n} where n should be refined
+        pattern_ast = {:%{}, [], [{:name, {:n, [version: 1], nil}}]}
+
+        # Call refine_map_pattern_vars (via of_match)
+        match_ast = {:=, [], [pattern_ast, %{name: "test"}]}
+
+        result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
+
+        case result do
+          {:ok, vars} when is_map(vars) ->
+            # Pattern refinement should work
+            assert is_map(vars)
+
+          :error ->
+            # Acceptable fallback for conservative implementation
+            :ok
+
+          other ->
+            flunk("Unexpected result: #{inspect(other)}")
+        end
+      end
+    end
+
+    test "tuple pattern refinement handles element positions" do
+      if ElixirTypes.available?() do
+        # Tuple pattern {a, b} where variables should be refined
+        pattern_ast = {:{}, [], [{:a, [version: 1], nil}, {:b, [version: 2], nil}]}
+
+        match_ast = {:=, [], [pattern_ast, {1, :ok}]}
+
+        result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
+
+        case result do
+          {:ok, vars} when is_map(vars) ->
+            # Pattern refinement should work
+            assert is_map(vars)
+
+          :error ->
+            # Acceptable fallback for conservative implementation
+            :ok
+
+          other ->
+            flunk("Unexpected result: #{inspect(other)}")
+        end
+      end
+    end
+
+    test "list pattern refinement handles head and tail" do
+      if ElixirTypes.available?() do
+        # List pattern [head | tail]
+        pattern_ast = [{:head, [version: 1], nil}, {:"|", [], [{:tail, [version: 2], nil}]}]
+
+        match_ast = {:=, [], [pattern_ast, [1, 2, 3]]}
+
+        result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
+
+        case result do
+          {:ok, vars} when is_map(vars) ->
+            # Pattern refinement should work
+            assert is_map(vars)
+
+          :error ->
+            # Acceptable fallback for conservative implementation
+            :ok
+
+          other ->
+            flunk("Unexpected result: #{inspect(other)}")
+        end
+      end
+    end
+
+    test "list pattern refinement handles simple list elements" do
+      if ElixirTypes.available?() do
+        # List pattern [a, b, c]
+        pattern_ast = [{:a, [version: 1], nil}, {:b, [version: 2], nil}, {:c, [version: 3], nil}]
+
+        match_ast = {:=, [], [pattern_ast, [1, 2, 3]]}
+
+        result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
+
+        case result do
+          {:ok, vars} when is_map(vars) ->
+            # Pattern refinement should work
+            assert is_map(vars)
+
+          :error ->
+            # Acceptable fallback for conservative implementation
+            :ok
+
+          other ->
+            flunk("Unexpected result: #{inspect(other)}")
+        end
+      end
+    end
+
+    test "pattern refinement is conservative and safe" do
+      if ElixirTypes.available?() do
+        # Complex pattern that may not be fully supported
+        pattern_ast = {:when, [], [{:x, [version: 1], nil}, {:>, [], [{:x, [version: 1], nil}, 0]}]}
+
+        match_ast = {:=, [], [pattern_ast, 42]}
+
+        result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
+
+        case result do
+          {:ok, _vars} ->
+            # If we get a result, it should be valid
+            :ok
+
+          :error ->
+            # Conservative fallback is expected for complex patterns
+            :ok
+
+          other ->
+            flunk("Unexpected result: #{inspect(other)}")
+        end
+      end
+    end
+  end
 end

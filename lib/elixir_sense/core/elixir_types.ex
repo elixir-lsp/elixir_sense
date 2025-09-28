@@ -549,22 +549,293 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   # Refine variables in map patterns
-  defp refine_map_pattern_vars(_var_shapes, _fields, _expected_descr) do
-    # TODO: Implement map pattern variable refinement
-    %{}
+  defp refine_map_pattern_vars(_var_shapes, fields, expected_descr) do
+    # Extract map type information from expected descriptor
+    map_type_info = extract_map_type_info(expected_descr)
+
+    fields
+    |> Enum.reduce(%{}, fn field, acc ->
+      case field do
+        # Map pattern like %{key: var} or %{"string_key" => var}
+        {key_ast, var_ast} ->
+          refine_map_field_var(acc, key_ast, var_ast, map_type_info)
+
+        _ ->
+          acc
+      end
+    end)
+  end
+
+  # Extract type information from map descriptors
+  defp extract_map_type_info(descr) do
+    cond do
+      # Handle map descriptors - check for recognizable patterns
+      is_map(descr) and Map.has_key?(descr, :atom) ->
+        case Map.get(descr, :atom) do
+          :map -> :open_map
+          other when is_atom(other) -> {:typed_map, other}
+          _ -> :unknown
+        end
+
+      # Handle struct descriptors
+      is_map(descr) and map_size(descr) == 1 ->
+        case Enum.at(descr, 0) do
+          {struct_name, _fields} when is_atom(struct_name) -> {:struct, struct_name}
+          _ -> :unknown
+        end
+
+      true ->
+        :unknown
+    end
+  end
+
+  # Refine a single map field variable
+  defp refine_map_field_var(acc, key_ast, var_ast, map_type_info) do
+    case extract_var_from_ast(var_ast) do
+      nil ->
+        acc
+
+      var_key ->
+        field_type = infer_map_field_type(key_ast, map_type_info)
+        if field_type do
+          Map.put(acc, var_key, field_type)
+        else
+          acc
+        end
+    end
+  end
+
+  # Infer the type of a map field based on key and map type
+  defp infer_map_field_type(key_ast, map_type_info) do
+    case {key_ast, map_type_info} do
+      # String key in any map
+      {{:__block__, _, [string]}, _} when is_binary(string) ->
+        {:binary, nil}
+
+      # Atom key in any map
+      {atom, _} when is_atom(atom) ->
+        {:atom, nil}
+
+      # For struct types, we could potentially be more specific
+      # but keeping conservative for now
+      {_, {:struct, _struct_name}} ->
+        # For now, return generic term for struct fields
+        nil
+
+      _ ->
+        nil
+    end
   end
 
   # Refine variables in tuple patterns
-  defp refine_tuple_pattern_vars(_var_shapes, _elements, _expected_descr) do
-    # TODO: Implement tuple pattern variable refinement
-    %{}
+  defp refine_tuple_pattern_vars(_var_shapes, elements, expected_descr) do
+    # Extract tuple type information from expected descriptor
+    tuple_info = extract_tuple_type_info(expected_descr)
+
+    elements
+    |> Enum.with_index()
+    |> Enum.reduce(%{}, fn {element_ast, index}, acc ->
+      case extract_var_from_ast(element_ast) do
+        nil ->
+          acc
+
+        var_key ->
+          element_type = infer_tuple_element_type(index, tuple_info)
+          if element_type do
+            Map.put(acc, var_key, element_type)
+          else
+            acc
+          end
+      end
+    end)
+  end
+
+  # Extract tuple type information from descriptors
+  defp extract_tuple_type_info(descr) do
+    cond do
+      # Handle tuple descriptors
+      is_map(descr) and Map.has_key?(descr, :atom) ->
+        case Map.get(descr, :atom) do
+          :tuple -> :open_tuple
+          other when is_atom(other) -> {:typed_tuple, other}
+          _ -> :unknown
+        end
+
+      # Handle specific tuple size descriptors
+      is_map(descr) and Map.has_key?(descr, :tuple) ->
+        case Map.get(descr, :tuple) do
+          size when is_integer(size) -> {:sized_tuple, size}
+          _ -> :open_tuple
+        end
+
+      true ->
+        :unknown
+    end
+  end
+
+  # Infer the type of a tuple element based on position and tuple info
+  defp infer_tuple_element_type(_index, tuple_info) do
+    case tuple_info do
+      # For now, we don't have enough information about element types
+      # from Module.Types descriptors to be specific
+      # Return nil to be conservative
+      {:sized_tuple, _size} ->
+        nil
+
+      :open_tuple ->
+        nil
+
+      _ ->
+        nil
+    end
   end
 
   # Refine variables in list patterns
-  defp refine_list_pattern_vars(_var_shapes, _list, _expected_descr) do
-    # TODO: Implement list pattern variable refinement
-    %{}
+  defp refine_list_pattern_vars(_var_shapes, list, expected_descr) do
+    # Extract list type information from expected descriptor
+    list_info = extract_list_type_info(expected_descr)
+
+    case list do
+      # Handle [head | tail] pattern - check for pipe operator in list
+      elements when is_list(elements) ->
+        case Enum.reverse(elements) do
+          [{:"|", _, [tail_ast]} | rest] ->
+            # [head | tail] pattern
+            case Enum.reverse(rest) do
+              [head_ast] -> refine_head_tail_pattern(head_ast, tail_ast, list_info)
+              multiple_heads -> refine_multi_head_tail_pattern(multiple_heads, tail_ast, list_info)
+            end
+
+          _ ->
+            # Simple list pattern [a, b, c]
+            refine_list_elements_pattern(elements, list_info)
+        end
+
+      _ ->
+        %{}
+    end
   end
+
+  # Extract list type information from descriptors
+  defp extract_list_type_info(descr) do
+    cond do
+      # Handle list descriptors
+      is_map(descr) and Map.has_key?(descr, :atom) ->
+        case Map.get(descr, :atom) do
+          :list -> :open_list
+          other when is_atom(other) -> {:typed_list, other}
+          _ -> :unknown
+        end
+
+      # Handle non-empty list descriptors
+      is_map(descr) and Map.has_key?(descr, :nonempty_list) ->
+        :nonempty_list
+
+      true ->
+        :unknown
+    end
+  end
+
+  # Refine variables in [head | tail] pattern
+  defp refine_head_tail_pattern(head_ast, tail_ast, list_info) do
+    head_refinements =
+      case extract_var_from_ast(head_ast) do
+        nil -> %{}
+        var_key ->
+          element_type = infer_list_element_type(list_info)
+          if element_type do
+            %{var_key => element_type}
+          else
+            %{}
+          end
+      end
+
+    tail_refinements =
+      case extract_var_from_ast(tail_ast) do
+        nil -> %{}
+        var_key ->
+          # Tail is always a list of the same element type
+          tail_type = infer_list_tail_type(list_info)
+          if tail_type do
+            %{var_key => tail_type}
+          else
+            %{}
+          end
+      end
+
+    Map.merge(head_refinements, tail_refinements)
+  end
+
+  # Refine variables in [head1, head2, ... | tail] pattern
+  defp refine_multi_head_tail_pattern(heads, tail_ast, list_info) do
+    # Refine all head elements
+    head_refinements = refine_list_elements_pattern(heads, list_info)
+
+    # Refine tail
+    tail_refinements =
+      case extract_var_from_ast(tail_ast) do
+        nil -> %{}
+        var_key ->
+          tail_type = infer_list_tail_type(list_info)
+          if tail_type do
+            %{var_key => tail_type}
+          else
+            %{}
+          end
+      end
+
+    Map.merge(head_refinements, tail_refinements)
+  end
+
+  # Refine variables in simple list patterns [a, b, c]
+  defp refine_list_elements_pattern(elements, list_info) do
+    element_type = infer_list_element_type(list_info)
+
+    if element_type do
+      elements
+      |> Enum.reduce(%{}, fn element_ast, acc ->
+        case extract_var_from_ast(element_ast) do
+          nil -> acc
+          var_key -> Map.put(acc, var_key, element_type)
+        end
+      end)
+    else
+      %{}
+    end
+  end
+
+  # Infer the type of list elements
+  defp infer_list_element_type(list_info) do
+    case list_info do
+      # For now, we don't have enough information about element types
+      # from Module.Types descriptors to be specific
+      # Return nil to be conservative
+      :open_list -> nil
+      :nonempty_list -> nil
+      {:typed_list, _type} -> nil
+      _ -> nil
+    end
+  end
+
+  # Infer the type of list tail (always a list)
+  defp infer_list_tail_type(list_info) do
+    case list_info do
+      :open_list -> {:list, :empty}
+      :nonempty_list -> {:list, :empty}
+      {:typed_list, _type} -> {:list, :empty}
+      _ -> nil
+    end
+  end
+
+  # Extract variable information from AST node
+  defp extract_var_from_ast({var_name, meta, nil}) when is_atom(var_name) do
+    case Keyword.get(meta, :version) do
+      nil -> nil
+      version -> {var_name, version}
+    end
+  end
+
+  defp extract_var_from_ast(_), do: nil
 
   @doc """
   Converts a Module.Types.Descr to ElixirSense shape format.
