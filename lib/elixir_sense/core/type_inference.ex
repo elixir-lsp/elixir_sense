@@ -231,14 +231,14 @@ defmodule ElixirSense.Core.TypeInference do
 
   # Helper to use ElixirTypes adaptor as fallback
   defp type_of_with_elixir_types(ast, context) do
-    type_of_with_elixir_types(ast, context, nil, nil)
+    type_of_with_elixir_types(ast, context, nil, nil, %{})
   end
 
   # Helper to use ElixirTypes adaptor with optional local signatures and metadata
-  def type_of_with_elixir_types(ast, _context, local_sigs_map, metadata \\ nil) do
+  def type_of_with_elixir_types(ast, _context, local_sigs_map, metadata \\ nil, env_context \\ %{}) do
     if ElixirSense.Core.ElixirTypes.enabled?() do
       # For M2, we'll pass local_sigs_map and metadata via the init_stack when available
-      case type_expr_with_local_sigs(ast, local_sigs_map, metadata) do
+      case type_expr_with_local_sigs(ast, local_sigs_map, metadata, env_context) do
         {:ok, descr} ->
           ElixirSense.Core.ElixirTypes.to_shape(descr)
 
@@ -251,26 +251,23 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   # Helper to type an expression with local signatures and metadata
-  defp type_expr_with_local_sigs(ast, local_sigs_map, metadata) do
-    if local_sigs_map && map_size(local_sigs_map) > 0 do
-      # Extract module from local_sigs_map keys if available
-      module =
-        case Enum.find(local_sigs_map, fn _ -> true end) do
-          nil -> nil
-          _ -> extract_module_from_context(ast)
-        end
+  defp type_expr_with_local_sigs(ast, local_sigs_map, metadata, env_context) do
+    module = Map.get(env_context, :module) || extract_module_from_context(ast)
+    function = Map.get(env_context, :function)
+    file = Map.get(env_context, :file)
 
+    if local_sigs_map && map_size(local_sigs_map) > 0 do
       ElixirSense.Core.ElixirTypes.of_expr(
         ast,
         module,
-        nil,
-        nil,
+        function,
+        file,
         :dynamic,
         local_sigs_map,
         metadata
       )
     else
-      ElixirSense.Core.ElixirTypes.of_expr(ast, nil, nil, nil, :dynamic, nil, metadata)
+      ElixirSense.Core.ElixirTypes.of_expr(ast, module, function, file, :dynamic, nil, metadata)
     end
   end
 
