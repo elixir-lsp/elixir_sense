@@ -533,8 +533,8 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       result = ElixirTypes.to_shape(struct_descr)
 
       case result do
-        {:struct, User, fields} ->
-          # Should have struct with fields
+        {:struct, fields, {:atom, User}, nil} ->
+          # Should have struct with fields in Binding-compatible format
           assert is_list(fields)
           field_names = Keyword.keys(fields)
           assert :name in field_names or :age in field_names

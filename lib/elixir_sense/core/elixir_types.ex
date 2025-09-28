@@ -933,7 +933,8 @@ defmodule ElixirSense.Core.ElixirTypes do
             case struct_info do
               %{module: module, fields: fields} when is_atom(module) ->
                 field_shapes = convert_struct_fields(fields)
-                {:struct, module, field_shapes}
+                # Use Binding-compatible format: {:struct, fields, {:atom, Module}, nil}
+                {:struct, field_shapes, {:atom, module}, nil}
 
               _ ->
                 nil
@@ -1055,26 +1056,64 @@ defmodule ElixirSense.Core.ElixirTypes do
       {{:list, type1}, {:list, type2}} when type1 == nil and type2 != nil ->
         new
 
-      # Prefer tuples with more concrete element shapes
+      # Element-wise merge for tuples with same arity
       {{:tuple, arity, elems1}, {:tuple, arity, elems2}} ->
-        if count_concrete_shapes(elems1) >= count_concrete_shapes(elems2) do
-          existing
-        else
-          new
-        end
+        merged_elems =
+          elems1
+          |> Enum.zip(elems2)
+          |> Enum.map(fn {elem1, elem2} -> merge_shapes(elem1, elem2) end)
 
-      # Prefer maps with more fields
+        {:tuple, arity, merged_elems}
+
+      # Field-wise merge for maps
       {{:map, fields1, nil}, {:map, fields2, nil}} ->
-        if length(fields1) >= length(fields2) do
-          existing
-        else
-          new
-        end
+        merged_fields = merge_map_fields(fields1, fields2)
+        {:map, merged_fields, nil}
+
+      # Enhanced list element type merging
+      {{:list, elem_type1}, {:list, elem_type2}} ->
+        merged_elem_type = merge_shapes(elem_type1, elem_type2)
+        {:list, merged_elem_type}
+
+      # Field-wise merge for structs with same type
+      {{:struct, fields1, module, updated1}, {:struct, fields2, module, updated2}} ->
+        merged_fields = merge_map_fields(fields1, fields2)
+        merged_updated = merge_shapes(updated1, updated2)
+        {:struct, merged_fields, module, merged_updated}
 
       # Default: keep existing to avoid surprises
       _ ->
         existing
     end
+  end
+
+  # Helper function for merging map fields
+  defp merge_map_fields(fields1, fields2) do
+    # Create maps for easier merging
+    map1 = Map.new(fields1)
+    map2 = Map.new(fields2)
+
+    # Get all unique keys
+    all_keys = (Map.keys(map1) ++ Map.keys(map2)) |> Enum.uniq()
+
+    # Merge field by field
+    merged_map =
+      Enum.reduce(all_keys, %{}, fn key, acc ->
+        case {Map.get(map1, key), Map.get(map2, key)} do
+          {nil, value2} ->
+            Map.put(acc, key, value2)
+
+          {value1, nil} ->
+            Map.put(acc, key, value1)
+
+          {value1, value2} ->
+            merged_value = merge_shapes(value1, value2)
+            Map.put(acc, key, merged_value)
+        end
+      end)
+
+    # Convert back to keyword list format
+    Enum.map(merged_map, fn {key, value} -> {key, value} end)
   end
 
   # Helper functions for shape conversion
@@ -1313,14 +1352,6 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp convert_struct_fields(_), do: nil
-
-  defp count_concrete_shapes(shapes) do
-    Enum.count(shapes, fn
-      nil -> false
-      :none -> false
-      _ -> true
-    end)
-  end
 
   defp unwrap_dynamic(%{dynamic: dynamic}) when is_map(dynamic), do: dynamic
   defp unwrap_dynamic(descr), do: descr
