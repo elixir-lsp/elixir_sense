@@ -1,7 +1,7 @@
 defmodule ElixirSense.Core.ElixirTypesM2Test do
   use ExUnit.Case, async: false
 
-  alias ElixirSense.Core.{ElixirTypes, MetadataBuilder, TypeInference}
+  alias ElixirSense.Core.{Binding, ElixirTypes, Metadata, MetadataBuilder, TypeInference}
 
   @moduletag :elixir_types_m2
 
@@ -242,6 +242,31 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         type when is_tuple(type) -> :ok
         other -> flunk("Unexpected result: #{inspect(other)}")
       end
+    end
+
+    test "Binding uses inferred local signatures for local calls" do
+      code = """
+      defmodule LocalExample do
+        def helper(), do: 1
+        def caller() do
+          helper()
+        end
+      end
+      """
+
+      {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
+      state = MetadataBuilder.build(ast)
+      metadata = Metadata.fill(code, state)
+
+      call_line = 4
+      env = state.lines_to_env[call_line]
+      refute is_nil(env)
+
+      binding = Binding.from_env(env, metadata, {call_line, 5})
+
+      result = Binding.expand(binding, {:local_call, :helper, {call_line, 5}, []})
+
+      assert result == {:integer, nil}
     end
   end
 
