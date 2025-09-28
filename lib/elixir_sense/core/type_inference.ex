@@ -235,7 +235,13 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   # Helper to use ElixirTypes adaptor with optional local signatures and metadata
-  def type_of_with_elixir_types(ast, _context, local_sigs_map, metadata \\ nil, env_context \\ %{}) do
+  def type_of_with_elixir_types(
+        ast,
+        _context,
+        local_sigs_map,
+        metadata \\ nil,
+        env_context \\ %{}
+      ) do
     if ElixirSense.Core.ElixirTypes.enabled?() do
       # For M2, we'll pass local_sigs_map and metadata via the init_stack when available
       case type_expr_with_local_sigs(ast, local_sigs_map, metadata, env_context) do

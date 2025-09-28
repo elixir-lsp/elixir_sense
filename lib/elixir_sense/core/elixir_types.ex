@@ -597,6 +597,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
       var_key ->
         field_type = infer_map_field_type(key_ast, map_type_info)
+
         if field_type do
           Map.put(acc, var_key, field_type)
         else
@@ -641,6 +642,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
         var_key ->
           element_type = infer_tuple_element_type(index, tuple_info)
+
           if element_type do
             Map.put(acc, var_key, element_type)
           else
@@ -699,11 +701,14 @@ defmodule ElixirSense.Core.ElixirTypes do
       # Handle [head | tail] pattern - check for pipe operator in list
       elements when is_list(elements) ->
         case Enum.reverse(elements) do
-          [{:"|", _, [tail_ast]} | rest] ->
+          [{:|, _, [tail_ast]} | rest] ->
             # [head | tail] pattern
             case Enum.reverse(rest) do
-              [head_ast] -> refine_head_tail_pattern(head_ast, tail_ast, list_info)
-              multiple_heads -> refine_multi_head_tail_pattern(multiple_heads, tail_ast, list_info)
+              [head_ast] ->
+                refine_head_tail_pattern(head_ast, tail_ast, list_info)
+
+              multiple_heads ->
+                refine_multi_head_tail_pattern(multiple_heads, tail_ast, list_info)
             end
 
           _ ->
@@ -740,9 +745,12 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp refine_head_tail_pattern(head_ast, tail_ast, list_info) do
     head_refinements =
       case extract_var_from_ast(head_ast) do
-        nil -> %{}
+        nil ->
+          %{}
+
         var_key ->
           element_type = infer_list_element_type(list_info)
+
           if element_type do
             %{var_key => element_type}
           else
@@ -752,10 +760,13 @@ defmodule ElixirSense.Core.ElixirTypes do
 
     tail_refinements =
       case extract_var_from_ast(tail_ast) do
-        nil -> %{}
+        nil ->
+          %{}
+
         var_key ->
           # Tail is always a list of the same element type
           tail_type = infer_list_tail_type(list_info)
+
           if tail_type do
             %{var_key => tail_type}
           else
@@ -774,9 +785,12 @@ defmodule ElixirSense.Core.ElixirTypes do
     # Refine tail
     tail_refinements =
       case extract_var_from_ast(tail_ast) do
-        nil -> %{}
+        nil ->
+          %{}
+
         var_key ->
           tail_type = infer_list_tail_type(list_info)
+
           if tail_type do
             %{var_key => tail_type}
           else

@@ -820,7 +820,9 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     Keyword.get(meta, :file)
   end
 
-  defp closest_env_clauses(%ElixirSense.Core.Compiler.State{closest_env: {{_, _}, _dist, env}}) when not is_nil(env), do: env
+  defp closest_env_clauses(%ElixirSense.Core.Compiler.State{closest_env: {{_, _}, _dist, env}})
+       when not is_nil(env), do: env
+
   defp closest_env_clauses(_), do: nil
 
   defp module_file_clauses(nil), do: nil
