@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 The ElixirSense Team
-
 defmodule ElixirSense.Core.ExCkReader do
   @moduledoc """
   Reads and caches ExCk chunks (Elixir checker signatures) from BEAM files.
