@@ -61,6 +61,8 @@ defmodule ElixirSense.Core.ElixirTypes do
   These limitations will be addressed in future milestones (M2-M4).
   """
 
+  require Logger
+
   @doc """
   Returns true if Module.Types.Expr is available and has of_expr/5.
 
@@ -428,7 +430,12 @@ defmodule ElixirSense.Core.ElixirTypes do
         rescue
           _ -> :error
         catch
-          _ -> :error
+          kind, payload ->
+            Logger.warning(
+              "Unable to infer type of match: #{Exception.format(kind, payload, __STACKTRACE__)}\nPattern: #{inspect(pattern_ast)}\nMatch: #{inspect(match_ast)}"
+            )
+
+            :error
         end
       else
         :error
@@ -1441,10 +1448,13 @@ defmodule ElixirSense.Core.ElixirTypes do
               domain = build_domain(clause_types)
               {:infer, domain, clause_types}
           end
+          |> dbg
       end
+      |> dbg
     else
       _ -> :error
     end
+    |> dbg
   end
 
   defp maybe_disable_local_handler(nil), do: nil
@@ -1480,10 +1490,13 @@ defmodule ElixirSense.Core.ElixirTypes do
           end
 
         {:cont, [{arg_types, return_type} | acc]}
-      rescue
-        _ -> {:cont, acc}
       catch
-        _ -> {:cont, acc}
+        kind, payload ->
+          Logger.warning(
+            "Unable to infer local signature: #{Exception.format(kind, payload, __STACKTRACE__)}\nBody: #{inspect(body)}"
+          )
+
+          {:cont, acc}
       end
     end)
     |> Enum.reverse()
