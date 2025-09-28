@@ -1130,7 +1130,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     test "list pattern refinement handles head and tail" do
       if ElixirTypes.available?() do
         # List pattern [head | tail]
-        pattern_ast = [{:head, [version: 1], nil}, {:"|", [], [{:tail, [version: 2], nil}]}]
+        pattern_ast = [{:head, [version: 1], nil}, {:|, [], [{:tail, [version: 2], nil}]}]
 
         match_ast = {:=, [], [pattern_ast, [1, 2, 3]]}
 
@@ -1178,7 +1178,8 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     test "pattern refinement is conservative and safe" do
       if ElixirTypes.available?() do
         # Complex pattern that may not be fully supported
-        pattern_ast = {:when, [], [{:x, [version: 1], nil}, {:>, [], [{:x, [version: 1], nil}, 0]}]}
+        pattern_ast =
+          {:when, [], [{:x, [version: 1], nil}, {:>, [], [{:x, [version: 1], nil}, 0]}]}
 
         match_ast = {:=, [], [pattern_ast, 42]}
 
