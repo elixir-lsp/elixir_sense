@@ -5,9 +5,9 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
   @moduletag :elixir_types_m2
 
-  describe "M2 local function inference" do
+  describe "local function inference" do
     setup do
-      # Enable ElixirTypes for M2 tests
+      # Enable ElixirTypes
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
       Application.put_env(:elixir_sense, :use_elixir_types, true)
 
@@ -85,17 +85,12 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       assert %{elixir_types_sig: identity_sig, elixir_types_status: identity_status} =
                state.mods_funs_to_positions[identity_key]
 
-      # Signatures should either be inferred successfully or skipped gracefully
-      assert add_status in [:ok, :skipped]
-      assert identity_status in [:ok, :skipped]
+      # Signatures should either be inferred successfully
+      assert add_status == :ok
+      assert identity_status == :ok
 
-      if add_status == :ok do
-        assert {:infer, _domain, _clauses} = add_sig
-      end
-
-      if identity_status == :ok do
-        assert {:infer, _domain, _clauses} = identity_sig
-      end
+      assert {:infer, _domain, _clauses} = add_sig
+      assert {:infer, _domain, _clauses} = identity_sig
     end
 
     test "handles functions with guards" do
@@ -124,15 +119,11 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       assert length(clauses) == 2
 
       # Status should be ok or skipped
-      assert status in [:ok, :skipped]
+      assert status == :ok
 
-      if status == :ok do
-        assert {:infer, _domain, clause_types} = sig
-        # For M2, we accept that some clauses might not be successfully inferred
-        # The important thing is that we captured the clauses and attempted inference
-        assert length(clause_types) >= 1
-        assert length(clause_types) <= 2
-      end
+      assert {:infer, _domain, clause_types} = sig
+      # TODO: remote handler not working
+      assert length(clause_types) == 2
     end
 
     test "skips functions with unquotes" do
@@ -152,11 +143,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       # Should not have captured clauses for functions with unquotes
       unknown_key = {TestModule, :__unknown__, 1}
 
-      case state.mods_funs_to_positions[unknown_key] do
-        # Not captured at all
-        nil -> :ok
-        %{elixir_types_clauses: clauses} -> assert clauses == []
-      end
+      assert %{elixir_types_clauses: []} = state.mods_funs_to_positions[unknown_key]
     end
 
     test "handles private functions" do
@@ -183,9 +170,36 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "local handler integration works" do
+      # TODO: test with for when remote handler is working
       code = """
       defmodule TestModule do
         def simple_add(x, y), do: x + y
+        # def simple_add(x, y) do
+          # if x do
+          #   %{ispies: 1}
+          # else
+          #   %{fo: 1}
+          # end
+          # try do
+          #   %{ispies: :ok}
+          # else
+          #   a -> %{a | ispies: :ok}
+          # rescue
+          #   _ -> %{foj: 1}
+          # end
+          # cond do
+          #   x -> %{ispies: :ok}
+          #   true -> 1
+          # end
+          # n = receive do
+          #   a -> %{ispies: :ok}
+          # after
+          #   2 -> %{foj: 1}
+          # end
+          # for _ <- 1..10 do
+          #   %{ispies: :ok}
+          # end
+        # end
         def identity(x), do: x
       end
       """
@@ -204,20 +218,13 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       assert Map.has_key?(local_sigs_map, {:identity, 1})
 
       # Test that we can use the local handler
-      case Map.get(local_sigs_map, {:simple_add, 2}) do
-        {kind, {:infer, _domain, _clause_types}} ->
-          assert kind == :def
-
-        _ ->
-          # If inference failed, that's ok for M2
-          :ok
-      end
+      assert {:def, {:infer, _domain, _clause_types}} = Map.get(local_sigs_map, {:simple_add, 2})
     end
 
     test "TypeInference integration with local signatures" do
       code = """
       defmodule TestModule do
-        def add(x, y), do: x + y
+        def add(x, y), do: %{foo: x, bar: y}
       end
       """
 
@@ -228,7 +235,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         |> MetadataBuilder.build()
 
       # Build local signatures map
-      local_sigs_map = ElixirTypes.build_local_sigs_map(state, TestModule)
+      local_sigs_map = ElixirTypes.build_local_sigs_map(state, TestModule) |> dbg
 
       # Test typing a local call with the signatures map
       call_ast = {:add, [], [1, 2]}
@@ -236,11 +243,13 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       # Result should either be a type or nil (graceful fallback)
       case result do
-        # Fallback is acceptable for M2
-        nil -> :ok
         # Got a type result
-        type when is_tuple(type) -> :ok
-        other -> flunk("Unexpected result: #{inspect(other)}")
+        type when is_tuple(type) ->
+          # TODO: assert on concrete type
+          :ok
+
+        other ->
+          flunk("Unexpected result: #{inspect(other)}")
       end
     end
 
@@ -270,7 +279,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
   end
 
-  describe "M2 integration with disabled feature" do
+  describe "integration with disabled feature" do
     setup do
       # Ensure feature is disabled
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
@@ -304,7 +313,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
   end
 
-  describe "M2 remote function integration" do
+  describe "remote function integration" do
     setup do
       # Enable ElixirTypes for M2 tests
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
@@ -336,8 +345,6 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       # Result should either be a type result or false (graceful fallback)
       case result do
-        # ExCk not available, fallback is acceptable
-        false -> :ok
         # Got ExCk signature
         {:def, _type, _context} -> :ok
         other -> flunk("Unexpected result: #{inspect(other)}")
@@ -406,7 +413,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
     test "init_stack integrates remote handler" do
       stack = ElixirTypes.init_stack(TestModule, {:test_fun, 1}, "test.ex", :dynamic, nil, %{})
-
+      # TODO: remote_handler setup seems broken
       case stack do
         nil ->
           # Module.Types not available, that's ok
@@ -416,9 +423,9 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
           # Should have remote handler
           assert is_function(handler, 6)
 
-        _other ->
-          # Different stack structure, check if it has remote handler capability
-          assert stack != nil
+          # _other ->
+          # # Different stack structure, check if it has remote handler capability
+          # assert stack != nil
       end
     end
 
@@ -428,51 +435,37 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       result = ElixirTypes.of_expr(ast, TestModule, {:test, 1}, "test.ex", :dynamic, nil, %{})
 
-      case result do
+      case result |> dbg do
+        {:ok, %{dynamic: :term}} ->
+          flunk("Unexpected result, expected infered type integer")
+
         # Got type descriptor
-        {:ok, _descr} -> :ok
+        {:ok, _descr} ->
+          :ok
+
         # Acceptable fallback for M2
-        :error -> :ok
-        other -> flunk("Unexpected result: #{inspect(other)}")
+        # :error -> :ok
+        other ->
+          flunk("Unexpected result: #{inspect(other)}")
       end
     end
 
     test "TypeInference integration with remote signatures" do
       # Test TypeInference with metadata parameter
-      ast = {{:., [], [Enum, :map]}, [], [[1, 2, 3], {:fn, [], nil}]}
+      ast = {{:., [], [String, :to_integer]}, [], [""]}
 
       result = TypeInference.type_of_with_elixir_types(ast, :none, nil, %{})
 
-      # Result should either be a type or nil (graceful fallback)
       case result do
-        # Fallback is acceptable for M2
-        nil -> :ok
-        # Got a type result
-        type when is_tuple(type) -> :ok
-        other -> flunk("Unexpected result: #{inspect(other)}")
-      end
-    end
-
-    test "backward compatibility with existing TypeInference calls" do
-      # Ensure 3-arity version still works
-      ast = {:+, [], [1, 2]}
-
-      result = TypeInference.type_of_with_elixir_types(ast, :none, nil)
-
-      # Should work the same as before
-      case result do
-        # Fallback is acceptable
-        nil -> :ok
-        # Got a type result
-        type when is_tuple(type) -> :ok
+        {:integer, nil} -> :ok
         other -> flunk("Unexpected result: #{inspect(other)}")
       end
     end
   end
 
-  describe "M2 enhanced shape conversion" do
+  describe "enhanced shape conversion" do
     setup do
-      # Enable ElixirTypes for M2 tests
+      # Enable ElixirTypes
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
       Application.put_env(:elixir_sense, :use_elixir_types, true)
 
@@ -489,7 +482,8 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "converts union types to shape" do
-      # Test union type conversion - this is simplified for M2
+      # TODO: this test is a stub
+      # Test union type conversion - this is simplified
       # In a real scenario, we'd need proper union descriptors from Module.Types
 
       # Test basic atom union
@@ -508,17 +502,14 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
           # Single atom fallback is acceptable
           :ok
 
-        nil ->
-          # M2 may not handle all union cases yet
-          :ok
-
         other ->
           flunk("Unexpected union shape: #{inspect(other)}")
       end
     end
 
     test "converts struct types to shape" do
-      # Test struct type conversion - simplified for M2
+      # TODO: this test should use real descriptor
+      # Test struct type conversion
       # Create a descriptor that looks like a struct
       struct_descr = %{
         map: %{
@@ -539,9 +530,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
           field_names = Keyword.keys(fields)
           assert :name in field_names or :age in field_names
 
-        nil ->
-          # M2 may not handle all struct cases yet
-          :ok
+        # TODO: assert on field values
 
         other ->
           flunk("Unexpected struct shape: #{inspect(other)}")
@@ -562,8 +551,6 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       case result do
         # Correct function shape
         {:fun, 2} -> :ok
-        # M2 may not handle all function cases yet
-        nil -> :ok
         other -> flunk("Unexpected function shape: #{inspect(other)}")
       end
     end
@@ -579,13 +566,9 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       result = ElixirTypes.to_shape(range_descr)
 
-      case result do
+      case result |> dbg do
         # Correct bounded integer
         {:integer, {1, 10}} -> :ok
-        # Fallback to unbounded is acceptable
-        {:integer, nil} -> :ok
-        # M2 may not handle all range cases yet
-        nil -> :ok
         other -> flunk("Unexpected integer range shape: #{inspect(other)}")
       end
     end
@@ -600,38 +583,67 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       result = ElixirTypes.to_shape(literal_descr)
 
-      case result do
+      case result |> dbg do
         # Correct string literal
         {:binary, "hello"} -> :ok
-        # Fallback to general binary is acceptable
-        {:binary, nil} -> :ok
-        # M2 may not handle all literal cases yet
-        nil -> :ok
         other -> flunk("Unexpected string literal shape: #{inspect(other)}")
       end
     end
 
-    test "handles PID types" do
+    test "handles PID type" do
       # Test that PID descriptor converts properly
-      if ElixirTypes.available?() do
-        pid_descr = Module.Types.Descr.pid()
-        result = ElixirTypes.to_shape(pid_descr)
+      pid_descr = Module.Types.Descr.pid()
+      result = ElixirTypes.to_shape(pid_descr)
 
-        case result do
-          # Correct PID shape
-          :pid -> :ok
-          # Fallback is acceptable for M2
-          nil -> :ok
-          other -> flunk("Unexpected PID shape: #{inspect(other)}")
-        end
-      else
-        :skip
+      case result do
+        # Correct PID shape
+        :pid -> :ok
+        other -> flunk("Unexpected PID shape: #{inspect(other)}")
       end
     end
 
+    test "handles port type" do
+      # Test that port descriptor converts properly
+      port_descr = Module.Types.Descr.port()
+      result = ElixirTypes.to_shape(port_descr)
+
+      case result do
+        # Correct port shape
+        :port -> :ok
+        other -> flunk("Unexpected port shape: #{inspect(other)}")
+      end
+    end
+
+    test "handles reference type" do
+      # Test that reference descriptor converts properly
+      reference_descr = Module.Types.Descr.reference()
+      result = ElixirTypes.to_shape(reference_descr)
+
+      case result do
+        # Correct reference shape
+        :reference -> :ok
+        other -> flunk("Unexpected reference shape: #{inspect(other)}")
+      end
+    end
+
+    test "handles top type" do
+      top_descr = Module.Types.Descr.term()
+      result = ElixirTypes.to_shape(top_descr)
+
+      assert result == nil
+    end
+
+    test "handles bottom type" do
+      bottom_descr = Module.Types.Descr.none()
+      result = ElixirTypes.to_shape(bottom_descr)
+
+      assert result == :none
+    end
+
     test "handles complex nested types" do
+      # TODO: use real descr
       # Test complex nested type like list(%{String.t => atom | integer})
-      # This is a simplified version for M2
+      # This is a simplified version
 
       # Create a list of maps descriptor
       map_descr = %{
@@ -651,13 +663,9 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       result = ElixirTypes.to_shape(list_descr)
 
-      case result do
+      case result |> dbg do
         # List of maps
         {:list, {:map, _fields, nil}} -> :ok
-        # Simplified list fallback
-        {:list, nil} -> :ok
-        # M2 may not handle all complex cases yet
-        nil -> :ok
         other -> flunk("Unexpected complex shape: #{inspect(other)}")
       end
     end
@@ -677,28 +685,23 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "preserves existing shape conversion behavior" do
-      # Test that existing basic types still work correctly
-      if ElixirTypes.available?() do
-        # Test basic integer
-        int_descr = Module.Types.Descr.integer()
-        assert ElixirTypes.to_shape(int_descr) == {:integer, nil}
+      # Test basic integer
+      int_descr = Module.Types.Descr.integer()
+      assert ElixirTypes.to_shape(int_descr) == {:integer, nil}
 
-        # Test basic binary
-        bin_descr = Module.Types.Descr.binary()
-        assert ElixirTypes.to_shape(bin_descr) == {:binary, nil}
+      # Test basic binary
+      bin_descr = Module.Types.Descr.binary()
+      assert ElixirTypes.to_shape(bin_descr) == {:binary, nil}
 
-        # Test basic float
-        float_descr = Module.Types.Descr.float()
-        assert ElixirTypes.to_shape(float_descr) == {:float, nil}
-      else
-        :skip
-      end
+      # Test basic float
+      float_descr = Module.Types.Descr.float()
+      assert ElixirTypes.to_shape(float_descr) == {:float, nil}
     end
   end
 
-  describe "M2 pattern matching refinement" do
+  describe "pattern matching refinement" do
     setup do
-      # Enable ElixirTypes for M2 tests
+      # Enable ElixirTypes
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
       Application.put_env(:elixir_sense, :use_elixir_types, true)
 
@@ -734,11 +737,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       case result do
         {:ok, vars} when is_map(vars) ->
           # Should get variable refinement
-          assert map_size(vars) >= 0
-
-        :error ->
-          # Acceptable fallback for complex cases
-          :ok
+          assert vars[{:x, 1}] == {:integer, nil}
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")
@@ -746,11 +745,12 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "struct pattern matching refinement" do
+      # TODO: this test is broken
       # Test struct pattern matching
       pattern_ast =
         {:%, [],
          [
-           {:__aliases__, [], [:User]},
+           User,
            {:%{}, [], [{:name, {:x, [version: 1], nil}}]}
          ]}
 
@@ -768,14 +768,10 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
           target_keys: [{:x, 1}]
         )
 
-      case result do
+      case result |> dbg do
         {:ok, vars} when is_map(vars) ->
           # Should handle struct patterns gracefully
           assert is_map(vars)
-
-        :error ->
-          # Acceptable for complex patterns
-          :ok
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")
@@ -783,6 +779,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "tuple pattern matching refinement" do
+      # TODO: this test is broken
       # Test tuple pattern matching
       pattern_ast =
         {:{}, [],
@@ -805,14 +802,10 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
           target_keys: [{:x, 1}, {:y, 2}]
         )
 
-      case result do
+      case result |> dbg do
         {:ok, vars} when is_map(vars) ->
           # Should handle tuple patterns
           assert is_map(vars)
-
-        :error ->
-          # Acceptable for complex cases
-          :ok
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")
@@ -843,14 +836,11 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
           target_keys: [{:head, 1}, {:tail, 2}]
         )
 
-      case result do
+      case result |> dbg do
         {:ok, vars} when is_map(vars) ->
           # Should handle list patterns
-          assert is_map(vars)
-
-        :error ->
-          # Acceptable for complex cases
-          :ok
+          assert vars[{:head, 1}] == {:integer, nil}
+          assert vars[{:tail, 2}] == {:union, [list: {:integer, nil}, list: :empty]}
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")
@@ -862,7 +852,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       pattern_ast =
         {:%, [],
          [
-           {:__aliases__, [], [:Response]},
+           Response,
            {:%{}, [],
             [
               {:status,
@@ -893,10 +883,6 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         {:ok, vars} when is_map(vars) ->
           # Should handle nested patterns
           assert is_map(vars)
-
-        :error ->
-          # Acceptable for very complex patterns
-          :ok
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")
@@ -933,6 +919,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         :error ->
           # Acceptable for guard patterns
+          # TODO: is it?
           :ok
 
         other ->
@@ -963,14 +950,11 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
           target_keys: [{:name_var, 1}, {:age_var, 2}]
         )
 
-      case result do
+      case result |> dbg do
         {:ok, vars} when is_map(vars) ->
           # Should handle map patterns
-          assert is_map(vars)
-
-        :error ->
-          # Acceptable for complex map patterns
-          :ok
+          assert vars[{:name_var, 1}] == {:binary, "John"}
+          assert vars[{:age_var, 1}] == {:integer, nil}
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")
@@ -996,7 +980,6 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       # Should gracefully handle invalid patterns
       case result do
-        {:ok, vars} when is_map(vars) -> :ok
         # Expected for invalid patterns
         :error -> :ok
         other -> flunk("Unexpected result: #{inspect(other)}")
@@ -1004,60 +987,30 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "type intersection with expected descriptors" do
+      # TODO: where is intersection in this test?
       # Test type intersection with value-based refinement
       pattern_ast = {:x, [version: 1], nil}
       match_ast = {:=, [], [pattern_ast, 42]}
 
       # Use integer descriptor as expected type
-      if ElixirTypes.available?() do
-        expected_descr = Module.Types.Descr.integer()
+      expected_descr = Module.Types.Descr.integer()
 
-        result =
-          ElixirTypes.of_match(
-            pattern_ast,
-            expected_descr,
-            match_ast,
-            TestModule,
-            {:test, 1},
-            "test.ex",
-            :dynamic,
-            target_keys: [{:x, 1}]
-          )
-
-        case result do
-          {:ok, vars} when is_map(vars) ->
-            # Should use expected descriptor for better refinement
-            assert is_map(vars)
-
-          :error ->
-            # Acceptable fallback
-            :ok
-
-          other ->
-            flunk("Unexpected result: #{inspect(other)}")
-        end
-      else
-        # Skip if Module.Types not available
-        :skip
-      end
-    end
-
-    test "enhanced pattern refinement maintains compatibility" do
-      # Test that enhanced refinement doesn't break existing functionality
-      pattern_ast = {:x, [version: 1], nil}
-      match_ast = {:=, [], [pattern_ast, 42]}
-
-      # Call with minimal parameters
-      result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
+      result =
+        ElixirTypes.of_match(
+          pattern_ast,
+          expected_descr,
+          match_ast,
+          TestModule,
+          {:test, 1},
+          "test.ex",
+          :dynamic,
+          target_keys: [{:x, 1}]
+        )
 
       case result do
         {:ok, vars} when is_map(vars) ->
-          # Should work with minimal parameters
+          # Should use expected descriptor for better refinement
           assert is_map(vars)
-
-        :error ->
-          # Acceptable fallback
-          :ok
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")
@@ -1065,7 +1018,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
   end
 
-  describe "M2 pattern refinement implementations" do
+  describe "pattern refinement implementations" do
     setup do
       # Enable ElixirTypes for pattern refinement tests
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
@@ -1084,18 +1037,35 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         pattern_ast = {:%{}, [], [{:name, {:n, [version: 1], nil}}]}
 
         # Call refine_map_pattern_vars (via of_match)
-        match_ast = {:=, [], [pattern_ast, %{name: "test"}]}
+        match_ast = {:=, [], [pattern_ast, {:%{}, [], [{:name, "test"}]}]}
 
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
         case result do
           {:ok, vars} when is_map(vars) ->
             # Pattern refinement should work
-            assert is_map(vars)
+            assert vars[{:n, 1}] == {:binary, "test"}
 
-          :error ->
-            # Acceptable fallback for conservative implementation
-            :ok
+          other ->
+            flunk("Unexpected result: #{inspect(other)}")
+        end
+      end
+    end
+
+    test "2-tuple pattern refinement handles element positions" do
+      if ElixirTypes.available?() do
+        # Tuple pattern {a, b} where variables should be refined
+        pattern_ast = {{:a, [version: 1], nil}, {:b, [version: 2], nil}}
+
+        match_ast = {:=, [], [pattern_ast, {1, :ok}]}
+
+        result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
+
+        case result |> dbg do
+          {:ok, vars} when is_map(vars) ->
+            # Pattern refinement should work
+            assert vars[{:a, 1}] == {:integer, nil}
+            assert vars[{:b, 2}] == {:atom, :ok}
 
           other ->
             flunk("Unexpected result: #{inspect(other)}")
@@ -1106,16 +1076,19 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     test "tuple pattern refinement handles element positions" do
       if ElixirTypes.available?() do
         # Tuple pattern {a, b} where variables should be refined
-        pattern_ast = {:{}, [], [{:a, [version: 1], nil}, {:b, [version: 2], nil}]}
+        pattern_ast =
+          {:{}, [], [{:a, [version: 1], nil}, {:b, [version: 2], nil}, {:c, [version: 3], nil}]}
 
-        match_ast = {:=, [], [pattern_ast, {1, :ok}]}
+        match_ast = {:=, [], [pattern_ast, {1, :ok, ""}]}
 
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
         case result do
           {:ok, vars} when is_map(vars) ->
             # Pattern refinement should work
-            assert is_map(vars)
+            assert vars[{:a, 1}] == {:integer, nil}
+            assert vars[{:b, 2}] == {:atom, :ok}
+            assert vars[{:c, 3}] == {:binary, ""}
 
           :error ->
             # Acceptable fallback for conservative implementation
@@ -1130,20 +1103,17 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     test "list pattern refinement handles head and tail" do
       if ElixirTypes.available?() do
         # List pattern [head | tail]
-        pattern_ast = [{:head, [version: 1], nil}, {:|, [], [{:tail, [version: 2], nil}]}]
+        pattern_ast = [{:|, [], [{:head, [version: 1], nil}, {:tail, [version: 2], nil}]}]
 
         match_ast = {:=, [], [pattern_ast, [1, 2, 3]]}
 
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
-        case result do
+        case result |> dbg do
           {:ok, vars} when is_map(vars) ->
             # Pattern refinement should work
-            assert is_map(vars)
-
-          :error ->
-            # Acceptable fallback for conservative implementation
-            :ok
+            assert vars[{:head, 1}] == {:integer, nil}
+            assert vars[{:tail, 2}] == {:union, [list: {:integer, nil}, list: :empty]}
 
           other ->
             flunk("Unexpected result: #{inspect(other)}")
@@ -1163,11 +1133,9 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         case result do
           {:ok, vars} when is_map(vars) ->
             # Pattern refinement should work
-            assert is_map(vars)
-
-          :error ->
-            # Acceptable fallback for conservative implementation
-            :ok
+            assert vars[{:a, 1}] == {:integer, nil}
+            assert vars[{:b, 2}] == {:integer, nil}
+            assert vars[{:c, 3}] == {:integer, nil}
 
           other ->
             flunk("Unexpected result: #{inspect(other)}")
@@ -1185,7 +1153,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
-        case result do
+        case result |> dbg do
           {:ok, _vars} ->
             # If we get a result, it should be valid
             :ok
@@ -1201,7 +1169,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
   end
 
-  describe "M2 assertive pattern refinement tests" do
+  describe "assertive pattern refinement tests" do
     setup do
       # Enable ElixirTypes for assertive tests
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
@@ -1214,116 +1182,20 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       :ok
     end
 
-    test "simple tuple pattern gives exact tuple shape" do
-      if ElixirTypes.available?() do
-        # Test {a, b} = {1, :ok} pattern
-        pattern_ast = {:{}, [], [{:a, [version: 1], nil}, {:b, [version: 2], nil}]}
-        # Create a concrete tuple value to match against
-        value_ast = {:{}, [], [1, :ok]}
-        match_ast = {:=, [], [pattern_ast, value_ast]}
-
-        result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
-
-        case result do
-          {:ok, vars} when is_map(vars) ->
-            # Should have refined both variables
-            assert map_size(vars) >= 0
-            # Even if no specific refinements, the structure should be correct
-            assert is_map(vars)
-
-          :error ->
-            # Conservative fallback is acceptable for complex Module.Types integration
-            :ok
-
-          other ->
-            flunk("Unexpected result: #{inspect(other)}")
-        end
-      end
-    end
-
-    test "map pattern with atom key refinement" do
-      if ElixirTypes.available?() do
-        # Test %{name: n} pattern where n should be refined based on key type
-        pattern_ast = {:%{}, [], [{:name, {:n, [version: 1], nil}}]}
-        match_ast = {:=, [], [pattern_ast, %{name: "test"}]}
-
-        result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
-
-        case result do
-          {:ok, vars} when is_map(vars) ->
-            # Should work with map patterns
-            assert is_map(vars)
-            # For atom key :name, we implemented basic refinement
-            # Check if variable n was processed (even if conservatively)
-            case Map.get(vars, {:n, 1}) do
-              # Conservative - no refinement
-              nil -> :ok
-              # Got some type
-              type when is_tuple(type) -> assert tuple_size(type) >= 2
-              _ -> :ok
-            end
-
-          :error ->
-            # Conservative fallback acceptable
-            :ok
-
-          other ->
-            flunk("Unexpected result: #{inspect(other)}")
-        end
-      end
-    end
-
-    test "list head-tail pattern refinement" do
-      if ElixirTypes.available?() do
-        # Test [head | tail] pattern
-        pattern_ast = [{:head, [version: 1], nil}, {:|, [], [{:tail, [version: 2], nil}]}]
-        match_ast = {:=, [], [pattern_ast, [1, 2, 3]]}
-
-        result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
-
-        case result do
-          {:ok, vars} when is_map(vars) ->
-            # Should process both head and tail variables
-            assert is_map(vars)
-            # Tail should get list type if our implementation supports it
-            case Map.get(vars, {:tail, 2}) do
-              # Got list type - good!
-              {:list, _} -> :ok
-              # Conservative - no refinement
-              nil -> :ok
-              # Some other type
-              _ -> :ok
-            end
-
-          :error ->
-            # Conservative fallback acceptable
-            :ok
-
-          other ->
-            flunk("Unexpected result: #{inspect(other)}")
-        end
-      end
-    end
-
     test "struct pattern refinement maintains conservatism" do
       if ElixirTypes.available?() do
         # Test struct pattern with existing struct - should be conservative
         pattern_ast =
-          {:%, [],
-           [{:__aliases__, [], [:Date]}, {:%{}, [], [{:year, {:year, [version: 1], nil}}]}]}
+          {:%, [], [Date, {:%{}, [], [{:year, {:year, [version: 1], nil}}]}]}
 
-        match_ast = {:=, [], [pattern_ast, ~D[2023-01-01]]}
+        match_ast = {:=, [], [pattern_ast, Macro.escape(~D[2023-01-01])]}
 
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
-        case result do
+        case result |> dbg do
           {:ok, vars} when is_map(vars) ->
             # Should work but be conservative with struct fields
             assert is_map(vars)
-
-          :error ->
-            # Expected for complex struct patterns
-            :ok
 
           other ->
             flunk("Unexpected result: #{inspect(other)}")
@@ -1352,7 +1224,6 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         for result <- results do
           case result do
             {:ok, vars} when is_map(vars) -> assert is_map(vars)
-            :error -> :ok
             other -> flunk("Unexpected result: #{inspect(other)}")
           end
         end
@@ -1364,18 +1235,14 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         # Test nested pattern like %{user: %{name: n}}
         inner_pattern = {:%{}, [], [{:name, {:n, [version: 1], nil}}]}
         pattern_ast = {:%{}, [], [{:user, inner_pattern}]}
-        match_ast = {:=, [], [pattern_ast, %{user: %{name: "Alice"}}]}
+        match_ast = {:=, [], [pattern_ast, Macro.escape(%{user: %{name: "Alice"}})]}
 
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
-        case result do
+        case result |> dbg do
           {:ok, vars} when is_map(vars) ->
             # Should handle nested patterns conservatively
-            assert is_map(vars)
-
-          :error ->
-            # Expected for complex nested patterns - conservative approach
-            :ok
+            assert vars[{:n, 1}] == {:binary, "Alice"}
 
           other ->
             flunk("Unexpected result: #{inspect(other)}")
@@ -1386,6 +1253,8 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     test "binary pattern demonstrates conservative behavior" do
       if ElixirTypes.available?() do
         # Test binary pattern - should be very conservative
+        # TODO: this AST is broken "<<data, :binary.()::8>>"
+        # was it supposed to be <<data::8, rest::binary>>
         pattern_ast =
           {:<<>>, [],
            [{:data, [version: 1], nil}, {:"::", [], [{{:., [], [:binary]}, [], []}, 8]}]}
@@ -1398,10 +1267,6 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
           {:ok, vars} when is_map(vars) ->
             # If binary patterns are supported, should work
             assert is_map(vars)
-
-          :error ->
-            # Expected - binary patterns are complex
-            :ok
 
           other ->
             flunk("Unexpected result: #{inspect(other)}")
@@ -1436,7 +1301,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         # Test that local signatures are built and used
         local_sigs = ElixirTypes.build_local_sigs_map(metadata, TestModule)
 
-        case local_sigs do
+        case local_sigs |> dbg do
           %{} when map_size(local_sigs) > 0 ->
             # Should have found local function signatures
             assert Map.has_key?(local_sigs, {:helper, 0})
@@ -1454,11 +1319,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
                 context
               )
 
-            case result do
-              # Conservative fallback acceptable
-              nil ->
-                :ok
-
+            case result |> dbg do
               type when is_tuple(type) ->
                 # Got a refined type - good!
                 assert tuple_size(type) >= 2
@@ -1467,12 +1328,52 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
                 flunk("Unexpected result: #{inspect(other)}")
             end
 
-          %{} ->
-            # Empty map - conservative behavior acceptable
-            :ok
-
           other ->
             flunk("Unexpected local_sigs result: #{inspect(other)}")
+        end
+      end
+    end
+
+    test "end-to-end integration: remote signatures influence binding type inference" do
+      if ElixirTypes.available?() do
+        # This test ensures local signatures actually change the type seen at call sites
+        # Similar to the existing integration test but more comprehensive
+
+        code = """
+        defmodule TestModule do
+          def caller() do
+            result = ElixirSenseExample.RemoteSignatures.helper()
+            result
+          end
+        end
+        """
+
+        # Build metadata
+        metadata = ElixirSense.Core.MetadataBuilder.build(code)
+
+        # Test that local signatures are built and used
+        local_sigs = ElixirTypes.build_local_sigs_map(metadata, TestModule)
+
+        # Test that these signatures can be used for type inference
+        call_ast = {{:., [line: 3], ElixirSenseExample.RemoteSignatures, :helper}, [line: 1], []}
+        context = %{module: TestModule, function: {:caller, 0}, file: "test.ex"}
+
+        result =
+          TypeInference.type_of_with_elixir_types(
+            call_ast,
+            :none,
+            local_sigs,
+            metadata,
+            context
+          )
+
+        case result |> dbg do
+          type when is_tuple(type) ->
+            # Got a refined type - good!
+            assert tuple_size(type) >= 2
+
+          other ->
+            flunk("Unexpected result: #{inspect(other)}")
         end
       end
     end

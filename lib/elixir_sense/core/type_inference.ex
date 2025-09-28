@@ -235,6 +235,7 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   # Helper to use ElixirTypes adaptor with optional local signatures and metadata
+  # TODO: metadata and env_context not passed
   def type_of_with_elixir_types(
         ast,
         _context,
