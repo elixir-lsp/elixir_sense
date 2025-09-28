@@ -687,14 +687,14 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   # Enhanced pattern matching refinement for case expressions
-  defp enhance_case_pattern_vars(clause_vars, pattern_ast, match_context, _state) do
+  defp enhance_case_pattern_vars(clause_vars, pattern_ast, match_context, state) do
     if ElixirSense.Core.ElixirTypes.enabled?() and clause_vars != [] do
       try do
         # Extract environment information for ElixirTypes
-        # Use a simple fallback for environment since we need to provide env parameter
-        module = nil
-        function = nil
-        file = nil
+        env = env_for_meta_clauses(state, pattern_ast)
+        module = env && env.module
+        function = env && env.function
+        file = file_for_meta(pattern_ast) || module_file_clauses(module)
 
         # Convert match_context to a Module.Types descriptor if possible
         expected_descr = match_context_to_descr(match_context)
@@ -795,5 +795,39 @@ defmodule ElixirSense.Core.Compiler.Clauses do
       |> Enum.reject(fn {key, _} -> key in original_keys end)
 
     ordered ++ additional
+  end
+
+  # Helper functions for environment extraction (adapted from compiler.ex)
+  defp env_for_meta_clauses(state, ast) do
+    meta = extract_meta_from_ast(ast)
+    line = Keyword.get(meta, :line, 0)
+
+    cond do
+      is_integer(line) and line > 0 ->
+        Map.get(state.lines_to_env, line) || closest_env_clauses(state)
+
+      true ->
+        closest_env_clauses(state)
+    end
+  end
+
+  defp extract_meta_from_ast({_, meta, _}) when is_list(meta), do: meta
+  defp extract_meta_from_ast(_), do: []
+
+  defp file_for_meta(ast) do
+    meta = extract_meta_from_ast(ast)
+    Keyword.get(meta, :file)
+  end
+
+  defp closest_env_clauses(%ElixirSense.Core.Compiler.State{closest_env: {{_, _}, _dist, env}}) when not is_nil(env), do: env
+  defp closest_env_clauses(_), do: nil
+
+  defp module_file_clauses(nil), do: nil
+
+  defp module_file_clauses(module) when is_atom(module) do
+    case :code.which(module) do
+      path when is_list(path) -> List.to_string(path)
+      _ -> nil
+    end
   end
 end
