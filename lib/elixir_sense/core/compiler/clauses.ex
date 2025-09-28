@@ -272,7 +272,11 @@ defmodule ElixirSense.Core.Compiler.Clauses do
             clause_vars_with_inferred_types =
               TypeInference.find_typed_vars(h, match_context, :match)
 
-            s = State.merge_inferred_types(s, clause_vars_with_inferred_types)
+            # Enhanced pattern matching refinement with ElixirTypes
+            enhanced_vars =
+              enhance_case_pattern_vars(clause_vars_with_inferred_types, h, match_context, s)
+
+            s = State.merge_inferred_types(s, enhanced_vars)
 
             {c, s, e}
 
@@ -680,5 +684,116 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
   defp sanitize_opts(opts, allowed) do
     Enum.flat_map(allowed, fn opt -> sanitize_opt(opts, opt) end)
+  end
+
+  # Enhanced pattern matching refinement for case expressions
+  defp enhance_case_pattern_vars(clause_vars, pattern_ast, match_context, _state) do
+    if ElixirSense.Core.ElixirTypes.enabled?() and clause_vars != [] do
+      try do
+        # Extract environment information for ElixirTypes
+        # Use a simple fallback for environment since we need to provide env parameter
+        module = nil
+        function = nil
+        file = nil
+
+        # Convert match_context to a Module.Types descriptor if possible
+        expected_descr = match_context_to_descr(match_context)
+
+        target_keys = Enum.map(clause_vars, &elem(&1, 0))
+
+        # Use ElixirTypes for pattern matching refinement
+        case ElixirSense.Core.ElixirTypes.of_match(
+               pattern_ast,
+               expected_descr,
+               {:variable_match, :__case_subject__},
+               module,
+               function,
+               file,
+               :dynamic,
+               target_keys: target_keys
+             ) do
+          {:ok, refined_vars} when map_size(refined_vars) > 0 ->
+            # Merge ElixirTypes refinements with existing clause vars
+            merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
+
+          _ ->
+            clause_vars
+        end
+      rescue
+        _ -> clause_vars
+      catch
+        _ -> clause_vars
+      end
+    else
+      clause_vars
+    end
+  end
+
+  # Convert TypeInference match context to Module.Types descriptor
+  defp match_context_to_descr(nil), do: nil
+  defp match_context_to_descr(:none), do: nil
+
+  defp match_context_to_descr(match_context) do
+    case match_context do
+      {:atom, atom} when is_atom(atom) ->
+        if ElixirSense.Core.ElixirTypes.available?() do
+          Module.Types.Descr.atom(atom)
+        else
+          nil
+        end
+
+      {:struct, _fields, {:atom, module}, _} when is_atom(module) ->
+        if ElixirSense.Core.ElixirTypes.available?() do
+          Module.Types.Descr.atom(module)
+        else
+          nil
+        end
+
+      {:tuple, _arity, _elements} ->
+        if ElixirSense.Core.ElixirTypes.available?() do
+          Module.Types.Descr.term()
+        else
+          nil
+        end
+
+      {:list, _element_type} ->
+        if ElixirSense.Core.ElixirTypes.available?() do
+          Module.Types.Descr.term()
+        else
+          nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  # Merge clause variables with ElixirTypes refinements
+  defp merge_clause_vars_with_elixir_types(clause_vars, refined_vars) do
+    clause_map = Map.new(clause_vars)
+
+    enhanced_map =
+      Enum.reduce(refined_vars, clause_map, fn {key, elixir_type}, acc ->
+        case Map.fetch(acc, key) do
+          {:ok, existing_type} ->
+            # Merge existing type with ElixirTypes refinement
+            merged_type = TypeInference.intersect(existing_type, elixir_type)
+            Map.put(acc, key, merged_type)
+
+          :error ->
+            # Add new refined variable
+            Map.put(acc, key, elixir_type)
+        end
+      end)
+
+    # Maintain original ordering but include all variables
+    original_keys = Enum.map(clause_vars, &elem(&1, 0))
+    ordered = Enum.map(original_keys, fn key -> {key, Map.get(enhanced_map, key)} end)
+
+    additional =
+      enhanced_map
+      |> Enum.reject(fn {key, _} -> key in original_keys end)
+
+    ordered ++ additional
   end
 end
