@@ -18,3 +18,4 @@ erl_crash.dump
 
 .elixir_ls
 .vscode
+*.local.json
