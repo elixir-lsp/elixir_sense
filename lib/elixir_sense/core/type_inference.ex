@@ -244,13 +244,25 @@ defmodule ElixirSense.Core.TypeInference do
         env_context \\ %{}
       ) do
     if ElixirSense.Core.ElixirTypes.enabled?() do
-      # For M2, we'll pass local_sigs_map and metadata via the init_stack when available
-      case type_expr_with_local_sigs(ast, local_sigs_map, metadata, env_context) do
-        {:ok, descr} ->
-          ElixirSense.Core.ElixirTypes.to_shape(descr)
+      # Prefer remote descriptor when AST is remote call
+      case ElixirSense.Core.ElixirTypes.maybe_remote_call_shape(ast, metadata) do
+        {:ok, shape} when shape != nil ->
+          shape
 
-        :error ->
-          nil
+        _ ->
+          case type_expr_with_local_sigs(ast, local_sigs_map, metadata, env_context) do
+            {:ok, descr} ->
+              case ElixirSense.Core.ElixirTypes.to_shape(descr) do
+                nil ->
+                  ElixirSense.Core.ElixirTypes.to_shape(Module.Types.Descr.dynamic())
+
+                shape ->
+                  shape
+              end
+
+            :error ->
+              nil
+          end
       end
     else
       nil
@@ -259,18 +271,29 @@ defmodule ElixirSense.Core.TypeInference do
 
   # Helper to type an expression with local signatures and metadata
   defp type_expr_with_local_sigs(ast, local_sigs_map, metadata, env_context) do
-    module = Map.get(env_context, :module) || extract_module_from_context(ast)
+    signatures =
+      if is_map(local_sigs_map) and not remote_call_ast?(ast) do
+        Map.drop(local_sigs_map, [:__module__])
+      else
+        %{}
+      end
+
+    module =
+      Map.get(env_context, :module) ||
+        (is_map(local_sigs_map) && Map.get(local_sigs_map, :__module__)) ||
+        extract_module_from_context(ast)
+
     function = Map.get(env_context, :function)
     file = Map.get(env_context, :file)
 
-    if local_sigs_map && map_size(local_sigs_map) > 0 do
+    if map_size(signatures) > 0 do
       ElixirSense.Core.ElixirTypes.of_expr(
         ast,
         module,
         function,
         file,
         :dynamic,
-        local_sigs_map,
+        signatures,
         metadata
       )
     else
@@ -284,6 +307,11 @@ defmodule ElixirSense.Core.TypeInference do
     # In M3, this could be enhanced to extract from AST context
     ElixirSense.ElixirTypes
   end
+
+  defp remote_call_ast?({{:., _, [_target, fun]}, _, args}) when is_atom(fun) and is_list(args),
+    do: true
+
+  defp remote_call_ast?(_), do: false
 
   # Helper to merge existing ElixirSense type with ElixirTypes result
   defp merge_with_elixir_types(existing, ast, _context) do
