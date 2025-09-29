@@ -438,21 +438,12 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp maybe_remote_call_descriptor(_ast, _metadata), do: nil
 
   defp descriptor_from_exck(%{sig: sig_info}) do
-    case extract_return_type_from_sig(sig_info) do
-      {:ok, descriptor} ->
-        IO.inspect({:descriptor_from_exck, descriptor})
-        descriptor
-
-      :error ->
-        IO.inspect({:descriptor_from_exck_error, sig_info})
-        nil
-    end
+    extract_return_type_from_sig(sig_info)
   end
 
   defp descriptor_from_exck(_), do: nil
 
   defp module_from_ast(atom) when is_atom(atom) do
-    IO.inspect({:module_from_ast, atom})
     {:ok, atom}
   end
 
@@ -575,20 +566,23 @@ defmodule ElixirSense.Core.ElixirTypes do
         Module.Types.Expr.of_expr(value_ast, refined_expected, full_match, stack, ctx)
       end
 
-      {_type, %{vars: vars_map}} =
-        Module.Types.Pattern.of_match(pattern_ast, expected_fun, full_match, stack, context)
+      case Module.Types.Pattern.of_match(pattern_ast, expected_fun, full_match, stack, context) do
+        {_type, %{vars: vars_map}} ->
+          # Enhanced variable shape extraction with type refinement
+          var_shapes =
+            extract_refined_var_shapes(
+              vars_map,
+              targets,
+              pattern_ast,
+              refined_expected,
+              value_ast
+            )
 
-      # Enhanced variable shape extraction with type refinement
-      var_shapes =
-        extract_refined_var_shapes(
-          vars_map,
-          targets,
-          pattern_ast,
-          refined_expected,
-          value_ast
-        )
+          {:ok, var_shapes}
 
-      {:ok, var_shapes}
+        _ ->
+          :error
+      end
     rescue
       _ -> :error
     catch
@@ -681,7 +675,18 @@ defmodule ElixirSense.Core.ElixirTypes do
       {key_ast, var_ast}, acc ->
         case extract_var_from_ast(var_ast) do
           nil ->
-            acc
+            # Check if this is a nested pattern that needs recursive refinement
+            key_literal = literal_from_key_ast(key_ast)
+
+            if key_literal != nil && Map.has_key?(value_field_map, key_literal) do
+              # Get the value for this field from the AST
+              field_value_ast = get_field_value_ast(value_ast, key_literal)
+              # Recursively apply pattern refinement for nested patterns
+              nested_refinements = apply_pattern_refinements(var_shapes, var_ast, nil, field_value_ast)
+              Map.merge(acc, nested_refinements)
+            else
+              acc
+            end
 
           var_key ->
             key_literal = literal_from_key_ast(key_ast)
@@ -689,7 +694,7 @@ defmodule ElixirSense.Core.ElixirTypes do
             field_shape =
               cond do
                 key_literal != nil && Map.has_key?(value_field_map, key_literal) ->
-                  generalize_shape(Map.get(value_field_map, key_literal))
+                  Map.get(value_field_map, key_literal)
 
                 true ->
                   Map.get(var_shapes, var_key)
@@ -810,6 +815,32 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp extract_var_from_ast(_), do: nil
+
+  # Extract the AST value for a specific field from a map value AST
+  defp get_field_value_ast(value_ast, field_key) do
+    case value_ast do
+      # Handle maps
+      {:%{}, _, fields} ->
+        Enum.find_value(fields, fn
+          {key_ast, value_ast} ->
+            if literal_from_key_ast(key_ast) == field_key do
+              value_ast
+            else
+              nil
+            end
+
+          _ ->
+            nil
+        end)
+
+      # Handle structs
+      {:%, _, [_, {:%{}, _, fields}]} ->
+        get_field_value_ast({:%{}, [], fields}, field_key)
+
+      _ ->
+        nil
+    end
+  end
 
   defp normalize_var_versions(vars_map) do
     Enum.reduce(vars_map, vars_map, fn

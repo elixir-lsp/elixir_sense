@@ -357,8 +357,8 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       result = handler.(NonExistentModule, :some_function, 1, [], nil, nil)
 
-      # Should return false for fallback
-      assert result == false
+      # Should return :error for fallback
+      assert result == :error
     end
 
     test "remote handler unions clause return types from ExCk" do
@@ -566,7 +566,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       result = ElixirTypes.to_shape(range_descr)
 
-      case result |> dbg do
+      case result do
         # Correct bounded integer
         {:integer, {1, 10}} -> :ok
         other -> flunk("Unexpected integer range shape: #{inspect(other)}")
@@ -583,7 +583,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       result = ElixirTypes.to_shape(literal_descr)
 
-      case result |> dbg do
+      case result do
         # Correct string literal
         {:binary, "hello"} -> :ok
         other -> flunk("Unexpected string literal shape: #{inspect(other)}")
@@ -663,7 +663,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       result = ElixirTypes.to_shape(list_descr)
 
-      case result |> dbg do
+      case result do
         # List of maps
         {:list, {:map, _fields, nil}} -> :ok
         other -> flunk("Unexpected complex shape: #{inspect(other)}")
@@ -768,7 +768,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
           target_keys: [{:x, 1}]
         )
 
-      case result |> dbg do
+      case result do
         {:ok, vars} when is_map(vars) ->
           # Should handle struct patterns gracefully
           assert is_map(vars)
@@ -802,7 +802,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
           target_keys: [{:x, 1}, {:y, 2}]
         )
 
-      case result |> dbg do
+      case result do
         {:ok, vars} when is_map(vars) ->
           # Should handle tuple patterns
           assert is_map(vars)
@@ -836,7 +836,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
           target_keys: [{:head, 1}, {:tail, 2}]
         )
 
-      case result |> dbg do
+      case result do
         {:ok, vars} when is_map(vars) ->
           # Should handle list patterns
           assert vars[{:head, 1}] == {:integer, nil}
@@ -950,7 +950,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
           target_keys: [{:name_var, 1}, {:age_var, 2}]
         )
 
-      case result |> dbg do
+      case result do
         {:ok, vars} when is_map(vars) ->
           # Should handle map patterns
           assert vars[{:name_var, 1}] == {:binary, "John"}
@@ -1061,7 +1061,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
-        case result |> dbg do
+        case result do
           {:ok, vars} when is_map(vars) ->
             # Pattern refinement should work
             assert vars[{:a, 1}] == {:integer, nil}
@@ -1109,7 +1109,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
-        case result |> dbg do
+        case result do
           {:ok, vars} when is_map(vars) ->
             # Pattern refinement should work
             assert vars[{:head, 1}] == {:integer, nil}
@@ -1153,7 +1153,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
-        case result |> dbg do
+        case result do
           {:ok, _vars} ->
             # If we get a result, it should be valid
             :ok
@@ -1192,7 +1192,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
-        case result |> dbg do
+        case result do
           {:ok, vars} when is_map(vars) ->
             # Should work but be conservative with struct fields
             assert is_map(vars)
@@ -1239,7 +1239,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
-        case result |> dbg do
+        case result do
           {:ok, vars} when is_map(vars) ->
             # Should handle nested patterns conservatively
             assert vars[{:n, 1}] == {:binary, "Alice"}
@@ -1319,7 +1319,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
                 context
               )
 
-            case result |> dbg do
+            case result do
               type when is_tuple(type) ->
                 # Got a refined type - good!
                 assert tuple_size(type) >= 2
@@ -1377,7 +1377,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
             context
           )
 
-        case result |> dbg do
+        case result do
           type when is_tuple(type) ->
             # Got a refined type - good!
             assert tuple_size(type) >= 2
