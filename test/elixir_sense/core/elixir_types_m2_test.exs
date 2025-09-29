@@ -1336,6 +1336,16 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
     test "end-to-end integration: remote signatures influence binding type inference" do
       if ElixirTypes.available?() do
+        assert {:ok, %{sig: sig}} =
+                 ElixirSense.Core.ExCkReader.lookup_signature(
+                   ElixirSenseExample.RemoteSignatures,
+                   :helper,
+                   0
+                 )
+
+        assert sig ==
+                 {:infer, nil, [{[], %{dynamic: %{atom: {:union, %{success: [], failure: []}}}}}]}
+
         # This test ensures local signatures actually change the type seen at call sites
         # Similar to the existing integration test but more comprehensive
 

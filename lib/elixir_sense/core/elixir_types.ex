@@ -110,7 +110,7 @@ defmodule ElixirSense.Core.ElixirTypes do
         file \\ nil,
         mode \\ :dynamic,
         local_sigs_map \\ nil,
-        metadata \\ nil
+        _metadata \\ nil
       ) do
     if available?() do
       local_handler =
@@ -120,7 +120,7 @@ defmodule ElixirSense.Core.ElixirTypes do
           &__MODULE__.local_handler/4
         end
 
-      remote_handler = remote_handler_from(metadata)
+      remote_handler = remote_handler_from()
 
       Module.Types.stack(
         mode,
@@ -128,9 +128,10 @@ defmodule ElixirSense.Core.ElixirTypes do
         module || ElixirSense.ElixirTypes,
         function || {:__info__, 1},
         :all,
-        remote_handler,
+        nil,
         local_handler
       )
+      |> Map.put(:remote_handler, remote_handler)
     else
       nil
     end
@@ -202,30 +203,41 @@ defmodule ElixirSense.Core.ElixirTypes do
     track_performance(:of_expr, fn ->
       if available?() do
         try do
-          # Performance optimization for traversal mode
-          if mode == :traversal && is_simple_ast?(ast) do
-            # Fast path for simple AST nodes in traversal mode
-            track_fast_path_hit()
-            simple_type_of(ast)
-          else
-            # Full Module.Types processing
-            stack = init_stack(module, function, file, mode, local_sigs_map, metadata)
-            context = init_context()
+          case maybe_local_call_descriptor(ast, local_sigs_map) do
+            nil ->
+              case maybe_remote_call_descriptor(ast, metadata) do
+                nil ->
+                  if mode == :traversal && is_simple_ast?(ast) do
+                    # Fast path for simple AST nodes in traversal mode
+                    track_fast_path_hit()
+                    simple_type_of(ast)
+                  else
+                    # Full Module.Types processing
+                    stack = init_stack(module, function, file, mode, local_sigs_map, metadata)
+                    context = init_context()
 
-            if stack && context do
-              {descr, _context} =
-                Module.Types.Expr.of_expr(
-                  ast,
-                  Module.Types.Descr.term(),
-                  ast,
-                  stack,
-                  context
-                )
+                    if stack && context do
+                      {descr, _context} =
+                        Module.Types.Expr.of_expr(
+                          ast,
+                          Module.Types.Descr.term(),
+                          ast,
+                          stack,
+                          context
+                        )
 
-              {:ok, descr}
-            else
-              :error
-            end
+                      {:ok, descr}
+                    else
+                      :error
+                    end
+                  end
+
+                descriptor ->
+                  {:ok, descriptor}
+              end
+
+            descriptor ->
+              {:ok, descriptor}
           end
         rescue
           _ -> :error
@@ -366,6 +378,94 @@ defmodule ElixirSense.Core.ElixirTypes do
     Process.put(:elixir_types_metrics, Map.update(metrics, :fast_path_hits, 1, &(&1 + 1)))
   end
 
+  defp maybe_local_call_descriptor({fun, _meta, args}, local_sigs_map)
+       when is_atom(fun) and is_list(args) and is_map(local_sigs_map) do
+    with {kind, sig} when kind in [:def, :defp] <- Map.get(local_sigs_map, {fun, length(args)}),
+         descriptor when not is_nil(descriptor) <- descriptor_from_signature(sig) do
+      descriptor
+    else
+      _ -> nil
+    end
+  end
+
+  defp maybe_local_call_descriptor(_, _), do: nil
+
+  defp descriptor_from_signature({sig_kind, _domain, clauses})
+       when sig_kind in [:infer, :strong] and is_list(clauses) do
+    case extract_return_type_from_clauses(clauses) do
+      {:ok, return_type} -> return_type
+      :error -> nil
+    end
+  end
+
+  defp descriptor_from_signature(:none), do: nil
+  defp descriptor_from_signature(_), do: nil
+
+  def maybe_remote_call_shape(ast, metadata) do
+    case maybe_remote_call_descriptor(ast, metadata) do
+      nil ->
+        :error
+
+      descriptor ->
+        case to_shape(descriptor) do
+          nil -> :error
+          shape -> {:ok, shape}
+        end
+    end
+  end
+
+  defp maybe_remote_call_descriptor(
+         {{:., _, [target_ast, fun]}, _meta, args},
+         _metadata
+       )
+       when is_atom(fun) and is_list(args) do
+    if enabled?() do
+      case module_from_ast(target_ast) do
+        {:ok, module} ->
+          case ElixirSense.Core.ExCkReader.lookup_signature(module, fun, length(args)) do
+            {:ok, info} -> descriptor_from_exck(info)
+            :error -> nil
+          end
+
+        :error ->
+          nil
+      end
+    else
+      nil
+    end
+  end
+
+  defp maybe_remote_call_descriptor(_ast, _metadata), do: nil
+
+  defp descriptor_from_exck(%{sig: sig_info}) do
+    case extract_return_type_from_sig(sig_info) do
+      {:ok, descriptor} ->
+        IO.inspect({:descriptor_from_exck, descriptor})
+        descriptor
+
+      :error ->
+        IO.inspect({:descriptor_from_exck_error, sig_info})
+        nil
+    end
+  end
+
+  defp descriptor_from_exck(_), do: nil
+
+  defp module_from_ast(atom) when is_atom(atom) do
+    IO.inspect({:module_from_ast, atom})
+    {:ok, atom}
+  end
+
+  defp module_from_ast({:__aliases__, _, parts}) when is_list(parts) do
+    try do
+      {:ok, Module.concat(parts)}
+    rescue
+      ArgumentError -> :error
+    end
+  end
+
+  defp module_from_ast(_), do: :error
+
   @doc """
   Types a pattern match to refine variable types.
 
@@ -479,7 +579,15 @@ defmodule ElixirSense.Core.ElixirTypes do
         Module.Types.Pattern.of_match(pattern_ast, expected_fun, full_match, stack, context)
 
       # Enhanced variable shape extraction with type refinement
-      var_shapes = extract_refined_var_shapes(vars_map, targets, pattern_ast, refined_expected)
+      var_shapes =
+        extract_refined_var_shapes(
+          vars_map,
+          targets,
+          pattern_ast,
+          refined_expected,
+          value_ast
+        )
+
       {:ok, var_shapes}
     rescue
       _ -> :error
@@ -498,7 +606,14 @@ defmodule ElixirSense.Core.ElixirTypes do
       {_type, %{vars: vars_map}} =
         Module.Types.Pattern.of_match(pattern_ast, expected_fun, full_match, stack, context)
 
-      {:ok, extract_var_shapes(vars_map, targets)}
+      {:ok,
+       extract_refined_var_shapes(
+         vars_map,
+         targets,
+         pattern_ast,
+         expected_descr,
+         value_ast
+       )}
     rescue
       _ -> :error
     catch
@@ -507,33 +622,36 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   # Enhanced variable shape extraction with additional type refinement
-  defp extract_refined_var_shapes(vars_map, targets, pattern_ast, expected_descr) do
+  defp extract_refined_var_shapes(vars_map, targets, pattern_ast, expected_descr, value_ast) do
     base_shapes = extract_var_shapes(vars_map, targets)
 
     # Apply pattern-specific type refinements
-    refined_shapes = apply_pattern_refinements(base_shapes, pattern_ast, expected_descr)
+    refined_shapes =
+      apply_pattern_refinements(base_shapes, pattern_ast, expected_descr, value_ast)
 
-    Map.merge(base_shapes, refined_shapes)
+    base_shapes
+    |> Map.merge(refined_shapes)
+    |> normalize_var_versions()
   end
 
   # Apply additional type refinements based on pattern structure
-  defp apply_pattern_refinements(var_shapes, pattern_ast, expected_descr) do
+  defp apply_pattern_refinements(var_shapes, pattern_ast, expected_descr, value_ast) do
     case pattern_ast do
       # Struct pattern refinement
       {:%, _, [struct_ast, {:%{}, _, fields}]} ->
-        refine_struct_pattern_vars(var_shapes, struct_ast, fields, expected_descr)
+        refine_struct_pattern_vars(var_shapes, struct_ast, fields, expected_descr, value_ast)
 
       # Map pattern refinement
       {:%{}, _, fields} ->
-        refine_map_pattern_vars(var_shapes, fields, expected_descr)
+        refine_map_pattern_vars(var_shapes, fields, expected_descr, value_ast)
 
       # Tuple pattern refinement
       {:{}, _, elements} ->
-        refine_tuple_pattern_vars(var_shapes, elements, expected_descr)
+        refine_tuple_pattern_vars(var_shapes, elements, expected_descr, value_ast)
 
       # List pattern refinement
       list when is_list(list) ->
-        refine_list_pattern_vars(var_shapes, list, expected_descr)
+        refine_list_pattern_vars(var_shapes, list, expected_descr, value_ast)
 
       _ ->
         %{}
@@ -541,7 +659,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   # Refine variables in struct patterns
-  defp refine_struct_pattern_vars(_var_shapes, struct_ast, _fields, _expected_descr) do
+  defp refine_struct_pattern_vars(_var_shapes, struct_ast, _fields, _expected_descr, _value_ast) do
     case struct_ast do
       {var_name, meta, nil} when is_atom(var_name) ->
         # Variable bound to struct module - refine to atom type
@@ -556,89 +674,54 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   # Refine variables in map patterns
-  defp refine_map_pattern_vars(_var_shapes, fields, expected_descr) do
-    # Extract map type information from expected descriptor
-    map_type_info = extract_map_type_info(expected_descr)
+  defp refine_map_pattern_vars(var_shapes, fields, _expected_descr, value_ast) do
+    value_field_map = map_field_map(shape_from_ast(value_ast))
 
-    fields
-    |> Enum.reduce(%{}, fn field, acc ->
-      case field do
-        # Map pattern like %{key: var} or %{"string_key" => var}
-        {key_ast, var_ast} ->
-          refine_map_field_var(acc, key_ast, var_ast, map_type_info)
+    Enum.reduce(fields, %{}, fn
+      {key_ast, var_ast}, acc ->
+        case extract_var_from_ast(var_ast) do
+          nil ->
+            acc
 
-        _ ->
-          acc
-      end
+          var_key ->
+            key_literal = literal_from_key_ast(key_ast)
+
+            field_shape =
+              cond do
+                key_literal != nil && Map.has_key?(value_field_map, key_literal) ->
+                  generalize_shape(Map.get(value_field_map, key_literal))
+
+                true ->
+                  Map.get(var_shapes, var_key)
+              end
+
+            if field_shape do
+              Map.put(acc, var_key, field_shape)
+            else
+              acc
+            end
+        end
+
+      _other, acc ->
+        acc
     end)
   end
 
-  # Extract type information from map descriptors
-  defp extract_map_type_info(descr) do
-    cond do
-      # Handle map descriptors - check for recognizable patterns
-      is_map(descr) and Map.has_key?(descr, :atom) ->
-        case Map.get(descr, :atom) do
-          :map -> :open_map
-          other when is_atom(other) -> {:typed_map, other}
-          _ -> :unknown
-        end
-
-      # Handle struct descriptors
-      is_map(descr) and map_size(descr) == 1 ->
-        case Enum.at(descr, 0) do
-          {struct_name, _fields} when is_atom(struct_name) -> {:struct, struct_name}
-          _ -> :unknown
-        end
-
-      true ->
-        :unknown
-    end
-  end
-
-  # Refine a single map field variable
-  defp refine_map_field_var(acc, key_ast, var_ast, map_type_info) do
-    case extract_var_from_ast(var_ast) do
-      nil ->
-        acc
-
-      var_key ->
-        field_type = infer_map_field_type(key_ast, map_type_info)
-
-        if field_type do
-          Map.put(acc, var_key, field_type)
-        else
-          acc
-        end
-    end
-  end
-
-  # Infer the type of a map field based on key and map type
-  defp infer_map_field_type(key_ast, map_type_info) do
-    case {key_ast, map_type_info} do
-      # String key in any map
-      {{:__block__, _, [string]}, _} when is_binary(string) ->
-        {:binary, nil}
-
-      # Atom key in any map
-      {atom, _} when is_atom(atom) ->
-        {:atom, nil}
-
-      # For struct types, we could potentially be more specific
-      # but keeping conservative for now
-      {_, {:struct, _struct_name}} ->
-        # For now, return generic term for struct fields
-        nil
-
-      _ ->
-        nil
-    end
-  end
-
   # Refine variables in tuple patterns
-  defp refine_tuple_pattern_vars(_var_shapes, elements, expected_descr) do
-    # Extract tuple type information from expected descriptor
-    tuple_info = extract_tuple_type_info(expected_descr)
+  defp refine_tuple_pattern_vars(var_shapes, elements, _expected_descr, value_ast) do
+    tuple_shapes =
+      case shape_from_ast(value_ast) do
+        {:tuple, size, shapes} when size == length(elements) ->
+          Enum.map(shapes, &generalize_shape/1)
+
+        _ ->
+          Enum.map(elements, fn element_ast ->
+            case extract_var_from_ast(element_ast) do
+              nil -> nil
+              var_key -> Map.get(var_shapes, var_key)
+            end
+          end)
+      end
 
     elements
     |> Enum.with_index()
@@ -648,10 +731,10 @@ defmodule ElixirSense.Core.ElixirTypes do
           acc
 
         var_key ->
-          element_type = infer_tuple_element_type(index, tuple_info)
+          element_shape = Enum.at(tuple_shapes, index)
 
-          if element_type do
-            Map.put(acc, var_key, element_type)
+          if element_shape do
+            Map.put(acc, var_key, element_shape)
           else
             acc
           end
@@ -659,192 +742,62 @@ defmodule ElixirSense.Core.ElixirTypes do
     end)
   end
 
-  # Extract tuple type information from descriptors
-  defp extract_tuple_type_info(descr) do
-    cond do
-      # Handle tuple descriptors
-      is_map(descr) and Map.has_key?(descr, :atom) ->
-        case Map.get(descr, :atom) do
-          :tuple -> :open_tuple
-          other when is_atom(other) -> {:typed_tuple, other}
-          _ -> :unknown
-        end
-
-      # Handle specific tuple size descriptors
-      is_map(descr) and Map.has_key?(descr, :tuple) ->
-        case Map.get(descr, :tuple) do
-          size when is_integer(size) -> {:sized_tuple, size}
-          _ -> :open_tuple
-        end
-
-      true ->
-        :unknown
-    end
-  end
-
-  # Infer the type of a tuple element based on position and tuple info
-  defp infer_tuple_element_type(_index, tuple_info) do
-    case tuple_info do
-      # For now, we don't have enough information about element types
-      # from Module.Types descriptors to be specific
-      # Return nil to be conservative
-      {:sized_tuple, _size} ->
-        nil
-
-      :open_tuple ->
-        nil
-
-      _ ->
-        nil
-    end
-  end
-
   # Refine variables in list patterns
-  defp refine_list_pattern_vars(_var_shapes, list, expected_descr) do
-    # Extract list type information from expected descriptor
-    list_info = extract_list_type_info(expected_descr)
+  defp refine_list_pattern_vars(var_shapes, list, _expected_descr, value_ast) do
+    value_list = if is_list(value_ast), do: value_ast, else: nil
 
     case list do
-      # Handle [head | tail] pattern - check for pipe operator in list
+      [{:|, _, [head_ast, tail_ast]}] ->
+        element_shape =
+          case value_list do
+            [head | _] -> generalize_shape(shape_from_ast(head))
+            _ -> Map.get(var_shapes, extract_var_from_ast(head_ast))
+          end
+
+        head_refinement =
+          case extract_var_from_ast(head_ast) do
+            nil -> %{}
+            var_key when element_shape != nil -> %{var_key => element_shape}
+            _ -> %{}
+          end
+
+        tail_refinement =
+          case extract_var_from_ast(tail_ast) do
+            nil ->
+              %{}
+
+            var_key ->
+              tail_shape = list_tail_shape(value_list, element_shape)
+
+              if tail_shape do
+                %{var_key => tail_shape}
+              else
+                %{}
+              end
+          end
+
+        Map.merge(head_refinement, tail_refinement)
+
       elements when is_list(elements) ->
-        case Enum.reverse(elements) do
-          [{:|, _, [tail_ast]} | rest] ->
-            # [head | tail] pattern
-            case Enum.reverse(rest) do
-              [head_ast] ->
-                refine_head_tail_pattern(head_ast, tail_ast, list_info)
+        element_shape =
+          case value_list do
+            [head | _] -> generalize_shape(shape_from_ast(head))
+            _ -> nil
+          end
 
-              multiple_heads ->
-                refine_multi_head_tail_pattern(multiple_heads, tail_ast, list_info)
+        if element_shape do
+          Enum.reduce(elements, %{}, fn element_ast, acc ->
+            case extract_var_from_ast(element_ast) do
+              nil -> acc
+              var_key -> Map.put(acc, var_key, element_shape)
             end
-
-          _ ->
-            # Simple list pattern [a, b, c]
-            refine_list_elements_pattern(elements, list_info)
+          end)
+        else
+          %{}
         end
 
       _ ->
         %{}
-    end
-  end
-
-  # Extract list type information from descriptors
-  defp extract_list_type_info(descr) do
-    cond do
-      # Handle list descriptors
-      is_map(descr) and Map.has_key?(descr, :atom) ->
-        case Map.get(descr, :atom) do
-          :list -> :open_list
-          other when is_atom(other) -> {:typed_list, other}
-          _ -> :unknown
-        end
-
-      # Handle non-empty list descriptors
-      is_map(descr) and Map.has_key?(descr, :nonempty_list) ->
-        :nonempty_list
-
-      true ->
-        :unknown
-    end
-  end
-
-  # Refine variables in [head | tail] pattern
-  defp refine_head_tail_pattern(head_ast, tail_ast, list_info) do
-    head_refinements =
-      case extract_var_from_ast(head_ast) do
-        nil ->
-          %{}
-
-        var_key ->
-          element_type = infer_list_element_type(list_info)
-
-          if element_type do
-            %{var_key => element_type}
-          else
-            %{}
-          end
-      end
-
-    tail_refinements =
-      case extract_var_from_ast(tail_ast) do
-        nil ->
-          %{}
-
-        var_key ->
-          # Tail is always a list of the same element type
-          tail_type = infer_list_tail_type(list_info)
-
-          if tail_type do
-            %{var_key => tail_type}
-          else
-            %{}
-          end
-      end
-
-    Map.merge(head_refinements, tail_refinements)
-  end
-
-  # Refine variables in [head1, head2, ... | tail] pattern
-  defp refine_multi_head_tail_pattern(heads, tail_ast, list_info) do
-    # Refine all head elements
-    head_refinements = refine_list_elements_pattern(heads, list_info)
-
-    # Refine tail
-    tail_refinements =
-      case extract_var_from_ast(tail_ast) do
-        nil ->
-          %{}
-
-        var_key ->
-          tail_type = infer_list_tail_type(list_info)
-
-          if tail_type do
-            %{var_key => tail_type}
-          else
-            %{}
-          end
-      end
-
-    Map.merge(head_refinements, tail_refinements)
-  end
-
-  # Refine variables in simple list patterns [a, b, c]
-  defp refine_list_elements_pattern(elements, list_info) do
-    element_type = infer_list_element_type(list_info)
-
-    if element_type do
-      elements
-      |> Enum.reduce(%{}, fn element_ast, acc ->
-        case extract_var_from_ast(element_ast) do
-          nil -> acc
-          var_key -> Map.put(acc, var_key, element_type)
-        end
-      end)
-    else
-      %{}
-    end
-  end
-
-  # Infer the type of list elements
-  defp infer_list_element_type(list_info) do
-    case list_info do
-      # For now, we don't have enough information about element types
-      # from Module.Types descriptors to be specific
-      # Return nil to be conservative
-      :open_list -> nil
-      :nonempty_list -> nil
-      {:typed_list, _type} -> nil
-      _ -> nil
-    end
-  end
-
-  # Infer the type of list tail (always a list)
-  defp infer_list_tail_type(list_info) do
-    case list_info do
-      :open_list -> {:list, :empty}
-      :nonempty_list -> {:list, :empty}
-      {:typed_list, _type} -> {:list, :empty}
-      _ -> nil
     end
   end
 
@@ -857,6 +810,167 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp extract_var_from_ast(_), do: nil
+
+  defp normalize_var_versions(vars_map) do
+    Enum.reduce(vars_map, vars_map, fn
+      {{var, version}, shape}, acc when is_atom(var) and is_integer(version) and version > 1 ->
+        primary_key = {var, 1}
+
+        if Map.has_key?(acc, primary_key) do
+          acc
+        else
+          Map.put(acc, primary_key, shape)
+        end
+
+      _, acc ->
+        acc
+    end)
+  end
+
+  defp map_field_map({:map, fields, _}) when is_list(fields) do
+    fields
+    |> Enum.into(%{}, fn {key, value} -> {key, value} end)
+  end
+
+  defp map_field_map({:struct, fields, {:atom, module}, _}) do
+    fields
+    |> Enum.reject(fn {key, _} -> key == :__struct__ end)
+    |> Enum.into(%{}, fn {key, value} -> {key, value} end)
+    |> Map.put(:__struct__, {:atom, module})
+  end
+
+  defp map_field_map(_), do: %{}
+
+  defp literal_from_key_ast({:__block__, _, [value]}), do: value
+  defp literal_from_key_ast({:<<>>, _, parts}) when is_list(parts), do: IO.iodata_to_binary(parts)
+  defp literal_from_key_ast(atom) when is_atom(atom), do: atom
+  defp literal_from_key_ast(_), do: nil
+
+  defp shape_from_ast(ast) when is_integer(ast), do: {:integer, ast}
+  defp shape_from_ast(ast) when is_float(ast), do: {:float, ast}
+  defp shape_from_ast(ast) when is_binary(ast), do: {:binary, ast}
+  defp shape_from_ast(ast) when is_atom(ast), do: {:atom, ast}
+
+  defp shape_from_ast({:%{}, _, fields}) do
+    mapped =
+      fields
+      |> Enum.flat_map(fn
+        {key, value} ->
+          case literal_from_key_ast(key) do
+            nil -> []
+            literal_key -> [{literal_key, shape_from_ast(value)}]
+          end
+
+        _ ->
+          []
+      end)
+
+    {:map, mapped, nil}
+  end
+
+  defp shape_from_ast({:%, _, [struct_ast, {:%{}, _, fields}]}) do
+    module =
+      case struct_ast do
+        {:__aliases__, _, parts} -> Module.concat(parts)
+        atom when is_atom(atom) -> atom
+        _ -> nil
+      end
+
+    field_shapes =
+      fields
+      |> Enum.flat_map(fn
+        {:__struct__, _} ->
+          []
+
+        {key, value} ->
+          case literal_from_key_ast(key) do
+            nil -> []
+            literal_key -> [{literal_key, shape_from_ast(value)}]
+          end
+
+        _ ->
+          []
+      end)
+
+    if module do
+      {:struct, field_shapes, {:atom, module}, nil}
+    else
+      {:map, field_shapes, nil}
+    end
+  end
+
+  defp shape_from_ast({:{}, _, elements}) when is_list(elements) do
+    {:tuple, length(elements), Enum.map(elements, &shape_from_ast/1)}
+  end
+
+  defp shape_from_ast(list) when is_list(list) do
+    case list do
+      [] ->
+        {:list, :empty}
+
+      _ ->
+        element_shapes = Enum.map(list, &shape_from_ast/1)
+        merged = merge_list_element_shapes(element_shapes)
+        {:list, merged}
+    end
+  end
+
+  defp shape_from_ast(_), do: nil
+
+  defp merge_list_element_shapes([]), do: nil
+
+  defp merge_list_element_shapes(shapes) do
+    shapes
+    |> Enum.map(&generalize_shape/1)
+    |> Enum.reject(&is_nil/1)
+    |> List.first()
+  end
+
+  defp generalize_shape(nil), do: nil
+  defp generalize_shape({:integer, _}), do: {:integer, nil}
+  defp generalize_shape({:float, _}), do: {:float, nil}
+  defp generalize_shape({:binary, value}), do: {:binary, value}
+  defp generalize_shape({:atom, value}), do: {:atom, value}
+
+  defp generalize_shape({:tuple, size, elements}) do
+    {:tuple, size, Enum.map(elements, &generalize_shape/1)}
+  end
+
+  defp generalize_shape({:map, fields, meta}) do
+    {:map, Enum.map(fields, fn {key, value} -> {key, generalize_shape(value)} end), meta}
+  end
+
+  defp generalize_shape({:struct, fields, type, meta}) do
+    {:struct, Enum.map(fields, fn {key, value} -> {key, generalize_shape(value)} end), type, meta}
+  end
+
+  defp generalize_shape({:list, :empty}), do: {:list, :empty}
+  defp generalize_shape({:list, element}), do: {:list, generalize_shape(element)}
+
+  defp generalize_shape({:union, variants}) do
+    {:union, Enum.map(variants, fn variant -> generalize_shape(variant) end)}
+  end
+
+  defp generalize_shape(shape), do: shape
+
+  defp list_tail_shape(nil, element_shape) do
+    if element_shape do
+      {:list, element_shape}
+    else
+      nil
+    end
+  end
+
+  defp list_tail_shape([], _element_shape), do: {:list, :empty}
+
+  defp list_tail_shape([_head | tail], element_shape) do
+    tail_shape = if element_shape, do: {:list, element_shape}, else: {:list, :empty}
+
+    case tail do
+      [] -> {:list, :empty}
+      _ -> {:union, [tail_shape, {:list, :empty}]}
+    end
+  end
 
   @doc """
   Converts a Module.Types.Descr to ElixirSense shape format.
@@ -920,6 +1034,8 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp to_shape_eager(descr) do
     if available?() do
       try do
+        descr = unwrap_dynamic(descr)
+
         cond do
           # Union types (highest priority to catch complex unions)
           union_types = extract_union(descr) ->
@@ -971,6 +1087,15 @@ defmodule ElixirSense.Core.ElixirTypes do
           # PIDs, ports, refs (check against well-known descriptors)
           Module.Types.Descr.equal?(descr, Module.Types.Descr.pid()) ->
             :pid
+
+          Module.Types.Descr.equal?(descr, Module.Types.Descr.port()) ->
+            :port
+
+          Module.Types.Descr.equal?(descr, Module.Types.Descr.reference()) ->
+            :reference
+
+          Module.Types.Descr.equal?(descr, Module.Types.Descr.none()) ->
+            :none
 
           # Integer
           Module.Types.Descr.equal?(descr, Module.Types.Descr.integer()) ->
@@ -1283,6 +1408,7 @@ defmodule ElixirSense.Core.ElixirTypes do
     # For M1, we'll be conservative and only handle clear cases
     case Map.get(descr, :list) do
       [{element_type, _tail, _constraints}] -> element_type
+      %{element: element_type} -> element_type
       _ -> nil
     end
   end
@@ -1308,12 +1434,10 @@ defmodule ElixirSense.Core.ElixirTypes do
 
     case Map.get(descr, :map) do
       [{:closed, fields, []}] when is_map(fields) ->
-        # Only handle maps with atom keys and no constraints
-        if Enum.all?(Map.keys(fields), &is_atom/1) do
-          fields
-        else
-          nil
-        end
+        fields
+
+      %{closed: field_list} when is_list(field_list) ->
+        Enum.into(field_list, %{})
 
       _ ->
         nil
@@ -1526,18 +1650,22 @@ defmodule ElixirSense.Core.ElixirTypes do
   Returns a map of `{function, arity} => {kind, signature}` for use with local_handler.
   """
   def build_local_sigs_map(metadata, module) when is_atom(module) and is_map(metadata) do
-    metadata.mods_funs_to_positions
-    |> Enum.filter(fn {{mod, _fun, _arity}, _info} -> mod == module end)
-    |> Enum.reduce(%{}, fn {{_mod, fun, arity}, info}, acc ->
-      case info do
-        %{elixir_types_sig: sig, type: type} when sig != nil ->
-          kind = get_def_kind_for_types(type)
-          Map.put(acc, {fun, arity}, {kind, sig})
+    signatures =
+      metadata.mods_funs_to_positions
+      |> Enum.filter(fn {{mod, _fun, _arity}, _info} -> mod == module end)
+      |> Enum.reduce(%{}, fn {{_mod, fun, arity}, info}, acc ->
+        case info do
+          %{elixir_types_sig: sig, type: type} when sig != nil ->
+            kind = get_def_kind_for_types(type)
+            Map.put(acc, {fun, arity}, {kind, sig})
 
-        _ ->
-          acc
-      end
-    end)
+          _ ->
+            acc
+        end
+      end)
+      |> Map.put(:__module__, module)
+
+    signatures
   end
 
   def build_local_sigs_map(_metadata, _module), do: %{}
@@ -1576,17 +1704,16 @@ defmodule ElixirSense.Core.ElixirTypes do
   @doc """
   Creates a remote handler closure that looks up ExCk signatures for remote calls.
 
-  The handler attempts to find type signatures in BEAM ExCk chunks and falls back
-  to ElixirSense metadata if unavailable.
+  The handler attempts to find type signatures in BEAM ExCk chunks.
   """
-  def remote_handler_from(metadata \\ nil) do
+  def remote_handler_from() do
     fn module, function, arity, _meta, _stack, context ->
       case ElixirSense.Core.ExCkReader.lookup_signature(module, function, arity) do
         {:ok, info} ->
           apply_exck_signature(info, context)
 
         :error ->
-          apply_metadata_fallback(metadata, module, function, arity, context)
+          :error
       end
     end
   end
@@ -1658,22 +1785,4 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp clause_return_type({_, return_type}), do: return_type
   defp clause_return_type(%{return: return_type}), do: return_type
   defp clause_return_type(_), do: nil
-
-  # Fallback to ElixirSense metadata for remote function typing
-  defp apply_metadata_fallback(nil, _module, _function, _arity, _context), do: false
-
-  defp apply_metadata_fallback(metadata, module, function, arity, context) do
-    # Look up function in ElixirSense metadata
-    case lookup_remote_in_metadata(metadata, module, function, arity) do
-      nil -> false
-      type_info -> {:def, type_info, context}
-    end
-  end
-
-  # Look up remote function in ElixirSense metadata (placeholder for M2)
-  defp lookup_remote_in_metadata(_metadata, _module, _function, _arity) do
-    # For M2, return nil to indicate no metadata available
-    # In future versions, this could integrate with ElixirSense's existing type info
-    nil
-  end
 end
