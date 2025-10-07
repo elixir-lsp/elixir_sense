@@ -1469,6 +1469,20 @@ defmodule ElixirSense.Core.ElixirTypes do
       {:closed, elements} when is_list(elements) and length(elements) <= 10 ->
         elements
 
+      # Open tuples with known elements - treat as minimum-size tuple
+      [{:open, elements}] when is_list(elements) and length(elements) > 0 and length(elements) <= 10 ->
+        elements
+
+      {:open, elements} when is_list(elements) and length(elements) > 0 and length(elements) <= 10 ->
+        elements
+
+      # Open tuple without elements (any tuple) cannot be converted
+      [{:open, []}] ->
+        nil
+
+      {:open, []} ->
+        nil
+
       _ ->
         nil
     end
@@ -1489,12 +1503,44 @@ defmodule ElixirSense.Core.ElixirTypes do
       %{closed: field_list} when is_list(field_list) ->
         Enum.into(field_list, %{})
 
+      # Open maps - extract known atom key fields
+      [{:open, fields, _}] when is_map(fields) ->
+        extract_atom_keys_from_map(fields)
+
+      {:open, fields} when is_map(fields) ->
+        extract_atom_keys_from_map(fields)
+
+      %{open: field_list} when is_list(field_list) ->
+        field_list
+        |> Enum.into(%{})
+        |> extract_atom_keys_from_map()
+
+      # Open map with domains (has default type) - extract atom key fields from second element
+      {_domains, fields} when is_map(fields) ->
+        extract_atom_keys_from_map(fields)
+
       _ ->
         nil
     end
   end
 
   defp extract_map_fields(_), do: nil
+
+  # Extract only atom key fields from an open map, filtering out domain keys
+  defp extract_atom_keys_from_map(fields) when is_map(fields) do
+    fields
+    |> Enum.reject(fn
+      {{:domain_key, _}, _} -> true
+      _ -> false
+    end)
+    |> Enum.into(%{})
+    |> case do
+      empty when map_size(empty) == 0 -> nil
+      non_empty -> non_empty
+    end
+  end
+
+  defp extract_atom_keys_from_map(_), do: nil
 
   defp convert_map_fields(fields) when is_map(fields) do
     try do
