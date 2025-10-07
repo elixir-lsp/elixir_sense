@@ -68,15 +68,17 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "types atom literals" do
-      result = ElixirTypes.of_expr(:test_atom)
-      assert {:ok, descr} = result
-      assert ElixirTypes.to_shape(descr) == {:atom, :test_atom}
+      for a <- [true, false, nil, :test_atom] do
+        result = ElixirTypes.of_expr(a)
+        assert {:ok, descr} = result
+        assert ElixirTypes.to_shape(descr) == {:atom, a}
+      end
     end
 
     test "types list literals" do
       # List with integers
       list_ast = [1, 2, 3]
-      result = ElixirTypes.of_expr(list_ast)
+      result = ElixirTypes.of_expr(list_ast) |> dbg
       assert {:ok, descr} = result
       assert ElixirTypes.to_shape(descr) == {:list, {:integer, nil}}
 
@@ -87,14 +89,39 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert ElixirTypes.to_shape(descr) == {:list, :empty}
     end
 
-    test "types tuple AST" do
-      # Tuple AST: {1, :ok}
-      tuple_ast = {:{}, [], [1, :ok]}
-      result = ElixirTypes.of_expr(tuple_ast)
+    test "types tuple-0 AST" do
+      tuple_ast = {:{}, [], []}
+      result = ElixirTypes.of_expr(tuple_ast) |> dbg
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(descr)
+      assert {:tuple, 0, []} = shape
+    end
+
+    test "types tuple-2 AST" do
+      tuple_ast = {1, :ok}
+      result = ElixirTypes.of_expr(tuple_ast) |> dbg
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert {:tuple, 2, elements} = shape
       assert elements == [{:integer, nil}, {:atom, :ok}]
+    end
+
+    test "types tuple-3 AST" do
+      tuple_ast = {:{}, [], [1, :ok, 1.2]}
+      result = ElixirTypes.of_expr(tuple_ast) |> dbg
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(descr)
+      assert {:tuple, 3, elements} = shape
+      assert elements == [{:integer, nil}, {:atom, :ok}, {:float, nil}]
+    end
+
+    test "types map empty AST" do
+      # Map AST: %{key: :value}
+      map_ast = {:%{}, [], []}
+      result = ElixirTypes.of_expr(map_ast)
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(descr)
+      assert {:map, [], nil} = shape
     end
 
     test "types map AST" do
@@ -105,6 +132,19 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       shape = ElixirTypes.to_shape(descr)
       assert {:map, fields, nil} = shape
       assert fields == [key: {:atom, :value}]
+    end
+
+    test "types struct AST" do
+      # Map AST: %{key: :value}
+      struct_ast = {:%, [],
+        [
+          Date,
+          {:%{}, [], [year: 2000, month: 1, day: 1]}
+        ]}
+      result = ElixirTypes.of_expr(struct_ast) |> dbg
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(descr)
+      assert {:struct, {:atom, Date}, [year: {integer, nil}, month: {integer, nil}, day: {integer, nil}], nil} = shape
     end
 
     test "handles complex nested structures" do
