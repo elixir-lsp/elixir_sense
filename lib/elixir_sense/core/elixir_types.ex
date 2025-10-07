@@ -1134,15 +1134,19 @@ defmodule ElixirSense.Core.ElixirTypes do
 
           # Float
           Module.Types.Descr.equal?(descr, Module.Types.Descr.float()) ->
-            {:float, nil}
+            :float
 
           # Binary
           Module.Types.Descr.equal?(descr, Module.Types.Descr.binary()) ->
-            {:binary, nil}
+            :binary
 
           # Empty list
           Module.Types.Descr.equal?(descr, Module.Types.Descr.empty_list()) ->
             {:list, :empty}
+
+          # Any atom (atom top type)
+          is_atom_top?(descr) ->
+            :atom
 
           # Single atom
           is_single_atom?(descr) ->
@@ -1157,20 +1161,26 @@ defmodule ElixirSense.Core.ElixirTypes do
 
           # Closed tuples with small arity
           tuple_elements = extract_tuple_elements(descr) ->
-            element_shapes = Enum.map(tuple_elements, &to_shape/1)
+            case tuple_elements do
+              :any_tuple ->
+                :tuple
 
-            if Enum.all?(element_shapes, &(&1 != nil)) do
-              {:tuple, length(element_shapes), element_shapes}
-            else
-              {:tuple, length(element_shapes), Enum.map(element_shapes, &(&1 || nil))}
+              elements when is_list(elements) ->
+                element_shapes =
+                  elements
+                  |> Enum.map(&to_shape/1)
+
+                if Enum.all?(element_shapes, &(&1 != nil)) do
+                  {:tuple, length(element_shapes), element_shapes}
+                else
+                  {:tuple, length(element_shapes), Enum.map(element_shapes, &(&1 || nil))}
+                end
             end
 
           # Closed maps with atom keys
           map_fields = extract_map_fields(descr) ->
-            case convert_map_fields(map_fields) do
-              nil -> nil
-              fields -> {:map, fields, nil}
-            end
+            fields = convert_map_fields(map_fields) || []
+            {:map, fields, nil}
 
           true ->
             nil
@@ -1416,6 +1426,18 @@ defmodule ElixirSense.Core.ElixirTypes do
     end
   end
 
+  defp is_atom_top?(descr) when is_map(descr) do
+    case Map.get(descr, :atom) do
+      {:negation, set} ->
+        :sets.is_empty(set)
+
+      _ ->
+        false
+    end
+  end
+
+  defp is_atom_top?(_), do: false
+
   defp is_single_atom?(descr) when is_map(descr) do
     case Map.get(descr, :atom) do
       {:union, set} ->
@@ -1476,12 +1498,12 @@ defmodule ElixirSense.Core.ElixirTypes do
       {:open, elements} when is_list(elements) and length(elements) > 0 and length(elements) <= 10 ->
         elements
 
-      # Open tuple without elements (any tuple) cannot be converted
+      # Open tuple without elements (any tuple) - return :any_tuple marker
       [{:open, []}] ->
-        nil
+        :any_tuple
 
       {:open, []} ->
-        nil
+        :any_tuple
 
       _ ->
         nil
@@ -1534,13 +1556,9 @@ defmodule ElixirSense.Core.ElixirTypes do
       _ -> false
     end)
     |> Enum.into(%{})
-    |> case do
-      empty when map_size(empty) == 0 -> nil
-      non_empty -> non_empty
-    end
   end
 
-  defp extract_atom_keys_from_map(_), do: nil
+  defp extract_atom_keys_from_map(_), do: %{}
 
   defp convert_map_fields(fields) when is_map(fields) do
     try do
@@ -1548,10 +1566,7 @@ defmodule ElixirSense.Core.ElixirTypes do
         for {key, value_descr} <- fields do
           value_descr = unwrap_dynamic(value_descr)
 
-          case to_shape(value_descr) do
-            nil -> {key, nil}
-            shape -> {key, shape}
-          end
+          {key, to_shape(value_descr)}
         end
 
       converted
