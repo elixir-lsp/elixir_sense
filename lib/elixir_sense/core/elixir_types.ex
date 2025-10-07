@@ -1317,7 +1317,7 @@ defmodule ElixirSense.Core.ElixirTypes do
     # Look for struct patterns in the descriptor
     if is_map(descr) do
       case Map.get(descr, :map) do
-        # Look for struct field pattern
+        # Look for struct field pattern - list format
         %{closed: fields} when is_list(fields) ->
           case Enum.find(fields, fn {key, _} -> key == :__struct__ end) do
             {:__struct__, struct_descr} ->
@@ -1327,6 +1327,18 @@ defmodule ElixirSense.Core.ElixirTypes do
 
             _ ->
               nil
+          end
+
+        # Look for struct field pattern - map format
+        {:closed, fields} when is_map(fields) ->
+          case Map.get(fields, :__struct__) do
+            nil ->
+              nil
+
+            struct_descr ->
+              struct_module = extract_struct_module(struct_descr)
+              other_fields = Map.delete(fields, :__struct__)
+              %{module: struct_module, fields: other_fields}
           end
 
         _ ->
@@ -1439,6 +1451,7 @@ defmodule ElixirSense.Core.ElixirTypes do
     # For M1, we'll be conservative and only handle clear cases
     case Map.get(descr, :list) do
       [{element_type, _tail, _constraints}] -> element_type
+      {element_type, _tail} -> element_type
       %{element: element_type} -> element_type
       _ -> nil
     end
@@ -1453,6 +1466,9 @@ defmodule ElixirSense.Core.ElixirTypes do
       [{:closed, elements}] when is_list(elements) and length(elements) <= 10 ->
         elements
 
+      {:closed, elements} when is_list(elements) and length(elements) <= 10 ->
+        elements
+
       _ ->
         nil
     end
@@ -1465,6 +1481,9 @@ defmodule ElixirSense.Core.ElixirTypes do
 
     case Map.get(descr, :map) do
       [{:closed, fields, []}] when is_map(fields) ->
+        fields
+
+      {:closed, fields} when is_map(fields) ->
         fields
 
       %{closed: field_list} when is_list(field_list) ->
@@ -1496,6 +1515,24 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp convert_struct_fields(fields) when is_list(fields) do
+    try do
+      converted =
+        for {key, value_descr} <- fields do
+          value_descr = unwrap_dynamic(value_descr)
+
+          case to_shape(value_descr) do
+            nil -> {key, nil}
+            shape -> {key, shape}
+          end
+        end
+
+      converted
+    rescue
+      _ -> nil
+    end
+  end
+
+  defp convert_struct_fields(fields) when is_map(fields) do
     try do
       converted =
         for {key, value_descr} <- fields do

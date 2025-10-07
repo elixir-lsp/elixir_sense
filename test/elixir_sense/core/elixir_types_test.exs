@@ -144,7 +144,8 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       result = ElixirTypes.of_expr(struct_ast) |> dbg
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
-      assert {:struct, {:atom, Date}, [year: {integer, nil}, month: {integer, nil}, day: {integer, nil}], nil} = shape
+      assert {:struct, fields, {:atom, Date}, nil} = shape
+      assert Enum.sort(fields) == [day: {:integer, nil}, month: {:integer, nil}, year: {:integer, nil}]
     end
 
     test "handles complex nested structures" do
