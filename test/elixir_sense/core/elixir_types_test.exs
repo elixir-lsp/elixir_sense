@@ -23,6 +23,107 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
   end
 
+  describe "shape conversions" do
+    setup do
+      # Save original value and enable feature
+      original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+
+      on_exit(fn ->
+        Application.put_env(:elixir_sense, :use_elixir_types, original_value)
+      end)
+
+      # Only run tests if Module.Types is available
+      if ElixirTypes.available?() do
+        :ok
+      else
+        :skip
+      end
+    end
+
+    test "handles none" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.none()) == :none
+    end
+
+    test "handles term" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.term()) == nil
+    end
+
+    test "handles dynamic" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.dynamic()) == nil
+    end
+
+    test "handles atom" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.atom(:foo)) == {:atom, :foo}
+      assert ElixirTypes.to_shape(Module.Types.Descr.atom()) == :atom
+    end
+
+    test "handles binary" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.binary()) == {:binary, nil}
+    end
+
+    test "handles closed map" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.closed_map([foo: "1"])) == {:binary, nil}
+    end
+
+    test "handles empty list" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.empty_list()) == {:list, :empty}
+    end
+
+    test "handles empty map" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.empty_map()) == {:map, [], nil}
+    end
+
+    test "handles integer" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.integer()) == {:integer, nil}
+    end
+
+    test "handles float" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.float()) == {:float, nil}
+    end
+
+    test "handles list" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.list(Module.Types.Descr.integer())) == {:union, [list: {:integer, nil}, list: :empty]}
+    end
+
+    test "handles nonempty list" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.non_empty_list(Module.Types.Descr.integer())) == {:list, {:integer, nil}}
+      # improper
+      assert ElixirTypes.to_shape(Module.Types.Descr.non_empty_list(Module.Types.Descr.integer(), Module.Types.Descr.integer())) == {:list, {:integer, nil}}
+    end
+
+    test "handles open map" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.open_map()) == {:map, [], nil}
+      # TODO: is this correct
+      assert ElixirTypes.to_shape(Module.Types.Descr.open_map([foo: "1"])) == {:map, [], nil}
+      # TODO: is this correct
+      assert ElixirTypes.to_shape(Module.Types.Descr.open_map([foo: "1"], :foo)) == {:map, [], nil}
+    end
+
+    test "handles open tuple" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.open_tuple([:ok, "1"])) == {:float, nil}
+      # TODO: is this correct
+      assert ElixirTypes.to_shape(Module.Types.Descr.open_tuple([:ok, "1"], :foo)) == {:float, nil}
+    end
+
+    test "handles pid" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.pid()) == :pid
+    end
+
+    test "handles port" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.port()) == :port
+    end
+
+    test "handles reference" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.reference()) == :reference
+    end
+
+    test "handles tuple" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.tuple()) == {:tuple, 0, []}
+      assert ElixirTypes.to_shape(Module.Types.Descr.tuple([:ok, 1])) == {:tuple, 2, [{:atom, :ok}, {:integer, nil}]}
+    end
+  end
+
   describe "expression typing" do
     test "of_expr/1 handles simple expressions safely" do
       # Should return :error if not enabled, or {:ok, descr} if available
@@ -78,7 +179,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "types list literals" do
       # List with integers
       list_ast = [1, 2, 3]
-      result = ElixirTypes.of_expr(list_ast) |> dbg
+      result = ElixirTypes.of_expr(list_ast)
       assert {:ok, descr} = result
       assert ElixirTypes.to_shape(descr) == {:list, {:integer, nil}}
 
@@ -87,6 +188,20 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       result = ElixirTypes.of_expr(empty_ast)
       assert {:ok, descr} = result
       assert ElixirTypes.to_shape(descr) == {:list, :empty}
+    end
+
+    test "types list mixed" do
+      list_ast = [1, :ok]
+      result = ElixirTypes.of_expr(list_ast) |> dbg
+      assert {:ok, descr} = result
+      assert ElixirTypes.to_shape(descr) == {:list, {:union, [{:integer, nil}, {:atom, :ok}]}}
+    end
+
+    test "types list improper" do
+      list_ast = [1 | :ok]
+      result = ElixirTypes.of_expr(list_ast) |> dbg
+      assert {:ok, descr} = result
+      assert ElixirTypes.to_shape(descr) == {:list, {:integer, nil}}
     end
 
     test "types tuple-0 AST" do
@@ -124,10 +239,19 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert {:map, [], nil} = shape
     end
 
-    test "types map AST" do
+    test "types closed map AST" do
       # Map AST: %{key: :value}
       map_ast = {:%{}, [], [key: :value]}
       result = ElixirTypes.of_expr(map_ast)
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(descr)
+      assert {:map, fields, nil} = shape
+      assert fields == [key: {:atom, :value}]
+    end
+
+    test "types open map AST" do
+      map_ast = {:%{}, [], [{"some", "other"}, key: :value]}
+      result = ElixirTypes.of_expr(map_ast) |> dbg
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert {:map, fields, nil} = shape
