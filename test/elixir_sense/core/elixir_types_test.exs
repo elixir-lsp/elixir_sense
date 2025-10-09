@@ -125,6 +125,70 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert ElixirTypes.to_shape(Module.Types.Descr.tuple()) == :tuple
       assert ElixirTypes.to_shape(Module.Types.Descr.tuple([Module.Types.Descr.atom([:ok]), Module.Types.Descr.integer()])) == {:tuple, 2, [{:atom, :ok}, {:integer, nil}]}
     end
+
+    test "handles boolean" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.boolean()) == {:union, [atom: false, atom: true]}
+    end
+
+    test "handles fun/0 (any function)" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.fun()) == :fun
+    end
+
+    test "handles fun/1 (function with specific arity)" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.fun(0)) == {:fun, 0}
+      assert ElixirTypes.to_shape(Module.Types.Descr.fun(1)) == {:fun, 1}
+      assert ElixirTypes.to_shape(Module.Types.Descr.fun(2)) == {:fun, 2}
+    end
+
+    test "handles fun/2 (function with arg and return types)" do
+      # (integer() -> atom())
+      fun_type = Module.Types.Descr.fun([Module.Types.Descr.integer()], Module.Types.Descr.atom())
+      assert ElixirTypes.to_shape(fun_type) == {:fun, [{:integer, nil}], :atom}
+
+      # (integer(), float() -> binary())
+      fun_type2 = Module.Types.Descr.fun(
+        [Module.Types.Descr.integer(), Module.Types.Descr.float()],
+        Module.Types.Descr.binary()
+      )
+      assert ElixirTypes.to_shape(fun_type2) == {:fun, [{:integer, nil}, :float], :binary}
+    end
+
+    test "handles fun_from_non_overlapping_clauses" do
+      # Multiple non-overlapping function clauses
+      clauses = [
+        {[Module.Types.Descr.integer()], Module.Types.Descr.atom()},
+        {[Module.Types.Descr.float()], Module.Types.Descr.binary()}
+      ]
+      fun_type = Module.Types.Descr.fun_from_non_overlapping_clauses(clauses)
+      # Should be a union of function types
+      shape = ElixirTypes.to_shape(fun_type)
+      assert match?({:fun_clauses, _}, shape)
+    end
+
+    test "handles fun_from_inferred_clauses" do
+      # Multiple potentially overlapping function clauses
+      clauses = [
+        {[Module.Types.Descr.integer()], Module.Types.Descr.atom()},
+        {[Module.Types.Descr.integer()], Module.Types.Descr.binary()}
+      ]
+      fun_type = Module.Types.Descr.fun_from_inferred_clauses(clauses)
+      shape = ElixirTypes.to_shape(fun_type)
+      # Should handle overlapping clauses
+      assert match?({:fun_clauses, _}, shape)
+    end
+
+    test "handles not_set" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.not_set()) == :not_set
+    end
+
+    test "handles if_set" do
+      # if_set makes a type optional in a map
+      optional_int = Module.Types.Descr.if_set(Module.Types.Descr.integer())
+      assert ElixirTypes.to_shape(optional_int) == {:optional, {:integer, nil}}
+
+      optional_atom = Module.Types.Descr.if_set(Module.Types.Descr.atom())
+      assert ElixirTypes.to_shape(optional_atom) == {:optional, :atom}
+    end
   end
 
   describe "expression typing" do

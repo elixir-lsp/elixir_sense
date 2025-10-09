@@ -1065,10 +1065,33 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp to_shape_eager(descr) do
     if available?() do
       try do
-        descr = unwrap_dynamic(descr)
+        # Check for fun_from_inferred_clauses BEFORE unwrapping
+        # (has both :dynamic and :fun keys, unwrapping would lose this info)
+        fun_inferred_shape =
+          if Map.has_key?(descr, :dynamic) and Map.has_key?(descr, :fun) do
+            case Map.get(descr, :dynamic) do
+              %{fun: {args, return_type}} when is_list(args) ->
+                arg_shapes = Enum.map(args, &to_shape/1)
+                return_shape = to_shape(return_type)
+                {:fun_clauses, [{arg_shapes, return_shape}]}
+              _ -> nil
+            end
+          else
+            nil
+          end
 
-        cond do
-          # Union types (highest priority to catch complex unions)
+        if fun_inferred_shape do
+          fun_inferred_shape
+        else
+          descr = unwrap_dynamic(descr)
+
+          cond do
+            # if_set - optional type (check before union, as if_set creates a union with not_set)
+            is_if_set?(descr) ->
+              inner_type = extract_if_set_type(descr)
+              {:optional, to_shape(inner_type)}
+
+            # Union types (highest priority to catch complex unions)
           union_types = extract_union(descr) ->
             shapes = Enum.map(union_types, &to_shape_eager/1) |> Enum.reject(&is_nil/1)
 
@@ -1144,6 +1167,14 @@ defmodule ElixirSense.Core.ElixirTypes do
           Module.Types.Descr.equal?(descr, Module.Types.Descr.empty_list()) ->
             {:list, :empty}
 
+          # not_set
+          Module.Types.Descr.equal?(descr, Module.Types.Descr.not_set()) ->
+            :not_set
+
+          # Function types
+          fun_info = extract_function_info(descr) ->
+            fun_info
+
           # Any atom (atom top type)
           is_atom_top?(descr) ->
             :atom
@@ -1184,6 +1215,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
           true ->
             nil
+          end
         end
       rescue
         _ -> nil
@@ -1559,6 +1591,82 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp extract_atom_keys_from_map(_), do: %{}
+
+  # Check if descriptor is if_set (optional type)
+  defp is_if_set?(descr) when is_map(descr) do
+    Map.has_key?(descr, :optional) and Map.get(descr, :optional) == 1 and
+      map_size(descr) > 1
+  end
+
+  defp is_if_set?(_), do: false
+
+  # Extract the inner type from if_set
+  defp extract_if_set_type(descr) when is_map(descr) do
+    descr
+    |> Map.delete(:optional)
+  end
+
+  # Extract function information from descriptor
+  # Note: fun_from_inferred_clauses is handled at the top of to_shape_eager
+  # before unwrapping dynamic
+  defp extract_function_info(descr) when is_map(descr) do
+    descr = unwrap_dynamic(descr)
+
+    case Map.get(descr, :fun) do
+      # fun() - top function type
+      :bdd_top ->
+        :fun
+
+      # fun(arity) or fun(args, return)
+      {args, return_type} when is_list(args) ->
+        arity = length(args)
+
+        # Check if this is just an arity constraint (args are all none, return is :term)
+        if Enum.all?(args, &Module.Types.Descr.equal?(&1, Module.Types.Descr.none())) and
+             return_type == :term do
+          {:fun, arity}
+        else
+          # fun(args, return) - function with specific signature
+          arg_shapes = Enum.map(args, &to_shape/1)
+          return_shape = to_shape(return_type)
+          {:fun, arg_shapes, return_shape}
+        end
+
+      # fun_from_non_overlapping_clauses
+      # Represented as BDD tuple with multiple clauses
+      bdd when is_tuple(bdd) ->
+        clauses = extract_function_clauses(bdd)
+        {:fun_clauses, clauses}
+
+      _ ->
+        nil
+    end
+  end
+
+  defp extract_function_info(_), do: nil
+
+  # Extract function clauses from BDD representation
+  defp extract_function_clauses(bdd) when is_tuple(bdd) do
+    # BDD is a tuple of clauses, each clause is {args, return}
+    # We'll flatten it to extract all clauses
+    flatten_bdd_clauses(bdd, [])
+  end
+
+  defp flatten_bdd_clauses({args, return}, acc) when is_list(args) do
+    # Single clause
+    clause = {Enum.map(args, &to_shape/1), to_shape(return)}
+    [clause | acc]
+  end
+
+  defp flatten_bdd_clauses({clause1, clause2, _, _}, acc) do
+    # Multiple clauses in BDD format
+    acc = flatten_bdd_clauses(clause1, acc)
+    flatten_bdd_clauses(clause2, acc)
+  end
+
+  defp flatten_bdd_clauses(:bdd_bot, acc), do: acc
+  defp flatten_bdd_clauses(:bdd_top, acc), do: acc
+  defp flatten_bdd_clauses(_, acc), do: acc
 
   defp convert_map_fields(fields) when is_map(fields) do
     try do
