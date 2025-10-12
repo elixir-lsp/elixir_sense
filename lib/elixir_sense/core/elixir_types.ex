@@ -182,10 +182,17 @@ defmodule ElixirSense.Core.ElixirTypes do
   ## Parameters
 
   - `ast` - The AST node to type (must be valid Elixir AST)
-  - `module` - Optional module context (defaults to nil)
-  - `function` - Optional function context (defaults to nil)
-  - `file` - Optional file context (defaults to nil)
-  - `mode` - Typing mode, :dynamic (default) or :traversal
+  - `opts_or_module` - Either a keyword list of options or module context (defaults to [])
+
+  ## Options
+
+  - `:module` - Optional module context (defaults to nil)
+  - `:function` - Optional function context (defaults to nil)
+  - `:file` - Optional file context (defaults to nil)
+  - `:mode` - Typing mode, :dynamic (default) or :traversal
+  - `:local_sigs_map` - Optional local signatures map
+  - `:metadata` - Optional metadata
+  - `:variables` - Optional map of variables with keys `{name, version}`
 
   ## Returns
 
@@ -198,6 +205,10 @@ defmodule ElixirSense.Core.ElixirTypes do
       iex> ElixirTypes.of_expr(42)
       {:ok, %{bitmap: 4}}
 
+      # Type a variable with known type
+      iex> ElixirTypes.of_expr({:foo, [version: 0], nil}, variables: %{{:foo, 0}: => Module.Types.Descr.integer()})
+      {:ok, %{bitmap: 4}}
+
       # Type a list
       iex> ElixirTypes.of_expr([1, 2, 3])
       {:ok, %{list: [{%{bitmap: 4}, %{bitmap: 2}, []}]}}
@@ -207,15 +218,33 @@ defmodule ElixirSense.Core.ElixirTypes do
       {:ok, %{tuple: [closed: [%{bitmap: 4}, %{atom: {:union, %{ok: []}}}]]}}
 
   """
-  def of_expr(
+  def of_expr(ast, opts_or_module \\ [])
+
+  def of_expr(ast, opts) when is_list(opts) do
+    module = Keyword.get(opts, :module)
+    function = Keyword.get(opts, :function)
+    file = Keyword.get(opts, :file)
+    mode = Keyword.get(opts, :mode, :dynamic)
+    local_sigs_map = Keyword.get(opts, :local_sigs_map)
+    metadata = Keyword.get(opts, :metadata)
+    variables = Keyword.get(opts, :variables)
+
+    of_expr_impl(ast, module, function, file, mode, local_sigs_map, metadata, variables)
+  end
+
+  def of_expr(ast, module) when is_atom(module) or is_nil(module) do
+    of_expr_impl(ast, module, nil, nil, :dynamic, nil, nil, nil)
+  end
+
+  defp of_expr_impl(
         ast,
-        module \\ nil,
-        function \\ nil,
-        file \\ nil,
-        mode \\ :dynamic,
-        local_sigs_map \\ nil,
-        metadata \\ nil,
-        variables \\ nil
+        module,
+        function,
+        file,
+        mode,
+        local_sigs_map,
+        metadata,
+        variables
       ) do
     track_performance(:of_expr, fn ->
       if available?() do

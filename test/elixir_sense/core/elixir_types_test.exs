@@ -391,15 +391,14 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "types variables" do
       variable_ast = {:foo, [version: 0], nil}
-      # TODO: pass type
-      result = ElixirTypes.of_expr(variable_ast) |> dbg
-      # TODO: find out why returned shape is dynamic term
-      # should we pass a local resolver?
+      result = ElixirTypes.of_expr(variable_ast)
+      # dynamic when var not know
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert shape == nil
 
-      result = ElixirTypes.of_expr(variable_ast, variables: %{foo: Module.Types.Descr.integer()}) |> dbg
+      result = ElixirTypes.of_expr(variable_ast, variables: %{{:foo, 0} => Module.Types.Descr.integer()})
+      # concrete type when known
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert shape == {:integer, nil}
