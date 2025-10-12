@@ -289,6 +289,8 @@ defmodule ElixirSense.Core.TypeInference do
     function = Map.get(env_context, :function)
     file = Map.get(env_context, :file)
 
+    variables = variables_from_env_context(env_context)
+
     if map_size(signatures) > 0 do
       ElixirSense.Core.ElixirTypes.of_expr(
         ast,
@@ -297,10 +299,20 @@ defmodule ElixirSense.Core.TypeInference do
         file,
         :dynamic,
         signatures,
-        metadata
+        metadata,
+        variables
       )
     else
-      ElixirSense.Core.ElixirTypes.of_expr(ast, module, function, file, :dynamic, nil, metadata)
+      ElixirSense.Core.ElixirTypes.of_expr(
+        ast,
+        module,
+        function,
+        file,
+        :dynamic,
+        nil,
+        metadata,
+        variables
+      )
     end
   end
 
@@ -310,6 +322,34 @@ defmodule ElixirSense.Core.TypeInference do
     # In M3, this could be enhanced to extract from AST context
     ElixirSense.ElixirTypes
   end
+
+  # Build ElixirTypes variables map from the elixir_sense compiler env_context
+  defp variables_from_env_context(env_context) when is_map(env_context) do
+    case Map.get(env_context, :vars) do
+      vars when is_list(vars) ->
+        Enum.reduce(vars, %{}, fn
+          %ElixirSense.Core.State.VarInfo{name: name, version: version, type: type}, acc when is_atom(name) and is_integer(version) ->
+            # Coerce known elixir_sense var type to a Module.Types.Descr when possible
+            descr =
+              case type do
+                {:atom, atom} when is_atom(atom) -> Module.Types.Descr.atom([atom])
+                {:struct, _fields, module} when is_atom(module) ->
+                  Module.Types.Descr.closed_map([{:__struct__, Module.Types.Descr.atom([module])}])
+                {:map, _kw} -> Module.Types.Descr.open_map()
+                _ -> Module.Types.Descr.dynamic()
+              end
+
+            Map.put(acc, {name, version}, descr)
+
+          _, acc ->
+            acc
+        end)
+
+      _ -> %{}
+    end
+  end
+
+  defp variables_from_env_context(_), do: %{}
 
   defp remote_call_ast?({{:., _, [_target, fun]}, _, args}) when is_atom(fun) and is_list(args),
     do: true

@@ -359,6 +359,62 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert elements == [{:list, {:integer, nil}}, {:atom, :ok}]
     end
 
+    test "types local call" do
+      call_ast = {:foo, [], []}
+      result = ElixirTypes.of_expr(call_ast)
+      # TODO: find out why returned shape is dynamic term
+      # should we pass a local resolver?
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(call_ast)
+      assert shape == nil
+    end
+
+    test "types remote call" do
+      call_ast = {{:., [], [Foo, :bar]}, [], []}
+      result = ElixirTypes.of_expr(call_ast)
+      # TODO: find out why returned shape is dynamic term
+      # should we pass a remote resolver?
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(call_ast)
+      assert shape == nil
+    end
+
+    test "types anonymous call" do
+      call_ast = {{:., [], [{:foo, [version: 0], nil}]}, [], []}
+      result = ElixirTypes.of_expr(call_ast)
+      # TODO: find out why returned shape is dynamic term
+      # should we pass a local resolver?
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(descr)
+      assert shape == nil
+    end
+
+    test "types variables" do
+      variable_ast = {:foo, [version: 0], nil}
+      # TODO: pass type
+      result = ElixirTypes.of_expr(variable_ast) |> dbg
+      # TODO: find out why returned shape is dynamic term
+      # should we pass a local resolver?
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(descr)
+      assert shape == nil
+
+      result = ElixirTypes.of_expr(variable_ast, variables: %{foo: Module.Types.Descr.integer()}) |> dbg
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(descr)
+      assert shape == {:integer, nil}
+    end
+
+    test "types property access" do
+      call_ast = {{:., [], [{:foo, [version: 0], nil}, :bar]}, [no_parens: true], []}
+      result = ElixirTypes.of_expr(call_ast)
+      # TODO: find out why returned shape is dynamic term
+      # should we pass a local resolver?
+      assert {:ok, descr} = result
+      shape = ElixirTypes.to_shape(call_ast)
+      assert shape == nil
+    end
+
     test "handles unknown expressions gracefully" do
       # Try with a complex AST that might not be fully supported
       complex_ast = {:some_unknown_call, [], []}
