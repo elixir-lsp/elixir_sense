@@ -550,7 +550,9 @@ defmodule ElixirSense.Core.ElixirTypes do
               )
 
             case result do
-              {:ok, var_shapes} ->
+              {:ok, var_shapes, var_descrs} ->
+                # Keep raw Module.Types descriptors for vars so the compiler can store them
+                maybe_store_var_descriptors(opts, var_descrs)
                 {:ok, var_shapes}
 
               :error ->
@@ -616,7 +618,7 @@ defmodule ElixirSense.Core.ElixirTypes do
       end
 
       case Module.Types.Pattern.of_match(pattern_ast, expected_fun, full_match, stack, context) do
-        {_type, %{vars: vars_map}} ->
+        {_type, %{vars: vars_map} = out_ctx} ->
           # Enhanced variable shape extraction with type refinement
           var_shapes =
             extract_refined_var_shapes(
@@ -627,7 +629,8 @@ defmodule ElixirSense.Core.ElixirTypes do
               value_ast
             )
 
-          {:ok, var_shapes}
+          var_descrs = vars_ctx_to_descrs(out_ctx)
+          {:ok, var_shapes, var_descrs}
 
         _ ->
           :error
@@ -646,23 +649,49 @@ defmodule ElixirSense.Core.ElixirTypes do
         Module.Types.Expr.of_expr(value_ast, expected_descr, full_match, stack, ctx)
       end
 
-      {_type, %{vars: vars_map}} =
+      {_type, %{vars: vars_map} = out_ctx} =
         Module.Types.Pattern.of_match(pattern_ast, expected_fun, full_match, stack, context)
 
-      {:ok,
-       extract_refined_var_shapes(
-         vars_map,
-         targets,
-         pattern_ast,
-         expected_descr,
-         value_ast
-       )}
+      var_shapes =
+        extract_refined_var_shapes(
+          vars_map,
+          targets,
+          pattern_ast,
+          expected_descr,
+          value_ast
+        )
+
+      var_descrs = vars_ctx_to_descrs(out_ctx)
+      {:ok, var_shapes, var_descrs}
     rescue
       _ -> :error
     catch
       _ -> :error
     end
   end
+
+  # If caller passes a state via opts, persist raw Module.Types var descriptors
+  defp maybe_store_var_descriptors(opts, var_descrs) when is_map(var_descrs) do
+    case Keyword.get(opts, :state) do
+      %ElixirSense.Core.Compiler.State{} = state ->
+        ElixirSense.Core.Compiler.State.merge_inferred_elixir_types(state, var_descrs)
+        :ok
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp maybe_store_var_descriptors(_opts, _), do: :ok
+
+  # Transform Module.Types context vars into a map of {name, version} => descr
+  defp vars_ctx_to_descrs(%{vars: vars_map}) when is_map(vars_map) do
+    Enum.into(vars_map, %{}, fn {version, %{name: name, type: descr}} ->
+      {{name, version}, descr}
+    end)
+  end
+
+  defp vars_ctx_to_descrs(_), do: %{}
 
   # Enhanced variable shape extraction with additional type refinement
   defp extract_refined_var_shapes(vars_map, targets, pattern_ast, expected_descr, value_ast) do

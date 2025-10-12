@@ -1390,6 +1390,24 @@ defmodule ElixirSense.Core.Compiler.State do
     %{state | vars_info: [h | t]}
   end
 
+  @doc """
+  Merge Module.Types variable descriptors into current scope VarInfo structs.
+
+  `inferred_descrs` should be a map of `{var_name, version} => Module.Types.Descr.t()`
+  """
+  def merge_inferred_elixir_types(state, inferred_descrs) do
+    [h | t] = state.vars_info
+
+    h =
+      Enum.reduce(inferred_descrs, h, fn {key, descr}, acc ->
+        Map.update(acc, key, nil, fn %VarInfo{} = v ->
+          %{v | elixir_types_descr: descr}
+        end)
+      end)
+
+    %{state | vars_info: [h | t]}
+  end
+
   def extract_position(meta) do
     line = Keyword.get(meta, :line, 0)
 
