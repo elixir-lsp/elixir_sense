@@ -139,10 +139,26 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   @doc """
   Creates a Module.Types context for typing operations.
+
+  Optionally accepts `variables`, a map describing known variables to seed
+  the typing context with. This prevents crashes when typing variable ASTs
+  and allows callers to provide best-effort types.
+
+  Accepted `variables` formats (keys are `{name, version}`):
+  - `%{{atom, non_neg_integer} => Module.Types.Descr.t()}`
+  - `%{{atom, non_neg_integer} => :dynamic | :term}`
+  - `%{{atom, non_neg_integer} => var_shape}` where `var_shape` is a minimal
+    ElixirSense variable shape (e.g. `{:atom, atom}`, `{:map, keyword}`,
+    `{:struct, keyword, module}`)
   """
-  def init_context() do
+  def init_context(variables \\ nil) do
     if available?() do
-      Module.Types.context()
+      base = Module.Types.context()
+
+      case variables_to_context_vars(variables) do
+        nil -> base
+        vars_map when is_map(vars_map) -> %{base | vars: vars_map}
+      end
     else
       nil
     end
@@ -198,7 +214,8 @@ defmodule ElixirSense.Core.ElixirTypes do
         file \\ nil,
         mode \\ :dynamic,
         local_sigs_map \\ nil,
-        metadata \\ nil
+        metadata \\ nil,
+        variables \\ nil
       ) do
     track_performance(:of_expr, fn ->
       if available?() do
@@ -214,7 +231,10 @@ defmodule ElixirSense.Core.ElixirTypes do
                   else
                     # Full Module.Types processing
                     stack = init_stack(module, function, file, mode, local_sigs_map, metadata)
-                    context = init_context()
+                    # Seed context with provided variables or infer from AST (dynamic types)
+                    auto_vars = variables_from_ast(ast)
+                    effective_vars = merge_variables(variables, auto_vars)
+                    context = init_context(effective_vars)
 
                     if stack && context do
                       {descr, _context} =
@@ -239,10 +259,10 @@ defmodule ElixirSense.Core.ElixirTypes do
             descriptor ->
               {:ok, descriptor}
           end
-        rescue
-          _ -> :error
         catch
-          _ -> :error
+          kind, payload ->
+            Logger.warning("Unable to infer type of #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}")
+            :error
         end
       else
         :error
@@ -483,7 +503,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
           if stack do
             stack = %{stack | refine_vars: true}
-            context = init_context()
+            context = init_context(Keyword.get(opts, :variables))
 
             {pattern_ast, value_ast, full_match} = normalize_match(pattern_ast, match_ast)
             expected_descr = expected_descr || Module.Types.Descr.term()
@@ -1723,6 +1743,87 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   defp unwrap_dynamic(%{dynamic: dynamic}) when is_map(dynamic), do: dynamic
   defp unwrap_dynamic(descr), do: descr
+
+  # -- Variables seeding helpers ------------------------------------------------
+
+  # Convert user-provided variables map into Module.Types context vars map.
+  # Input keys are {name, version}; output keys are version only.
+  defp variables_to_context_vars(nil), do: nil
+
+  defp variables_to_context_vars(vars) when is_map(vars) do
+    Enum.reduce(vars, %{}, fn
+      {{name, version}, type_like}, acc when is_atom(name) and is_integer(version) ->
+        type_descr = coerce_var_type(type_like)
+        data = %{type: type_descr, name: name, context: nil, off_traces: []}
+        Map.put(acc, version, data)
+
+      _other, acc ->
+        acc
+    end)
+  end
+
+  defp variables_to_context_vars(_), do: nil
+
+  # Accept Module.Types.Descr, sentinel atoms, or ElixirSense minimal shapes
+  # and coerce into a Module.Types.Descr.t()
+  defp coerce_var_type(%{} = descr), do: descr
+  defp coerce_var_type(:dynamic), do: Module.Types.Descr.dynamic()
+  defp coerce_var_type(:term), do: Module.Types.Descr.term()
+  defp coerce_var_type(nil), do: Module.Types.Descr.dynamic()
+
+  defp coerce_var_type({:atom, atom}) when is_atom(atom),
+    do: Module.Types.Descr.atom([atom])
+
+  defp coerce_var_type({:map, fields}) when is_list(fields) do
+    # Best-effort closed map from atom keys; values default to term()
+    pairs = for {k, _v} when is_atom(k) <- fields, do: {k, Module.Types.Descr.term()}
+    Module.Types.Descr.closed_map(pairs)
+  end
+
+  defp coerce_var_type({:struct, _fields, module}) when is_atom(module) do
+    # Represent struct as map with __struct__
+    Module.Types.Descr.closed_map([{:__struct__, Module.Types.Descr.atom([module])}])
+  end
+
+  defp coerce_var_type(_), do: Module.Types.Descr.dynamic()
+
+  # Collect variables from AST and seed them as dynamic() types
+  defp variables_from_ast(ast) do
+    try do
+      {_ast, acc} =
+        Macro.prewalk(ast, %{}, fn
+          {name, meta, ctx} = node, acc when is_atom(name) and is_list(meta) and is_atom(ctx) ->
+            new_acc =
+              case Keyword.fetch(meta, :version) do
+                {:ok, version} when is_integer(version) ->
+                  if valid_variable_name?(name) do
+                    Map.put(acc, {name, version}, Module.Types.Descr.dynamic())
+                  else
+                    acc
+                  end
+
+                _ ->
+                  acc
+              end
+
+            {node, new_acc}
+
+          node, acc ->
+            {node, acc}
+        end)
+
+      acc
+    rescue
+      _ -> %{}
+    end
+  end
+
+  defp valid_variable_name?(name) when is_atom(name),
+    do: name not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_]
+
+  defp merge_variables(nil, other) when is_map(other), do: other
+  defp merge_variables(other, nil) when is_map(other), do: other
+  defp merge_variables(%{} = a, %{} = b), do: Map.merge(a, b, fn _k, v1, _v2 -> v1 end)
 
   defp targets_from_opts(opts) do
     case Keyword.get(opts, :target_keys) || Keyword.get(opts, :target_versions) do
