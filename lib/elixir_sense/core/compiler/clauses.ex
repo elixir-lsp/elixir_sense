@@ -896,13 +896,18 @@ defmodule ElixirSense.Core.Compiler.Clauses do
         function = env && env.function
         file = file_for_meta(condition_ast) || module_file_clauses(module)
 
+        # Extract metadata and variables from state
+        metadata = state.mods_funs_to_positions
+        variables = variables_from_state(state)
+
         # Use ElixirTypes to analyze the condition for type refinements
-        case ElixirSense.Core.ElixirTypes.of_expr(
-               condition_ast,
-               module,
-               function,
-               file,
-               :dynamic
+        case ElixirSense.Core.ElixirTypes.of_expr(condition_ast,
+               module: module,
+               function: function,
+               file: file,
+               mode: :dynamic,
+               metadata: metadata,
+               variables: variables
              ) do
           {:ok, _condition_descr} ->
             # For cond, we primarily care about finding typed variables in the condition
@@ -1054,4 +1059,34 @@ defmodule ElixirSense.Core.Compiler.Clauses do
       clause_vars
     end
   end
+
+  # Build ElixirTypes variables map from the compiler state
+  defp variables_from_state(%ElixirSense.Core.Compiler.State{vars_info: vars_info}) when is_list(vars_info) do
+    Enum.reduce(vars_info, %{}, fn
+      %ElixirSense.Core.State.VarInfo{name: name, version: version, type: type}, acc
+      when is_atom(name) and is_integer(version) ->
+        # Coerce known elixir_sense var type to a Module.Types.Descr when possible
+        descr =
+          case type do
+            {:atom, atom} when is_atom(atom) ->
+              Module.Types.Descr.atom([atom])
+
+            {:struct, _fields, {:atom, module}, _} when is_atom(module) ->
+              Module.Types.Descr.closed_map([{:__struct__, Module.Types.Descr.atom([module])}])
+
+            {:map, _kw} ->
+              Module.Types.Descr.open_map()
+
+            _ ->
+              Module.Types.Descr.dynamic()
+          end
+
+        Map.put(acc, {name, version}, descr)
+
+      _, acc ->
+        acc
+    end)
+  end
+
+  defp variables_from_state(_), do: %{}
 end
