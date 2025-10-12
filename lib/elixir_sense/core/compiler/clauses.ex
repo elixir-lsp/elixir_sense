@@ -764,11 +764,30 @@ defmodule ElixirSense.Core.Compiler.Clauses do
                function,
                file,
                :dynamic,
-               target_keys: target_keys
+               target_keys: target_keys,
+               state: state
              ) do
           {:ok, refined_vars} when map_size(refined_vars) > 0 ->
             # Merge ElixirTypes refinements with existing clause vars
-            merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
+            merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
+
+            # Also persist raw Module.Types descriptors for these vars into state
+            case ElixirSense.Core.ElixirTypes.of_match_descr(
+                   pattern_ast,
+                   expected_descr,
+                   {:variable_match, :__case_subject__},
+                   module,
+                   function,
+                   file,
+                   :dynamic
+                 ) do
+              {:ok, var_descrs} ->
+                state = State.merge_inferred_elixir_types(state, var_descrs)
+                state
+              _ -> :ok
+            end
+
+            merged
 
           _ ->
             clause_vars
@@ -956,11 +975,30 @@ defmodule ElixirSense.Core.Compiler.Clauses do
                function,
                file,
                :dynamic,
-               target_keys: target_keys
+               target_keys: target_keys,
+               state: s
              ) do
           {:ok, refined_vars} when map_size(refined_vars) > 0 ->
             # Merge ElixirTypes refinements with existing clause vars
-            merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
+            merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
+
+            # Also persist raw Module.Types descriptors for these vars into state
+            case ElixirSense.Core.ElixirTypes.of_match_descr(
+                   pattern_ast,
+                   expected_descr,
+                   {:variable_match, :__with_expression__},
+                   module,
+                   function,
+                   file,
+                   :dynamic
+                 ) do
+              {:ok, var_descrs} ->
+                s = State.merge_inferred_elixir_types(s, var_descrs)
+                s
+              _ -> :ok
+            end
+
+            merged
 
           _ ->
             clause_vars
@@ -999,11 +1037,30 @@ defmodule ElixirSense.Core.Compiler.Clauses do
                function,
                file,
                :dynamic,
-               target_keys: target_keys
+               target_keys: target_keys,
+               state: sr
              ) do
           {:ok, refined_vars} when map_size(refined_vars) > 0 ->
             # Merge ElixirTypes refinements with existing clause vars
-            merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
+            merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
+
+            # Also persist raw Module.Types descriptors for these vars into state
+            case ElixirSense.Core.ElixirTypes.of_match_descr(
+                   pattern_ast,
+                   expected_descr,
+                   {:variable_match, :__rescue_exception__},
+                   module,
+                   function,
+                   file,
+                   :dynamic
+                 ) do
+              {:ok, var_descrs} ->
+                sr = State.merge_inferred_elixir_types(sr, var_descrs)
+                sr
+              _ -> :ok
+            end
+
+            merged
 
           _ ->
             clause_vars
@@ -1042,11 +1099,30 @@ defmodule ElixirSense.Core.Compiler.Clauses do
                function,
                file,
                :dynamic,
-               target_keys: target_keys
+               target_keys: target_keys,
+               state: sr
              ) do
           {:ok, refined_vars} when map_size(refined_vars) > 0 ->
             # Merge ElixirTypes refinements with existing clause vars
-            merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
+            merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
+
+            # Also persist raw Module.Types descriptors for these vars into state
+            case ElixirSense.Core.ElixirTypes.of_match_descr(
+                   pattern_ast,
+                   expected_descr,
+                   {:variable_match, :__catch_value__},
+                   module,
+                   function,
+                   file,
+                   :dynamic
+                 ) do
+              {:ok, var_descrs} ->
+                sr = State.merge_inferred_elixir_types(sr, var_descrs)
+                sr
+              _ -> :ok
+            end
+
+            merged
 
           _ ->
             clause_vars
@@ -1064,24 +1140,9 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   # Build ElixirTypes variables map from the compiler state
   defp variables_from_state(%ElixirSense.Core.Compiler.State{vars_info: vars_info}) when is_list(vars_info) do
     Enum.reduce(vars_info, %{}, fn
-      %ElixirSense.Core.State.VarInfo{name: name, version: version, type: type}, acc
+      %ElixirSense.Core.State.VarInfo{name: name, version: version, elixir_types_descr: descr}, acc
       when is_atom(name) and is_integer(version) ->
-        # Coerce known elixir_sense var type to a Module.Types.Descr when possible
-        descr =
-          case type do
-            {:atom, atom} when is_atom(atom) ->
-              Module.Types.Descr.atom([atom])
-
-            {:struct, _fields, {:atom, module}, _} when is_atom(module) ->
-              Module.Types.Descr.closed_map([{:__struct__, Module.Types.Descr.atom([module])}])
-
-            {:map, _kw} ->
-              Module.Types.Descr.open_map()
-
-            _ ->
-              Module.Types.Descr.dynamic()
-          end
-
+        descr = descr || Module.Types.Descr.dynamic()
         Map.put(acc, {name, version}, descr)
 
       _, acc ->

@@ -322,17 +322,8 @@ defmodule ElixirSense.Core.TypeInference do
     case Map.get(env_context, :vars) do
       vars when is_list(vars) ->
         Enum.reduce(vars, %{}, fn
-          %ElixirSense.Core.State.VarInfo{name: name, version: version, type: type}, acc when is_atom(name) and is_integer(version) ->
-            # Coerce known elixir_sense var type to a Module.Types.Descr when possible
-            descr =
-              case type do
-                {:atom, atom} when is_atom(atom) -> Module.Types.Descr.atom([atom])
-                {:struct, _fields, module} when is_atom(module) ->
-                  Module.Types.Descr.closed_map([{:__struct__, Module.Types.Descr.atom([module])}])
-                {:map, _kw} -> Module.Types.Descr.open_map()
-                _ -> Module.Types.Descr.dynamic()
-              end
-
+          %ElixirSense.Core.State.VarInfo{name: name, version: version, elixir_types_descr: descr}, acc when is_atom(name) and is_integer(version) ->
+            descr = descr || Module.Types.Descr.dynamic()
             Map.put(acc, {name, version}, descr)
 
           _, acc ->
