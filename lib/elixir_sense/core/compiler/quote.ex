@@ -6,6 +6,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
             file: nil,
             context: nil,
             op: :escape,
+            # :escape | :escape_and_prune | {:struct, module} | :quote
             aliases_hygiene: nil,
             imports_hygiene: nil,
             unquote: true,
@@ -128,16 +129,22 @@ defmodule ElixirSense.Core.Compiler.Quote do
   defp default(:generated), do: false
 
   def escape(expr, op, unquote, state) do
-    q = %__MODULE__{
-      line: true,
-      file: nil,
-      op: op,
-      unquote: unquote
-    }
+    try do
+      q = %__MODULE__{
+        line: true,
+        file: nil,
+        op: op,
+        unquote: unquote
+      }
 
-    case unquote do
-      true -> do_quote(expr, q, state)
-      false -> do_escape(expr, q, state)
+      case unquote do
+        true -> do_quote(expr, q, state)
+        false -> do_escape(expr, q, state)
+      end
+    catch
+      _kind, _reason ->
+        # elixir reraises here with trimmed stacktrace
+        {nil, state}
     end
   end
 
@@ -536,23 +543,36 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   defp do_escape(map, q, state) when is_map(map) do
     with %{__struct__: module} when is_atom(module) <- map,
-      true <- Code.ensure_loaded?(module),
-      true <- function_exported?(module, :__escape__, 1) do
-        module.__escape__(map)
+         true <- q.op != {:struct, module},
+         {:module, ^module} <- Code.ensure_loaded(module),
+         true <- function_exported?(module, :__escape__, 1) do
+      case q.op do
+        {:struct, _module} ->
+          # elixir raises here error about custom escaping rules in struct defaults
+          {{:%{}, [], []}, state}
+
+        _ ->
+          expr = module.__escape__(map)
+
+          # elixir validates if expr is valid AST
+          # we skip validation
+          {expr, state}
+      end
     else
       _ ->
-      # elixir errors if value is reference
-      keys = map
-      |> Map.to_list
-      |> Enum.filter(fn
-        {_k, v} when is_reference(v) -> false
-        {_k, v} when is_tuple(v) ->
-          not find_tuple_ref(v, 0)
-        _ -> true
-      end)
-      |> Enum.sort
-      {tt, state} = do_escape(keys, q, state)
-      {{:%{}, [], tt}, state}
+        # elixir errors if value is reference
+        keys =
+          map
+          |> Map.to_list()
+          |> Enum.filter(fn
+            {_k, v} when is_reference(v) -> false
+            {_k, v} when is_tuple(v) -> not find_tuple_ref(v, 0)
+            _ -> true
+          end)
+          |> Enum.sort()
+
+        {tt, state} = do_escape(keys, q, state)
+        {{:%{}, [], tt}, state}
     end
   end
 
@@ -579,7 +599,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
       l = Enum.reverse(t, [h])
       do_quote_tail(l, q, state)
     catch
-      _ ->
+      _, _ ->
         {l, r} = reverse_improper(t, [h])
         {tl, state} = do_quote_splice(l, q, [], [], state)
         {tr, state} = do_escape(r, q, state)

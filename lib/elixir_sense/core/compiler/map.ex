@@ -21,11 +21,10 @@ defmodule ElixirSense.Core.Compiler.Map do
             struct = load_struct(meta, e_left, [assocs], se, ee)
             keys = [:__struct__ | assoc_keys]
             without_keys = Elixir.Map.drop(struct, keys)
+            |> Elixir.Map.to_list
+            |> Enum.sort
 
-            {struct_assocs, se} =
-              Compiler.Macro.escape(Enum.sort(Elixir.Map.to_list(without_keys)), se)
-
-            {e_struct_assocs, sa, ea} = Compiler.expand(struct_assocs, se, ee)
+            {struct_assocs, se} = Compiler.Quote.escape(without_keys, :escape, false, se)
 
             {{:%, meta, [e_left, {:%{}, map_meta, struct_assocs ++ assocs}]}, se, ee}
 
