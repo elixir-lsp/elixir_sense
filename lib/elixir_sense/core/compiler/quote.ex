@@ -528,7 +528,17 @@ defmodule ElixirSense.Core.Compiler.Quote do
   end
 
   defp do_escape(map, q, state) when is_map(map) do
-    {tt, state} = do_quote(Enum.sort(Map.to_list(map)), q, state)
+    # elixir errors if value is reference
+    keys = map
+    |> Map.to_list
+    |> Enum.filter(fn
+      {_k, v} when is_reference(v) -> false
+      {_k, v} when is_tuple(v) ->
+        not find_tuple_ref(v, 0)
+      _ -> true
+    end)
+    |> Enum.sort
+    {tt, state} = do_quote(keys, q, state)
     {{:%{}, [], tt}, state}
   end
 
@@ -570,6 +580,14 @@ defmodule ElixirSense.Core.Compiler.Quote do
   defp do_escape(_other, _, state) do
     # elixir raises here ArgumentError
     {nil, state}
+  end
+
+  defp find_tuple_ref(tuple, index) when index >= tuple_size(tuple), do: false
+  defp find_tuple_ref(tuple, index) do
+    case elem(tuple, index) do
+      ref when is_reference(ref) -> true
+      _ -> find_tuple_ref(tuple, index + 1)
+    end
   end
 
   defp reverse_improper([h | t], acc), do: reverse_improper(t, [h | acc])
