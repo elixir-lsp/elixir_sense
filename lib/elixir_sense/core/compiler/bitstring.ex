@@ -40,7 +40,10 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
         alignment,
         require_size
       ) do
-    {e_left, {sl, original_s}, el} = expand_expr(left, fun, s, e)
+    # We don't want to consider variables added in the Left pattern inside the Right specs
+    {%{vars: before_vars}, _} = s
+
+    {e_left, {%{vars: after_vars} = sl, original_s}, el} = expand_expr(left, fun, s, e)
 
     # elixir validates expression here
 
@@ -55,7 +58,7 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
       end
 
     {e_right, e_alignment, ss, es} =
-      expand_specs(e_type, meta, right, sl, original_s, el, expect_size)
+      expand_specs(e_type, meta, right, %{sl | vars: before_vars}, original_s, el, expect_size)
 
     e_acc = concat_or_prepend_bitstring(meta, e_left, e_right, acc)
 
@@ -64,7 +67,7 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
       fun,
       t,
       e_acc,
-      {ss, original_s},
+      {%{ss | vars: after_vars}, original_s},
       es,
       alignment(alignment, e_alignment),
       require_size
