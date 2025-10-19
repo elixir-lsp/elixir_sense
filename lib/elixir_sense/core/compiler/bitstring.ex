@@ -14,8 +14,6 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
         {e_args, alignment, {sa, _}, ea} =
           expand(meta, &expand_match/3, args, [], {s, s}, e, 0, require_size)
 
-        # elixir validates if there is no nested match
-
         {{:<<>>, [{:alignment, alignment} | meta], e_args}, sa, ea}
 
       _ ->
@@ -43,6 +41,8 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
         require_size
       ) do
     {e_left, {sl, original_s}, el} = expand_expr(left, fun, s, e)
+
+    # elixir validates expression here
 
     match_or_require_size = require_size or is_match_size(t, el)
     e_type = expr_type(e_left)
@@ -74,6 +74,8 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
   def expand(bitstr_meta, fun, [h | t], acc, s, e, alignment, require_size) do
     meta = extract_meta(h, bitstr_meta)
     {e_left, {ss, original_s}, es} = expand_expr(h, fun, s, e)
+
+    # elixir validates expression here
 
     e_type = expr_type(e_left)
     e_right = infer_spec(e_type, meta)
