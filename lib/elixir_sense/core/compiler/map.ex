@@ -2,15 +2,21 @@ defmodule ElixirSense.Core.Compiler.Map do
   alias ElixirSense.Core.Compiler
 
   def expand_struct(meta, left, {:%{}, map_meta, map_args}, s, %{context: context} = e) do
-    clean_map_args = clean_struct_key_from_map_args(map_args)
+    clean_map_args = delete_struct_key(map_args)
 
     {[e_left, e_right], se, ee} =
       Compiler.expand_args([left, {:%{}, map_meta, clean_map_args}], s, e)
 
     case validate_struct(e_left, context) do
       true when is_atom(e_left) ->
-        case extract_struct_assocs(e_right) do
-          {:expand, map_meta, assocs} when context != :match ->
+        case e_right do
+          {:"%{}", _map_meta, [{:|, _, [_, assocs]}]} ->
+            assocs = sanitize_assocs(assocs)
+            # elixir warns about deprecated struct update
+            :elixir_env.trace({:struct_expansion, meta, e_left, assocs}, e)
+            {{:"%", meta, [e_left, e_right]}, se, ee}
+          {:"%{}", map_meta, assocs} when context != :match ->
+            assocs = sanitize_assocs(assocs)
             assoc_keys = Enum.map(assocs, fn {k, _} -> k end)
             struct = load_struct(meta, e_left, [assocs], se, ee)
             keys = [:__struct__ | assoc_keys]
@@ -21,7 +27,8 @@ defmodule ElixirSense.Core.Compiler.Map do
 
             {{:%, meta, [e_left, {:%{}, map_meta, struct_assocs ++ assocs}]}, se, ee}
 
-          {_, _, assocs} ->
+          {:"%{}", _map_meta, assocs} ->
+            assocs = sanitize_assocs(assocs)
             :elixir_env.trace({:struct_expansion, meta, e_left, assocs}, e)
             # elixir validates assocs against struct keys
             # we don't need to validate keys
@@ -70,12 +77,12 @@ defmodule ElixirSense.Core.Compiler.Map do
     {{:%{}, meta, e_args}, se, ee}
   end
 
-  defp clean_struct_key_from_map_args([{:|, pipe_meta, [left, map_assocs]}]) do
-    [{:|, pipe_meta, [left, delete_struct_key(map_assocs)]}]
+  defp delete_struct_key([{:|, pipe_meta, [left, map_assocs]}]) do
+    [{:|, pipe_meta, [left, delete_struct_key_assoc(map_assocs)]}]
   end
 
-  defp clean_struct_key_from_map_args(map_assocs) do
-    delete_struct_key(map_assocs)
+  defp delete_struct_key(map_assocs) do
+    delete_struct_key_assoc(map_assocs)
   end
 
   defp sanitize_kv(kv, %{context: context}) do
@@ -133,21 +140,7 @@ defmodule ElixirSense.Core.Compiler.Map do
     Enum.filter(list, &match?({k, _} when is_atom(k), &1))
   end
 
-  defp extract_struct_assocs({:%{}, meta, [{:|, _, [_, assocs]}]}) do
-    {:update, meta, delete_struct_key(sanitize_assocs(assocs))}
-  end
-
-  defp extract_struct_assocs({:%{}, meta, assocs}) do
-    {:expand, meta, delete_struct_key(sanitize_assocs(assocs))}
-  end
-
-  defp extract_struct_assocs(right) do
-    # elixir raises here non_map_after_struct
-    # try to recover from error by wrapping the expression in map
-    extract_struct_assocs(wrap_in_fake_map(right))
-  end
-
-  defp delete_struct_key(assocs) do
+  defp delete_struct_key_assoc(assocs) do
     Keyword.delete(assocs, :__struct__)
   end
 
