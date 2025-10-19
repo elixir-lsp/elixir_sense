@@ -2476,22 +2476,27 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_multi_alias_call(kind, meta, base, refs, opts, state, env) do
     {base_ref, state, env} = expand_without_aliases_report(base, state, env)
 
-    fun = fn
-      {:__aliases__, _, ref}, state, env ->
-        expand({kind, meta, [Module.concat([base_ref | ref]), opts]}, state, env)
+    if is_atom(base_ref) do
+      fun = fn
+        {:__aliases__, _, ref}, state, env ->
+          expand({kind, meta, [Module.concat([base_ref | ref]), opts]}, state, env)
 
-      ref, state, env when is_atom(ref) ->
-        expand({kind, meta, [Module.concat([base_ref, ref]), opts]}, state, env)
+        ref, state, env when is_atom(ref) ->
+          expand({kind, meta, [Module.concat([base_ref, ref]), opts]}, state, env)
 
-      other, s, e ->
-        # elixir raises here
-        # expected_compile_time_module
-        # we search for cursor
-        {_, s, _} = expand(other, s, e)
-        {other, s, e}
+        other, s, e ->
+          # elixir raises here
+          # expected_compile_time_module
+          # we search for cursor
+          {_, s, _} = expand(other, s, e)
+          {other, s, e}
+      end
+
+      map_fold(fun, state, env, refs)
+    else
+      # elixir raises invalid_alias here
+      {{kind, meta, []}, state, env}
     end
-
-    map_fold(fun, state, env, refs)
   end
 
   defp overridable_name(name, count) when is_integer(count), do: :"#{name} (overridable #{count})"
