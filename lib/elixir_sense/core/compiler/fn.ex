@@ -186,9 +186,8 @@ defmodule ElixirSense.Core.Compiler.Fn do
   defp escape({:&, meta, [pos]}, dict) when is_integer(pos) and pos > 0 do
     # This might pollute user space but is unlikely because variables
     # named :"&1" are not valid syntax.
-    var = {:"&#{pos}", meta, nil}
-    {var, :orddict.store(pos, var, dict)}
-
+    # NOTE: ElixirSense intentionally uses :"&#{pos}" instead of :capture atom
+    # (Elixir 1.17+ uses :capture) because :"&#{pos}" provides better variable intelligence
     case :orddict.find(pos, dict) do
       {:ok, var} ->
         {var, dict}
@@ -196,7 +195,7 @@ defmodule ElixirSense.Core.Compiler.Fn do
       :error ->
         # elixir uses here elixir_module:next_counter(?key(E, module))
         # but we are not compiling and do not need to keep count in module scope
-        # elixir 1.17 also renames the var to `capture`
+        # elixir 1.19 added {:capture, pos} metadata
         next = System.unique_integer()
         var = {:"&#{pos}", [{:counter, next}, {:capture, pos} | meta], nil}
         {var, :orddict.store(pos, var, dict)}

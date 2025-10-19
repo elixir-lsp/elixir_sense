@@ -974,24 +974,38 @@ defmodule ElixirSense.Core.CompilerTest do
           {{{:., dot_meta, target}, call_meta, args}, state}
 
         {:fn, meta, args} = _node, state ->
-          meta =
-            if Version.match?(System.version(), "< 1.19.0") do
-              Keyword.delete(meta, :capture)
-            else
-              meta
-            end
-
+          # Always remove {:capture, true} metadata for normalization
+          # Both ElixirSense and Elixir >= 1.19 produce it, so normalize it away
+          meta = Keyword.delete(meta, :capture)
           {{:fn, meta, args}, state}
 
         {atom, meta, nil} = node, state when is_atom(atom) ->
-          # elixir changes the name to capture and does different counter tracking
+          # ElixirSense intentionally uses :"&#{pos}" instead of :capture
+          # Convert to :capture to match Elixir 1.17+ behavior
           node =
-            with "&" <> int <- to_string(atom), {_, ""} <- Integer.parse(int) do
+            with "&" <> int <- to_string(atom), {pos, ""} <- Integer.parse(int) do
+              # Normalize metadata
               meta =
-                Keyword.delete(meta, :counter)
-                |> Keyword.delete(:capture)
+                if Version.match?(System.version(), "< 1.17.0") do
+                  # Elixir < 1.17 used :"&#{pos}" with no special metadata
+                  Keyword.delete(meta, :counter) |> Keyword.delete(:capture)
+                else
+                  # Elixir >= 1.17 uses :capture atom
+                  if Version.match?(System.version(), "< 1.19.0") do
+                    # Elixir 1.17-1.18: no {:capture, pos} metadata
+                    Keyword.delete(meta, :counter) |> Keyword.delete(:capture)
+                  else
+                    # Elixir >= 1.19: has {:capture, pos} metadata, remove :counter only
+                    Keyword.delete(meta, :counter)
+                  end
+                end
 
-              {:capture, meta, nil}
+              # Convert to :capture for Elixir 1.17+
+              if Version.match?(System.version(), "< 1.17.0") do
+                {atom, meta, nil}
+              else
+                {:capture, meta, nil}
+              end
             else
               _ -> node
             end
@@ -1019,27 +1033,36 @@ defmodule ElixirSense.Core.CompilerTest do
           {{:->, meta, args}, state}
 
         {:fn, meta, args} = _node, state ->
-          meta =
-            if Version.match?(System.version(), ">= 1.19.0-rc.0") do
-              Keyword.delete(meta, :capture)
-            else
-              meta
-            end
-
+          # Normalize :capture metadata - always remove for comparison
+          # (ElixirSense normalizes this too)
+          meta = Keyword.delete(meta, :capture)
           {{:fn, meta, args}, state}
 
         {:capture, meta, nil} = _node, state ->
-          # elixir changes the name to capture and does different counter tracking
-          meta = Keyword.delete(meta, :counter)
-
+          # Normalize capture variable metadata
+          # Always remove :counter and optionally :capture depending on version
           meta =
-            if Version.match?(System.version(), ">= 1.19.0-rc.0") do
-              Keyword.delete(meta, :capture)
+            if Version.match?(System.version(), "< 1.19.0") do
+              # Elixir < 1.19: remove both counter and capture metadata
+              Keyword.delete(meta, :counter) |> Keyword.delete(:capture)
             else
-              meta
+              # Elixir >= 1.19: keep :capture but remove :counter
+              Keyword.delete(meta, :counter)
             end
 
           {{:capture, meta, nil}, state}
+
+        {atom, meta, nil} = node, state when is_atom(atom) ->
+          # Handle old :"&#{pos}" format from Elixir < 1.18
+          node =
+            with "&" <> int <- to_string(atom), {_, ""} <- Integer.parse(int) do
+              meta = Keyword.delete(meta, :counter) |> Keyword.delete(:capture)
+              {atom, meta, nil}
+            else
+              _ -> node
+            end
+
+          {node, state}
 
         node, state ->
           {node, state}
