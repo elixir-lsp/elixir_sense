@@ -528,18 +528,25 @@ defmodule ElixirSense.Core.Compiler.Quote do
   end
 
   defp do_escape(map, q, state) when is_map(map) do
-    # elixir errors if value is reference
-    keys = map
-    |> Map.to_list
-    |> Enum.filter(fn
-      {_k, v} when is_reference(v) -> false
-      {_k, v} when is_tuple(v) ->
-        not find_tuple_ref(v, 0)
-      _ -> true
-    end)
-    |> Enum.sort
-    {tt, state} = do_quote(keys, q, state)
-    {{:%{}, [], tt}, state}
+    with %{__struct__: module} when is_atom(module) <- map,
+      true <- Code.ensure_loaded?(module),
+      true <- function_exported?(module, :__escape__, 1) do
+        module.__escape__(map)
+    else
+      _ ->
+      # elixir errors if value is reference
+      keys = map
+      |> Map.to_list
+      |> Enum.filter(fn
+        {_k, v} when is_reference(v) -> false
+        {_k, v} when is_tuple(v) ->
+          not find_tuple_ref(v, 0)
+        _ -> true
+      end)
+      |> Enum.sort
+      {tt, state} = do_quote(keys, q, state)
+      {{:%{}, [], tt}, state}
+    end
   end
 
   defp do_escape([], _, state), do: {[], state}
