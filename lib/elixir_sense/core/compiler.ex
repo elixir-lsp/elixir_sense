@@ -447,9 +447,11 @@ defmodule ElixirSense.Core.Compiler do
 
     es = es |> State.add_current_env_to_line(meta, eq)
 
+    binding_meta = Keyword.delete(meta, :column)
+
     e_binding =
       for {k, v} <- binding do
-        {:{}, [], [:=, [], [{:{}, [], [k, meta, e_context]}, v]]}
+        {:{}, [], [:=, [], [{:{}, [], [k, binding_meta, e_context]}, v]]}
       end
 
     e_binding_quoted =

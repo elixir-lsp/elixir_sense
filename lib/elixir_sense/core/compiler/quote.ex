@@ -130,17 +130,12 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   def escape(expr, op, unquote, state) do
     try do
-      q = %__MODULE__{
+      do_quote(expr, %__MODULE__{
         line: true,
         file: nil,
         op: op,
         unquote: unquote
-      }
-
-      case unquote do
-        true -> do_quote(expr, q, state)
-        false -> do_escape(expr, q, state)
-      end
+      }, state)
     catch
       _kind, _reason ->
         # elixir reraises here with trimmed stacktrace
@@ -172,7 +167,8 @@ defmodule ElixirSense.Core.Compiler.Quote do
           meta
       end
 
-    {{:{}, [], [:quote, meta(new_meta, q), [t_arg]]}, state}
+    {quoted_meta, state} = meta(new_meta, q, state)
+    {{:{}, [], [:quote, quoted_meta, [t_arg]]}, state}
   end
 
   defp do_quote({:quote, meta, [opts, arg]}, %__MODULE__{} = q, state) when is_list(meta) do
@@ -188,7 +184,8 @@ defmodule ElixirSense.Core.Compiler.Quote do
           meta
       end
 
-    {{:{}, [], [:quote, meta(new_meta, q), [t_opts, t_arg]]}, state}
+    {quoted_meta, state} = meta(new_meta, q, state)
+    {{:{}, [], [:quote, quoted_meta, [t_opts, t_arg]]}, state}
   end
 
   defp do_quote(
@@ -235,7 +232,8 @@ defmodule ElixirSense.Core.Compiler.Quote do
         e -> import_meta(meta, name, 0, q, e)
       end
 
-    {{:{}, [], [name, meta(import_meta, q), q.context]}, state}
+    {quoted_meta, state} = meta(import_meta, q, state)
+    {{:{}, [], [name, quoted_meta, q.context]}, state}
   end
 
   # cursor
@@ -371,7 +369,8 @@ defmodule ElixirSense.Core.Compiler.Quote do
       end)
 
     # elixir does not emit remote_function in quoted as AST is meaningless
-    {{{:., meta, [:elixir_quote, :dot]}, meta, [meta(meta, q) | Enum.reverse(tall_reverse)]},
+    {quoted_meta, state} = meta(meta, q, state)
+    {{{:., meta, [:elixir_quote, :dot]}, meta, [quoted_meta | Enum.reverse(tall_reverse)]},
      state}
   end
 
@@ -382,7 +381,8 @@ defmodule ElixirSense.Core.Compiler.Quote do
   defp do_quote_tuple(left, meta, right, q, state) do
     {t_left, state} = do_quote(left, q, state)
     {t_right, state} = do_quote(right, q, state)
-    {{:{}, [], [t_left, meta(meta, q), t_right]}, state}
+    {quoted_meta, state} = meta(meta, q, state)
+    {{:{}, [], [t_left, quoted_meta, t_right]}, state}
   end
 
   defp do_quote_simple_list([], prev, _, state), do: {[prev], state}
@@ -443,8 +443,12 @@ defmodule ElixirSense.Core.Compiler.Quote do
     {{:., meta, [:elixir_quote, fun]}, meta, args}
   end
 
-  defp meta(meta, q) do
-    generated(keep(Keyword.delete(meta, :column), q), q)
+  defp meta(meta, %__MODULE__{op: :quote} = q, state) do
+    {generated(keep(Keyword.delete(meta, :column), q), q), state}
+  end
+
+  defp meta(meta, q, state) do
+    do_quote(meta, q, state)
   end
 
   defp generated(meta, %__MODULE__{generated: true}), do: [{:generated, true} | meta]
@@ -512,19 +516,19 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   defp do_escape({left, meta, right}, q = %{op: :escape_and_prune}, state) when is_list(meta) do
     tm = for {k, v} <- meta, k == :no_parens or k == :line or k == :delimiter, do: {k, v}
-    {tl, state} = do_escape(left, q, state)
-    {tr, state} = do_escape(right, q, state)
+    {tl, state} = do_quote(left, q, state)
+    {tr, state} = do_quote(right, q, state)
     {{:{}, [], [tl, tm, tr]}, state}
   end
 
   defp do_escape({left, right}, q, state) do
-    {tl, state} = do_escape(left, q, state)
-    {tr, state} = do_escape(right, q, state)
+    {tl, state} = do_quote(left, q, state)
+    {tr, state} = do_quote(right, q, state)
     {{tl, tr}, state}
   end
 
   defp do_escape(tuple, q, state) when is_tuple(tuple) do
-    {tt, state} = do_escape(Tuple.to_list(tuple), q, state)
+    {tt, state} = do_quote(Tuple.to_list(tuple), q, state)
     {{:{}, [], tt}, state}
   end
 
@@ -560,19 +564,17 @@ defmodule ElixirSense.Core.Compiler.Quote do
       end
     else
       _ ->
-        # elixir errors if value is reference
-        keys =
+        {tt, state} =
           map
           |> Map.to_list()
-          |> Enum.filter(fn
-            {_k, v} when is_reference(v) -> false
-            {_k, v} when is_tuple(v) -> not find_tuple_ref(v, 0)
-            _ -> true
-          end)
           |> Enum.sort()
+          |> Enum.reduce({[], state}, fn {k, v}, {acc, s} ->
+            {k_quoted, s} = do_quote(k, q, s)
+            {v_quoted, s} = do_quote(v, q, s)
+            {[{k_quoted, v_quoted} | acc], s}
+          end)
 
-        {tt, state} = do_escape(keys, q, state)
-        {{:%{}, [], tt}, state}
+        {{:%{}, [], Enum.reverse(tt)}, state}
     end
   end
 
@@ -580,17 +582,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   defp do_escape([h | t], %__MODULE__{unquote: false} = q, state) do
     {eh, state} = do_escape(h, q, state)
-
-    case is_list(t) do
-      true ->
-        {et, state} = do_escape(t, q, state)
-        {[eh | et], state}
-
-      # improper list
-      false ->
-        {et, state} = do_escape(t, q, state)
-        {[{:|, [], [eh, et]}], state}
-    end
+    do_quote_simple_list(t, eh, q, state)
   end
 
   defp do_escape([h | t], q, state) do
@@ -602,7 +594,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
       _, _ ->
         {l, r} = reverse_improper(t, [h])
         {tl, state} = do_quote_splice(l, q, [], [], state)
-        {tr, state} = do_escape(r, q, state)
+        {tr, state} = do_quote(r, q, state)
         {update_last(tl, fn x -> {:|, [], [x, tr]} end), state}
     end
   end
@@ -624,14 +616,6 @@ defmodule ElixirSense.Core.Compiler.Quote do
   defp do_escape(_other, _, state) do
     # elixir raises here ArgumentError
     {nil, state}
-  end
-
-  defp find_tuple_ref(tuple, index) when index >= tuple_size(tuple), do: false
-  defp find_tuple_ref(tuple, index) do
-    case elem(tuple, index) do
-      ref when is_reference(ref) -> true
-      _ -> find_tuple_ref(tuple, index + 1)
-    end
   end
 
   defp reverse_improper([h | t], acc), do: reverse_improper(t, [h | acc])
