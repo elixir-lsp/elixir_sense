@@ -43,21 +43,21 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
           end
       end
     end
-  end
 
-  defp wrap_expansion(receiver, expander, _meta, _name, _arity, env, _opts) do
-    fn expansion_meta, args ->
-      quoted = expander.(args, env)
-      next = :elixir_module.next_counter(env.module)
+    defp wrap_expansion(receiver, expander, _meta, _name, _arity, env, _opts) do
+      fn expansion_meta, args ->
+        quoted = expander.(args, env)
+        next = :elixir_module.next_counter(env.module)
 
-      if Version.match?(System.version(), ">= 1.14.0-dev") do
-        :elixir_quote.linify_with_context_counter(expansion_meta, {receiver, next}, quoted)
-      else
-        :elixir_quote.linify_with_context_counter(
-          expansion_meta |> Keyword.get(:line, 0),
-          {receiver, next},
-          quoted
-        )
+        if Version.match?(System.version(), ">= 1.14.0-dev") do
+          :elixir_quote.linify_with_context_counter(expansion_meta, {receiver, next}, quoted)
+        else
+          :elixir_quote.linify_with_context_counter(
+            expansion_meta |> Keyword.get(:line, 0),
+            {receiver, next},
+            quoted
+          )
+        end
       end
     end
   end
@@ -549,6 +549,16 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
   end
 
   defmodule Dispatch do
+    if Version.match?(System.version(), ">= 1.14.0-dev") do
+      defp local_for(meta, name, arity, kinds, env) do
+        :elixir_def.local_for(meta, name, arity, kinds, env)
+      end
+    else
+      defp local_for(_meta, name, arity, kinds, env) do
+        :elixir_def.local_for(env.module, name, arity, kinds)
+      end
+    end
+
     def expand_import(meta, name, arity, e, extra, allow_locals, trace) do
       tuple = {name, arity}
       module = e.module
@@ -568,11 +578,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
                 false
 
               true ->
-                if Version.match?(System.version(), ">= 1.14.0-dev") do
-                  :elixir_def.local_for(meta, name, arity, [:defmacro, :defmacrop], e)
-                else
-                  :elixir_def.local_for(e.module, name, arity, [:defmacro, :defmacrop])
-                end
+                local_for(meta, name, arity, [:defmacro, :defmacrop], e)
 
               fun when is_function(fun, 0) ->
                 allow_locals.()

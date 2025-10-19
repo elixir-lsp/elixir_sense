@@ -11,10 +11,12 @@ defmodule ElixirSense.Core.Compiler.Rewrite do
 
   defp do_rewrite(_, :erlang, _, :-, _, [arg], _s) when is_number(arg), do: {:ok, -arg}
 
-  defp do_rewrite(:match, receiver, dot_meta, right, meta, e_args, s) do
-    if function_exported?(:elixir_rewrite, :match_rewrite, 5) do
+  if function_exported?(:elixir_rewrite, :match_rewrite, 5) do
+    defp do_rewrite(:match, receiver, dot_meta, right, meta, e_args, s) do
       :elixir_rewrite.match_rewrite(receiver, dot_meta, right, meta, e_args)
-    else
+    end
+  else
+    defp do_rewrite(:match, receiver, dot_meta, right, meta, e_args, s) do
       :elixir_rewrite.match(receiver, dot_meta, right, meta, e_args, s)
     end
   end
@@ -24,11 +26,13 @@ defmodule ElixirSense.Core.Compiler.Rewrite do
       :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args)
     end
   else
-    defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
-      if function_exported?(:elixir_rewrite, :match_rewrite, 5) do
+    if function_exported?(:elixir_rewrite, :match_rewrite, 5) do
+      defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
         # elixir uses guard context for error messages
         :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args, "guard")
-      else
+      end
+    else
+      defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
         :elixir_rewrite.guard(receiver, dot_meta, right, meta, e_args, s)
       end
     end

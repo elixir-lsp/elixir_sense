@@ -12,8 +12,6 @@ defmodule ElixirSense.MixProject do
       start_permanent: Mix.env() == :prod,
       prune_code_paths: Mix.env() == :prod,
       compilers: [:yecc] ++ Mix.compilers(),
-      test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [coveralls: :test, "coveralls.detail": :test, "coveralls.html": :test],
       dialyzer: [
         flags: [
           :unmatched_returns,
@@ -42,16 +40,9 @@ defmodule ElixirSense.MixProject do
     [
       # TODO: Uncomment this when we have a credo version that supports OTP 28
       # {:credo, "~> 1.0", only: [:dev], runtime: false},
-    ] ++
-      if System.get_env("HEX_MIRROR") != "https://cdn.jsdelivr.net/hex" do
-        [
-          {:excoveralls, "~> 0.17", only: :test},
-          {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
-          {:ex_doc, "~> 0.18", only: [:dev], runtime: false}
-        ]
-      else
-        []
-      end
+      {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
+      {:ex_doc, "~> 0.18", only: [:dev], runtime: false}
+    ]
   end
 
   defp docs do
