@@ -5,7 +5,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
   defstruct line: false,
             file: nil,
             context: nil,
-            op: :none,
+            op: :escape,
             aliases_hygiene: nil,
             imports_hygiene: nil,
             unquote: true,
@@ -74,7 +74,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
     generated = validate_runtime(:generated, generated)
 
     q = %__MODULE__{
-      op: :add_context,
+      op: :quote,
       aliases_hygiene: e,
       imports_hygiene: e,
       line: v_line,
@@ -128,16 +128,17 @@ defmodule ElixirSense.Core.Compiler.Quote do
   defp default(:generated), do: false
 
   def escape(expr, op, unquote, state) do
-    do_quote(
-      expr,
-      %__MODULE__{
-        line: true,
-        file: nil,
-        op: op,
-        unquote: unquote
-      },
-      state
-    )
+    q = %__MODULE__{
+      line: true,
+      file: nil,
+      op: op,
+      unquote: unquote
+    }
+
+    case unquote do
+      true -> do_quote(expr, q, state)
+      false -> do_escape(expr, q, state)
+    end
   end
 
   def quote({:unquote_splicing, _, [_]} = expr, %__MODULE__{unquote: true} = q, state) do
@@ -157,7 +158,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
     new_meta =
       case q do
-        %__MODULE__{op: :add_context, context: context} ->
+        %__MODULE__{op: :quote, context: context} ->
           keystore(:context, meta, context)
 
         _ ->
@@ -173,7 +174,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
     new_meta =
       case q do
-        %__MODULE__{op: :add_context, context: context} ->
+        %__MODULE__{op: :quote, context: context} ->
           keystore(:context, meta, context)
 
         _ ->
@@ -219,7 +220,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   # Vars
 
-  defp do_quote({name, meta, nil}, %__MODULE__{op: :add_context} = q, state)
+  defp do_quote({name, meta, nil}, %__MODULE__{op: :quote} = q, state)
        when is_atom(name) and is_list(meta) do
     import_meta =
       case q.imports_hygiene do
@@ -313,7 +314,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   # Everything else
 
-  defp do_quote(other, q = %{op: op}, state) when op != :add_context do
+  defp do_quote(other, q = %{op: op}, state) when op != :quote do
     do_escape(other, q, state)
   end
 
@@ -502,15 +503,21 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   defp annotate_def(other, _context), do: other
 
-  defp do_escape({left, meta, right}, q = %{op: :prune_metadata}, state) when is_list(meta) do
+  defp do_escape({left, meta, right}, q = %{op: :escape_and_prune}, state) when is_list(meta) do
     tm = for {k, v} <- meta, k == :no_parens or k == :line or k == :delimiter, do: {k, v}
-    {tl, state} = do_quote(left, q, state)
-    {tr, state} = do_quote(right, q, state)
+    {tl, state} = do_escape(left, q, state)
+    {tr, state} = do_escape(right, q, state)
     {{:{}, [], [tl, tm, tr]}, state}
   end
 
+  defp do_escape({left, right}, q, state) do
+    {tl, state} = do_escape(left, q, state)
+    {tr, state} = do_escape(right, q, state)
+    {{tl, tr}, state}
+  end
+
   defp do_escape(tuple, q, state) when is_tuple(tuple) do
-    {tt, state} = do_quote(Tuple.to_list(tuple), q, state)
+    {tt, state} = do_escape(Tuple.to_list(tuple), q, state)
     {{:{}, [], tt}, state}
   end
 
@@ -544,7 +551,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
         _ -> true
       end)
       |> Enum.sort
-      {tt, state} = do_quote(keys, q, state)
+      {tt, state} = do_escape(keys, q, state)
       {{:%{}, [], tt}, state}
     end
   end
@@ -552,7 +559,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
   defp do_escape([], _, state), do: {[], state}
 
   defp do_escape([h | t], %__MODULE__{unquote: false} = q, state) do
-    {ht, state} = do_quote(h, q, state)
+    {ht, state} = do_escape(h, q, state)
     do_quote_simple_list(t, ht, q, state)
   end
 
@@ -565,7 +572,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
       _ ->
         {l, r} = reverse_improper(t, [h])
         {tl, state} = do_quote_splice(l, q, [], [], state)
-        {tr, state} = do_quote(r, q, state)
+        {tr, state} = do_escape(r, q, state)
         {update_last(tl, fn x -> {:|, [], [x, tr]} end), state}
     end
   end
