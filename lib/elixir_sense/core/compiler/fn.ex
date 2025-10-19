@@ -29,22 +29,22 @@ defmodule ElixirSense.Core.Compiler.Fn do
       when is_atom(f) and is_integer(a) do
     args = args_from_arity(meta, a)
 
-    capture_require({dot, require_meta, args}, s, e, true)
+    capture_require({dot, require_meta, args}, s, e, :arity)
   end
 
   def capture(meta, {:/, _, [{f, import_meta, c}, a]}, s, e)
       when is_atom(f) and is_integer(a) and is_atom(c) do
     args = args_from_arity(meta, a)
-    capture_import({f, import_meta, args}, s, e, true)
+    capture_import({f, import_meta, args}, s, e, :arity)
   end
 
   def capture(_meta, {{:., _, [_, fun]}, _, args} = expr, s, e)
       when is_atom(fun) and is_list(args) do
-    capture_require(expr, s, e, is_sequential_and_not_empty(args))
+    capture_require(expr, s, e, check_sequential_and_not_empty(args))
   end
 
   def capture(meta, {{:., _, [_]}, _, args} = expr, s, e) when is_list(args) do
-    capture_expr(meta, expr, s, e, false)
+    capture_expr(meta, expr, s, e, :non_sequential)
   end
 
   def capture(meta, {:__block__, _, [expr]}, s, e) do
@@ -67,7 +67,7 @@ defmodule ElixirSense.Core.Compiler.Fn do
   end
 
   def capture(_meta, {atom, _, args} = expr, s, e) when is_atom(atom) and is_list(args) do
-    capture_import(expr, s, e, is_sequential_and_not_empty(args))
+    capture_import(expr, s, e, check_sequential_and_not_empty(args))
   end
 
   def capture(meta, {left, right}, s, e) do
@@ -75,7 +75,7 @@ defmodule ElixirSense.Core.Compiler.Fn do
   end
 
   def capture(meta, list, s, e) when is_list(list) do
-    capture_expr(meta, list, s, e, is_sequential_and_not_empty(list))
+    capture_expr(meta, list, s, e, check_sequential_and_not_empty(list))
   end
 
   def capture(meta, integer, s, e) when is_integer(integer) do
@@ -97,24 +97,27 @@ defmodule ElixirSense.Core.Compiler.Fn do
     end
   end
 
-  defp capture_import({atom, import_meta, args} = expr, s, e, sequential) do
+  defp capture_import({atom, import_meta, args} = expr, s, e, args_type) do
     res =
-      if sequential do
+      if args_type != :non_sequential do
         Dispatch.import_function(import_meta, atom, length(args), s, e)
       else
         false
       end
 
-    handle_capture(res, import_meta, import_meta, expr, s, e, sequential)
+    handle_capture(res, import_meta, import_meta, expr, s, e, args_type)
   end
 
-  defp capture_require({{:., dot_meta, [left, right]}, require_meta, args}, s, e, sequential) do
+  defp capture_require({{:., dot_meta, [left, right]}, require_meta, args}, s, e, args_type) do
     case escape(left, []) do
       {esc_left, []} ->
         {e_left, se, ee} = Compiler.expand(esc_left, s, e)
 
+        # elixir emits complex_module_capture warning for complex module expressions in &mod.fun/arity
+        # when args_type == :arity and e_left is not atom or variable
+
         res =
-          if sequential do
+          if args_type != :non_sequential do
             case e_left do
               {name, _, context} when is_atom(name) and is_atom(context) ->
                 {:remote, e_left, right, length(args)}
@@ -137,34 +140,35 @@ defmodule ElixirSense.Core.Compiler.Fn do
           end
 
         dot = {{:., dot_meta, [e_left, right]}, require_meta, args}
-        handle_capture(res, require_meta, dot_meta, dot, se, ee, sequential)
+        handle_capture(res, require_meta, dot_meta, dot, se, ee, args_type)
 
       {esc_left, escaped} ->
         dot = {{:., dot_meta, [esc_left, right]}, require_meta, args}
-        capture_expr(require_meta, dot, s, e, escaped, sequential)
+        capture_expr(require_meta, dot, s, e, escaped, args_type)
     end
   end
 
-  defp handle_capture(false, meta, _dot_meta, expr, s, e, sequential) do
-    capture_expr(meta, expr, s, e, sequential)
+  defp handle_capture(false, meta, _dot_meta, expr, s, e, args_type) do
+    capture_expr(meta, expr, s, e, args_type)
   end
 
-  defp handle_capture(local_or_remote, meta, dot_meta, _expr, s, e, _sequential) do
+  defp handle_capture(local_or_remote, meta, dot_meta, _expr, s, e, _args_type) do
     {local_or_remote, meta, dot_meta, s, e}
   end
 
-  defp capture_expr(meta, expr, s, e, sequential) do
-    capture_expr(meta, expr, s, e, [], sequential)
+  defp capture_expr(meta, expr, s, e, args_type) do
+    capture_expr(meta, expr, s, e, [], args_type)
   end
 
-  defp capture_expr(meta, expr, s, e, escaped, sequential) do
+  defp capture_expr(meta, expr, s, e, escaped, args_type) do
     case escape(expr, escaped) do
-      {e_expr, []} when not sequential ->
+      {e_expr, []} when args_type == :non_sequential ->
         # elixir raises here invalid_args_for_capture
         # we emit fn without args
         fn_expr = {:fn, meta, [{:->, meta, [[], e_expr]}]}
         {:expand, fn_expr, s, e}
 
+      # elixir will remove this clause once complex module captures raise
       {{{:., _, [_, _]} = dot, _, args}, []} ->
         meta = Keyword.delete(meta, :no_parens)
         fn_expr = {:fn, meta, [{:->, meta, [[], {dot, meta, args}]}]}
@@ -244,10 +248,10 @@ defmodule ElixirSense.Core.Compiler.Fn do
     []
   end
 
-  defp is_sequential_and_not_empty([]), do: false
-  defp is_sequential_and_not_empty(list), do: is_sequential(list, 1)
+  defp check_sequential_and_not_empty([]), do: :non_sequential
+  defp check_sequential_and_not_empty(list), do: check_sequential(list, 1)
 
-  defp is_sequential([{:&, _, [int]} | t], int), do: is_sequential(t, int + 1)
-  defp is_sequential([], _int), do: true
-  defp is_sequential(_, _int), do: false
+  defp check_sequential([{:&, _, [int]} | t], int), do: check_sequential(t, int + 1)
+  defp check_sequential([], _int), do: :sequential
+  defp check_sequential(_, _int), do: :non_sequential
 end
