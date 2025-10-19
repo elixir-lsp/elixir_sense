@@ -130,12 +130,16 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   def escape(expr, op, unquote, state) do
     try do
-      do_quote(expr, %__MODULE__{
-        line: true,
-        file: nil,
-        op: op,
-        unquote: unquote
-      }, state)
+      do_quote(
+        expr,
+        %__MODULE__{
+          line: true,
+          file: nil,
+          op: op,
+          unquote: unquote
+        },
+        state
+      )
     catch
       _kind, _reason ->
         # elixir reraises here with trimmed stacktrace
@@ -370,8 +374,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
     # elixir does not emit remote_function in quoted as AST is meaningless
     {quoted_meta, state} = meta(meta, q, state)
-    {{{:., meta, [:elixir_quote, :dot]}, meta, [quoted_meta | Enum.reverse(tall_reverse)]},
-     state}
+    {{{:., meta, [:elixir_quote, :dot]}, meta, [quoted_meta | Enum.reverse(tall_reverse)]}, state}
   end
 
   defp do_quote_tuple({left, meta, right}, q, state) do

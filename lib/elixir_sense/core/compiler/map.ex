@@ -10,25 +10,28 @@ defmodule ElixirSense.Core.Compiler.Map do
     case validate_struct(e_left, context) do
       true when is_atom(e_left) ->
         case e_right do
-          {:"%{}", _map_meta, [{:|, _, [_, assocs]}]} ->
+          {:%{}, _map_meta, [{:|, _, [_, assocs]}]} ->
             assocs = sanitize_assocs(assocs)
             # elixir warns about deprecated struct update
             :elixir_env.trace({:struct_expansion, meta, e_left, assocs}, e)
-            {{:"%", meta, [e_left, e_right]}, se, ee}
-          {:"%{}", map_meta, assocs} when context != :match ->
+            {{:%, meta, [e_left, e_right]}, se, ee}
+
+          {:%{}, map_meta, assocs} when context != :match ->
             assocs = sanitize_assocs(assocs)
             assoc_keys = Enum.map(assocs, fn {k, _} -> k end)
             struct = load_struct(meta, e_left, [assocs], se, ee)
             keys = [:__struct__ | assoc_keys]
-            without_keys = Elixir.Map.drop(struct, keys)
-            |> Elixir.Map.to_list
-            |> Enum.sort
+
+            without_keys =
+              Elixir.Map.drop(struct, keys)
+              |> Elixir.Map.to_list()
+              |> Enum.sort()
 
             {struct_assocs, se} = Compiler.Quote.escape(without_keys, :escape, false, se)
 
             {{:%, meta, [e_left, {:%{}, map_meta, struct_assocs ++ assocs}]}, se, ee}
 
-          {:"%{}", _map_meta, assocs} ->
+          {:%{}, _map_meta, assocs} ->
             assocs = sanitize_assocs(assocs)
             :elixir_env.trace({:struct_expansion, meta, e_left, assocs}, e)
             # elixir validates assocs against struct keys
