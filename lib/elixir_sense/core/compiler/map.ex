@@ -25,6 +25,8 @@ defmodule ElixirSense.Core.Compiler.Map do
             {struct_assocs, se} =
               Compiler.Macro.escape(Enum.sort(Elixir.Map.to_list(without_keys)), se)
 
+            {e_struct_assocs, sa, ea} = Compiler.expand(struct_assocs, se, ee)
+
             {{:%, meta, [e_left, {:%{}, map_meta, struct_assocs ++ assocs}]}, se, ee}
 
           {:"%{}", _map_meta, assocs} ->
