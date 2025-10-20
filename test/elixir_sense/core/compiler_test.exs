@@ -979,24 +979,6 @@ defmodule ElixirSense.Core.CompilerTest do
           meta = Keyword.delete(meta, :capture)
           {{:fn, meta, args}, state}
 
-        # Normalize binding variables in quote bind_quoted
-        # ElixirSense (1.19+ behavior) removes :column, but Elixir < 1.19 keeps it
-        {:{}, [], [:=, meta1, [{:{}, [], [var_name, var_meta, context]}, value]]} = _node, state
-        when is_atom(var_name) and is_list(var_meta) and is_atom(context) ->
-          # Add :column back for Elixir < 1.19
-          var_meta =
-            if Version.match?(System.version(), "< 1.19.0") do
-              # For Elixir < 1.19, add :column: 1 if not present
-              case Keyword.has_key?(var_meta, :column) do
-                true -> var_meta
-                false -> [{:column, 1} | var_meta]
-              end
-            else
-              var_meta
-            end
-
-          {{:{}, [], [:=, meta1, [{:{}, [], [var_name, var_meta, context]}, value]]}, state}
-
         {atom, meta, nil} = node, state when is_atom(atom) ->
           # ElixirSense intentionally uses :"&#{pos}" instead of :capture
           # Convert to :capture to match Elixir 1.17+ behavior
@@ -1069,6 +1051,21 @@ defmodule ElixirSense.Core.CompilerTest do
             end
 
           {{:capture, meta, nil}, state}
+
+        # Normalize binding variables in quote bind_quoted/context
+        # Elixir < 1.19 has :column in metadata, 1.19+ removes it
+        # ElixirSense follows 1.19+ behavior, so remove :column from Elixir < 1.19
+        {:{}, [], [:=, meta1, [{:{}, [], [var_name, var_meta, context]}, value]]} = _node, state
+        when is_atom(var_name) and is_list(var_meta) and is_atom(context) ->
+          var_meta =
+            if Version.match?(System.version(), "< 1.19.0") do
+              # Remove :column to match ElixirSense (1.19+) behavior
+              Keyword.delete(var_meta, :column)
+            else
+              var_meta
+            end
+
+          {{:{}, [], [:=, meta1, [{:{}, [], [var_name, var_meta, context]}, value]]}, state}
 
         {atom, meta, nil} = node, state when is_atom(atom) ->
           # Handle old :"&#{pos}" format from Elixir < 1.18
