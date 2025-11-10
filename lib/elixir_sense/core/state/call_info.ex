@@ -5,8 +5,8 @@ defmodule ElixirSense.Core.State.CallInfo do
   @type t :: %ElixirSense.Core.State.CallInfo{
           arity: non_neg_integer | nil,
           position: {non_neg_integer, pos_integer | nil},
-          func: atom,
-          mod: module | {:attribute, atom},
+          func: atom | {:attribute, atom} | {:variable, atom, any} | nil,
+          mod: module | {:attribute, atom} | {:variable, atom, any} | nil,
           kind: atom
         }
   defstruct arity: 0,

@@ -8954,6 +8954,24 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
              } = state.calls
     end
 
+    test "registers calls capture expression anonymous" do
+      state =
+        """
+        defmodule NyModule do
+          def func do
+            (& 1 + &1).(1)
+          end
+        end
+        """
+        |> string_to_state
+
+      # The anonymous function call should have func: nil instead of a tuple
+      assert Enum.any?(
+               state.calls[3],
+               &match?(%CallInfo{arity: 1, func: nil, kind: :anonymous_function}, &1)
+             )
+    end
+
     test "registers calls on ex_unit DSL" do
       state =
         """

@@ -348,6 +348,16 @@ defmodule ElixirSense.Core.Compiler.State do
         column + Keyword.get(meta, :column_correction, 0)
       end
 
+    # For anonymous function calls, func can be an AST tuple (e.g., {:fn, [], []})
+    # Replace it with nil to avoid issues in consumers
+    func =
+      case func do
+        f when is_atom(f) -> f
+        {:attribute, _} = attr -> attr
+        {:variable, _, _} = var -> var
+        _ -> nil
+      end
+
     call = %CallInfo{mod: mod, func: func, arity: arity, position: {line, column}, kind: kind}
 
     calls =
