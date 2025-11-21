@@ -250,19 +250,47 @@ defmodule ElixirSense.Providers.Definition.Locator do
 
         case fn_definition do
           nil ->
-            Location.find_mod_fun_source(mod, fun, call_arity)
+            # Try to find function in __using__ macro before giving up and pointing to the macro use
+            case find_function_in_module_using_macro(mod, fun, metadata) do
+              %Location{file: file} = location when not is_nil(file) ->
+                location
+
+              _ ->
+                Location.find_mod_fun_source(mod, fun, call_arity)
+            end
 
           %ModFunInfo{} = info ->
             {{line, column}, {end_line, end_column}} = Location.info_to_range(info)
 
-            %Location{
-              file: nil,
-              type: ModFunInfo.get_category(info),
-              line: line,
-              column: column,
-              end_line: end_line,
-              end_column: end_column
-            }
+            if ModFunInfo.get_category(info) in [:function, :macro] do
+              # First try to use find_function_in_module_using_macro for external modules
+              # This is needed when the function is defined in a different file via __using__
+              case find_function_in_module_using_macro(mod, fun, metadata) do
+                %Location{file: file} = location when not is_nil(file) ->
+                  location
+
+                _ ->
+                  find_function_in_using_macro(
+                    metadata,
+                    env,
+                    line,
+                    column,
+                    end_line,
+                    end_column,
+                    fun,
+                    info
+                  )
+              end
+            else
+              %Location{
+                file: nil,
+                type: ModFunInfo.get_category(info),
+                line: line,
+                column: column,
+                end_line: end_line,
+                end_column: end_column
+              }
+            end
         end
 
       {mod, fun, true, :type} ->
@@ -311,6 +339,264 @@ defmodule ElixirSense.Providers.Definition.Locator do
       {true, {:atom, module}} -> {true, module}
       {false, {:atom, module}} -> module
       _ -> nil
+    end
+  end
+
+  defp resolve_use_module({:__aliases__, _, parts}, env) do
+    [head | tail] = parts
+
+    case Keyword.fetch(env.aliases, Module.concat(Elixir, head)) do
+      {:ok, aliased_mod} ->
+        Module.concat([aliased_mod | tail])
+
+      :error ->
+        Module.concat(parts)
+    end
+  end
+
+  defp resolve_use_module(atom, _env) when is_atom(atom), do: atom
+  defp resolve_use_module(_, _), do: nil
+
+  defp find_function_in_module_using_macro(mod, fun, metadata) do
+    if Map.has_key?(metadata.mods_funs_to_positions, {mod, nil, nil}) do
+      # Module is in the current source - use metadata.source
+      find_used_modules_and_search_in_source(metadata.source, mod, fun)
+    else
+      # Module is external - try to get source file
+      with file when not is_nil(file) <- get_module_source_file(mod),
+           {:ok, content} <- File.read(file) do
+        find_used_modules_and_search_in_source(content, mod, fun)
+      else
+        _ -> nil
+      end
+    end
+  end
+
+  defp get_module_source_file(mod) do
+    try do
+      compile_info = mod.__info__(:compile)
+      source = Keyword.get(compile_info, :source)
+      if source, do: to_string(source)
+    catch
+      _, _ ->
+        case Code.fetch_docs(mod) do
+          {:docs_v1, _, _, _, _, _, docs} when is_list(docs) ->
+            docs
+            |> Enum.find_value(fn
+              {{_, _, _}, _, _, _, meta} when is_map(meta) ->
+                Map.get(meta, :source)
+
+              _ ->
+                nil
+            end)
+
+          _ ->
+            try do
+              case :code.get_object_code(mod) do
+                {^mod, bin, _} ->
+                  case :beam_lib.chunks(bin, [:debug_info]) do
+                    {:ok, {_, [{:debug_info, {:debug_info_v1, _, {_, %{file: file}, _}}}]}} ->
+                      to_string(file)
+
+                    _ ->
+                      nil
+                  end
+
+                _ ->
+                  nil
+              end
+            catch
+              _, _ -> nil
+            end
+        end
+    end
+  end
+
+  defp find_used_modules_and_search_in_source(source, mod, fun) do
+    with {:ok, ast} <- Code.string_to_quoted(source) do
+      collect_use_statements(ast, mod)
+      |> Enum.find_value(fn used_module ->
+        search_in_using_macro(used_module, fun)
+      end)
+    else
+      _ -> nil
+    end
+  end
+
+  defp collect_use_statements(ast, mod) do
+    target_parts = Module.split(mod)
+
+    {_, {_, modules}} =
+      Macro.traverse(
+        ast,
+        {[], []},
+        fn
+          {:defmodule, _meta, [module_ast | _]} = node, {stack, modules} ->
+            module_parts = module_ast_parts(module_ast)
+
+            full_parts =
+              case stack do
+                [parent_parts | _] when length(module_parts) == 1 ->
+                  parent_parts ++ module_parts
+
+                _ ->
+                  module_parts
+              end
+
+            {node, {[full_parts | stack], modules}}
+
+          {:use, _meta, [module_ast | _]} = node, {[current_parts | _] = stack, modules} ->
+            modules =
+              if current_parts == target_parts do
+                module = resolve_use_module(module_ast, %State.Env{aliases: []})
+                if module, do: [module | modules], else: modules
+              else
+                modules
+              end
+
+            {node, {stack, modules}}
+
+          node, acc ->
+            {node, acc}
+        end,
+        fn
+          {:defmodule, _meta, [_ | _]} = node, {[_ | rest], modules} ->
+            {node, {rest, modules}}
+
+          node, acc ->
+            {node, acc}
+        end
+      )
+
+    Enum.reverse(modules)
+  end
+
+  defp module_ast_parts({:__aliases__, _meta, parts}) do
+    parts
+    |> Module.concat()
+    |> Module.split()
+  end
+
+  defp module_ast_parts(atom) when is_atom(atom), do: Module.split(atom)
+  defp module_ast_parts(_), do: []
+
+  defp search_in_using_macro(module, fun) do
+    case Location.find_mod_fun_source(module, :__using__, :any) do
+      %Location{file: file, line: using_line, column: using_col} when not is_nil(file) ->
+        search_function_in_using_macro(file, using_line, using_col, fun)
+
+      _ ->
+        nil
+    end
+  end
+
+  defp search_function_in_using_macro(file, using_line, using_col, fun) do
+    content = File.read!(file)
+    {_, suffix} = Source.split_at(content, using_line, using_col)
+    regex = ~r/def\s+(#{Regex.escape(Atom.to_string(fun))}\b)/
+
+    case Regex.run(regex, suffix, return: :index) do
+      [_entire_match, {fun_offset, _fun_len}] ->
+        {line_offset, col_offset} = calculate_offset(suffix, fun_offset)
+        target_line = using_line + line_offset
+        target_column = if line_offset == 0, do: using_col + col_offset, else: 1 + col_offset
+
+        %Location{
+          file: file,
+          type: :function,
+          line: target_line,
+          column: target_column,
+          end_line: target_line,
+          end_column: target_column
+        }
+
+      nil ->
+        nil
+    end
+  end
+
+  defp calculate_offset(suffix, fun_offset) do
+    suffix
+    |> String.slice(0, fun_offset)
+    |> Source.split_lines()
+    |> then(fn lines -> {length(lines) - 1, String.length(List.last(lines) || "")} end)
+  end
+
+  defp find_function_in_using_macro(metadata, env, line, column, end_line, end_column, fun, info) do
+    # This might be a function defined via `use`
+    # We need to find the `use` statement and the module being used
+    source_line = Source.split_lines(metadata.source) |> Enum.at(line - 1)
+
+    used_module =
+      case Code.string_to_quoted(source_line) do
+        {:ok, {:use, _, [module_ast | _]}} ->
+          resolve_use_module(module_ast, env)
+
+        _ ->
+          nil
+      end
+
+    case used_module do
+      nil ->
+        %Location{
+          file: nil,
+          type: if(info, do: ModFunInfo.get_category(info), else: :function),
+          line: line,
+          column: column,
+          end_line: end_line,
+          end_column: end_column
+        }
+
+      used_module ->
+        # Find __using__ macro in the used module
+        case Location.find_mod_fun_source(used_module, :__using__, :any) do
+          %Location{file: file, line: using_line, column: using_col} = using_location
+          when not is_nil(file) ->
+            # Function is defined inside quote block, not as actual module function.
+            # Use regex to find def within __using__ source text.
+            content = File.read!(file)
+            {_, suffix} = Source.split_at(content, using_line, using_col)
+
+            regex = ~r/def\s+(#{Regex.escape(Atom.to_string(fun))}\b)/
+
+            case Regex.run(regex, suffix, return: :index) do
+              [_entire_match, {fun_offset, _fun_len}] ->
+                {line_offset, col_offset} =
+                  suffix
+                  |> String.slice(0, fun_offset)
+                  |> Source.split_lines()
+                  |> then(fn lines ->
+                    {length(lines) - 1, String.length(List.last(lines) || "")}
+                  end)
+
+                target_line = using_line + line_offset
+
+                target_column =
+                  if line_offset == 0, do: using_col + col_offset, else: 1 + col_offset
+
+                %Location{
+                  file: file,
+                  type: :function,
+                  line: target_line,
+                  column: target_column,
+                  end_line: target_line,
+                  end_column: target_column
+                }
+
+              nil ->
+                using_location
+            end
+
+          _ ->
+            %Location{
+              file: nil,
+              type: if(info, do: ModFunInfo.get_category(info), else: :function),
+              line: line,
+              column: column,
+              end_line: end_line,
+              end_column: end_column
+            }
+        end
     end
   end
 end
