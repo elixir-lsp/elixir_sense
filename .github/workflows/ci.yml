@@ -62,7 +62,7 @@ jobs:
     env:
       MIX_ENV: test
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
@@ -133,7 +133,7 @@ jobs:
       - name: Set git to use original line ending
         run: |
           git config --global core.autocrlf false
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
@@ -155,7 +155,7 @@ jobs:
           - elixir: 1.19.x
             otp: 28.x
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
