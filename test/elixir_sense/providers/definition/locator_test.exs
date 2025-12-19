@@ -53,4 +53,46 @@ defmodule ElixirSense.Providers.Definition.LocatorTest do
     assert location.line == 4
     assert location.column == 11
   end
+
+  test "finds definition of function defined in __using__ macro from external file" do
+    code = """
+    defmodule MyModule do
+      use ElixirSenseExample.UsingMacroExample
+
+      def test do
+        using_macro_function()
+      end
+    end
+    """
+
+    {line, column} = {5, 5}
+
+    location = Locator.definition(code, line, column)
+
+    assert location != nil
+    assert location.type == :function
+    assert location.file =~ "using_macro_example.ex"
+    assert location.line == 4
+    assert location.column == 11
+  end
+
+  test "finds definition of function defined in __using__ macro via module from external file" do
+    code = """
+    defmodule MyModule do
+      def test do
+        ElixirSenseExample.ModuleUsingMacroExample.using_macro_function()
+      end
+    end
+    """
+
+    {line, column} = {3, 49}
+
+    location = Locator.definition(code, line, column)
+
+    assert location != nil
+    assert location.type == :function
+    assert location.file =~ "using_macro_example.ex"
+    assert location.line == 4
+    assert location.column == 11
+  end
 end
