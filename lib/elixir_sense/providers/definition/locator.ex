@@ -359,13 +359,22 @@ defmodule ElixirSense.Providers.Definition.Locator do
 
   defp find_function_in_module_using_macro(mod, fun, metadata) do
     if Map.has_key?(metadata.mods_funs_to_positions, {mod, nil, nil}) do
-      # Module is in the current source - use metadata.source
-      find_used_modules_and_search_in_source(metadata.source, mod, fun)
+      # Module is in the current source - use metadata.uses
+      used_modules = Map.get(metadata.uses, mod, [])
+
+      Enum.find_value(used_modules, fn used_module ->
+        search_in_using_macro(used_module, fun)
+      end)
     else
-      # Module is external - try to get source file
+      # Module is external - read the file contents and parse it
       with file when not is_nil(file) <- get_module_source_file(mod),
            {:ok, content} <- File.read(file) do
-        find_used_modules_and_search_in_source(content, mod, fun)
+        external_metadata = Parser.parse_string(content, false, false, nil)
+        used_modules = Map.get(external_metadata.uses, mod, [])
+
+        Enum.find_value(used_modules, fn used_module ->
+          search_in_using_macro(used_module, fun)
+        end)
       else
         _ -> nil
       end
@@ -379,74 +388,6 @@ defmodule ElixirSense.Providers.Definition.Locator do
   catch
     _, _ -> nil
   end
-
-  defp find_used_modules_and_search_in_source(source, mod, fun) do
-    with {:ok, ast} <- Code.string_to_quoted(source) do
-      collect_use_statements(ast, mod)
-      |> Enum.find_value(fn used_module ->
-        search_in_using_macro(used_module, fun)
-      end)
-    else
-      _ -> nil
-    end
-  end
-
-  defp collect_use_statements(ast, mod) do
-    target_parts = Module.split(mod)
-
-    {_, {_, modules}} =
-      Macro.traverse(
-        ast,
-        {[], []},
-        fn
-          {:defmodule, _meta, [module_ast | _]} = node, {stack, modules} ->
-            module_parts = module_ast_parts(module_ast)
-
-            full_parts =
-              case stack do
-                [parent_parts | _] when length(module_parts) == 1 ->
-                  parent_parts ++ module_parts
-
-                _ ->
-                  module_parts
-              end
-
-            {node, {[full_parts | stack], modules}}
-
-          {:use, _meta, [module_ast | _]} = node, {[current_parts | _] = stack, modules} ->
-            modules =
-              if current_parts == target_parts do
-                module = resolve_use_module(module_ast, %State.Env{aliases: []})
-                if module, do: [module | modules], else: modules
-              else
-                modules
-              end
-
-            {node, {stack, modules}}
-
-          node, acc ->
-            {node, acc}
-        end,
-        fn
-          {:defmodule, _meta, [_ | _]} = node, {[_ | rest], modules} ->
-            {node, {rest, modules}}
-
-          node, acc ->
-            {node, acc}
-        end
-      )
-
-    Enum.reverse(modules)
-  end
-
-  defp module_ast_parts({:__aliases__, _meta, parts}) do
-    parts
-    |> Module.concat()
-    |> Module.split()
-  end
-
-  defp module_ast_parts(atom) when is_atom(atom), do: Module.split(atom)
-  defp module_ast_parts(_), do: []
 
   defp search_in_using_macro(module, fun) do
     case Location.find_mod_fun_source(module, :__using__, :any) do

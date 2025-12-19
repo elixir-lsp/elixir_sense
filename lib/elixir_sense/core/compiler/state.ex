@@ -48,6 +48,7 @@ defmodule ElixirSense.Core.Compiler.State do
           attributes: list(list(ElixirSense.Core.State.AttributeInfo.t())),
           scope_attributes: list(list(atom)),
           behaviours: %{optional(module) => [module]},
+          uses: %{optional(module) => [module]},
           specs: specs_t,
           types: types_t,
           mods_funs_to_positions: mods_funs_to_positions_t,
@@ -88,6 +89,7 @@ defmodule ElixirSense.Core.Compiler.State do
   defstruct attributes: [[]],
             scope_attributes: [[]],
             behaviours: %{},
+            uses: %{},
             specs: %{},
             types: %{},
             mods_funs_to_positions: %{},
@@ -1049,6 +1051,12 @@ defmodule ElixirSense.Core.Compiler.State do
   end
 
   def add_behaviour(_module, %__MODULE__{} = state, env), do: {nil, state, env}
+
+  def add_use(module, %__MODULE__{} = state, env) when is_atom(module) and not is_nil(module) do
+    update_in(state.uses[env.module], &Enum.uniq([module | &1 || []]))
+  end
+
+  def add_use(_module, %__MODULE__{} = state, _env), do: state
 
   def register_doc(%__MODULE__{} = state, env, :moduledoc, doc_arg) do
     current_module = env.module

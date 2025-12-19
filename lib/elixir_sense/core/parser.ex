@@ -190,6 +190,7 @@ defmodule ElixirSense.Core.Parser do
       specs: acc.specs,
       structs: acc.structs,
       records: acc.records,
+      uses: acc.uses,
       mods_funs_to_positions: acc.mods_funs_to_positions,
       cursor_env: acc.cursor_env,
       closest_env: acc.closest_env,
