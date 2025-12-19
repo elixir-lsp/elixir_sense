@@ -1001,6 +1001,27 @@ defmodule ElixirSense.Core.Compiler do
   defp expand_macro(
          meta,
          Kernel,
+         :use,
+         [target_module | _opts] = args,
+         callback,
+         state,
+         env
+       ) do
+    {expanded_module, state, env} = expand(target_module, state, env)
+
+    state =
+      if is_atom(expanded_module) do
+        State.add_use(expanded_module, state, env)
+      else
+        state
+      end
+
+    expand_macro_callback(meta, Kernel, :use, args, callback, state, env)
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
          :defdelegate,
          [funs, opts],
          _callback,
@@ -2200,8 +2221,10 @@ defmodule ElixirSense.Core.Compiler do
       # If expanding the macro fails, we just give up.
       _kind, _payload ->
         # Logger.warning(Exception.format(kind, payload, __STACKTRACE__))
+        uses = state.uses
         # look for cursor in args
         {_ast, state, _env} = expand(args, state, env)
+        state = %{state | uses: uses}
 
         {{{:., meta, [module, fun]}, meta, args}, state, env}
     else
