@@ -373,43 +373,11 @@ defmodule ElixirSense.Providers.Definition.Locator do
   end
 
   defp get_module_source_file(mod) do
-    try do
-      compile_info = mod.__info__(:compile)
-      source = Keyword.get(compile_info, :source)
-      if source, do: to_string(source)
-    catch
-      _, _ ->
-        case Code.fetch_docs(mod) do
-          {:docs_v1, _, _, _, _, _, docs} when is_list(docs) ->
-            docs
-            |> Enum.find_value(fn
-              {{_, _, _}, _, _, _, meta} when is_map(meta) ->
-                Map.get(meta, :source)
-
-              _ ->
-                nil
-            end)
-
-          _ ->
-            try do
-              case :code.get_object_code(mod) do
-                {^mod, bin, _} ->
-                  case :beam_lib.chunks(bin, [:debug_info]) do
-                    {:ok, {_, [{:debug_info, {:debug_info_v1, _, {_, %{file: file}, _}}}]}} ->
-                      to_string(file)
-
-                    _ ->
-                      nil
-                  end
-
-                _ ->
-                  nil
-              end
-            catch
-              _, _ -> nil
-            end
-        end
-    end
+    compile_info = mod.__info__(:compile)
+    source = Keyword.get(compile_info, :source)
+    if source, do: to_string(source)
+  catch
+    _, _ -> nil
   end
 
   defp find_used_modules_and_search_in_source(source, mod, fun) do
