@@ -482,14 +482,14 @@ defmodule ElixirSense.Providers.Definition.Locator do
   defp search_in_using_macro(module, fun) do
     case Location.find_mod_fun_source(module, :__using__, :any) do
       %Location{file: file, line: using_line, column: using_col} when not is_nil(file) ->
-        search_function_in_using_macro(file, using_line, using_col, fun)
+        find_function_def_in_using_macro_source(file, using_line, using_col, fun)
 
       _ ->
         nil
     end
   end
 
-  defp search_function_in_using_macro(file, using_line, using_col, fun) do
+  defp find_function_def_in_using_macro_source(file, using_line, using_col, fun) do
     content = File.read!(file)
     {_, suffix} = Source.split_at(content, using_line, using_col)
     regex = ~r/def\s+(#{Regex.escape(Atom.to_string(fun))}\b)/
@@ -521,6 +521,17 @@ defmodule ElixirSense.Providers.Definition.Locator do
     |> then(fn lines -> {length(lines) - 1, String.length(List.last(lines) || "")} end)
   end
 
+  defp fallback_location(line, column, end_line, end_column, info) do
+    %Location{
+      file: nil,
+      type: if(info, do: ModFunInfo.get_category(info), else: :function),
+      line: line,
+      column: column,
+      end_line: end_line,
+      end_column: end_column
+    }
+  end
+
   defp find_function_in_using_macro(metadata, env, line, column, end_line, end_column, fun, info) do
     # This might be a function defined via `use`
     # We need to find the `use` statement and the module being used
@@ -535,67 +546,14 @@ defmodule ElixirSense.Providers.Definition.Locator do
           nil
       end
 
-    case used_module do
-      nil ->
-        %Location{
-          file: nil,
-          type: if(info, do: ModFunInfo.get_category(info), else: :function),
-          line: line,
-          column: column,
-          end_line: end_line,
-          end_column: end_column
-        }
+    case used_module && Location.find_mod_fun_source(used_module, :__using__, :any) do
+      %Location{file: file, line: using_line, column: using_col} = using_location
+      when not is_nil(file) ->
+        find_function_def_in_using_macro_source(file, using_line, using_col, fun) ||
+          using_location
 
-      used_module ->
-        # Find __using__ macro in the used module
-        case Location.find_mod_fun_source(used_module, :__using__, :any) do
-          %Location{file: file, line: using_line, column: using_col} = using_location
-          when not is_nil(file) ->
-            # Function is defined inside quote block, not as actual module function.
-            # Use regex to find def within __using__ source text.
-            content = File.read!(file)
-            {_, suffix} = Source.split_at(content, using_line, using_col)
-
-            regex = ~r/def\s+(#{Regex.escape(Atom.to_string(fun))}\b)/
-
-            case Regex.run(regex, suffix, return: :index) do
-              [_entire_match, {fun_offset, _fun_len}] ->
-                {line_offset, col_offset} =
-                  suffix
-                  |> String.slice(0, fun_offset)
-                  |> Source.split_lines()
-                  |> then(fn lines ->
-                    {length(lines) - 1, String.length(List.last(lines) || "")}
-                  end)
-
-                target_line = using_line + line_offset
-
-                target_column =
-                  if line_offset == 0, do: using_col + col_offset, else: 1 + col_offset
-
-                %Location{
-                  file: file,
-                  type: :function,
-                  line: target_line,
-                  column: target_column,
-                  end_line: target_line,
-                  end_column: target_column
-                }
-
-              nil ->
-                using_location
-            end
-
-          _ ->
-            %Location{
-              file: nil,
-              type: if(info, do: ModFunInfo.get_category(info), else: :function),
-              line: line,
-              column: column,
-              end_line: end_line,
-              end_column: end_column
-            }
-        end
+      _ ->
+        fallback_location(line, column, end_line, end_column, info)
     end
   end
 end
