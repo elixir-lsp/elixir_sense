@@ -30,10 +30,14 @@ defmodule ElixirSense.Core.TypeInference do
     {:struct, fields, type, updated_struct}
   end
 
-  def type_of({{:., _, [target, fun]}, _meta, args}, context)
-      when is_atom(fun) and is_list(args) and not ElixirSense.Core.ElixirTypes.enabled?() do
-    target = type_of(target, context)
-    {:call, target, fun, Enum.map(args, &type_of(&1, context))}
+  def type_of({{:., _, [target, fun]}, _meta, args} = ast, context)
+      when is_atom(fun) and is_list(args) do
+    if ElixirSense.Core.ElixirTypes.enabled?() do
+      type_of_with_elixir_types(ast, context)
+    else
+      target = type_of(target, context)
+      {:call, target, fun, Enum.map(args, &type_of(&1, context))}
+    end
   end
 
   # pinned variable
@@ -165,8 +169,11 @@ defmodule ElixirSense.Core.TypeInference do
     merge_with_elixir_types(existing, list, context, nil, nil, %{})
   end
 
-  def type_of({:fn, _meta, _clauses}, _context) when not ElixirSense.Core.ElixirTypes.enabled?(),
-    do: nil
+  def type_of({:fn, _meta, _clauses} = ast, context) do
+    if ElixirSense.Core.ElixirTypes.enabled?(),
+      do: type_of_with_elixir_types(ast, context),
+      else: nil
+  end
 
   # block expressions
   def type_of({:__block__, _meta, exprs}, context) do
@@ -199,7 +206,7 @@ defmodule ElixirSense.Core.TypeInference do
              :__DIR__,
              :super,
              :"::"
-           ] and not ElixirSense.Core.ElixirTypes.enabled?(),
+           ],
       do: nil
 
   # __ENV__ is already expanded to map
@@ -211,11 +218,14 @@ defmodule ElixirSense.Core.TypeInference do
     {:list, nil}
   end
 
-  def type_of({var, meta, args}, context)
-      when is_atom(var) and is_list(args) and not ElixirSense.Core.ElixirTypes.enabled?() do
-    line = Keyword.get(meta, :line, 1)
-    column = Keyword.get(meta, :column, 1)
-    {:local_call, var, {line, column}, Enum.map(args, &type_of(&1, context))}
+  def type_of({var, meta, args} = ast, context) when is_atom(var) and is_list(args) do
+    if ElixirSense.Core.ElixirTypes.enabled?() do
+      type_of_with_elixir_types(ast, context)
+    else
+      line = Keyword.get(meta, :line, 1)
+      column = Keyword.get(meta, :column, 1)
+      {:local_call, var, {line, column}, Enum.map(args, &type_of(&1, context))}
+    end
   end
 
   # integer

@@ -174,7 +174,7 @@ defmodule ElixirSense.Core.ExCkReader do
   end
 
   defp safe_binary_to_term(binary) do
-    {:ok, :erlang.binary_to_term(binary, [:safe])}
+    {:ok, :erlang.binary_to_term(binary)}
   rescue
     _ -> {:error, :invalid_chunk}
   end

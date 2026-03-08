@@ -71,7 +71,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "handles closed map" do
       assert ElixirTypes.to_shape(Module.Types.Descr.closed_map(foo: Module.Types.Descr.binary())) ==
-               {:map, [foo: :binary], nil}
+               {:map, [foo: {:binary, nil}], nil}
     end
 
     test "handles empty list" do
@@ -113,7 +113,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert ElixirTypes.to_shape(Module.Types.Descr.open_map()) == {:map, [], nil}
       # open_map with atom key fields - extract known fields, lose open/closed distinction
       assert ElixirTypes.to_shape(Module.Types.Descr.open_map(foo: Module.Types.Descr.binary())) ==
-               {:map, [foo: :binary], nil}
+               {:map, [foo: {:binary, nil}], nil}
 
       # open_map with default is also converted (known fields extracted)
       assert ElixirTypes.to_shape(
@@ -121,7 +121,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
                  [foo: Module.Types.Descr.binary()],
                  Module.Types.Descr.atom()
                )
-             ) == {:map, [foo: :binary], nil}
+             ) == {:map, [foo: {:binary, nil}], nil}
     end
 
     test "handles open tuple" do
@@ -131,7 +131,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
                  Module.Types.Descr.atom([:ok]),
                  Module.Types.Descr.binary()
                ])
-             ) == {:tuple, 2, [{:atom, :ok}, :binary]}
+             ) == {:tuple, 2, [{:atom, :ok}, {:binary, nil}]}
 
       # Open tuple with fallback - still extracts known elements
       assert ElixirTypes.to_shape(
@@ -139,7 +139,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
                  [Module.Types.Descr.atom([:ok]), Module.Types.Descr.binary()],
                  Module.Types.Descr.term()
                )
-             ) == {:tuple, 2, [{:atom, :ok}, :binary]}
+             ) == {:tuple, 2, [{:atom, :ok}, {:binary, nil}]}
     end
 
     test "handles pid" do
@@ -156,7 +156,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "handles tuple" do
       # tuple() returns an open tuple (any tuple), which cannot be converted to a shape
-      assert ElixirTypes.to_shape(Module.Types.Descr.tuple()) == :tuple
+      assert ElixirTypes.to_shape(Module.Types.Descr.tuple()) == {:tuple, 0, []}
 
       assert ElixirTypes.to_shape(
                Module.Types.Descr.tuple([
@@ -193,7 +193,8 @@ defmodule ElixirSense.Core.ElixirTypesTest do
           Module.Types.Descr.binary()
         )
 
-      assert ElixirTypes.to_shape(fun_type2) == {:fun, [{:integer, nil}, :float], :binary}
+      assert ElixirTypes.to_shape(fun_type2) ==
+               {:fun, [{:integer, nil}, {:float, nil}], {:binary, nil}}
     end
 
     test "handles fun_from_non_overlapping_clauses" do
@@ -229,10 +230,10 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "handles if_set" do
       # if_set makes a type optional in a map
       optional_int = Module.Types.Descr.if_set(Module.Types.Descr.integer())
-      assert ElixirTypes.to_shape(optional_int) == nil
+      assert ElixirTypes.to_shape(optional_int) == {:optional, {:integer, nil}}
 
       optional_atom = Module.Types.Descr.if_set(Module.Types.Descr.atom())
-      assert ElixirTypes.to_shape(optional_atom) == nil
+      assert ElixirTypes.to_shape(optional_atom) == {:optional, :atom}
     end
   end
 
