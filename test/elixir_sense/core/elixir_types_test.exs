@@ -305,7 +305,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "types list mixed" do
       list_ast = [1, :ok]
-      result = ElixirTypes.of_expr(list_ast) |> dbg
+      result = ElixirTypes.of_expr(list_ast)
       assert {:ok, descr} = result
       # Mixed list elements get unified to a single type
       shape = ElixirTypes.to_shape(descr)
@@ -315,7 +315,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "types list improper" do
       list_ast = [1 | :ok]
-      result = ElixirTypes.of_expr(list_ast) |> dbg
+      result = ElixirTypes.of_expr(list_ast)
       # Improper lists may not be supported by Module.Types in all cases
       # Accept either error or a successful result
       case result do
@@ -330,7 +330,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "types tuple-0 AST" do
       tuple_ast = {:{}, [], []}
-      result = ElixirTypes.of_expr(tuple_ast) |> dbg
+      result = ElixirTypes.of_expr(tuple_ast)
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert {:tuple, 0, []} = shape
@@ -338,7 +338,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "types tuple-2 AST" do
       tuple_ast = {1, :ok}
-      result = ElixirTypes.of_expr(tuple_ast) |> dbg
+      result = ElixirTypes.of_expr(tuple_ast)
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert {:tuple, 2, elements} = shape
@@ -347,7 +347,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "types tuple-3 AST" do
       tuple_ast = {:{}, [], [1, :ok, 1.2]}
-      result = ElixirTypes.of_expr(tuple_ast) |> dbg
+      result = ElixirTypes.of_expr(tuple_ast)
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert {:tuple, 3, elements} = shape
@@ -375,7 +375,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "types open map AST" do
       map_ast = {:%{}, [], [{"some", "other"}, key: :value]}
-      result = ElixirTypes.of_expr(map_ast) |> dbg
+      result = ElixirTypes.of_expr(map_ast)
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert {:map, fields, nil} = shape
@@ -391,7 +391,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
            {:%{}, [], [year: 2000, month: 1, day: 1]}
          ]}
 
-      result = ElixirTypes.of_expr(struct_ast) |> dbg
+      result = ElixirTypes.of_expr(struct_ast)
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert {:struct, fields, {:atom, Date}, nil} = shape
@@ -415,20 +415,18 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "types local call" do
       call_ast = {:foo, [], []}
-      result = ElixirTypes.of_expr(call_ast)
+      assert {:ok, _descr} = ElixirTypes.of_expr(call_ast)
       # TODO: find out why returned shape is dynamic term
       # should we pass a local resolver?
-      assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(call_ast)
       assert shape == nil
     end
 
     test "types remote call" do
       call_ast = {{:., [], [Foo, :bar]}, [], []}
-      result = ElixirTypes.of_expr(call_ast)
+      assert {:ok, _descr} = ElixirTypes.of_expr(call_ast)
       # TODO: find out why returned shape is dynamic term
       # should we pass a remote resolver?
-      assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(call_ast)
       assert shape == nil
     end
@@ -462,10 +460,9 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "types property access" do
       call_ast = {{:., [], [{:foo, [version: 0], nil}, :bar]}, [no_parens: true], []}
-      result = ElixirTypes.of_expr(call_ast)
+      assert {:ok, _descr} = ElixirTypes.of_expr(call_ast)
       # TODO: find out why returned shape is dynamic term
       # should we pass a local resolver?
-      assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(call_ast)
       assert shape == nil
     end

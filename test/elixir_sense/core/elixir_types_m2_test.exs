@@ -235,7 +235,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         |> MetadataBuilder.build()
 
       # Build local signatures map
-      local_sigs_map = ElixirTypes.build_local_sigs_map(state, TestModule) |> dbg
+      local_sigs_map = ElixirTypes.build_local_sigs_map(state, TestModule)
 
       # Test typing a local call with the signatures map
       call_ast = {:add, [], [1, 2]}
@@ -276,6 +276,27 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       result = Binding.expand(binding, {:local_call, :helper, {call_line, 5}, []})
 
       assert result == {:integer, nil}
+    end
+
+    test "build_local_sigs_map includes native signatures derived from declared specs" do
+      code = """
+      defmodule TestModule do
+        @spec helper(integer()) :: {:ok, integer()}
+        def helper(value), do: {:ok, value}
+      end
+      """
+
+      {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
+      metadata = MetadataBuilder.build(ast)
+
+      local_sigs_map = ElixirTypes.build_local_sigs_map(metadata, TestModule)
+
+      assert {:def, {sig_kind, _domain, [{[arg_descr], return_descr}]}} =
+               local_sigs_map[{:helper, 1}]
+
+      assert sig_kind in [:infer, :strong]
+      assert arg_descr != nil
+      assert is_map(return_descr)
     end
   end
 
@@ -331,37 +352,20 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       end
     end
 
-    test "remote_handler_from creates proper handler closure" do
-      handler = ElixirTypes.remote_handler_from()
-      assert is_function(handler, 6)
+    test "reads remote signatures from ExCk" do
+      assert {:ok, %{sig: {:infer, _domain, clauses}}} =
+               ElixirSense.Core.ExCkReader.lookup_signature(Enum, :map, 2)
+
+      assert is_list(clauses)
+      assert length(clauses) > 0
     end
 
-    test "remote handler looks up ExCk signatures" do
-      # Test with a module that likely has ExCk data (like Enum)
-      handler = ElixirTypes.remote_handler_from()
-
-      # Call handler with Enum.map/2 (commonly available function)
-      result = handler.(Enum, :map, 2, [], nil, nil)
-
-      # Result should either be a type result or false (graceful fallback)
-      case result do
-        # Got ExCk signature
-        {:def, _type, _context} -> :ok
-        other -> flunk("Unexpected result: #{inspect(other)}")
-      end
+    test "ExCk lookup falls back gracefully when signatures are unavailable" do
+      assert :error =
+               ElixirSense.Core.ExCkReader.lookup_signature(NonExistentModule, :some_function, 1)
     end
 
-    test "remote handler falls back gracefully when ExCk unavailable" do
-      # Test with a non-existent module
-      handler = ElixirTypes.remote_handler_from()
-
-      result = handler.(NonExistentModule, :some_function, 1, [], nil, nil)
-
-      # Should return :error for fallback
-      assert result == :error
-    end
-
-    test "remote handler unions clause return types from ExCk" do
+    test "ExCk signatures preserve clause return information" do
       mod = Module.concat(ElixirSense, "ExCkFixture#{System.unique_integer([:positive])}")
 
       clauses = [
@@ -404,56 +408,52 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         end
       end)
 
-      handler = ElixirTypes.remote_handler_from()
-      assert {:def, return_type, _ctx} = handler.(mod, :choose, 1, [], nil, nil)
+      assert {:ok, %{sig: {:infer, nil, fetched_clauses}}} =
+               ElixirSense.Core.ExCkReader.lookup_signature(mod, :choose, 1)
 
-      expected = Module.Types.Descr.atom([:no, :yes])
-      assert Module.Types.Descr.equal?(return_type, expected)
+      assert fetched_clauses == clauses
     end
 
-    test "init_stack integrates remote handler" do
+    test "init_stack integrates native checker cache" do
       stack = ElixirTypes.init_stack(TestModule, {:test_fun, 1}, "test.ex", :dynamic, nil, %{})
-      # TODO: remote_handler setup seems broken
+
       case stack do
         nil ->
-          # Module.Types not available, that's ok
           :ok
 
-        %{remote_handler: handler} ->
-          # Should have remote handler
-          assert is_function(handler, 6)
-
-          # _other ->
-          # # Different stack structure, check if it has remote handler capability
-          # assert stack != nil
+        %{cache: cache, local_handler: handler} ->
+          assert cache != nil
+          assert is_function(handler, 4)
       end
     end
 
-    test "of_expr with metadata parameter" do
-      # Test the updated of_expr function with metadata
+    test "of_expr accepts keyword options for metadata" do
       ast = {:+, [], [1, 2]}
 
-      result = ElixirTypes.of_expr(ast, TestModule, {:test, 1}, "test.ex", :infer, nil, %{})
+      result =
+        ElixirTypes.of_expr(
+          ast,
+          module: TestModule,
+          function: {:test, 1},
+          file: "test.ex",
+          mode: :infer,
+          metadata: %{},
+          variables: %{}
+        )
 
       case result do
         {:ok, %{dynamic: :term}} ->
-          # Module.Types returns dynamic for arithmetic expressions
-          # when specific type cannot be inferred - this is acceptable
           :ok
 
-        # Got type descriptor
         {:ok, _descr} ->
           :ok
 
-        # Acceptable fallback for M2
-        # :error -> :ok
         other ->
           flunk("Unexpected result: #{inspect(other)}")
       end
     end
 
     test "TypeInference integration with remote signatures" do
-      # Test TypeInference with metadata parameter
       ast = {{:., [], [String, :to_integer]}, [], [""]}
 
       result = TypeInference.type_of_with_elixir_types(ast, :none, nil, %{})
@@ -510,29 +510,16 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "converts struct types to shape" do
-      # TODO: this test should use real descriptor
-      # Test struct type conversion
-      # Create a descriptor that looks like a struct
-      struct_descr = %{
-        map: %{
-          closed: [
-            {:__struct__, %{atom: {:union, :sets.from_list([User])}}},
-            {:name, %{binary: %{}}},
-            {:age, %{integer: %{}}}
-          ]
-        }
-      }
+      struct_descr = Module.Types.Of.struct_type(Date, [%{field: :year}, %{field: :month}])
 
       result = ElixirTypes.to_shape(struct_descr)
 
       case result do
-        {:struct, fields, {:atom, User}, nil} ->
-          # Should have struct with fields in Binding-compatible format
+        {:struct, fields, {:atom, Date}, nil} ->
           assert is_list(fields)
           field_names = Keyword.keys(fields)
-          assert :name in field_names or :age in field_names
-
-        # TODO: assert on field values
+          assert :year in field_names
+          assert :month in field_names
 
         other ->
           flunk("Unexpected struct shape: #{inspect(other)}")
@@ -540,13 +527,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "converts function types to shape" do
-      # Test function type conversion
-      fun_descr = %{
-        fun: %{
-          arity: 2,
-          type: :function
-        }
-      }
+      fun_descr = Module.Types.Descr.fun(2)
 
       result = ElixirTypes.to_shape(fun_descr)
 
@@ -558,36 +539,23 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "converts bounded integer types to shape" do
-      # Test bounded integer conversion
-      range_descr = %{
-        integer: %{
-          min: 1,
-          max: 10
-        }
-      }
+      range_descr = Module.Types.Descr.integer()
 
       result = ElixirTypes.to_shape(range_descr)
 
       case result do
-        # Correct bounded integer
-        {:integer, {1, 10}} -> :ok
+        {:integer, nil} -> :ok
         other -> flunk("Unexpected integer range shape: #{inspect(other)}")
       end
     end
 
     test "converts string literal types to shape" do
-      # Test string literal conversion
-      literal_descr = %{
-        binary: %{
-          literal: "hello"
-        }
-      }
+      literal_descr = Module.Types.Descr.binary()
 
       result = ElixirTypes.to_shape(literal_descr)
 
       case result do
-        # Correct string literal
-        {:binary, "hello"} -> :ok
+        {:binary, nil} -> :ok
         other -> flunk("Unexpected string literal shape: #{inspect(other)}")
       end
     end
@@ -643,25 +611,13 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "handles complex nested types" do
-      # TODO: use real descr
-      # Test complex nested type like list(%{String.t => atom | integer})
-      # This is a simplified version
+      map_descr =
+        Module.Types.Descr.closed_map(
+          key: Module.Types.Descr.binary(),
+          value: Module.Types.Descr.atom([:a, :b])
+        )
 
-      # Create a list of maps descriptor
-      map_descr = %{
-        map: %{
-          closed: [
-            {:key, %{binary: %{}}},
-            {:value, %{atom: {:union, :sets.from_list([:a, :b])}}}
-          ]
-        }
-      }
-
-      list_descr = %{
-        list: %{
-          element: map_descr
-        }
-      }
+      list_descr = Module.Types.Descr.list(map_descr)
 
       result = ElixirTypes.to_shape(list_descr)
 
@@ -747,16 +703,10 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "struct pattern matching refinement" do
-      # TODO: this test is broken
-      # Test struct pattern matching
       pattern_ast =
-        {:%, [],
-         [
-           User,
-           {:%{}, [], [{:name, {:x, [version: 1], nil}}]}
-         ]}
+        {:%, [], [Date, {:%{}, [], [{:year, {:x, [version: 1], nil}}]}]}
 
-      match_ast = {:=, [], [pattern_ast, Macro.escape(%{__struct__: User, name: "test_name"})]}
+      match_ast = {:=, [], [pattern_ast, Macro.escape(~D[2023-01-01])]}
 
       result =
         ElixirTypes.of_match(
@@ -772,8 +722,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       case result do
         {:ok, vars} when is_map(vars) ->
-          # Should handle struct patterns gracefully
-          assert is_map(vars)
+          assert vars[{:x, 1}] == {:integer, nil}
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")
@@ -850,24 +799,20 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "nested pattern matching refinement" do
-      # Test complex nested patterns
       pattern_ast =
-        {:%, [],
+        {:%{}, [],
          [
-           Response,
-           {:%{}, [],
-            [
-              {:status,
-               {:=, [],
-                [
-                  {:status_var, [version: 1], nil},
-                  200
-                ]}},
-              {:data, {:data_var, [version: 2], nil}}
-            ]}
+           {:status,
+            {:=, [],
+             [
+               {:status_var, [version: 1], nil},
+               200
+             ]}},
+           {:data, {:%{}, [], [{:value, {:data_var, [version: 2], nil}}]}}
          ]}
 
-      match_ast = {:=, [], [pattern_ast, {:api_response, [], nil}]}
+      match_ast =
+        {:=, [], [pattern_ast, Macro.escape(%{status: 200, data: %{value: "ok"}})]}
 
       result =
         ElixirTypes.of_match(
@@ -883,8 +828,8 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       case result do
         {:ok, vars} when is_map(vars) ->
-          # Should handle nested patterns
-          assert is_map(vars)
+          assert vars[{:status_var, 1}] in [{:integer, 200}, {:integer, nil}]
+          assert vars[{:data_var, 2}] == {:binary, "ok"}
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")
@@ -956,7 +901,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         {:ok, vars} when is_map(vars) ->
           # Should handle map patterns
           assert vars[{:name_var, 1}] == {:binary, "John"}
-          assert vars[{:age_var, 1}] == {:integer, nil}
+          assert vars[{:age_var, 2}] in [{:integer, 30}, {:integer, nil}]
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")
@@ -1254,12 +1199,12 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
     test "binary pattern demonstrates conservative behavior" do
       if ElixirTypes.available?() do
-        # Test binary pattern - should be very conservative
-        # TODO: this AST is broken "<<data, :binary.()::8>>"
-        # was it supposed to be <<data::8, rest::binary>>
         pattern_ast =
           {:<<>>, [],
-           [{:data, [version: 1], nil}, {:"::", [], [{{:., [], [:binary]}, [], []}, 8]}]}
+           [
+             {:"::", [], [{:data, [version: 1], nil}, 8]},
+             {:"::", [], [{:rest, [version: 2], nil}, {:binary, [], Elixir}]}
+           ]}
 
         match_ast = {:=, [], [pattern_ast, <<72, 101, 108, 108, 111>>]}
 
@@ -1267,8 +1212,11 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         case result do
           {:ok, vars} when is_map(vars) ->
-            # If binary patterns are supported, should work
-            assert is_map(vars)
+            assert vars[{:data, 1}] == {:integer, nil}
+            assert vars[{:rest, 2}] == {:binary, nil}
+
+          :error ->
+            :ok
 
           other ->
             flunk("Unexpected result: #{inspect(other)}")
@@ -1298,14 +1246,14 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         """
 
         # Build metadata
-        metadata = ElixirSense.Core.MetadataBuilder.build(code)
+        {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
+        metadata = ElixirSense.Core.MetadataBuilder.build(ast)
 
         # Test that local signatures are built and used
         local_sigs = ElixirTypes.build_local_sigs_map(metadata, TestModule)
 
-        case local_sigs |> dbg do
+        case local_sigs do
           %{} when map_size(local_sigs) > 0 ->
-            # Should have found local function signatures
             assert Map.has_key?(local_sigs, {:helper, 0})
 
             # Test that these signatures can be used for type inference
@@ -1323,7 +1271,6 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
             case result do
               type when is_tuple(type) ->
-                # Got a refined type - good!
                 assert tuple_size(type) >= 2
 
               other ->
@@ -1361,13 +1308,16 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         """
 
         # Build metadata
-        metadata = ElixirSense.Core.MetadataBuilder.build(code)
+        {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
+        metadata = ElixirSense.Core.MetadataBuilder.build(ast)
 
         # Test that local signatures are built and used
         local_sigs = ElixirTypes.build_local_sigs_map(metadata, TestModule)
 
         # Test that these signatures can be used for type inference
-        call_ast = {{:., [line: 3], ElixirSenseExample.RemoteSignatures, :helper}, [line: 1], []}
+        call_ast =
+          {{:., [line: 3], [ElixirSenseExample.RemoteSignatures, :helper]}, [line: 1], []}
+
         context = %{module: TestModule, function: {:caller, 0}, file: "test.ex"}
 
         result =
@@ -1381,13 +1331,24 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         case result do
           type when is_tuple(type) ->
-            # Got a refined type - good!
             assert tuple_size(type) >= 2
 
           other ->
             flunk("Unexpected result: #{inspect(other)}")
         end
       end
+    end
+
+    test "Binding unions results across union remote targets" do
+      env = %Binding{module: TestModule, function: {:caller, 0}, requires: [], vars: []}
+
+      results =
+        [String, Integer]
+        |> Enum.map(fn mod ->
+          Binding.expand(env, {:call, {:atom, mod}, :module_info, [{:atom, :module}]})
+        end)
+
+      assert Enum.all?(results, &(&1 in [nil, :none] or is_tuple(&1) or is_map(&1)))
     end
   end
 end

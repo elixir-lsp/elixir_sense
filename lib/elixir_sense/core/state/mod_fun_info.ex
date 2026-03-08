@@ -26,7 +26,7 @@ defmodule ElixirSense.Core.State.ModFunInfo do
             | :defmodule,
           # ElixirTypes M2 fields
           elixir_types_clauses: list(map()),
-          elixir_types_sig: nil | {:infer, term(), list()},
+          elixir_types_sig: nil | {:infer | :strong, term(), list()},
           elixir_types_status: :ok | :partial | :skipped
         }
 

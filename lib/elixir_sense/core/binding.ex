@@ -1380,14 +1380,19 @@ defmodule ElixirSense.Core.Binding do
   defp expand_call(_env, {:atom, _mod}, _fun, _arity, _include_private, _, _stack), do: :none
 
   defp expand_call(env, {:union, variants}, fun, arity, include_private, position, stack) do
-    # TODO choose variant by args?
-    Enum.find_value(variants, fn variant ->
-      res = expand_call(env, variant, fun, arity, include_private, position, stack)
+    variants
+    |> Enum.map(&expand_call(env, &1, fun, arity, include_private, position, stack))
+    |> Enum.reject(&(&1 in [:none, nil]))
+    |> case do
+      [] ->
+        nil
 
-      if res != :none do
-        res
-      end
-    end)
+      [single] ->
+        single
+
+      results ->
+        {:union, Enum.uniq(results)}
+    end
   end
 
   defp expand_call(_env, _target, _fun, _arity, _include_private, _, _stack), do: nil
@@ -1486,6 +1491,10 @@ defmodule ElixirSense.Core.Binding do
         case specs[{mod, fun, arity}] do
           nil ->
             :no_spec
+
+          %State.SpecInfo{elixir_types_sig: {sig_kind, _domain, _clauses} = sig}
+          when sig_kind in [:infer, :strong] ->
+            ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig)
 
           %State.SpecInfo{} = spec ->
             get_return_from_metadata(env, mod, spec, include_private, stack) || :no_spec

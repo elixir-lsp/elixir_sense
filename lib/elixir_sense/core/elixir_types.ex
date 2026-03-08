@@ -243,48 +243,57 @@ defmodule ElixirSense.Core.ElixirTypes do
          metadata,
          variables
        ) do
-    track_performance(:of_expr, fn ->
-      if available?() do
-        try do
-          if mode == :traversal && is_simple_ast?(ast) do
-            # Fast path for simple AST nodes in traversal mode
-            track_fast_path_hit()
-            simple_type_of(ast)
-          else
-            # Full Module.Types processing
-            stack = init_stack(module, function, file, mode, local_sigs_map, metadata)
-            # Seed context with provided variables or infer from AST (dynamic types)
-            auto_vars = variables_from_ast(ast)
-            effective_vars = merge_variables(variables, auto_vars)
-            context = init_context(effective_vars)
+    cond do
+      is_list(ast) and not proper_list_ast?(ast) ->
+        :error
 
-            if stack && context do
-              {descr, _context} =
-                Module.Types.Expr.of_expr(
-                  ast,
-                  Module.Types.Descr.term(),
-                  ast,
-                  stack,
-                  context
+      is_tuple(ast) and tuple_size(ast) not in [2, 3] ->
+        :error
+
+      true ->
+        track_performance(:of_expr, fn ->
+          if available?() do
+            try do
+              if mode == :traversal && is_simple_ast?(ast) do
+                # Fast path for simple AST nodes in traversal mode
+                track_fast_path_hit()
+                simple_type_of(ast)
+              else
+                # Full Module.Types processing
+                stack = init_stack(module, function, file, mode, local_sigs_map, metadata)
+                # Seed context with provided variables or infer from AST (dynamic types)
+                auto_vars = variables_from_ast(ast)
+                effective_vars = merge_variables(variables, auto_vars)
+                context = init_context(effective_vars)
+
+                if stack && context do
+                  {descr, _context} =
+                    Module.Types.Expr.of_expr(
+                      ast,
+                      Module.Types.Descr.term(),
+                      ast,
+                      stack,
+                      context
+                    )
+
+                  {:ok, descr}
+                else
+                  :error
+                end
+              end
+            catch
+              kind, payload ->
+                Logger.warning(
+                  "Unable to infer type of #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
                 )
 
-              {:ok, descr}
-            else
-              :error
+                :error
             end
-          end
-        catch
-          kind, payload ->
-            Logger.warning(
-              "Unable to infer type of #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
-            )
-
+          else
             :error
-        end
-      else
-        :error
-      end
-    end)
+          end
+        end)
+    end
   end
 
   # Performance optimization: fast path for simple AST nodes in traversal mode
@@ -310,6 +319,10 @@ defmodule ElixirSense.Core.ElixirTypes do
         false
     end
   end
+
+  defp proper_list_ast?([]), do: true
+  defp proper_list_ast?([_ | tail]), do: proper_list_ast?(tail)
+  defp proper_list_ast?(_), do: false
 
   # Simple type inference for basic literals (fast path)
   defp simple_type_of(ast) do
@@ -1833,6 +1846,8 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   # Accept Module.Types.Descr, sentinel atoms, or ElixirSense minimal shapes
   # and coerce into a Module.Types.Descr.t()
+  def coerce_var_type_public(type_like), do: coerce_var_type(type_like)
+
   defp coerce_var_type(%{} = descr), do: descr
   defp coerce_var_type(:dynamic), do: Module.Types.Descr.dynamic()
   defp coerce_var_type(:term), do: Module.Types.Descr.term()
@@ -2014,35 +2029,39 @@ defmodule ElixirSense.Core.ElixirTypes do
       %{meta: meta, args: args, guards: guards, body: body} = normalise_clause(clause)
       body = ensure_body_var_versions(body)
 
-      try do
-        {trees, clause_ctx} =
-          Module.Types.Pattern.of_head(
-            args,
-            guards || [],
-            expected,
-            {:infer, expected},
-            meta,
-            stack,
-            context
-          )
+      if unsupported_signature_body?(body) do
+        {:cont, acc}
+      else
+        try do
+          {trees, clause_ctx} =
+            Module.Types.Pattern.of_head(
+              args,
+              guards || [],
+              expected,
+              {:infer, expected},
+              meta,
+              stack,
+              context
+            )
 
-        {return_type, clause_ctx} =
-          Module.Types.Expr.of_expr(body, Module.Types.Descr.term(), body, stack, clause_ctx)
+          {return_type, clause_ctx} =
+            Module.Types.Expr.of_expr(body, Module.Types.Descr.term(), body, stack, clause_ctx)
 
-        arg_types =
-          case stack.mode do
-            :traversal -> expected
-            _ -> Module.Types.Pattern.of_domain(trees, expected, clause_ctx)
-          end
+          arg_types =
+            case stack.mode do
+              :traversal -> expected
+              _ -> Module.Types.Pattern.of_domain(trees, expected, clause_ctx)
+            end
 
-        {:cont, [{arg_types, return_type} | acc]}
-      catch
-        kind, payload ->
-          Logger.warning(
-            "Unable to infer local signature: #{Exception.format(kind, payload, __STACKTRACE__)}\nBody: #{inspect(body)}"
-          )
+          {:cont, [{arg_types, return_type} | acc]}
+        catch
+          kind, payload ->
+            Logger.warning(
+              "Unable to infer local signature: #{Exception.format(kind, payload, __STACKTRACE__)}\nBody: #{inspect(body)}"
+            )
 
-          {:cont, acc}
+            {:cont, acc}
+        end
       end
     end)
     |> Enum.reverse()
@@ -2068,6 +2087,9 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   defp ensure_body_var_versions(ast) do
     Macro.prewalk(ast, fn
+      {:@, _, _} = node ->
+        node
+
       {name, meta, context} = node
       when is_atom(name) and is_list(meta) and is_atom(context) and
              name not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] ->
@@ -2082,6 +2104,16 @@ defmodule ElixirSense.Core.ElixirTypes do
     end)
   end
 
+  defp unsupported_signature_body?(body) do
+    {_body, found?} =
+      Macro.prewalk(body, false, fn
+        {:@, _, _} = node, _acc -> {node, true}
+        node, acc -> {node, acc}
+      end)
+
+    found?
+  end
+
   @doc """
   Build a local signatures map from metadata for a specific module.
 
@@ -2092,11 +2124,31 @@ defmodule ElixirSense.Core.ElixirTypes do
       metadata.mods_funs_to_positions
       |> Enum.filter(fn {{mod, _fun, _arity}, _info} -> mod == module end)
       |> Enum.reduce(%{}, fn {{_mod, fun, arity}, info}, acc ->
-        case info do
-          %{elixir_types_sig: sig, type: type} when sig != nil ->
-            kind = get_def_kind_for_types(type)
-            Map.put(acc, {fun, arity}, {kind, sig})
+        with %{type: type} <- info do
+          kind = get_def_kind_for_types(type)
 
+          sig =
+            case {Map.get(info, :elixir_types_sig),
+                  spec_signature_from_metadata(metadata, module, fun, arity)} do
+              {_inferred, {:ok, {:strong, _domain, _clauses} = spec_sig}} ->
+                spec_sig
+
+              {sig, _} when sig != nil ->
+                sig
+
+              {nil, {:ok, spec_sig}} ->
+                spec_sig
+
+              _ ->
+                nil
+            end
+
+          if sig != nil do
+            Map.put(acc, {fun, arity}, {kind, sig})
+          else
+            acc
+          end
+        else
           _ ->
             acc
         end
@@ -2128,6 +2180,20 @@ defmodule ElixirSense.Core.ElixirTypes do
       end
     end
   end
+
+  def spec_signature_from_metadata(metadata, module, fun, arity)
+      when is_map(metadata) and is_atom(module) and is_atom(fun) and is_integer(arity) do
+    case metadata.specs[{module, fun, arity}] do
+      %ElixirSense.Core.State.SpecInfo{elixir_types_sig: {kind, _domain, _clauses} = sig}
+      when kind in [:infer, :strong] ->
+        {:ok, sig}
+
+      _ ->
+        :error
+    end
+  end
+
+  def spec_signature_from_metadata(_, _, _, _), do: :error
 
   defp maybe_put_remote_sig(context, meta, stack) do
     call = build_remote_call_from_meta(meta)
@@ -2169,17 +2235,17 @@ defmodule ElixirSense.Core.ElixirTypes do
   # For other types, default to :def
   defp get_def_kind_for_types(_), do: :def
 
-  # Extract return type from ExCk signature (simplified for M2)
-  defp extract_return_type_from_sig({sig_kind, _domain, clauses})
-       when sig_kind in [:infer, :strong] and is_list(clauses) do
+  # Extract return type from signature by unioning clause returns.
+  def extract_return_type_from_sig({sig_kind, _domain, clauses})
+      when sig_kind in [:infer, :strong] and is_list(clauses) do
     case extract_return_type_from_clauses(clauses) do
       {:ok, return_type} -> return_type
       :error -> Module.Types.Descr.dynamic()
     end
   end
 
-  defp extract_return_type_from_sig(:none), do: Module.Types.Descr.dynamic()
-  defp extract_return_type_from_sig(_), do: Module.Types.Descr.dynamic()
+  def extract_return_type_from_sig(:none), do: Module.Types.Descr.dynamic()
+  def extract_return_type_from_sig(_), do: Module.Types.Descr.dynamic()
 
   defp extract_return_type_from_clauses(clauses) do
     clauses

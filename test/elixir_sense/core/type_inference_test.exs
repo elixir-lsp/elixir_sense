@@ -1,6 +1,16 @@
 defmodule ElixirSense.Core.TypeInferenceTest do
   use ExUnit.Case, async: true
-  alias ElixirSense.Core.TypeInference
+  alias ElixirSense.Core.{ElixirTypes, TypeInference}
+
+  setup do
+    original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+
+    on_exit(fn ->
+      Application.put_env(:elixir_sense, :use_elixir_types, original_value)
+    end)
+
+    :ok
+  end
 
   describe "find_typed_vars" do
     defp find_typed_vars_in(code, match_context \\ nil, context \\ nil) do
@@ -344,6 +354,19 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       TypeInference.type_of(ast, context)
     end
 
+    defp with_elixir_types(enabled, fun) do
+      Application.put_env(:elixir_sense, :use_elixir_types, enabled)
+      fun.()
+    end
+
+    defp assert_old_and_native(code, old_expected, native_expected, context \\ nil) do
+      assert with_elixir_types(false, fn -> type_of(code, context) end) == old_expected
+
+      if ElixirTypes.available?() do
+        assert with_elixir_types(true, fn -> type_of(code, context) end) == native_expected
+      end
+    end
+
     test "atom" do
       assert type_of(":a") == {:atom, :a}
       assert type_of("My.Module") == {:atom, My.Module}
@@ -384,13 +407,17 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "list operators" do
-      assert type_of(":erlang.++([a], [b])") ==
-               {:call, {:atom, :erlang}, :++,
-                [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
+      assert_old_and_native(
+        ":erlang.++([a], [b])",
+        {:call, {:atom, :erlang}, :++, [list: {:variable, :a, 1}, list: {:variable, :b, 1}]},
+        {:list, nil}
+      )
 
-      assert type_of(":erlang.--([a], [b])") ==
-               {:call, {:atom, :erlang}, :--,
-                [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
+      assert_old_and_native(
+        ":erlang.--([a], [b])",
+        {:call, {:atom, :erlang}, :--, [list: {:variable, :a, 1}, list: {:variable, :b, 1}]},
+        {:list, nil}
+      )
     end
 
     test "tuple" do
@@ -464,11 +491,15 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "local call" do
-      assert type_of("foo(a)") == {:local_call, :foo, {1, 1}, [{:variable, :a, 1}]}
+      assert_old_and_native("foo(a)", {:local_call, :foo, {1, 1}, [{:variable, :a, 1}]}, nil)
     end
 
     test "remote call" do
-      assert type_of(":foo.bar(a)") == {:call, {:atom, :foo}, :bar, [{:variable, :a, 1}]}
+      assert_old_and_native(
+        ":foo.bar(a)",
+        {:call, {:atom, :foo}, :bar, [{:variable, :a, 1}]},
+        nil
+      )
     end
 
     test "match" do
@@ -485,8 +516,8 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "other" do
-      assert type_of("\"asd\"") == nil
-      assert type_of("1.23") == nil
+      assert_old_and_native("\"asd\"", nil, {:binary, nil})
+      assert_old_and_native("1.23", nil, {:float, nil})
     end
 
     test "__STACKTRACE__ returns {:list, nil}" do
@@ -494,9 +525,9 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "anonymous function returns nil" do
-      assert type_of("fn -> a end") == nil
-      assert type_of("fn x -> x + 1 end") == nil
-      assert type_of("fn x, y -> x * y end") == nil
+      assert_old_and_native("fn -> a end", nil, {:fun_clauses, [{[], nil}]})
+      assert_old_and_native("fn x -> x + 1 end", nil, {:fun_clauses, [{[nil], nil}]})
+      assert_old_and_native("fn x, y -> x * y end", nil, {:fun_clauses, [{[nil, nil], nil}]})
     end
   end
 
@@ -538,9 +569,28 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       "require Module"
     ]
 
+    native_expectations = %{
+      "case a do\n  :ok -> 1\n  :error -> 2\nend" => {:integer, nil},
+      "cond do\n  a -> 1\n  b -> 2\nend" => {:integer, nil},
+      "try do\n  risky_operation()\nrescue\n  e -> handle(e)\nend" => nil,
+      "receive do\n  {:msg, msg} -> process(msg)\nend" => nil,
+      "for x <- list, do: x * 2" => {:list, nil},
+      "with {:ok, a} <- fetch_a(), {:ok, b} <- fetch_b(a), do: a + b" => nil,
+      "quote do: a + b" => nil,
+      "unquote(expr)" => nil,
+      "unquote_splicing(expr)" => nil,
+      "import Module" => nil,
+      "alias Module.SubModule" => nil,
+      "require Module" => nil
+    }
+
     for form <- special_forms do
-      test "special form: #{inspect(form)} returns nil" do
-        assert type_of(unquote(form)) == nil
+      test "special form: #{inspect(form)} matches legacy and native mode" do
+        assert_old_and_native(
+          unquote(form),
+          nil,
+          Map.fetch!(unquote(Macro.escape(native_expectations)), unquote(form))
+        )
       end
     end
   end

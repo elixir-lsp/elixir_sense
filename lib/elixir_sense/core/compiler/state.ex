@@ -1,6 +1,7 @@
 defmodule ElixirSense.Core.Compiler.State do
   @moduledoc false
   alias ElixirSense.Core.BuiltinFunctions
+  alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.State.Env
 
   alias ElixirSense.Core.State.{
@@ -877,7 +878,8 @@ defmodule ElixirSense.Core.Compiler.State do
         end_positions: [hd(new.end_positions) | existing.end_positions],
         generated: [hd(new.generated) | existing.generated],
         args: [hd(new.args) | existing.args],
-        specs: [hd(new.specs) | existing.specs]
+        specs: [hd(new.specs) | existing.specs],
+        elixir_types_sig: new.elixir_types_sig || existing.elixir_types_sig
     }
   end
 
@@ -915,6 +917,7 @@ defmodule ElixirSense.Core.Compiler.State do
       name: type_name,
       args: [arg_names],
       specs: [spec],
+      elixir_types_sig: build_elixir_types_spec_sig(env, type_name, spec, kind),
       kind: kind,
       generated: [Keyword.get(options, :generated, false)],
       positions: [pos],
@@ -934,6 +937,264 @@ defmodule ElixirSense.Core.Compiler.State do
 
     %__MODULE__{state | specs: specs}
   end
+
+  defp build_elixir_types_spec_sig(_env, _name, _spec, kind)
+       when kind not in [:spec, :callback, :macrocallback],
+       do: nil
+
+  defp build_elixir_types_spec_sig(%{module: module}, name, spec, _kind)
+       when is_atom(module) and is_atom(name) and is_binary(spec) do
+    with {:ok, {:@, _, [{_kind, _, [ast]}]}} <- Code.string_to_quoted(spec, emit_warnings: false),
+         {:ok, {fun_ast, return_ast, guards}} <- extract_spec_parts(ast),
+         {^name, _, args} <- fun_ast,
+         true <- is_list(args) do
+      arg_descrs = Enum.map(args, &spec_arg_to_descr(&1, module, guards))
+      return_descr = spec_return_to_descr(return_ast, module, guards)
+      {:strong, nil, [{arg_descrs, return_descr}]}
+    else
+      _ -> nil
+    end
+  end
+
+  defp build_elixir_types_spec_sig(_, _, _, _), do: nil
+
+  defp extract_spec_parts({:when, _, [{:"::", _, [fun_ast, return_ast]}, guards]}) do
+    {:ok, {fun_ast, return_ast, guards}}
+  end
+
+  defp extract_spec_parts({:"::", _, [fun_ast, return_ast]}) do
+    {:ok, {fun_ast, return_ast, []}}
+  end
+
+  defp extract_spec_parts(_), do: :error
+
+  defp spec_arg_to_descr({:"::", _, [_var_ast, type_ast]}, module, guards) do
+    spec_return_to_descr(type_ast, module, guards)
+  end
+
+  defp spec_arg_to_descr(type_ast, module, guards),
+    do: spec_return_to_descr(type_ast, module, guards)
+
+  defp spec_return_to_descr(type_ast, module, guards) do
+    type_ast
+    |> substitute_spec_vars(guards)
+    |> spec_ast_to_shape(module)
+    |> ElixirTypes.coerce_var_type_public()
+    |> Kernel.||(Module.Types.Descr.dynamic())
+  rescue
+    _ -> Module.Types.Descr.dynamic()
+  end
+
+  defp substitute_spec_vars(type_ast, guards) when is_list(guards) do
+    guard_map =
+      for {var, type} <- guards,
+          is_atom(var),
+          into: %{},
+          do: {var, type}
+
+    Macro.prewalk(type_ast, fn
+      {name, _, nil} = ast when is_atom(name) -> Map.get(guard_map, name, ast)
+      ast -> ast
+    end)
+  end
+
+  defp substitute_spec_vars(type_ast, _guards), do: type_ast
+
+  defp spec_ast_to_shape({:|, _, variants}, module) do
+    {:union, Enum.map(variants, &spec_ast_to_shape(&1, module))}
+  end
+
+  defp spec_ast_to_shape({:%{}, _, fields}, module) do
+    {:map,
+     for(
+       {field, type} <- fields,
+       field = spec_map_key(field),
+       is_atom(field),
+       do: {field, spec_ast_to_shape(type, module)}
+     ), nil}
+  end
+
+  defp spec_ast_to_shape({:{}, _, fields}, module) do
+    {:tuple, length(fields), Enum.map(fields, &spec_ast_to_shape(&1, module))}
+  end
+
+  defp spec_ast_to_shape([], _module), do: {:list, :empty}
+  defp spec_ast_to_shape([type | _], module), do: {:list, spec_ast_to_shape(type, module)}
+
+  defp spec_ast_to_shape({:%, _, [struct_mod, {:%{}, _, fields}]}, module) do
+    resolved_module = resolve_spec_module(struct_mod, module)
+
+    shape_fields =
+      for {field, type} <- fields,
+          is_atom(field),
+          do: {field, spec_ast_to_shape(type, module)}
+
+    case resolved_module do
+      mod when is_atom(mod) -> {:struct, shape_fields, {:atom, mod}, nil}
+      _ -> {:map, shape_fields, nil}
+    end
+  end
+
+  defp spec_ast_to_shape({name, _, args} = ast, module) when is_atom(name) and is_list(args) do
+    case {name, args} do
+      {:any, []} ->
+        nil
+
+      {:none, []} ->
+        :none
+
+      {:integer, []} ->
+        {:integer, nil}
+
+      {:float, []} ->
+        {:float, nil}
+
+      {:binary, []} ->
+        {:binary, nil}
+
+      {:bitstring, []} ->
+        {:binary, nil}
+
+      {:atom, []} ->
+        :atom
+
+      {:boolean, []} ->
+        {:union, [atom: false, atom: true]}
+
+      {:number, []} ->
+        :number
+
+      {:timeout, []} ->
+        {:union, [atom: :infinity, integer: nil]}
+
+      {:non_neg_integer, []} ->
+        {:integer, nil}
+
+      {:pos_integer, []} ->
+        {:integer, nil}
+
+      {:neg_integer, []} ->
+        {:integer, nil}
+
+      {:arity, []} ->
+        {:integer, nil}
+
+      {:byte, []} ->
+        {:integer, nil}
+
+      {:char, []} ->
+        {:integer, nil}
+
+      {:charlist, []} ->
+        {:list, {:integer, nil}}
+
+      {:nonempty_charlist, []} ->
+        {:list, {:integer, nil}}
+
+      {:iolist, []} ->
+        {:list, nil}
+
+      {:iodata, []} ->
+        {:union, [binary: nil, list: nil]}
+
+      {:node, []} ->
+        :atom
+
+      {:identifier, []} ->
+        {:union, [atom: nil, atom: true]}
+
+      {:mfa, []} ->
+        {:tuple, 3, [:atom, :atom, {:integer, nil}]}
+
+      {:term, []} ->
+        nil
+
+      {:dynamic, []} ->
+        nil
+
+      {:map, []} ->
+        {:map, [], nil}
+
+      {:keyword, []} ->
+        {:list, {:tuple, 2, [nil, nil]}}
+
+      {:keyword, [type]} ->
+        {:list, {:tuple, 2, [nil, spec_ast_to_shape(type, module)]}}
+
+      {:list, []} ->
+        {:list, nil}
+
+      {:nonempty_list, []} ->
+        {:list, nil}
+
+      {:list, [type]} ->
+        {:list, spec_ast_to_shape(type, module)}
+
+      {:nonempty_list, [type]} ->
+        {:list, spec_ast_to_shape(type, module)}
+
+      {:maybe_improper_list, [type, _tail]} ->
+        {:list, spec_ast_to_shape(type, module)}
+
+      {:nonempty_improper_list, [type, _tail]} ->
+        {:list, spec_ast_to_shape(type, module)}
+
+      {:nonempty_maybe_improper_list, [type, _tail]} ->
+        {:list, spec_ast_to_shape(type, module)}
+
+      {:tuple, []} ->
+        :tuple
+
+      {:module, []} ->
+        :atom
+
+      {:pid, []} ->
+        :pid
+
+      {:port, []} ->
+        :port
+
+      {:reference, []} ->
+        :reference
+
+      {:fun, [{:->, _, [arg_types, return_type]}]} when is_list(arg_types) ->
+        {:fun, Enum.map(arg_types, &spec_ast_to_shape(&1, module)),
+         spec_ast_to_shape(return_type, module)}
+
+      _ ->
+        case ast do
+          {:__aliases__, _, _} -> {:atom, resolve_spec_module(ast, module)}
+          _ -> nil
+        end
+    end
+  end
+
+  defp spec_ast_to_shape({:.., _, [_left, _right]}, _module), do: {:integer, nil}
+
+  defp spec_ast_to_shape({{:., _, [remote, type]}, _, args}, module) do
+    resolved_remote = resolve_spec_module(remote, module)
+
+    if is_atom(resolved_remote) and is_atom(type) and is_list(args) do
+      {:atom, Module.concat([resolved_remote, type])}
+    else
+      nil
+    end
+  end
+
+  defp spec_ast_to_shape(atom, _module) when is_atom(atom), do: {:atom, atom}
+  defp spec_ast_to_shape(int, _module) when is_integer(int), do: {:integer, int}
+  defp spec_ast_to_shape(float, _module) when is_float(float), do: {:float, float}
+  defp spec_ast_to_shape(binary, _module) when is_binary(binary), do: {:binary, binary}
+  defp spec_ast_to_shape(_ast, _module), do: nil
+
+  defp spec_map_key({:required, _, [key]}), do: key
+  defp spec_map_key({:optional, _, [key]}), do: key
+  defp spec_map_key(key), do: key
+
+  defp resolve_spec_module({:__aliases__, _, list}, _current_module), do: Module.concat(list)
+  defp resolve_spec_module(atom, _current_module) when is_atom(atom), do: atom
+  defp resolve_spec_module({:__MODULE__, _, _}, current_module), do: current_module
+  defp resolve_spec_module(_, _), do: nil
 
   def add_var_write(%__MODULE__{} = state, {name, meta, _}) when name != :_ do
     version = meta[:version]

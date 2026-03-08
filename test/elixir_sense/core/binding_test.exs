@@ -1682,7 +1682,22 @@ defmodule ElixirSense.Core.BindingTest do
           function: {:some, 0},
           specs: %{
             {MyMod, :fun, 3} => %SpecInfo{
-              specs: ["@spec fun(integer(), integer(), any()) :: %MyMod{}"]
+              specs: ["@spec fun(integer(), integer(), any()) :: %MyMod{}"],
+              elixir_types_sig: {
+                :strong,
+                nil,
+                [
+                  {[
+                     Module.Types.Descr.integer(),
+                     Module.Types.Descr.integer(),
+                     Module.Types.Descr.dynamic()
+                   ],
+                   Module.Types.Descr.closed_map([
+                     {:__struct__, Module.Types.Descr.atom([MyMod])},
+                     {:abc, Module.Types.Descr.dynamic()}
+                   ])}
+                ]
+              }
             }
           },
           mods_funs_to_positions: %{
@@ -1713,7 +1728,13 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref, 1}
                )
 
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
+      expected = %{
+        dynamic: %{
+          map: {:closed, %{__struct__: %{atom: {:union, %{MyMod => []}}}, abc: :term}}
+        }
+      }
+
+      assert expected ==
                Binding.expand(
                  env
                  |> Map.put(:vars, [
@@ -1722,7 +1743,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref, 1}
                )
 
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
+      assert expected ==
                Binding.expand(
                  env
                  |> Map.put(:vars, [
@@ -1731,7 +1752,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref, 1}
                )
 
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
+      assert expected ==
                Binding.expand(
                  env
                  |> Map.put(:vars, [

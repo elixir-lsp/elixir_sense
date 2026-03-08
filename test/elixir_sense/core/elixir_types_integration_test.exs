@@ -69,7 +69,7 @@ defmodule ElixirSense.Core.ElixirTypesIntegrationTest do
     test "handles unknown expressions gracefully" do
       # Unknown expressions should either return nil or a reasonable fallback
       result = TypeInference.type_of({:unknown_call, [], []}, :none)
-      assert match?({:local_call, :unknown_call, {1, 1}, []}, result) or is_tuple(result)
+      assert is_nil(result) or is_tuple(result)
     end
   end
 

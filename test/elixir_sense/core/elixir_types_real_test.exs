@@ -1,8 +1,7 @@
 defmodule ElixirSense.Core.ElixirTypesRealTest do
   use ExUnit.Case, async: false
 
-  alias ElixirSense.Core.{ElixirTypes, TypeInference, Binding}
-  alias ElixirSense.Core.State
+  alias ElixirSense.Core.{ElixirTypes, TypeInference}
 
   @moduletag :elixir_types_integration
 
