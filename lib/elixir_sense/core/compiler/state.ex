@@ -879,8 +879,29 @@ defmodule ElixirSense.Core.Compiler.State do
         generated: [hd(new.generated) | existing.generated],
         args: [hd(new.args) | existing.args],
         specs: [hd(new.specs) | existing.specs],
-        elixir_types_sig: new.elixir_types_sig || existing.elixir_types_sig
+        elixir_types_sig: merge_elixir_types_sigs(existing.elixir_types_sig, new.elixir_types_sig)
     }
+  end
+
+  defp merge_elixir_types_sigs(nil, new), do: new
+  defp merge_elixir_types_sigs(existing, nil), do: existing
+
+  defp merge_elixir_types_sigs(
+         {kind1, _domain1, clauses1},
+         {_kind2, _domain2, clauses2}
+       ) do
+    # Merge clauses from both specs; use :strong if either is :strong
+    merged_kind = if kind1 == :strong, do: :strong, else: :strong
+    merged_clauses = clauses1 ++ clauses2
+
+    # Recompute domain as union of all clause arg types
+    merged_domain =
+      case merged_clauses do
+        [{args, _return}] -> args
+        _ -> nil
+      end
+
+    {merged_kind, merged_domain, merged_clauses}
   end
 
   def add_spec(
@@ -1200,6 +1221,36 @@ defmodule ElixirSense.Core.Compiler.State do
       # Handle well-known remote types
       case {resolved_remote, type, args} do
         {String, :t, []} -> {:binary, nil}
+        {String, :codepoint, []} -> {:binary, nil}
+        {String, :grapheme, []} -> {:binary, nil}
+        {String, :pattern, []} -> nil
+        {Enum, :t, []} -> nil
+        {Enum, :acc, []} -> nil
+        {Enum, :element, []} -> nil
+        {Enum, :index, []} -> {:integer, nil}
+        {Enum, :default, []} -> nil
+        {Range, :t, []} -> {:struct, [__struct__: {:atom, Range}], {:atom, Range}, nil}
+        {Range, :t, [_start, _stop]} -> {:struct, [__struct__: {:atom, Range}], {:atom, Range}, nil}
+        {Regex, :t, []} -> {:struct, [__struct__: {:atom, Regex}], {:atom, Regex}, nil}
+        {MapSet, :t, [_]} -> {:struct, [__struct__: {:atom, MapSet}], {:atom, MapSet}, nil}
+        {MapSet, :t, []} -> {:struct, [__struct__: {:atom, MapSet}], {:atom, MapSet}, nil}
+        {DateTime, :t, []} -> {:struct, [__struct__: {:atom, DateTime}], {:atom, DateTime}, nil}
+        {NaiveDateTime, :t, []} -> {:struct, [__struct__: {:atom, NaiveDateTime}], {:atom, NaiveDateTime}, nil}
+        {Date, :t, []} -> {:struct, [__struct__: {:atom, Date}], {:atom, Date}, nil}
+        {Time, :t, []} -> {:struct, [__struct__: {:atom, Time}], {:atom, Time}, nil}
+        {URI, :t, []} -> {:struct, [__struct__: {:atom, URI}], {:atom, URI}, nil}
+        {Keyword, :t, []} -> {:list, {:tuple, 2, [:atom, nil]}}
+        {Keyword, :t, [type]} -> {:list, {:tuple, 2, [:atom, spec_ast_to_shape(type, module)]}}
+        {Keyword, :key, []} -> :atom
+        {Keyword, :value, []} -> nil
+        {Access, :key, []} -> nil
+        {Access, :value, []} -> nil
+        {IO, :chardata, []} -> {:union, [{:binary, nil}, {:list, nil}]}
+        {IO, :nodata, []} -> {:atom, :ok}
+        {Macro, :t, []} -> nil
+        {Macro, :input, []} -> nil
+        {Macro, :output, []} -> nil
+        {Exception, :t, []} -> {:map, [__struct__: :atom, __exception__: {:atom, true}], nil}
         _ -> nil
       end
     else

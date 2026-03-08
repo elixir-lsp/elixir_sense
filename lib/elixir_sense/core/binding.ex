@@ -424,40 +424,19 @@ defmodule ElixirSense.Core.Binding do
          _module when is_atom(env.module) <- env.module,
          local_sigs when is_map(local_sigs) and local_sigs != %{} <- env.elixir_types_local_sigs,
          entry when not is_nil(entry) <- Map.get(local_sigs, {fun, length(arguments)}),
-         {kind, {:infer, _domain, clause_types}} when kind in [:def, :defp] <- entry,
-         {:ok, return_descr} <- merge_clause_returns(clause_types),
-         shape when shape != nil <- ElixirTypes.to_shape(return_descr) do
-      merge_binding_shape(result, shape)
+         {kind, {:infer, _domain, _clauses} = sig} when kind in [:def, :defp] <- entry do
+      # Expand argument shapes for overload filtering
+      expanded_args = Enum.map(arguments, &expand(env, &1, []))
+      return_descr = ElixirTypes.extract_return_type_from_sig(sig, expanded_args)
+      shape = ElixirTypes.to_shape(return_descr)
+
+      if shape != nil do
+        merge_binding_shape(result, shape)
+      else
+        result
+      end
     else
       _ -> result
-    end
-  end
-
-  defp merge_clause_returns([]), do: :error
-
-  defp merge_clause_returns(clause_types) when is_list(clause_types) do
-    returns =
-      clause_types
-      |> Enum.map(&elem(&1, 1))
-      |> Enum.reject(&is_nil/1)
-
-    case returns do
-      [] ->
-        :error
-
-      [single] ->
-        {:ok, single}
-
-      [first | rest] ->
-        Enum.reduce_while(rest, {:ok, first}, fn descr, {:ok, acc} ->
-          try do
-            {:cont, {:ok, Module.Types.Descr.union(acc, descr)}}
-          rescue
-            _ -> {:halt, :error}
-          catch
-            _ -> {:halt, :error}
-          end
-        end)
     end
   end
 
@@ -1385,10 +1364,12 @@ defmodule ElixirSense.Core.Binding do
   defp expand_call(env, {:atom, mod}, fun, arguments, include_private, position, stack)
        when mod not in [nil, true, false] and fun not in [nil, true, false] do
     arity = length(arguments)
+    # Expand argument shapes for overload filtering
+    expanded_args = Enum.map(arguments, &expand(env, &1, stack))
 
-    case expand_call_from_metadata(env, mod, fun, arity, include_private, position, stack) do
+    case expand_call_from_metadata(env, mod, fun, arity, expanded_args, include_private, position, stack) do
       result when result not in [:none] -> result
-      _ -> expand_call_from_introspection(env, mod, fun, arity, include_private, stack)
+      _ -> expand_call_from_introspection(env, mod, fun, arity, expanded_args, include_private, stack)
     end
   end
 
@@ -1417,18 +1398,19 @@ defmodule ElixirSense.Core.Binding do
     fun_arity - fun_defaults <= call_arity and call_arity <= fun_arity
   end
 
-  defp expand_call_from_introspection(env, mod, fun, arity, include_private, stack) do
+  defp expand_call_from_introspection(env, mod, fun, arity, arg_shapes, include_private, stack) do
     case ElixirSense.Core.ElixirTypes.spec_signature_from_metadata(env, mod, fun, arity) do
       {:ok, sig} ->
-        expand(env, ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig), stack) ||
-          :no_spec
+        descr = ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig, arg_shapes)
+        shape = ElixirSense.Core.ElixirTypes.to_shape(descr)
+        expand(env, shape, stack) || :no_spec
 
       :error ->
-        do_expand_call_from_introspection(env, mod, fun, arity, include_private, stack)
+        do_expand_call_from_introspection(env, mod, fun, arity, arg_shapes, include_private, stack)
     end
   end
 
-  defp do_expand_call_from_introspection(env, mod, fun, arity, include_private, stack) do
+  defp do_expand_call_from_introspection(env, mod, fun, arity, arg_shapes, include_private, stack) do
     maybe_kind_arity =
       case ElixirSense.Core.Normalized.Code.get_docs(mod, :docs) do
         nil ->
@@ -1458,13 +1440,34 @@ defmodule ElixirSense.Core.Binding do
         :no_spec
 
       {:function, arity} ->
-        case TypeInfo.get_function_spec(mod, fun, arity) do
-          {{_fun, _arity}, _asts} = type ->
-            return_type = get_return_from_spec(env, type, mod, include_private)
-            expand(env, return_type, stack) || :no_spec
+        # Try ExCk native signature first, then fall back to legacy spec parsing
+        exck_result =
+          if ElixirSense.Core.ElixirTypes.enabled?() do
+            case ElixirSense.Core.ExCkReader.lookup_signature(mod, fun, arity) do
+              {:ok, %{sig: {sig_kind, _domain, _clauses} = sig}}
+              when sig_kind in [:infer, :strong] ->
+                descr = ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig, arg_shapes)
+                shape = ElixirSense.Core.ElixirTypes.to_shape(descr)
+                expand(env, shape, stack)
 
-          _ ->
-            :no_spec
+              _ ->
+                nil
+            end
+          end
+
+        case exck_result do
+          nil ->
+            case TypeInfo.get_function_spec(mod, fun, arity) do
+              {{_fun, _arity}, _asts} = type ->
+                return_type = get_return_from_spec(env, type, mod, include_private)
+                expand(env, return_type, stack) || :no_spec
+
+              _ ->
+                :no_spec
+            end
+
+          result ->
+            result
         end
     end
   end
@@ -1474,6 +1477,7 @@ defmodule ElixirSense.Core.Binding do
          mod,
          fun,
          arity,
+         arg_shapes,
          include_private,
          position,
          stack
@@ -1526,7 +1530,8 @@ defmodule ElixirSense.Core.Binding do
 
           %State.SpecInfo{elixir_types_sig: {sig_kind, _domain, _clauses} = sig}
           when sig_kind in [:infer, :strong] ->
-            ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig)
+            descr = ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig, arg_shapes)
+            ElixirSense.Core.ElixirTypes.to_shape(descr)
 
           %State.SpecInfo{elixir_types_sig: nil} = spec ->
             get_return_from_metadata(env, mod, spec, include_private, stack) || :no_spec

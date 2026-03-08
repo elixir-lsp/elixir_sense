@@ -1829,11 +1829,8 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref, 1}
                )
 
-      expected = %{
-        dynamic: %{
-          map: {:closed, %{__struct__: %{atom: {:union, %{MyMod => []}}}, abc: :term}}
-        }
-      }
+      expected =
+        {:struct, [__struct__: {:atom, MyMod}, abc: nil], {:atom, MyMod}, nil}
 
       assert expected ==
                Binding.expand(
@@ -1878,6 +1875,88 @@ defmodule ElixirSense.Core.BindingTest do
                  ]),
                  {:variable, :ref, 1}
                )
+    end
+
+    if ElixirSense.Core.ElixirTypes.available?() do
+      test "local call metadata multi-clause overload selection by arg type" do
+        env =
+          @env
+          |> Map.merge(%{
+            module: MyMod,
+            function: {:some, 0},
+            specs: %{
+              {MyMod, :classify, 1} => %SpecInfo{
+                specs: [
+                  "@spec classify(integer()) :: :int",
+                  "@spec classify(atom()) :: :atom_type"
+                ],
+                elixir_types_sig: {
+                  :strong,
+                  nil,
+                  [
+                    {[Module.Types.Descr.integer()],
+                     Module.Types.Descr.atom([:int])},
+                    {[Module.Types.Descr.atom()],
+                     Module.Types.Descr.atom([:atom_type])}
+                  ]
+                }
+              }
+            },
+            mods_funs_to_positions: %{
+              {MyMod, :classify, 1} => %ModFunInfo{
+                params: [[{:x, [], []}]],
+                type: :def
+              }
+            }
+          })
+
+        # Call with integer arg → should return :int (not union)
+        assert {:atom, :int} ==
+                 Binding.expand(
+                   env
+                   |> Map.put(:vars, [
+                     %VarInfo{
+                       version: 1,
+                       name: :ref,
+                       type: {:local_call, :classify, {1, 1}, [{:integer, 42}]}
+                     }
+                   ]),
+                   {:variable, :ref, 1}
+                 )
+
+        # Call with atom arg → should return :atom_type (not union)
+        assert {:atom, :atom_type} ==
+                 Binding.expand(
+                   env
+                   |> Map.put(:vars, [
+                     %VarInfo{
+                       version: 1,
+                       name: :ref,
+                       type: {:local_call, :classify, {1, 1}, [{:atom, :foo}]}
+                     }
+                   ]),
+                   {:variable, :ref, 1}
+                 )
+
+        # Call with nil arg (unknown type) → should return union of both
+        result =
+          Binding.expand(
+            env
+            |> Map.put(:vars, [
+              %VarInfo{
+                version: 1,
+                name: :ref,
+                type: {:local_call, :classify, {1, 1}, [nil]}
+              }
+            ]),
+            {:variable, :ref, 1}
+          )
+
+        assert result in [
+                 {:union, [{:atom, :int}, {:atom, :atom_type}]},
+                 {:union, [{:atom, :atom_type}, {:atom, :int}]}
+               ]
+      end
     end
 
     test "remote call fun with default args" do

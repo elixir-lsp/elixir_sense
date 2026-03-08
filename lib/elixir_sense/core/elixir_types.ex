@@ -1462,16 +1462,22 @@ defmodule ElixirSense.Core.ElixirTypes do
           multiple -> {:union, multiple}
         end
 
-      # Intersection of function types — extract clauses from each branch
+      # Intersection types — function intersections become multi-clause funs,
+      # non-function intersections fall back to the left branch as best approximation
       {:and, [], [_left, _right]} = intersection ->
         fun_clauses = extract_fun_clauses_from_intersection(intersection)
 
         case fun_clauses do
-          [_ | _] -> {:fun_clauses, fun_clauses}
-          [] -> nil
+          [_ | _] ->
+            {:fun_clauses, fun_clauses}
+
+          [] ->
+            # For non-function intersections, try both branches and use the first non-nil shape
+            flatten_quoted_intersection(intersection)
+            |> Enum.find_value(&quoted_to_shape/1)
         end
 
-      # Negation types — best effort
+      # Negation types — try to interpret as the base type when possible
       {:not, [], [_inner]} -> nil
 
       # Optional map field value
@@ -1572,6 +1578,12 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp flatten_quoted_union(other), do: [other]
+
+  defp flatten_quoted_intersection({:and, [], [left, right]}) do
+    flatten_quoted_intersection(left) ++ flatten_quoted_intersection(right)
+  end
+
+  defp flatten_quoted_intersection(other), do: [other]
 
   @doc """
   Merges two shapes, preferring the more specific one.
@@ -2119,16 +2131,74 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp get_def_kind_for_types(_), do: :def
 
   # Extract return type from signature by unioning clause returns.
-  def extract_return_type_from_sig({sig_kind, _domain, clauses})
+  # When arg_shapes are provided, filters clauses by domain compatibility.
+  def extract_return_type_from_sig(sig, arg_shapes \\ nil)
+
+  def extract_return_type_from_sig({sig_kind, _domain, clauses}, arg_shapes)
       when sig_kind in [:infer, :strong] and is_list(clauses) do
-    case extract_return_type_from_clauses(clauses) do
+    filtered =
+      if is_list(arg_shapes) and arg_shapes != [] do
+        filter_clauses_by_args(clauses, arg_shapes)
+      else
+        clauses
+      end
+
+    # Fall back to all clauses if no clause matched the args
+    effective = if filtered == [], do: clauses, else: filtered
+
+    case extract_return_type_from_clauses(effective) do
       {:ok, return_type} -> return_type
       :error -> Module.Types.Descr.dynamic()
     end
   end
 
-  def extract_return_type_from_sig(:none), do: Module.Types.Descr.dynamic()
-  def extract_return_type_from_sig(_), do: Module.Types.Descr.dynamic()
+  def extract_return_type_from_sig(:none, _arg_shapes), do: Module.Types.Descr.dynamic()
+  def extract_return_type_from_sig(_, _arg_shapes), do: Module.Types.Descr.dynamic()
+
+  # Filter clauses whose arg domains are compatible with the given arg shapes.
+  # A clause matches if each arg shape is a subtype of (or intersects with) the clause's arg domain.
+  defp filter_clauses_by_args(clauses, arg_shapes) do
+    if available?() do
+      arg_descrs =
+        try do
+          Enum.map(arg_shapes, &coerce_var_type/1)
+        rescue
+          _ -> nil
+        end
+
+      if arg_descrs do
+        Enum.filter(clauses, fn clause ->
+          clause_args = clause_arg_types(clause)
+          args_compatible?(clause_args, arg_descrs)
+        end)
+      else
+        clauses
+      end
+    else
+      clauses
+    end
+  end
+
+  defp clause_arg_types({arg_types, _return}) when is_list(arg_types), do: arg_types
+  defp clause_arg_types(%{args: arg_types}) when is_list(arg_types), do: arg_types
+  defp clause_arg_types(_), do: nil
+
+  defp args_compatible?(nil, _arg_descrs), do: true
+  defp args_compatible?(clause_args, arg_descrs) when length(clause_args) != length(arg_descrs), do: false
+
+  defp args_compatible?(clause_args, arg_descrs) do
+    try do
+      Enum.zip(clause_args, arg_descrs)
+      |> Enum.all?(fn {domain, arg} ->
+        # Check if arg type intersects with domain (not empty intersection)
+        not Module.Types.Descr.empty?(Module.Types.Descr.intersection(arg, domain))
+      end)
+    rescue
+      _ -> true
+    catch
+      _ -> true
+    end
+  end
 
   defp extract_return_type_from_clauses(clauses) do
     clauses
