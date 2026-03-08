@@ -1273,6 +1273,74 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "shape conversion recognizes pid/port/reference subtype-compatible descriptors" do
+      assert ElixirSense.Core.ElixirTypes.to_shape(Module.Types.Descr.pid()) == :pid
+      assert ElixirSense.Core.ElixirTypes.to_shape(Module.Types.Descr.port()) == :port
+      assert ElixirSense.Core.ElixirTypes.to_shape(Module.Types.Descr.reference()) == :reference
+    end
+
+    test "remote type expansion resolves __MODULE__ and module attributes" do
+      env =
+        @env
+        |> Map.merge(%{
+          module: ElixirSenseExample.FunctionsWithReturnSpec,
+          attributes: [
+            %AttributeInfo{
+              name: :remote_mod,
+              type: {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}
+            }
+          ],
+          vars: [
+            %VarInfo{
+              version: 1,
+              name: :from_module,
+              type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f3, []}
+            },
+            %VarInfo{
+              version: 2,
+              name: :from_attr,
+              type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f4, []}
+            }
+          ]
+        })
+
+      assert {:struct,
+              [
+                {:__struct__, {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}},
+                {:abc, nil}
+              ], {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}, nil} =
+               Binding.expand(env, {:variable, :from_module, 1})
+
+      assert {:map, [abc: nil], nil} = Binding.expand(env, {:variable, :from_attr, 2})
+    end
+
+    test "remote type expansion resolves module-valued variables" do
+      env =
+        @env
+        |> Map.merge(%{
+          module: ElixirSenseExample.FunctionsWithReturnSpec,
+          vars: [
+            %VarInfo{
+              version: 1,
+              name: :remote_module,
+              type: {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}
+            }
+          ]
+        })
+
+      assert {:struct,
+              [
+                abc: nil
+              ], {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}, nil} ==
+               Binding.expand_type(
+                 env,
+                 {:., [], [{:remote_module, [], nil}, :t]},
+                 [],
+                 false,
+                 []
+               )
+    end
+
     test "remote call fun with spec parametrized map" do
       assert {:map, [abc: nil], nil} ==
                Binding.expand(

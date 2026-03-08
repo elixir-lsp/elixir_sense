@@ -90,6 +90,10 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  def expand_type(%Binding{} = env, remote_type_ast, args, include_private, stack \\ []) do
+    parse_type(env, {remote_type_ast, [], args}, env.module, include_private, stack)
+  end
+
   def do_expand(%Binding{} = env, {:intersection, variants}, stack) do
     combined =
       variants
@@ -1443,12 +1447,12 @@ defmodule ElixirSense.Core.Binding do
 
       {:function, arity} ->
         case TypeInfo.get_function_spec(mod, fun, arity) do
-          nil ->
-            :no_spec
-
-          type ->
+          {{_fun, _arity}, _asts} = type ->
             return_type = get_return_from_spec(env, type, mod, include_private)
             expand(env, return_type, stack) || :no_spec
+
+          _ ->
+            :no_spec
         end
     end
   end
@@ -1691,19 +1695,9 @@ defmodule ElixirSense.Core.Binding do
 
   # remote user type
   defp parse_type(env, {{:., _, [remote, type]}, _, args}, _mod, _include_private, stack) do
-    module =
-      case remote do
-        m when is_atom(m) ->
-          m
+    module = resolve_type_module(env, remote)
 
-        {:__aliases__, _, list} ->
-          Module.concat(list)
-
-        _ ->
-          nil
-      end
-
-    if remote && is_atom(type) do
+    if module && is_atom(type) do
       # do not propagate include_private when expanding remote types
       expand_type(env, module, type, args, false, stack)
     end
@@ -1805,6 +1799,56 @@ defmodule ElixirSense.Core.Binding do
 
   defp drop_optional({:optional, _, [key]}), do: key
   defp drop_optional(other), do: other
+
+  defp resolve_type_module(_env, module) when is_atom(module), do: module
+
+  defp resolve_type_module(%Binding{module: current_module}, {:__MODULE__, _, _}),
+    do: current_module
+
+  defp resolve_type_module(%Binding{attributes: attrs} = env, {:@, _, [{attr, _, _}]})
+       when is_atom(attr) do
+    case Enum.find(attrs, &(&1.name == attr)) do
+      %State.AttributeInfo{type: {:atom, module}} when is_atom(module) ->
+        module
+
+      %State.AttributeInfo{type: {:attribute, nested_attr}} when is_atom(nested_attr) ->
+        resolve_type_module(env, {:@, [], [{nested_attr, [], nil}]})
+
+      _ ->
+        nil
+    end
+  end
+
+  defp resolve_type_module(%Binding{vars: vars}, {var, _, context})
+       when is_atom(var) and is_atom(context) do
+    case Enum.find(vars, &(&1.name == var)) do
+      %State.VarInfo{type: {:atom, module}} when is_atom(module) -> module
+      _ -> nil
+    end
+  end
+
+  defp resolve_type_module(%Binding{} = env, {:__aliases__, _, list}) do
+    case resolve_alias(env, list) do
+      nil -> Module.concat(list)
+      resolved -> resolved
+    end
+  end
+
+  defp resolve_type_module(_env, _), do: nil
+
+  defp resolve_alias(%Binding{module: module}, [first | rest]) do
+    if is_atom(first) and is_atom(module) and String.contains?(Atom.to_string(module), ".") do
+      root = module |> Module.split() |> hd()
+
+      if Atom.to_string(first) == root do
+        Module.concat([first | rest])
+      end
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp resolve_alias(_, _), do: nil
 
   defp combine_intersection(:none, _), do: :none
   defp combine_intersection(_, :none), do: :none

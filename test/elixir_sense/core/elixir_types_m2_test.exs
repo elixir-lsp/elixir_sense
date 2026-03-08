@@ -401,6 +401,28 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
                )
     end
 
+    test "remote signatures resolve module-valued variables from metadata env" do
+      metadata = %ElixirSense.Core.Metadata{
+        cursor_env:
+          {[],
+           %{
+             vars: [
+               %ElixirSense.Core.State.VarInfo{
+                 name: :mod_var,
+                 version: 1,
+                 type: {:atom, String}
+               }
+             ]
+           }}
+      }
+
+      assert {:ok, {_kind, _domain, _clauses}} =
+               ElixirTypes.maybe_remote_call_sig(
+                 {{:., [], [{:mod_var, [], nil}, :split]}, [], [nil, nil]},
+                 metadata
+               )
+    end
+
     test "ExCk signatures preserve clause return information" do
       mod = Module.concat(ElixirSense, "ExCkFixture#{System.unique_integer([:positive])}")
 

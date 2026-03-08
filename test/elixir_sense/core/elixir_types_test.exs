@@ -65,6 +65,11 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert ElixirTypes.to_shape(Module.Types.Descr.atom()) == :atom
     end
 
+    test "handles atom unions via atom_fetch" do
+      assert ElixirTypes.to_shape(Module.Types.Descr.atom([:ok, :error])) ==
+               {:union, [atom: :error, atom: :ok]}
+    end
+
     test "handles binary" do
       assert ElixirTypes.to_shape(Module.Types.Descr.binary()) == {:binary, nil}
     end
@@ -152,6 +157,29 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "handles reference" do
       assert ElixirTypes.to_shape(Module.Types.Descr.reference()) == :reference
+    end
+
+    test "handles pid/port/reference through compatible subtypes" do
+      assert ElixirTypes.to_shape(
+               Module.Types.Descr.intersection(
+                 Module.Types.Descr.pid(),
+                 Module.Types.Descr.term()
+               )
+             ) == :pid
+
+      assert ElixirTypes.to_shape(
+               Module.Types.Descr.intersection(
+                 Module.Types.Descr.port(),
+                 Module.Types.Descr.term()
+               )
+             ) == :port
+
+      assert ElixirTypes.to_shape(
+               Module.Types.Descr.intersection(
+                 Module.Types.Descr.reference(),
+                 Module.Types.Descr.term()
+               )
+             ) == :reference
     end
 
     test "handles tuple" do

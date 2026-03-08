@@ -543,6 +543,27 @@ defmodule ElixirSense.Core.ElixirTypes do
           %ElixirSense.Core.State.AttributeInfo{type: {:atom, module}} when is_atom(module) ->
             {:ok, module}
 
+          %ElixirSense.Core.State.AttributeInfo{type: {:attribute, nested_attr}}
+          when is_atom(nested_attr) ->
+            module_from_ast({:@, [], [{nested_attr, [], nil}]}, metadata)
+
+          _ ->
+            :error
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  defp module_from_ast({var, _, context}, metadata)
+       when is_atom(var) and is_atom(context) and is_map(metadata) do
+    case metadata_env(metadata) do
+      %{vars: vars} when is_list(vars) ->
+        case Enum.find(vars, &(&1.name == var)) do
+          %ElixirSense.Core.State.VarInfo{type: {:atom, module}} when is_atom(module) ->
+            {:ok, module}
+
           _ ->
             :error
         end
@@ -1339,13 +1360,16 @@ defmodule ElixirSense.Core.ElixirTypes do
                   end
 
                 # PIDs, ports, refs (check against well-known descriptors)
-                Module.Types.Descr.equal?(descr, Module.Types.Descr.pid()) ->
+                Module.Types.Descr.compatible?(descr, Module.Types.Descr.pid()) and
+                    Module.Types.Descr.subtype?(descr, Module.Types.Descr.pid()) ->
                   :pid
 
-                Module.Types.Descr.equal?(descr, Module.Types.Descr.port()) ->
+                Module.Types.Descr.compatible?(descr, Module.Types.Descr.port()) and
+                    Module.Types.Descr.subtype?(descr, Module.Types.Descr.port()) ->
                   :port
 
-                Module.Types.Descr.equal?(descr, Module.Types.Descr.reference()) ->
+                Module.Types.Descr.compatible?(descr, Module.Types.Descr.reference()) and
+                    Module.Types.Descr.subtype?(descr, Module.Types.Descr.reference()) ->
                   :reference
 
                 Module.Types.Descr.equal?(descr, Module.Types.Descr.none()) ->
@@ -1534,18 +1558,9 @@ defmodule ElixirSense.Core.ElixirTypes do
   # Advanced type extractors for Enhanced Shape Conversion
 
   defp extract_union(descr) do
-    case descr do
-      %{atom: {:union, set}} when map_size(descr) == 1 ->
-        set
-        |> :sets.to_list()
-        |> Enum.map(&Module.Types.Descr.atom([&1]))
-        |> case do
-          singles when length(singles) > 1 -> singles
-          _ -> nil
-        end
-
-      _ ->
-        nil
+    case Module.Types.Descr.atom_fetch(descr) do
+      {:finite, atoms} when length(atoms) > 1 -> Enum.map(atoms, &Module.Types.Descr.atom([&1]))
+      _ -> nil
     end
   end
 
@@ -1586,43 +1601,27 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp is_atom_top?(descr) when is_map(descr) do
-    case Map.get(descr, :atom) do
-      {:negation, set} ->
-        :sets.is_empty(set)
-
-      _ ->
-        false
+    case Module.Types.Descr.atom_fetch(descr) do
+      {:infinite, []} -> true
+      _ -> false
     end
   end
 
   defp is_atom_top?(_), do: false
 
   defp is_single_atom?(descr) when is_map(descr) do
-    case Map.get(descr, :atom) do
-      {:union, set} ->
-        set_list = :sets.to_list(set)
-        length(set_list) == 1
-
-      _ ->
-        false
+    case Module.Types.Descr.atom_fetch(descr) do
+      {:finite, [_]} -> true
+      _ -> false
     end
   end
 
   defp is_single_atom?(_), do: false
 
   defp extract_single_atom(descr) when is_map(descr) do
-    case Map.get(descr, :atom) do
-      {:union, set} ->
-        set_list = :sets.to_list(set)
-
-        if length(set_list) == 1 do
-          hd(set_list)
-        else
-          nil
-        end
-
-      _ ->
-        nil
+    case Module.Types.Descr.atom_fetch(descr) do
+      {:finite, [atom]} -> atom
+      _ -> nil
     end
   end
 
@@ -1713,38 +1712,64 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp extract_function_info(descr) when is_map(descr) do
     descr = unwrap_dynamic(descr)
 
-    case Map.get(descr, :fun) do
-      # fun() - top function type
-      :bdd_top ->
+    cond do
+      Module.Types.Descr.equal?(descr, Module.Types.Descr.fun()) ->
         :fun
 
-      # fun(arity) or fun(args, return)
-      {args, return_type} when is_list(args) ->
-        arity = length(args)
-
-        # Check if this is just an arity constraint (args are all none, return is :term)
-        if Enum.all?(args, &Module.Types.Descr.equal?(&1, Module.Types.Descr.none())) and
-             return_type == :term do
-          {:fun, arity}
-        else
-          # fun(args, return) - function with specific signature
-          arg_shapes = Enum.map(args, &to_shape/1)
-          return_shape = to_shape(return_type)
-          {:fun, arg_shapes, return_shape}
+      true ->
+        case extract_function_signature_from_raw(descr) do
+          nil -> extract_function_arity_or_shape(descr)
+          shape -> shape
         end
+    end
+  end
 
-      # fun_from_non_overlapping_clauses
-      # Represented as BDD tuple with multiple clauses
-      bdd when is_tuple(bdd) ->
-        clauses = extract_function_clauses(bdd)
-        {:fun_clauses, clauses}
+  defp extract_function_info(_), do: nil
+
+  defp extract_function_signature_from_raw(%{fun: {args, return_type}})
+       when is_list(args) do
+    arity = length(args)
+
+    if Enum.all?(args, &Module.Types.Descr.equal?(&1, Module.Types.Descr.none())) and
+         return_type == :term do
+      {:fun, arity}
+    else
+      {:fun, Enum.map(args, &to_shape/1), to_shape(return_type)}
+    end
+  end
+
+  defp extract_function_signature_from_raw(%{fun: bdd}) when is_tuple(bdd) do
+    clauses = extract_function_clauses(bdd)
+    if clauses == [], do: nil, else: {:fun_clauses, clauses}
+  end
+
+  defp extract_function_signature_from_raw(_), do: nil
+
+  defp extract_function_arity_or_shape(descr) do
+    arities = Enum.filter(0..8, &Module.Types.Descr.subtype?(descr, Module.Types.Descr.fun(&1)))
+
+    case arities do
+      [arity] ->
+        case build_fun_shape_from_apply(descr, arity) do
+          nil -> {:fun, arity}
+          shape -> shape
+        end
 
       _ ->
         nil
     end
   end
 
-  defp extract_function_info(_), do: nil
+  defp build_fun_shape_from_apply(descr, arity) do
+    args = List.duplicate(Module.Types.Descr.dynamic(), arity)
+
+    case Module.Types.Descr.fun_apply(descr, args) do
+      {:ok, return_descr} -> {:fun, List.duplicate(nil, arity), to_shape(return_descr)}
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  end
 
   # Extract function clauses from BDD representation
   defp extract_function_clauses(bdd) when is_tuple(bdd) do
