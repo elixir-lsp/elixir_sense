@@ -148,25 +148,35 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   def type_of({:{}, _, list} = ast, context) do
-    existing = {:tuple, length(list), list |> Enum.map(&type_of(&1, context))}
-    merge_with_elixir_types(existing, ast, context, nil, nil, %{})
+    native = type_of_with_elixir_types(ast, context)
+
+    if native do
+      native
+    else
+      {:tuple, length(list), list |> Enum.map(&type_of(&1, context))}
+    end
   end
 
   def type_of(list, context) when is_list(list) do
-    type =
-      case list do
-        [] ->
-          :empty
+    native = type_of_with_elixir_types(list, context)
 
-        [{:|, _, [head, _tail]}] ->
-          type_of(head, context)
+    if native do
+      native
+    else
+      type =
+        case list do
+          [] ->
+            :empty
 
-        [head | _] ->
-          type_of(head, context)
-      end
+          [{:|, _, [head, _tail]}] ->
+            type_of(head, context)
 
-    existing = {:list, type}
-    merge_with_elixir_types(existing, list, context, nil, nil, %{})
+          [head | _] ->
+            type_of(head, context)
+        end
+
+      {:list, type}
+    end
   end
 
   def type_of({:fn, _meta, clauses} = ast, context) do
@@ -335,7 +345,7 @@ defmodule ElixirSense.Core.TypeInference do
       if is_map(local_sigs_map) and not remote_call_ast?(ast) do
         Map.drop(local_sigs_map, [:__module__])
       else
-        %{}
+        nil
       end
 
     module =
@@ -343,31 +353,15 @@ defmodule ElixirSense.Core.TypeInference do
         (is_map(local_sigs_map) && Map.get(local_sigs_map, :__module__)) ||
         extract_module_from_context(ast)
 
-    function = Map.get(env_context, :function)
-    file = Map.get(env_context, :file)
-
-    variables = variables_from_env_context(env_context)
-
-    if map_size(signatures) > 0 do
-      ElixirSense.Core.ElixirTypes.of_expr(ast,
-        module: module,
-        function: function,
-        file: file,
-        mode: :dynamic,
-        local_sigs_map: signatures,
-        metadata: metadata,
-        variables: variables
-      )
-    else
-      ElixirSense.Core.ElixirTypes.of_expr(ast,
-        module: module,
-        function: function,
-        file: file,
-        mode: :dynamic,
-        metadata: metadata,
-        variables: variables
-      )
-    end
+    ElixirSense.Core.ElixirTypes.of_expr(ast,
+      module: module,
+      function: Map.get(env_context, :function),
+      file: Map.get(env_context, :file),
+      mode: :dynamic,
+      local_sigs_map: signatures,
+      metadata: metadata,
+      variables: variables_from_env_context(env_context)
+    )
   end
 
   # Fallback module for type_of/2 path (when no compiler env is available)
@@ -401,54 +395,6 @@ defmodule ElixirSense.Core.TypeInference do
     do: true
 
   defp remote_call_ast?(_), do: false
-
-  # Helper to merge existing ElixirSense type with ElixirTypes result
-  defp merge_with_elixir_types(existing, ast, _context, local_sigs_map, metadata, env_context) do
-    if ElixirSense.Core.ElixirTypes.enabled?() do
-      # Build the context for of_expr
-      module =
-        Map.get(env_context, :module) ||
-          (is_map(local_sigs_map) && Map.get(local_sigs_map, :__module__))
-
-      function = Map.get(env_context, :function)
-      file = Map.get(env_context, :file)
-      variables = variables_from_env_context(env_context)
-
-      signatures =
-        if is_map(local_sigs_map) and not remote_call_ast?(ast) do
-          Map.drop(local_sigs_map, [:__module__])
-        else
-          nil
-        end
-
-      opts = [
-        module: module,
-        function: function,
-        file: file,
-        mode: :dynamic,
-        metadata: metadata,
-        variables: variables
-      ]
-
-      opts =
-        if signatures && map_size(signatures) > 0 do
-          Keyword.put(opts, :local_sigs_map, signatures)
-        else
-          opts
-        end
-
-      case ElixirSense.Core.ElixirTypes.of_expr(ast, opts) do
-        {:ok, descr} ->
-          new_shape = ElixirSense.Core.ElixirTypes.to_shape(descr)
-          ElixirSense.Core.ElixirTypes.merge_shapes(existing, new_shape)
-
-        :error ->
-          existing
-      end
-    else
-      existing
-    end
-  end
 
   defp get_fields_type(fields, context) do
     for {field, value} <- fields,

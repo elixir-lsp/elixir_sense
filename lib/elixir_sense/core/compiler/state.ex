@@ -438,7 +438,7 @@ defmodule ElixirSense.Core.Compiler.State do
       meta: meta,
       generated: [Keyword.get(options, :generated, false) | current_info.generated],
       overridable: overridable,
-      # M2: Preserve ElixirTypes fields from existing info
+      # Preserve ElixirTypes fields from existing info
       elixir_types_clauses: current_info.elixir_types_clauses || [],
       elixir_types_sig: current_info.elixir_types_sig,
       elixir_types_status: current_info.elixir_types_status || :skipped

@@ -2137,7 +2137,7 @@ defmodule ElixirSense.Core.Compiler do
     {e_body, state, _env_for_expand} =
       expand(expr, state, env_for_expand)
 
-    # M2: Capture clause AST for ElixirTypes inference
+    # Capture clause AST for ElixirTypes inference
     state =
       if ElixirSense.Core.ElixirTypes.enabled?() and def_kind in [:def, :defp] and
            not has_unquotes and name != :__unknown__ do
@@ -3145,7 +3145,7 @@ defmodule ElixirSense.Core.Compiler do
     end
   end
 
-  # M2: Maybe infer local function signature from accumulated clauses
+  # Maybe infer local function signature from accumulated clauses
   defp maybe_infer_local_signature(state, %{module: module, file: file}, {fun, arity})
        when is_atom(module) and is_atom(fun) and is_integer(arity) do
     if ElixirSense.Core.ElixirTypes.enabled?() do

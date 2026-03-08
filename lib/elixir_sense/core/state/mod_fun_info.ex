@@ -24,7 +24,7 @@ defmodule ElixirSense.Core.State.ModFunInfo do
             | :defguard
             | :defguardp
             | :defmodule,
-          # ElixirTypes M2 fields
+          # ElixirTypes fields
           elixir_types_clauses: list(map()),
           elixir_types_sig: nil | {:infer | :strong, term(), list()},
           elixir_types_status: :ok | :partial | :skipped
@@ -39,7 +39,7 @@ defmodule ElixirSense.Core.State.ModFunInfo do
             overridable: false,
             doc: "",
             meta: %{},
-            # ElixirTypes M2 fields
+            # ElixirTypes fields
             elixir_types_clauses: [],
             elixir_types_sig: nil,
             elixir_types_status: :skipped

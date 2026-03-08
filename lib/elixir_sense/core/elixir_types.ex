@@ -29,8 +29,9 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   ## Integration Points
 
-  - **TypeInference**: Enhanced expression typing for literals and AST nodes
-  - **Compiler**: Pattern matching refinement (stubbed in M1)
+  - **TypeInference**: Enhanced expression typing for literals, calls, and AST nodes
+  - **Compiler**: Pattern matching refinement via `of_match/5`
+  - **Binding**: Call resolution via `extract_return_type_from_sig/2` and `spec_signature_from_metadata/4`
 
   ## Examples
 
@@ -47,18 +48,10 @@ defmodule ElixirSense.Core.ElixirTypes do
       ElixirTypes.to_shape(descr)
       #=> {:list, {:integer, nil}}
 
-      # Shape merging
-      ElixirTypes.merge_shapes({:integer, nil}, {:integer, 42})
-      #=> {:integer, 42}
+  ## Limitations
 
-  ## Limitations (M1)
-
-  - Local function calls remain dynamic (no local_handler implementation)
-  - Remote function calls remain dynamic (no ExCk cache)
   - Pattern matching relies on best-effort conversion and may skip complex types
-  - Conservative shape conversion (only handles clear, simple cases)
-
-  These limitations will be addressed in future milestones (M2-M4).
+  - Computed module expressions (from function calls) not fully resolved
   """
 
   require Logger
@@ -170,9 +163,10 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   @doc """
-  Local handler for Module.Types - always returns false in M1.
+  Default local handler stub for Module.Types when no local signatures are available.
 
-  This will be expanded in M2 to use ElixirSense's module metadata.
+  Returns `false` to indicate no local type info. When local signatures are
+  available, `local_handler_from/1` creates a closure-based handler instead.
   """
   def local_handler(_meta, _fun_arity, _stack, _context) do
     false
@@ -259,48 +253,45 @@ defmodule ElixirSense.Core.ElixirTypes do
         :error
 
       true ->
-        track_performance(:of_expr, fn ->
-          if available?() do
-            try do
-              if mode == :traversal && is_simple_ast?(ast) do
-                # Fast path for simple AST nodes in traversal mode
-                track_fast_path_hit()
-                simple_type_of(ast)
+        if available?() do
+          try do
+            if mode == :traversal && is_simple_ast?(ast) do
+              # Fast path for simple AST nodes in traversal mode
+              simple_type_of(ast)
+            else
+              # Full Module.Types processing
+              stack = init_stack(module, function, file, mode, local_sigs_map, metadata)
+              # Seed context with provided variables or infer from AST (dynamic types)
+              auto_vars = variables_from_ast(ast)
+              effective_vars = merge_variables(variables, auto_vars)
+              context = init_context(effective_vars)
+
+              if stack && context do
+                {descr, _context} =
+                  Module.Types.Expr.of_expr(
+                    ast,
+                    Module.Types.Descr.term(),
+                    ast,
+                    stack,
+                    context
+                  )
+
+                {:ok, descr}
               else
-                # Full Module.Types processing
-                stack = init_stack(module, function, file, mode, local_sigs_map, metadata)
-                # Seed context with provided variables or infer from AST (dynamic types)
-                auto_vars = variables_from_ast(ast)
-                effective_vars = merge_variables(variables, auto_vars)
-                context = init_context(effective_vars)
-
-                if stack && context do
-                  {descr, _context} =
-                    Module.Types.Expr.of_expr(
-                      ast,
-                      Module.Types.Descr.term(),
-                      ast,
-                      stack,
-                      context
-                    )
-
-                  {:ok, descr}
-                else
-                  :error
-                end
-              end
-            catch
-              kind, payload ->
-                Logger.warning(
-                  "Unable to infer type of #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
-                )
-
                 :error
+              end
             end
-          else
-            :error
+          catch
+            kind, payload ->
+              Logger.warning(
+                "Unable to infer type of #{inspect(ast)}: #{Exception.format(kind, payload, __STACKTRACE__)}"
+              )
+
+              :error
           end
-        end)
+        else
+          :error
+        end
     end
   end
 
@@ -358,80 +349,6 @@ defmodule ElixirSense.Core.ElixirTypes do
     end
   rescue
     _ -> :error
-  end
-
-  @doc """
-  Performance metrics for ElixirTypes operations.
-
-  Returns a map with timing and call count statistics.
-  """
-  def get_performance_metrics do
-    if enabled?() do
-      Process.get(:elixir_types_metrics, %{
-        of_expr_calls: 0,
-        of_expr_total_time: 0,
-        of_match_calls: 0,
-        of_match_total_time: 0,
-        to_shape_calls: 0,
-        to_shape_total_time: 0,
-        fast_path_hits: 0,
-        cache_hits: 0,
-        cache_misses: 0
-      })
-    else
-      %{}
-    end
-  end
-
-  @doc """
-  Reset performance metrics.
-  """
-  def reset_performance_metrics do
-    Process.delete(:elixir_types_metrics)
-    :ok
-  end
-
-  # Performance tracking helpers
-  defp track_performance(operation, func) do
-    if enabled?() do
-      start_time = System.monotonic_time(:microsecond)
-      result = func.()
-      end_time = System.monotonic_time(:microsecond)
-      duration = end_time - start_time
-
-      update_metrics(operation, duration)
-      result
-    else
-      func.()
-    end
-  end
-
-  defp update_metrics(operation, duration) do
-    metrics = get_performance_metrics()
-    calls_key = :"#{operation}_calls"
-    time_key = :"#{operation}_total_time"
-
-    updated_metrics =
-      metrics
-      |> Map.update(calls_key, 1, &(&1 + 1))
-      |> Map.update(time_key, duration, &(&1 + duration))
-
-    Process.put(:elixir_types_metrics, updated_metrics)
-  end
-
-  defp track_cache_hit do
-    metrics = get_performance_metrics()
-    Process.put(:elixir_types_metrics, Map.update(metrics, :cache_hits, 1, &(&1 + 1)))
-  end
-
-  defp track_cache_miss do
-    metrics = get_performance_metrics()
-    Process.put(:elixir_types_metrics, Map.update(metrics, :cache_misses, 1, &(&1 + 1)))
-  end
-
-  defp track_fast_path_hit do
-    metrics = get_performance_metrics()
-    Process.put(:elixir_types_metrics, Map.update(metrics, :fast_path_hits, 1, &(&1 + 1)))
   end
 
   defp checker_cache do
@@ -573,28 +490,22 @@ defmodule ElixirSense.Core.ElixirTypes do
     case ElixirSense.Core.Introspection.expand_alias(mod, aliases) do
       ^mod ->
         case expand_alias_from_env(current_module, aliases, parts) do
-          resolved when is_atom(resolved) -> resolved
-          _ -> Module.concat(parts)
+          resolved when is_atom(resolved) ->
+            resolved
+
+          _ ->
+            # For single-element aliases, try parent module resolution as fallback
+            case parts do
+              [single] when is_atom(single) and is_atom(current_module) ->
+                resolve_parent_alias(current_module, single) || Module.concat(parts)
+
+              _ ->
+                Module.concat(parts)
+            end
         end
 
       resolved ->
         resolved
-    end
-  end
-
-  defp resolve_alias([single], metadata) when is_atom(single) and is_map(metadata) do
-    case metadata_env(metadata) do
-      %{module: module, aliases: aliases} when is_atom(module) and is_list(aliases) ->
-        case Keyword.get(aliases, single) do
-          resolved when is_atom(resolved) -> resolved
-          _ -> resolve_parent_alias(module, single)
-        end
-
-      %{module: module} when is_atom(module) ->
-        resolve_parent_alias(module, single)
-
-      _ ->
-        Module.concat([single])
     end
   end
 
@@ -664,29 +575,6 @@ defmodule ElixirSense.Core.ElixirTypes do
     end
   end
 
-  @doc """
-  Types a pattern match and returns raw Module.Types descriptors for refined vars.
-  """
-  def of_match_descr(
-        pattern_ast,
-        expected_descr,
-        match_ast,
-        module \\ nil,
-        function \\ nil,
-        file \\ nil,
-        mode \\ :dynamic,
-        opts \\ []
-      ) do
-    case do_of_match(pattern_ast, expected_descr, match_ast, module, function, file, mode, opts) do
-      {:ok, _var_shapes, var_descrs} ->
-        maybe_store_var_descriptors(opts, var_descrs)
-        {:ok, var_descrs}
-
-      :error ->
-        :error
-    end
-  end
-
   defp do_of_match(
          pattern_ast,
          expected_descr,
@@ -697,23 +585,37 @@ defmodule ElixirSense.Core.ElixirTypes do
          mode,
          opts
        ) do
-    track_performance(:of_match, fn ->
-      if available?() do
-        targets = targets_from_opts(opts)
+    if available?() do
+      targets = targets_from_opts(opts)
 
-        try do
-          stack = init_stack(module, function, file, mode)
+      try do
+        stack = init_stack(module, function, file, mode)
 
-          if stack do
-            stack = %{stack | refine_vars: true}
-            context = init_context(Keyword.get(opts, :variables))
+        if stack do
+          stack = %{stack | refine_vars: true}
+          context = init_context(Keyword.get(opts, :variables))
 
-            {pattern_ast, value_ast, full_match} = normalize_match(pattern_ast, match_ast)
-            expected_descr = expected_descr || Module.Types.Descr.term()
+          {pattern_ast, value_ast, full_match} = normalize_match(pattern_ast, match_ast)
+          expected_descr = expected_descr || Module.Types.Descr.term()
 
-            # Enhanced pattern matching refinement
-            result =
-              perform_enhanced_match(
+          # Enhanced pattern matching refinement
+          result =
+            perform_enhanced_match(
+              pattern_ast,
+              value_ast,
+              expected_descr,
+              full_match,
+              stack,
+              context,
+              targets
+            )
+
+          case result do
+            {:ok, var_shapes, var_descrs} ->
+              {:ok, var_shapes, var_descrs}
+
+            :error ->
+              fallback_match(
                 pattern_ast,
                 value_ast,
                 expected_descr,
@@ -722,39 +624,23 @@ defmodule ElixirSense.Core.ElixirTypes do
                 context,
                 targets
               )
-
-            case result do
-              {:ok, var_shapes, var_descrs} ->
-                {:ok, var_shapes, var_descrs}
-
-              :error ->
-                fallback_match(
-                  pattern_ast,
-                  value_ast,
-                  expected_descr,
-                  full_match,
-                  stack,
-                  context,
-                  targets
-                )
-            end
-          else
-            :error
           end
-        rescue
-          _ -> :error
-        catch
-          kind, payload ->
-            Logger.warning(
-              "Unable to infer type of match: #{Exception.format(kind, payload, __STACKTRACE__)}\nPattern: #{inspect(pattern_ast)}\nMatch: #{inspect(match_ast)}"
-            )
-
-            :error
+        else
+          :error
         end
-      else
-        :error
+      rescue
+        _ -> :error
+      catch
+        kind, payload ->
+          Logger.warning(
+            "Unable to infer type of match: #{Exception.format(kind, payload, __STACKTRACE__)}\nPattern: #{inspect(pattern_ast)}\nMatch: #{inspect(match_ast)}"
+          )
+
+          :error
       end
-    end)
+    else
+      :error
+    end
   end
 
   # Enhanced pattern matching with better variable type refinement
@@ -1283,13 +1169,11 @@ defmodule ElixirSense.Core.ElixirTypes do
   - `:lazy` - When true, uses lazy evaluation and caching for expensive conversions
   """
   def to_shape(descr, opts \\ []) do
-    track_performance(:to_shape, fn ->
-      if Keyword.get(opts, :lazy, false) do
-        to_shape_lazy(descr, opts)
-      else
-        to_shape_eager(descr)
-      end
-    end)
+    if Keyword.get(opts, :lazy, false) do
+      to_shape_lazy(descr, opts)
+    else
+      to_shape_eager(descr)
+    end
   end
 
   # Lazy shape conversion with caching (uses descriptor as key to avoid hash collisions)
@@ -1298,17 +1182,14 @@ defmodule ElixirSense.Core.ElixirTypes do
 
     case Process.get(cache_key) do
       nil ->
-        track_cache_miss()
         result = to_shape_eager(descr)
         Process.put(cache_key, {result, System.monotonic_time(:millisecond)})
         result
 
       {cached_result, timestamp} ->
         if System.monotonic_time(:millisecond) - timestamp < 300_000 do
-          track_cache_hit()
           cached_result
         else
-          track_cache_miss()
           Process.delete(cache_key)
           result = to_shape_eager(descr)
           Process.put(cache_key, {result, System.monotonic_time(:millisecond)})
@@ -2042,10 +1923,8 @@ defmodule ElixirSense.Core.ElixirTypes do
   def local_handler_from(local_sigs_map) when is_map(local_sigs_map) do
     fn meta, {_fun, _arity} = fun_arity, stack, context ->
       case Map.get(local_sigs_map, fun_arity) do
-        {kind, {:infer, _domain, _clause_types} = sig} ->
-          {kind, sig, maybe_put_remote_sig(context, meta, stack)}
-
-        {kind, {:strong, _domain, _clause_types} = sig} ->
+        {kind, {sig_kind, _domain, _clause_types} = sig}
+        when sig_kind in [:infer, :strong] ->
           {kind, sig, maybe_put_remote_sig(context, meta, stack)}
 
         {kind, :none} ->
