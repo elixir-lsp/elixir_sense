@@ -950,7 +950,8 @@ defmodule ElixirSense.Core.Compiler.State do
          true <- is_list(args) do
       arg_descrs = Enum.map(args, &spec_arg_to_descr(&1, module, guards))
       return_descr = spec_return_to_descr(return_ast, module, guards)
-      {:strong, nil, [{arg_descrs, return_descr}]}
+      # Domain is the arg types for the single clause — enables arg-domain filtering
+      {:strong, arg_descrs, [{arg_descrs, return_descr}]}
     else
       _ -> nil
     end
@@ -1101,7 +1102,7 @@ defmodule ElixirSense.Core.Compiler.State do
         :atom
 
       {:identifier, []} ->
-        {:union, [atom: nil, atom: true]}
+        {:union, [:pid, :port, :reference]}
 
       {:mfa, []} ->
         {:tuple, 3, [:atom, :atom, {:integer, nil}]}
@@ -1157,9 +1158,30 @@ defmodule ElixirSense.Core.Compiler.State do
       {:reference, []} ->
         :reference
 
+      {:string, []} ->
+        {:binary, nil}
+
+      {:nonempty_binary, []} ->
+        {:binary, nil}
+
+      {:nonempty_bitstring, []} ->
+        {:binary, nil}
+
+      {:as_boolean, [type]} ->
+        spec_ast_to_shape(type, module)
+
+      {:struct, []} ->
+        {:map, [__struct__: :atom], nil}
+
+      {:fun, []} ->
+        :fun
+
       {:fun, [{:->, _, [arg_types, return_type]}]} when is_list(arg_types) ->
         {:fun, Enum.map(arg_types, &spec_ast_to_shape(&1, module)),
          spec_ast_to_shape(return_type, module)}
+
+      {:fun, [{:->, _, [[{:..., _, _}], return_type]}]} ->
+        {:fun, [], spec_ast_to_shape(return_type, module)}
 
       _ ->
         case ast do
@@ -1175,7 +1197,11 @@ defmodule ElixirSense.Core.Compiler.State do
     resolved_remote = resolve_spec_module(remote, module)
 
     if is_atom(resolved_remote) and is_atom(type) and is_list(args) do
-      {:atom, Module.concat([resolved_remote, type])}
+      # Handle well-known remote types
+      case {resolved_remote, type, args} do
+        {String, :t, []} -> {:binary, nil}
+        _ -> nil
+      end
     else
       nil
     end

@@ -252,17 +252,8 @@ defmodule ElixirSense.Core.TypeInference do
       ) do
     if ElixirSense.Core.ElixirTypes.enabled?() do
       case type_expr_with_local_sigs(ast, local_sigs_map, metadata, env_context) do
-        {:ok, descr} ->
-          case ElixirSense.Core.ElixirTypes.to_shape(descr) do
-            nil ->
-              ElixirSense.Core.ElixirTypes.to_shape(Module.Types.Descr.dynamic())
-
-            shape ->
-              shape
-          end
-
-        :error ->
-          nil
+        {:ok, descr} -> ElixirSense.Core.ElixirTypes.to_shape(descr)
+        :error -> nil
       end
     else
       nil

@@ -1127,18 +1127,23 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp normalize_var_versions(vars_map) do
-    Enum.reduce(vars_map, vars_map, fn
-      {{var, version}, shape}, acc when is_atom(var) and is_integer(version) and version > 1 ->
-        primary_key = {var, 1}
+    # For each variable name, if version 1 is missing, use the lowest available version.
+    # Group entries by var name first to avoid non-deterministic map iteration order.
+    vars_map
+    |> Enum.filter(fn {{var, version}, _} ->
+      is_atom(var) and is_integer(version) and version > 1
+    end)
+    |> Enum.group_by(fn {{var, _version}, _shape} -> var end)
+    |> Enum.reduce(vars_map, fn {var, entries}, acc ->
+      primary_key = {var, 1}
 
-        if Map.has_key?(acc, primary_key) do
-          acc
-        else
-          Map.put(acc, primary_key, shape)
-        end
-
-      _, acc ->
+      if Map.has_key?(acc, primary_key) do
         acc
+      else
+        # Pick the entry with the lowest version number
+        {{_var, _version}, shape} = Enum.min_by(entries, fn {{_v, version}, _s} -> version end)
+        Map.put(acc, primary_key, shape)
+      end
     end)
   end
 
@@ -1320,39 +1325,26 @@ defmodule ElixirSense.Core.ElixirTypes do
     end)
   end
 
-  # Lazy shape conversion with caching
+  # Lazy shape conversion with caching (uses descriptor as key to avoid hash collisions)
   defp to_shape_lazy(descr, _opts) do
-    # Use a simple hash-based cache for M2
-    cache_key = :erlang.phash2(descr)
+    cache_key = {:elixir_types_shape_cache, descr}
 
-    case Process.get({:elixir_types_shape_cache, cache_key}) do
+    case Process.get(cache_key) do
       nil ->
         track_cache_miss()
         result = to_shape_eager(descr)
-        # Cache result with TTL
-        Process.put(
-          {:elixir_types_shape_cache, cache_key},
-          {result, System.monotonic_time(:millisecond)}
-        )
-
+        Process.put(cache_key, {result, System.monotonic_time(:millisecond)})
         result
 
       {cached_result, timestamp} ->
-        # Check if cache entry is still fresh (5 minute TTL)
         if System.monotonic_time(:millisecond) - timestamp < 300_000 do
           track_cache_hit()
           cached_result
         else
-          # Cache expired, recompute
           track_cache_miss()
-          Process.delete({:elixir_types_shape_cache, cache_key})
+          Process.delete(cache_key)
           result = to_shape_eager(descr)
-
-          Process.put(
-            {:elixir_types_shape_cache, cache_key},
-            {result, System.monotonic_time(:millisecond)}
-          )
-
+          Process.put(cache_key, {result, System.monotonic_time(:millisecond)})
           result
         end
     end
