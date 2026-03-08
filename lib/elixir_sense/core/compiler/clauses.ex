@@ -259,7 +259,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
     opts = sanitize_opts(opts, @valid_case_opts)
 
-    match_context = TypeInference.type_of(e_expr, e.context)
+    match_context = TypeInference.type_of(e_expr, e.context, s, e)
 
     {case_clauses, sa} =
       Enum.map_reduce(opts, s, fn x, sa ->
@@ -430,7 +430,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     sm = State.reset_read(sr, s)
     {[e_left], sl, el} = head([left], sm, er)
 
-    match_context_r = TypeInference.type_of(e_right, e.context)
+    match_context_r = TypeInference.type_of(e_right, e.context, sr, e)
     vars_l_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context_r, :match)
 
     # Enhanced pattern matching refinement with ElixirTypes for with expressions

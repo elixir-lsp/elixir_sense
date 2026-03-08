@@ -1501,7 +1501,7 @@ defmodule ElixirSense.Core.Compiler do
     inferred_type =
       case e_args do
         nil -> nil
-        [arg] -> TypeInference.type_of(arg, env.context)
+        [arg] -> TypeInference.type_of(arg, env.context, state, env)
       end
 
     state =
@@ -2744,7 +2744,7 @@ defmodule ElixirSense.Core.Compiler do
     sm = State.reset_read(sr, s)
     {[e_left], sl, el} = __MODULE__.Clauses.head([left], sm, er)
 
-    match_context_r = TypeInference.type_of(e_right, e.context)
+    match_context_r = TypeInference.type_of(e_right, e.context, sr, e)
 
     vars_l_with_inferred_types =
       TypeInference.find_typed_vars(e_left, {:for_expression, match_context_r}, :match)

@@ -271,13 +271,47 @@ defmodule ElixirSense.Core.TypeInference do
   # other
   def type_of(ast, context), do: type_of_with_elixir_types(ast, context)
 
+  @doc """
+  Type an expression with compiler state and env context.
+
+  When native typing is enabled, seeds variable types and module/function/file
+  context from the compiler state into the native inference engine. Falls back to
+  `type_of/2` when native typing is disabled or returns nil.
+  """
+  def type_of(ast, context, %{vars_info: [current_scope | _]} = _state, env)
+      when is_map(current_scope) do
+    if ElixirSense.Core.ElixirTypes.enabled?() do
+      env_context = build_env_context(current_scope, env)
+      native_result = type_of_with_elixir_types(ast, context, nil, nil, env_context)
+      native_result || type_of(ast, context)
+    else
+      type_of(ast, context)
+    end
+  end
+
+  def type_of(ast, context, _state, _env), do: type_of(ast, context)
+
+  defp build_env_context(current_scope, env) do
+    vars =
+      current_scope
+      |> Map.values()
+      |> Enum.filter(&match?(%ElixirSense.Core.State.VarInfo{}, &1))
+
+    %{
+      module: env[:module],
+      function: env[:function],
+      file: env[:file],
+      vars: vars
+    }
+  end
+
   # Helper to use ElixirTypes adaptor as fallback
   defp type_of_with_elixir_types(ast, context) do
     type_of_with_elixir_types(ast, context, nil, nil, %{})
   end
 
   # Helper to use ElixirTypes adaptor with optional local signatures and metadata
-  # TODO: metadata and env_context not passed
+  # Used by both the internal type_of/4 path and the external type_of_with_elixir_types/5 API
   def type_of_with_elixir_types(
         ast,
         _context,
@@ -336,10 +370,8 @@ defmodule ElixirSense.Core.TypeInference do
     end
   end
 
-  # Helper to extract module context from AST (simplified for M2)
+  # Fallback module for type_of/2 path (when no compiler env is available)
   defp extract_module_from_context(_ast) do
-    # For M2, we'll use a default module
-    # In M3, this could be enhanced to extract from AST context
     ElixirSense.ElixirTypes
   end
 

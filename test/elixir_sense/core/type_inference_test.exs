@@ -622,4 +622,68 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       end
     end
   end
+
+  describe "type_of/4 with compiler context" do
+    alias ElixirSense.Core.State.VarInfo
+
+    defp type_of_with_context(code, vars_info, env \\ %{}) do
+      ast =
+        Code.string_to_quoted!(code)
+        |> Macro.prewalk(fn
+          {:__aliases__, _, list} ->
+            Module.concat(list)
+
+          {atom, _meta, var_context} = node when is_atom(atom) and is_atom(var_context) ->
+            Macro.update_meta(node, &Keyword.put(&1, :version, 1))
+
+          node ->
+            node
+        end)
+
+      state = %{vars_info: [vars_info]}
+      env = Map.merge(%{module: TestModule, function: {:test, 0}, file: "nofile", context: nil}, env)
+      TypeInference.type_of(ast, env[:context], state, env)
+    end
+
+    test "type_of/4 falls back to type_of/2 when native typing disabled" do
+      original = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, false)
+
+      try do
+        result = type_of_with_context("x", %{{:x, 1} => %VarInfo{name: :x, version: 1, type: {:integer, 1}}})
+        assert result == {:variable, :x, 1}
+      after
+        Application.put_env(:elixir_sense, :use_elixir_types, original)
+      end
+    end
+
+    test "type_of/4 with variable context produces native result when enabled" do
+      if ElixirTypes.available?() do
+        original = Application.get_env(:elixir_sense, :use_elixir_types, false)
+        Application.put_env(:elixir_sense, :use_elixir_types, true)
+
+        try do
+          # With an integer variable in scope, native typing should type "x + 1" as integer
+          vars = %{
+            {:x, 1} => %VarInfo{
+              name: :x,
+              version: 1,
+              type: {:integer, nil},
+              elixir_types_descr: Module.Types.Descr.integer()
+            }
+          }
+
+          result = type_of_with_context(":erlang.+(x, 1)", vars)
+          assert result in [{:integer, nil}, :number]
+        after
+          Application.put_env(:elixir_sense, :use_elixir_types, original)
+        end
+      end
+    end
+
+    test "type_of/4 handles empty vars_info gracefully" do
+      result = type_of_with_context(":ok", %{})
+      assert result == {:atom, :ok}
+    end
+  end
 end
