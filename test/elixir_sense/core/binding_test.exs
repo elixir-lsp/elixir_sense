@@ -1341,6 +1341,39 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "remote type expansion resolves nested module aliases" do
+      env = %Binding{
+        module: ElixirSenseExample.ModuleWithTypespecs,
+        aliases: [{Elixir.Remote, ElixirSenseExample.ModuleWithTypespecs.Remote}],
+        vars: [],
+        attributes: []
+      }
+
+      # remote_t :: atom — atom is a built-in type so expands to nil (unknown),
+      # but the alias resolution path is still exercised
+      assert nil ==
+               Binding.expand_type(
+                 env,
+                 {{:., [], [{:__aliases__, [], [:Remote]}, :remote_t]}, [], []},
+                 [],
+                 false,
+                 []
+               )
+
+      # __MODULE__.Remote resolves to ElixirSenseExample.ModuleWithTypespecs.Remote
+      # remote_list_t :: [remote_t] — remote_t resolves to nil, so list element is nil
+      assert {:list, nil} ==
+               Binding.expand_type(
+                 env,
+                 {{:., [],
+                   [{{:., [], [{:__MODULE__, [], nil}, :Remote]}, [], []}, :remote_list_t]}, [],
+                  []},
+                 [],
+                 false,
+                 []
+               )
+    end
+
     test "remote call fun with spec parametrized map" do
       assert {:map, [abc: nil], nil} ==
                Binding.expand(

@@ -367,7 +367,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
     test "remote signatures resolve __MODULE__ and aliases from metadata env" do
       metadata = %ElixirSense.Core.Metadata{
-        cursor_env: {[], %{module: String, aliases: [MyAlias: Integer]}}
+        cursor_env: {[], %{module: String, aliases: [{Elixir.MyAlias, Integer}]}}
       }
 
       assert {:ok, {_kind, _domain, _clauses}} =
@@ -378,7 +378,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       assert {:ok, {_kind, _domain, _clauses}} =
                ElixirTypes.maybe_remote_call_sig(
-                 {{:., [], [{:__aliases__, [], [:MyAlias]}, :to_string]}, [], [nil]},
+                 {{:., [], [{:__aliases__, [], [MyAlias]}, :to_string]}, [], [nil]},
                  metadata
                )
     end
@@ -419,6 +419,20 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       assert {:ok, {_kind, _domain, _clauses}} =
                ElixirTypes.maybe_remote_call_sig(
                  {{:., [], [{:mod_var, [], nil}, :split]}, [], [nil, nil]},
+                 metadata
+               )
+    end
+
+    test "remote signatures resolve nested module expressions from metadata env" do
+      metadata = %ElixirSense.Core.Metadata{
+        cursor_env: {[], %{module: String}}
+      }
+
+      # __MODULE__.Chars resolves to String.Chars, which has ExCk sigs
+      assert {:ok, {_kind, _domain, _clauses}} =
+               ElixirTypes.maybe_remote_call_sig(
+                 {{:., [], [{{:., [], [{:__MODULE__, [], nil}, :Chars]}, [], []}, :to_string]},
+                  [], [nil]},
                  metadata
                )
     end

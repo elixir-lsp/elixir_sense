@@ -573,6 +573,13 @@ defmodule ElixirSense.Core.ElixirTypes do
     end
   end
 
+  defp module_from_ast({{:., _, [base, nested]}, _, []}, metadata) when is_atom(nested) do
+    case module_from_ast(base, metadata) do
+      {:ok, module} when is_atom(module) -> {:ok, Module.concat(module, nested)}
+      _ -> :error
+    end
+  end
+
   defp module_from_ast({:__aliases__, _, parts}, metadata) when is_list(parts) do
     try do
       {:ok, resolve_alias(parts, metadata)}
@@ -584,21 +591,74 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp module_from_ast(_ast, _metadata), do: :error
 
   defp resolve_alias(parts, metadata) when is_list(parts) and is_map(metadata) do
-    first = hd(parts)
+    env = metadata_env(metadata)
 
     aliases =
-      case metadata_env(metadata) do
+      case env do
         %{aliases: aliases} when is_list(aliases) -> aliases
         _ -> []
       end
 
-    case Keyword.get(aliases, first) do
-      nil -> Module.concat(parts)
-      resolved when is_atom(resolved) -> Module.concat([resolved | tl(parts)])
+    current_module = if is_map(env), do: env.module, else: nil
+
+    mod = Module.concat(parts)
+
+    case ElixirSense.Core.Introspection.expand_alias(mod, aliases) do
+      ^mod ->
+        case expand_alias_from_env(current_module, aliases, parts) do
+          resolved when is_atom(resolved) -> resolved
+          _ -> Module.concat(parts)
+        end
+
+      resolved ->
+        resolved
+    end
+  end
+
+  defp resolve_alias([single], metadata) when is_atom(single) and is_map(metadata) do
+    case metadata_env(metadata) do
+      %{module: module, aliases: aliases} when is_atom(module) and is_list(aliases) ->
+        case Keyword.get(aliases, single) do
+          resolved when is_atom(resolved) -> resolved
+          _ -> resolve_parent_alias(module, single)
+        end
+
+      %{module: module} when is_atom(module) ->
+        resolve_parent_alias(module, single)
+
+      _ ->
+        Module.concat([single])
     end
   end
 
   defp resolve_alias(parts, _metadata), do: Module.concat(parts)
+
+  defp resolve_parent_alias(module, single) when is_atom(module) and is_atom(single) do
+    parent = module |> Module.split() |> Enum.drop(-1)
+
+    case parent do
+      [] -> nil
+      parts -> Module.concat(parts ++ [single])
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp resolve_parent_alias(_, _), do: nil
+
+  defp expand_alias_from_env(module, aliases, list)
+       when is_atom(module) and is_list(aliases) and is_list(list) do
+    env = %Macro.Env{module: module, aliases: aliases}
+
+    case ElixirSense.Core.Normalized.Macro.Env.expand_alias(env, [], list, trace: false) do
+      {:alias, resolved} when is_atom(resolved) -> resolved
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp expand_alias_from_env(_, _, _), do: nil
 
   defp metadata_env(metadata) when is_map(metadata) do
     case metadata.cursor_env || metadata.closest_env do
@@ -1206,6 +1266,19 @@ defmodule ElixirSense.Core.ElixirTypes do
     {:union, Enum.map(variants, fn variant -> generalize_shape(variant) end)}
   end
 
+  defp generalize_shape({:fun, args, return}) when is_list(args) do
+    {:fun, Enum.map(args, &generalize_shape/1), generalize_shape(return)}
+  end
+
+  defp generalize_shape({:fun_clauses, clauses}) when is_list(clauses) do
+    {:fun_clauses,
+     Enum.map(clauses, fn {args, return} ->
+       {Enum.map(args, &generalize_shape/1), generalize_shape(return)}
+     end)}
+  end
+
+  defp generalize_shape({:optional, inner}), do: {:optional, generalize_shape(inner)}
+
   defp generalize_shape(shape), do: shape
 
   defp list_tail_shape(nil, element_shape) do
@@ -1285,169 +1358,27 @@ defmodule ElixirSense.Core.ElixirTypes do
     end
   end
 
-  # Original eager shape conversion (renamed for clarity)
+  # Convert a Module.Types.Descr descriptor to an ElixirSense shape.
+  # Uses Descr.to_quoted/1 to get stable AST representation, then translates
+  # that AST to ElixirSense shapes — avoiding internal BDD pattern matching.
   defp to_shape_eager(descr) do
     if available?() do
       try do
-        # Check for fun_from_inferred_clauses BEFORE unwrapping
-        # (has both :dynamic and :fun keys, unwrapping would lose this info)
-        fun_inferred_shape =
-          if Map.has_key?(descr, :dynamic) and Map.has_key?(descr, :fun) do
-            case Map.get(descr, :dynamic) do
-              %{fun: {args, return_type}} when is_list(args) ->
-                arg_shapes = Enum.map(args, &to_shape/1)
-                return_shape = to_shape(return_type)
-                {:fun_clauses, [{arg_shapes, return_shape}]}
+        cond do
+          # not_set() has an :optional key that to_quoted doesn't handle
+          is_map(descr) and is_map_key(descr, :optional) ->
+            optional_descr = Map.delete(descr, :optional)
 
-              _ ->
-                nil
-            end
-          else
-            nil
-          end
-
-        if fun_inferred_shape do
-          fun_inferred_shape
-        else
-          cond do
-            Module.Types.Descr.equal?(descr, Module.Types.Descr.dynamic()) ->
-              nil
-
-            optional_descr = extract_optional(descr) ->
+            if map_size(optional_descr) > 0 do
               {:optional, to_shape(optional_descr)}
+            else
+              :not_set
+            end
 
-            true ->
-              descr = unwrap_dynamic(descr)
-
-              cond do
-                # Union types (highest priority to catch complex unions)
-                union_types = extract_union(descr) ->
-                  shapes = Enum.map(union_types, &to_shape_eager/1) |> Enum.reject(&is_nil/1)
-
-                  if length(shapes) > 1 do
-                    {:union, shapes}
-                  else
-                    # Fall back to single type or nil
-                    case shapes do
-                      [single_shape] -> single_shape
-                      [] -> nil
-                    end
-                  end
-
-                # Struct types
-                struct_info = extract_struct(descr) ->
-                  case struct_info do
-                    %{module: module, fields: fields} when is_atom(module) ->
-                      field_shapes = convert_struct_fields(fields)
-                      # Use Binding-compatible format: {:struct, fields, {:atom, Module}, nil}
-                      {:struct, field_shapes, {:atom, module}, nil}
-
-                    _ ->
-                      nil
-                  end
-
-                # Function types
-                function_info = extract_function(descr) ->
-                  case function_info do
-                    %{arity: arity, type: :function} when is_integer(arity) ->
-                      {:fun, arity}
-
-                    %{arity: :any, type: :function} ->
-                      {:fun, :any}
-
-                    _ ->
-                      nil
-                  end
-
-                # PIDs, ports, refs (check against well-known descriptors)
-                Module.Types.Descr.compatible?(descr, Module.Types.Descr.pid()) and
-                    Module.Types.Descr.subtype?(descr, Module.Types.Descr.pid()) ->
-                  :pid
-
-                Module.Types.Descr.compatible?(descr, Module.Types.Descr.port()) and
-                    Module.Types.Descr.subtype?(descr, Module.Types.Descr.port()) ->
-                  :port
-
-                Module.Types.Descr.compatible?(descr, Module.Types.Descr.reference()) and
-                    Module.Types.Descr.subtype?(descr, Module.Types.Descr.reference()) ->
-                  :reference
-
-                Module.Types.Descr.equal?(descr, Module.Types.Descr.none()) ->
-                  :none
-
-                # Integer
-                Module.Types.Descr.equal?(descr, Module.Types.Descr.integer()) ->
-                  {:integer, nil}
-
-                # Float
-                Module.Types.Descr.equal?(descr, Module.Types.Descr.float()) ->
-                  {:float, nil}
-
-                # Binary
-                Module.Types.Descr.equal?(descr, Module.Types.Descr.binary()) ->
-                  {:binary, nil}
-
-                # Empty list
-                Module.Types.Descr.equal?(descr, Module.Types.Descr.empty_list()) ->
-                  {:list, :empty}
-
-                # not_set
-                Module.Types.Descr.equal?(descr, Module.Types.Descr.not_set()) ->
-                  :not_set
-
-                # Function types
-                fun_info = extract_function_info(descr) ->
-                  fun_info
-
-                # Any atom (atom top type)
-                is_atom_top?(descr) ->
-                  :atom
-
-                Module.Types.Descr.number_type?(descr) and
-                    not Module.Types.Descr.equal?(descr, Module.Types.Descr.dynamic()) ->
-                  :number
-
-                # Single atom
-                is_single_atom?(descr) ->
-                  {:atom, extract_single_atom(descr)}
-
-                proper_list_element = extract_proper_list_element(descr) ->
-                  {:list, to_shape(proper_list_element)}
-
-                # Lists with concrete element type
-                list_element = extract_list_element(descr) ->
-                  case to_shape(list_element) do
-                    nil -> {:list, nil}
-                    element_shape -> {:list, element_shape}
-                  end
-
-                # Closed tuples with small arity
-                tuple_elements = extract_tuple_elements(descr) ->
-                  case tuple_elements do
-                    :any_tuple ->
-                      :tuple
-
-                    elements when is_list(elements) ->
-                      element_shapes =
-                        elements
-                        |> Enum.map(&to_shape/1)
-
-                      if Enum.all?(element_shapes, &(&1 != nil)) do
-                        {:tuple, length(element_shapes), element_shapes}
-                      else
-                        {:tuple, length(element_shapes), Enum.map(element_shapes, &(&1 || nil))}
-                      end
-                  end
-
-                # Closed maps with atom keys
-                map_fields = extract_map_fields(descr) ->
-                  fields = convert_map_fields(map_fields) || []
-                  {:map, fields, nil}
-
-                true ->
-                  nil
-              end
-          end
+          true ->
+            descr
+            |> Module.Types.Descr.to_quoted()
+            |> quoted_to_shape()
         end
       rescue
         _ -> nil
@@ -1458,6 +1389,197 @@ defmodule ElixirSense.Core.ElixirTypes do
       nil
     end
   end
+
+  # Convert Descr.to_quoted/1 AST output into ElixirSense shapes.
+  defp quoted_to_shape(quoted) do
+    case quoted do
+      # Special types
+      {:term, [], []} -> nil
+      {:none, [], []} -> :none
+      {:dynamic, [], []} -> nil
+      # dynamic(inner) — unwrap and convert the inner type
+      {:dynamic, [], [inner]} -> quoted_to_shape(inner)
+
+      # Primitive types
+      {:integer, [], []} -> {:integer, nil}
+      {:float, [], []} -> {:float, nil}
+      {:binary, [], []} -> {:binary, nil}
+      {:atom, [], []} -> :atom
+      {:pid, [], []} -> :pid
+      {:port, [], []} -> :port
+      {:reference, [], []} -> :reference
+      {:empty_list, [], []} -> {:list, :empty}
+      {:empty_map, [], []} -> {:map, [], nil}
+      {:boolean, [], []} -> {:union, [{:atom, false}, {:atom, true}]}
+      # map() — the map top type with no specific fields
+      {:map, [], []} -> {:map, [], nil}
+
+      # Function types
+      {:fun, [], []} -> :fun
+
+      # Function with signature: {:__block__, [], [[{:->, [], [[args...], return]}]]}
+      {:__block__, [], [clauses]} when is_list(clauses) ->
+        fun_clauses =
+          for {:->, [], [args, return]} <- clauses do
+            {Enum.map(args, &quoted_to_shape/1), quoted_to_shape(return)}
+          end
+
+        case fun_clauses do
+          [{arg_shapes, return_shape}] ->
+            # When all args are :none and return is nil (term), this is just {:fun, arity}
+            if Enum.all?(arg_shapes, &(&1 == :none)) and return_shape == nil do
+              {:fun, length(arg_shapes)}
+            else
+              {:fun, arg_shapes, return_shape}
+            end
+
+          [_ | _] ->
+            {:fun_clauses, fun_clauses}
+
+          [] ->
+            quoted_to_shape_block(clauses)
+        end
+
+      # List types
+      {:list, [], [elem]} -> {:list, quoted_to_shape(elem)}
+      {:non_empty_list, [], [elem]} -> {:list, quoted_to_shape(elem)}
+      # non_empty_list with explicit tail (improper list) — we lose the tail info
+      {:non_empty_list, [], [elem, _tail]} -> {:list, quoted_to_shape(elem)}
+
+      # Tuple types (all arities use {:{}, [], elems} form)
+      {:{}, [], elems} when is_list(elems) ->
+        # Filter out open tuple marker {:..., [], nil}
+        elems = Enum.reject(elems, &match?({:..., [], _}, &1))
+        shapes = Enum.map(elems, &quoted_to_shape/1)
+        {:tuple, length(shapes), shapes}
+
+      # Map types (may contain structs)
+      {:%{}, [], fields} when is_list(fields) ->
+        quoted_map_to_shape(fields)
+
+      # Union types
+      {:or, [], [_left, _right]} = union ->
+        shapes =
+          flatten_quoted_union(union)
+          |> Enum.map(&quoted_to_shape/1)
+          |> Enum.reject(&is_nil/1)
+
+        case shapes do
+          [] -> nil
+          [single] -> single
+          multiple -> {:union, multiple}
+        end
+
+      # Intersection of function types — extract clauses from each branch
+      {:and, [], [_left, _right]} = intersection ->
+        fun_clauses = extract_fun_clauses_from_intersection(intersection)
+
+        case fun_clauses do
+          [_ | _] -> {:fun_clauses, fun_clauses}
+          [] -> nil
+        end
+
+      # Negation types — best effort
+      {:not, [], [_inner]} -> nil
+
+      # Optional map field value
+      {:if_set, [], [inner]} -> {:optional, quoted_to_shape(inner)}
+
+      # Literal atoms wrapped in __block__
+      {:__block__, [], [atom]} when is_atom(atom) -> {:atom, atom}
+
+      # Literal integers wrapped in __block__
+      {:__block__, [], [integer]} when is_integer(integer) -> {:integer, integer}
+
+      # Module aliases in struct __struct__ fields
+      {:__aliases__, [], parts} when is_list(parts) ->
+        {:atom, Module.concat(parts)}
+
+      # Open map/tuple marker
+      {:..., [], _} -> nil
+
+      # Bare literal atoms (unlikely from to_quoted but handle for safety)
+      atom when is_atom(atom) -> {:atom, atom}
+
+      # Bare literal integers
+      integer when is_integer(integer) -> {:integer, integer}
+
+      # Fallback
+      _ -> nil
+    end
+  end
+
+  # Handle __block__ wrapping a list that isn't function clauses
+  defp quoted_to_shape_block([value]) when is_atom(value), do: {:atom, value}
+  defp quoted_to_shape_block([value]) when is_integer(value), do: {:integer, value}
+  defp quoted_to_shape_block(_), do: nil
+
+  # Extract function clauses from an intersection of function types.
+  # fun_from_non_overlapping_clauses produces {:and, [], [fun1, fun2]}
+  defp extract_fun_clauses_from_intersection({:and, [], [left, right]}) do
+    extract_fun_clauses_from_intersection(left) ++
+      extract_fun_clauses_from_intersection(right)
+  end
+
+  defp extract_fun_clauses_from_intersection({:__block__, [], [clauses]})
+       when is_list(clauses) do
+    for {:->, [], [args, return]} <- clauses do
+      {Enum.map(args, &quoted_to_shape/1), quoted_to_shape(return)}
+    end
+  end
+
+  defp extract_fun_clauses_from_intersection(_), do: []
+
+  # Convert quoted map fields to either a struct or map shape.
+  defp quoted_map_to_shape(fields) do
+    # Extract field key-value pairs, skipping open map markers
+    kv_pairs =
+      for {key_quoted, value_quoted} <- fields,
+          not match?({:..., [], _}, key_quoted),
+          key = extract_quoted_map_key(key_quoted),
+          do: {key, value_quoted}
+
+    # Check if this is a struct (has __struct__ field with a module atom)
+    struct_module =
+      Enum.find_value(kv_pairs, fn
+        {:__struct__, value_quoted} ->
+          case quoted_to_shape(value_quoted) do
+            {:atom, module} when is_atom(module) and module != nil -> module
+            _ -> nil
+          end
+
+        _ ->
+          nil
+      end)
+
+    if struct_module do
+      field_shapes =
+        for {key, value_quoted} <- kv_pairs,
+            key != :__struct__,
+            do: {key, quoted_to_shape(value_quoted)}
+
+      {:struct, field_shapes, {:atom, struct_module}, nil}
+    else
+      field_shapes =
+        for {key, value_quoted} <- kv_pairs,
+            do: {key, quoted_to_shape(value_quoted)}
+
+      {:map, field_shapes, nil}
+    end
+  end
+
+  # Extract atom key from quoted map key representation.
+  defp extract_quoted_map_key({:__block__, [format: :keyword], [key]}) when is_atom(key), do: key
+  defp extract_quoted_map_key({:__block__, _, [key]}) when is_atom(key), do: key
+  defp extract_quoted_map_key(key) when is_atom(key), do: key
+  defp extract_quoted_map_key(_), do: nil
+
+  # Flatten nested {:or, [], [left, right]} into a flat list.
+  defp flatten_quoted_union({:or, [], [left, right]}) do
+    flatten_quoted_union(left) ++ flatten_quoted_union(right)
+  end
+
+  defp flatten_quoted_union(other), do: [other]
 
   @doc """
   Merges two shapes, preferring the more specific one.
@@ -1555,300 +1677,6 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   # Helper functions for shape conversion
 
-  # Advanced type extractors for Enhanced Shape Conversion
-
-  defp extract_union(descr) do
-    case Module.Types.Descr.atom_fetch(descr) do
-      {:finite, atoms} when length(atoms) > 1 -> Enum.map(atoms, &Module.Types.Descr.atom([&1]))
-      _ -> nil
-    end
-  end
-
-  defp extract_struct(descr) do
-    with true <- is_map(descr),
-         fields when is_map(fields) <- extract_map_fields(descr),
-         struct_descr when not is_nil(struct_descr) <- Map.get(fields, :__struct__),
-         struct_module when is_atom(struct_module) <- extract_struct_module(struct_descr) do
-      %{module: struct_module, fields: Map.delete(fields, :__struct__)}
-    else
-      _ -> nil
-    end
-  end
-
-  defp extract_struct_module(descr) do
-    # Extract module name from struct descriptor
-    case extract_single_atom(descr) do
-      atom when is_atom(atom) -> atom
-      _ -> nil
-    end
-  end
-
-  defp extract_function(descr) do
-    # Look for function type patterns
-    if is_map(descr) do
-      case Map.get(descr, :fun) do
-        fun_descr when is_map(fun_descr) ->
-          # Extract arity from function descriptor
-          arity = Map.get(fun_descr, :arity, :any)
-          %{arity: arity, type: :function}
-
-        _ ->
-          nil
-      end
-    else
-      nil
-    end
-  end
-
-  defp is_atom_top?(descr) when is_map(descr) do
-    case Module.Types.Descr.atom_fetch(descr) do
-      {:infinite, []} -> true
-      _ -> false
-    end
-  end
-
-  defp is_atom_top?(_), do: false
-
-  defp is_single_atom?(descr) when is_map(descr) do
-    case Module.Types.Descr.atom_fetch(descr) do
-      {:finite, [_]} -> true
-      _ -> false
-    end
-  end
-
-  defp is_single_atom?(_), do: false
-
-  defp extract_single_atom(descr) when is_map(descr) do
-    case Module.Types.Descr.atom_fetch(descr) do
-      {:finite, [atom]} -> atom
-      _ -> nil
-    end
-  end
-
-  defp extract_list_element(descr) when is_map(descr) do
-    descr = unwrap_dynamic(descr)
-
-    case Map.get(descr, :list) do
-      {element_type, _tail} -> element_type
-      _ -> nil
-    end
-  end
-
-  defp extract_list_element(_), do: nil
-
-  defp extract_proper_list_element(descr) when is_map(descr) do
-    descr = unwrap_dynamic(descr)
-
-    case Map.get(descr, :list) do
-      {element_type, tail_type} ->
-        if Module.Types.Descr.empty_list_type?(tail_type), do: element_type, else: nil
-
-      _ ->
-        nil
-    end
-  end
-
-  defp extract_proper_list_element(_), do: nil
-
-  defp extract_tuple_elements(descr) when is_map(descr) do
-    descr = unwrap_dynamic(descr)
-
-    values =
-      Stream.iterate(0, &(&1 + 1))
-      |> Enum.reduce_while([], fn index, acc ->
-        case Module.Types.Descr.tuple_fetch(descr, index) do
-          {_optional?, element_type} -> {:cont, [element_type | acc]}
-          :badindex -> {:halt, Enum.reverse(acc)}
-          _ -> {:halt, nil}
-        end
-      end)
-
-    tuple_root = Map.get(descr, :tuple)
-
-    case values do
-      nil -> nil
-      [] when tuple_root == :bdd_top -> :any_tuple
-      [] -> []
-      elems -> Enum.map(elems, &unwrap_dynamic/1)
-    end
-  end
-
-  defp extract_tuple_elements(_), do: nil
-
-  defp extract_map_fields(descr) when is_map(descr) do
-    descr = unwrap_dynamic(descr)
-
-    case Map.get(descr, :map) do
-      {:closed, fields} when is_map(fields) ->
-        fields
-
-      {:open, fields} when is_map(fields) ->
-        fields
-
-      {_domains, fields} when is_map(fields) ->
-        fields
-
-      _ ->
-        nil
-    end
-  end
-
-  defp extract_map_fields(_), do: nil
-
-  defp extract_optional(%{optional: 1} = descr) do
-    descr
-    |> Map.delete(:optional)
-    |> case do
-      %{} = without_optional when map_size(without_optional) > 0 -> without_optional
-      _ -> nil
-    end
-  end
-
-  defp extract_optional(_), do: nil
-
-  # Extract function information from descriptor
-  # Note: fun_from_inferred_clauses is handled at the top of to_shape_eager
-  # before unwrapping dynamic
-  defp extract_function_info(descr) when is_map(descr) do
-    descr = unwrap_dynamic(descr)
-
-    cond do
-      Module.Types.Descr.equal?(descr, Module.Types.Descr.fun()) ->
-        :fun
-
-      true ->
-        case extract_function_signature_from_raw(descr) do
-          nil -> extract_function_arity_or_shape(descr)
-          shape -> shape
-        end
-    end
-  end
-
-  defp extract_function_info(_), do: nil
-
-  defp extract_function_signature_from_raw(%{fun: {args, return_type}})
-       when is_list(args) do
-    arity = length(args)
-
-    if Enum.all?(args, &Module.Types.Descr.equal?(&1, Module.Types.Descr.none())) and
-         return_type == :term do
-      {:fun, arity}
-    else
-      {:fun, Enum.map(args, &to_shape/1), to_shape(return_type)}
-    end
-  end
-
-  defp extract_function_signature_from_raw(%{fun: bdd}) when is_tuple(bdd) do
-    clauses = extract_function_clauses(bdd)
-    if clauses == [], do: nil, else: {:fun_clauses, clauses}
-  end
-
-  defp extract_function_signature_from_raw(_), do: nil
-
-  defp extract_function_arity_or_shape(descr) do
-    arities = Enum.filter(0..8, &Module.Types.Descr.subtype?(descr, Module.Types.Descr.fun(&1)))
-
-    case arities do
-      [arity] ->
-        case build_fun_shape_from_apply(descr, arity) do
-          nil -> {:fun, arity}
-          shape -> shape
-        end
-
-      _ ->
-        nil
-    end
-  end
-
-  defp build_fun_shape_from_apply(descr, arity) do
-    args = List.duplicate(Module.Types.Descr.dynamic(), arity)
-
-    case Module.Types.Descr.fun_apply(descr, args) do
-      {:ok, return_descr} -> {:fun, List.duplicate(nil, arity), to_shape(return_descr)}
-      _ -> nil
-    end
-  rescue
-    _ -> nil
-  end
-
-  # Extract function clauses from BDD representation
-  defp extract_function_clauses(bdd) when is_tuple(bdd) do
-    # BDD is a tuple of clauses, each clause is {args, return}
-    # We'll flatten it to extract all clauses
-    flatten_bdd_clauses(bdd, [])
-  end
-
-  defp flatten_bdd_clauses({args, return}, acc) when is_list(args) do
-    # Single clause
-    clause = {Enum.map(args, &to_shape/1), to_shape(return)}
-    [clause | acc]
-  end
-
-  defp flatten_bdd_clauses({clause1, clause2, _, _}, acc) do
-    # Multiple clauses in BDD format
-    acc = flatten_bdd_clauses(clause1, acc)
-    flatten_bdd_clauses(clause2, acc)
-  end
-
-  defp flatten_bdd_clauses(:bdd_bot, acc), do: acc
-  defp flatten_bdd_clauses(:bdd_top, acc), do: acc
-  defp flatten_bdd_clauses(_, acc), do: acc
-
-  defp convert_map_fields(fields) when is_map(fields) do
-    try do
-      converted =
-        for {key, value_descr} <- fields do
-          value_descr = unwrap_dynamic(value_descr)
-          {key, to_shape(value_descr)}
-        end
-
-      converted
-    rescue
-      _ -> nil
-    end
-  end
-
-  defp convert_struct_fields(fields) when is_list(fields) do
-    try do
-      converted =
-        for {key, value_descr} <- fields do
-          value_descr = unwrap_dynamic(value_descr)
-
-          case to_shape(value_descr) do
-            nil -> {key, nil}
-            shape -> {key, shape}
-          end
-        end
-
-      converted
-    rescue
-      _ -> nil
-    end
-  end
-
-  defp convert_struct_fields(fields) when is_map(fields) do
-    try do
-      converted =
-        for {key, value_descr} <- fields do
-          value_descr = unwrap_dynamic(value_descr)
-
-          case to_shape(value_descr) do
-            nil -> {key, nil}
-            shape -> {key, shape}
-          end
-        end
-
-      converted
-    rescue
-      _ -> nil
-    end
-  end
-
-  defp convert_struct_fields(_), do: nil
-
-  defp unwrap_dynamic(%{dynamic: dynamic} = descr) when map_size(descr) == 1, do: dynamic
-  defp unwrap_dynamic(descr), do: descr
-
   # -- Variables seeding helpers ------------------------------------------------
 
   # Convert user-provided variables map into Module.Types context vars map.
@@ -1882,10 +1710,22 @@ defmodule ElixirSense.Core.ElixirTypes do
     do: Module.Types.Descr.atom([atom])
 
   defp coerce_var_type(:atom), do: Module.Types.Descr.atom()
+  defp coerce_var_type(:integer), do: Module.Types.Descr.integer()
   defp coerce_var_type(:binary), do: Module.Types.Descr.binary()
   defp coerce_var_type(:float), do: Module.Types.Descr.float()
+  defp coerce_var_type(:pid), do: Module.Types.Descr.pid()
+  defp coerce_var_type(:port), do: Module.Types.Descr.port()
+  defp coerce_var_type(:reference), do: Module.Types.Descr.reference()
+  defp coerce_var_type(:tuple), do: Module.Types.Descr.tuple()
+  defp coerce_var_type(:fun), do: Module.Types.Descr.fun()
+  defp coerce_var_type(:none), do: Module.Types.Descr.none()
+
+  defp coerce_var_type(:number),
+    do: Module.Types.Descr.union(Module.Types.Descr.integer(), Module.Types.Descr.float())
+
   defp coerce_var_type({:integer, _}), do: Module.Types.Descr.integer()
   defp coerce_var_type({:float, _}), do: Module.Types.Descr.float()
+  defp coerce_var_type({:binary, _}), do: Module.Types.Descr.binary()
   defp coerce_var_type({:list, :empty}), do: Module.Types.Descr.empty_list()
 
   defp coerce_var_type({:list, element_type}) do
@@ -1896,19 +1736,45 @@ defmodule ElixirSense.Core.ElixirTypes do
     Module.Types.Descr.tuple(Enum.map(elements, &coerce_var_type/1))
   end
 
-  defp coerce_var_type({:map, fields}) when is_list(fields) do
-    # Best-effort closed map from atom keys; values default to term()
+  defp coerce_var_type({:map, fields, _}) when is_list(fields) do
     pairs = for {k, v} when is_atom(k) <- fields, do: {k, coerce_var_type(v)}
     Module.Types.Descr.closed_map(pairs)
   end
 
-  defp coerce_var_type({:struct, fields, module}) when is_atom(module) do
-    # Represent struct as map with __struct__
+  defp coerce_var_type({:map, fields}) when is_list(fields) do
+    pairs = for {k, v} when is_atom(k) <- fields, do: {k, coerce_var_type(v)}
+    Module.Types.Descr.closed_map(pairs)
+  end
+
+  defp coerce_var_type({:struct, fields, {:atom, module}, _updated})
+       when is_atom(module) and is_list(fields) do
     pairs =
       [{:__struct__, Module.Types.Descr.atom([module])}] ++
         for {k, v} when is_atom(k) <- fields, do: {k, coerce_var_type(v)}
 
     Module.Types.Descr.closed_map(pairs)
+  end
+
+  defp coerce_var_type({:struct, fields, module}) when is_atom(module) do
+    pairs =
+      [{:__struct__, Module.Types.Descr.atom([module])}] ++
+        for {k, v} when is_atom(k) <- fields, do: {k, coerce_var_type(v)}
+
+    Module.Types.Descr.closed_map(pairs)
+  end
+
+  defp coerce_var_type({:fun, arity}) when is_integer(arity) do
+    Module.Types.Descr.fun(arity)
+  end
+
+  defp coerce_var_type({:fun, args, _return}) when is_list(args) do
+    Module.Types.Descr.fun(length(args))
+  end
+
+  defp coerce_var_type({:union, types}) when is_list(types) do
+    types
+    |> Enum.map(&coerce_var_type/1)
+    |> Enum.reduce(Module.Types.Descr.none(), &Module.Types.Descr.union/2)
   end
 
   defp coerce_var_type(_), do: Module.Types.Descr.dynamic()

@@ -13,6 +13,7 @@ defmodule ElixirSense.Core.Binding do
   defstruct structs: %{},
             vars: [],
             attributes: [],
+            aliases: [],
             module: nil,
             function: nil,
             functions: [],
@@ -35,6 +36,7 @@ defmodule ElixirSense.Core.Binding do
     %Binding{
       vars: env.vars,
       attributes: env.attributes,
+      aliases: env.aliases,
       structs: metadata.structs,
       functions: env.functions,
       macros: env.macros,
@@ -91,7 +93,17 @@ defmodule ElixirSense.Core.Binding do
   end
 
   def expand_type(%Binding{} = env, remote_type_ast, args, include_private, stack \\ []) do
-    parse_type(env, {remote_type_ast, [], args}, env.module, include_private, stack)
+    # Handle already-wrapped call forms (e.g., {{:., _, [mod, type]}, _, call_args})
+    ast =
+      case remote_type_ast do
+        {{:., _, _} = dot, _meta, call_args} when is_list(call_args) ->
+          {dot, [], args ++ call_args}
+
+        _ ->
+          {remote_type_ast, [], args}
+      end
+
+    parse_type(env, ast, env.module, include_private, stack)
   end
 
   def do_expand(%Binding{} = env, {:intersection, variants}, stack) do
@@ -1711,6 +1723,47 @@ defmodule ElixirSense.Core.Binding do
        when kind in [:term, :any, :dynamic],
        do: nil
 
+  # built-in primitive types that must not be resolved as user types
+  defp parse_type(_env, {kind, _, []}, _, _include_private, _stack)
+       when kind in [
+              :atom,
+              :integer,
+              :float,
+              :binary,
+              :bitstring,
+              :boolean,
+              :pid,
+              :port,
+              :reference,
+              :number,
+              :char,
+              :charlist,
+              :fun,
+              :module,
+              :node,
+              :iodata,
+              :iolist,
+              :timeout,
+              :pos_integer,
+              :neg_integer,
+              :non_neg_integer,
+              :byte,
+              :arity,
+              :identifier,
+              :struct,
+              :as_boolean,
+              :mfa,
+              :string,
+              :nonempty_binary,
+              :nonempty_bitstring,
+              :nonempty_charlist,
+              :nonempty_list,
+              :nonempty_maybe_improper_list,
+              :nonempty_improper_list,
+              :maybe_improper_list
+            ],
+       do: nil
+
   # local user type
   defp parse_type(env, {atom, _, args}, mod, include_private, stack) when is_atom(atom) do
     # propagate include_private when expanding local types
@@ -1834,21 +1887,63 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  defp resolve_type_module(%Binding{} = env, {{:., _, [base, nested]}, _, []})
+       when is_atom(nested) do
+    case resolve_type_module(env, base) do
+      module when is_atom(module) -> Module.concat(module, nested)
+      _ -> nil
+    end
+  end
+
   defp resolve_type_module(_env, _), do: nil
 
-  defp resolve_alias(%Binding{module: module}, [first | rest]) do
-    if is_atom(first) and is_atom(module) and String.contains?(Atom.to_string(module), ".") do
-      root = module |> Module.split() |> hd()
+  defp resolve_alias(%Binding{aliases: aliases, module: module}, [first | rest]) do
+    mod = Module.concat([first | rest])
 
-      if Atom.to_string(first) == root do
-        Module.concat([first | rest])
-      end
+    case Introspection.expand_alias(mod, aliases) do
+      ^mod -> resolve_same_root_alias(module, first, rest)
+      resolved -> resolved
     end
   rescue
     _ -> nil
   end
 
   defp resolve_alias(_, _), do: nil
+
+  defp resolve_same_root_alias(module, first, rest)
+       when is_atom(first) and is_atom(module) and is_list(rest) do
+    cond do
+      rest == [] ->
+        resolve_parent_alias(module, first)
+
+      String.contains?(Atom.to_string(module), ".") ->
+        root = module |> Module.split() |> hd()
+
+        if Atom.to_string(first) == root do
+          Module.concat([first | rest])
+        end
+
+      true ->
+        nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp resolve_same_root_alias(_, _, _), do: nil
+
+  defp resolve_parent_alias(module, single) when is_atom(single) and is_atom(module) do
+    parent = module |> Module.split() |> Enum.drop(-1)
+
+    case parent do
+      [] -> nil
+      parts -> Module.concat(parts ++ [single])
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp resolve_parent_alias(_, _), do: nil
 
   defp combine_intersection(:none, _), do: :none
   defp combine_intersection(_, :none), do: :none

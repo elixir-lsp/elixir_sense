@@ -531,9 +531,10 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "anonymous function returns nil" do
-      assert_old_and_native("fn -> a end", nil, {:fun_clauses, [{[], nil}]})
-      assert_old_and_native("fn x -> x + 1 end", nil, {:fun_clauses, [{[nil], nil}]})
-      assert_old_and_native("fn x, y -> x * y end", nil, {:fun_clauses, [{[nil, nil], nil}]})
+      # Native typing produces {:fun, arg_shapes, return_shape} for single-clause fns
+      assert_old_and_native("fn -> a end", nil, {:fun, 0})
+      assert_old_and_native("fn x -> x + 1 end", nil, {:fun, [nil], nil})
+      assert_old_and_native("fn x, y -> x * y end", nil, {:fun, [nil, nil], nil})
     end
   end
 

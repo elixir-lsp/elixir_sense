@@ -247,8 +247,9 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
       fun_type = Module.Types.Descr.fun_from_inferred_clauses(clauses)
       shape = ElixirTypes.to_shape(fun_type)
-      # Should handle overlapping clauses
-      assert match?({:fun_clauses, _}, shape)
+      # Inferred clauses with same domain get merged into a single clause
+      # with union return type: (integer() -> atom() | binary())
+      assert match?({:fun, [{:integer, nil}], _return}, shape)
     end
 
     test "handles not_set" do
@@ -262,6 +263,39 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
       optional_atom = Module.Types.Descr.if_set(Module.Types.Descr.atom())
       assert ElixirTypes.to_shape(optional_atom) == {:optional, :atom}
+    end
+
+    test "handles cross-family unions" do
+      # integer() | atom() — a union across different type families
+      union = Module.Types.Descr.union(Module.Types.Descr.integer(), Module.Types.Descr.atom())
+      assert ElixirTypes.to_shape(union) == {:union, [:atom, {:integer, nil}]}
+
+      # integer() | binary() | nil
+      union2 =
+        Module.Types.Descr.union(
+          Module.Types.Descr.union(Module.Types.Descr.integer(), Module.Types.Descr.binary()),
+          Module.Types.Descr.atom([:nil])
+        )
+
+      shape = ElixirTypes.to_shape(union2)
+      assert match?({:union, _}, shape)
+    end
+
+    test "handles dynamic-wrapped types" do
+      # dynamic(integer()) - to_quoted unwraps to {:integer, [], []}
+      dynamic_int = Module.Types.Descr.dynamic(Module.Types.Descr.integer())
+      assert ElixirTypes.to_shape(dynamic_int) == {:integer, nil}
+
+      # dynamic(atom(:ok)) - preserves literal atom info
+      dynamic_atom = Module.Types.Descr.dynamic(Module.Types.Descr.atom([:ok]))
+      assert ElixirTypes.to_shape(dynamic_atom) == {:atom, :ok}
+    end
+
+    test "handles struct as dynamic map" do
+      # Module.Types.Of.struct_type produces dynamic-wrapped map with __struct__
+      struct = Module.Types.Of.struct_type(Date, [%{field: :year}, %{field: :month}])
+      shape = ElixirTypes.to_shape(struct)
+      assert match?({:struct, _fields, {:atom, Date}, nil}, shape)
     end
   end
 
