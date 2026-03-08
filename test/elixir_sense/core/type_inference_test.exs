@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.TypeInferenceTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   alias ElixirSense.Core.{ElixirTypes, TypeInference}
 
   setup do
@@ -355,8 +355,14 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     defp with_elixir_types(enabled, fun) do
+      original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
       Application.put_env(:elixir_sense, :use_elixir_types, enabled)
-      fun.()
+
+      try do
+        fun.()
+      after
+        Application.put_env(:elixir_sense, :use_elixir_types, original_value)
+      end
     end
 
     defp assert_old_and_native(code, old_expected, native_expected, context \\ nil) do

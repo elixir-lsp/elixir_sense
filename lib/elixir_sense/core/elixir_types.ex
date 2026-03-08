@@ -468,11 +468,11 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   def maybe_remote_call_sig(
         {{:., _, [target_ast, fun]}, _meta, args},
-        _metadata
+        metadata
       )
       when is_atom(fun) and is_list(args) do
     if enabled?() do
-      case module_from_ast(target_ast) do
+      case module_from_ast(target_ast, metadata) do
         {:ok, module} ->
           case ElixirSense.Core.ExCkReader.lookup_signature(module, fun, length(args)) do
             {:ok, %{sig: {sig_kind, _domain, _clauses} = sig}}
@@ -495,11 +495,11 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   defp maybe_remote_call_descriptor(
          {{:., _, [target_ast, fun]}, _meta, args},
-         _metadata
+         metadata
        )
        when is_atom(fun) and is_list(args) do
     if enabled?() do
-      case module_from_ast(target_ast) do
+      case module_from_ast(target_ast, metadata) do
         {:ok, module} ->
           case ElixirSense.Core.ExCkReader.lookup_signature(module, fun, length(args)) do
             {:ok, info} -> descriptor_from_exck(info)
@@ -522,19 +522,72 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   defp descriptor_from_exck(_), do: nil
 
-  defp module_from_ast(atom) when is_atom(atom) do
+  defp module_from_ast(atom, _metadata) when is_atom(atom) do
     {:ok, atom}
   end
 
-  defp module_from_ast({:__aliases__, _, parts}) when is_list(parts) do
+  defp module_from_ast({:__MODULE__, _, _}, metadata) when is_map(metadata) do
+    metadata
+    |> metadata_env()
+    |> case do
+      %{module: module} when is_atom(module) -> {:ok, module}
+      _ -> :error
+    end
+  end
+
+  defp module_from_ast({:@, _, [{attr, _, _}]}, metadata)
+       when is_atom(attr) and is_map(metadata) do
+    case metadata_env(metadata) do
+      %{attributes: attrs} when is_list(attrs) ->
+        case Enum.find(attrs, &(&1.name == attr)) do
+          %ElixirSense.Core.State.AttributeInfo{type: {:atom, module}} when is_atom(module) ->
+            {:ok, module}
+
+          _ ->
+            :error
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  defp module_from_ast({:__aliases__, _, parts}, metadata) when is_list(parts) do
     try do
-      {:ok, Module.concat(parts)}
+      {:ok, resolve_alias(parts, metadata)}
     rescue
       ArgumentError -> :error
     end
   end
 
-  defp module_from_ast(_), do: :error
+  defp module_from_ast(_ast, _metadata), do: :error
+
+  defp resolve_alias(parts, metadata) when is_list(parts) and is_map(metadata) do
+    first = hd(parts)
+
+    aliases =
+      case metadata_env(metadata) do
+        %{aliases: aliases} when is_list(aliases) -> aliases
+        _ -> []
+      end
+
+    case Keyword.get(aliases, first) do
+      nil -> Module.concat(parts)
+      resolved when is_atom(resolved) -> Module.concat([resolved | tl(parts)])
+    end
+  end
+
+  defp resolve_alias(parts, _metadata), do: Module.concat(parts)
+
+  defp metadata_env(metadata) when is_map(metadata) do
+    case metadata.cursor_env || metadata.closest_env do
+      {_, env} when is_map(env) -> env
+      {_from, _to, env} when is_map(env) -> env
+      _ -> nil
+    end
+  end
+
+  defp metadata_env(_), do: nil
 
   @doc """
   Types a pattern match to refine variable types.
@@ -1497,38 +1550,13 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp extract_struct(descr) do
-    # Look for struct patterns in the descriptor
-    if is_map(descr) do
-      case Map.get(descr, :map) do
-        # Look for struct field pattern - list format
-        %{closed: fields} when is_list(fields) ->
-          case Enum.find(fields, fn {key, _} -> key == :__struct__ end) do
-            {:__struct__, struct_descr} ->
-              struct_module = extract_struct_module(struct_descr)
-              other_fields = Enum.reject(fields, fn {key, _} -> key == :__struct__ end)
-              %{module: struct_module, fields: other_fields}
-
-            _ ->
-              nil
-          end
-
-        # Look for struct field pattern - map format
-        {:closed, fields} when is_map(fields) ->
-          case Map.get(fields, :__struct__) do
-            nil ->
-              nil
-
-            struct_descr ->
-              struct_module = extract_struct_module(struct_descr)
-              other_fields = Map.delete(fields, :__struct__)
-              %{module: struct_module, fields: other_fields}
-          end
-
-        _ ->
-          nil
-      end
+    with true <- is_map(descr),
+         fields when is_map(fields) <- extract_map_fields(descr),
+         struct_descr when not is_nil(struct_descr) <- Map.get(fields, :__struct__),
+         struct_module when is_atom(struct_module) <- extract_struct_module(struct_descr) do
+      %{module: struct_module, fields: Map.delete(fields, :__struct__)}
     else
-      nil
+      _ -> nil
     end
   end
 
@@ -1652,30 +1680,14 @@ defmodule ElixirSense.Core.ElixirTypes do
     descr = unwrap_dynamic(descr)
 
     case Map.get(descr, :map) do
-      [{:closed, fields, []}] when is_map(fields) ->
-        fields
-
       {:closed, fields} when is_map(fields) ->
         fields
 
-      %{closed: field_list} when is_list(field_list) ->
-        Enum.into(field_list, %{})
-
-      # Open maps - extract known atom key fields
-      [{:open, fields, _}] when is_map(fields) ->
-        extract_atom_keys_from_map(fields)
-
       {:open, fields} when is_map(fields) ->
-        extract_atom_keys_from_map(fields)
+        fields
 
-      %{open: field_list} when is_list(field_list) ->
-        field_list
-        |> Enum.into(%{})
-        |> extract_atom_keys_from_map()
-
-      # Open map with domains (has default type) - extract atom key fields from second element
       {_domains, fields} when is_map(fields) ->
-        extract_atom_keys_from_map(fields)
+        fields
 
       _ ->
         nil
@@ -1683,18 +1695,6 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp extract_map_fields(_), do: nil
-
-  # Extract only atom key fields from an open map, filtering out domain keys
-  defp extract_atom_keys_from_map(fields) when is_map(fields) do
-    fields
-    |> Enum.reject(fn
-      {{:domain_key, _}, _} -> true
-      _ -> false
-    end)
-    |> Enum.into(%{})
-  end
-
-  defp extract_atom_keys_from_map(_), do: %{}
 
   defp extract_optional(%{optional: 1} = descr) do
     descr

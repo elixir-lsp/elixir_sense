@@ -365,6 +365,42 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
                ElixirSense.Core.ExCkReader.lookup_signature(NonExistentModule, :some_function, 1)
     end
 
+    test "remote signatures resolve __MODULE__ and aliases from metadata env" do
+      metadata = %ElixirSense.Core.Metadata{
+        cursor_env: {[], %{module: String, aliases: [MyAlias: Integer]}}
+      }
+
+      assert {:ok, {_kind, _domain, _clauses}} =
+               ElixirTypes.maybe_remote_call_sig(
+                 {{:., [], [{:__MODULE__, [], nil}, :split]}, [], [nil, nil]},
+                 metadata
+               )
+
+      assert {:ok, {_kind, _domain, _clauses}} =
+               ElixirTypes.maybe_remote_call_sig(
+                 {{:., [], [{:__aliases__, [], [:MyAlias]}, :to_string]}, [], [nil]},
+                 metadata
+               )
+    end
+
+    test "remote signatures resolve module attributes from metadata env" do
+      metadata = %ElixirSense.Core.Metadata{
+        cursor_env:
+          {[],
+           %{
+             attributes: [
+               %ElixirSense.Core.State.AttributeInfo{name: :mod, type: {:atom, String}}
+             ]
+           }}
+      }
+
+      assert {:ok, {_kind, _domain, _clauses}} =
+               ElixirTypes.maybe_remote_call_sig(
+                 {{:., [], [{:@, [], [{:mod, [], nil}]}, :split]}, [], [nil, nil]},
+                 metadata
+               )
+    end
+
     test "ExCk signatures preserve clause return information" do
       mod = Module.concat(ElixirSense, "ExCkFixture#{System.unique_integer([:positive])}")
 

@@ -1402,6 +1402,17 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp expand_call_from_introspection(env, mod, fun, arity, include_private, stack) do
+    case ElixirSense.Core.ElixirTypes.spec_signature_from_metadata(env, mod, fun, arity) do
+      {:ok, sig} ->
+        expand(env, ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig), stack) ||
+          :no_spec
+
+      :error ->
+        do_expand_call_from_introspection(env, mod, fun, arity, include_private, stack)
+    end
+  end
+
+  defp do_expand_call_from_introspection(env, mod, fun, arity, include_private, stack) do
     maybe_kind_arity =
       case ElixirSense.Core.Normalized.Code.get_docs(mod, :docs) do
         nil ->
@@ -1431,9 +1442,14 @@ defmodule ElixirSense.Core.Binding do
         :no_spec
 
       {:function, arity} ->
-        type = TypeInfo.get_function_spec(mod, fun, arity)
-        return_type = get_return_from_spec(env, type, mod, include_private)
-        expand(env, return_type, stack) || :no_spec
+        case TypeInfo.get_function_spec(mod, fun, arity) do
+          nil ->
+            :no_spec
+
+          type ->
+            return_type = get_return_from_spec(env, type, mod, include_private)
+            expand(env, return_type, stack) || :no_spec
+        end
     end
   end
 
@@ -1496,7 +1512,7 @@ defmodule ElixirSense.Core.Binding do
           when sig_kind in [:infer, :strong] ->
             ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig)
 
-          %State.SpecInfo{} = spec ->
+          %State.SpecInfo{elixir_types_sig: nil} = spec ->
             get_return_from_metadata(env, mod, spec, include_private, stack) || :no_spec
         end
     end

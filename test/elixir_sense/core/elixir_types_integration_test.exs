@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.ElixirTypesIntegrationTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias ElixirSense.Core.TypeInference
 

@@ -1,5 +1,5 @@
 defmodule ElixirSense.Core.BindingTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.State.AttributeInfo
   alias ElixirSense.Core.State.VarInfo
@@ -1851,6 +1851,31 @@ defmodule ElixirSense.Core.BindingTest do
                  ]),
                  {:variable, :ref, 1}
                )
+    end
+
+    test "metadata spec signatures are preferred for remote call return typing" do
+      env =
+        @env
+        |> Map.put(:specs, %{
+          {String, :split, 2} => %SpecInfo{
+            specs: ["@spec split(binary(), binary()) :: [binary()]"],
+            elixir_types_sig: {
+              :strong,
+              nil,
+              [
+                {[
+                   Module.Types.Descr.binary(),
+                   Module.Types.Descr.binary()
+                 ], Module.Types.Descr.list(Module.Types.Descr.binary())}
+              ]
+            }
+          }
+        })
+
+      assert {:ok, sig} =
+               ElixirSense.Core.ElixirTypes.spec_signature_from_metadata(env, String, :split, 2)
+
+      assert is_map(ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig))
     end
 
     test "local call imported fun with spec t expanding to atom" do
