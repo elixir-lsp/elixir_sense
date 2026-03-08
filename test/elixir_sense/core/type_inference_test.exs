@@ -521,20 +521,36 @@ defmodule ElixirSense.Core.TypeInferenceTest do
                {:intersection, [{:map, [foo: nil], nil}, {:map, [bar: nil], nil}]}
     end
 
-    test "other" do
+    test "string literal" do
       assert_old_and_native("\"asd\"", nil, {:binary, nil})
+    end
+
+    test "float literal" do
       assert_old_and_native("1.23", nil, {:float, nil})
+    end
+
+    test "binary expression" do
+      assert_old_and_native("<<1, 2, 3>>", {:binary, nil}, {:binary, nil})
+      assert_old_and_native("<<a::utf8>>", {:binary, nil}, {:binary, nil})
+    end
+
+    test "for comprehension without into" do
+      assert_old_and_native("for x <- [1, 2], do: x", {:list, nil}, {:list, nil})
+    end
+
+    test "for comprehension with into" do
+      assert_old_and_native("for x <- [1, 2], into: %{}, do: {x, x}", nil, nil)
     end
 
     test "__STACKTRACE__ returns {:list, nil}" do
       assert type_of("__STACKTRACE__") == {:list, nil}
     end
 
-    test "anonymous function returns nil" do
-      # Native typing produces {:fun, arg_shapes, return_shape} for single-clause fns
-      assert_old_and_native("fn -> a end", nil, {:fun, 0})
-      assert_old_and_native("fn x -> x + 1 end", nil, {:fun, [nil], nil})
-      assert_old_and_native("fn x, y -> x * y end", nil, {:fun, [nil, nil], nil})
+    test "anonymous function" do
+      # Both modes now extract fn arity/arg info
+      assert_old_and_native("fn -> a end", {:fun, 0}, {:fun, 0})
+      assert_old_and_native("fn x -> x + 1 end", {:fun, [nil], nil}, {:fun, [nil], nil})
+      assert_old_and_native("fn x, y -> x * y end", {:fun, [nil, nil], nil}, {:fun, [nil, nil], nil})
     end
   end
 
@@ -591,11 +607,16 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       "require Module" => nil
     }
 
+    old_expectations = %{
+      "for x <- list, do: x * 2" => {:list, nil}
+    }
+
     for form <- special_forms do
       test "special form: #{inspect(form)} matches legacy and native mode" do
+        old_expected = Map.get(unquote(Macro.escape(old_expectations)), unquote(form))
         assert_old_and_native(
           unquote(form),
-          nil,
+          old_expected,
           Map.fetch!(unquote(Macro.escape(native_expectations)), unquote(form))
         )
       end

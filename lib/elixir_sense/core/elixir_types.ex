@@ -110,7 +110,7 @@ defmodule ElixirSense.Core.ElixirTypes do
         file \\ nil,
         mode \\ :dynamic,
         local_sigs_map \\ nil,
-        _metadata \\ nil
+        metadata \\ nil
       ) do
     if available?() do
       local_handler =
@@ -120,15 +120,23 @@ defmodule ElixirSense.Core.ElixirTypes do
           &__MODULE__.local_handler/4
         end
 
-      Module.Types.stack(
-        mode,
-        file || "nofile",
-        module || ElixirSense.ElixirTypes,
-        function || {:__info__, 1},
-        :all,
-        checker_cache(),
-        local_handler
-      )
+      stack =
+        Module.Types.stack(
+          mode,
+          file || "nofile",
+          module || ElixirSense.ElixirTypes,
+          function || {:__info__, 1},
+          :all,
+          checker_cache(),
+          local_handler
+        )
+
+      # Store metadata on stack so module_from_ast can resolve aliases
+      if metadata != nil and is_map(stack) do
+        Map.put(stack, :metadata, metadata)
+      else
+        stack
+      end
     else
       nil
     end
@@ -453,19 +461,6 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp literal_descr([]), do: Module.Types.Descr.empty_list()
   defp literal_descr(_), do: Module.Types.Descr.term()
 
-  def maybe_remote_call_shape(ast, metadata) do
-    case maybe_remote_call_descriptor(ast, metadata) do
-      nil ->
-        :error
-
-      descriptor ->
-        case to_shape(descriptor) do
-          nil -> :error
-          shape -> {:ok, shape}
-        end
-    end
-  end
-
   def maybe_remote_call_sig(
         {{:., _, [target_ast, fun]}, _meta, args},
         metadata
@@ -493,34 +488,6 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   def maybe_remote_call_sig(_ast, _metadata), do: :error
 
-  defp maybe_remote_call_descriptor(
-         {{:., _, [target_ast, fun]}, _meta, args},
-         metadata
-       )
-       when is_atom(fun) and is_list(args) do
-    if enabled?() do
-      case module_from_ast(target_ast, metadata) do
-        {:ok, module} ->
-          case ElixirSense.Core.ExCkReader.lookup_signature(module, fun, length(args)) do
-            {:ok, info} -> descriptor_from_exck(info)
-            :error -> nil
-          end
-
-        :error ->
-          nil
-      end
-    else
-      nil
-    end
-  end
-
-  defp maybe_remote_call_descriptor(_ast, _metadata), do: nil
-
-  defp descriptor_from_exck(%{sig: sig_info}) do
-    extract_return_type_from_sig(sig_info)
-  end
-
-  defp descriptor_from_exck(_), do: nil
 
   defp module_from_ast(atom, _metadata) when is_atom(atom) do
     {:ok, atom}
@@ -1775,10 +1742,24 @@ defmodule ElixirSense.Core.ElixirTypes do
     Module.Types.Descr.fun(length(args))
   end
 
+  defp coerce_var_type({:fun_clauses, clauses}) when is_list(clauses) do
+    # fun_clauses is multi-clause function — coerce as generic fun with arity of first clause
+    case clauses do
+      [{args, _return} | _] when is_list(args) -> Module.Types.Descr.fun(length(args))
+      _ -> Module.Types.Descr.fun()
+    end
+  end
+
   defp coerce_var_type({:union, types}) when is_list(types) do
     types
     |> Enum.map(&coerce_var_type/1)
     |> Enum.reduce(Module.Types.Descr.none(), &Module.Types.Descr.union/2)
+  end
+
+  defp coerce_var_type({:intersection, types}) when is_list(types) do
+    types
+    |> Enum.map(&coerce_var_type/1)
+    |> Enum.reduce(Module.Types.Descr.term(), &Module.Types.Descr.intersection/2)
   end
 
   defp coerce_var_type(_), do: Module.Types.Descr.dynamic()

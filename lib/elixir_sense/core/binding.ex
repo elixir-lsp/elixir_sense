@@ -414,6 +414,29 @@ defmodule ElixirSense.Core.Binding do
 
   def do_expand(_env, :none, _stack), do: :none
 
+  # Terminal type shapes — return as-is
+  def do_expand(_env, :atom, _stack), do: :atom
+  def do_expand(_env, :integer, _stack), do: {:integer, nil}
+  def do_expand(_env, :binary, _stack), do: {:binary, nil}
+  def do_expand(_env, :float, _stack), do: {:float, nil}
+  def do_expand(_env, :number, _stack), do: :number
+  def do_expand(_env, :pid, _stack), do: :pid
+  def do_expand(_env, :port, _stack), do: :port
+  def do_expand(_env, :reference, _stack), do: :reference
+  def do_expand(_env, :fun, _stack), do: :fun
+  def do_expand(_env, :tuple, _stack), do: :tuple
+  def do_expand(_env, {:binary, _} = shape, _stack), do: shape
+  def do_expand(_env, {:float, _} = shape, _stack), do: shape
+  def do_expand(_env, {:fun, arity} = shape, _stack) when is_integer(arity), do: shape
+  def do_expand(env, {:fun, args, return}, stack) when is_list(args),
+    do: {:fun, Enum.map(args, &expand(env, &1, stack)), expand(env, return, stack)}
+  def do_expand(env, {:fun_clauses, clauses}, stack) when is_list(clauses) do
+    {:fun_clauses,
+     Enum.map(clauses, fn {args, return} ->
+       {Enum.map(args, &expand(env, &1, stack)), expand(env, return, stack)}
+     end)}
+  end
+
   def do_expand(_env, _other, _stack), do: nil
 
   defp drop_no_spec(:no_spec), do: nil
@@ -424,7 +447,8 @@ defmodule ElixirSense.Core.Binding do
          _module when is_atom(env.module) <- env.module,
          local_sigs when is_map(local_sigs) and local_sigs != %{} <- env.elixir_types_local_sigs,
          entry when not is_nil(entry) <- Map.get(local_sigs, {fun, length(arguments)}),
-         {kind, {:infer, _domain, _clauses} = sig} when kind in [:def, :defp] <- entry do
+         {kind, {sig_kind, _domain, _clauses} = sig}
+         when kind in [:def, :defp] and sig_kind in [:infer, :strong] <- entry do
       # Expand argument shapes for overload filtering
       expanded_args = Enum.map(arguments, &expand(env, &1, []))
       return_descr = ElixirTypes.extract_return_type_from_sig(sig, expanded_args)

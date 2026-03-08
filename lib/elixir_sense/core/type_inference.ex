@@ -169,10 +169,25 @@ defmodule ElixirSense.Core.TypeInference do
     merge_with_elixir_types(existing, list, context, nil, nil, %{})
   end
 
-  def type_of({:fn, _meta, _clauses} = ast, context) do
-    if ElixirSense.Core.ElixirTypes.enabled?(),
-      do: type_of_with_elixir_types(ast, context),
-      else: nil
+  def type_of({:fn, _meta, clauses} = ast, context) do
+    if ElixirSense.Core.ElixirTypes.enabled?() do
+      type_of_with_elixir_types(ast, context)
+    else
+      # In disabled mode, at least extract arity from the first clause
+      case clauses do
+        [{:->, _, [args, _body]} | _] when is_list(args) ->
+          arity = length(args)
+
+          if arity == 0 do
+            {:fun, 0}
+          else
+            {:fun, List.duplicate(nil, arity), nil}
+          end
+
+        _ ->
+          nil
+      end
+    end
   end
 
   # block expressions
@@ -184,15 +199,35 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   def type_of({form, _meta, _clauses} = ast, context)
-      when form in [:case, :cond, :try, :receive, :for, :with, :<<>>] do
+      when form in [:case, :cond, :try, :receive, :with] do
     type_of_with_elixir_types(ast, context)
   end
 
+  # for comprehensions produce a list (unless :into is specified)
+  def type_of({:for, _meta, clauses} = ast, context) when is_list(clauses) do
+    native_result = type_of_with_elixir_types(ast, context)
+
+    if native_result do
+      native_result
+    else
+      # Basic: check if :into option is present
+      opts = List.last(clauses)
+
+      case opts do
+        [{:into, _into_target} | _] -> nil
+        [{:do, _body} | _] -> {:list, nil}
+        _ -> nil
+      end
+    end
+  end
+
+  # Binaries always produce a binary
+  def type_of({:<<>>, _meta, _clauses} = ast, context) do
+    type_of_with_elixir_types(ast, context) || {:binary, nil}
+  end
+
   # special forms
-  # for case/cond/with/receive/for/try we have no idea what the type is going to be
-  # we don't support binaries
-  # TODO guard?
-  # other are not worth handling
+  # quote/unquote/import/alias/require etc. don't produce meaningful types
   def type_of({form, _meta, _clauses}, _context)
       when form in [
              :quote,

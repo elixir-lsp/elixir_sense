@@ -888,17 +888,24 @@ defmodule ElixirSense.Core.Compiler.State do
 
   defp merge_elixir_types_sigs(
          {kind1, _domain1, clauses1},
-         {_kind2, _domain2, clauses2}
+         {kind2, _domain2, clauses2}
        ) do
-    # Merge clauses from both specs; use :strong if either is :strong
-    merged_kind = if kind1 == :strong, do: :strong, else: :strong
+    merged_kind = if kind1 == :strong or kind2 == :strong, do: :strong, else: :infer
     merged_clauses = clauses1 ++ clauses2
 
     # Recompute domain as union of all clause arg types
     merged_domain =
       case merged_clauses do
-        [{args, _return}] -> args
-        _ -> nil
+        [{args, _return}] ->
+          args
+
+        [{first_args, _} | rest] ->
+          Enum.zip_with([first_args | Enum.map(rest, fn {args, _} -> args end)], fn descrs ->
+            Enum.reduce(descrs, &Module.Types.Descr.union/2)
+          end)
+
+        _ ->
+          nil
       end
 
     {merged_kind, merged_domain, merged_clauses}

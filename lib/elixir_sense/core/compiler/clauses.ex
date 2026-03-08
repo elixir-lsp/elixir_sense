@@ -786,97 +786,31 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     end
   end
 
-  # Convert TypeInference match context to Module.Types descriptor
+  # Convert TypeInference match context to Module.Types descriptor.
+  # Delegates to coerce_var_type which handles all ElixirSense shape types.
   defp match_context_to_descr(nil), do: nil
   defp match_context_to_descr(:none), do: nil
 
   defp match_context_to_descr(match_context) do
-    case match_context do
-      {:atom, atom} when is_atom(atom) ->
-        if ElixirSense.Core.ElixirTypes.available?() do
-          Module.Types.Descr.atom([atom])
-        else
+    if ElixirSense.Core.ElixirTypes.available?() do
+      try do
+        descr = ElixirSense.Core.ElixirTypes.coerce_var_type_public(match_context)
+
+        # coerce_var_type returns dynamic() for unrecognized shapes — treat as nil
+        # to avoid passing uninformative constraints to native pattern matching
+        if descr == Module.Types.Descr.dynamic() do
           nil
-        end
-
-      {:struct, fields, {:atom, module}, _} when is_atom(module) ->
-        if ElixirSense.Core.ElixirTypes.available?() do
-          pairs =
-            [{:__struct__, Module.Types.Descr.atom([module])}] ++
-              for {key, value} when is_atom(key) <- fields do
-                {key, type_to_descr(value)}
-              end
-
-          Module.Types.Descr.closed_map(pairs)
         else
-          nil
+          descr
         end
-
-      {:tuple, _arity, elements} when is_list(elements) ->
-        if ElixirSense.Core.ElixirTypes.available?() do
-          Module.Types.Descr.tuple(Enum.map(elements, &type_to_descr/1))
-        else
-          nil
-        end
-
-      {:list, :empty} ->
-        if ElixirSense.Core.ElixirTypes.available?() do
-          Module.Types.Descr.empty_list()
-        else
-          nil
-        end
-
-      {:list, element_type} ->
-        if ElixirSense.Core.ElixirTypes.available?() do
-          Module.Types.Descr.list(type_to_descr(element_type))
-        else
-          nil
-        end
-
-      _ ->
-        nil
+      rescue
+        _ -> nil
+      end
+    else
+      nil
     end
   end
 
-  defp type_to_descr(nil), do: Module.Types.Descr.dynamic()
-  defp type_to_descr(:none), do: Module.Types.Descr.none()
-  defp type_to_descr(:atom), do: Module.Types.Descr.atom()
-  defp type_to_descr(:binary), do: Module.Types.Descr.binary()
-  defp type_to_descr(:float), do: Module.Types.Descr.float()
-  defp type_to_descr(:pid), do: Module.Types.Descr.pid()
-  defp type_to_descr(:port), do: Module.Types.Descr.port()
-  defp type_to_descr(:reference), do: Module.Types.Descr.reference()
-  defp type_to_descr({:atom, atom}) when is_atom(atom), do: Module.Types.Descr.atom([atom])
-  defp type_to_descr({:integer, _}), do: Module.Types.Descr.integer()
-
-  defp type_to_descr({:tuple, _arity, elements}) when is_list(elements),
-    do: Module.Types.Descr.tuple(Enum.map(elements, &type_to_descr/1))
-
-  defp type_to_descr({:list, :empty}), do: Module.Types.Descr.empty_list()
-  defp type_to_descr({:list, element}), do: Module.Types.Descr.list(type_to_descr(element))
-
-  defp type_to_descr({:map, fields, _}) when is_list(fields) do
-    pairs = for {key, value} when is_atom(key) <- fields, do: {key, type_to_descr(value)}
-    Module.Types.Descr.closed_map(pairs)
-  end
-
-  defp type_to_descr({:struct, fields, {:atom, module}, _}) when is_atom(module) do
-    pairs =
-      [{:__struct__, Module.Types.Descr.atom([module])}] ++
-        for {key, value} when is_atom(key) <- fields, do: {key, type_to_descr(value)}
-
-    Module.Types.Descr.closed_map(pairs)
-  end
-
-  defp type_to_descr({:union, variants}) when is_list(variants) do
-    variants
-    |> Enum.map(&type_to_descr/1)
-    |> Enum.reduce(&Module.Types.Descr.union/2)
-  rescue
-    _ -> Module.Types.Descr.dynamic()
-  end
-
-  defp type_to_descr(_), do: Module.Types.Descr.dynamic()
 
   # Merge clause variables with ElixirTypes refinements
   defp merge_clause_vars_with_elixir_types(clause_vars, refined_vars) do

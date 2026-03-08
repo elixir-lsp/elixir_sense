@@ -3159,4 +3159,40 @@ defmodule ElixirSense.Core.BindingTest do
       )
     end
   end
+
+  describe "terminal shape expansion" do
+    test "primitive type atoms are preserved through expand" do
+      assert Binding.expand(@env, :atom) == :atom
+      assert Binding.expand(@env, :integer) == {:integer, nil}
+      assert Binding.expand(@env, :binary) == {:binary, nil}
+      assert Binding.expand(@env, :float) == {:float, nil}
+      assert Binding.expand(@env, :number) == :number
+      assert Binding.expand(@env, :pid) == :pid
+      assert Binding.expand(@env, :port) == :port
+      assert Binding.expand(@env, :reference) == :reference
+      assert Binding.expand(@env, :fun) == :fun
+      assert Binding.expand(@env, :tuple) == :tuple
+    end
+
+    test ":none is preserved through expand" do
+      assert Binding.expand(@env, :none) == :none
+    end
+
+    test "tagged terminal shapes are preserved through expand" do
+      assert Binding.expand(@env, {:binary, nil}) == {:binary, nil}
+      assert Binding.expand(@env, {:float, nil}) == {:float, nil}
+      assert Binding.expand(@env, {:fun, 2}) == {:fun, 2}
+    end
+
+    test "fun with args and return is expanded recursively" do
+      assert Binding.expand(@env, {:fun, [nil, nil], nil}) == {:fun, [nil, nil], nil}
+      assert Binding.expand(@env, {:fun, [{:atom, :ok}], {:integer, nil}}) ==
+               {:fun, [{:atom, :ok}], {:integer, nil}}
+    end
+
+    test "fun_clauses are expanded recursively" do
+      assert Binding.expand(@env, {:fun_clauses, [{[nil], {:atom, :ok}}]}) ==
+               {:fun_clauses, [{[nil], {:atom, :ok}}]}
+    end
+  end
 end
