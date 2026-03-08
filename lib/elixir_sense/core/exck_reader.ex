@@ -179,6 +179,7 @@ defmodule ElixirSense.Core.ExCkReader do
     _ -> {:error, :invalid_chunk}
   end
 
+  defp extract_signatures({:elixir_checker_v3, contents}), do: do_extract_signatures(contents)
   defp extract_signatures({:elixir_checker_v2, contents}), do: do_extract_signatures(contents)
   defp extract_signatures({:elixir_checker_v1, contents}), do: do_extract_signatures(contents)
   defp extract_signatures(_), do: {:error, :invalid_payload}

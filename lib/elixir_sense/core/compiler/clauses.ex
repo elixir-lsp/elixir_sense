@@ -771,22 +771,6 @@ defmodule ElixirSense.Core.Compiler.Clauses do
             # Merge ElixirTypes refinements with existing clause vars
             merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
 
-            # Also persist raw Module.Types descriptors for these vars into state
-            case ElixirSense.Core.ElixirTypes.of_match_descr(
-                   pattern_ast,
-                   expected_descr,
-                   {:variable_match, :__case_subject__},
-                   module,
-                   function,
-                   file,
-                   :dynamic
-                 ) do
-              {:ok, var_descrs} ->
-                state = State.merge_inferred_elixir_types(state, var_descrs)
-                state
-              _ -> :ok
-            end
-
             merged
 
           _ ->
@@ -810,28 +794,41 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     case match_context do
       {:atom, atom} when is_atom(atom) ->
         if ElixirSense.Core.ElixirTypes.available?() do
-          Module.Types.Descr.atom(atom)
+          Module.Types.Descr.atom([atom])
         else
           nil
         end
 
-      {:struct, _fields, {:atom, module}, _} when is_atom(module) ->
+      {:struct, fields, {:atom, module}, _} when is_atom(module) ->
         if ElixirSense.Core.ElixirTypes.available?() do
-          Module.Types.Descr.atom(module)
+          pairs =
+            [{:__struct__, Module.Types.Descr.atom([module])}] ++
+              for {key, value} when is_atom(key) <- fields do
+                {key, type_to_descr(value)}
+              end
+
+          Module.Types.Descr.closed_map(pairs)
         else
           nil
         end
 
-      {:tuple, _arity, _elements} ->
+      {:tuple, _arity, elements} when is_list(elements) ->
         if ElixirSense.Core.ElixirTypes.available?() do
-          Module.Types.Descr.term()
+          Module.Types.Descr.tuple(Enum.map(elements, &type_to_descr/1))
         else
           nil
         end
 
-      {:list, _element_type} ->
+      {:list, :empty} ->
         if ElixirSense.Core.ElixirTypes.available?() do
-          Module.Types.Descr.term()
+          Module.Types.Descr.empty_list()
+        else
+          nil
+        end
+
+      {:list, element_type} ->
+        if ElixirSense.Core.ElixirTypes.available?() do
+          Module.Types.Descr.list(type_to_descr(element_type))
         else
           nil
         end
@@ -840,6 +837,46 @@ defmodule ElixirSense.Core.Compiler.Clauses do
         nil
     end
   end
+
+  defp type_to_descr(nil), do: Module.Types.Descr.dynamic()
+  defp type_to_descr(:none), do: Module.Types.Descr.none()
+  defp type_to_descr(:atom), do: Module.Types.Descr.atom()
+  defp type_to_descr(:binary), do: Module.Types.Descr.binary()
+  defp type_to_descr(:float), do: Module.Types.Descr.float()
+  defp type_to_descr(:pid), do: Module.Types.Descr.pid()
+  defp type_to_descr(:port), do: Module.Types.Descr.port()
+  defp type_to_descr(:reference), do: Module.Types.Descr.reference()
+  defp type_to_descr({:atom, atom}) when is_atom(atom), do: Module.Types.Descr.atom([atom])
+  defp type_to_descr({:integer, _}), do: Module.Types.Descr.integer()
+
+  defp type_to_descr({:tuple, _arity, elements}) when is_list(elements),
+    do: Module.Types.Descr.tuple(Enum.map(elements, &type_to_descr/1))
+
+  defp type_to_descr({:list, :empty}), do: Module.Types.Descr.empty_list()
+  defp type_to_descr({:list, element}), do: Module.Types.Descr.list(type_to_descr(element))
+
+  defp type_to_descr({:map, fields, _}) when is_list(fields) do
+    pairs = for {key, value} when is_atom(key) <- fields, do: {key, type_to_descr(value)}
+    Module.Types.Descr.closed_map(pairs)
+  end
+
+  defp type_to_descr({:struct, fields, {:atom, module}, _}) when is_atom(module) do
+    pairs =
+      [{:__struct__, Module.Types.Descr.atom([module])}] ++
+        for {key, value} when is_atom(key) <- fields, do: {key, type_to_descr(value)}
+
+    Module.Types.Descr.closed_map(pairs)
+  end
+
+  defp type_to_descr({:union, variants}) when is_list(variants) do
+    variants
+    |> Enum.map(&type_to_descr/1)
+    |> Enum.reduce(&Module.Types.Descr.union/2)
+  rescue
+    _ -> Module.Types.Descr.dynamic()
+  end
+
+  defp type_to_descr(_), do: Module.Types.Descr.dynamic()
 
   # Merge clause variables with ElixirTypes refinements
   defp merge_clause_vars_with_elixir_types(clause_vars, refined_vars) do
@@ -976,27 +1013,11 @@ defmodule ElixirSense.Core.Compiler.Clauses do
                file,
                :dynamic,
                target_keys: target_keys,
-               state: s
+               state: state
              ) do
           {:ok, refined_vars} when map_size(refined_vars) > 0 ->
             # Merge ElixirTypes refinements with existing clause vars
             merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
-
-            # Also persist raw Module.Types descriptors for these vars into state
-            case ElixirSense.Core.ElixirTypes.of_match_descr(
-                   pattern_ast,
-                   expected_descr,
-                   {:variable_match, :__with_expression__},
-                   module,
-                   function,
-                   file,
-                   :dynamic
-                 ) do
-              {:ok, var_descrs} ->
-                s = State.merge_inferred_elixir_types(s, var_descrs)
-                s
-              _ -> :ok
-            end
 
             merged
 
@@ -1038,27 +1059,11 @@ defmodule ElixirSense.Core.Compiler.Clauses do
                file,
                :dynamic,
                target_keys: target_keys,
-               state: sr
+               state: state
              ) do
           {:ok, refined_vars} when map_size(refined_vars) > 0 ->
             # Merge ElixirTypes refinements with existing clause vars
             merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
-
-            # Also persist raw Module.Types descriptors for these vars into state
-            case ElixirSense.Core.ElixirTypes.of_match_descr(
-                   pattern_ast,
-                   expected_descr,
-                   {:variable_match, :__rescue_exception__},
-                   module,
-                   function,
-                   file,
-                   :dynamic
-                 ) do
-              {:ok, var_descrs} ->
-                sr = State.merge_inferred_elixir_types(sr, var_descrs)
-                sr
-              _ -> :ok
-            end
 
             merged
 
@@ -1100,27 +1105,11 @@ defmodule ElixirSense.Core.Compiler.Clauses do
                file,
                :dynamic,
                target_keys: target_keys,
-               state: sr
+               state: state
              ) do
           {:ok, refined_vars} when map_size(refined_vars) > 0 ->
             # Merge ElixirTypes refinements with existing clause vars
             merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
-
-            # Also persist raw Module.Types descriptors for these vars into state
-            case ElixirSense.Core.ElixirTypes.of_match_descr(
-                   pattern_ast,
-                   expected_descr,
-                   {:variable_match, :__catch_value__},
-                   module,
-                   function,
-                   file,
-                   :dynamic
-                 ) do
-              {:ok, var_descrs} ->
-                sr = State.merge_inferred_elixir_types(sr, var_descrs)
-                sr
-              _ -> :ok
-            end
 
             merged
 
@@ -1138,12 +1127,18 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   # Build ElixirTypes variables map from the compiler state
-  defp variables_from_state(%ElixirSense.Core.Compiler.State{vars_info: vars_info}) when is_list(vars_info) do
+  defp variables_from_state(%ElixirSense.Core.Compiler.State{vars_info: vars_info})
+       when is_list(vars_info) do
     Enum.reduce(vars_info, %{}, fn
-      %ElixirSense.Core.State.VarInfo{name: name, version: version, elixir_types_descr: descr}, acc
-      when is_atom(name) and is_integer(version) ->
-        descr = descr || Module.Types.Descr.dynamic()
-        Map.put(acc, {name, version}, descr)
+      scope_vars, acc when is_map(scope_vars) ->
+        Enum.reduce(scope_vars, acc, fn
+          {{name, version}, %ElixirSense.Core.State.VarInfo{elixir_types_descr: descr}}, inner_acc
+          when is_atom(name) and is_integer(version) ->
+            Map.put(inner_acc, {name, version}, descr || Module.Types.Descr.dynamic())
+
+          _, inner_acc ->
+            inner_acc
+        end)
 
       _, acc ->
         acc

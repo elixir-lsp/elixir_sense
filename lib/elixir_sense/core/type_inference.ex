@@ -30,9 +30,8 @@ defmodule ElixirSense.Core.TypeInference do
     {:struct, fields, type, updated_struct}
   end
 
-  # remote call
   def type_of({{:., _, [target, fun]}, _meta, args}, context)
-      when is_atom(fun) and is_list(args) do
+      when is_atom(fun) and is_list(args) and not ElixirSense.Core.ElixirTypes.enabled?() do
     target = type_of(target, context)
     {:call, target, fun, Enum.map(args, &type_of(&1, context))}
   end
@@ -166,6 +165,9 @@ defmodule ElixirSense.Core.TypeInference do
     merge_with_elixir_types(existing, list, context, nil, nil, %{})
   end
 
+  def type_of({:fn, _meta, _clauses}, _context) when not ElixirSense.Core.ElixirTypes.enabled?(),
+    do: nil
+
   # block expressions
   def type_of({:__block__, _meta, exprs}, context) do
     case List.last(exprs) do
@@ -174,8 +176,10 @@ defmodule ElixirSense.Core.TypeInference do
     end
   end
 
-  # anonymous functions
-  def type_of({:fn, _meta, _clauses}, _context), do: nil
+  def type_of({form, _meta, _clauses} = ast, context)
+      when form in [:case, :cond, :try, :receive, :for, :with, :<<>>] do
+    type_of_with_elixir_types(ast, context)
+  end
 
   # special forms
   # for case/cond/with/receive/for/try we have no idea what the type is going to be
@@ -184,12 +188,6 @@ defmodule ElixirSense.Core.TypeInference do
   # other are not worth handling
   def type_of({form, _meta, _clauses}, _context)
       when form in [
-             :case,
-             :cond,
-             :try,
-             :receive,
-             :for,
-             :with,
              :quote,
              :unquote,
              :unquote_splicing,
@@ -200,9 +198,8 @@ defmodule ElixirSense.Core.TypeInference do
              :__cursor__,
              :__DIR__,
              :super,
-             :<<>>,
              :"::"
-           ],
+           ] and not ElixirSense.Core.ElixirTypes.enabled?(),
       do: nil
 
   # __ENV__ is already expanded to map
@@ -214,8 +211,8 @@ defmodule ElixirSense.Core.TypeInference do
     {:list, nil}
   end
 
-  # local call
-  def type_of({var, meta, args}, context) when is_atom(var) and is_list(args) do
+  def type_of({var, meta, args}, context)
+      when is_atom(var) and is_list(args) and not ElixirSense.Core.ElixirTypes.enabled?() do
     line = Keyword.get(meta, :line, 1)
     column = Keyword.get(meta, :column, 1)
     {:local_call, var, {line, column}, Enum.map(args, &type_of(&1, context))}
@@ -244,25 +241,18 @@ defmodule ElixirSense.Core.TypeInference do
         env_context \\ %{}
       ) do
     if ElixirSense.Core.ElixirTypes.enabled?() do
-      # Prefer remote descriptor when AST is remote call
-      case ElixirSense.Core.ElixirTypes.maybe_remote_call_shape(ast, metadata) do
-        {:ok, shape} when shape != nil ->
-          shape
+      case type_expr_with_local_sigs(ast, local_sigs_map, metadata, env_context) do
+        {:ok, descr} ->
+          case ElixirSense.Core.ElixirTypes.to_shape(descr) do
+            nil ->
+              ElixirSense.Core.ElixirTypes.to_shape(Module.Types.Descr.dynamic())
 
-        _ ->
-          case type_expr_with_local_sigs(ast, local_sigs_map, metadata, env_context) do
-            {:ok, descr} ->
-              case ElixirSense.Core.ElixirTypes.to_shape(descr) do
-                nil ->
-                  ElixirSense.Core.ElixirTypes.to_shape(Module.Types.Descr.dynamic())
-
-                shape ->
-                  shape
-              end
-
-            :error ->
-              nil
+            shape ->
+              shape
           end
+
+        :error ->
+          nil
       end
     else
       nil
@@ -322,7 +312,9 @@ defmodule ElixirSense.Core.TypeInference do
     case Map.get(env_context, :vars) do
       vars when is_list(vars) ->
         Enum.reduce(vars, %{}, fn
-          %ElixirSense.Core.State.VarInfo{name: name, version: version, elixir_types_descr: descr}, acc when is_atom(name) and is_integer(version) ->
+          %ElixirSense.Core.State.VarInfo{name: name, version: version, elixir_types_descr: descr},
+          acc
+          when is_atom(name) and is_integer(version) ->
             descr = descr || Module.Types.Descr.dynamic()
             Map.put(acc, {name, version}, descr)
 
@@ -330,7 +322,8 @@ defmodule ElixirSense.Core.TypeInference do
             acc
         end)
 
-      _ -> %{}
+      _ ->
+        %{}
     end
   end
 

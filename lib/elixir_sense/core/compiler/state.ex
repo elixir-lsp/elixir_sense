@@ -1197,7 +1197,8 @@ defmodule ElixirSense.Core.Compiler.State do
         # take type from outer scope as type narrowing in inner scope is not guaranteed to
         # affect outer scope
         type = outer_scope_vars[key].type
-        {key, %{current_scope_vars[key] | type: type}}
+        elixir_types_descr = outer_scope_vars[key].elixir_types_descr
+        {key, %{current_scope_vars[key] | type: type, elixir_types_descr: elixir_types_descr}}
       end
 
     vars_info = [current_scope_vars, outer_scope_vars | other_scopes_vars]
@@ -1424,9 +1425,13 @@ defmodule ElixirSense.Core.Compiler.State do
 
     h =
       Enum.reduce(inferred_descrs, h, fn {key, descr}, acc ->
-        Map.update(acc, key, nil, fn %VarInfo{} = v ->
-          %{v | elixir_types_descr: descr}
-        end)
+        case Map.fetch(acc, key) do
+          {:ok, %VarInfo{} = v} ->
+            Map.put(acc, key, %{v | elixir_types_descr: descr})
+
+          _ ->
+            acc
+        end
       end)
 
     %{state | vars_info: [h | t]}

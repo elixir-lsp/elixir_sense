@@ -11,6 +11,13 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "enabled?/0 returns false by default" do
       # Should be false since config defaults to false
+      original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, false)
+
+      on_exit(fn ->
+        Application.put_env(:elixir_sense, :use_elixir_types, original_value)
+      end)
+
       refute ElixirTypes.enabled?()
     end
   end
@@ -59,11 +66,12 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "handles binary" do
-      assert ElixirTypes.to_shape(Module.Types.Descr.binary()) == :binary
+      assert ElixirTypes.to_shape(Module.Types.Descr.binary()) == {:binary, nil}
     end
 
     test "handles closed map" do
-      assert ElixirTypes.to_shape(Module.Types.Descr.closed_map([foo: Module.Types.Descr.binary()])) == {:map, [foo: :binary], nil}
+      assert ElixirTypes.to_shape(Module.Types.Descr.closed_map(foo: Module.Types.Descr.binary())) ==
+               {:map, [foo: :binary], nil}
     end
 
     test "handles empty list" do
@@ -79,33 +87,59 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "handles float" do
-      assert ElixirTypes.to_shape(Module.Types.Descr.float()) == :float
+      assert ElixirTypes.to_shape(Module.Types.Descr.float()) == {:float, nil}
     end
 
     test "handles list" do
-      assert ElixirTypes.to_shape(Module.Types.Descr.list(Module.Types.Descr.integer())) == {:union, [list: {:integer, nil}, list: :empty]}
+      assert ElixirTypes.to_shape(Module.Types.Descr.list(Module.Types.Descr.integer())) ==
+               {:list, {:integer, nil}}
     end
 
     test "handles nonempty list" do
-      assert ElixirTypes.to_shape(Module.Types.Descr.non_empty_list(Module.Types.Descr.integer())) == {:list, {:integer, nil}}
+      assert ElixirTypes.to_shape(Module.Types.Descr.non_empty_list(Module.Types.Descr.integer())) ==
+               {:list, {:integer, nil}}
+
       # we loose improper info
-      assert ElixirTypes.to_shape(Module.Types.Descr.non_empty_list(Module.Types.Descr.integer(), Module.Types.Descr.integer())) == {:list, {:integer, nil}}
+      assert ElixirTypes.to_shape(
+               Module.Types.Descr.non_empty_list(
+                 Module.Types.Descr.integer(),
+                 Module.Types.Descr.integer()
+               )
+             ) == {:list, {:integer, nil}}
     end
 
     test "handles open map" do
       # open_map() is a top open map (any map), which cannot be converted to a shape (no known fields)
       assert ElixirTypes.to_shape(Module.Types.Descr.open_map()) == {:map, [], nil}
       # open_map with atom key fields - extract known fields, lose open/closed distinction
-      assert ElixirTypes.to_shape(Module.Types.Descr.open_map([foo: Module.Types.Descr.binary()])) == {:map, [foo: :binary], nil}
+      assert ElixirTypes.to_shape(Module.Types.Descr.open_map(foo: Module.Types.Descr.binary())) ==
+               {:map, [foo: :binary], nil}
+
       # open_map with default is also converted (known fields extracted)
-      assert ElixirTypes.to_shape(Module.Types.Descr.open_map([foo: Module.Types.Descr.binary()], Module.Types.Descr.atom())) == {:map, [foo: :binary], nil}
+      assert ElixirTypes.to_shape(
+               Module.Types.Descr.open_map(
+                 [foo: Module.Types.Descr.binary()],
+                 Module.Types.Descr.atom()
+               )
+             ) == {:map, [foo: :binary], nil}
     end
 
     test "handles open tuple" do
       # Open tuple with known elements - treat as minimum-size tuple, lose open/closed distinction
-      assert ElixirTypes.to_shape(Module.Types.Descr.open_tuple([Module.Types.Descr.atom([:ok]), Module.Types.Descr.binary()])) == {:tuple, 2, [{:atom, :ok}, :binary]}
+      assert ElixirTypes.to_shape(
+               Module.Types.Descr.open_tuple([
+                 Module.Types.Descr.atom([:ok]),
+                 Module.Types.Descr.binary()
+               ])
+             ) == {:tuple, 2, [{:atom, :ok}, :binary]}
+
       # Open tuple with fallback - still extracts known elements
-      assert ElixirTypes.to_shape(Module.Types.Descr.open_tuple([Module.Types.Descr.atom([:ok]), Module.Types.Descr.binary()], Module.Types.Descr.term())) == {:tuple, 2, [{:atom, :ok}, :binary]}
+      assert ElixirTypes.to_shape(
+               Module.Types.Descr.open_tuple(
+                 [Module.Types.Descr.atom([:ok]), Module.Types.Descr.binary()],
+                 Module.Types.Descr.term()
+               )
+             ) == {:tuple, 2, [{:atom, :ok}, :binary]}
     end
 
     test "handles pid" do
@@ -123,11 +157,18 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "handles tuple" do
       # tuple() returns an open tuple (any tuple), which cannot be converted to a shape
       assert ElixirTypes.to_shape(Module.Types.Descr.tuple()) == :tuple
-      assert ElixirTypes.to_shape(Module.Types.Descr.tuple([Module.Types.Descr.atom([:ok]), Module.Types.Descr.integer()])) == {:tuple, 2, [{:atom, :ok}, {:integer, nil}]}
+
+      assert ElixirTypes.to_shape(
+               Module.Types.Descr.tuple([
+                 Module.Types.Descr.atom([:ok]),
+                 Module.Types.Descr.integer()
+               ])
+             ) == {:tuple, 2, [{:atom, :ok}, {:integer, nil}]}
     end
 
     test "handles boolean" do
-      assert ElixirTypes.to_shape(Module.Types.Descr.boolean()) == {:union, [atom: false, atom: true]}
+      assert ElixirTypes.to_shape(Module.Types.Descr.boolean()) ==
+               {:union, [atom: false, atom: true]}
     end
 
     test "handles fun/0 (any function)" do
@@ -146,10 +187,12 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert ElixirTypes.to_shape(fun_type) == {:fun, [{:integer, nil}], :atom}
 
       # (integer(), float() -> binary())
-      fun_type2 = Module.Types.Descr.fun(
-        [Module.Types.Descr.integer(), Module.Types.Descr.float()],
-        Module.Types.Descr.binary()
-      )
+      fun_type2 =
+        Module.Types.Descr.fun(
+          [Module.Types.Descr.integer(), Module.Types.Descr.float()],
+          Module.Types.Descr.binary()
+        )
+
       assert ElixirTypes.to_shape(fun_type2) == {:fun, [{:integer, nil}, :float], :binary}
     end
 
@@ -159,6 +202,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
         {[Module.Types.Descr.integer()], Module.Types.Descr.atom()},
         {[Module.Types.Descr.float()], Module.Types.Descr.binary()}
       ]
+
       fun_type = Module.Types.Descr.fun_from_non_overlapping_clauses(clauses)
       # Should be a union of function types
       shape = ElixirTypes.to_shape(fun_type)
@@ -171,6 +215,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
         {[Module.Types.Descr.integer()], Module.Types.Descr.atom()},
         {[Module.Types.Descr.integer()], Module.Types.Descr.binary()}
       ]
+
       fun_type = Module.Types.Descr.fun_from_inferred_clauses(clauses)
       shape = ElixirTypes.to_shape(fun_type)
       # Should handle overlapping clauses
@@ -184,10 +229,10 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "handles if_set" do
       # if_set makes a type optional in a map
       optional_int = Module.Types.Descr.if_set(Module.Types.Descr.integer())
-      assert ElixirTypes.to_shape(optional_int) == {:optional, {:integer, nil}}
+      assert ElixirTypes.to_shape(optional_int) == nil
 
       optional_atom = Module.Types.Descr.if_set(Module.Types.Descr.atom())
-      assert ElixirTypes.to_shape(optional_atom) == {:optional, :atom}
+      assert ElixirTypes.to_shape(optional_atom) == nil
     end
   end
 
@@ -276,6 +321,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
         {:ok, descr} ->
           shape = ElixirTypes.to_shape(descr)
           assert match?({:list, _}, shape) or is_nil(shape)
+
         :error ->
           assert true
       end
@@ -337,16 +383,23 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     test "types struct AST" do
       # Map AST: %{key: :value}
-      struct_ast = {:%, [],
-        [
-          Date,
-          {:%{}, [], [year: 2000, month: 1, day: 1]}
-        ]}
+      struct_ast =
+        {:%, [],
+         [
+           Date,
+           {:%{}, [], [year: 2000, month: 1, day: 1]}
+         ]}
+
       result = ElixirTypes.of_expr(struct_ast) |> dbg
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert {:struct, fields, {:atom, Date}, nil} = shape
-      assert Enum.sort(fields) == [day: {:integer, nil}, month: {:integer, nil}, year: {:integer, nil}]
+
+      assert Enum.sort(fields) == [
+               day: {:integer, nil},
+               month: {:integer, nil},
+               year: {:integer, nil}
+             ]
     end
 
     test "handles complex nested structures" do
@@ -397,7 +450,9 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       shape = ElixirTypes.to_shape(descr)
       assert shape == nil
 
-      result = ElixirTypes.of_expr(variable_ast, variables: %{{:foo, 0} => Module.Types.Descr.integer()})
+      result =
+        ElixirTypes.of_expr(variable_ast, variables: %{{:foo, 0} => Module.Types.Descr.integer()})
+
       # concrete type when known
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
