@@ -1428,7 +1428,15 @@ defmodule ElixirSense.Core.Binding do
       {:ok, sig} ->
         descr = ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig, arg_shapes)
         shape = ElixirSense.Core.ElixirTypes.to_shape(descr)
-        expand(env, shape, stack) || :no_spec
+
+        case expand(env, shape, stack) do
+          nil ->
+            # Native sig produced nil shape, fall back to ExCk/legacy
+            do_expand_call_from_introspection(env, mod, fun, arity, arg_shapes, include_private, stack)
+
+          result ->
+            result
+        end
 
       :error ->
         do_expand_call_from_introspection(env, mod, fun, arity, arg_shapes, include_private, stack)
@@ -1553,11 +1561,19 @@ defmodule ElixirSense.Core.Binding do
           nil ->
             :no_spec
 
-          %State.SpecInfo{elixir_types_sig: {sig_kind, _domain, _clauses} = sig}
+          %State.SpecInfo{elixir_types_sig: {sig_kind, _domain, _clauses} = sig} = spec
           when sig_kind in [:infer, :strong] ->
             descr = ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig, arg_shapes)
             shape = ElixirSense.Core.ElixirTypes.to_shape(descr)
-            expand(env, shape, stack)
+
+            case expand(env, shape, stack) do
+              nil ->
+                # Native sig produced nil shape (e.g. dynamic(term())), fall back to legacy
+                get_return_from_metadata(env, mod, spec, include_private, stack) || :no_spec
+
+              result ->
+                result
+            end
 
           %State.SpecInfo{elixir_types_sig: nil} = spec ->
             get_return_from_metadata(env, mod, spec, include_private, stack) || :no_spec

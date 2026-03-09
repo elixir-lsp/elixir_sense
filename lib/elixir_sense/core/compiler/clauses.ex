@@ -327,26 +327,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   defp expand_cond({:do, _} = do_clause, s, e) do
-    expand_clauses(
-      fn c, s, e ->
-        case c do
-          {:->, _meta, [[condition], _body]} ->
-            # Enhanced condition analysis with ElixirTypes for cond expressions
-            enhanced_vars = enhance_cond_condition_vars(condition, s)
-            s = State.merge_inferred_types(s, enhanced_vars)
-
-            # Continue with normal expansion
-            Compiler.expand_args(c, s, e)
-
-          _ ->
-            # Handle malformed clauses gracefully
-            Compiler.expand_args(c, s, e)
-        end
-      end,
-      do_clause,
-      s,
-      e
-    )
+    expand_clauses(&Compiler.expand_args/3, do_clause, s, e)
   end
 
   # receive
@@ -842,51 +823,6 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     end
   end
 
-  # Enhanced condition analysis for cond expressions
-  defp enhance_cond_condition_vars(condition_ast, state) do
-    if ElixirSense.Core.ElixirTypes.enabled?() do
-      try do
-        # Extract environment information for ElixirTypes
-        env = env_for_meta_clauses(state, condition_ast)
-        module = env && env.module
-        function = env && env.function
-        file = file_for_meta(condition_ast) || module_file_clauses(module)
-
-        # Extract metadata and variables from state
-        metadata = state.mods_funs_to_positions
-        variables = variables_from_state(state)
-
-        # Use ElixirTypes to analyze the condition for type refinements
-        case ElixirSense.Core.ElixirTypes.of_expr(condition_ast,
-               module: module,
-               function: function,
-               file: file,
-               mode: :dynamic,
-               metadata: metadata,
-               variables: variables
-             ) do
-          {:ok, _condition_descr} ->
-            # For cond, we primarily care about finding typed variables in the condition
-            # that can be refined for the body based on truthiness
-            vars_in_condition = TypeInference.find_typed_vars(condition_ast, nil, nil)
-
-            # Return variables that could be refined by truthiness analysis
-            # This is a basic implementation - could be enhanced with guard-like analysis
-            vars_in_condition
-
-          _ ->
-            []
-        end
-      rescue
-        _ -> []
-      catch
-        _ -> []
-      end
-    else
-      []
-    end
-  end
-
   # Enhanced pattern matching refinement for with expressions
   defp enhance_with_pattern_vars(clause_vars, pattern_ast, match_context, state) do
     enhance_pattern_vars(clause_vars, pattern_ast, match_context, :__with_expression__, state)
@@ -941,24 +877,4 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     end
   end
 
-  # Build ElixirTypes variables map from the compiler state
-  defp variables_from_state(%ElixirSense.Core.Compiler.State{vars_info: vars_info})
-       when is_list(vars_info) do
-    Enum.reduce(vars_info, %{}, fn
-      scope_vars, acc when is_map(scope_vars) ->
-        Enum.reduce(scope_vars, acc, fn
-          {{name, version}, %ElixirSense.Core.State.VarInfo{elixir_types_descr: descr}}, inner_acc
-          when is_atom(name) and is_integer(version) ->
-            Map.put(inner_acc, {name, version}, descr || Module.Types.Descr.dynamic())
-
-          _, inner_acc ->
-            inner_acc
-        end)
-
-      _, acc ->
-        acc
-    end)
-  end
-
-  defp variables_from_state(_), do: %{}
 end

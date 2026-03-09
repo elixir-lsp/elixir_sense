@@ -566,13 +566,7 @@ defmodule ElixirSense.Core.ElixirTypes do
         mode \\ :dynamic,
         opts \\ []
       ) do
-    case do_of_match(pattern_ast, expected_descr, match_ast, module, function, file, mode, opts) do
-      {:ok, var_shapes, var_descrs} ->
-        {:ok, var_shapes, var_descrs}
-
-      :error ->
-        :error
-    end
+    do_of_match(pattern_ast, expected_descr, match_ast, module, function, file, mode, opts)
   end
 
   defp do_of_match(
