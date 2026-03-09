@@ -1750,7 +1750,7 @@ defmodule ElixirSense.Core.Compiler.State do
     [h | t] = state.vars_info
 
     h =
-      for {key, type} <- inferred_types, reduce: h do
+      for {key, type} <- inferred_types, Map.has_key?(h, key), reduce: h do
         acc ->
           Map.update!(acc, key, fn %VarInfo{type: old} = v ->
             %{v | type: ElixirSense.Core.TypeInference.intersect(old, type)}
@@ -1764,6 +1764,10 @@ defmodule ElixirSense.Core.Compiler.State do
   Merge Module.Types variable descriptors into current scope VarInfo structs.
 
   `inferred_descrs` should be a map of `{var_name, version} => Module.Types.Descr.t()`
+
+  Note: Currently unused. Pattern match refinement persists shapes via
+  `merge_inferred_types` but not raw descriptors. This function is retained
+  for future use when `of_match` is extended to return and persist descriptors.
   """
   def merge_inferred_elixir_types(state, inferred_descrs) do
     [h | t] = state.vars_info

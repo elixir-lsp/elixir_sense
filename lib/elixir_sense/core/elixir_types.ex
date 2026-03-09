@@ -566,8 +566,7 @@ defmodule ElixirSense.Core.ElixirTypes do
         opts \\ []
       ) do
     case do_of_match(pattern_ast, expected_descr, match_ast, module, function, file, mode, opts) do
-      {:ok, var_shapes, var_descrs} ->
-        maybe_store_var_descriptors(opts, var_descrs)
+      {:ok, var_shapes, _var_descrs} ->
         {:ok, var_shapes}
 
       :error ->
@@ -727,19 +726,6 @@ defmodule ElixirSense.Core.ElixirTypes do
       _ -> :error
     end
   end
-
-  # If caller passes a state via opts, persist raw Module.Types var descriptors
-  defp maybe_store_var_descriptors(opts, var_descrs) when is_map(var_descrs) do
-    case Keyword.get(opts, :state) do
-      %ElixirSense.Core.Compiler.State{} = state ->
-        ElixirSense.Core.Compiler.State.merge_inferred_elixir_types(state, var_descrs)
-
-      _ ->
-        :ok
-    end
-  end
-
-  defp maybe_store_var_descriptors(_opts, _), do: :ok
 
   # Transform Module.Types context vars into a map of {name, version} => descr
   defp vars_ctx_to_descrs(%{vars: vars_map}) when is_map(vars_map) do

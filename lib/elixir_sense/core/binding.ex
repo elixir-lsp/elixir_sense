@@ -453,9 +453,10 @@ defmodule ElixirSense.Core.Binding do
       expanded_args = Enum.map(arguments, &expand(env, &1, []))
       return_descr = ElixirTypes.extract_return_type_from_sig(sig, expanded_args)
       shape = ElixirTypes.to_shape(return_descr)
+      expanded_shape = if shape, do: expand(env, shape, []), else: nil
 
-      if shape != nil do
-        merge_binding_shape(result, shape)
+      if expanded_shape != nil do
+        merge_binding_shape(result, expanded_shape)
       else
         result
       end
@@ -1555,7 +1556,8 @@ defmodule ElixirSense.Core.Binding do
           %State.SpecInfo{elixir_types_sig: {sig_kind, _domain, _clauses} = sig}
           when sig_kind in [:infer, :strong] ->
             descr = ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig, arg_shapes)
-            ElixirSense.Core.ElixirTypes.to_shape(descr)
+            shape = ElixirSense.Core.ElixirTypes.to_shape(descr)
+            expand(env, shape, stack)
 
           %State.SpecInfo{elixir_types_sig: nil} = spec ->
             get_return_from_metadata(env, mod, spec, include_private, stack) || :no_spec

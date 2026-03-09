@@ -478,8 +478,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "types local call" do
       call_ast = {:foo, [], []}
       assert {:ok, _descr} = ElixirTypes.of_expr(call_ast)
-      # TODO: find out why returned shape is dynamic term
-      # should we pass a local resolver?
+      # Returns dynamic(term()) — no local handler or remote sig available
       shape = ElixirTypes.to_shape(call_ast)
       assert shape == nil
     end
@@ -487,8 +486,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "types remote call" do
       call_ast = {{:., [], [Foo, :bar]}, [], []}
       assert {:ok, _descr} = ElixirTypes.of_expr(call_ast)
-      # TODO: find out why returned shape is dynamic term
-      # should we pass a remote resolver?
+      # Returns dynamic(term()) — no ExCk sig for Foo.bar
       shape = ElixirTypes.to_shape(call_ast)
       assert shape == nil
     end
@@ -496,8 +494,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "types anonymous call" do
       call_ast = {{:., [], [{:foo, [version: 0], nil}]}, [], []}
       result = ElixirTypes.of_expr(call_ast)
-      # TODO: find out why returned shape is dynamic term
-      # should we pass a local resolver?
+      # Returns dynamic(term()) — no local handler or remote sig available
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert shape == nil
@@ -523,8 +520,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "types property access" do
       call_ast = {{:., [], [{:foo, [version: 0], nil}, :bar]}, [no_parens: true], []}
       assert {:ok, _descr} = ElixirTypes.of_expr(call_ast)
-      # TODO: find out why returned shape is dynamic term
-      # should we pass a local resolver?
+      # Returns dynamic(term()) — no local handler or remote sig available
       shape = ElixirTypes.to_shape(call_ast)
       assert shape == nil
     end

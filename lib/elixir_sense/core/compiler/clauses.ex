@@ -764,8 +764,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
                function,
                file,
                :dynamic,
-               target_keys: target_keys,
-               state: state
+               target_keys: target_keys
              ) do
           {:ok, refined_vars} when map_size(refined_vars) > 0 ->
             # Merge ElixirTypes refinements with existing clause vars
@@ -946,8 +945,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
                function,
                file,
                :dynamic,
-               target_keys: target_keys,
-               state: state
+               target_keys: target_keys
              ) do
           {:ok, refined_vars} when map_size(refined_vars) > 0 ->
             # Merge ElixirTypes refinements with existing clause vars
@@ -992,8 +990,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
                function,
                file,
                :dynamic,
-               target_keys: target_keys,
-               state: state
+               target_keys: target_keys
              ) do
           {:ok, refined_vars} when map_size(refined_vars) > 0 ->
             # Merge ElixirTypes refinements with existing clause vars
@@ -1038,8 +1035,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
                function,
                file,
                :dynamic,
-               target_keys: target_keys,
-               state: state
+               target_keys: target_keys
              ) do
           {:ok, refined_vars} when map_size(refined_vars) > 0 ->
             # Merge ElixirTypes refinements with existing clause vars
