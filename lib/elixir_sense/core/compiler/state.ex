@@ -1147,10 +1147,10 @@ defmodule ElixirSense.Core.Compiler.State do
         {:map, [], nil}
 
       {:keyword, []} ->
-        {:list, {:tuple, 2, [nil, nil]}}
+        {:list, {:tuple, 2, [:atom, nil]}}
 
       {:keyword, [type]} ->
-        {:list, {:tuple, 2, [nil, spec_ast_to_shape(type, module)]}}
+        {:list, {:tuple, 2, [:atom, spec_ast_to_shape(type, module)]}}
 
       {:list, []} ->
         {:list, nil}
@@ -1270,6 +1270,20 @@ defmodule ElixirSense.Core.Compiler.State do
         {File, :posix, []} -> :atom
         {Collectable, :t, []} -> nil
         {Enumerable, :t, []} -> nil
+        {Agent, :agent, []} -> {:union, [:atom, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
+        {Agent, :on_start, []} -> {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
+        {Task, :t, []} -> {:struct, [__struct__: {:atom, Task}], {:atom, Task}, nil}
+        {Task, :ref, []} -> :reference
+        {Macro.Env, :t, []} -> {:struct, [__struct__: {:atom, Macro.Env}], {:atom, Macro.Env}, nil}
+        {Map, :key, []} -> nil
+        {Map, :value, []} -> nil
+        {IO, :device, []} -> {:union, [:atom, :pid]}
+        {Inspect.Algebra, :t, []} -> nil
+        {Module, :definition, []} -> {:tuple, 2, [:atom, {:integer, nil}]}
+        {Node, :t, []} -> :atom
+        {Registry, :key, []} -> nil
+        {Registry, :value, []} -> nil
+        {System, :time_unit, []} -> {:union, [{:atom, :second}, {:atom, :millisecond}, {:atom, :microsecond}, {:atom, :nanosecond}, {:integer, nil}]}
         _ -> nil
       end
     else

@@ -287,6 +287,10 @@ defmodule ElixirSense.Core.TypeInference.Guard do
 
   defp guard_predicate_type(:is_atom, [first | _]), do: {:atom, first}
   defp guard_predicate_type(:is_boolean, [first | _]), do: {:boolean, first}
+  defp guard_predicate_type(:is_pid, [first | _]), do: {:pid, first}
+  defp guard_predicate_type(:is_port, [first | _]), do: {:port, first}
+  defp guard_predicate_type(:is_reference, [first | _]), do: {:reference, first}
+  defp guard_predicate_type(:is_function, [first | _]), do: {:fun, first}
 
   defp guard_predicate_type(_, _), do: nil
 
@@ -294,5 +298,5 @@ defmodule ElixirSense.Core.TypeInference.Guard do
     TypeInference.type_of(expression, :guard)
   end
 
-  # TODO :in :is_function/1-2 :is_pid :is_port :is_reference :node/0-1 :self
+  # TODO :in :node/0-1 :self
 end

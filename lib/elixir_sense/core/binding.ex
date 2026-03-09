@@ -387,9 +387,11 @@ defmodule ElixirSense.Core.Binding do
 
   def do_expand(_env, {:integer, integer}, _stack), do: {:integer, integer}
 
-  def do_expand(_env, {:union, all}, _stack) do
-    # TODO implement union for maps and lists?
-    all = Enum.filter(all, &(&1 != :none))
+  def do_expand(env, {:union, all}, stack) do
+    all =
+      all
+      |> Enum.map(&expand(env, &1, stack))
+      |> Enum.reject(&(&1 == :none))
 
     cond do
       all == [] ->
@@ -407,7 +409,7 @@ defmodule ElixirSense.Core.Binding do
         if Enum.all?(tl(all), &(&1 == first)) do
           first
         else
-          {:union, all}
+          {:union, Enum.uniq(all)}
         end
     end
   end

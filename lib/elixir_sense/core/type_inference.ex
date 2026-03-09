@@ -365,9 +365,7 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   # Fallback module for type_of/2 path (when no compiler env is available)
-  defp extract_module_from_context(_ast) do
-    ElixirSense.ElixirTypes
-  end
+  defp extract_module_from_context(_ast), do: nil
 
   # Build ElixirTypes variables map from the elixir_sense compiler env_context
   defp variables_from_env_context(env_context) when is_map(env_context) do

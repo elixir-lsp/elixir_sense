@@ -738,7 +738,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   defp match_context_to_descr(:none), do: nil
 
   defp match_context_to_descr(match_context) do
-    if ElixirSense.Core.ElixirTypes.available?() do
+    if ElixirSense.Core.ElixirTypes.enabled?() do
       try do
         descr = ElixirSense.Core.ElixirTypes.coerce_var_type_public(match_context)
 

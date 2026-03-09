@@ -1160,38 +1160,9 @@ defmodule ElixirSense.Core.ElixirTypes do
   Conservative conversion - only returns shapes for clearly identifiable types.
   Returns nil for complex or uncertain types to avoid false precision.
 
-  ## Options
-
-  - `:lazy` - When true, uses lazy evaluation and caching for expensive conversions
   """
-  def to_shape(descr, opts \\ []) do
-    if Keyword.get(opts, :lazy, false) do
-      to_shape_lazy(descr, opts)
-    else
-      to_shape_eager(descr)
-    end
-  end
-
-  # Lazy shape conversion with caching (uses descriptor as key to avoid hash collisions)
-  defp to_shape_lazy(descr, _opts) do
-    cache_key = {:elixir_types_shape_cache, descr}
-
-    case Process.get(cache_key) do
-      nil ->
-        result = to_shape_eager(descr)
-        Process.put(cache_key, {result, System.monotonic_time(:millisecond)})
-        result
-
-      {cached_result, timestamp} ->
-        if System.monotonic_time(:millisecond) - timestamp < 300_000 do
-          cached_result
-        else
-          Process.delete(cache_key)
-          result = to_shape_eager(descr)
-          Process.put(cache_key, {result, System.monotonic_time(:millisecond)})
-          result
-        end
-    end
+  def to_shape(descr) do
+    to_shape_eager(descr)
   end
 
   # Convert a Module.Types.Descr descriptor to an ElixirSense shape.
