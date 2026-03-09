@@ -1011,7 +1011,9 @@ defmodule ElixirSense.Core.Compiler.State do
     |> ElixirTypes.coerce_var_type_public()
     |> Kernel.||(Module.Types.Descr.dynamic())
   rescue
-    _ -> Module.Types.Descr.dynamic()
+    e ->
+      Logger.debug("spec_return_to_descr failed for #{inspect(type_ast)}: #{Exception.format(:error, e, __STACKTRACE__)}")
+      Module.Types.Descr.dynamic()
   end
 
   defp substitute_spec_vars(type_ast, guards) when is_list(guards) do
@@ -1258,6 +1260,16 @@ defmodule ElixirSense.Core.Compiler.State do
         {Macro, :input, []} -> nil
         {Macro, :output, []} -> nil
         {Exception, :t, []} -> {:map, [__struct__: :atom, __exception__: {:atom, true}], nil}
+        {GenServer, :name, []} -> nil
+        {GenServer, :from, []} -> {:tuple, 2, [:pid, :reference]}
+        {GenServer, :server, []} -> nil
+        {GenServer, :on_start, []} -> {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
+        {Supervisor, :child_spec, []} -> {:map, [], nil}
+        {Supervisor, :on_start, []} -> {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
+        {Path, :t, []} -> {:binary, nil}
+        {File, :posix, []} -> :atom
+        {Collectable, :t, []} -> nil
+        {Enumerable, :t, []} -> nil
         _ -> nil
       end
     else

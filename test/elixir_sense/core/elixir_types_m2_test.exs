@@ -822,7 +822,8 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       case result do
         {:ok, vars, _descrs} when is_map(vars) ->
-          assert vars[{:x, 1}] == {:integer, nil}
+          # Struct field refinement picks up the literal value from the match AST
+          assert match?({:integer, _}, vars[{:x, 1}])
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")

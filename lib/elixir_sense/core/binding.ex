@@ -437,6 +437,9 @@ defmodule ElixirSense.Core.Binding do
      end)}
   end
 
+  # Optional map field values — unwrap to the inner type
+  def do_expand(env, {:optional, inner}, stack), do: expand(env, inner, stack)
+
   def do_expand(_env, _other, _stack), do: nil
 
   defp drop_no_spec(:no_spec), do: nil

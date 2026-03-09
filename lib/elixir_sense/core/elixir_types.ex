@@ -688,9 +688,13 @@ defmodule ElixirSense.Core.ElixirTypes do
           :error
       end
     rescue
-      _ -> :error
+      e ->
+        Logger.debug("perform_enhanced_match failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+        :error
     catch
-      _ -> :error
+      kind, payload ->
+        Logger.debug("perform_enhanced_match failed: #{Exception.format(kind, payload, __STACKTRACE__)}")
+        :error
     end
   end
 
@@ -716,9 +720,13 @@ defmodule ElixirSense.Core.ElixirTypes do
       var_descrs = vars_ctx_to_descrs(out_ctx)
       {:ok, var_shapes, var_descrs}
     rescue
-      _ -> :error
+      e ->
+        Logger.debug("fallback_match failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+        :error
     catch
-      _ -> :error
+      kind, payload ->
+        Logger.debug("fallback_match failed: #{Exception.format(kind, payload, __STACKTRACE__)}")
+        :error
     end
   end
 
@@ -769,18 +777,25 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   # Refine variables in struct patterns
-  defp refine_struct_pattern_vars(_var_shapes, struct_ast, _fields, _expected_descr, _value_ast) do
-    case struct_ast do
-      {var_name, meta, nil} when is_atom(var_name) ->
-        # Variable bound to struct module - refine to atom type
-        case Keyword.get(meta, :version) do
-          nil -> %{}
-          version -> %{{var_name, version} => {:atom, nil}}
-        end
+  defp refine_struct_pattern_vars(var_shapes, struct_ast, fields, expected_descr, value_ast) do
+    # Refine struct module variable if present
+    module_refinement =
+      case struct_ast do
+        {var_name, meta, nil} when is_atom(var_name) ->
+          case Keyword.get(meta, :version) do
+            nil -> %{}
+            version -> %{{var_name, version} => {:atom, nil}}
+          end
 
-      _ ->
-        %{}
-    end
+        _ ->
+          %{}
+      end
+
+    # Refine field variables using map pattern refinement (structs are maps)
+    field_refinements =
+      refine_map_pattern_vars(var_shapes, fields, expected_descr, value_ast)
+
+    Map.merge(module_refinement, field_refinements)
   end
 
   # Refine variables in map patterns
@@ -1202,9 +1217,13 @@ defmodule ElixirSense.Core.ElixirTypes do
             |> quoted_to_shape()
         end
       rescue
-        _ -> nil
+        e ->
+          Logger.debug("to_shape conversion failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+          nil
       catch
-        _ -> nil
+        kind, payload ->
+          Logger.debug("to_shape conversion failed: #{Exception.format(kind, payload, __STACKTRACE__)}")
+          nil
       end
     else
       nil
@@ -1624,6 +1643,8 @@ defmodule ElixirSense.Core.ElixirTypes do
     |> Enum.reduce(Module.Types.Descr.term(), &Module.Types.Descr.intersection/2)
   end
 
+  defp coerce_var_type({:optional, inner}), do: coerce_var_type(inner)
+
   defp coerce_var_type(_), do: Module.Types.Descr.dynamic()
 
   # Collect variables from AST and seed them as dynamic() types
@@ -2004,7 +2025,9 @@ defmodule ElixirSense.Core.ElixirTypes do
         try do
           Enum.map(arg_shapes, &coerce_var_type/1)
         rescue
-          _ -> nil
+          e ->
+            Logger.debug("filter_clauses_by_args coercion failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+            nil
         end
 
       if arg_descrs do
