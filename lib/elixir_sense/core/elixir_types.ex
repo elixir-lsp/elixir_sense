@@ -551,9 +551,10 @@ defmodule ElixirSense.Core.ElixirTypes do
   @doc """
   Types a pattern match to refine variable types.
 
-  Returns `{:ok, map}` with entries keyed by `{var_name, version}` and values
-  converted to ElixirSense shapes. Returns `:error` when typing fails or
-  Module.Types cannot be used.
+  Returns `{:ok, var_shapes, var_descrs}` where `var_shapes` is a map of
+  `{var_name, version} => ElixirSense shape` and `var_descrs` is a map of
+  `{var_name, version} => Module.Types.Descr.t()`. Returns `:error` when
+  typing fails or Module.Types cannot be used.
   """
   def of_match(
         pattern_ast,
@@ -566,8 +567,8 @@ defmodule ElixirSense.Core.ElixirTypes do
         opts \\ []
       ) do
     case do_of_match(pattern_ast, expected_descr, match_ast, module, function, file, mode, opts) do
-      {:ok, var_shapes, _var_descrs} ->
-        {:ok, var_shapes}
+      {:ok, var_shapes, var_descrs} ->
+        {:ok, var_shapes, var_descrs}
 
       :error ->
         :error

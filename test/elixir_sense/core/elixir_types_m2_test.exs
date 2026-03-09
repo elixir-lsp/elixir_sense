@@ -793,7 +793,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         )
 
       case result do
-        {:ok, vars} when is_map(vars) ->
+        {:ok, vars, _descrs} when is_map(vars) ->
           # Should get variable refinement
           assert vars[{:x, 1}] == {:integer, nil}
 
@@ -821,7 +821,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         )
 
       case result do
-        {:ok, vars} when is_map(vars) ->
+        {:ok, vars, _descrs} when is_map(vars) ->
           assert vars[{:x, 1}] == {:integer, nil}
 
         other ->
@@ -853,7 +853,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         )
 
       case result do
-        {:ok, vars} when is_map(vars) ->
+        {:ok, vars, _descrs} when is_map(vars) ->
           # Should handle tuple patterns
           assert is_map(vars)
 
@@ -887,7 +887,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         )
 
       case result do
-        {:ok, vars} when is_map(vars) ->
+        {:ok, vars, _descrs} when is_map(vars) ->
           # Should handle list patterns
           assert vars[{:head, 1}] == {:integer, nil}
           assert vars[{:tail, 2}] == {:union, [list: {:integer, nil}, list: :empty]}
@@ -926,7 +926,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         )
 
       case result do
-        {:ok, vars} when is_map(vars) ->
+        {:ok, vars, _descrs} when is_map(vars) ->
           assert vars[{:status_var, 1}] in [{:integer, 200}, {:integer, nil}]
           assert vars[{:data_var, 2}] == {:binary, "ok"}
 
@@ -959,7 +959,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         )
 
       case result do
-        {:ok, vars} when is_map(vars) ->
+        {:ok, vars, _descrs} when is_map(vars) ->
           # Should handle guard patterns
           assert is_map(vars)
 
@@ -996,7 +996,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         )
 
       case result do
-        {:ok, vars} when is_map(vars) ->
+        {:ok, vars, _descrs} when is_map(vars) ->
           # Should handle map patterns
           assert vars[{:name_var, 1}] == {:binary, "John"}
           assert vars[{:age_var, 2}] in [{:integer, 30}, {:integer, nil}]
@@ -1053,7 +1053,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         )
 
       case result do
-        {:ok, vars} when is_map(vars) ->
+        {:ok, vars, _descrs} when is_map(vars) ->
           # Should use expected descriptor for better refinement
           assert is_map(vars)
 
@@ -1087,7 +1087,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
         case result do
-          {:ok, vars} when is_map(vars) ->
+          {:ok, vars, _descrs} when is_map(vars) ->
             # Pattern refinement should work
             assert vars[{:n, 1}] == {:binary, "test"}
 
@@ -1107,7 +1107,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
         case result do
-          {:ok, vars} when is_map(vars) ->
+          {:ok, vars, _descrs} when is_map(vars) ->
             # Pattern refinement should work
             assert vars[{:a, 1}] == {:integer, nil}
             assert vars[{:b, 2}] == {:atom, :ok}
@@ -1129,7 +1129,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
         case result do
-          {:ok, vars} when is_map(vars) ->
+          {:ok, vars, _descrs} when is_map(vars) ->
             # Pattern refinement should work
             assert vars[{:a, 1}] == {:integer, nil}
             assert vars[{:b, 2}] == {:atom, :ok}
@@ -1155,7 +1155,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
         case result do
-          {:ok, vars} when is_map(vars) ->
+          {:ok, vars, _descrs} when is_map(vars) ->
             # Pattern refinement should work
             assert vars[{:head, 1}] == {:integer, nil}
             assert vars[{:tail, 2}] == {:union, [list: {:integer, nil}, list: :empty]}
@@ -1176,7 +1176,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
         case result do
-          {:ok, vars} when is_map(vars) ->
+          {:ok, vars, _descrs} when is_map(vars) ->
             # Pattern refinement should work
             assert vars[{:a, 1}] == {:integer, nil}
             assert vars[{:b, 2}] == {:integer, nil}
@@ -1238,7 +1238,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
         case result do
-          {:ok, vars} when is_map(vars) ->
+          {:ok, vars, _descrs} when is_map(vars) ->
             # Should work but be conservative with struct fields
             assert is_map(vars)
 
@@ -1268,7 +1268,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         # All should either work or fail conservatively
         for result <- results do
           case result do
-            {:ok, vars} when is_map(vars) -> assert is_map(vars)
+            {:ok, vars, _descrs} when is_map(vars) -> assert is_map(vars)
             other -> flunk("Unexpected result: #{inspect(other)}")
           end
         end
@@ -1285,7 +1285,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
         case result do
-          {:ok, vars} when is_map(vars) ->
+          {:ok, vars, _descrs} when is_map(vars) ->
             # Should handle nested patterns conservatively
             assert vars[{:n, 1}] == {:binary, "Alice"}
 
@@ -1309,7 +1309,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
         case result do
-          {:ok, vars} when is_map(vars) ->
+          {:ok, vars, _descrs} when is_map(vars) ->
             assert vars[{:data, 1}] == {:integer, nil}
             assert vars[{:rest, 2}] == {:binary, nil}
 

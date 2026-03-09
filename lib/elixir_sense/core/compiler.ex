@@ -153,10 +153,11 @@ defmodule ElixirSense.Core.Compiler do
     vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, :match)
 
     # Augment with ElixirTypes pattern refinement if available
-    vars_with_inferred_types =
+    {vars_with_inferred_types, var_descrs} =
       merge_elixir_types_pattern_vars(vars_with_inferred_types, e_expr, se)
 
     se = State.merge_inferred_types(se, vars_with_inferred_types)
+    se = State.merge_inferred_elixir_types(se, var_descrs)
 
     {e_expr, se, ee}
   end
@@ -171,10 +172,11 @@ defmodule ElixirSense.Core.Compiler do
     vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, el.context)
 
     # Augment with ElixirTypes pattern refinement if available
-    vars_with_inferred_types =
+    {vars_with_inferred_types, var_descrs} =
       merge_elixir_types_pattern_vars(vars_with_inferred_types, e_expr, sl)
 
     sl = State.merge_inferred_types(sl, vars_with_inferred_types)
+    sl = State.merge_inferred_elixir_types(sl, var_descrs)
 
     {e_expr, sl, el}
   end
@@ -3062,10 +3064,10 @@ defmodule ElixirSense.Core.Compiler do
        ) do
     cond do
       existing_vars == [] ->
-        existing_vars
+        {existing_vars, %{}}
 
       not ElixirSense.Core.ElixirTypes.enabled?() ->
-        existing_vars
+        {existing_vars, %{}}
 
       true ->
         env = env_for_meta(state, meta)
@@ -3085,16 +3087,16 @@ defmodule ElixirSense.Core.Compiler do
                :dynamic,
                target_keys: target_keys
              ) do
-          {:ok, refined} when map_size(refined) > 0 ->
-            merge_pattern_types(existing_vars, refined)
+          {:ok, refined, var_descrs} when map_size(refined) > 0 ->
+            {merge_pattern_types(existing_vars, refined), var_descrs}
 
           _ ->
-            existing_vars
+            {existing_vars, %{}}
         end
     end
   end
 
-  defp merge_elixir_types_pattern_vars(existing_vars, _expr_ast, _state), do: existing_vars
+  defp merge_elixir_types_pattern_vars(existing_vars, _expr_ast, _state), do: {existing_vars, %{}}
 
   defp merge_pattern_types(existing_vars, refined_map) do
     existing_map = Map.new(existing_vars)

@@ -278,10 +278,11 @@ defmodule ElixirSense.Core.Compiler.Clauses do
               TypeInference.find_typed_vars(h, match_context, :match)
 
             # Enhanced pattern matching refinement with ElixirTypes
-            enhanced_vars =
+            {enhanced_vars, var_descrs} =
               enhance_case_pattern_vars(clause_vars_with_inferred_types, h, match_context, s)
 
             s = State.merge_inferred_types(s, enhanced_vars)
+            s = State.merge_inferred_elixir_types(s, var_descrs)
 
             {c, s, e}
 
@@ -434,10 +435,11 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     vars_l_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context_r, :match)
 
     # Enhanced pattern matching refinement with ElixirTypes for with expressions
-    enhanced_vars =
+    {enhanced_vars, var_descrs} =
       enhance_with_pattern_vars(vars_l_with_inferred_types, e_left, match_context_r, sl)
 
     sl = State.merge_inferred_types(sl, enhanced_vars)
+    sl = State.merge_inferred_elixir_types(sl, var_descrs)
 
     {{:<-, meta, [e_left, e_right]}, {sl, el}}
   end
@@ -558,10 +560,11 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     value_vars = TypeInference.find_typed_vars(e_value, nil, :match)
 
     # Enhanced catch pattern refinement with ElixirTypes
-    enhanced_kind_vars = enhance_catch_pattern_vars(kind_vars, e_kind, kind_context, sl)
-    enhanced_value_vars = enhance_catch_pattern_vars(value_vars, e_value, nil, sl)
+    {enhanced_kind_vars, kind_descrs} = enhance_catch_pattern_vars(kind_vars, e_kind, kind_context, sl)
+    {enhanced_value_vars, value_descrs} = enhance_catch_pattern_vars(value_vars, e_value, nil, sl)
 
     sl = State.merge_inferred_types(sl, enhanced_kind_vars ++ enhanced_value_vars)
+    sl = State.merge_inferred_elixir_types(sl, Map.merge(kind_descrs, value_descrs))
 
     {[e_kind, e_value], sl, el}
   end
@@ -595,10 +598,11 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     vars_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context, :match)
 
     # Enhanced rescue pattern refinement with ElixirTypes
-    enhanced_vars =
+    {enhanced_vars, var_descrs} =
       enhance_rescue_pattern_vars(vars_with_inferred_types, e_left, match_context, sl)
 
     sl = State.merge_inferred_types(sl, enhanced_vars)
+    sl = State.merge_inferred_elixir_types(sl, var_descrs)
 
     {e_left, sl, el}
   end
@@ -622,10 +626,11 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     vars_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context, :match)
 
     # Enhanced rescue pattern refinement with ElixirTypes
-    enhanced_vars =
+    {enhanced_vars, var_descrs} =
       enhance_rescue_pattern_vars(vars_with_inferred_types, e_left, match_context, sl)
 
     sl = State.merge_inferred_types(sl, enhanced_vars)
+    sl = State.merge_inferred_elixir_types(sl, var_descrs)
 
     {e_left, sl, el}
   end
@@ -655,10 +660,11 @@ defmodule ElixirSense.Core.Compiler.Clauses do
         vars_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context, :match)
 
         # Enhanced rescue pattern refinement with ElixirTypes
-        enhanced_vars =
+        {enhanced_vars, var_descrs} =
           enhance_rescue_pattern_vars(vars_with_inferred_types, e_left, match_context, sr)
 
         sr = State.merge_inferred_types(sr, enhanced_vars)
+        sr = State.merge_inferred_elixir_types(sr, var_descrs)
 
         {{:in, meta, [e_left, normalized]}, sr, er}
 
@@ -742,47 +748,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
   # Enhanced pattern matching refinement for case expressions
   defp enhance_case_pattern_vars(clause_vars, pattern_ast, match_context, state) do
-    if ElixirSense.Core.ElixirTypes.enabled?() and clause_vars != [] do
-      try do
-        # Extract environment information for ElixirTypes
-        env = env_for_meta_clauses(state, pattern_ast)
-        module = env && env.module
-        function = env && env.function
-        file = file_for_meta(pattern_ast) || module_file_clauses(module)
-
-        # Convert match_context to a Module.Types descriptor if possible
-        expected_descr = match_context_to_descr(match_context)
-
-        target_keys = Enum.map(clause_vars, &elem(&1, 0))
-
-        # Use ElixirTypes for pattern matching refinement
-        case ElixirSense.Core.ElixirTypes.of_match(
-               pattern_ast,
-               expected_descr,
-               {:variable_match, :__case_subject__},
-               module,
-               function,
-               file,
-               :dynamic,
-               target_keys: target_keys
-             ) do
-          {:ok, refined_vars} when map_size(refined_vars) > 0 ->
-            # Merge ElixirTypes refinements with existing clause vars
-            merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
-
-            merged
-
-          _ ->
-            clause_vars
-        end
-      rescue
-        _ -> clause_vars
-      catch
-        _ -> clause_vars
-      end
-    else
-      clause_vars
-    end
+    enhance_pattern_vars(clause_vars, pattern_ast, match_context, :__case_subject__, state)
   end
 
   # Convert TypeInference match context to Module.Types descriptor.
@@ -923,136 +889,55 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
   # Enhanced pattern matching refinement for with expressions
   defp enhance_with_pattern_vars(clause_vars, pattern_ast, match_context, state) do
-    if ElixirSense.Core.ElixirTypes.enabled?() and clause_vars != [] do
-      try do
-        # Extract environment information for ElixirTypes
-        env = env_for_meta_clauses(state, pattern_ast)
-        module = env && env.module
-        function = env && env.function
-        file = file_for_meta(pattern_ast) || module_file_clauses(module)
-
-        # Convert match_context to a Module.Types descriptor if possible
-        expected_descr = match_context_to_descr(match_context)
-
-        target_keys = Enum.map(clause_vars, &elem(&1, 0))
-
-        # Use ElixirTypes for pattern matching refinement
-        case ElixirSense.Core.ElixirTypes.of_match(
-               pattern_ast,
-               expected_descr,
-               {:variable_match, :__with_expression__},
-               module,
-               function,
-               file,
-               :dynamic,
-               target_keys: target_keys
-             ) do
-          {:ok, refined_vars} when map_size(refined_vars) > 0 ->
-            # Merge ElixirTypes refinements with existing clause vars
-            merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
-
-            merged
-
-          _ ->
-            clause_vars
-        end
-      rescue
-        _ -> clause_vars
-      catch
-        _ -> clause_vars
-      end
-    else
-      clause_vars
-    end
+    enhance_pattern_vars(clause_vars, pattern_ast, match_context, :__with_expression__, state)
   end
 
   # Enhanced pattern matching refinement for rescue expressions
   defp enhance_rescue_pattern_vars(clause_vars, pattern_ast, match_context, state) do
-    if ElixirSense.Core.ElixirTypes.enabled?() and clause_vars != [] do
-      try do
-        # Extract environment information for ElixirTypes
-        env = env_for_meta_clauses(state, pattern_ast)
-        module = env && env.module
-        function = env && env.function
-        file = file_for_meta(pattern_ast) || module_file_clauses(module)
-
-        # Convert match_context to a Module.Types descriptor if possible
-        expected_descr = match_context_to_descr(match_context)
-
-        target_keys = Enum.map(clause_vars, &elem(&1, 0))
-
-        # Use ElixirTypes for pattern matching refinement
-        case ElixirSense.Core.ElixirTypes.of_match(
-               pattern_ast,
-               expected_descr,
-               {:variable_match, :__rescue_exception__},
-               module,
-               function,
-               file,
-               :dynamic,
-               target_keys: target_keys
-             ) do
-          {:ok, refined_vars} when map_size(refined_vars) > 0 ->
-            # Merge ElixirTypes refinements with existing clause vars
-            merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
-
-            merged
-
-          _ ->
-            clause_vars
-        end
-      rescue
-        _ -> clause_vars
-      catch
-        _ -> clause_vars
-      end
-    else
-      clause_vars
-    end
+    enhance_pattern_vars(clause_vars, pattern_ast, match_context, :__rescue_exception__, state)
   end
 
   # Enhanced pattern matching refinement for catch expressions
   defp enhance_catch_pattern_vars(clause_vars, pattern_ast, match_context, state) do
+    enhance_pattern_vars(clause_vars, pattern_ast, match_context, :__catch_value__, state)
+  end
+
+  # Common implementation for pattern matching refinement via ElixirTypes
+  defp enhance_pattern_vars(clause_vars, pattern_ast, match_context, match_label, state) do
     if ElixirSense.Core.ElixirTypes.enabled?() and clause_vars != [] do
       try do
-        # Extract environment information for ElixirTypes
         env = env_for_meta_clauses(state, pattern_ast)
         module = env && env.module
         function = env && env.function
         file = file_for_meta(pattern_ast) || module_file_clauses(module)
 
-        # Convert match_context to a Module.Types descriptor if possible
         expected_descr = match_context_to_descr(match_context)
-
         target_keys = Enum.map(clause_vars, &elem(&1, 0))
 
-        # Use ElixirTypes for pattern matching refinement
         case ElixirSense.Core.ElixirTypes.of_match(
                pattern_ast,
                expected_descr,
-               {:variable_match, :__catch_value__},
+               {:variable_match, match_label},
                module,
                function,
                file,
                :dynamic,
                target_keys: target_keys
              ) do
-          {:ok, refined_vars} when map_size(refined_vars) > 0 ->
-            # Merge ElixirTypes refinements with existing clause vars
+          {:ok, refined_vars, var_descrs} when map_size(refined_vars) > 0 ->
             merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
-
-            merged
+            {merged, var_descrs}
 
           _ ->
-            clause_vars
+            {clause_vars, %{}}
         end
       rescue
-        _ -> clause_vars
+        _ -> {clause_vars, %{}}
       catch
-        _ -> clause_vars
+        _ -> {clause_vars, %{}}
       end
     else
-      clause_vars
+      {clause_vars, %{}}
     end
   end
 

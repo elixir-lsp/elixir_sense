@@ -1765,9 +1765,8 @@ defmodule ElixirSense.Core.Compiler.State do
 
   `inferred_descrs` should be a map of `{var_name, version} => Module.Types.Descr.t()`
 
-  Note: Currently unused. Pattern match refinement persists shapes via
-  `merge_inferred_types` but not raw descriptors. This function is retained
-  for future use when `of_match` is extended to return and persist descriptors.
+  Called after pattern match refinement to persist raw Module.Types descriptors
+  alongside the shape-level types stored by `merge_inferred_types`.
   """
   def merge_inferred_elixir_types(state, inferred_descrs) do
     [h | t] = state.vars_info
