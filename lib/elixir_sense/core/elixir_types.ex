@@ -720,9 +720,9 @@ defmodule ElixirSense.Core.ElixirTypes do
 
         Map.merge(left_refinements, right_refinements)
 
-      # Binary pattern: variables in binary patterns are binaries/integers
-      {:<<>>, _, _parts} ->
-        %{}
+      # Binary pattern: variables in binary segments get types from segment spec
+      {:<<>>, _, parts} ->
+        refine_binary_pattern_vars(var_shapes, parts)
 
       # List pattern refinement
       list when is_list(list) ->
@@ -895,6 +895,36 @@ defmodule ElixirSense.Core.ElixirTypes do
         %{}
     end
   end
+
+  # Refine variables in binary pattern segments
+  defp refine_binary_pattern_vars(_var_shapes, segments) do
+    Enum.reduce(segments, %{}, fn
+      {:"::", _, [var_ast, type_spec]}, acc ->
+        case extract_var_from_ast(var_ast) do
+          nil ->
+            acc
+
+          var_key ->
+            segment_shape = binary_segment_shape(type_spec)
+            Map.put(acc, var_key, segment_shape)
+        end
+
+      _, acc ->
+        acc
+    end)
+  end
+
+  defp binary_segment_shape({:-, _, [left, _right]}), do: binary_segment_shape(left)
+  defp binary_segment_shape({:binary, _, _}), do: {:binary, nil}
+  defp binary_segment_shape({:bytes, _, _}), do: {:binary, nil}
+  defp binary_segment_shape({:bitstring, _, _}), do: {:binary, nil}
+  defp binary_segment_shape({:bits, _, _}), do: {:binary, nil}
+  defp binary_segment_shape({:utf8, _, _}), do: {:integer, nil}
+  defp binary_segment_shape({:utf16, _, _}), do: {:integer, nil}
+  defp binary_segment_shape({:utf32, _, _}), do: {:integer, nil}
+  defp binary_segment_shape({:integer, _, _}), do: {:integer, nil}
+  defp binary_segment_shape({:float, _, _}), do: {:float, nil}
+  defp binary_segment_shape(_), do: {:integer, nil}
 
   # Extract variable information from AST node
   defp extract_var_from_ast({var_name, meta, nil}) when is_atom(var_name) do
@@ -1718,37 +1748,33 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp do_infer_local_signature(stack, context, clauses, expected) do
     Enum.reduce_while(clauses, [], fn clause, acc ->
       %{meta: meta, args: args, guards: guards, body: body} = normalise_clause(clause)
-      body = ensure_body_var_versions(body)
+      body = body |> ensure_body_var_versions() |> replace_module_attributes()
 
-      if unsupported_signature_body?(body) do
-        {:cont, acc}
-      else
-        try do
-          {trees, clause_ctx} =
-            Module.Types.Pattern.of_head(
-              args,
-              guards || [],
-              expected,
-              {:infer, expected},
-              meta,
-              stack,
-              context
-            )
+      try do
+        {trees, clause_ctx} =
+          Module.Types.Pattern.of_head(
+            args,
+            guards || [],
+            expected,
+            {:infer, expected},
+            meta,
+            stack,
+            context
+          )
 
-          {return_type, clause_ctx} =
-            Module.Types.Expr.of_expr(body, Module.Types.Descr.term(), body, stack, clause_ctx)
+        {return_type, clause_ctx} =
+          Module.Types.Expr.of_expr(body, Module.Types.Descr.term(), body, stack, clause_ctx)
 
-          arg_types = Module.Types.Pattern.of_domain(trees, expected, clause_ctx)
+        arg_types = Module.Types.Pattern.of_domain(trees, expected, clause_ctx)
 
-          {:cont, [{arg_types, return_type} | acc]}
-        catch
-          kind, payload ->
-            Logger.warning(
-              "Unable to infer local signature: #{Exception.format(kind, payload, __STACKTRACE__)}\nBody: #{inspect(body)}"
-            )
+        {:cont, [{arg_types, return_type} | acc]}
+      catch
+        kind, payload ->
+          Logger.warning(
+            "Unable to infer local signature: #{Exception.format(kind, payload, __STACKTRACE__)}\nBody: #{inspect(body)}"
+          )
 
-            {:cont, acc}
-        end
+          {:cont, acc}
       end
     end)
     |> Enum.reverse()
@@ -1791,14 +1817,20 @@ defmodule ElixirSense.Core.ElixirTypes do
     end)
   end
 
-  defp unsupported_signature_body?(body) do
-    {_body, found?} =
-      Macro.prewalk(body, false, fn
-        {:@, _, _} = node, _acc -> {node, true}
-        node, acc -> {node, acc}
+  # Replace @attr references with placeholder variables so Module.Types.Expr.of_expr can process them
+  defp replace_module_attributes(body) do
+    {body, _counter} =
+      Macro.prewalk(body, 0, fn
+        {:@, _meta, [{_attr_name, _, _}]} = _node, counter ->
+          # Replace @attr with a fresh variable that of_expr can handle
+          placeholder = {:__attr_placeholder__, [version: 1_000_000 + counter], nil}
+          {placeholder, counter + 1}
+
+        node, counter ->
+          {node, counter}
       end)
 
-    found?
+    body
   end
 
   @doc """

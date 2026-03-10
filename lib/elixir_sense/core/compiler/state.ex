@@ -1303,7 +1303,13 @@ defmodule ElixirSense.Core.Compiler.State do
   defp spec_ast_to_shape(int, _module) when is_integer(int), do: {:integer, int}
   defp spec_ast_to_shape(float, _module) when is_float(float), do: {:float, float}
   defp spec_ast_to_shape(binary, _module) when is_binary(binary), do: {:binary, binary}
-  defp spec_ast_to_shape(_ast, _module), do: nil
+  # Unresolved type variables (e.g. `t` in `@spec foo(t) :: t when t: integer()`) — treat as term
+  defp spec_ast_to_shape({name, _meta, nil}, _module) when is_atom(name), do: nil
+
+  defp spec_ast_to_shape(ast, _module) do
+    Logger.debug("Unhandled spec type AST: #{inspect(ast)}")
+    nil
+  end
 
   defp spec_map_key({:required, _, [key]}), do: key
   defp spec_map_key({:optional, _, [key]}), do: key

@@ -333,6 +333,22 @@ defmodule ElixirSense.Core.TypeInferenceTest do
                }
              ]
     end
+
+    test "finds variables in binary pattern" do
+      assert find_typed_vars_in("<<a::binary, b::integer>>", nil, :match) == [
+               {{:a, 1}, {:binary, nil}},
+               {{:b, 1}, {:integer, nil}}
+             ]
+
+      assert find_typed_vars_in("<<x::utf8, rest::binary>>", nil, :match) == [
+               {{:x, 1}, {:integer, nil}},
+               {{:rest, 1}, {:binary, nil}}
+             ]
+
+      assert find_typed_vars_in("<<f::float>>", nil, :match) == [
+               {{:f, 1}, {:float, nil}}
+             ]
+    end
   end
 
   describe "type_of" do

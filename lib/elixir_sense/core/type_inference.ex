@@ -606,11 +606,45 @@ defmodule ElixirSense.Core.TypeInference do
     end
   end
 
+  # Binary/bitstring patterns — variables inside get type based on their segment spec
+  defp match_var({:<<>>, _, segments}, {vars, _match_context, context}) do
+    destructured_vars =
+      segments
+      |> Enum.flat_map(fn
+        {:"::", _, [var_ast, type_spec]} ->
+          # Determine the type from the binary segment type spec
+          segment_type = binary_segment_type(type_spec)
+
+          {_ast, {new_vars, _match_context, _context}} =
+            match_var(var_ast, {[], segment_type, context})
+
+          new_vars
+
+        _ ->
+          []
+      end)
+
+    {nil, {vars ++ destructured_vars, nil, context}}
+  end
+
   defp match_var(ast, {vars, _match_context, context}) do
-    # traverse literals, not expanded macro calls and bitstrings with nil match_context
+    # traverse literals, not expanded macro calls with nil match_context
     # we cannot assume anything basing on match_context on variables there
     {ast, {vars, nil, context}}
   end
+
+  # Extract type from binary segment type spec (e.g., ::binary, ::integer-8, ::utf8)
+  defp binary_segment_type({:-, _, [left, _right]}), do: binary_segment_type(left)
+  defp binary_segment_type({:binary, _, _}), do: {:binary, nil}
+  defp binary_segment_type({:bytes, _, _}), do: {:binary, nil}
+  defp binary_segment_type({:bitstring, _, _}), do: {:binary, nil}
+  defp binary_segment_type({:bits, _, _}), do: {:binary, nil}
+  defp binary_segment_type({:utf8, _, _}), do: {:integer, nil}
+  defp binary_segment_type({:utf16, _, _}), do: {:integer, nil}
+  defp binary_segment_type({:utf32, _, _}), do: {:integer, nil}
+  defp binary_segment_type({:integer, _, _}), do: {:integer, nil}
+  defp binary_segment_type({:float, _, _}), do: {:float, nil}
+  defp binary_segment_type(_), do: {:integer, nil}
 
   defp propagate_context(nil, _), do: nil
   defp propagate_context(:none, _), do: :none

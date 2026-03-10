@@ -1,6 +1,8 @@
 defmodule ElixirSense.Core.Binding do
   @moduledoc false
 
+  require Logger
+
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.Introspection
@@ -303,7 +305,8 @@ defmodule ElixirSense.Core.Binding do
           {:atom, :error}
       end
     rescue
-      _ ->
+      e ->
+        Logger.debug("Application.fetch_env expand failed: #{Exception.message(e)}")
         :none
     end
   end
@@ -341,7 +344,8 @@ defmodule ElixirSense.Core.Binding do
           nil
       end
     rescue
-      _ ->
+      e ->
+        Logger.debug("Application.#{fun} expand failed: #{Exception.message(e)}")
         :none
     end
   end
@@ -1990,7 +1994,9 @@ defmodule ElixirSense.Core.Binding do
       resolved -> resolved
     end
   rescue
-    _ -> nil
+    e ->
+      Logger.debug("resolve_alias failed: #{Exception.message(e)}")
+      nil
   end
 
   defp resolve_alias(_, _), do: nil
@@ -2012,7 +2018,9 @@ defmodule ElixirSense.Core.Binding do
         nil
     end
   rescue
-    _ -> nil
+    e ->
+      Logger.debug("resolve_same_root_alias failed: #{Exception.message(e)}")
+      nil
   end
 
   defp resolve_same_root_alias(_, _, _), do: nil
@@ -2025,7 +2033,9 @@ defmodule ElixirSense.Core.Binding do
       parts -> Module.concat(parts ++ [single])
     end
   rescue
-    _ -> nil
+    e ->
+      Logger.debug("resolve_parent_alias failed: #{Exception.message(e)}")
+      nil
   end
 
   defp resolve_parent_alias(_, _), do: nil

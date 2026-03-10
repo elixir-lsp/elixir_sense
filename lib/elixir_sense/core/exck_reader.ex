@@ -8,6 +8,8 @@ defmodule ElixirSense.Core.ExCkReader do
   the ExCk chunk (containing at least `:sig`).
   """
 
+  require Logger
+
   @type signature_map :: %{optional({atom(), non_neg_integer()}) => map()}
 
   @table __MODULE__
@@ -131,7 +133,9 @@ defmodule ElixirSense.Core.ExCkReader do
       {:error, _} -> extract_chunk_from_binary(beam)
     end
   rescue
-    _ -> extract_chunk_from_binary(beam)
+    e ->
+      Logger.debug("beam_lib.chunks failed: #{Exception.message(e)}")
+      extract_chunk_from_binary(beam)
   end
 
   defp extract_chunk_from_binary(beam) when is_binary(beam) do
@@ -176,7 +180,9 @@ defmodule ElixirSense.Core.ExCkReader do
   defp safe_binary_to_term(binary) do
     {:ok, :erlang.binary_to_term(binary)}
   rescue
-    _ -> {:error, :invalid_chunk}
+    e ->
+      Logger.debug("binary_to_term failed: #{Exception.message(e)}")
+      {:error, :invalid_chunk}
   end
 
   defp extract_signatures({:elixir_checker_v3, contents}), do: do_extract_signatures(contents)
