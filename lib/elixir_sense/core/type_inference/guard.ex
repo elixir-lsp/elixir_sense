@@ -138,16 +138,18 @@ defmodule ElixirSense.Core.TypeInference.Guard do
 
   defp extract_var_type(_, _), do: nil
 
-  # TODO div and rem only work on first arg
+  # div and rem require integer args
+  defp guard_predicate_type(p, [first | _]) when p in [:is_integer, :div, :rem],
+    do: {:integer, first}
+
+  defp guard_predicate_type(:is_float, [first | _]), do: {:float, first}
+
+  # TODO div and rem only work on first arg - second arg also integer
   defp guard_predicate_type(p, [first | _])
        when p in [
               :is_number,
-              :is_float,
-              :is_integer,
               :round,
               :trunc,
-              :div,
-              :rem,
               :abs,
               :ceil,
               :floor

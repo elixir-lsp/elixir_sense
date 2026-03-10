@@ -224,7 +224,7 @@ defmodule ElixirSense.Core.TypeInference do
       opts = List.last(clauses)
 
       case opts do
-        [{:into, _into_target} | _] -> nil
+        [{:into, into_target} | _] -> type_of_into_target(into_target)
         [{:do, _body} | _] -> {:list, nil}
         _ -> nil
       end
@@ -405,6 +405,23 @@ defmodule ElixirSense.Core.TypeInference do
     do: true
 
   defp remote_call_ast?(_), do: false
+
+  # Infer the result type of a `for` comprehension with `:into`
+  defp type_of_into_target(target) when is_binary(target), do: {:binary, nil}
+  defp type_of_into_target(target) when is_list(target), do: {:list, nil}
+  defp type_of_into_target({:%{}, _, []}), do: {:map, [], nil}
+  defp type_of_into_target({:%{}, _, [{:|, _, _} | _]}), do: {:map, [], nil}
+
+  defp type_of_into_target(
+         {{:., _, [{:__aliases__, _, _} = aliases, :new]}, _, []}
+       ) do
+    case type_of(aliases, nil) do
+      {:atom, module} -> {:struct, [], {:atom, module}, nil}
+      _ -> nil
+    end
+  end
+
+  defp type_of_into_target(_), do: nil
 
   defp get_fields_type(fields, context) do
     for {field, value} <- fields,

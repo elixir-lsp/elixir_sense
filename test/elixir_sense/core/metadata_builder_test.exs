@@ -3774,12 +3774,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                },
                %VarInfo{
                  name: :b,
-                 type: {:intersection, [:number, {:tuple_nth, {:variable, :x, 0}, 1}]}
+                 type: {:intersection, [:integer, {:tuple_nth, {:variable, :x, 0}, 1}]}
                },
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 6)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 8)
+      assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 8)
 
       assert [%VarInfo{name: :x, type: nil}] =
                get_line_vars(state, 10)
@@ -3828,7 +3828,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [%VarInfo{name: :c, type: nil}, %VarInfo{name: :x, type: nil}] =
                get_line_vars(state, 8)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
+      assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 10)
 
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
     end
@@ -3862,7 +3862,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                },
                %VarInfo{
                  name: :b,
-                 type: {:intersection, [:number, {:tuple_nth, {:variable, :x, 0}, 1}]}
+                 type: {:intersection, [:integer, {:tuple_nth, {:variable, :x, 0}, 1}]}
                },
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 5)
@@ -3870,7 +3870,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [%VarInfo{name: :e, type: :atom}, %VarInfo{name: :x, type: nil}] =
                get_line_vars(state, 8)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
+      assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 10)
 
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
     end
@@ -3897,11 +3897,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :a, type: {:atom, nil}},
-               %VarInfo{name: :b, type: :number},
+               %VarInfo{name: :b, type: :integer},
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 6)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 8)
+      assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 8)
 
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 10)
     end
@@ -3934,9 +3934,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  name: :b,
                  type:
                    {:intersection,
-                    [:number, {:tuple_nth, {:for_expression, {:variable, :x, 0}}, 1}]}
+                    [:integer, {:tuple_nth, {:for_expression, {:variable, :x, 0}}, 1}]}
                },
-               %VarInfo{name: :x, type: :number},
+               %VarInfo{name: :x, type: :integer},
                %VarInfo{name: :y, type: {:for_expression, {:variable, :a, 1}}}
              ] = get_line_vars(state, 5)
 
@@ -3967,7 +3967,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :a, type: {:for_expression, {:variable, :x, 0}}},
-               %VarInfo{name: :b, type: :number},
+               %VarInfo{name: :b, type: :integer},
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 6)
 
@@ -3979,7 +3979,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :a, type: {:for_expression, {:variable, :x, 0}}},
-               %VarInfo{name: :x, type: :number}
+               %VarInfo{name: :x, type: :integer}
              ] = get_line_vars(state, 10)
 
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
@@ -4012,7 +4012,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :a, type: {:atom, nil}},
-               %VarInfo{name: :b, type: :number},
+               %VarInfo{name: :b, type: :integer},
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 8)
 
@@ -4021,7 +4021,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 11)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 13)
+      assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 13)
 
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 15)
     end
@@ -4050,7 +4050,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :a, type: {:atom, nil}},
-               %VarInfo{name: :b, type: :number},
+               %VarInfo{name: :b, type: :integer},
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 6)
 
@@ -4059,18 +4059,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 8)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
+      assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 10)
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
     end
 
     test "number guards" do
       assert %VarInfo{name: :x, type: :number} = var_with_guards("is_number(x)")
-      assert %VarInfo{name: :x, type: :number} = var_with_guards("is_float(x)")
-      assert %VarInfo{name: :x, type: :number} = var_with_guards("is_integer(x)")
+      assert %VarInfo{name: :x, type: :float} = var_with_guards("is_float(x)")
+      assert %VarInfo{name: :x, type: :integer} = var_with_guards("is_integer(x)")
       assert %VarInfo{name: :x, type: :number} = var_with_guards("round(x)")
       assert %VarInfo{name: :x, type: :number} = var_with_guards("trunc(x)")
-      assert %VarInfo{name: :x, type: :number} = var_with_guards("div(x, 1)")
-      assert %VarInfo{name: :x, type: :number} = var_with_guards("rem(x, 1)")
+      assert %VarInfo{name: :x, type: :integer} = var_with_guards("div(x, 1)")
+      assert %VarInfo{name: :x, type: :integer} = var_with_guards("rem(x, 1)")
       assert %VarInfo{name: :x, type: :number} = var_with_guards("abs(x)")
       assert %VarInfo{name: :x, type: :number} = var_with_guards("ceil(x)")
       assert %VarInfo{name: :x, type: :number} = var_with_guards("floor(x)")
@@ -4090,7 +4090,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
 
     test "multiple guards" do
-      assert %VarInfo{name: :x, type: {:union, [:bitstring, :number]}} =
+      assert %VarInfo{name: :x, type: {:union, [:bitstring, :integer]}} =
                var_with_guards("is_bitstring(x) when is_integer(x)")
     end
 

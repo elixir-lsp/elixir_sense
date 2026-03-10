@@ -1260,11 +1260,12 @@ defmodule ElixirSense.Core.Compiler.State do
         {Macro, :input, []} -> nil
         {Macro, :output, []} -> nil
         {Exception, :t, []} -> {:map, [__struct__: :atom, __exception__: {:atom, true}], nil}
-        {GenServer, :name, []} -> nil
+        {Exception, :kind, []} -> {:union, [{:atom, :error}, {:atom, :exit}, {:atom, :throw}]}
+        {GenServer, :name, []} -> {:union, [:atom, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
         {GenServer, :from, []} -> {:tuple, 2, [:pid, :reference]}
-        {GenServer, :server, []} -> nil
+        {GenServer, :server, []} -> {:union, [:atom, :pid, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
         {GenServer, :on_start, []} -> {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
-        {Supervisor, :child_spec, []} -> {:map, [], nil}
+        {Supervisor, :child_spec, []} -> {:map, [id: nil, start: {:tuple, 2, [:atom, nil]}], nil}
         {Supervisor, :on_start, []} -> {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
         {Path, :t, []} -> {:binary, nil}
         {File, :posix, []} -> :atom

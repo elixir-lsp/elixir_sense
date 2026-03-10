@@ -188,7 +188,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   - `:module` - Optional module context (defaults to nil)
   - `:function` - Optional function context (defaults to nil)
   - `:file` - Optional file context (defaults to nil)
-  - `:mode` - Typing mode, :dynamic (default) or :traversal
+  - `:mode` - Typing mode, :dynamic (default)
   - `:local_sigs_map` - Optional local signatures map
   - `:metadata` - Optional metadata
   - `:variables` - Optional map of variables with keys `{name, version}`
@@ -255,31 +255,25 @@ defmodule ElixirSense.Core.ElixirTypes do
       true ->
         if available?() do
           try do
-            if mode == :traversal && is_simple_ast?(ast) do
-              # Fast path for simple AST nodes in traversal mode
-              simple_type_of(ast)
+            stack = init_stack(module, function, file, mode, local_sigs_map, metadata)
+            # Seed context with provided variables or infer from AST (dynamic types)
+            auto_vars = variables_from_ast(ast)
+            effective_vars = merge_variables(variables, auto_vars)
+            context = init_context(effective_vars)
+
+            if stack && context do
+              {descr, _context} =
+                Module.Types.Expr.of_expr(
+                  ast,
+                  Module.Types.Descr.term(),
+                  ast,
+                  stack,
+                  context
+                )
+
+              {:ok, descr}
             else
-              # Full Module.Types processing
-              stack = init_stack(module, function, file, mode, local_sigs_map, metadata)
-              # Seed context with provided variables or infer from AST (dynamic types)
-              auto_vars = variables_from_ast(ast)
-              effective_vars = merge_variables(variables, auto_vars)
-              context = init_context(effective_vars)
-
-              if stack && context do
-                {descr, _context} =
-                  Module.Types.Expr.of_expr(
-                    ast,
-                    Module.Types.Descr.term(),
-                    ast,
-                    stack,
-                    context
-                  )
-
-                {:ok, descr}
-              else
-                :error
-              end
+              :error
             end
           catch
             kind, payload ->
@@ -295,61 +289,9 @@ defmodule ElixirSense.Core.ElixirTypes do
     end
   end
 
-  # Performance optimization: fast path for simple AST nodes in traversal mode
-  defp is_simple_ast?(ast) do
-    case ast do
-      # Literals
-      x when is_atom(x) or is_integer(x) or is_float(x) or is_binary(x) ->
-        true
-
-      [] ->
-        true
-
-      # Lists can be complex
-      [_ | _] ->
-        false
-
-      {a, b}
-      when (is_atom(a) or is_integer(a) or is_float(a) or is_binary(a)) and
-             (is_atom(b) or is_integer(b) or is_float(b) or is_binary(b)) ->
-        true
-
-      _ ->
-        false
-    end
-  end
-
   defp proper_list_ast?([]), do: true
   defp proper_list_ast?([_ | tail]), do: proper_list_ast?(tail)
   defp proper_list_ast?(_), do: false
-
-  # Simple type inference for basic literals (fast path)
-  defp simple_type_of(ast) do
-    case ast do
-      x when is_atom(x) ->
-        {:ok, Module.Types.Descr.atom([x])}
-
-      x when is_integer(x) ->
-        {:ok, Module.Types.Descr.integer()}
-
-      x when is_float(x) ->
-        {:ok, Module.Types.Descr.float()}
-
-      x when is_binary(x) ->
-        {:ok, Module.Types.Descr.binary()}
-
-      [] ->
-        {:ok, Module.Types.Descr.empty_list()}
-
-      {a, b} ->
-        {:ok, Module.Types.Descr.tuple([literal_descr(a), literal_descr(b)])}
-
-      _ ->
-        :error
-    end
-  rescue
-    _ -> :error
-  end
 
   defp checker_cache do
     case Process.get(:elixir_sense_checker_cache) do
@@ -370,13 +312,6 @@ defmodule ElixirSense.Core.ElixirTypes do
   rescue
     _ -> nil
   end
-
-  defp literal_descr(x) when is_atom(x), do: Module.Types.Descr.atom([x])
-  defp literal_descr(x) when is_integer(x), do: Module.Types.Descr.integer()
-  defp literal_descr(x) when is_float(x), do: Module.Types.Descr.float()
-  defp literal_descr(x) when is_binary(x), do: Module.Types.Descr.binary()
-  defp literal_descr([]), do: Module.Types.Descr.empty_list()
-  defp literal_descr(_), do: Module.Types.Descr.term()
 
   def maybe_remote_call_sig(
         {{:., _, [target_ast, fun]}, _meta, args},
@@ -770,6 +705,10 @@ defmodule ElixirSense.Core.ElixirTypes do
       # Tuple pattern refinement
       {:{}, _, elements} ->
         refine_tuple_pattern_vars(var_shapes, elements, expected_descr, value_ast)
+
+      # 2-element tuple (Elixir represents {a, b} without :{} wrapper)
+      {a, b} ->
+        refine_tuple_pattern_vars(var_shapes, [a, b], expected_descr, value_ast)
 
       # List pattern refinement
       list when is_list(list) ->
@@ -1537,8 +1476,10 @@ defmodule ElixirSense.Core.ElixirTypes do
     do: Module.Types.Descr.atom([atom])
 
   defp coerce_var_type(:atom), do: Module.Types.Descr.atom()
+  defp coerce_var_type(:boolean), do: Module.Types.Descr.atom([true, false])
   defp coerce_var_type(:integer), do: Module.Types.Descr.integer()
   defp coerce_var_type(:binary), do: Module.Types.Descr.binary()
+  defp coerce_var_type(:bitstring), do: Module.Types.Descr.binary()
   defp coerce_var_type(:float), do: Module.Types.Descr.float()
   defp coerce_var_type(:pid), do: Module.Types.Descr.pid()
   defp coerce_var_type(:port), do: Module.Types.Descr.port()
@@ -1783,11 +1724,7 @@ defmodule ElixirSense.Core.ElixirTypes do
           {return_type, clause_ctx} =
             Module.Types.Expr.of_expr(body, Module.Types.Descr.term(), body, stack, clause_ctx)
 
-          arg_types =
-            case stack.mode do
-              :traversal -> expected
-              _ -> Module.Types.Pattern.of_domain(trees, expected, clause_ctx)
-            end
+          arg_types = Module.Types.Pattern.of_domain(trees, expected, clause_ctx)
 
           {:cont, [{arg_types, return_type} | acc]}
         catch

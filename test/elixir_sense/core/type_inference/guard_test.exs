@@ -240,7 +240,7 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
 
       result = Guard.type_information_from_guards(guard)
 
-      assert result == %{{:x, 1} => :number, {:y, 0} => :binary}
+      assert result == %{{:x, 1} => :integer, {:y, 0} => :binary}
     end
   end
 
@@ -249,7 +249,7 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       guard = quote(do: is_integer(x) or is_binary(x)) |> expand()
 
       result = Guard.type_information_from_guards(guard)
-      assert result == %{{:x, 0} => {:union, [:number, :binary]}}
+      assert result == %{{:x, 0} => {:union, [:integer, :binary]}}
     end
 
     test "handles nested or" do
@@ -277,7 +277,7 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       guard = quote(do: is_integer(x) when is_binary(x)) |> expand()
 
       result = Guard.type_information_from_guards(guard)
-      assert result == %{{:x, 0} => {:union, [:number, :binary]}}
+      assert result == %{{:x, 0} => {:union, [:integer, :binary]}}
     end
   end
 

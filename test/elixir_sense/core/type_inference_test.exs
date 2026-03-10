@@ -550,8 +550,20 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       assert_old_and_native("for x <- [1, 2], do: x", {:list, nil}, {:list, nil})
     end
 
-    test "for comprehension with into" do
-      assert_old_and_native("for x <- [1, 2], into: %{}, do: {x, x}", nil, nil)
+    test "for comprehension with into map" do
+      assert_old_and_native(
+        "for x <- [1, 2], into: %{}, do: {x, x}",
+        {:map, [], nil},
+        {:map, [], nil}
+      )
+    end
+
+    test "for comprehension with into string" do
+      assert_old_and_native(
+        ~s(for x <- ["a", "b"], into: "", do: x),
+        {:binary, nil},
+        {:binary, nil}
+      )
     end
 
     test "__STACKTRACE__ returns {:list, nil}" do

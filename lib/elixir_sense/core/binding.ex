@@ -425,6 +425,8 @@ defmodule ElixirSense.Core.Binding do
   def do_expand(_env, :pid, _stack), do: :pid
   def do_expand(_env, :port, _stack), do: :port
   def do_expand(_env, :reference, _stack), do: :reference
+  def do_expand(_env, :boolean, _stack), do: {:union, [{:atom, false}, {:atom, true}]}
+  def do_expand(_env, :bitstring, _stack), do: {:binary, nil}
   def do_expand(_env, :fun, _stack), do: :fun
   def do_expand(_env, :tuple, _stack), do: :tuple
   def do_expand(_env, {:binary, _} = shape, _stack), do: shape
