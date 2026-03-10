@@ -104,7 +104,12 @@ defmodule ElixirSense.Core.TypeInference.Guard do
           with {type, binding} <- guard_predicate_type(fun, params),
                {{var, version}, type} <- extract_var_type(binding, type) do
             # If we found the predicate type, we can prematurely exit traversing the subtree
-            {nil, Map.put(acc, {var, version}, type)}
+            acc = Map.put(acc, {var, version}, type)
+
+            # Apply secondary constraints (e.g., div/rem constrain both args to integer)
+            acc = apply_secondary_constraints(fun, params, acc)
+
+            {nil, acc}
           else
             _ ->
               # traverse params
@@ -144,7 +149,7 @@ defmodule ElixirSense.Core.TypeInference.Guard do
 
   defp guard_predicate_type(:is_float, [first | _]), do: {:float, first}
 
-  # TODO div and rem only work on first arg - second arg also integer
+  # div/rem second arg constrained by apply_secondary_constraints/3
   defp guard_predicate_type(p, [first | _])
        when p in [
               :is_number,
@@ -218,8 +223,7 @@ defmodule ElixirSense.Core.TypeInference.Guard do
         key == :__struct__ ->
           {:struct, [], nil, nil}
 
-        is_atom(key) or is_binary(key) ->
-          # TODO other types of keys?
+        is_atom(key) or is_binary(key) or is_integer(key) ->
           rhs_type = type_of(value)
 
           {:map, [{key, rhs_type}], nil}
@@ -264,11 +268,10 @@ defmodule ElixirSense.Core.TypeInference.Guard do
   defp guard_predicate_type(:map_size, [first | _]), do: {{:map, [], nil}, first}
 
   defp guard_predicate_type(:is_map_key, [key, var | _]) do
-    # TODO other types of keys?
     type =
       case key do
         :__struct__ -> {:struct, [], nil, nil}
-        key when is_atom(key) when is_binary(key) -> {:map, [{key, nil}], nil}
+        key when is_atom(key) when is_binary(key) when is_integer(key) -> {:map, [{key, nil}], nil}
         _ -> {:map, [], nil}
       end
 
@@ -276,11 +279,10 @@ defmodule ElixirSense.Core.TypeInference.Guard do
   end
 
   defp guard_predicate_type(:map_get, [key, var | _]) do
-    # TODO other types of keys?
     type =
       case key do
         :__struct__ -> {:struct, [], nil, nil}
-        key when is_atom(key) when is_binary(key) -> {:map, [{key, nil}], nil}
+        key when is_atom(key) when is_binary(key) when is_integer(key) -> {:map, [{key, nil}], nil}
         _ -> {:map, [], nil}
       end
 
@@ -295,6 +297,16 @@ defmodule ElixirSense.Core.TypeInference.Guard do
   defp guard_predicate_type(:is_function, [first | _]), do: {:fun, first}
 
   defp guard_predicate_type(_, _), do: nil
+
+  # Apply constraints on additional arguments (beyond the first) for multi-arg guards
+  defp apply_secondary_constraints(fun, [_, second | _], acc) when fun in [:div, :rem] do
+    case extract_var_type(second, :integer) do
+      {{var, version}, type} -> Map.put(acc, {var, version}, type)
+      _ -> acc
+    end
+  end
+
+  defp apply_secondary_constraints(_fun, _params, acc), do: acc
 
   defp type_of(expression) do
     TypeInference.type_of(expression, :guard)

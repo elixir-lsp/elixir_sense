@@ -1049,6 +1049,13 @@ defmodule ElixirSense.Core.Compiler.State do
     {:tuple, length(fields), Enum.map(fields, &spec_ast_to_shape(&1, module))}
   end
 
+  # 2-element tuples are represented as bare {a, b} in Elixir AST (no :{} wrapper)
+  # The {:|, _} case is already handled above. All other 2-element tuples in spec
+  # context are tuple types (AST nodes are always 3-element tuples).
+  defp spec_ast_to_shape({a, b}, module) do
+    {:tuple, 2, [spec_ast_to_shape(a, module), spec_ast_to_shape(b, module)]}
+  end
+
   defp spec_ast_to_shape([], _module), do: {:list, :empty}
   defp spec_ast_to_shape([type | _], module), do: {:list, spec_ast_to_shape(type, module)}
 

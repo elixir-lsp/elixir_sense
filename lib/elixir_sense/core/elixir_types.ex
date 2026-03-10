@@ -710,6 +710,20 @@ defmodule ElixirSense.Core.ElixirTypes do
       {a, b} ->
         refine_tuple_pattern_vars(var_shapes, [a, b], expected_descr, value_ast)
 
+      # Match operator pattern: `{:ok, val} = result`
+      {:=, _, [left, right]} ->
+        left_refinements =
+          apply_pattern_refinements(var_shapes, left, expected_descr, value_ast)
+
+        right_refinements =
+          apply_pattern_refinements(var_shapes, right, expected_descr, value_ast)
+
+        Map.merge(left_refinements, right_refinements)
+
+      # Binary pattern: variables in binary patterns are binaries/integers
+      {:<<>>, _, _parts} ->
+        %{}
+
       # List pattern refinement
       list when is_list(list) ->
         refine_list_pattern_vars(var_shapes, list, expected_descr, value_ast)

@@ -285,7 +285,28 @@ defmodule ElixirSense.Core.Binding do
     do_expand(env, {:call, {:atom, Application}, :get_env, args}, stack)
   end
 
-  # TODO maybe handle Application.fetch_env/2
+  def do_expand(env, {:call, {:atom, Application}, :fetch_env, args}, stack) do
+    try do
+      expanded_args =
+        args
+        |> Enum.map(&expand(env, &1, stack))
+        |> Enum.map(&elem(&1, 1))
+
+      case apply(Application, :fetch_env, expanded_args) do
+        {:ok, value} when is_atom(value) ->
+          {:tuple, 2, [{:atom, :ok}, {:atom, value}]}
+
+        {:ok, _value} ->
+          {:tuple, 2, [{:atom, :ok}, nil]}
+
+        :error ->
+          {:atom, :error}
+      end
+    rescue
+      _ ->
+        :none
+    end
+  end
 
   def do_expand(env, {:call, {:atom, Application}, fun, args}, stack)
       when fun in ~w(get_env fetch_env!)a do
@@ -295,16 +316,26 @@ defmodule ElixirSense.Core.Binding do
         |> Enum.map(&expand(env, &1, stack))
         |> Enum.map(&elem(&1, 1))
 
-      mod = apply(Application, fun, expanded_args)
+      result = apply(Application, fun, expanded_args)
 
-      case mod do
+      case result do
         :error ->
           :none
 
-        mod when is_atom(mod) ->
-          {:atom, mod}
+        value when is_atom(value) ->
+          {:atom, value}
 
-        # TODO handle other types
+        value when is_integer(value) ->
+          {:integer, value}
+
+        value when is_binary(value) ->
+          {:binary, value}
+
+        value when is_list(value) ->
+          {:list, nil}
+
+        value when is_map(value) ->
+          {:map, [], nil}
 
         _ ->
           nil

@@ -242,6 +242,22 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
 
       assert result == %{{:x, 1} => :integer, {:y, 0} => :binary}
     end
+
+    test "div constrains both arguments to integer" do
+      guard = quote(do: div(x, y) == 0) |> expand()
+
+      result = Guard.type_information_from_guards(guard)
+
+      assert result == %{{:x, 1} => :integer, {:y, 0} => :integer}
+    end
+
+    test "rem constrains both arguments to integer" do
+      guard = quote(do: rem(x, y) == 0) |> expand()
+
+      result = Guard.type_information_from_guards(guard)
+
+      assert result == %{{:x, 1} => :integer, {:y, 0} => :integer}
+    end
   end
 
   describe "type_information_from_guards or" do
