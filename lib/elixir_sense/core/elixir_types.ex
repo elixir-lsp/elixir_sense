@@ -519,7 +519,9 @@ defmodule ElixirSense.Core.ElixirTypes do
       parts -> Module.concat(parts ++ [single])
     end
   rescue
-    _ -> nil
+    e ->
+      Logger.debug("resolve_parent_alias failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+      nil
   end
 
   defp resolve_parent_alias(_, _), do: nil
@@ -533,7 +535,9 @@ defmodule ElixirSense.Core.ElixirTypes do
       _ -> nil
     end
   rescue
-    _ -> nil
+    e ->
+      Logger.debug("expand_alias_from_env failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+      nil
   end
 
   defp expand_alias_from_env(_, _, _), do: nil
@@ -1645,7 +1649,9 @@ defmodule ElixirSense.Core.ElixirTypes do
 
       acc
     rescue
-      _ -> %{}
+      e ->
+        Logger.debug("variables_from_ast failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+        %{}
     end
   end
 
@@ -2029,9 +2035,13 @@ defmodule ElixirSense.Core.ElixirTypes do
         not Module.Types.Descr.empty?(Module.Types.Descr.intersection(arg, domain))
       end)
     rescue
-      _ -> true
+      e ->
+        Logger.debug("args_compatible? failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+        true
     catch
-      _ -> true
+      kind, payload ->
+        Logger.debug("args_compatible? failed: #{Exception.format(kind, payload, __STACKTRACE__)}")
+        true
     end
   end
 

@@ -1,5 +1,6 @@
 defmodule ElixirSense.Core.Compiler.Clauses do
   @moduledoc false
+  require Logger
   alias ElixirSense.Core.Compiler
   alias ElixirSense.Core.Compiler.Utils
   alias ElixirSense.Core.Compiler.State
@@ -750,7 +751,9 @@ defmodule ElixirSense.Core.Compiler.Clauses do
           descr
         end
       rescue
-        _ -> nil
+        e ->
+          Logger.debug("match_context_to_descr failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+          nil
       end
     else
       nil
@@ -868,9 +871,13 @@ defmodule ElixirSense.Core.Compiler.Clauses do
             {clause_vars, %{}}
         end
       rescue
-        _ -> {clause_vars, %{}}
+        e ->
+          Logger.debug("enhance_pattern_vars failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+          {clause_vars, %{}}
       catch
-        _ -> {clause_vars, %{}}
+        kind, payload ->
+          Logger.debug("enhance_pattern_vars failed: #{Exception.format(kind, payload, __STACKTRACE__)}")
+          {clause_vars, %{}}
       end
     else
       {clause_vars, %{}}

@@ -248,11 +248,13 @@ defmodule ElixirSense.Core.TypeInference do
              :require,
              :__aliases__,
              :__cursor__,
-             :__DIR__,
              :super,
              :"::"
            ],
       do: nil
+
+  # __DIR__ always returns a binary (the current file's directory)
+  def type_of({:__DIR__, _meta, _clauses}, _context), do: {:binary, nil}
 
   # __ENV__ is already expanded to map
   def type_of({form, _meta, _clauses}, _context) when form in [:__CALLER__] do
@@ -276,6 +278,16 @@ defmodule ElixirSense.Core.TypeInference do
   # integer
   def type_of(integer, _context) when is_integer(integer) do
     {:integer, integer}
+  end
+
+  # float
+  def type_of(float, _context) when is_float(float) do
+    {:float, float}
+  end
+
+  # binary/string literal
+  def type_of(binary, _context) when is_binary(binary) do
+    {:binary, binary}
   end
 
   # other

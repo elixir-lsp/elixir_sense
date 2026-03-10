@@ -2008,10 +2008,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  name: :var1,
                  type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
                },
-               # NOTE non atom keys currently not supported
                %VarInfo{
                  name: :var2,
-                 type: {:map_key, {:attribute, :other}, nil}
+                 type: {:map_key, {:attribute, :other}, {:binary, "a"}}
                }
              ] = state |> get_line_vars(7)
     end
@@ -2245,7 +2244,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :var1, type: {:call, {:atom, DateTime}, :now, []}},
                %VarInfo{name: :var2, type: {:call, {:atom, :erlang}, :now, []}},
                %VarInfo{name: :var3, type: {:call, {:atom, MyModule}, :now, [{:atom, :abc}]}},
-               %VarInfo{name: :var4, type: {:call, {:atom, DateTime}, :now, [nil]}}
+               %VarInfo{name: :var4, type: {:call, {:atom, DateTime}, :now, [{:binary, "Etc/UTC"}]}}
              ] = state |> get_line_vars(7)
 
       assert [
@@ -2299,7 +2298,8 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{
-                 type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}
+                 type:
+                   {:map, [asd: {:integer, 5}, nested: {:map, [wer: {:binary, "asd"}], nil}], nil}
                }
              ] = state |> get_line_vars(6)
 

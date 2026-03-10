@@ -522,16 +522,28 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "string literal" do
-      assert_old_and_native("\"asd\"", nil, {:binary, nil})
+      assert_old_and_native("\"asd\"", {:binary, "asd"}, {:binary, "asd"})
     end
 
     test "float literal" do
-      assert_old_and_native("1.23", nil, {:float, nil})
+      assert_old_and_native("1.23", {:float, 1.23}, {:float, 1.23})
     end
 
     test "binary expression" do
       assert_old_and_native("<<1, 2, 3>>", {:binary, nil}, {:binary, nil})
       assert_old_and_native("<<a::utf8>>", {:binary, nil}, {:binary, nil})
+    end
+
+    test "__DIR__ returns binary" do
+      assert type_of("__DIR__", nil) == {:binary, nil}
+    end
+
+    test "__STACKTRACE__ returns list" do
+      assert type_of("__STACKTRACE__", nil) == {:list, nil}
+    end
+
+    test "__CALLER__ returns Macro.Env struct" do
+      assert type_of("__CALLER__", nil) == {:struct, [], {:atom, Macro.Env}, nil}
     end
 
     test "for comprehension without into" do
