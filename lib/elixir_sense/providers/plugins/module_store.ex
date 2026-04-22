@@ -69,7 +69,6 @@ defmodule ElixirSense.Providers.Plugins.ModuleStore do
     Applications.get_modules_from_applications()
     |> Enum.filter(fn module ->
       try do
-        _ = Code.ensure_compiled(module)
         function_exported?(module, :module_info, 0)
       rescue
         _ ->
