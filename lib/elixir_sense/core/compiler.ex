@@ -11,6 +11,25 @@ defmodule ElixirSense.Core.Compiler do
   @trace_key :elixir_sense_trace
   @trace_paused_key :elixir_sense_trace_paused
 
+  # Whether to emit the `{:version, N}` meta stamps on `case`/`cond`/`receive`/
+  # `try`/`with`/`for`/`_` and bump the version counter accordingly. Introduced
+  # in Elixir v1.20 (commit 603602e67 — reverse arrows for case). We gate by
+  # host version so ElixirSense's expansion stays in lock-step with the host
+  # Elixir's `:elixir_expand` output across 1.16–1.20+.
+  @stamp_version Version.match?(System.version(), ">= 1.20.0-dev")
+
+  # Stamps {:version, counter} on meta and bumps the counter — but only when
+  # the host Elixir is 1.20+. On older hosts this is the identity so tests
+  # comparing against `:elixir_expand` stay aligned.
+  defp stamp_version(meta, s) do
+    if @stamp_version do
+      counter = s.unused
+      {[{:version, counter} | meta], %{s | unused: counter + 1}}
+    else
+      {meta, s}
+    end
+  end
+
   def pause_trace do
     Process.put(@trace_paused_key, true)
   end
@@ -512,6 +531,9 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:cond, meta, [opts]}, s, e) do
     # elixir raises underscore_in_cond if the last clause is _
     {e_clauses, sc, ec} = __MODULE__.Clauses.cond(opts, s, e)
+    # Stamp a {:version, N} on the block (1.20+ only — see stamp_version/2).
+    # Mirrors upstream commit 603602e67 (reverse arrows for case).
+    {meta, sc} = stamp_version(meta, sc)
     {{:cond, meta, [e_clauses]}, sc, ec}
   end
 
@@ -521,11 +543,13 @@ defmodule ElixirSense.Core.Compiler do
 
   defp do_expand({:receive, meta, [opts]}, s, e) do
     {e_clauses, sc, ec} = __MODULE__.Clauses.receive(opts, s, e)
+    {meta, sc} = stamp_version(meta, sc)
     {{:receive, meta, [e_clauses]}, sc, ec}
   end
 
   defp do_expand({:try, meta, [opts]}, s, e) do
     {e_clauses, sc, ec} = __MODULE__.Clauses.try(opts, s, e)
+    {meta, sc} = stamp_version(meta, sc)
     {{:try, meta, [e_clauses]}, sc, ec}
   end
 
@@ -605,9 +629,18 @@ defmodule ElixirSense.Core.Compiler do
     expand(arg, s, e)
   end
 
-  defp do_expand({:_, _meta, kind} = var, s, e) when is_atom(kind) do
-    # elixir raises unbound_underscore if context is not match
-    {var, s, e}
+  defp do_expand({:_, meta, kind} = var, s, e) when is_atom(kind) do
+    # Stamp a {:version, N} on `_` and bump the counter (1.20+ only —
+    # upstream commit 603602e67 — reverse arrows). Pre-1.20 the underscore
+    # passes through with no meta change.
+    # elixir raises unbound_underscore if context is not match (handled
+    # implicitly here by recovery — we still return the var either way).
+    if @stamp_version do
+      {meta, s} = stamp_version(meta, s)
+      {{:_, meta, kind}, s, e}
+    else
+      {var, s, e}
+    end
   end
 
   defp do_expand({name, meta, kind}, s, %{context: :match} = e)
@@ -2047,11 +2080,14 @@ defmodule ElixirSense.Core.Compiler do
 
         _ ->
           if is_list(expr) and Keyword.has_key?(expr, :do) do
-            # do block with receive/catch/else/after
-            # wrap in try
-            # NOTE origin kind may be not correct here but origin is not used and
-            # elixir uses it only for error messages in elixir_clauses module
-            {:try, [{:origin, def_kind} | meta], [expr]}
+            # do block with receive/catch/else/after — wrap in try.
+            # NOTE origin/definition kind may be not correct here. The meta
+            # annotation is consumed only by error messages in
+            # `:elixir_clauses`. Upstream renamed the key from `:origin` to
+            # `:definition` in 1.20 (commit 40e930607 — Use definition instead
+            # of origin in meta). We emit both so older and newer hosts find
+            # what they expect.
+            {:try, [{:origin, def_kind}, {:definition, def_kind} | meta], [expr]}
           else
             # elixir raises here
             expr
@@ -2589,8 +2625,10 @@ defmodule ElixirSense.Core.Compiler do
 
     {e_expr, se, _ee} = expand_for_do_block(expr, sc, ec, maybe_reduce)
 
-    {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]}, State.remove_vars_scope(se, s),
-     e}
+    sf = State.remove_vars_scope(se, s)
+    # Stamp a {:version, N} on `for` (1.20+ only — commit 603602e67).
+    {meta, sf} = stamp_version(meta, sf)
+    {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]}, sf, e}
   end
 
   defp expand_for_do_block([{:->, _, _} | _] = clauses, s, e, false) do
@@ -2791,6 +2829,8 @@ defmodule ElixirSense.Core.Compiler do
       end
 
     {e_opts, so, eo} = __MODULE__.Clauses.case(e_expr, r_opts, se, ee)
+    # Stamp a {:version, N} on `case` (1.20+ only — commit 603602e67).
+    {meta, so} = stamp_version(meta, so)
     {{:case, meta, [e_expr, e_opts]}, so, eo}
   end
 
