@@ -46,7 +46,11 @@ defmodule ElixirSense.Core.Compiler.Quote do
   def has_unquotes({var, _, ctx}, _) when is_atom(var) and is_atom(ctx), do: false
 
   def has_unquotes({name, _, args}, quote_level) when is_list(args) do
-    has_unquotes(name) or Enum.any?(args, fn child -> has_unquotes(child, quote_level) end)
+    # Pass quote_level when recursing into the call head, mirroring upstream fix
+    # https://github.com/elixir-lang/elixir/commit/4d56bdd89 — Do not reset quote
+    # level on calls in `has_unquotes/2`.
+    has_unquotes(name, quote_level) or
+      Enum.any?(args, fn child -> has_unquotes(child, quote_level) end)
   end
 
   def has_unquotes({left, right}, quote_level) do

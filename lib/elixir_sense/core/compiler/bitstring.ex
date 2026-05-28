@@ -93,7 +93,10 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
         acc
       )
 
-    expand(meta, fun, t, e_acc, {ss, original_s}, es, alignment, require_size)
+    # Forward bitstr_meta (the outer `<<>>` meta), not the per-element meta,
+    # so subsequent segments stay anchored on the original literal. Mirrors
+    # upstream commit 5d794ab17 — Pass correct bitstring meta during expansion.
+    expand(bitstr_meta, fun, t, e_acc, {ss, original_s}, es, alignment, require_size)
   end
 
   defp expand_expr(
@@ -282,6 +285,13 @@ defmodule ElixirSense.Core.Compiler.Bitstring do
 
       {:bitstring, _, nil} ->
         Enum.reverse(parts, acc)
+
+      # Fallback for invalid nested bitstrings like `<<<<x>>::y>>`.
+      # Mirrors upstream commit 5e44c78ff — Fix compiler crash on invalid nested
+      # bitstring. We keep the original `::` shape so downstream tooling still
+      # sees an AST node rather than crashing with `function_clause`.
+      _ ->
+        [{:"::", meta, [e_left, e_right]} | acc]
     end
   end
 

@@ -682,9 +682,24 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
     defp prune_stacktrace([{_, _, [caller | _], _} | _], _mfa, info, {:ok, caller}), do: info
     defp prune_stacktrace([{m, f, a, _} | _], {m, f, a}, info, _e), do: info
 
+    # Mirrors upstream commit 5a1fa351d — Fix invalid module reference in
+    # prune_stacktrace. `:elixir_exp` was the historical name (and is still
+    # referenced in older Elixir releases); `:elixir_expand` is the current
+    # one. We keep both so this works across 1.16+.
     defp prune_stacktrace([{mod, _, _, _} | _], _mfa, info, _e)
-         when mod in [:elixir_dispatch, :elixir_exp, __MODULE__],
+         when mod in [:elixir_dispatch, :elixir_exp, :elixir_expand, __MODULE__],
          do: info
+
+    # Also prune ElixirSense's own expansion plumbing so the surfaced trace
+    # focuses on user-relevant frames (the macro being expanded and its caller)
+    # rather than `ElixirSense.Core.Compiler{,.Bitstring,.Quote,...}` internals.
+    defp prune_stacktrace([{mod, _, _, _} = h | t], mfa, info, e) when is_atom(mod) do
+      case Atom.to_string(mod) do
+        "Elixir.ElixirSense.Core.Compiler" -> info
+        "Elixir.ElixirSense.Core.Compiler." <> _ -> info
+        _ -> [h | prune_stacktrace(t, mfa, info, e)]
+      end
+    end
 
     defp prune_stacktrace([h | t], mfa, info, e), do: [h | prune_stacktrace(t, mfa, info, e)]
     defp prune_stacktrace([], _mfa, info, _e), do: info
