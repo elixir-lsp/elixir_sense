@@ -1052,6 +1052,14 @@ defmodule ElixirSense.Core.CompilerTest do
 
           {{:capture, meta, nil}, state}
 
+        # Elixir 1.20+ renamed the synthetic capture var:
+        #   {:capture, meta, nil} → {:"_&", meta, :elixir_fn}
+        # See upstream commit aae39c87d. Normalize back to `{:capture, meta, nil}`
+        # so the ES-side conversion (which still emits `:capture`) lines up.
+        {:"_&", meta, :elixir_fn} = _node, state ->
+          meta = Keyword.delete(meta, :counter)
+          {{:capture, meta, nil}, state}
+
         # Normalize binding variables in quote bind_quoted/context
         # Elixir < 1.19 has :column in metadata, 1.19+ removes it
         # ElixirSense follows 1.19+ behavior, so remove :column from Elixir < 1.19

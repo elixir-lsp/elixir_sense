@@ -587,9 +587,22 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   defp do_escape([], _, state), do: {[], state}
 
+  # Fix for upstream commit 514bc86a7 — Macro.escape/1 must recurse with
+  # `do_escape` (not `do_quote_simple_list`, which routes through `do_quote`
+  # and would misinterpret a `:quote` tuple in the tail as a quote AST node).
   defp do_escape([h | t], %__MODULE__{unquote: false} = q, state) do
     {eh, state} = do_escape(h, q, state)
-    do_quote_simple_list(t, eh, q, state)
+
+    case is_list(t) do
+      true ->
+        {et, state} = do_escape(t, q, state)
+        {[eh | et], state}
+
+      # improper list
+      false ->
+        {et, state} = do_escape(t, q, state)
+        {[{:|, [], [eh, et]}], state}
+    end
   end
 
   defp do_escape([h | t], q, state) do
