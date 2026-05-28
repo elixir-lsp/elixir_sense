@@ -479,9 +479,21 @@ defmodule ElixirSense.Core.Compiler do
         _ -> {:{}, [], [:__block__, [], e_binding ++ [e_quoted]]}
       end
 
-    case e_prelude do
-      [] -> {e_binding_quoted, es, eq}
-      _ -> {{:__block__, [], e_prelude ++ [e_binding_quoted]}, es, eq}
+    e_block =
+      case e_prelude do
+        [] -> e_binding_quoted
+        _ -> {:__block__, [], e_prelude ++ [e_binding_quoted]}
+      end
+
+    # Wrap the quote result in a remote call to `elixir_quote.validate_quote/1`
+    # outside of match/guard context. Mirrors upstream commit 3a038d176
+    # (Wrap quote in a function that will implement recursive types) +
+    # the partial revert 7a9ea30d9 that skips the wrap inside match/guard.
+    # 1.20+ only — keeps test parity with host expansion on older hosts.
+    if @stamp_version and e.context == nil do
+      {{{:., meta, [:elixir_quote, :validate_quote]}, meta, [e_block]}, es, eq}
+    else
+      {e_block, es, eq}
     end
   end
 
@@ -616,25 +628,32 @@ defmodule ElixirSense.Core.Compiler do
         {{:^, meta, [var]}, %{s | unused: unused}, e}
 
       {arg, ss, _e} ->
-        # elixir raises here invalid_arg_for_pin
+        # elixir raises here invalid_arg_for_pin (and marks tainted_function;
+        # upstream commit 5bad452d0). We mirror the taint for state parity but
+        # don't emit the warning — ElixirSense's diagnostic surfaces differ.
         # we may have cursor in arg
         # restore prematch and vars
-        {{:^, meta, [arg]}, %{ss | prematch: s.prematch, vars: s.vars}, e}
+        {{:^, meta, [arg]},
+         %{ss | prematch: s.prematch, vars: s.vars, tainted_function: true}, e}
     end
   end
 
   defp do_expand({:^, _meta, [arg]}, s, e) do
-    # elixir raises here pin_outside_of_match
+    # elixir raises here pin_outside_of_match (and marks tainted_function;
+    # upstream commit 5bad452d0).
     # try to recover from error by dropping the pin and expanding arg
-    expand(arg, s, e)
+    {arg, s, e} = expand(arg, s, e)
+    {arg, %{s | tainted_function: true}, e}
   end
 
-  defp do_expand({:_, meta, kind} = var, s, e) when is_atom(kind) do
+  defp do_expand({:_, meta, kind} = var, s, %{context: context} = e) when is_atom(kind) do
     # Stamp a {:version, N} on `_` and bump the counter (1.20+ only —
     # upstream commit 603602e67 — reverse arrows). Pre-1.20 the underscore
     # passes through with no meta change.
-    # elixir raises unbound_underscore if context is not match (handled
-    # implicitly here by recovery — we still return the var either way).
+    # elixir raises unbound_underscore if context is not match (commit
+    # 5bad452d0 also marks tainted_function in the non-match branch).
+    s = if context == :match, do: s, else: %{s | tainted_function: true}
+
     if @stamp_version do
       {meta, s} = stamp_version(meta, s)
       {{:_, meta, kind}, s, e}
@@ -739,8 +758,9 @@ defmodule ElixirSense.Core.Compiler do
 
           # elixir plans to remove this clause on v2.0
           {:ok, :raise} ->
-            # elixir raises here undefined_var
-            {{name, meta, kind}, s, e}
+            # elixir raises here undefined_var and marks tainted_function
+            # (upstream commit 5bad452d0).
+            {{name, meta, kind}, %{s | tainted_function: true}, e}
 
           # elixir plans to remove this clause on v2.0
           _ when error == :warn ->
@@ -748,12 +768,13 @@ defmodule ElixirSense.Core.Compiler do
             expand({name, [{:if_undefined, :warn} | meta], []}, s, e)
 
           _ when error == :pin ->
-            # elixir raises here undefined_var_pin
-            {{name, meta, kind}, s, e}
+            # elixir raises here undefined_var_pin (marks tainted_function)
+            {{name, meta, kind}, %{s | tainted_function: true}, e}
 
           _ ->
             # elixir raises here undefined_var and attaches span meta
-            {{name, meta, kind}, s, e}
+            # (marks tainted_function)
+            {{name, meta, kind}, %{s | tainted_function: true}, e}
         end
     end
   end
@@ -2848,6 +2869,38 @@ defmodule ElixirSense.Core.Compiler do
            ]}
         ]
       ) do
+    rewrite_case_clauses(false_meta, false_expr, true_meta, true_expr)
+  end
+
+  # Elixir 1.20+ shape for `if`/`unless`-generated case clauses, after the
+  # `Kernel.in/2` rewrite. Upstream commit 19c628ae2 — Mark individual guards
+  # of `||`, `&&`, `if`, and `unless` as generated. Same simplification, just
+  # matched against the post-rewrite `orelse`/`=:=` form.
+  def rewrite_case_clauses(
+        do: [
+          {:->, false_meta,
+           [
+             [
+               {:when, _,
+                [
+                  {var_name, _, Kernel},
+                  {{:., _, [:erlang, :orelse]}, _,
+                   [
+                     {{:., _, [:erlang, :"=:="]}, _, [{var_name, _, Kernel}, false]},
+                     {{:., _, [:erlang, :"=:="]}, _, [{var_name, _, Kernel}, nil]}
+                   ]}
+                ]}
+             ],
+             false_expr
+           ]},
+          {:->, true_meta,
+           [
+             [{:_, _, _}],
+             true_expr
+           ]}
+        ]
+      )
+      when is_atom(var_name) do
     rewrite_case_clauses(false_meta, false_expr, true_meta, true_expr)
   end
 

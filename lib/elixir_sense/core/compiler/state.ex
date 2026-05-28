@@ -68,6 +68,11 @@ defmodule ElixirSense.Core.Compiler.State do
           prematch: atom | tuple,
           stacktrace: boolean(),
           caller: boolean(),
+          # Mirrors upstream #elixir_ex.tainted_function — set when a match-
+          # context error path (^pin / _ / undefined-var) was hit, so a later
+          # remote dispatch can suppress false positives. Upstream commits
+          # 5bad452d0 + 8bc9a2ed1.
+          tainted_function: boolean(),
           runtime_modules: list(module),
           first_alias_positions: map(),
           moduledoc_positions: map(),
@@ -107,6 +112,7 @@ defmodule ElixirSense.Core.Compiler.State do
             prematch: :raise,
             stacktrace: false,
             caller: false,
+            tainted_function: false,
             runtime_modules: [],
             first_alias_positions: %{},
             moduledoc_positions: %{},
