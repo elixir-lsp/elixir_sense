@@ -27,7 +27,14 @@ defmodule ElixirSense.Core.Compiler.Map do
               |> Elixir.Map.to_list()
               |> Enum.sort()
 
-            {struct_assocs, se} = Compiler.Quote.escape(without_keys, :escape, false, se)
+            # Use {:struct, Module} op (not plain :escape) so quote.escape will
+            # skip calling Module.__escape__/1 on values whose struct type is
+            # `e_left` itself. Mirrors upstream commit e07f0117b — Improve error
+            # message when escaping default values with custom rules in structs.
+            # Crucial on OTP 28.1+ where Regex defines `__escape__/1` and would
+            # otherwise be infinitely re-escaped.
+            {struct_assocs, se} =
+              Compiler.Quote.escape(without_keys, {:struct, e_left}, false, se)
 
             {{:%, meta, [e_left, {:%{}, map_meta, struct_assocs ++ assocs}]}, se, ee}
 

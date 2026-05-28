@@ -1962,9 +1962,9 @@ defmodule ElixirSense.Core.Compiler do
     has_unquotes = unquoted_call or unquoted_expr
 
     # if there are unquote fragments in either call or body elixir escapes both and evaluates
-    # if unquoted_expr or unquoted_call, do: __MODULE__.Quote.escape({call, expr}, :none, true)
+    # if unquoted_expr or unquoted_call, do: __MODULE__.Quote.escape({call, expr}, :escape, true)
     # instead we try to expand the call and body ignoring the unquotes
-    # 
+    # (Note: op was renamed `:none` → `:escape` upstream — commit 2ee1d0eb7.)
 
     {name_and_args, guards} = __MODULE__.Utils.extract_guards(call)
 
