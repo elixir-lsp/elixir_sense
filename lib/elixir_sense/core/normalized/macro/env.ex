@@ -44,9 +44,29 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
       end
     end
 
+    # Mirror upstream commit 67042e877 — Stop propagating `generated` on macro
+    # arguments. Adds `{:stop_generated, true}` to each arg's meta so the
+    # host's `:elixir_quote.linify_with_context_counter/3` won't propagate
+    # `:generated` from a generated macro into the user's args. Only meaningful
+    # on Elixir 1.20+ (the host's linify gained the `stop_generated` handling
+    # in the same commit); on older hosts it would just leave a harmless
+    # meta key behind, but we gate to avoid AST shape divergence in tests.
+    @stop_generated_on_args Version.match?(System.version(), ">= 1.20.0-dev")
+
+    defp stop_generated(args) do
+      if @stop_generated_on_args do
+        Enum.map(args, fn
+          {call, meta, ctx} when is_list(meta) -> {call, [{:stop_generated, true} | meta], ctx}
+          other -> other
+        end)
+      else
+        args
+      end
+    end
+
     defp wrap_expansion(receiver, expander, _meta, _name, _arity, env, _opts) do
       fn expansion_meta, args ->
-        quoted = expander.(args, env)
+        quoted = expander.(stop_generated(args), env)
         next = :elixir_module.next_counter(env.module)
 
         if Version.match?(System.version(), ">= 1.14.0-dev") do
@@ -658,9 +678,23 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
       fn args, caller -> expand_macro_fun(meta, fun, receiver, name, args, caller, e) end
     end
 
+    # See top-level @stop_generated_on_args (same upstream commit 67042e877).
+    @stop_generated_on_args Version.match?(System.version(), ">= 1.20.0-dev")
+
+    defp stop_generated(args) do
+      if @stop_generated_on_args do
+        Enum.map(args, fn
+          {call, meta, ctx} when is_list(meta) -> {call, [{:stop_generated, true} | meta], ctx}
+          other -> other
+        end)
+      else
+        args
+      end
+    end
+
     defp expand_macro_fun(meta, fun, receiver, name, args, caller, e) do
       try do
-        apply(fun, [caller | args])
+        apply(fun, [caller | stop_generated(args)])
       catch
         kind, reason ->
           arity = length(args)
