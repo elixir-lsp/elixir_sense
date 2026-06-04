@@ -1858,8 +1858,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  %VarInfo{
                    name: :other,
                    type:
-                     {:call, {:atom, Kernel}, :elem,
-                      [{:attribute, :myattribute}, {:integer, 0}]}
+                     {:call, {:atom, Kernel}, :elem, [{:attribute, :myattribute}, {:integer, 0}]}
                  },
                  %VarInfo{
                    name: :var,

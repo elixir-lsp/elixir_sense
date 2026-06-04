@@ -6,9 +6,9 @@ defmodule ElixirSense.Core.Compiler.Quote do
   # from `:elixir_quote.shallow_validate_ast/1` to `:elixir_quote.unquote/1`
   # (the old name is kept exported for back-compat). Pick the right one for
   # the host so test-side equality with `:elixir_expand.expand` holds.
-  @unquote_validator (if Version.match?(System.version(), ">= 1.20.0-dev"),
-                        do: :unquote,
-                        else: :shallow_validate_ast)
+  @unquote_validator if Version.match?(System.version(), ">= 1.20.0-dev"),
+                       do: :unquote,
+                       else: :shallow_validate_ast
 
   defstruct line: false,
             file: nil,

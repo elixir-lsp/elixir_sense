@@ -633,8 +633,7 @@ defmodule ElixirSense.Core.Compiler do
         # don't emit the warning — ElixirSense's diagnostic surfaces differ.
         # we may have cursor in arg
         # restore prematch and vars
-        {{:^, meta, [arg]},
-         %{ss | prematch: s.prematch, vars: s.vars, tainted_function: true}, e}
+        {{:^, meta, [arg]}, %{ss | prematch: s.prematch, vars: s.vars, tainted_function: true}, e}
     end
   end
 
