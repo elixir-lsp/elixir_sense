@@ -9,73 +9,125 @@ defmodule ElixirSense.Core.CompilerTest do
   defp to_quoted!(string, false),
     do: Code.string_to_quoted!(string, columns: true, token_metadata: true)
 
-  if Version.match?(System.version(), ">= 1.17.0") do
-    Record.defrecordp(:elixir_ex,
-      caller: false,
-      prematch: if(Version.match?(System.version(), ">= 1.18.0"), do: :none, else: :raise),
-      stacktrace: false,
-      unused: {%{}, 0},
-      runtime_modules: [],
-      vars: {%{}, false}
-    )
-
-    defp elixir_ex_to_map(
-           elixir_ex(
-             caller: caller,
-             prematch: prematch,
-             stacktrace: stacktrace,
-             unused: {_, unused},
-             runtime_modules: runtime_modules,
-             vars: vars
-           )
-         ) do
-      %{
-        caller: caller,
-        prematch: prematch,
-        stacktrace: stacktrace,
-        unused: unused,
-        runtime_modules: runtime_modules,
-        vars: vars
-      }
-    end
-  else
-    Record.defrecordp(:elixir_ex,
-      caller: false,
-      prematch: %State{
-        prematch:
-          if Version.match?(System.version(), ">= 1.15.0") do
-            Code.get_compiler_option(:on_undefined_variable)
-          else
-            :warn
-          end
-      },
-      stacktrace: false,
-      unused: {%{}, 0},
-      vars: {%{}, false}
-    )
-
-    defp elixir_ex_to_map(
-           elixir_ex(
-             caller: caller,
-             prematch: prematch,
-             stacktrace: stacktrace,
-             unused: {_, unused},
-             vars: vars
-           )
-         ) do
-      %{
-        caller: caller,
-        prematch: prematch,
-        stacktrace: stacktrace,
-        unused: unused,
+  cond do
+    Version.match?(System.version(), ">= 1.20.0-dev") ->
+      # Upstream 1.20 (commit 5bad452d0 + 603602e67) split the old
+      # `unused = {Map, Counter}` field into two — `unused = #{}` (still a map
+      # of unused vars) and `version = 0` (the counter). It also added
+      # `tainted_function`. The new record field order must match elixir.hrl.
+      Record.defrecordp(:elixir_ex,
+        tainted_function: false,
+        caller: false,
+        prematch: :none,
+        stacktrace: false,
+        unused: %{},
         runtime_modules: [],
-        vars: vars
-      }
-    end
+        vars: {%{}, false},
+        version: 0
+      )
+
+      defp elixir_ex_to_map(
+             elixir_ex(
+               tainted_function: tainted_function,
+               caller: caller,
+               prematch: prematch,
+               stacktrace: stacktrace,
+               version: version,
+               runtime_modules: runtime_modules,
+               vars: vars
+             )
+           ) do
+        %{
+          caller: caller,
+          prematch: prematch,
+          stacktrace: stacktrace,
+          tainted_function: tainted_function,
+          # ES still uses a single `unused` integer counter, which corresponds
+          # to upstream's `version` field on 1.20+.
+          unused: version,
+          runtime_modules: runtime_modules,
+          vars: vars
+        }
+      end
+
+    Version.match?(System.version(), ">= 1.17.0") ->
+      Record.defrecordp(:elixir_ex,
+        caller: false,
+        prematch: if(Version.match?(System.version(), ">= 1.18.0"), do: :none, else: :raise),
+        stacktrace: false,
+        unused: {%{}, 0},
+        runtime_modules: [],
+        vars: {%{}, false}
+      )
+
+      defp elixir_ex_to_map(
+             elixir_ex(
+               caller: caller,
+               prematch: prematch,
+               stacktrace: stacktrace,
+               unused: {_, unused},
+               runtime_modules: runtime_modules,
+               vars: vars
+             )
+           ) do
+        %{
+          caller: caller,
+          prematch: prematch,
+          stacktrace: stacktrace,
+          tainted_function: false,
+          unused: unused,
+          runtime_modules: runtime_modules,
+          vars: vars
+        }
+      end
+
+    true ->
+      Record.defrecordp(:elixir_ex,
+        caller: false,
+        prematch: %State{
+          prematch:
+            if Version.match?(System.version(), ">= 1.15.0") do
+              Code.get_compiler_option(:on_undefined_variable)
+            else
+              :warn
+            end
+        },
+        stacktrace: false,
+        unused: {%{}, 0},
+        vars: {%{}, false}
+      )
+
+      defp elixir_ex_to_map(
+             elixir_ex(
+               caller: caller,
+               prematch: prematch,
+               stacktrace: stacktrace,
+               unused: {_, unused},
+               vars: vars
+             )
+           ) do
+        %{
+          caller: caller,
+          prematch: prematch,
+          stacktrace: stacktrace,
+          tainted_function: false,
+          unused: unused,
+          runtime_modules: [],
+          vars: vars
+        }
+      end
   end
 
   defp state_to_map(%State{} = state) do
-    Map.take(state, [:caller, :prematch, :stacktrace, :unused, :runtime_modules, :vars])
+    Map.take(state, [
+      :caller,
+      :prematch,
+      :stacktrace,
+      :tainted_function,
+      :unused,
+      :runtime_modules,
+      :vars
+    ])
   end
 
   defp expand(ast) do
@@ -959,10 +1011,23 @@ defmodule ElixirSense.Core.CompilerTest do
     assert_expansion(code)
   end
 
+  # Strips `:generated` from any meta list. On 1.20+ the host's
+  # `:elixir_quote.linify_with_context_counter` propagates `generated: true`
+  # into intermediate nodes of macro expansions (notably `Kernel.in/2`'s range
+  # check). ES doesn't track that metadata because it has its own type
+  # inference; for comparison parity we normalize both sides.
+  defp strip_generated_meta(ast) do
+    Macro.prewalk(ast, fn
+      {form, meta, args} when is_list(meta) -> {form, Keyword.delete(meta, :generated), args}
+      other -> other
+    end)
+  end
+
   defp clean_capture_arg(ast) do
     {ast, _} =
-      Macro.prewalk(ast, nil, fn
-        {{:., _, [:elixir_quote, :shallow_validate_ast]}, _, [inner]} = node, state ->
+      Macro.prewalk(strip_generated_meta(ast), nil, fn
+        {{:., _, [:elixir_quote, validator]}, _, [inner]} = node, state
+        when validator in [:shallow_validate_ast, :unquote] ->
           if Version.match?(System.version(), "< 1.18.0") do
             {inner, state}
           else
@@ -1021,7 +1086,7 @@ defmodule ElixirSense.Core.CompilerTest do
 
   defp clean_capture_arg_elixir(ast) do
     {ast, _} =
-      Macro.prewalk(ast, nil, fn
+      Macro.prewalk(strip_generated_meta(ast), nil, fn
         {:->, meta, args}, state ->
           meta =
             if Version.match?(System.version(), "< 1.18.0") do

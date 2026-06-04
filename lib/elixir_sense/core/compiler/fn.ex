@@ -5,6 +5,10 @@ defmodule ElixirSense.Core.Compiler.Fn do
   alias ElixirSense.Core.Compiler.Utils
   alias ElixirSense.Core.Compiler.State
 
+  # See ElixirSense.Core.Compiler.@stamp_version — gates version stamping
+  # on `fn` to host Elixir 1.20+ (commit 603602e67 — reverse arrows).
+  @stamp_version Version.match?(System.version(), ">= 1.20.0-dev")
+
   def expand(meta, clauses, s, e) when is_list(clauses) do
     transformer = fn
       {:->, _, [_left, _right]} = clause, sa ->
@@ -19,6 +23,15 @@ defmodule ElixirSense.Core.Compiler.Fn do
     end
 
     {e_clauses, se} = Enum.map_reduce(clauses, s, transformer)
+
+    # Stamp a {:version, N} on `fn` (1.20+ only — commit 603602e67).
+    {meta, se} =
+      if @stamp_version do
+        counter = se.unused
+        {[{:version, counter} | meta], %{se | unused: counter + 1}}
+      else
+        {meta, se}
+      end
 
     {{:fn, meta, e_clauses}, se, e}
   end

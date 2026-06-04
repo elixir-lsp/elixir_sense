@@ -369,21 +369,8 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
   defp expand_receive({:after, expr}, s, e) when not is_list(expr) do
     # elixir raises here multiple_after_clauses_in_receive
-    case expr do
-      expr when not is_list(expr) ->
-        # try to recover from error by wrapping the expression in list
-        expand_receive({:after, [expr]}, s, e)
-
-      [first | discarded] ->
-        # try to recover from error by taking first clause only
-        # expand other in case there's cursor
-        {_ast, s, _e} = Compiler.expand(discarded, s, e)
-        expand_receive({:after, [first]}, s, e)
-
-      [] ->
-        # try to recover from error by inserting a fake clause
-        expand_receive({:after, [{:->, [], [[0], :ok]}]}, s, e)
-    end
+    # try to recover from error by wrapping the expression in list
+    expand_receive({:after, [expr]}, s, e)
   end
 
   # with

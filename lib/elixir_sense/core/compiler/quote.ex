@@ -2,6 +2,14 @@ defmodule ElixirSense.Core.Compiler.Quote do
   alias ElixirSense.Core.Compiler.Dispatch
   alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
 
+  # Upstream commit 3a038d176 renamed the runtime unquote-validation callback
+  # from `:elixir_quote.shallow_validate_ast/1` to `:elixir_quote.unquote/1`
+  # (the old name is kept exported for back-compat). Pick the right one for
+  # the host so test-side equality with `:elixir_expand.expand` holds.
+  @unquote_validator (if Version.match?(System.version(), ">= 1.20.0-dev"),
+                        do: :unquote,
+                        else: :shallow_validate_ast)
+
   defstruct line: false,
             file: nil,
             context: nil,
@@ -203,7 +211,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
        )
        when is_list(meta) do
     if validate do
-      {{{:., meta, [:elixir_quote, :shallow_validate_ast]}, meta, [expr]}, state}
+      {{{:., meta, [:elixir_quote, @unquote_validator]}, meta, [expr]}, state}
     else
       {expr, state}
     end
@@ -545,10 +553,10 @@ defmodule ElixirSense.Core.Compiler.Quote do
          bitstring
 
        size ->
-         <<bits::size(size), bytes::binary>> = bitstring
+         <<bits::size(^size), bytes::binary>> = bitstring
 
          {:<<>>, [],
-          [{:"::", [], [bits, {size, [], [size]}]}, {:"::", [], [bytes, {:binary, [], nil}]}]}
+          [{:"::", [], [bits, {:size, [], [size]}]}, {:"::", [], [bytes, {:binary, [], nil}]}]}
      end, state}
   end
 

@@ -620,11 +620,28 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Map.keys(state.lines_to_env[1].versioned_vars) == []
       assert [] = state |> get_line_vars(1)
 
-      assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
+      # On 1.20+, the env snapshot at the second generator line includes
+      # `cde` (the var being bound on that line) — this matches a downstream
+      # expectation that the cursor at line N can see vars introduced on
+      # that same line.
+      if Version.match?(System.version(), ">= 1.20.0-dev") do
+        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}, {:cde, nil}]
+      else
+        assert Map.keys(state.lines_to_env[2].versioned_vars) == [{:abc, nil}]
+      end
 
-      assert [
-               %VarInfo{name: :abc, positions: [{1, 5}]}
-             ] = state |> get_line_vars(2)
+      # Same as above — on 1.20+, `cde` becomes visible at the line where
+      # it's bound.
+      if Version.match?(System.version(), ">= 1.20.0-dev") do
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 5}]},
+                 %VarInfo{name: :cde, positions: [{2, 3}]}
+               ] = state |> get_line_vars(2)
+      else
+        assert [
+                 %VarInfo{name: :abc, positions: [{1, 5}]}
+               ] = state |> get_line_vars(2)
+      end
 
       assert Map.keys(state.lines_to_env[4].versioned_vars) == [
                {:abc, nil},
@@ -1832,21 +1849,40 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
              ]
 
-      assert [
-               %VarInfo{
-                 name: :other,
-                 type: {
-                   :call,
-                   {:atom, :erlang},
-                   :element,
-                   [{:integer, 1}, {:attribute, :myattribute}]
+      # Upstream 1.20 (commit 87582af54) stopped rewriting Kernel.elem/2 to
+      # `:erlang.element/2` at the expansion level (the rewrite now happens
+      # later in the Erlang pass). ES delegates to `:elixir_rewrite`, so on
+      # 1.20+ `elem/2` stays as `Kernel.elem(arg, index)` (original arg order).
+      if Version.match?(System.version(), ">= 1.20.0-dev") do
+        assert [
+                 %VarInfo{
+                   name: :other,
+                   type:
+                     {:call, {:atom, Kernel}, :elem,
+                      [{:attribute, :myattribute}, {:integer, 0}]}
+                 },
+                 %VarInfo{
+                   name: :var,
+                   type: {:tuple_nth, {:attribute, :myattribute}, 1}
                  }
-               },
-               %VarInfo{
-                 name: :var,
-                 type: {:tuple_nth, {:attribute, :myattribute}, 1}
-               }
-             ] = state |> get_line_vars(5)
+               ] = state |> get_line_vars(5)
+      else
+        assert [
+                 %VarInfo{
+                   name: :other,
+                   type: {
+                     :call,
+                     {:atom, :erlang},
+                     :element,
+                     [{:integer, 1}, {:attribute, :myattribute}]
+                   }
+                 },
+                 %VarInfo{
+                   name: :var,
+                   type: {:tuple_nth, {:attribute, :myattribute}, 1}
+                 }
+               ] = state |> get_line_vars(5)
+      end
 
       assert [
                %VarInfo{
@@ -1945,12 +1981,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :b, type: {:variable, :a, 0}}
              ] = state |> get_line_vars(5)
 
-      assert [
-               %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
-               %VarInfo{name: :a1, type: {:attribute, :myattribute}},
-               %VarInfo{name: :a2, type: {:for_expression, {:variable, :a1, 3}}},
-               %VarInfo{name: :b, type: {:variable, :a, 2}}
-             ] = state |> get_line_vars(10)
+      # Upstream 1.20 (commit 603602e67) bumps the version counter at each
+      # `for`, so var versions shift by 1 relative to 1.19.
+      if Version.match?(System.version(), ">= 1.20.0-dev") do
+        assert [
+                 %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
+                 %VarInfo{name: :a1, type: {:attribute, :myattribute}},
+                 %VarInfo{name: :a2, type: {:for_expression, {:variable, :a1, 4}}},
+                 %VarInfo{name: :b, type: {:variable, :a, 3}}
+               ] = state |> get_line_vars(10)
+      else
+        assert [
+                 %VarInfo{name: :a, type: {:for_expression, {:attribute, :myattribute}}},
+                 %VarInfo{name: :a1, type: {:attribute, :myattribute}},
+                 %VarInfo{name: :a2, type: {:for_expression, {:variable, :a1, 3}}},
+                 %VarInfo{name: :b, type: {:variable, :a, 2}}
+               ] = state |> get_line_vars(10)
+      end
     end
 
     test "map destructuring" do
@@ -2159,10 +2206,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{type: {:atom, Atom}}
              ] = state |> get_line_vars(16)
 
-      assert [
-               %VarInfo{name: :other, type: {:variable, :var, 5}},
-               %VarInfo{type: {:atom, Atom}}
-             ] = state |> get_line_vars(18)
+      # Version counter shifts on 1.20+ (extra bumps from case/fn/for, etc.).
+      if Version.match?(System.version(), ">= 1.20.0-dev") do
+        assert [
+                 %VarInfo{name: :other, type: {:variable, :var, 7}},
+                 %VarInfo{type: {:atom, Atom}}
+               ] = state |> get_line_vars(18)
+      else
+        assert [
+                 %VarInfo{name: :other, type: {:variable, :var, 5}},
+                 %VarInfo{type: {:atom, Atom}}
+               ] = state |> get_line_vars(18)
+      end
     end
 
     test "call binding" do
@@ -4153,33 +4208,65 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
 
     test "exception guards" do
-      assert %VarInfo{
-               name: :x,
-               type: {
-                 :intersection,
-                 [
-                   {:map, [{:__exception__, {:atom, true}}], nil},
-                   {:map, [{:__exception__, nil}], nil},
-                   {:struct, [], nil, nil},
-                   {:map, [], nil}
-                 ]
-               }
-             } = var_with_guards("is_exception(x)")
+      # Upstream 1.20 (commit 245066b40) relaxed `is_exception/1,2` to assert
+      # only on the *presence* of the `__exception__` key, not its value being
+      # `true`. The first `{:map, [__exception__: {:atom, true}], nil}` arm
+      # therefore drops out of the inferred type.
+      if Version.match?(System.version(), ">= 1.20.0-dev") do
+        assert %VarInfo{
+                 name: :x,
+                 type: {
+                   :intersection,
+                   [
+                     {:map, [{:__exception__, nil}], nil},
+                     {:struct, [], nil, nil},
+                     {:map, [], nil}
+                   ]
+                 }
+               } = var_with_guards("is_exception(x)")
 
-      assert %VarInfo{
-               name: :x,
-               type: {
-                 :intersection,
-                 [
-                   {:map, [{:__exception__, {:atom, true}}], nil},
-                   {:map, [{:__exception__, nil}], nil},
-                   {:struct, [], {:atom, ArgumentError}, nil},
-                   {:map, [], nil},
-                   {:struct, [], nil, nil}
-                 ]
-               }
-             } =
-               var_with_guards("is_exception(x, ArgumentError)")
+        assert %VarInfo{
+                 name: :x,
+                 type: {
+                   :intersection,
+                   [
+                     {:map, [{:__exception__, nil}], nil},
+                     {:struct, [], {:atom, ArgumentError}, nil},
+                     {:map, [], nil},
+                     {:struct, [], nil, nil}
+                   ]
+                 }
+               } =
+                 var_with_guards("is_exception(x, ArgumentError)")
+      else
+        assert %VarInfo{
+                 name: :x,
+                 type: {
+                   :intersection,
+                   [
+                     {:map, [{:__exception__, {:atom, true}}], nil},
+                     {:map, [{:__exception__, nil}], nil},
+                     {:struct, [], nil, nil},
+                     {:map, [], nil}
+                   ]
+                 }
+               } = var_with_guards("is_exception(x)")
+
+        assert %VarInfo{
+                 name: :x,
+                 type: {
+                   :intersection,
+                   [
+                     {:map, [{:__exception__, {:atom, true}}], nil},
+                     {:map, [{:__exception__, nil}], nil},
+                     {:struct, [], {:atom, ArgumentError}, nil},
+                     {:map, [], nil},
+                     {:struct, [], nil, nil}
+                   ]
+                 }
+               } =
+                 var_with_guards("is_exception(x, ArgumentError)")
+      end
 
       assert %VarInfo{
                name: :x,
@@ -5041,7 +5128,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Keyword.keys(macros) == [Protocol, Kernel]
       kernel_macros = Keyword.fetch!(macros, Kernel)
       assert {:def, 1} not in kernel_macros
-      assert {:defdelegate, 2} not in kernel_macros
+      # Upstream 1.20 (commit 4a8d4f29a) relaxed defprotocol's
+      # `import Kernel, except: [...]` to only exclude `def/1` and `def/2`;
+      # `defdelegate/2`, `defguard/1`, `defguardp/1` are now allowed inside
+      # the protocol module body.
+      if Version.match?(System.version(), "< 1.20.0-dev") do
+        assert {:defdelegate, 2} not in kernel_macros
+      end
+
       assert {:def, 1} in Keyword.fetch!(macros, Protocol)
     end
   end
