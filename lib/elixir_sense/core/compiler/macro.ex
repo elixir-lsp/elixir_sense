@@ -194,7 +194,9 @@ defmodule ElixirSense.Core.Compiler.Macro do
   @spec escape(term, term, keyword) :: Macro.t()
   def escape(expr, state, opts \\ []) do
     unquote = Keyword.get(opts, :unquote, false)
-    kind = if Keyword.get(opts, :prune_metadata, false), do: :prune_metadata, else: :none
+    # Upstream renamed the op atoms in commit 2ee1d0eb7:
+    # `:none → :escape`, `:prune_metadata → :escape_and_prune`.
+    kind = if Keyword.get(opts, :prune_metadata, false), do: :escape_and_prune, else: :escape
     ElixirSense.Core.Compiler.Quote.escape(expr, kind, unquote, state)
   end
 end

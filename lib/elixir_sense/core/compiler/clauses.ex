@@ -4,6 +4,10 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   alias ElixirSense.Core.Compiler.State
   alias ElixirSense.Core.TypeInference
 
+  # See ElixirSense.Core.Compiler.@stamp_version — gates version stamping
+  # on `with` to host Elixir 1.20+ (commit 603602e67 — reverse arrows).
+  @stamp_version Version.match?(System.version(), ">= 1.20.0-dev")
+
   def parallel_match(meta, expr, s, e = %{context: :match}) do
     %{vars: {_read, write}} = s
 
@@ -365,21 +369,8 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
   defp expand_receive({:after, expr}, s, e) when not is_list(expr) do
     # elixir raises here multiple_after_clauses_in_receive
-    case expr do
-      expr when not is_list(expr) ->
-        # try to recover from error by wrapping the expression in list
-        expand_receive({:after, [expr]}, s, e)
-
-      [first | discarded] ->
-        # try to recover from error by taking first clause only
-        # expand other in case there's cursor
-        {_ast, s, _e} = Compiler.expand(discarded, s, e)
-        expand_receive({:after, [first]}, s, e)
-
-      [] ->
-        # try to recover from error by inserting a fake clause
-        expand_receive({:after, [{:->, [], [[0], :ok]}]}, s, e)
-    end
+    # try to recover from error by wrapping the expression in list
+    expand_receive({:after, [expr]}, s, e)
   end
 
   # with
@@ -397,6 +388,15 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     {e_exprs, {s1, e1}} = Enum.map_reduce(exprs, {s0, e}, &expand_with/2)
     {e_do, opts1, s2} = expand_with_do(meta, opts0, s, s1, e1)
     {e_opts, _opts2, s3} = expand_with_else(opts1, s2, e)
+
+    # Stamp a {:version, N} on `with` (1.20+ only — commit 603602e67).
+    {meta, s3} =
+      if @stamp_version do
+        counter = s3.unused
+        {[{:version, counter} | meta], %{s3 | unused: counter + 1}}
+      else
+        {meta, s3}
+      end
 
     {{:with, meta, e_exprs ++ [[{:do, e_do} | e_opts]]}, s3, e}
   end

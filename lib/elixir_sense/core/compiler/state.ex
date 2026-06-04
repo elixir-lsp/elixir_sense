@@ -13,8 +13,6 @@ defmodule ElixirSense.Core.Compiler.State do
     AttributeInfo
   }
 
-  require Logger
-
   @type fun_arity :: {atom, non_neg_integer}
   @type scope :: atom | fun_arity | {:typespec, atom, non_neg_integer}
 
@@ -68,6 +66,11 @@ defmodule ElixirSense.Core.Compiler.State do
           prematch: atom | tuple,
           stacktrace: boolean(),
           caller: boolean(),
+          # Mirrors upstream #elixir_ex.tainted_function — set when a match-
+          # context error path (^pin / _ / undefined-var) was hit, so a later
+          # remote dispatch can suppress false positives. Upstream commits
+          # 5bad452d0 + 8bc9a2ed1.
+          tainted_function: boolean(),
           runtime_modules: list(module),
           first_alias_positions: map(),
           moduledoc_positions: map(),
@@ -107,6 +110,7 @@ defmodule ElixirSense.Core.Compiler.State do
             prematch: :raise,
             stacktrace: false,
             caller: false,
+            tainted_function: false,
             runtime_modules: [],
             first_alias_positions: %{},
             moduledoc_positions: %{},
@@ -667,7 +671,11 @@ defmodule ElixirSense.Core.Compiler.State do
         # elixir_ex entries
         # each def starts versioning from 0
         unused: 0,
-        vars: {%{}, false}
+        vars: {%{}, false},
+        # Upstream `env_for_expansion` (elixir_def.erl) reaches each def body
+        # via a fresh `#elixir_ex{}`, so `tainted_function` resets at every
+        # function boundary. Mirror that here.
+        tainted_function: false
     }
   end
 
@@ -702,7 +710,11 @@ defmodule ElixirSense.Core.Compiler.State do
     end
   end
 
-  def remove_func_vars_scope(%__MODULE__{} = state, %{vars: vars, unused: unused}) do
+  def remove_func_vars_scope(%__MODULE__{} = state, %{
+        vars: vars,
+        unused: unused,
+        tainted_function: tainted_function
+      }) do
     %__MODULE__{
       state
       | scope_ids: tl(state.scope_ids),
@@ -711,7 +723,10 @@ defmodule ElixirSense.Core.Compiler.State do
         # restore elixir_ex fields
         vars: vars,
         # restore versioning
-        unused: unused
+        unused: unused,
+        # tainted_function is per-function-scope upstream (env_for_expansion
+        # creates a fresh #elixir_ex), so restore the outer scope's value.
+        tainted_function: tainted_function
     }
   end
 

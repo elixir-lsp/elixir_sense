@@ -14,15 +14,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - elixir: 1.15.x
-            otp: 24.x
-            tests_may_fail: false
-          - elixir: 1.15.x
-            otp: 25.x
-            tests_may_fail: false
-          - elixir: 1.15.x
-            otp: 26.x
-            tests_may_fail: false
           - elixir: 1.16.x
             otp: 24.x
             tests_may_fail: false
@@ -58,6 +49,17 @@ jobs:
             tests_may_fail: false
           - elixir: 1.19.x
             otp: 28.x
+            tests_may_fail: false
+          # Elixir 1.20 dropped OTP 26 support (commit 13024f43c) and added
+          # OTP 29 support.
+          - elixir: 1.20.x
+            otp: 27.x
+            tests_may_fail: false
+          - elixir: 1.20.x
+            otp: 28.x
+            tests_may_fail: false
+          - elixir: 1.20.x
+            otp: 29.x
             tests_may_fail: false
     env:
       MIX_ENV: test
@@ -82,15 +84,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - elixir: 1.15.x
-            otp: 24.x
-            tests_may_fail: false
-          - elixir: 1.15.x
-            otp: 25.x
-            tests_may_fail: false
-          - elixir: 1.15.x
-            otp: 26.x
-            tests_may_fail: false
           - elixir: 1.16.x
             otp: 24.x
             tests_may_fail: false
@@ -126,6 +119,17 @@ jobs:
             tests_may_fail: false
           - elixir: 1.19.x
             otp: 28.x
+            tests_may_fail: false
+          # Elixir 1.20 dropped OTP 26 support (commit 13024f43c) and added
+          # OTP 29 support.
+          - elixir: 1.20.x
+            otp: 27.x
+            tests_may_fail: false
+          - elixir: 1.20.x
+            otp: 28.x
+            tests_may_fail: false
+          - elixir: 1.20.x
+            otp: 29.x
             tests_may_fail: false
     env:
       MIX_ENV: test
@@ -152,8 +156,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - elixir: 1.19.x
-            otp: 28.x
+          - elixir: 1.20.x
+            otp: 29.x
     steps:
       - uses: actions/checkout@v5
       - uses: erlef/setup-beam@v1

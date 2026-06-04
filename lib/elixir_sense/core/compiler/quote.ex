@@ -2,6 +2,14 @@ defmodule ElixirSense.Core.Compiler.Quote do
   alias ElixirSense.Core.Compiler.Dispatch
   alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
 
+  # Upstream commit 3a038d176 renamed the runtime unquote-validation callback
+  # from `:elixir_quote.shallow_validate_ast/1` to `:elixir_quote.unquote/1`
+  # (the old name is kept exported for back-compat). Pick the right one for
+  # the host so test-side equality with `:elixir_expand.expand` holds.
+  @unquote_validator if Version.match?(System.version(), ">= 1.20.0-dev"),
+                       do: :unquote,
+                       else: :shallow_validate_ast
+
   defstruct line: false,
             file: nil,
             context: nil,
@@ -46,7 +54,11 @@ defmodule ElixirSense.Core.Compiler.Quote do
   def has_unquotes({var, _, ctx}, _) when is_atom(var) and is_atom(ctx), do: false
 
   def has_unquotes({name, _, args}, quote_level) when is_list(args) do
-    has_unquotes(name) or Enum.any?(args, fn child -> has_unquotes(child, quote_level) end)
+    # Pass quote_level when recursing into the call head, mirroring upstream fix
+    # https://github.com/elixir-lang/elixir/commit/4d56bdd89 — Do not reset quote
+    # level on calls in `has_unquotes/2`.
+    has_unquotes(name, quote_level) or
+      Enum.any?(args, fn child -> has_unquotes(child, quote_level) end)
   end
 
   def has_unquotes({left, right}, quote_level) do
@@ -199,7 +211,7 @@ defmodule ElixirSense.Core.Compiler.Quote do
        )
        when is_list(meta) do
     if validate do
-      {{{:., meta, [:elixir_quote, :shallow_validate_ast]}, meta, [expr]}, state}
+      {{{:., meta, [:elixir_quote, @unquote_validator]}, meta, [expr]}, state}
     else
       {expr, state}
     end
@@ -541,10 +553,10 @@ defmodule ElixirSense.Core.Compiler.Quote do
          bitstring
 
        size ->
-         <<bits::size(size), bytes::binary>> = bitstring
+         <<bits::size(^size), bytes::binary>> = bitstring
 
          {:<<>>, [],
-          [{:"::", [], [bits, {size, [], [size]}]}, {:"::", [], [bytes, {:binary, [], nil}]}]}
+          [{:"::", [], [bits, {:size, [], [size]}]}, {:"::", [], [bytes, {:binary, [], nil}]}]}
      end, state}
   end
 
@@ -583,9 +595,22 @@ defmodule ElixirSense.Core.Compiler.Quote do
 
   defp do_escape([], _, state), do: {[], state}
 
+  # Fix for upstream commit 514bc86a7 — Macro.escape/1 must recurse with
+  # `do_escape` (not `do_quote_simple_list`, which routes through `do_quote`
+  # and would misinterpret a `:quote` tuple in the tail as a quote AST node).
   defp do_escape([h | t], %__MODULE__{unquote: false} = q, state) do
     {eh, state} = do_escape(h, q, state)
-    do_quote_simple_list(t, eh, q, state)
+
+    case is_list(t) do
+      true ->
+        {et, state} = do_escape(t, q, state)
+        {[eh | et], state}
+
+      # improper list
+      false ->
+        {et, state} = do_escape(t, q, state)
+        {[{:|, [], [eh, et]}], state}
+    end
   end
 
   defp do_escape([h | t], q, state) do

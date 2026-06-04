@@ -2,7 +2,6 @@ defmodule ElixirSense.Log do
   @moduledoc """
   A simple logger for the project that allows it to be muted via application config
   """
-  require Logger
 
   def enabled? do
     Application.get_env(:elixir_sense, :logging_enabled, true)

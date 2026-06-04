@@ -35,9 +35,9 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
   end
 
   defp unwrap(
-         {:fn, [],
+         {:fn, _,
           [
-            {:->, [],
+            {:->, _,
              [
                [
                  {:when, _, [_, guard]}

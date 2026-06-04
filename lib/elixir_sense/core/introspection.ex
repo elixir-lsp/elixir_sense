@@ -620,7 +620,7 @@ defmodule ElixirSense.Core.Introspection do
   defp to_var({name, meta, _}, _) when is_atom(name), do: {name, meta, nil}
   defp to_var({_, _}, _), do: {:tuple, [], nil}
   defp to_var(integer, _) when is_integer(integer), do: {:integer, [], nil}
-  defp to_var(float, _) when is_integer(float), do: {:float, [], nil}
+  defp to_var(float, _) when is_float(float), do: {:float, [], nil}
   defp to_var(list, _) when is_list(list), do: {:list, [], nil}
   defp to_var(atom, _) when is_atom(atom), do: {:atom, [], nil}
   defp to_var(_, position), do: {:"arg#{position}", [], nil}

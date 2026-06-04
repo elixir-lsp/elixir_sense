@@ -127,23 +127,19 @@ defmodule ElixirSense.Providers.Implementation.Locator do
       found_module ->
         found_module = expand(found_module, binding_env)
 
-        cond do
-          maybe_fun == nil or Introspection.is_callback(found_module, maybe_fun, arity, metadata) ->
-            # protocol function call
-            get_locations(found_module, maybe_fun, arity, metadata)
+        if maybe_fun == nil or Introspection.is_callback(found_module, maybe_fun, arity, metadata) do
+          # protocol function call
+          get_locations(found_module, maybe_fun, arity, metadata)
+        else
+          # maybe_fun != nil here — the if branch already handled nil
+          behaviours = Metadata.get_module_behaviours(metadata, env, module)
 
-          maybe_fun != nil ->
-            behaviours = Metadata.get_module_behaviours(metadata, env, module)
-
-            # callback/protocol implementation def
-            for behaviour <- behaviours,
-                Introspection.is_callback(behaviour, maybe_fun, arity, metadata) do
-              get_locations(behaviour, maybe_fun, arity, metadata)
-            end
-            |> List.flatten()
-
-          true ->
-            []
+          # callback/protocol implementation def
+          for behaviour <- behaviours,
+              Introspection.is_callback(behaviour, maybe_fun, arity, metadata) do
+            get_locations(behaviour, maybe_fun, arity, metadata)
+          end
+          |> List.flatten()
         end
     end
     |> Enum.reject(&is_nil/1)

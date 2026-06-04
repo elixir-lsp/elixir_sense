@@ -11,6 +11,25 @@ defmodule ElixirSense.Core.Compiler do
   @trace_key :elixir_sense_trace
   @trace_paused_key :elixir_sense_trace_paused
 
+  # Whether to emit the `{:version, N}` meta stamps on `case`/`cond`/`receive`/
+  # `try`/`with`/`for`/`_` and bump the version counter accordingly. Introduced
+  # in Elixir v1.20 (commit 603602e67 — reverse arrows for case). We gate by
+  # host version so ElixirSense's expansion stays in lock-step with the host
+  # Elixir's `:elixir_expand` output across 1.16–1.20+.
+  @stamp_version Version.match?(System.version(), ">= 1.20.0-dev")
+
+  # Stamps {:version, counter} on meta and bumps the counter — but only when
+  # the host Elixir is 1.20+. On older hosts this is the identity so tests
+  # comparing against `:elixir_expand` stay aligned.
+  defp stamp_version(meta, s) do
+    if @stamp_version do
+      counter = s.unused
+      {[{:version, counter} | meta], %{s | unused: counter + 1}}
+    else
+      {meta, s}
+    end
+  end
+
   def pause_trace do
     Process.put(@trace_paused_key, true)
   end
@@ -460,9 +479,21 @@ defmodule ElixirSense.Core.Compiler do
         _ -> {:{}, [], [:__block__, [], e_binding ++ [e_quoted]]}
       end
 
-    case e_prelude do
-      [] -> {e_binding_quoted, es, eq}
-      _ -> {{:__block__, [], e_prelude ++ [e_binding_quoted]}, es, eq}
+    e_block =
+      case e_prelude do
+        [] -> e_binding_quoted
+        _ -> {:__block__, [], e_prelude ++ [e_binding_quoted]}
+      end
+
+    # Wrap the quote result in a remote call to `elixir_quote.validate_quote/1`
+    # outside of match/guard context. Mirrors upstream commit 3a038d176
+    # (Wrap quote in a function that will implement recursive types) +
+    # the partial revert 7a9ea30d9 that skips the wrap inside match/guard.
+    # 1.20+ only — keeps test parity with host expansion on older hosts.
+    if @stamp_version and e.context == nil do
+      {{{:., meta, [:elixir_quote, :validate_quote]}, meta, [e_block]}, es, eq}
+    else
+      {e_block, es, eq}
     end
   end
 
@@ -512,6 +543,9 @@ defmodule ElixirSense.Core.Compiler do
   defp do_expand({:cond, meta, [opts]}, s, e) do
     # elixir raises underscore_in_cond if the last clause is _
     {e_clauses, sc, ec} = __MODULE__.Clauses.cond(opts, s, e)
+    # Stamp a {:version, N} on the block (1.20+ only — see stamp_version/2).
+    # Mirrors upstream commit 603602e67 (reverse arrows for case).
+    {meta, sc} = stamp_version(meta, sc)
     {{:cond, meta, [e_clauses]}, sc, ec}
   end
 
@@ -521,11 +555,13 @@ defmodule ElixirSense.Core.Compiler do
 
   defp do_expand({:receive, meta, [opts]}, s, e) do
     {e_clauses, sc, ec} = __MODULE__.Clauses.receive(opts, s, e)
+    {meta, sc} = stamp_version(meta, sc)
     {{:receive, meta, [e_clauses]}, sc, ec}
   end
 
   defp do_expand({:try, meta, [opts]}, s, e) do
     {e_clauses, sc, ec} = __MODULE__.Clauses.try(opts, s, e)
+    {meta, sc} = stamp_version(meta, sc)
     {{:try, meta, [e_clauses]}, sc, ec}
   end
 
@@ -592,22 +628,37 @@ defmodule ElixirSense.Core.Compiler do
         {{:^, meta, [var]}, %{s | unused: unused}, e}
 
       {arg, ss, _e} ->
-        # elixir raises here invalid_arg_for_pin
+        # elixir raises here invalid_arg_for_pin (and marks tainted_function;
+        # upstream commit 5bad452d0). We mirror the taint for state parity but
+        # don't emit the warning — ElixirSense's diagnostic surfaces differ.
         # we may have cursor in arg
         # restore prematch and vars
-        {{:^, meta, [arg]}, %{ss | prematch: s.prematch, vars: s.vars}, e}
+        {{:^, meta, [arg]}, %{ss | prematch: s.prematch, vars: s.vars, tainted_function: true}, e}
     end
   end
 
   defp do_expand({:^, _meta, [arg]}, s, e) do
-    # elixir raises here pin_outside_of_match
+    # elixir raises here pin_outside_of_match (and marks tainted_function;
+    # upstream commit 5bad452d0).
     # try to recover from error by dropping the pin and expanding arg
-    expand(arg, s, e)
+    {arg, s, e} = expand(arg, s, e)
+    {arg, %{s | tainted_function: true}, e}
   end
 
-  defp do_expand({:_, _meta, kind} = var, s, e) when is_atom(kind) do
-    # elixir raises unbound_underscore if context is not match
-    {var, s, e}
+  defp do_expand({:_, meta, kind} = var, s, %{context: context} = e) when is_atom(kind) do
+    # Stamp a {:version, N} on `_` and bump the counter (1.20+ only —
+    # upstream commit 603602e67 — reverse arrows). Pre-1.20 the underscore
+    # passes through with no meta change.
+    # elixir raises unbound_underscore if context is not match (commit
+    # 5bad452d0 also marks tainted_function in the non-match branch).
+    s = if context == :match, do: s, else: %{s | tainted_function: true}
+
+    if @stamp_version do
+      {meta, s} = stamp_version(meta, s)
+      {{:_, meta, kind}, s, e}
+    else
+      {var, s, e}
+    end
   end
 
   defp do_expand({name, meta, kind}, s, %{context: :match} = e)
@@ -706,8 +757,9 @@ defmodule ElixirSense.Core.Compiler do
 
           # elixir plans to remove this clause on v2.0
           {:ok, :raise} ->
-            # elixir raises here undefined_var
-            {{name, meta, kind}, s, e}
+            # elixir raises here undefined_var and marks tainted_function
+            # (upstream commit 5bad452d0).
+            {{name, meta, kind}, %{s | tainted_function: true}, e}
 
           # elixir plans to remove this clause on v2.0
           _ when error == :warn ->
@@ -715,12 +767,13 @@ defmodule ElixirSense.Core.Compiler do
             expand({name, [{:if_undefined, :warn} | meta], []}, s, e)
 
           _ when error == :pin ->
-            # elixir raises here undefined_var_pin
-            {{name, meta, kind}, s, e}
+            # elixir raises here undefined_var_pin (marks tainted_function)
+            {{name, meta, kind}, %{s | tainted_function: true}, e}
 
           _ ->
             # elixir raises here undefined_var and attaches span meta
-            {{name, meta, kind}, s, e}
+            # (marks tainted_function)
+            {{name, meta, kind}, %{s | tainted_function: true}, e}
         end
     end
   end
@@ -1908,9 +1961,9 @@ defmodule ElixirSense.Core.Compiler do
     has_unquotes = unquoted_call or unquoted_expr
 
     # if there are unquote fragments in either call or body elixir escapes both and evaluates
-    # if unquoted_expr or unquoted_call, do: __MODULE__.Quote.escape({call, expr}, :none, true)
+    # if unquoted_expr or unquoted_call, do: __MODULE__.Quote.escape({call, expr}, :escape, true)
     # instead we try to expand the call and body ignoring the unquotes
-    # 
+    # (Note: op was renamed `:none` → `:escape` upstream — commit 2ee1d0eb7.)
 
     {name_and_args, guards} = __MODULE__.Utils.extract_guards(call)
 
@@ -2047,11 +2100,14 @@ defmodule ElixirSense.Core.Compiler do
 
         _ ->
           if is_list(expr) and Keyword.has_key?(expr, :do) do
-            # do block with receive/catch/else/after
-            # wrap in try
-            # NOTE origin kind may be not correct here but origin is not used and
-            # elixir uses it only for error messages in elixir_clauses module
-            {:try, [{:origin, def_kind} | meta], [expr]}
+            # do block with receive/catch/else/after — wrap in try.
+            # NOTE origin/definition kind may be not correct here. The meta
+            # annotation is consumed only by error messages in
+            # `:elixir_clauses`. Upstream renamed the key from `:origin` to
+            # `:definition` in 1.20 (commit 40e930607 — Use definition instead
+            # of origin in meta). We emit both so older and newer hosts find
+            # what they expect.
+            {:try, [{:origin, def_kind}, {:definition, def_kind} | meta], [expr]}
           else
             # elixir raises here
             expr
@@ -2589,8 +2645,10 @@ defmodule ElixirSense.Core.Compiler do
 
     {e_expr, se, _ee} = expand_for_do_block(expr, sc, ec, maybe_reduce)
 
-    {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]}, State.remove_vars_scope(se, s),
-     e}
+    sf = State.remove_vars_scope(se, s)
+    # Stamp a {:version, N} on `for` (1.20+ only — commit 603602e67).
+    {meta, sf} = stamp_version(meta, sf)
+    {{:for, meta, e_cases ++ [[{:do, e_expr} | normalized_opts]]}, sf, e}
   end
 
   defp expand_for_do_block([{:->, _, _} | _] = clauses, s, e, false) do
@@ -2791,6 +2849,8 @@ defmodule ElixirSense.Core.Compiler do
       end
 
     {e_opts, so, eo} = __MODULE__.Clauses.case(e_expr, r_opts, se, ee)
+    # Stamp a {:version, N} on `case` (1.20+ only — commit 603602e67).
+    {meta, so} = stamp_version(meta, so)
     {{:case, meta, [e_expr, e_opts]}, so, eo}
   end
 
@@ -2808,6 +2868,38 @@ defmodule ElixirSense.Core.Compiler do
            ]}
         ]
       ) do
+    rewrite_case_clauses(false_meta, false_expr, true_meta, true_expr)
+  end
+
+  # Elixir 1.20+ shape for `if`/`unless`-generated case clauses, after the
+  # `Kernel.in/2` rewrite. Upstream commit 19c628ae2 — Mark individual guards
+  # of `||`, `&&`, `if`, and `unless` as generated. Same simplification, just
+  # matched against the post-rewrite `orelse`/`=:=` form.
+  def rewrite_case_clauses(
+        do: [
+          {:->, false_meta,
+           [
+             [
+               {:when, _,
+                [
+                  {var_name, _, Kernel},
+                  {{:., _, [:erlang, :orelse]}, _,
+                   [
+                     {{:., _, [:erlang, :"=:="]}, _, [{var_name, _, Kernel}, false]},
+                     {{:., _, [:erlang, :"=:="]}, _, [{var_name, _, Kernel}, nil]}
+                   ]}
+                ]}
+             ],
+             false_expr
+           ]},
+          {:->, true_meta,
+           [
+             [{:_, _, _}],
+             true_expr
+           ]}
+        ]
+      )
+      when is_atom(var_name) do
     rewrite_case_clauses(false_meta, false_expr, true_meta, true_expr)
   end
 

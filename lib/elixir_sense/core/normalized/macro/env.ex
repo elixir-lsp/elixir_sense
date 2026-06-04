@@ -44,9 +44,29 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
       end
     end
 
+    # Mirror upstream commit 67042e877 — Stop propagating `generated` on macro
+    # arguments. Adds `{:stop_generated, true}` to each arg's meta so the
+    # host's `:elixir_quote.linify_with_context_counter/3` won't propagate
+    # `:generated` from a generated macro into the user's args. Only meaningful
+    # on Elixir 1.20+ (the host's linify gained the `stop_generated` handling
+    # in the same commit); on older hosts it would just leave a harmless
+    # meta key behind, but we gate to avoid AST shape divergence in tests.
+    @stop_generated_on_args Version.match?(System.version(), ">= 1.20.0-dev")
+
+    defp stop_generated(args) do
+      if @stop_generated_on_args do
+        Enum.map(args, fn
+          {call, meta, ctx} when is_list(meta) -> {call, [{:stop_generated, true} | meta], ctx}
+          other -> other
+        end)
+      else
+        args
+      end
+    end
+
     defp wrap_expansion(receiver, expander, _meta, _name, _arity, env, _opts) do
       fn expansion_meta, args ->
-        quoted = expander.(args, env)
+        quoted = expander.(stop_generated(args), env)
         next = :elixir_module.next_counter(env.module)
 
         if Version.match?(System.version(), ">= 1.14.0-dev") do
@@ -658,9 +678,23 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
       fn args, caller -> expand_macro_fun(meta, fun, receiver, name, args, caller, e) end
     end
 
+    # See top-level @stop_generated_on_args (same upstream commit 67042e877).
+    @stop_generated_on_args Version.match?(System.version(), ">= 1.20.0-dev")
+
+    defp stop_generated(args) do
+      if @stop_generated_on_args do
+        Enum.map(args, fn
+          {call, meta, ctx} when is_list(meta) -> {call, [{:stop_generated, true} | meta], ctx}
+          other -> other
+        end)
+      else
+        args
+      end
+    end
+
     defp expand_macro_fun(meta, fun, receiver, name, args, caller, e) do
       try do
-        apply(fun, [caller | args])
+        apply(fun, [caller | stop_generated(args)])
       catch
         kind, reason ->
           arity = length(args)
@@ -682,9 +716,24 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
     defp prune_stacktrace([{_, _, [caller | _], _} | _], _mfa, info, {:ok, caller}), do: info
     defp prune_stacktrace([{m, f, a, _} | _], {m, f, a}, info, _e), do: info
 
+    # Mirrors upstream commit 5a1fa351d — Fix invalid module reference in
+    # prune_stacktrace. `:elixir_exp` was the historical name (and is still
+    # referenced in older Elixir releases); `:elixir_expand` is the current
+    # one. We keep both so this works across 1.16+.
     defp prune_stacktrace([{mod, _, _, _} | _], _mfa, info, _e)
-         when mod in [:elixir_dispatch, :elixir_exp, __MODULE__],
+         when mod in [:elixir_dispatch, :elixir_exp, :elixir_expand, __MODULE__],
          do: info
+
+    # Also prune ElixirSense's own expansion plumbing so the surfaced trace
+    # focuses on user-relevant frames (the macro being expanded and its caller)
+    # rather than `ElixirSense.Core.Compiler{,.Bitstring,.Quote,...}` internals.
+    defp prune_stacktrace([{mod, _, _, _} = h | t], mfa, info, e) when is_atom(mod) do
+      case Atom.to_string(mod) do
+        "Elixir.ElixirSense.Core.Compiler" -> info
+        "Elixir.ElixirSense.Core.Compiler." <> _ -> info
+        _ -> [h | prune_stacktrace(t, mfa, info, e)]
+      end
+    end
 
     defp prune_stacktrace([h | t], mfa, info, e), do: [h | prune_stacktrace(t, mfa, info, e)]
     defp prune_stacktrace([], _mfa, info, _e), do: info

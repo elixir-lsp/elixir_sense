@@ -54,7 +54,6 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
   alias ElixirSense.Core.TypeInfo
 
   alias ElixirSense.Providers.Utils.Matcher
-  require Logger
 
   @module_results_cache_key :"#{__MODULE__}_module_results_cache"
 
@@ -554,7 +553,10 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
           # include module attributes in module scope
           attribute_names ++ BuiltinAttributes.all()
 
-        _ ->
+        %State.Env{} ->
+          # defensive: outside both a function and a module (e.g. top-level script).
+          # The type checker on 1.20+ infers env always has module != nil at this
+          # call site, but we keep this catch-all for safety.
           []
       end
 

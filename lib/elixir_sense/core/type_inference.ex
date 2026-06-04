@@ -163,10 +163,6 @@ defmodule ElixirSense.Core.TypeInference do
     {:list, type}
   end
 
-  def type_of(list, context) when is_list(list) do
-    {:list, list |> Enum.map(&type_of(&1, context))}
-  end
-
   # block expressions
   def type_of({:__block__, _meta, exprs}, context) do
     case List.last(exprs) do
