@@ -51,14 +51,70 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       refute ElixirTypes.available?(:no_such_capability)
     end
 
-    test "all capabilities are present on Elixir 1.20+" do
-      # This suite runs on >= 1.20; every probed capability should be available.
-      # When the system Elixir is downgraded these expectations relax (see plan).
-      if Version.match?(System.version(), ">= 1.20.0") do
-        caps = ElixirTypes.capabilities()
-        assert caps.expr and caps.pattern_match and caps.head
-        assert caps.previous and caps.reverse_arrow and caps.domain_map_ops
-        assert caps.local_signature
+    test "capability profile matches the running Elixir" do
+      caps = ElixirTypes.capabilities()
+
+      cond do
+        Version.match?(System.version(), ">= 1.20.0") ->
+          # 1.20 has the full surface: expected-type expr, of_match/6, of_head/8,
+          # cross-clause previous + reverse arrows, and domain-aware map ops.
+          assert caps.expr and caps.pattern_match and caps.head
+          assert caps.local_signature
+          assert caps.previous and caps.reverse_arrow and caps.domain_map_ops
+
+        Version.match?(System.version(), ">= 1.19.0") ->
+          # 1.19 has expr/5, of_match/5, of_head/7 and stack/7, but NOT the
+          # 1.20-only cross-clause/reverse-arrow/domain-map machinery. If these
+          # flip, the V19 dispatch assumptions are wrong — fail loudly here.
+          assert caps.expr and caps.pattern_match and caps.head
+          assert caps.local_signature
+          refute caps.previous
+          refute caps.reverse_arrow
+          refute caps.domain_map_ops
+
+        true ->
+          # 1.17/1.18 (no expected-type of_expr/5): the adapter is effectively
+          # off until their backends land.
+          refute caps.expr
+      end
+    end
+  end
+
+  describe "version-dispatched pattern API (1.19 and 1.20)" do
+    setup do
+      original = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+      on_exit(fn -> Application.put_env(:elixir_sense, :use_elixir_types, original) end)
+      :ok
+    end
+
+    # These pin the V19/V20 dispatch (of_match/5-or-6, of_head/7-or-8,
+    # of_domain expected-or-stack) loudly: a broken arity choice degrades to
+    # :error here instead of being silently swallowed by a tolerant assertion.
+
+    test "of_match refines pattern variables when pattern_match is available" do
+      if ElixirTypes.available?(:pattern_match) do
+        pattern = {:%{}, [], [{:name, {:name_var, [version: 1], nil}}]}
+        match = {:=, [], [pattern, {:%{}, [], [{:name, "John"}]}]}
+
+        assert {:ok, vars, _descrs} =
+                 ElixirTypes.of_match(pattern, nil, match, TestModule, {:t, 1}, "t.ex", :dynamic,
+                   target_keys: [{:name_var, 1}]
+                 )
+
+        assert vars[{:name_var, 1}] == {:binary, "John"}
+      end
+    end
+
+    test "infer_local_signature returns a real signature when head is available" do
+      if ElixirTypes.available?(:head) do
+        clauses = [%{meta: [], args: [], guards: nil, body: 42}]
+
+        assert {:infer, _domain, [{[], return}]} =
+                 ElixirTypes.infer_local_signature(MyMod, {:answer, 0}, clauses, "nofile")
+
+        # body `42` is an integer, on both 1.19 and 1.20
+        assert ElixirTypes.to_shape(return) == {:integer, nil}
       end
     end
   end

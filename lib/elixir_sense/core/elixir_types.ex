@@ -169,15 +169,24 @@ defmodule ElixirSense.Core.ElixirTypes do
   # `enabled?/0` is true on any Elixir with `Expr.of_expr/5` (1.19+), but the
   # pattern API changed shape across releases. These helpers dispatch on the
   # actually-exported arity so the adapter works on 1.19 and 1.20 alike instead
-  # of calling 1.20-only forms and silently degrading on 1.19. The current-Elixir
-  # arity is called directly (so Dialyzer's `:unknown` flag can check it); older
-  # arities go through `apply/3`, which carries no static existence requirement.
+  # of calling 1.20-only forms and degrading on 1.19. Every variant arity goes
+  # through `apply/3`: a literal call to the other version's arity would be an
+  # undefined-function compile warning on whichever Elixir is not loaded. The
+  # safety net against upstream drift is the test suite (run on both versions),
+  # not Dialyzer's static `:unknown` check.
 
   # of_match: 1.20 `of_match/6` (adds `meta`); 1.19 `of_match/5`.
   # Both return `{type, context}`.
   defp call_of_match(pattern_ast, expected_fun, expr, meta, stack, context) do
     if loaded_exported?(Module.Types.Pattern, :of_match, 6) do
-      Module.Types.Pattern.of_match(pattern_ast, expected_fun, expr, meta, stack, context)
+      apply(Module.Types.Pattern, :of_match, [
+        pattern_ast,
+        expected_fun,
+        expr,
+        meta,
+        stack,
+        context
+      ])
     else
       apply(Module.Types.Pattern, :of_match, [pattern_ast, expected_fun, expr, stack, context])
     end
@@ -187,11 +196,20 @@ defmodule ElixirSense.Core.ElixirTypes do
   # `of_head/7` (single `tag`, 2-tuple return). Normalized to `{trees, context}`.
   defp call_of_head(args, guards, expected, meta, stack, context) do
     if loaded_exported?(Module.Types.Pattern, :of_head, 8) do
-      previous = Module.Types.Pattern.init_previous()
+      previous = apply(Module.Types.Pattern, :init_previous, [])
       info = {{:def, :def, :infer, expected}, args, guards}
 
       {trees, _precise?, _no_previous_args_types, _previous, clause_ctx} =
-        Module.Types.Pattern.of_head(args, guards, expected, previous, info, meta, stack, context)
+        apply(Module.Types.Pattern, :of_head, [
+          args,
+          guards,
+          expected,
+          previous,
+          info,
+          meta,
+          stack,
+          context
+        ])
 
       {trees, clause_ctx}
     else
@@ -210,10 +228,14 @@ defmodule ElixirSense.Core.ElixirTypes do
   # of_domain: same arity (3) in both, but 1.20 takes `stack` where 1.19 takes
   # the `expected` types list. Tie the choice to the of_head version.
   defp call_of_domain(trees, expected, stack, clause_ctx) do
+    # `apply/3` (rather than a literal call) keeps both branches free of
+    # version-specific contract warnings: 1.19's of_domain/3 contract expects an
+    # `expected` list as the 2nd arg, so a literal `of_domain(trees, stack, ...)`
+    # is flagged as a failing call on 1.19 even though that branch is dead there.
     if loaded_exported?(Module.Types.Pattern, :of_head, 8) do
-      Module.Types.Pattern.of_domain(trees, stack, clause_ctx)
+      apply(Module.Types.Pattern, :of_domain, [trees, stack, clause_ctx])
     else
-      Module.Types.Pattern.of_domain(trees, expected, clause_ctx)
+      apply(Module.Types.Pattern, :of_domain, [trees, expected, clause_ctx])
     end
   end
 
