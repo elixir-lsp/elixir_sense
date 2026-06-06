@@ -340,7 +340,6 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   def maybe_remote_call_sig(_ast, _metadata), do: :error
 
-
   defp module_from_ast(atom, _metadata) when is_atom(atom) do
     {:ok, atom}
   end
@@ -628,11 +627,17 @@ defmodule ElixirSense.Core.ElixirTypes do
       end
     rescue
       e ->
-        Logger.debug("perform_enhanced_match failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+        Logger.debug(
+          "perform_enhanced_match failed: #{Exception.format(:error, e, __STACKTRACE__)}"
+        )
+
         :error
     catch
       kind, payload ->
-        Logger.debug("perform_enhanced_match failed: #{Exception.format(kind, payload, __STACKTRACE__)}")
+        Logger.debug(
+          "perform_enhanced_match failed: #{Exception.format(kind, payload, __STACKTRACE__)}"
+        )
+
         :error
     end
   end
@@ -1176,11 +1181,17 @@ defmodule ElixirSense.Core.ElixirTypes do
         end
       rescue
         e ->
-          Logger.debug("to_shape conversion failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+          Logger.debug(
+            "to_shape conversion failed: #{Exception.format(:error, e, __STACKTRACE__)}"
+          )
+
           nil
       catch
         kind, payload ->
-          Logger.debug("to_shape conversion failed: #{Exception.format(kind, payload, __STACKTRACE__)}")
+          Logger.debug(
+            "to_shape conversion failed: #{Exception.format(kind, payload, __STACKTRACE__)}"
+          )
+
           nil
       end
     else
@@ -1192,28 +1203,57 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp quoted_to_shape(quoted) do
     case quoted do
       # Special types
-      {:term, [], []} -> nil
-      {:none, [], []} -> :none
-      {:dynamic, [], []} -> nil
+      {:term, [], []} ->
+        nil
+
+      {:none, [], []} ->
+        :none
+
+      {:dynamic, [], []} ->
+        nil
+
       # dynamic(inner) — unwrap and convert the inner type
-      {:dynamic, [], [inner]} -> quoted_to_shape(inner)
+      {:dynamic, [], [inner]} ->
+        quoted_to_shape(inner)
 
       # Primitive types
-      {:integer, [], []} -> {:integer, nil}
-      {:float, [], []} -> {:float, nil}
-      {:binary, [], []} -> {:binary, nil}
-      {:atom, [], []} -> :atom
-      {:pid, [], []} -> :pid
-      {:port, [], []} -> :port
-      {:reference, [], []} -> :reference
-      {:empty_list, [], []} -> {:list, :empty}
-      {:empty_map, [], []} -> {:map, [], nil}
-      {:boolean, [], []} -> {:union, [{:atom, false}, {:atom, true}]}
+      {:integer, [], []} ->
+        {:integer, nil}
+
+      {:float, [], []} ->
+        {:float, nil}
+
+      {:binary, [], []} ->
+        {:binary, nil}
+
+      {:atom, [], []} ->
+        :atom
+
+      {:pid, [], []} ->
+        :pid
+
+      {:port, [], []} ->
+        :port
+
+      {:reference, [], []} ->
+        :reference
+
+      {:empty_list, [], []} ->
+        {:list, :empty}
+
+      {:empty_map, [], []} ->
+        {:map, [], nil}
+
+      {:boolean, [], []} ->
+        {:union, [{:atom, false}, {:atom, true}]}
+
       # map() — the map top type with no specific fields
-      {:map, [], []} -> {:map, [], nil}
+      {:map, [], []} ->
+        {:map, [], nil}
 
       # Function types
-      {:fun, [], []} -> :fun
+      {:fun, [], []} ->
+        :fun
 
       # Function with signature: {:__block__, [], [[{:->, [], [[args...], return]}]]}
       {:__block__, [], [clauses]} when is_list(clauses) ->
@@ -1239,10 +1279,15 @@ defmodule ElixirSense.Core.ElixirTypes do
         end
 
       # List types
-      {:list, [], [elem]} -> {:list, quoted_to_shape(elem)}
-      {:non_empty_list, [], [elem]} -> {:list, quoted_to_shape(elem)}
+      {:list, [], [elem]} ->
+        {:list, quoted_to_shape(elem)}
+
+      {:non_empty_list, [], [elem]} ->
+        {:list, quoted_to_shape(elem)}
+
       # non_empty_list with explicit tail (improper list) — we lose the tail info
-      {:non_empty_list, [], [elem, _tail]} -> {:list, quoted_to_shape(elem)}
+      {:non_empty_list, [], [elem, _tail]} ->
+        {:list, quoted_to_shape(elem)}
 
       # Tuple types (all arities use {:{}, [], elems} form)
       {:{}, [], elems} when is_list(elems) ->
@@ -1284,32 +1329,40 @@ defmodule ElixirSense.Core.ElixirTypes do
         end
 
       # Negation types — try to interpret as the base type when possible
-      {:not, [], [_inner]} -> nil
+      {:not, [], [_inner]} ->
+        nil
 
       # Optional map field value
-      {:if_set, [], [inner]} -> {:optional, quoted_to_shape(inner)}
+      {:if_set, [], [inner]} ->
+        {:optional, quoted_to_shape(inner)}
 
       # Literal atoms wrapped in __block__
-      {:__block__, [], [atom]} when is_atom(atom) -> {:atom, atom}
+      {:__block__, [], [atom]} when is_atom(atom) ->
+        {:atom, atom}
 
       # Literal integers wrapped in __block__
-      {:__block__, [], [integer]} when is_integer(integer) -> {:integer, integer}
+      {:__block__, [], [integer]} when is_integer(integer) ->
+        {:integer, integer}
 
       # Module aliases in struct __struct__ fields
       {:__aliases__, [], parts} when is_list(parts) ->
         {:atom, Module.concat(parts)}
 
       # Open map/tuple marker
-      {:..., [], _} -> nil
+      {:..., [], _} ->
+        nil
 
       # Bare literal atoms (unlikely from to_quoted but handle for safety)
-      atom when is_atom(atom) -> {:atom, atom}
+      atom when is_atom(atom) ->
+        {:atom, atom}
 
       # Bare literal integers
-      integer when is_integer(integer) -> {:integer, integer}
+      integer when is_integer(integer) ->
+        {:integer, integer}
 
       # Fallback
-      _ -> nil
+      _ ->
+        nil
     end
   end
 
@@ -1986,7 +2039,10 @@ defmodule ElixirSense.Core.ElixirTypes do
           Enum.map(arg_shapes, &coerce_var_type/1)
         rescue
           e ->
-            Logger.debug("filter_clauses_by_args coercion failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+            Logger.debug(
+              "filter_clauses_by_args coercion failed: #{Exception.format(:error, e, __STACKTRACE__)}"
+            )
+
             nil
         end
 
@@ -2008,7 +2064,9 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp clause_arg_types(_), do: nil
 
   defp args_compatible?(nil, _arg_descrs), do: true
-  defp args_compatible?(clause_args, arg_descrs) when length(clause_args) != length(arg_descrs), do: false
+
+  defp args_compatible?(clause_args, arg_descrs) when length(clause_args) != length(arg_descrs),
+    do: false
 
   defp args_compatible?(clause_args, arg_descrs) do
     try do
@@ -2023,7 +2081,10 @@ defmodule ElixirSense.Core.ElixirTypes do
         true
     catch
       kind, payload ->
-        Logger.debug("args_compatible? failed: #{Exception.format(kind, payload, __STACKTRACE__)}")
+        Logger.debug(
+          "args_compatible? failed: #{Exception.format(kind, payload, __STACKTRACE__)}"
+        )
+
         true
     end
   end

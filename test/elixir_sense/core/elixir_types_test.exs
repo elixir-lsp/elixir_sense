@@ -274,7 +274,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       union2 =
         Module.Types.Descr.union(
           Module.Types.Descr.union(Module.Types.Descr.integer(), Module.Types.Descr.binary()),
-          Module.Types.Descr.atom([:nil])
+          Module.Types.Descr.atom([nil])
         )
 
       shape = ElixirTypes.to_shape(union2)
