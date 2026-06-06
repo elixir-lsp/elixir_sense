@@ -2782,12 +2782,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       vars = state |> get_line_vars(8)
 
+      # Cross-clause occurrence typing: the second clause sees `a` with the first
+      # clause's `%{b: 2}` pattern subtracted (the `{:difference, ...}` term).
       assert %VarInfo{
                name: :a2,
                positions: [{7, 18}],
                type: {
                  :intersection,
-                 [{:map, [b: {:variable, :b, 1}], nil}, {:variable, :a, 0}]
+                 [
+                   {:map, [b: {:variable, :b, 1}], nil},
+                   {:difference, {:variable, :a, 0}, {:map, [b: {:integer, 2}], nil}}
+                 ]
                }
              } = Enum.find(vars, &(&1.name == :a2))
     end

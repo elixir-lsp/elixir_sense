@@ -271,37 +271,85 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     {case_clauses, sa, e}
   end
 
-  defp expand_case({:do, _} = do_clause, scrutinee_ast, match_context, s, e) do
-    expand_clauses(
-      fn c, s, e ->
-        case head(c, s, e) do
-          {[h | _] = c, s, e} ->
-            clause_vars_with_inferred_types =
-              TypeInference.find_typed_vars(h, match_context, :match)
+  # Threads the patterns matched by earlier clauses so each clause can be typed
+  # against the scrutinee MINUS what already matched (cross-clause / occurrence
+  # typing). For the first clause `prior` is empty and behaviour is unchanged.
+  defp expand_case({:do, clauses} = _do_clause, scrutinee_ast, match_context, s, e)
+       when is_list(clauses) and clauses != [] do
+    {values, {se, _prior}} =
+      Enum.map_reduce(clauses, {s, []}, fn clause, {sa, prior} ->
+        refined_context = match_context_minus_prior(match_context, prior)
 
-            # Enhanced pattern matching refinement with ElixirTypes
-            {enhanced_vars, var_descrs} =
-              enhance_case_pattern_vars(clause_vars_with_inferred_types, h, match_context, s)
-
-            s = State.merge_inferred_types(s, enhanced_vars)
-            s = State.merge_inferred_elixir_types(s, var_descrs)
-
-            # Occurrence typing (positive narrowing only — no prior-clause
-            # subtraction yet): within this branch, narrow the scrutinee variable
-            # itself to the type the clause pattern matched.
-            s = State.merge_inferred_types(s, Occurrence.scrutinee_refinements(scrutinee_ast, h))
-
-            {c, s, e}
-
-          other ->
-            other
+        head_fun = fn c, cs, ce ->
+          expand_case_head(c, scrutinee_ast, match_context, refined_context, cs, ce)
         end
-      end,
-      do_clause,
-      s,
-      e
-    )
+
+        {e_clause, s_acc, _e_acc} = clause(head_fun, clause, State.new_vars_scope(sa), e)
+
+        {e_clause, {State.remove_vars_scope(s_acc, sa), [clause_pattern_type(clause) | prior]}}
+      end)
+
+    {{:do, values}, se}
   end
+
+  defp expand_case({:do, _} = do_clause, _scrutinee_ast, _match_context, s, e) do
+    # empty / cursor-recovery do-block: nothing to type
+    expand_clauses(&head/3, do_clause, s, e)
+  end
+
+  defp expand_case_head(c, scrutinee_ast, match_context, refined_context, s, e) do
+    case head(c, s, e) do
+      {[h | _] = c, s, e} ->
+        # Pattern variables are typed against the scrutinee with earlier clauses
+        # subtracted (refined_context), so e.g. the `value` in
+        # `nil -> ...; value -> ...` narrows to the non-nil part of the union.
+        clause_vars_with_inferred_types =
+          TypeInference.find_typed_vars(h, refined_context, :match)
+
+        # Native refinement still runs against the original (unsubtracted)
+        # context, augmenting the shapes above with Module.Types descriptors.
+        {enhanced_vars, var_descrs} =
+          enhance_case_pattern_vars(clause_vars_with_inferred_types, h, match_context, s)
+
+        s = State.merge_inferred_types(s, enhanced_vars)
+        s = State.merge_inferred_elixir_types(s, var_descrs)
+
+        # Positive narrowing of a variable scrutinee to the matched pattern.
+        s = State.merge_inferred_types(s, Occurrence.scrutinee_refinements(scrutinee_ast, h))
+
+        {c, s, e}
+
+      other ->
+        other
+    end
+  end
+
+  # The scrutinee type with earlier clauses' patterns subtracted. Returns the
+  # original context for the first clause (prior empty); otherwise a lazy
+  # `{:difference, ...}` that Binding resolves once the scrutinee concretizes.
+  defp match_context_minus_prior(match_context, []), do: match_context
+
+  defp match_context_minus_prior(match_context, prior) do
+    {:difference, match_context, prior_union(prior)}
+  end
+
+  defp prior_union([single]), do: single
+  defp prior_union(prior), do: {:union, Enum.reverse(prior)}
+
+  # Best-effort type of a clause's (raw) pattern, used as the subtracted type for
+  # later clauses. Literals/atoms (the cases we can actually subtract) type
+  # precisely here; anything else stays conservative.
+  defp clause_pattern_type({:->, _meta, [[head | _], _body]}) do
+    pattern =
+      case head do
+        {:when, _, [pat | _guards]} -> pat
+        pat -> pat
+      end
+
+    TypeInference.type_of(pattern, :match)
+  end
+
+  defp clause_pattern_type(_clause), do: nil
 
   # cond
 

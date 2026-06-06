@@ -3196,4 +3196,56 @@ defmodule ElixirSense.Core.BindingTest do
                {:fun_clauses, [{[nil], {:atom, :ok}}]}
     end
   end
+
+  describe "difference (cross-clause subtraction)" do
+    defp union_env(type) do
+      %Binding{
+        functions: __ENV__.functions,
+        macros: __ENV__.macros,
+        vars: [%VarInfo{version: 1, name: :x, type: type}]
+      }
+    end
+
+    test "drops the subtracted member from a union base" do
+      env = union_env({:union, [{:atom, :a}, {:atom, :b}, {:atom, :c}]})
+
+      assert Binding.expand(env, {:difference, {:variable, :x, 1}, {:atom, :a}}) ==
+               {:union, [{:atom, :b}, {:atom, :c}]}
+    end
+
+    test "collapses to the single remaining member" do
+      env = union_env({:union, [{:binary, nil}, {:atom, nil}]})
+
+      # the flagship: `binary() | nil` minus `nil` is `binary()`
+      assert Binding.expand(env, {:difference, {:variable, :x, 1}, {:atom, nil}}) ==
+               {:binary, nil}
+    end
+
+    test "a generic subtracted type removes all matching literals" do
+      env = union_env({:union, [{:atom, :a}, {:integer, 1}, {:integer, 2}]})
+
+      assert Binding.expand(env, {:difference, {:variable, :x, 1}, :integer}) ==
+               {:atom, :a}
+    end
+
+    test "subtracting everything yields :none" do
+      env = union_env({:union, [{:atom, :a}, {:atom, :b}]})
+
+      assert Binding.expand(
+               env,
+               {:difference, {:variable, :x, 1}, {:union, [{:atom, :a}, {:atom, :b}]}}
+             ) == :none
+    end
+
+    test "is conservative for a non-union base (returns it unchanged)" do
+      env = union_env({:atom, :a})
+
+      assert Binding.expand(env, {:difference, {:variable, :x, 1}, {:atom, :b}}) ==
+               {:atom, :a}
+    end
+
+    test "an unresolvable base (:none) stays :none" do
+      assert Binding.expand(@env, {:difference, {:variable, :missing, 9}, {:atom, :a}}) == :none
+    end
+  end
 end

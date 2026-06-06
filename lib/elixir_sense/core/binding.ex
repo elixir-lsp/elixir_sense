@@ -274,6 +274,15 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  # Set difference, used for cross-clause occurrence typing (a later `case`
+  # clause sees the scrutinee type minus what earlier clauses matched). Resolved
+  # lazily so the base — typically `{:variable, ...}` or a remote `{:call, ...}`
+  # — is concretized first. Conservative: only narrows when the base resolves to
+  # a union (see difference/2).
+  def do_expand(env, {:difference, base_candidate, subtracted_candidate}, stack) do
+    difference(expand(env, base_candidate, stack), expand(env, subtracted_candidate, stack))
+  end
+
   # dependency injection
   def do_expand(env, {:call, {:atom, Application}, fun, args}, stack)
       when fun in ~w(compile_env!)a do
@@ -482,6 +491,48 @@ defmodule ElixirSense.Core.Binding do
   def do_expand(env, {:optional, inner}, stack), do: expand(env, inner, stack)
 
   def do_expand(_env, _other, _stack), do: nil
+
+  # Conservative set difference over already-expanded shapes. We can only
+  # represent "X minus Y" when X is a union: drop the members Y covers. A single
+  # (non-union) shape collapses to :none if fully covered, otherwise is returned
+  # unchanged (subtracting from an opaque type is not representable, so we keep
+  # the base rather than invent a negation).
+  defp difference(nil, _subtracted), do: nil
+  defp difference(base, nil), do: base
+  defp difference(:none, _subtracted), do: :none
+  defp difference(base, :none), do: base
+
+  defp difference({:union, members}, subtracted) do
+    removed = union_to_list(subtracted)
+
+    case Enum.reject(members, fn m -> Enum.any?(removed, &covers?(&1, m)) end) do
+      [] -> :none
+      [one] -> one
+      rest -> {:union, rest}
+    end
+  end
+
+  defp difference(base, subtracted) do
+    removed = union_to_list(subtracted)
+    if Enum.any?(removed, &covers?(&1, base)), do: :none, else: base
+  end
+
+  defp union_to_list({:union, members}), do: members
+  defp union_to_list(other), do: [other]
+
+  # Does shape `a` subsume shape `b`? Used to decide which union members a
+  # subtracted type removes. Conservative — only exact matches and generic
+  # (value-less) types covering their literals.
+  defp covers?(same, same), do: true
+  defp covers?(:atom, {:atom, _}), do: true
+  defp covers?(:boolean, {:atom, bool}) when is_boolean(bool), do: true
+  defp covers?(:integer, {:integer, _}), do: true
+  defp covers?({:integer, nil}, {:integer, _}), do: true
+  defp covers?(:float, {:float, _}), do: true
+  defp covers?({:float, nil}, {:float, _}), do: true
+  defp covers?(:binary, {:binary, _}), do: true
+  defp covers?({:binary, nil}, {:binary, _}), do: true
+  defp covers?(_a, _b), do: false
 
   defp drop_no_spec(:no_spec), do: nil
   defp drop_no_spec(other), do: other
