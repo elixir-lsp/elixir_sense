@@ -1,6 +1,9 @@
 defmodule ElixirSense.Core.ElixirTypesRealTest do
   use ExUnit.Case, async: false
 
+  # Entire module exercises the native Module.Types backend (Elixir 1.18+).
+  @moduletag :requires_native_types
+
   alias ElixirSense.Core.{ElixirTypes, TypeInference}
 
   @moduletag :elixir_types_integration

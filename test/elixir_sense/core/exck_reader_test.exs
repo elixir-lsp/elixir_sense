@@ -1,6 +1,10 @@
 defmodule ElixirSense.Core.ExCkReaderTest do
   use ExUnit.Case, async: true
 
+  # ExCk remote-signature reading is part of the native typing path; 1.17's
+  # stdlib chunks aren't usable by the adaptor (native backend off there).
+  @moduletag :requires_native_types
+
   alias ElixirSense.Core.ExCkReader
 
   @table ElixirSense.Core.ExCkReader

@@ -1,6 +1,9 @@
 defmodule ElixirSense.Core.ElixirTypesIntegrationTest do
   use ExUnit.Case, async: false
 
+  # Entire module exercises the native Module.Types backend (Elixir 1.18+).
+  @moduletag :requires_native_types
+
   alias ElixirSense.Core.TypeInference
 
   describe "integration with TypeInference when disabled" do

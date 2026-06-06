@@ -66,16 +66,35 @@ defmodule ElixirSense.Core.ElixirTypesTest do
           # 1.19 has expr/5, of_match/5, of_head/7 and stack/7, but NOT the
           # 1.20-only cross-clause/reverse-arrow/domain-map machinery. If these
           # flip, the V19 dispatch assumptions are wrong — fail loudly here.
-          assert caps.expr and caps.pattern_match and caps.head
+          assert caps.expr and caps.expr_basic and caps.pattern_match and caps.head
+          assert caps.local_signature
+          refute caps.previous
+          refute caps.reverse_arrow
+          refute caps.domain_map_ops
+
+        Version.match?(System.version(), ">= 1.18.0") ->
+          # 1.18 has the basic of_expr/3 (NOT the expected-type of_expr/5),
+          # of_match/7, of_head/7 and stack/7. The adapter is active here, but
+          # without expected-type expr or any 1.20 machinery.
+          refute caps.expr
+          assert caps.expr_basic and caps.pattern_match and caps.head
           assert caps.local_signature
           refute caps.previous
           refute caps.reverse_arrow
           refute caps.domain_map_ops
 
         true ->
-          # 1.17/1.18 (no expected-type of_expr/5): the adapter is effectively
-          # off until their backends land.
+          # 1.17: has of_expr/3 (so expr_basic can be true) but only stack/5 and
+          # no of_match, so the adaptor is OFF (available?/0 false) and the
+          # usable capabilities are all false — callers use the custom engine.
+          refute ElixirTypes.available?()
           refute caps.expr
+          refute caps.pattern_match
+          refute caps.head
+          refute caps.local_signature
+          refute caps.previous
+          refute caps.reverse_arrow
+          refute caps.domain_map_ops
       end
     end
   end
@@ -120,6 +139,8 @@ defmodule ElixirSense.Core.ElixirTypesTest do
   end
 
   describe "shape conversion" do
+    @describetag :requires_native_types
+
     test "to_shape/1 returns :none for empty descriptor" do
       # Empty descriptor is the "none" type
       result = ElixirTypes.to_shape(%{})
@@ -128,6 +149,9 @@ defmodule ElixirSense.Core.ElixirTypesTest do
   end
 
   describe "shape conversions" do
+    # Descr-based shape conversion is part of the native backend (1.18+).
+    @describetag :requires_native_types
+
     setup do
       # Save original value and enable feature
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
@@ -137,12 +161,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
         Application.put_env(:elixir_sense, :use_elixir_types, original_value)
       end)
 
-      # Only run tests if Module.Types is available
-      if ElixirTypes.available?() do
-        :ok
-      else
-        :skip
-      end
+      :ok
     end
 
     test "handles none" do
@@ -302,53 +321,66 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert ElixirTypes.to_shape(Module.Types.Descr.fun()) == :fun
     end
 
+    # Descr.fun/1, fun/2 and fun_from_*_clauses are 1.20-only constructors.
+    @fun_descr_api function_exported?(Module.Types.Descr, :fun, 1)
+
     test "handles fun/1 (function with specific arity)" do
-      assert ElixirTypes.to_shape(Module.Types.Descr.fun(0)) == {:fun, 0}
-      assert ElixirTypes.to_shape(Module.Types.Descr.fun(1)) == {:fun, 1}
-      assert ElixirTypes.to_shape(Module.Types.Descr.fun(2)) == {:fun, 2}
+      if @fun_descr_api do
+        assert ElixirTypes.to_shape(Module.Types.Descr.fun(0)) == {:fun, 0}
+        assert ElixirTypes.to_shape(Module.Types.Descr.fun(1)) == {:fun, 1}
+        assert ElixirTypes.to_shape(Module.Types.Descr.fun(2)) == {:fun, 2}
+      end
     end
 
     test "handles fun/2 (function with arg and return types)" do
-      # (integer() -> atom())
-      fun_type = Module.Types.Descr.fun([Module.Types.Descr.integer()], Module.Types.Descr.atom())
-      assert ElixirTypes.to_shape(fun_type) == {:fun, [{:integer, nil}], :atom}
+      if @fun_descr_api do
+        # (integer() -> atom())
+        fun_type =
+          Module.Types.Descr.fun([Module.Types.Descr.integer()], Module.Types.Descr.atom())
 
-      # (integer(), float() -> binary())
-      fun_type2 =
-        Module.Types.Descr.fun(
-          [Module.Types.Descr.integer(), Module.Types.Descr.float()],
-          Module.Types.Descr.binary()
-        )
+        assert ElixirTypes.to_shape(fun_type) == {:fun, [{:integer, nil}], :atom}
 
-      assert ElixirTypes.to_shape(fun_type2) ==
-               {:fun, [{:integer, nil}, {:float, nil}], {:binary, nil}}
+        # (integer(), float() -> binary())
+        fun_type2 =
+          Module.Types.Descr.fun(
+            [Module.Types.Descr.integer(), Module.Types.Descr.float()],
+            Module.Types.Descr.binary()
+          )
+
+        assert ElixirTypes.to_shape(fun_type2) ==
+                 {:fun, [{:integer, nil}, {:float, nil}], {:binary, nil}}
+      end
     end
 
     test "handles fun_from_non_overlapping_clauses" do
-      # Multiple non-overlapping function clauses
-      clauses = [
-        {[Module.Types.Descr.integer()], Module.Types.Descr.atom()},
-        {[Module.Types.Descr.float()], Module.Types.Descr.binary()}
-      ]
+      if @fun_descr_api do
+        # Multiple non-overlapping function clauses
+        clauses = [
+          {[Module.Types.Descr.integer()], Module.Types.Descr.atom()},
+          {[Module.Types.Descr.float()], Module.Types.Descr.binary()}
+        ]
 
-      fun_type = Module.Types.Descr.fun_from_non_overlapping_clauses(clauses)
-      # Should be a union of function types
-      shape = ElixirTypes.to_shape(fun_type)
-      assert match?({:fun_clauses, _}, shape)
+        fun_type = Module.Types.Descr.fun_from_non_overlapping_clauses(clauses)
+        # Should be a union of function types
+        shape = ElixirTypes.to_shape(fun_type)
+        assert match?({:fun_clauses, _}, shape)
+      end
     end
 
     test "handles fun_from_inferred_clauses" do
-      # Multiple potentially overlapping function clauses
-      clauses = [
-        {[Module.Types.Descr.integer()], Module.Types.Descr.atom()},
-        {[Module.Types.Descr.integer()], Module.Types.Descr.binary()}
-      ]
+      if @fun_descr_api do
+        # Multiple potentially overlapping function clauses
+        clauses = [
+          {[Module.Types.Descr.integer()], Module.Types.Descr.atom()},
+          {[Module.Types.Descr.integer()], Module.Types.Descr.binary()}
+        ]
 
-      fun_type = Module.Types.Descr.fun_from_inferred_clauses(clauses)
-      shape = ElixirTypes.to_shape(fun_type)
-      # Inferred clauses with same domain get merged into a single clause
-      # with union return type: (integer() -> atom() | binary())
-      assert match?({:fun, [{:integer, nil}], _return}, shape)
+        fun_type = Module.Types.Descr.fun_from_inferred_clauses(clauses)
+        shape = ElixirTypes.to_shape(fun_type)
+        # Inferred clauses with same domain get merged into a single clause
+        # with union return type: (integer() -> atom() | binary())
+        assert match?({:fun, [{:integer, nil}], _return}, shape)
+      end
     end
 
     test "handles not_set" do
@@ -391,10 +423,14 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "handles struct as dynamic map" do
-      # Module.Types.Of.struct_type produces dynamic-wrapped map with __struct__
-      struct = Module.Types.Of.struct_type(Date, [%{field: :year}, %{field: :month}])
-      shape = ElixirTypes.to_shape(struct)
-      assert match?({:struct, _fields, {:atom, Date}, nil}, shape)
+      # Module.Types.Of.struct_type produces a dynamic-wrapped map with
+      # __struct__. On 1.18 to_shape renders this looser (the descr/to_quoted
+      # form differs), so this precise assertion is 1.19+.
+      if ElixirTypes.available?(:expr) do
+        struct = Module.Types.Of.struct_type(Date, [%{field: :year}, %{field: :month}])
+        shape = ElixirTypes.to_shape(struct)
+        assert match?({:struct, _fields, {:atom, Date}, nil}, shape)
+      end
     end
   end
 
@@ -407,6 +443,10 @@ defmodule ElixirSense.Core.ElixirTypesTest do
   end
 
   describe "expression typing with feature enabled" do
+    # Native expression typing requires the expected-type API (1.19+); excluded
+    # on 1.18 via test_helper (see :requires_expected_type_native).
+    @describetag :requires_expected_type_native
+
     setup do
       # Save original value and enable feature
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
@@ -416,12 +456,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
         Application.put_env(:elixir_sense, :use_elixir_types, original_value)
       end)
 
-      # Only run tests if Module.Types is available
-      if ElixirTypes.available?() do
-        :ok
-      else
-        :skip
-      end
+      :ok
     end
 
     test "types integer literals" do

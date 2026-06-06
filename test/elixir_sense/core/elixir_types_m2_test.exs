@@ -1,11 +1,18 @@
 defmodule ElixirSense.Core.ElixirTypesM2Test do
   use ExUnit.Case, async: false
 
+  # Entire module exercises the native Module.Types backend (Elixir 1.18+).
+  @moduletag :requires_native_types
+
   alias ElixirSense.Core.{Binding, ElixirTypes, Metadata, MetadataBuilder, TypeInference}
 
   @moduletag :elixir_types_m2
 
   describe "local function inference" do
+    # Local signature inference feeds the native expression typer, which is the
+    # expected-type backend (1.19+). Excluded on 1.18 via test_helper.
+    @describetag :requires_expected_type_native
+
     setup do
       # Enable ElixirTypes
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
@@ -15,12 +22,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         Application.put_env(:elixir_sense, :use_elixir_types, original_value)
       end)
 
-      # Skip tests if Module.Types is not available
-      if ElixirTypes.available?() do
-        :ok
-      else
-        :skip
-      end
+      :ok
     end
 
     test "captures clause AST during compilation" do
@@ -329,6 +331,10 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
   end
 
   describe "remote function integration" do
+    # Remote-call typing and remote-signature resolution go through native
+    # expression typing (expected-type backend, 1.19+). Excluded on 1.18.
+    @describetag :requires_expected_type_native
+
     setup do
       # Enable ElixirTypes for M2 tests
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
@@ -338,12 +344,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         Application.put_env(:elixir_sense, :use_elixir_types, original_value)
       end)
 
-      # Skip tests if Module.Types is not available
-      if ElixirTypes.available?() do
-        :ok
-      else
-        :skip
-      end
+      :ok
     end
 
     test "reads remote signatures from ExCk" do
@@ -609,31 +610,38 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "converts struct types to shape" do
-      struct_descr = Module.Types.Of.struct_type(Date, [%{field: :year}, %{field: :month}])
+      # On 1.18 to_shape renders the dynamic-wrapped struct descr looser; the
+      # precise struct shape is 1.19+ (see elixir_types_test "struct as dynamic map").
+      if ElixirTypes.available?(:expr) do
+        struct_descr = Module.Types.Of.struct_type(Date, [%{field: :year}, %{field: :month}])
 
-      result = ElixirTypes.to_shape(struct_descr)
+        result = ElixirTypes.to_shape(struct_descr)
 
-      case result do
-        {:struct, fields, {:atom, Date}, nil} ->
-          assert is_list(fields)
-          field_names = Keyword.keys(fields)
-          assert :year in field_names
-          assert :month in field_names
+        case result do
+          {:struct, fields, {:atom, Date}, nil} ->
+            assert is_list(fields)
+            field_names = Keyword.keys(fields)
+            assert :year in field_names
+            assert :month in field_names
 
-        other ->
-          flunk("Unexpected struct shape: #{inspect(other)}")
+          other ->
+            flunk("Unexpected struct shape: #{inspect(other)}")
+        end
       end
     end
 
     test "converts function types to shape" do
-      fun_descr = Module.Types.Descr.fun(2)
+      # Descr.fun/1 (arity-only function descr) is a 1.20 constructor.
+      if function_exported?(Module.Types.Descr, :fun, 1) do
+        fun_descr = Module.Types.Descr.fun(2)
 
-      result = ElixirTypes.to_shape(fun_descr)
+        result = ElixirTypes.to_shape(fun_descr)
 
-      case result do
-        # Correct function shape
-        {:fun, 2} -> :ok
-        other -> flunk("Unexpected function shape: #{inspect(other)}")
+        case result do
+          # Correct function shape
+          {:fun, 2} -> :ok
+          other -> flunk("Unexpected function shape: #{inspect(other)}")
+        end
       end
     end
 
@@ -1120,11 +1128,14 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
     test "tuple pattern refinement handles element positions" do
       if ElixirTypes.available?() do
-        # Tuple pattern {a, b} where variables should be refined
+        # Tuple pattern {a, b, c} where variables should be refined. The RHS must
+        # be a proper 3-element-tuple AST node (`{:{}, _, [...]}`); a bare 3-tuple
+        # `{1, :ok, ""}` is not valid quoted form (it happened to be tolerated on
+        # 1.19/1.20 but breaks value typing on 1.18).
         pattern_ast =
           {:{}, [], [{:a, [version: 1], nil}, {:b, [version: 2], nil}, {:c, [version: 3], nil}]}
 
-        match_ast = {:=, [], [pattern_ast, {1, :ok, ""}]}
+        match_ast = {:=, [], [pattern_ast, {:{}, [], [1, :ok, ""]}]}
 
         result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
 
@@ -1322,6 +1333,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       end
     end
 
+    @tag :requires_expected_type_native
     test "end-to-end integration: local signatures influence binding type inference" do
       if ElixirTypes.available?() do
         # This test ensures local signatures actually change the type seen at call sites
@@ -1381,6 +1393,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       end
     end
 
+    @tag :requires_expected_type_native
     test "end-to-end integration: remote signatures influence binding type inference" do
       if ElixirTypes.available?() do
         assert {:ok, %{sig: sig}} =

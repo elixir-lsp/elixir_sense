@@ -57,10 +57,12 @@ defmodule ElixirSense.Core.ElixirTypes do
   require Logger
 
   @doc """
-  Returns true if Module.Types.Expr is available and has of_expr/5.
+  Returns true if the running Elixir exposes a usable `Module.Types` backend.
 
-  This function checks if the current Elixir installation includes the
-  Module.Types infrastructure required for the adaptor.
+  Requires both an expression typer (`Expr.of_expr/5` on 1.19+, or `/3` on 1.18)
+  AND the modern `Module.Types.stack/7` that `init_stack/6` builds. 1.17 has only
+  `of_expr/3` + `stack/5` and no `of_match`, so nothing the adaptor uses works
+  there — `available?/0` is false and callers fall back to the custom engine.
 
   ## Examples
 
@@ -69,8 +71,8 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   """
   def available?() do
-    Code.ensure_loaded?(Module.Types.Expr) and
-      function_exported?(Module.Types.Expr, :of_expr, 5)
+    Code.ensure_loaded?(Module.Types.Expr) and expr_api() != :none and
+      loaded_exported?(Module.Types, :stack, 7)
   end
 
   @doc """
@@ -94,6 +96,20 @@ defmodule ElixirSense.Core.ElixirTypes do
     Application.get_env(:elixir_sense, :use_elixir_types, false) and available?()
   end
 
+  @doc """
+  Returns true if native typing should be used for general expression typing.
+
+  This requires the **expected-type** expression API (`Expr.of_expr/5`, Elixir
+  1.19+). On 1.18 only the basic `of_expr/3` exists, which (lacking expected
+  types) is generally no better than — and sometimes less precise than — the
+  ElixirSense custom engine for plain expressions. So on 1.18 expression typing
+  stays on the custom engine, while pattern-match refinement (`of_match`) and
+  local-signature inference (`of_head`) still use the native backend.
+  """
+  def expr_typing_enabled?() do
+    enabled?() and available?(:expr)
+  end
+
   @typedoc """
   A probed `Module.Types` capability.
 
@@ -106,6 +122,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   """
   @type capability ::
           :expr
+          | :expr_basic
           | :pattern_match
           | :head
           | :local_signature
@@ -121,7 +138,8 @@ defmodule ElixirSense.Core.ElixirTypes do
   reference only — dispatch must use the probes, not versions):
 
     * `:expr` — expected-type expression typing (`Expr.of_expr/5`), 1.19+
-    * `:pattern_match` — `Pattern.of_match/6` (1.20) or `/5` (1.19)
+    * `:expr_basic` — any expression typing (`of_expr/5` or `/3`), 1.18+
+    * `:pattern_match` — `of_match/7` (1.18), `/5` (1.19) or `/6` (1.20)
     * `:head` — `Pattern.of_head/8` (1.20) or `/7` (1.18/1.19)
     * `:local_signature` — local handler on the stack (`Module.Types.stack/7`), 1.18+
     * `:previous` — cross-clause `Pattern.init_previous/0`, 1.20+
@@ -130,10 +148,9 @@ defmodule ElixirSense.Core.ElixirTypes do
   """
   def capabilities() do
     %{
-      expr: loaded_exported?(Module.Types.Expr, :of_expr, 5),
-      pattern_match:
-        loaded_exported?(Module.Types.Pattern, :of_match, 6) or
-          loaded_exported?(Module.Types.Pattern, :of_match, 5),
+      expr: expr_api() == :expected,
+      expr_basic: expr_api() != :none,
+      pattern_match: pattern_api() != :none,
       head:
         loaded_exported?(Module.Types.Pattern, :of_head, 8) or
           loaded_exported?(Module.Types.Pattern, :of_head, 7),
@@ -142,6 +159,28 @@ defmodule ElixirSense.Core.ElixirTypes do
       reverse_arrow: reverse_arrow_capability?(),
       domain_map_ops: loaded_exported?(Module.Types.Descr, :map_update, 5)
     }
+  end
+
+  # Expression-typer shape: 1.19+ has the expected-type `Expr.of_expr/5`; 1.18
+  # has the basic `of_expr/3` (no expected type / expr-tracking args).
+  defp expr_api() do
+    cond do
+      loaded_exported?(Module.Types.Expr, :of_expr, 5) -> :expected
+      loaded_exported?(Module.Types.Expr, :of_expr, 3) -> :basic
+      true -> :none
+    end
+  end
+
+  # Pattern API generation, keyed off the unambiguous `of_match` arity:
+  # 1.18 `of_match/7`, 1.19 `of_match/5`, 1.20 `of_match/6`. (1.18 also exports
+  # `/6` via a defaulted `guards` arg, so `/7` must be checked first.)
+  defp pattern_api() do
+    cond do
+      loaded_exported?(Module.Types.Pattern, :of_match, 7) -> :v18
+      loaded_exported?(Module.Types.Pattern, :of_match, 5) -> :v19
+      loaded_exported?(Module.Types.Pattern, :of_match, 6) -> :v20
+      true -> :none
+    end
   end
 
   @doc """
@@ -175,67 +214,142 @@ defmodule ElixirSense.Core.ElixirTypes do
   # safety net against upstream drift is the test suite (run on both versions),
   # not Dialyzer's static `:unknown` check.
 
-  # of_match: 1.20 `of_match/6` (adds `meta`); 1.19 `of_match/5`.
-  # Both return `{type, context}`.
-  defp call_of_match(pattern_ast, expected_fun, expr, meta, stack, context) do
-    if loaded_exported?(Module.Types.Pattern, :of_match, 6) do
-      apply(Module.Types.Pattern, :of_match, [
-        pattern_ast,
-        expected_fun,
-        expr,
-        meta,
-        stack,
-        context
-      ])
-    else
-      apply(Module.Types.Pattern, :of_match, [pattern_ast, expected_fun, expr, stack, context])
+  # of_expr: 1.19+ `of_expr/5` (expected + expr-tracking); 1.18 `of_expr/3`
+  # (no expected type). Both return `{type, context}`; on 1.18 the `expected`
+  # and `expr` arguments are simply dropped.
+  defp call_of_expr(ast, expected, expr, stack, context) do
+    case expr_api() do
+      :expected -> apply(Module.Types.Expr, :of_expr, [ast, expected, expr, stack, context])
+      :basic -> apply(Module.Types.Expr, :of_expr, [ast, stack, context])
+      :none -> {Module.Types.Descr.dynamic(), context}
     end
   end
 
-  # of_head: 1.20 `of_head/8` (`previous` + `info`, 5-tuple return); 1.19
-  # `of_head/7` (single `tag`, 2-tuple return). Normalized to `{trees, context}`.
-  defp call_of_head(args, guards, expected, meta, stack, context) do
-    if loaded_exported?(Module.Types.Pattern, :of_head, 8) do
-      previous = apply(Module.Types.Pattern, :init_previous, [])
-      info = {{:def, :def, :infer, expected}, args, guards}
+  # of_match. The contract changed shape across versions; all return `{type,
+  # context}`:
+  #   * 1.20 `of_match/6` — (pattern, expected_fun, expr, meta, stack, context)
+  #   * 1.19 `of_match/5` — (pattern, expected_fun, expr, stack, context)
+  #   * 1.18 `of_match/7` — (pattern, guards, expected, expr, tag, stack, context)
+  # 1.19/1.20 take a lazy `expected_fun`; 1.18 takes a precomputed `expected`
+  # descr. We build whichever the running version needs from `value_ast` +
+  # `expected_descr`.
+  defp call_of_match(pattern_ast, value_ast, expected_descr, full_match, stack, context) do
+    case pattern_api() do
+      :v20 ->
+        expected_fun = of_match_expected_fun(value_ast, expected_descr, full_match, stack)
 
-      {trees, _precise?, _no_previous_args_types, _previous, clause_ctx} =
-        apply(Module.Types.Pattern, :of_head, [
-          args,
-          guards,
-          expected,
-          previous,
-          info,
-          meta,
+        apply(Module.Types.Pattern, :of_match, [
+          pattern_ast,
+          expected_fun,
+          full_match,
+          pattern_meta(pattern_ast),
           stack,
           context
         ])
 
-      {trees, clause_ctx}
-    else
-      apply(Module.Types.Pattern, :of_head, [
-        args,
-        guards,
-        expected,
-        {:infer, expected},
-        meta,
-        stack,
-        context
-      ])
+      :v19 ->
+        expected_fun = of_match_expected_fun(value_ast, expected_descr, full_match, stack)
+
+        apply(Module.Types.Pattern, :of_match, [
+          pattern_ast,
+          expected_fun,
+          full_match,
+          stack,
+          context
+        ])
+
+      :v18 ->
+        tag = {:match, full_match}
+
+        apply(Module.Types.Pattern, :of_match, [
+          pattern_ast,
+          [],
+          expected_descr,
+          full_match,
+          tag,
+          stack,
+          context
+        ])
+
+      :none ->
+        throw({:elixir_types_unsupported, :of_match})
     end
   end
 
-  # of_domain: same arity (3) in both, but 1.20 takes `stack` where 1.19 takes
-  # the `expected` types list. Tie the choice to the of_head version.
-  defp call_of_domain(trees, expected, stack, clause_ctx) do
-    # `apply/3` (rather than a literal call) keeps both branches free of
-    # version-specific contract warnings: 1.19's of_domain/3 contract expects an
-    # `expected` list as the 2nd arg, so a literal `of_domain(trees, stack, ...)`
-    # is flagged as a failing call on 1.19 even though that branch is dead there.
-    if loaded_exported?(Module.Types.Pattern, :of_head, 8) do
-      apply(Module.Types.Pattern, :of_domain, [trees, stack, clause_ctx])
-    else
-      apply(Module.Types.Pattern, :of_domain, [trees, expected, clause_ctx])
+  defp of_match_expected_fun(value_ast, expected_descr, full_match, stack) do
+    fn _pattern_type, ctx -> call_of_expr(value_ast, expected_descr, full_match, stack, ctx) end
+  end
+
+  # of_head + per-arg domain. Returns `{arg_types, clause_ctx}` where `arg_types`
+  # is the list of inferred argument types. The pieces differ by version:
+  #   * 1.20 `of_head/8` -> {trees, …}; arg types via `of_domain(trees, stack, ctx)`
+  #   * 1.19 `of_head/7` -> {trees, ctx}; arg types via `of_domain(trees, expected, ctx)`
+  #   * 1.18 `of_head/7` -> {types, ctx}; `types` ARE the arg types (no of_domain)
+  defp call_of_head(args, guards, expected, meta, stack, context) do
+    case pattern_api() do
+      :v20 ->
+        previous = apply(Module.Types.Pattern, :init_previous, [])
+        info = {{:def, :def, :infer, expected}, args, guards}
+
+        {trees, _precise?, _no_prev, _previous, clause_ctx} =
+          apply(Module.Types.Pattern, :of_head, [
+            args,
+            guards,
+            expected,
+            previous,
+            info,
+            meta,
+            stack,
+            context
+          ])
+
+        {trees, clause_ctx, :trees}
+
+      :v19 ->
+        {trees, clause_ctx} =
+          apply(Module.Types.Pattern, :of_head, [
+            args,
+            guards,
+            expected,
+            {:infer, expected},
+            meta,
+            stack,
+            context
+          ])
+
+        {trees, clause_ctx, :trees}
+
+      :v18 ->
+        {types, clause_ctx} =
+          apply(Module.Types.Pattern, :of_head, [
+            args,
+            guards,
+            expected,
+            {:infer, expected},
+            meta,
+            stack,
+            context
+          ])
+
+        # 1.18 has no of_domain; of_head already returns the arg types.
+        {types, clause_ctx, :types}
+
+      :none ->
+        throw({:elixir_types_unsupported, :of_head})
+    end
+  end
+
+  # Compute the per-argument types from an of_head result, dispatched the same
+  # way of_head was. `apply/3` avoids version-specific contract warnings (1.19's
+  # of_domain/3 expects `expected` as 2nd arg; 1.20's expects `stack`).
+  defp arg_types_from_head(head_result, :types, _expected, _stack, _clause_ctx) do
+    head_result
+  end
+
+  defp arg_types_from_head(trees, :trees, expected, stack, clause_ctx) do
+    case pattern_api() do
+      :v20 -> apply(Module.Types.Pattern, :of_domain, [trees, stack, clause_ctx])
+      _ -> apply(Module.Types.Pattern, :of_domain, [trees, expected, clause_ctx])
     end
   end
 
@@ -398,7 +512,10 @@ defmodule ElixirSense.Core.ElixirTypes do
         :error
 
       true ->
-        if available?() do
+        # Public expression typing requires the expected-type API (1.19+); on
+        # 1.18 callers fall back to the custom engine. (of_match / of_head still
+        # work on 1.18 — they use call_of_expr internally, not this entry point.)
+        if available?(:expr) do
           try do
             stack = init_stack(module, function, file, mode, local_sigs_map, metadata)
             # Seed context with provided variables or infer from AST (dynamic types)
@@ -408,13 +525,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
             if stack && context do
               {descr, _context} =
-                Module.Types.Expr.of_expr(
-                  ast,
-                  Module.Types.Descr.term(),
-                  ast,
-                  stack,
-                  context
-                )
+                call_of_expr(ast, Module.Types.Descr.term(), ast, stack, context)
 
               {:ok, descr}
             else
@@ -733,14 +844,7 @@ defmodule ElixirSense.Core.ElixirTypes do
        ) do
     try do
       # First, try to get more specific type information from the value
-      value_type =
-        Module.Types.Expr.of_expr(
-          value_ast,
-          Module.Types.Descr.term(),
-          full_match,
-          stack,
-          context
-        )
+      value_type = call_of_expr(value_ast, Module.Types.Descr.term(), full_match, stack, context)
 
       # Use more refined expected descriptor if value typing succeeded
       refined_expected =
@@ -749,18 +853,7 @@ defmodule ElixirSense.Core.ElixirTypes do
           _ -> expected_descr
         end
 
-      expected_fun = fn _pattern_type, ctx ->
-        Module.Types.Expr.of_expr(value_ast, refined_expected, full_match, stack, ctx)
-      end
-
-      case call_of_match(
-             pattern_ast,
-             expected_fun,
-             full_match,
-             pattern_meta(pattern_ast),
-             stack,
-             context
-           ) do
+      case call_of_match(pattern_ast, value_ast, refined_expected, full_match, stack, context) do
         {_type, %{vars: vars_map} = out_ctx} ->
           # Enhanced variable shape extraction with type refinement
           var_shapes =
@@ -798,19 +891,8 @@ defmodule ElixirSense.Core.ElixirTypes do
   # Fallback to original pattern matching approach
   defp fallback_match(pattern_ast, value_ast, expected_descr, full_match, stack, context, targets) do
     try do
-      expected_fun = fn _pattern_type, ctx ->
-        Module.Types.Expr.of_expr(value_ast, expected_descr, full_match, stack, ctx)
-      end
-
       {_type, %{vars: vars_map} = out_ctx} =
-        call_of_match(
-          pattern_ast,
-          expected_fun,
-          full_match,
-          pattern_meta(pattern_ast),
-          stack,
-          context
-        )
+        call_of_match(pattern_ast, value_ast, expected_descr, full_match, stack, context)
 
       var_shapes =
         extract_refined_var_shapes(
@@ -1803,18 +1885,28 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp coerce_var_type({:fun, arity}) when is_integer(arity) do
-    Module.Types.Descr.fun(arity)
+    fun_descr(arity)
   end
 
   defp coerce_var_type({:fun, args, _return}) when is_list(args) do
-    Module.Types.Descr.fun(length(args))
+    fun_descr(length(args))
   end
 
   defp coerce_var_type({:fun_clauses, clauses}) when is_list(clauses) do
     # fun_clauses is multi-clause function — coerce as generic fun with arity of first clause
     case clauses do
-      [{args, _return} | _] when is_list(args) -> Module.Types.Descr.fun(length(args))
+      [{args, _return} | _] when is_list(args) -> fun_descr(length(args))
       _ -> Module.Types.Descr.fun()
+    end
+  end
+
+  # Descr.fun/1 (arity-specific function descr) is 1.20+. On 1.18/1.19 fall back
+  # to the generic `fun/0`. `apply/3` avoids an undefined-function warning there.
+  defp fun_descr(arity) do
+    if function_exported?(Module.Types.Descr, :fun, 1) do
+      apply(Module.Types.Descr, :fun, [arity])
+    else
+      Module.Types.Descr.fun()
     end
   end
 
@@ -1978,14 +2070,16 @@ defmodule ElixirSense.Core.ElixirTypes do
       body = body |> ensure_body_var_versions() |> replace_module_attributes()
 
       try do
-        # of_head / of_domain shapes differ between 1.19 and 1.20; call_of_head/
-        # call_of_domain dispatch on the exported arity (see their definitions).
-        {trees, clause_ctx} = call_of_head(args, guards || [], expected, meta, stack, context)
+        # of_head / of_domain shapes differ across 1.18/1.19/1.20; the helpers
+        # dispatch on pattern_api() (see their definitions). `head_kind` is
+        # :trees (1.19/1.20, needs of_domain) or :types (1.18, types as-is).
+        {head_result, clause_ctx, head_kind} =
+          call_of_head(args, guards || [], expected, meta, stack, context)
 
         {return_type, clause_ctx} =
-          Module.Types.Expr.of_expr(body, Module.Types.Descr.term(), body, stack, clause_ctx)
+          call_of_expr(body, Module.Types.Descr.term(), body, stack, clause_ctx)
 
-        arg_types = call_of_domain(trees, expected, stack, clause_ctx)
+        arg_types = arg_types_from_head(head_result, head_kind, expected, stack, clause_ctx)
 
         {:cont, [{arg_types, return_type} | acc]}
       catch

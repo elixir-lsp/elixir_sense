@@ -1273,6 +1273,7 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    @tag :requires_native_types
     test "shape conversion recognizes pid/port/reference subtype-compatible descriptors" do
       assert ElixirSense.Core.ElixirTypes.to_shape(Module.Types.Descr.pid()) == :pid
       assert ElixirSense.Core.ElixirTypes.to_shape(Module.Types.Descr.port()) == :port
@@ -2031,6 +2032,7 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    @tag :requires_native_types
     test "metadata spec signatures are preferred for remote call return typing" do
       env =
         @env

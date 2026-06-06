@@ -384,7 +384,10 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     defp assert_old_and_native(code, old_expected, native_expected, context \\ nil) do
       assert with_elixir_types(false, fn -> type_of(code, context) end) == old_expected
 
-      if ElixirTypes.available?() do
+      # `native_expected` describes the expected-type native backend (1.19+).
+      # On 1.18 expression typing stays on the custom engine, so only the
+      # disabled-mode (`old_expected`) assertion above applies.
+      if ElixirTypes.available?(:expr) do
         assert with_elixir_types(true, fn -> type_of(code, context) end) == native_expected
       end
     end
@@ -719,7 +722,9 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "type_of/4 with variable context produces native result when enabled" do
-      if ElixirTypes.available?() do
+      # Native expression typing requires the expected-type backend (1.19+); on
+      # 1.18 type_of/4 stays on the custom engine.
+      if ElixirTypes.available?(:expr) do
         original = Application.get_env(:elixir_sense, :use_elixir_types, false)
         Application.put_env(:elixir_sense, :use_elixir_types, true)
 

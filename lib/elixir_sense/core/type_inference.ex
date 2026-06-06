@@ -33,8 +33,9 @@ defmodule ElixirSense.Core.TypeInference do
   def type_of({{:., _, [target, fun]}, _meta, args} = ast, context)
       when is_atom(fun) and is_list(args) do
     # Native typing only narrows calls it understands; when it returns nil
-    # (unsupported call/signature) keep the `{:call, ...}` shape Binding relies on.
-    with true <- ElixirSense.Core.ElixirTypes.enabled?(),
+    # (unsupported call/signature, or 1.18) keep the `{:call, ...}` shape Binding
+    # relies on.
+    with true <- ElixirSense.Core.ElixirTypes.expr_typing_enabled?(),
          native when not is_nil(native) <- type_of_with_elixir_types(ast, context) do
       native
     else
@@ -184,10 +185,11 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   def type_of({:fn, _meta, clauses} = ast, context) do
-    if ElixirSense.Core.ElixirTypes.enabled?() do
+    if ElixirSense.Core.ElixirTypes.expr_typing_enabled?() do
       type_of_with_elixir_types(ast, context)
     else
-      # In disabled mode, at least extract arity from the first clause
+      # Without native expression typing (disabled, or 1.18) at least extract
+      # arity from the first clause — more precise than the native :fun on 1.18.
       case clauses do
         [{:->, _, [args, _body]} | _] when is_list(args) ->
           arity = length(args)
@@ -271,8 +273,8 @@ defmodule ElixirSense.Core.TypeInference do
 
   def type_of({var, meta, args} = ast, context) when is_atom(var) and is_list(args) do
     # As with remote calls: fall back to the `{:local_call, ...}` shape Binding
-    # relies on when native typing returns nil for this local call.
-    with true <- ElixirSense.Core.ElixirTypes.enabled?(),
+    # relies on when native typing returns nil for this local call (or on 1.18).
+    with true <- ElixirSense.Core.ElixirTypes.expr_typing_enabled?(),
          native when not is_nil(native) <- type_of_with_elixir_types(ast, context) do
       native
     else
@@ -310,7 +312,7 @@ defmodule ElixirSense.Core.TypeInference do
   """
   def type_of(ast, context, %{vars_info: [current_scope | _]} = _state, env)
       when is_map(current_scope) do
-    if ElixirSense.Core.ElixirTypes.enabled?() do
+    if ElixirSense.Core.ElixirTypes.expr_typing_enabled?() do
       env_context = build_env_context(current_scope, env)
       native_result = type_of_with_elixir_types(ast, context, nil, nil, env_context)
       native_result || type_of(ast, context)
@@ -349,7 +351,9 @@ defmodule ElixirSense.Core.TypeInference do
         metadata \\ nil,
         env_context \\ %{}
       ) do
-    if ElixirSense.Core.ElixirTypes.enabled?() do
+    # General expression typing requires the expected-type API (1.19+). On 1.18
+    # the custom engine handles expressions; see ElixirTypes.expr_typing_enabled?/0.
+    if ElixirSense.Core.ElixirTypes.expr_typing_enabled?() do
       case type_expr_with_local_sigs(ast, local_sigs_map, metadata, env_context) do
         {:ok, descr} -> ElixirSense.Core.ElixirTypes.to_shape(descr)
         :error -> nil
