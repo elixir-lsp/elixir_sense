@@ -1,5 +1,7 @@
 defmodule ElixirSense.Core.Compiler.State do
   @moduledoc false
+  require Logger
+
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.State.Env
@@ -1012,7 +1014,10 @@ defmodule ElixirSense.Core.Compiler.State do
     |> Kernel.||(Module.Types.Descr.dynamic())
   rescue
     e ->
-      Logger.debug("spec_return_to_descr failed for #{inspect(type_ast)}: #{Exception.format(:error, e, __STACKTRACE__)}")
+      Logger.debug(
+        "spec_return_to_descr failed for #{inspect(type_ast)}: #{Exception.format(:error, e, __STACKTRACE__)}"
+      )
+
       Module.Types.Descr.dynamic()
   end
 
@@ -1236,63 +1241,186 @@ defmodule ElixirSense.Core.Compiler.State do
     if is_atom(resolved_remote) and is_atom(type) and is_list(args) do
       # Handle well-known remote types
       case {resolved_remote, type, args} do
-        {String, :t, []} -> {:binary, nil}
-        {String, :codepoint, []} -> {:binary, nil}
-        {String, :grapheme, []} -> {:binary, nil}
-        {String, :pattern, []} -> nil
-        {Enum, :t, []} -> nil
-        {Enum, :acc, []} -> nil
-        {Enum, :element, []} -> nil
-        {Enum, :index, []} -> {:integer, nil}
-        {Enum, :default, []} -> nil
-        {Range, :t, []} -> {:struct, [__struct__: {:atom, Range}], {:atom, Range}, nil}
-        {Range, :t, [_start, _stop]} -> {:struct, [__struct__: {:atom, Range}], {:atom, Range}, nil}
-        {Regex, :t, []} -> {:struct, [__struct__: {:atom, Regex}], {:atom, Regex}, nil}
-        {MapSet, :t, [_]} -> {:struct, [__struct__: {:atom, MapSet}], {:atom, MapSet}, nil}
-        {MapSet, :t, []} -> {:struct, [__struct__: {:atom, MapSet}], {:atom, MapSet}, nil}
-        {DateTime, :t, []} -> {:struct, [__struct__: {:atom, DateTime}], {:atom, DateTime}, nil}
-        {NaiveDateTime, :t, []} -> {:struct, [__struct__: {:atom, NaiveDateTime}], {:atom, NaiveDateTime}, nil}
-        {Date, :t, []} -> {:struct, [__struct__: {:atom, Date}], {:atom, Date}, nil}
-        {Time, :t, []} -> {:struct, [__struct__: {:atom, Time}], {:atom, Time}, nil}
-        {URI, :t, []} -> {:struct, [__struct__: {:atom, URI}], {:atom, URI}, nil}
-        {Keyword, :t, []} -> {:list, {:tuple, 2, [:atom, nil]}}
-        {Keyword, :t, [type]} -> {:list, {:tuple, 2, [:atom, spec_ast_to_shape(type, module)]}}
-        {Keyword, :key, []} -> :atom
-        {Keyword, :value, []} -> nil
-        {Access, :key, []} -> nil
-        {Access, :value, []} -> nil
-        {IO, :chardata, []} -> {:union, [{:binary, nil}, {:list, nil}]}
-        {IO, :nodata, []} -> {:atom, :ok}
-        {Macro, :t, []} -> nil
-        {Macro, :input, []} -> nil
-        {Macro, :output, []} -> nil
-        {Exception, :t, []} -> {:map, [__struct__: :atom, __exception__: {:atom, true}], nil}
-        {Exception, :kind, []} -> {:union, [{:atom, :error}, {:atom, :exit}, {:atom, :throw}]}
-        {GenServer, :name, []} -> {:union, [:atom, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
-        {GenServer, :from, []} -> {:tuple, 2, [:pid, :reference]}
-        {GenServer, :server, []} -> {:union, [:atom, :pid, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
-        {GenServer, :on_start, []} -> {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
-        {Supervisor, :child_spec, []} -> {:map, [id: nil, start: {:tuple, 2, [:atom, nil]}], nil}
-        {Supervisor, :on_start, []} -> {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
-        {Path, :t, []} -> {:binary, nil}
-        {File, :posix, []} -> :atom
-        {Collectable, :t, []} -> nil
-        {Enumerable, :t, []} -> nil
-        {Agent, :agent, []} -> {:union, [:atom, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
-        {Agent, :on_start, []} -> {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
-        {Task, :t, []} -> {:struct, [__struct__: {:atom, Task}], {:atom, Task}, nil}
-        {Task, :ref, []} -> :reference
-        {Macro.Env, :t, []} -> {:struct, [__struct__: {:atom, Macro.Env}], {:atom, Macro.Env}, nil}
-        {Map, :key, []} -> nil
-        {Map, :value, []} -> nil
-        {IO, :device, []} -> {:union, [:atom, :pid]}
-        {Inspect.Algebra, :t, []} -> nil
-        {Module, :definition, []} -> {:tuple, 2, [:atom, {:integer, nil}]}
-        {Node, :t, []} -> :atom
-        {Registry, :key, []} -> nil
-        {Registry, :value, []} -> nil
-        {System, :time_unit, []} -> {:union, [{:atom, :second}, {:atom, :millisecond}, {:atom, :microsecond}, {:atom, :nanosecond}, {:integer, nil}]}
-        _ -> nil
+        {String, :t, []} ->
+          {:binary, nil}
+
+        {String, :codepoint, []} ->
+          {:binary, nil}
+
+        {String, :grapheme, []} ->
+          {:binary, nil}
+
+        {String, :pattern, []} ->
+          nil
+
+        {Enum, :t, []} ->
+          nil
+
+        {Enum, :acc, []} ->
+          nil
+
+        {Enum, :element, []} ->
+          nil
+
+        {Enum, :index, []} ->
+          {:integer, nil}
+
+        {Enum, :default, []} ->
+          nil
+
+        {Range, :t, []} ->
+          {:struct, [__struct__: {:atom, Range}], {:atom, Range}, nil}
+
+        {Range, :t, [_start, _stop]} ->
+          {:struct, [__struct__: {:atom, Range}], {:atom, Range}, nil}
+
+        {Regex, :t, []} ->
+          {:struct, [__struct__: {:atom, Regex}], {:atom, Regex}, nil}
+
+        {MapSet, :t, [_]} ->
+          {:struct, [__struct__: {:atom, MapSet}], {:atom, MapSet}, nil}
+
+        {MapSet, :t, []} ->
+          {:struct, [__struct__: {:atom, MapSet}], {:atom, MapSet}, nil}
+
+        {DateTime, :t, []} ->
+          {:struct, [__struct__: {:atom, DateTime}], {:atom, DateTime}, nil}
+
+        {NaiveDateTime, :t, []} ->
+          {:struct, [__struct__: {:atom, NaiveDateTime}], {:atom, NaiveDateTime}, nil}
+
+        {Date, :t, []} ->
+          {:struct, [__struct__: {:atom, Date}], {:atom, Date}, nil}
+
+        {Time, :t, []} ->
+          {:struct, [__struct__: {:atom, Time}], {:atom, Time}, nil}
+
+        {URI, :t, []} ->
+          {:struct, [__struct__: {:atom, URI}], {:atom, URI}, nil}
+
+        {Keyword, :t, []} ->
+          {:list, {:tuple, 2, [:atom, nil]}}
+
+        {Keyword, :t, [type]} ->
+          {:list, {:tuple, 2, [:atom, spec_ast_to_shape(type, module)]}}
+
+        {Keyword, :key, []} ->
+          :atom
+
+        {Keyword, :value, []} ->
+          nil
+
+        {Access, :key, []} ->
+          nil
+
+        {Access, :value, []} ->
+          nil
+
+        {IO, :chardata, []} ->
+          {:union, [{:binary, nil}, {:list, nil}]}
+
+        {IO, :nodata, []} ->
+          {:atom, :ok}
+
+        {Macro, :t, []} ->
+          nil
+
+        {Macro, :input, []} ->
+          nil
+
+        {Macro, :output, []} ->
+          nil
+
+        {Exception, :t, []} ->
+          {:map, [__struct__: :atom, __exception__: {:atom, true}], nil}
+
+        {Exception, :kind, []} ->
+          {:union, [{:atom, :error}, {:atom, :exit}, {:atom, :throw}]}
+
+        {GenServer, :name, []} ->
+          {:union,
+           [:atom, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
+
+        {GenServer, :from, []} ->
+          {:tuple, 2, [:pid, :reference]}
+
+        {GenServer, :server, []} ->
+          {:union,
+           [:atom, :pid, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
+
+        {GenServer, :on_start, []} ->
+          {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
+
+        {Supervisor, :child_spec, []} ->
+          {:map, [id: nil, start: {:tuple, 2, [:atom, nil]}], nil}
+
+        {Supervisor, :on_start, []} ->
+          {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
+
+        {Path, :t, []} ->
+          {:binary, nil}
+
+        {File, :posix, []} ->
+          :atom
+
+        {Collectable, :t, []} ->
+          nil
+
+        {Enumerable, :t, []} ->
+          nil
+
+        {Agent, :agent, []} ->
+          {:union,
+           [:atom, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
+
+        {Agent, :on_start, []} ->
+          {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
+
+        {Task, :t, []} ->
+          {:struct, [__struct__: {:atom, Task}], {:atom, Task}, nil}
+
+        {Task, :ref, []} ->
+          :reference
+
+        {Macro.Env, :t, []} ->
+          {:struct, [__struct__: {:atom, Macro.Env}], {:atom, Macro.Env}, nil}
+
+        {Map, :key, []} ->
+          nil
+
+        {Map, :value, []} ->
+          nil
+
+        {IO, :device, []} ->
+          {:union, [:atom, :pid]}
+
+        {Inspect.Algebra, :t, []} ->
+          nil
+
+        {Module, :definition, []} ->
+          {:tuple, 2, [:atom, {:integer, nil}]}
+
+        {Node, :t, []} ->
+          :atom
+
+        {Registry, :key, []} ->
+          nil
+
+        {Registry, :value, []} ->
+          nil
+
+        {System, :time_unit, []} ->
+          {:union,
+           [
+             {:atom, :second},
+             {:atom, :millisecond},
+             {:atom, :microsecond},
+             {:atom, :nanosecond},
+             {:integer, nil}
+           ]}
+
+        _ ->
+          nil
       end
     else
       nil
@@ -1303,6 +1431,7 @@ defmodule ElixirSense.Core.Compiler.State do
   defp spec_ast_to_shape(int, _module) when is_integer(int), do: {:integer, int}
   defp spec_ast_to_shape(float, _module) when is_float(float), do: {:float, float}
   defp spec_ast_to_shape(binary, _module) when is_binary(binary), do: {:binary, binary}
+
   # Unresolved type variables (e.g. `t` in `@spec foo(t) :: t when t: integer()`) — treat as term
   defp spec_ast_to_shape({name, _meta, nil}, _module) when is_atom(name), do: nil
 

@@ -152,30 +152,14 @@ defmodule ElixirSense.Core.ElixirTypes do
     Map.get(capabilities(), capability, false)
   end
 
-  # `init_previous/0` implies reverse arrows in 1.20, but probe the stack field
-  # directly so a future Elixir that splits these apart is handled correctly.
-  @spec reverse_arrow_capability?() :: boolean()
+  # `Pattern.init_previous/0` is the marker for the 1.20 cross-clause / reverse
+  # arrow machinery (it accompanies the `stack.reverse_arrow` field). Probing
+  # the function is enough and avoids constructing a stack just to inspect it.
   defp reverse_arrow_capability?() do
     loaded_exported?(Module.Types.Pattern, :init_previous, 0) and
-      loaded_exported?(Module.Types, :stack, 7) and
-      match?(%{reverse_arrow: _}, build_probe_stack())
-  rescue
-    _ -> false
+      loaded_exported?(Module.Types, :stack, 7)
   end
 
-  defp build_probe_stack() do
-    Module.Types.stack(
-      :infer,
-      "nofile",
-      ElixirSense.ElixirTypes,
-      {:__info__, 1},
-      :all,
-      nil,
-      &__MODULE__.local_handler/4
-    )
-  end
-
-  @spec loaded_exported?(module(), atom(), arity()) :: boolean()
   defp loaded_exported?(module, fun, arity) do
     Code.ensure_loaded?(module) and function_exported?(module, fun, arity)
   end
@@ -510,7 +494,7 @@ defmodule ElixirSense.Core.ElixirTypes do
     case ElixirSense.Core.Introspection.expand_alias(mod, aliases) do
       ^mod ->
         case expand_alias_from_env(current_module, aliases, parts) do
-          resolved when is_atom(resolved) ->
+          resolved when is_atom(resolved) and not is_nil(resolved) ->
             resolved
 
           _ ->
@@ -562,15 +546,15 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   defp expand_alias_from_env(_, _, _), do: nil
 
-  defp metadata_env(metadata) when is_map(metadata) do
-    case metadata.cursor_env || metadata.closest_env do
+  defp metadata_env(metadata) do
+    source = if is_map(metadata), do: metadata.cursor_env || metadata.closest_env, else: nil
+
+    case source do
       {_, env} when is_map(env) -> env
       {_from, _to, env} when is_map(env) -> env
       _ -> nil
     end
   end
-
-  defp metadata_env(_), do: nil
 
   @doc """
   Types a pattern match to refine variable types.
@@ -1958,7 +1942,6 @@ defmodule ElixirSense.Core.ElixirTypes do
     |> Enum.reverse()
   end
 
-  defp build_domain([]), do: nil
   defp build_domain([_]), do: nil
 
   defp build_domain(clause_types) do

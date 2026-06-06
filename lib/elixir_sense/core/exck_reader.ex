@@ -88,6 +88,8 @@ defmodule ElixirSense.Core.ExCkReader do
   defp fetch_from_path(module) do
     case :code.which(module) do
       path when is_list(path) ->
+        # `:beam_lib.chunks/2` returns `{:error, :beam_lib, reason}` (a 3-tuple),
+        # not `{:error, reason}`.
         case :beam_lib.chunks(path, [@chunk_id]) do
           {:ok, {_path, [{@chunk_id, chunk}]}} ->
             {:ok, chunk}
@@ -95,19 +97,8 @@ defmodule ElixirSense.Core.ExCkReader do
           {:ok, {_path, []}} ->
             {:error, :not_found}
 
-          {:error, {:missing_chunk, _}} ->
+          {:error, :beam_lib, _reason} ->
             {:error, :not_found}
-
-          {:error, {:beam_lib, {:missing_chunk, _, chunk_id}}}
-          when chunk_id in [@chunk_id, @chunk_id_bin] ->
-            {:error, :not_found}
-
-          {:error, :beam_lib, {:missing_chunk, _, chunk_id}}
-          when chunk_id in [@chunk_id, @chunk_id_bin] ->
-            {:error, :not_found}
-
-          {:error, reason} ->
-            {:error, reason}
         end
 
       _ ->
@@ -126,11 +117,12 @@ defmodule ElixirSense.Core.ExCkReader do
   end
 
   defp fetch_from_beam_binary(beam) do
-    case :beam_lib.chunks({:binary, beam}, [@chunk_id]) do
+    # `beam` is already the BEAM binary; pass it directly (not wrapped) and
+    # match `:beam_lib`'s `{:error, :beam_lib, reason}` 3-tuple.
+    case :beam_lib.chunks(beam, [@chunk_id]) do
       {:ok, {_mod, [{@chunk_id, chunk}]}} -> {:ok, chunk}
       {:ok, {_mod, []}} -> extract_chunk_from_binary(beam)
-      {:error, {:missing_chunk, _}} -> extract_chunk_from_binary(beam)
-      {:error, _} -> extract_chunk_from_binary(beam)
+      {:error, :beam_lib, _reason} -> extract_chunk_from_binary(beam)
     end
   rescue
     e ->
@@ -158,7 +150,7 @@ defmodule ElixirSense.Core.ExCkReader do
     if byte_size(rest) < padding do
       {:error, :invalid_beam}
     else
-      <<_pad::binary-size(padding), tail::binary>> = rest
+      <<_pad::binary-size(^padding), tail::binary>> = rest
 
       if id == @chunk_id_bin do
         {:ok, chunk}
@@ -259,10 +251,11 @@ defmodule ElixirSense.Core.ExCkReader do
   end
 
   defp ensure_table do
-    case :ets.info(@table) do
-      :undefined -> :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
-      _ -> :ok
-    end
+    _ =
+      case :ets.info(@table) do
+        :undefined -> :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
+        _ -> :ok
+      end
 
     :ok
   end

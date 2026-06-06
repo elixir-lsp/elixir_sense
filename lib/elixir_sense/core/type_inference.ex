@@ -380,26 +380,24 @@ defmodule ElixirSense.Core.TypeInference do
   defp extract_module_from_context(_ast), do: nil
 
   # Build ElixirTypes variables map from the elixir_sense compiler env_context
-  defp variables_from_env_context(env_context) when is_map(env_context) do
-    case Map.get(env_context, :vars) do
-      vars when is_list(vars) ->
-        Enum.reduce(vars, %{}, fn
-          %ElixirSense.Core.State.VarInfo{name: name, version: version, elixir_types_descr: descr},
+  defp variables_from_env_context(env_context) do
+    vars = if is_map(env_context), do: Map.get(env_context, :vars), else: nil
+
+    if is_list(vars) do
+      Enum.reduce(vars, %{}, fn
+        %ElixirSense.Core.State.VarInfo{name: name, version: version, elixir_types_descr: descr},
+        acc
+        when is_atom(name) and is_integer(version) ->
+          descr = descr || Module.Types.Descr.dynamic()
+          Map.put(acc, {name, version}, descr)
+
+        _, acc ->
           acc
-          when is_atom(name) and is_integer(version) ->
-            descr = descr || Module.Types.Descr.dynamic()
-            Map.put(acc, {name, version}, descr)
-
-          _, acc ->
-            acc
-        end)
-
-      _ ->
-        %{}
+      end)
+    else
+      %{}
     end
   end
-
-  defp variables_from_env_context(_), do: %{}
 
   defp remote_call_ast?({{:., _, [_target, fun]}, _, args}) when is_atom(fun) and is_list(args),
     do: true
@@ -411,15 +409,6 @@ defmodule ElixirSense.Core.TypeInference do
   defp type_of_into_target(target) when is_list(target), do: {:list, nil}
   defp type_of_into_target({:%{}, _, []}), do: {:map, [], nil}
   defp type_of_into_target({:%{}, _, [{:|, _, _} | _]}), do: {:map, [], nil}
-
-  defp type_of_into_target(
-         {{:., _, [{:__aliases__, _, _} = aliases, :new]}, _, []}
-       ) do
-    case type_of(aliases, nil) do
-      {:atom, module} -> {:struct, [], {:atom, module}, nil}
-      _ -> nil
-    end
-  end
 
   defp type_of_into_target(_), do: nil
 
