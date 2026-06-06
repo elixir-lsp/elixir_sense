@@ -100,6 +100,20 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       assert result == %{{:x, 0} => {:atom, :foo}}
     end
 
+    test "infers type from strict equality: === atom (Erlang =:=)" do
+      # `===` expands to the Erlang `=:=` BIF; it must refine like `==`.
+      guard_expr = quote(do: x === :foo) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:atom, :foo}}
+    end
+
+    test "infers union type from membership: x in [atoms]" do
+      # In guards `in` expands to an `orelse` chain of `=:=` comparisons.
+      guard_expr = quote(do: x in [:a, :b]) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:union, [atom: :a, atom: :b]}}
+    end
+
     test "infers type from simple guard: == alias" do
       guard_expr = quote(do: x == Some.Mod) |> expand()
       result = Guard.type_information_from_guards(guard_expr)

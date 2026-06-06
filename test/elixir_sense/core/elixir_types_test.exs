@@ -22,6 +22,47 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
   end
 
+  describe "capabilities" do
+    @capability_keys [
+      :expr,
+      :pattern_match,
+      :head,
+      :local_signature,
+      :previous,
+      :reverse_arrow,
+      :domain_map_ops
+    ]
+
+    test "capabilities/0 returns a boolean for every known capability" do
+      caps = ElixirTypes.capabilities()
+
+      for key <- @capability_keys do
+        assert is_boolean(Map.get(caps, key)), "expected boolean for capability #{inspect(key)}"
+      end
+    end
+
+    test "available?/1 agrees with capabilities/0" do
+      caps = ElixirTypes.capabilities()
+
+      for key <- @capability_keys do
+        assert ElixirTypes.available?(key) == caps[key]
+      end
+
+      refute ElixirTypes.available?(:no_such_capability)
+    end
+
+    test "all capabilities are present on Elixir 1.20+" do
+      # This suite runs on >= 1.20; every probed capability should be available.
+      # When the system Elixir is downgraded these expectations relax (see plan).
+      if Version.match?(System.version(), ">= 1.20.0") do
+        caps = ElixirTypes.capabilities()
+        assert caps.expr and caps.pattern_match and caps.head
+        assert caps.previous and caps.reverse_arrow and caps.domain_map_ops
+        assert caps.local_signature
+      end
+    end
+  end
+
   describe "shape conversion" do
     test "to_shape/1 returns :none for empty descriptor" do
       # Empty descriptor is the "none" type

@@ -99,8 +99,10 @@ defmodule ElixirSense.Core.TypeInference.Guard do
   def type_information_from_guards(guard_ast) do
     {_, acc} =
       Macro.prewalk(guard_ast, %{}, fn
-        {{:., _dot_meta, [:erlang, fun]}, _call_meta, params}, acc
-        when is_atom(fun) and is_list(params) ->
+        {{:., _dot_meta, [:erlang, fun0]}, _call_meta, params}, acc
+        when is_atom(fun0) and is_list(params) ->
+          fun = normalize_erlang_guard_fun(fun0)
+
           with {type, binding} <- guard_predicate_type(fun, params),
                {{var, version}, type} <- extract_var_type(binding, type) do
             # If we found the predicate type, we can prematurely exit traversing the subtree
@@ -142,6 +144,17 @@ defmodule ElixirSense.Core.TypeInference.Guard do
   end
 
   defp extract_var_type(_, _), do: nil
+
+  # Guards are expanded to Erlang BIFs before reaching us, so comparison
+  # operators arrive under their Erlang spellings (`=:=`, `=/=`, `=<`) rather
+  # than the Elixir ones the clauses below match. Normalize the equality and
+  # ordering operators so strict equality (`===`) and `<=` refine like `==`/`<`
+  # do. This also makes `x in [...]` work, since in guards it expands to an
+  # `orelse` chain of `=:=` comparisons.
+  defp normalize_erlang_guard_fun(:"=:="), do: :===
+  defp normalize_erlang_guard_fun(:"=/="), do: :!==
+  defp normalize_erlang_guard_fun(:"=<"), do: :<=
+  defp normalize_erlang_guard_fun(other), do: other
 
   # div and rem require integer args
   defp guard_predicate_type(p, [first | _]) when p in [:is_integer, :div, :rem],
@@ -270,9 +283,14 @@ defmodule ElixirSense.Core.TypeInference.Guard do
   defp guard_predicate_type(:is_map_key, [key, var | _]) do
     type =
       case key do
-        :__struct__ -> {:struct, [], nil, nil}
-        key when is_atom(key) when is_binary(key) when is_integer(key) -> {:map, [{key, nil}], nil}
-        _ -> {:map, [], nil}
+        :__struct__ ->
+          {:struct, [], nil, nil}
+
+        key when is_atom(key) when is_binary(key) when is_integer(key) ->
+          {:map, [{key, nil}], nil}
+
+        _ ->
+          {:map, [], nil}
       end
 
     {type, var}
@@ -281,9 +299,14 @@ defmodule ElixirSense.Core.TypeInference.Guard do
   defp guard_predicate_type(:map_get, [key, var | _]) do
     type =
       case key do
-        :__struct__ -> {:struct, [], nil, nil}
-        key when is_atom(key) when is_binary(key) when is_integer(key) -> {:map, [{key, nil}], nil}
-        _ -> {:map, [], nil}
+        :__struct__ ->
+          {:struct, [], nil, nil}
+
+        key when is_atom(key) when is_binary(key) when is_integer(key) ->
+          {:map, [{key, nil}], nil}
+
+        _ ->
+          {:map, [], nil}
       end
 
     {type, var}
