@@ -2,6 +2,20 @@
 
 An API for Elixir projects that provides building blocks for code completion, documentation, go/jump to definition, signature info and more via AST inspection and runtime introspection.
 
+## Supported versions
+
+ElixirSense supports the five most recent Elixir versions, paired with the latest Erlang/OTP releases each Elixir supports. The matrix below mirrors [Elixir's compatibility table](https://hexdocs.pm/elixir/compatibility-and-deprecations.html); each pairing is exercised in CI.
+
+| Elixir | Erlang/OTP |
+| ------ | ---------- |
+| 1.16   | 26         |
+| 1.17   | 27         |
+| 1.18   | 27         |
+| 1.19   | 27, 28     |
+| 1.20   | 27, 28, 29 |
+
+Other OTP versions inside each Elixir's supported range will likely work but aren't tested.
+
 ## Usage
 
 ```

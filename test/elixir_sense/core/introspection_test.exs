@@ -78,12 +78,10 @@ defmodule ElixirSense.Core.IntrospectionTest do
              }
            ] = get_callbacks_with_docs(:gen_statem) |> Enum.filter(&(&1.name == :callback_mode))
 
-    if System.otp_release() |> String.to_integer() >= 23 do
-      if System.otp_release() |> String.to_integer() >= 27 do
-        assert "Select the _callback mode_" <> _ = summary
-      else
-        assert "- CallbackMode = " <> _ = summary
-      end
+    if System.otp_release() |> String.to_integer() >= 27 do
+      assert "Select the _callback mode_" <> _ = summary
+    else
+      assert "- CallbackMode = " <> _ = summary
     end
   end
 

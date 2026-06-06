@@ -24,8 +24,6 @@ defmodule ElixirSense.Core.Applications do
   """
 
   @spec get_modules_from_applications() :: [module]
-  # TODO use :code.all_available |> Enum.map(fn {m, _, _} -> :"#{m}" end) on otp 23+
-  # as it returns more
   def get_modules_from_applications do
     # :erts app is not loaded by default
     _ = Application.load(:erts)

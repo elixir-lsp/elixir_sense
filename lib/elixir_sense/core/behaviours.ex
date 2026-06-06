@@ -15,9 +15,6 @@ defmodule ElixirSense.Core.Behaviours do
   def get_all_behaviour_implementations(behaviour) do
     # this function can take a few seconds
     # unfortunately it does not benefit from conversion to Task.async_stream
-    # at least on otp 23
-
-    # TODO consider changing this to :code.all_available when otp 23 is required
     all_loaded =
       :code.all_loaded()
       |> Enum.map(&(&1 |> elem(0)))

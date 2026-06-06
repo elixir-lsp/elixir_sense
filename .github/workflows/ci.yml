@@ -13,45 +13,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Matrix follows the elixir compatibility table:
+        # https://hexdocs.pm/elixir/compatibility-and-deprecations.html
+        # We test on OTP 27, 28, 29 (the latest three releases), falling back
+        # to the latest OTP each Elixir version supports.
         include:
-          - elixir: 1.16.x
-            otp: 24.x
-            tests_may_fail: false
-          - elixir: 1.16.x
-            otp: 25.x
-            tests_may_fail: false
+          # 1.16 supports OTP 24-26 — latest is 26.
           - elixir: 1.16.x
             otp: 26.x
             tests_may_fail: false
-          - elixir: 1.17.x
-            otp: 25.x
-            tests_may_fail: false
-          - elixir: 1.17.x
-            otp: 26.x
-            tests_may_fail: false
+          # 1.17 supports OTP 25-27 — latest is 27.
           - elixir: 1.17.x
             otp: 27.x
             tests_may_fail: false
-          - elixir: 1.18.x
-            otp: 25.x
-            tests_may_fail: false
-          - elixir: 1.18.x
-            otp: 26.x
-            tests_may_fail: false
+          # 1.18 supports OTP 25-27 — latest is 27.
           - elixir: 1.18.x
             otp: 27.x
             tests_may_fail: false
-          - elixir: 1.19.x
-            otp: 26.x
-            tests_may_fail: false
+          # 1.19 supports OTP 26-28.
           - elixir: 1.19.x
             otp: 27.x
             tests_may_fail: false
           - elixir: 1.19.x
             otp: 28.x
             tests_may_fail: false
-          # Elixir 1.20 dropped OTP 26 support (commit 13024f43c) and added
-          # OTP 29 support.
+          # 1.20 supports OTP 27-29.
           - elixir: 1.20.x
             otp: 27.x
             tests_may_fail: false
@@ -83,36 +69,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Same matrix as mix_test (Linux). See above for compatibility notes.
         include:
           - elixir: 1.16.x
-            otp: 24.x
-            tests_may_fail: false
-          - elixir: 1.16.x
-            otp: 25.x
-            tests_may_fail: false
-          - elixir: 1.16.x
-            otp: 26.x
-            tests_may_fail: false
-          - elixir: 1.17.x
-            otp: 25.x
-            tests_may_fail: false
-          - elixir: 1.17.x
             otp: 26.x
             tests_may_fail: false
           - elixir: 1.17.x
             otp: 27.x
             tests_may_fail: false
           - elixir: 1.18.x
-            otp: 25.x
-            tests_may_fail: false
-          - elixir: 1.18.x
-            otp: 26.x
-            tests_may_fail: false
-          - elixir: 1.18.x
             otp: 27.x
-            tests_may_fail: false
-          - elixir: 1.19.x
-            otp: 26.x
             tests_may_fail: false
           - elixir: 1.19.x
             otp: 27.x
@@ -120,8 +86,6 @@ jobs:
           - elixir: 1.19.x
             otp: 28.x
             tests_may_fail: false
-          # Elixir 1.20 dropped OTP 26 support (commit 13024f43c) and added
-          # OTP 29 support.
           - elixir: 1.20.x
             otp: 27.x
             tests_may_fail: false
