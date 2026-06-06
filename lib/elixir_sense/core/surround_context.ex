@@ -27,7 +27,11 @@ defmodule ElixirSense.Core.SurroundContext do
   defp to_binding_impl({:alias, {:module_attribute, _charlist1}, _charlist}, _current_module),
     do: nil
 
-  # this probably only existed on 1.14
+  # `Code.Fragment.surround_context/2` on 1.16+ does not document or emit
+  # `{:alias, {:dot, _, _}, _}` (only `{:alias, {:local_or_var, _}, _}` and
+  # `{:alias, {:module_attribute, _}, _}` per its `@type inside_alias`).
+  # This clause was needed on 1.14 and is kept defensively in case a future
+  # Code.Fragment release reintroduces the shape.
   defp to_binding_impl({:alias, {:dot, _, _}, _charlist}, _current_module),
     do: nil
 

@@ -5,8 +5,6 @@ defmodule ElixirSense.Core.Normalized.Code do
 
   alias ElixirSense.Core.Behaviours
   alias ElixirSense.Core.ErlangHtml
-  alias ElixirSense.Core.Normalized.Path, as: PathNormalized
-  require Logger
 
   @type doc_t :: nil | false | String.t()
   @type fun_doc_entry_t ::
@@ -223,29 +221,10 @@ defmodule ElixirSense.Core.Normalized.Code do
 
   defp maybe_mark_as_hidden(metadata, _text), do: metadata
 
-  # the functions below are copied from elixir project
-  # https://github.com/lukaszsamson/elixir/blob/bf3e2fd3ad78235bda059b80994a90d9a4184353/lib/elixir/lib/code.ex
-  # with applied https://github.com/elixir-lang/elixir/pull/13061
-  # and https://github.com/elixir-lang/elixir/pull/13075
-  # as well as some small stability fixes
-  # TODO remove when we require elixir 1.16
-  # The original code is licensed as follows:
-  #
-  # Copyright 2012 Plataformatec
-  # Copyright 2021 The Elixir Team
-  #
-  # Licensed under the Apache License, Version 2.0 (the "License");
-  # you may not use this file except in compliance with the License.
-  # You may obtain a copy of the License at
-  #
-  #    https://www.apache.org/licenses/LICENSE-2.0
-  #
-  # Unless required by applicable law or agreed to in writing, software
-  # distributed under the License is distributed on an "AS IS" BASIS,
-  # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  # See the License for the specific language governing permissions and
-  # limitations under the License.
-
+  # Delegate to `Code.fetch_docs/1`. Since Elixir 1.16 (PRs #13061, #13075,
+  # #13286) the upstream implementation honors the `doc/chunks/` fallback,
+  # `Path.expand` semantics, and preloaded modules — so the previous local
+  # reimplementation is no longer needed.
   @spec fetch_docs(module | String.t()) ::
           {:docs_v1, annotation, beam_language, format, module_doc :: doc_content, metadata,
            docs :: [doc_element]}
@@ -261,93 +240,6 @@ defmodule ElixirSense.Core.Normalized.Code do
              metadata: map
   def fetch_docs(module_or_path)
 
-  def fetch_docs(module) when is_atom(module) do
-    case get_beam_and_path(module) do
-      {bin, beam_path} ->
-        case fetch_docs_from_beam(bin) do
-          {:error, :chunk_not_found} ->
-            app_root = PathNormalized.expand(Path.join(["..", ".."]), beam_path)
-            path = Path.join([app_root, "doc", "chunks", "#{module}.chunk"])
-            fetch_docs_from_chunk(path)
-
-          other ->
-            other
-        end
-
-      :error ->
-        case :code.is_loaded(module) do
-          {:file, :preloaded} ->
-            # The ERTS directory is not necessarily included in releases
-            # unless it is listed as an extra application.
-            case :code.lib_dir(:erts) do
-              path when is_list(path) ->
-                path = Path.join([path, "doc", "chunks", "#{module}.chunk"])
-                fetch_docs_from_chunk(path)
-
-              {:error, _} ->
-                {:error, :chunk_not_found}
-            end
-
-          _ ->
-            {:error, :module_not_found}
-        end
-    end
-  end
-
-  def fetch_docs(path) when is_binary(path) do
-    fetch_docs_from_beam(String.to_charlist(path))
-  end
-
-  defp get_beam_and_path(module) do
-    with {^module, beam, filename} <- :code.get_object_code(module),
-         info_pairs when is_list(info_pairs) <- :beam_lib.info(beam),
-         {:ok, ^module} <- Keyword.fetch(info_pairs, :module) do
-      {beam, filename}
-    else
-      _ -> :error
-    end
-  catch
-    kind, reason ->
-      Logger.warning(
-        "Failed to fetch docs for #{inspect(module)}: #{Exception.format(kind, reason, __STACKTRACE__)}"
-      )
-
-      :error
-  end
-
-  @docs_chunk [?D, ?o, ?c, ?s]
-
-  # TODO remove when we depend on elixir with fix for https://github.com/elixir-lang/elixir/pull/13286
-  defp fetch_docs_from_beam(bin_or_path) do
-    case :beam_lib.chunks(bin_or_path, [@docs_chunk]) do
-      {:ok, {_module, [{@docs_chunk, bin}]}} ->
-        load_docs_chunk(bin)
-
-      {:error, :beam_lib, {:missing_chunk, _, @docs_chunk}} ->
-        {:error, :chunk_not_found}
-
-      {:error, :beam_lib, {:file_error, _, :enoent}} ->
-        {:error, :module_not_found}
-
-      {:error, :beam_lib, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp fetch_docs_from_chunk(path) do
-    case File.read(path) do
-      {:ok, bin} ->
-        load_docs_chunk(bin)
-
-      {:error, _} ->
-        {:error, :chunk_not_found}
-    end
-  end
-
-  defp load_docs_chunk(bin) do
-    :erlang.binary_to_term(bin)
-  rescue
-    _ ->
-      {:error, {:invalid_chunk, bin}}
-  end
+  def fetch_docs(module) when is_atom(module), do: Code.fetch_docs(module)
+  def fetch_docs(path) when is_binary(path), do: Code.fetch_docs(path)
 end

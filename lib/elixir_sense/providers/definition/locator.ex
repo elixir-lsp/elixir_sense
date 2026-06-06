@@ -17,10 +17,9 @@ defmodule ElixirSense.Providers.Definition.Locator do
   alias ElixirSense.Core.State.{ModFunInfo, TypeInfo}
 
   alias ElixirSense.Providers.Plugins.Phoenix.Scope
-  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
   def definition(code, line, column, options \\ []) do
-    case NormalizedCode.Fragment.surround_context(code, {line, column}) do
+    case Code.Fragment.surround_context(code, {line, column}) do
       :none ->
         nil
 

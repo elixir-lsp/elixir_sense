@@ -112,9 +112,7 @@ defmodule ElixirSense.Core.ParserTest do
               error: {:error, :parse_error}
             }, %Env{functions: functions}} = parse(source, {3, 10})
 
-    if Version.match?(System.version(), ">= 1.15.0") do
-      assert Keyword.has_key?(functions, List)
-    end
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with missing terminator \"\'\"" do
@@ -129,9 +127,7 @@ defmodule ElixirSense.Core.ParserTest do
               error: {:error, :parse_error}
             }, %Env{functions: functions}} = parse(source, {3, 10})
 
-    if Version.match?(System.version(), ">= 1.15.0") do
-      assert Keyword.has_key?(functions, List)
-    end
+    assert Keyword.has_key?(functions, List)
   end
 
   test "parse_string with missing heredoc terminator" do
@@ -362,17 +358,10 @@ defmodule ElixirSense.Core.ParserTest do
               vars: vars
             }} = parse(source, {5, 14})
 
-    if Version.match?(System.version(), "< 1.15.0") do
-      # container_cursor_to_quoted removes function body
-      assert [
-               %ElixirSense.Core.State.VarInfo{name: :y}
-             ] = Enum.sort(vars)
-    else
-      assert [
-               %ElixirSense.Core.State.VarInfo{name: :x},
-               %ElixirSense.Core.State.VarInfo{name: :y}
-             ] = Enum.sort(vars)
-    end
+    assert [
+             %ElixirSense.Core.State.VarInfo{name: :x},
+             %ElixirSense.Core.State.VarInfo{name: :y}
+           ] = Enum.sort(vars)
   end
 
   test "parse struct" do

@@ -87,14 +87,6 @@ defmodule ElixirSense.Core.Metadata do
         surround \\ nil
       )
 
-  if Version.match?(System.version(), "< 1.15.0-dev") do
-    # return early if cursor env already found by parser replacing line
-    # this helps on < 1.15 and breaks tests on later versions
-    def get_cursor_env(%__MODULE__{cursor_env: {_, env}}, _position, _surround) do
-      env
-    end
-  end
-
   def get_cursor_env(
         %__MODULE__{} = metadata,
         {line, column},
@@ -144,7 +136,7 @@ defmodule ElixirSense.Core.Metadata do
         # IO.puts(prefix <> "|")
         options = container_cursor_to_quoted_options(needle <> suffix)
 
-        case NormalizedCode.Fragment.container_cursor_to_quoted(prefix, options) do
+        case Code.Fragment.container_cursor_to_quoted(prefix, options) do
           {:ok, ast} ->
             MetadataBuilder.build(ast).cursor_env || {[], nil}
 

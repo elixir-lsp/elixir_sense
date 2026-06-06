@@ -7,7 +7,6 @@ defmodule ElixirSense.Core.Parser do
   alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Normalized.Tokenizer
   alias ElixirSense.Core.Source
-  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
   require Logger
 
   @spec parse_file(String.t(), boolean, boolean, {pos_integer, pos_integer} | nil) :: Metadata.t()
@@ -134,7 +133,7 @@ defmodule ElixirSense.Core.Parser do
             {true, {cursor_line, cursor_column}} ->
               prefix = Source.text_before(original_source, cursor_line, cursor_column)
 
-              case NormalizedCode.Fragment.container_cursor_to_quoted(prefix, parser_options) do
+              case Code.Fragment.container_cursor_to_quoted(prefix, parser_options) do
                 {:ok, ast} ->
                   {:ok, ast, prefix, error_to_report}
 

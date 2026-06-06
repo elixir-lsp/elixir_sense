@@ -12,12 +12,11 @@ defmodule ElixirSense.Providers.Implementation.Locator do
   alias ElixirSense.Core.SurroundContext
   alias ElixirSense.Providers.Location
   alias ElixirSense.Core.Parser
-  alias ElixirSense.Core.Normalized.Code, as: NormalizedCode
 
   require ElixirSense.Core.Introspection, as: Introspection
 
   def implementations(code, line, column, options \\ []) do
-    case NormalizedCode.Fragment.surround_context(code, {line, column}) do
+    case Code.Fragment.surround_context(code, {line, column}) do
       :none ->
         []
 

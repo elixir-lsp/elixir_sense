@@ -21,20 +21,14 @@ defmodule ElixirSense.Core.Compiler.Rewrite do
     end
   end
 
-  if Version.match?(System.version(), "< 1.14.0-dev") do
+  if function_exported?(:elixir_rewrite, :match_rewrite, 5) do
     defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
-      :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args)
+      # elixir uses guard context for error messages
+      :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args, "guard")
     end
   else
-    if function_exported?(:elixir_rewrite, :match_rewrite, 5) do
-      defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
-        # elixir uses guard context for error messages
-        :elixir_rewrite.guard_rewrite(receiver, dot_meta, right, meta, e_args, "guard")
-      end
-    else
-      defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
-        :elixir_rewrite.guard(receiver, dot_meta, right, meta, e_args, s)
-      end
+    defp do_rewrite(:guard, receiver, dot_meta, right, meta, e_args, s) do
+      :elixir_rewrite.guard(receiver, dot_meta, right, meta, e_args, s)
     end
   end
 

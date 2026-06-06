@@ -6,12 +6,12 @@ defmodule ElixirSense.MixProject do
     [
       app: :elixir_sense,
       version: "2.0.0",
-      elixir: "~> 1.13",
+      elixir: "~> 1.16",
       elixirc_paths: elixirc_paths(Mix.env()),
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       prune_code_paths: Mix.env() == :prod,
-      compilers: [:yecc] ++ Mix.compilers(),
+      compilers: Mix.compilers(),
       dialyzer: [
         flags: [
           :unmatched_returns,

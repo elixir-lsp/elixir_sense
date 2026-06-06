@@ -85,12 +85,7 @@ defmodule ElixirSense.Core.CompilerTest do
       Record.defrecordp(:elixir_ex,
         caller: false,
         prematch: %State{
-          prematch:
-            if Version.match?(System.version(), ">= 1.15.0") do
-              Code.get_compiler_option(:on_undefined_variable)
-            else
-              :warn
-            end
+          prematch: Code.get_compiler_option(:on_undefined_variable)
         },
         stacktrace: false,
         unused: {%{}, 0},
@@ -189,14 +184,10 @@ defmodule ElixirSense.Core.CompilerTest do
   defp state_with_prematch do
     %State{
       prematch:
-        if Version.match?(System.version(), ">= 1.15.0") do
-          if(Version.match?(System.version(), ">= 1.18.0"),
-            do: :none,
-            else: Code.get_compiler_option(:on_undefined_variable)
-          )
-        else
-          :warn
-        end
+        if(Version.match?(System.version(), ">= 1.18.0"),
+          do: :none,
+          else: Code.get_compiler_option(:on_undefined_variable)
+        )
     }
   end
 
@@ -238,17 +229,15 @@ defmodule ElixirSense.Core.CompilerTest do
       assert_expansion("%x{} = %Date{year: 2024, month: 2, day: 18}")
     end
 
-    if Version.match?(System.version(), ">= 1.15.0") do
-      test "expands <<>>" do
-        assert_expansion("<<>>")
-        assert_expansion("<<1>>")
-        assert_expansion("<<x, rest::binary>> = \"\"")
-      end
+    test "expands <<>>" do
+      assert_expansion("<<>>")
+      assert_expansion("<<1>>")
+      assert_expansion("<<x, rest::binary>> = \"\"")
+    end
 
-      test "expands <<>> with modifier" do
-        assert_expansion("x = 1; y = 1; <<x::size(y)>>")
-        assert_expansion("x = 1; y = 1; <<x::size(y)>> = <<>>")
-      end
+    test "expands <<>> with modifier" do
+      assert_expansion("x = 1; y = 1; <<x::size(y)>>")
+      assert_expansion("x = 1; y = 1; <<x::size(y)>> = <<>>")
     end
 
     test "expands __block__" do
@@ -382,41 +371,31 @@ defmodule ElixirSense.Core.CompilerTest do
     test "expands __ENV__.property" do
       assert_expansion("__ENV__.requires")
 
-      if Version.match?(System.version(), ">= 1.15.0") do
-        # elixir 1.14 returns fields in different order
-        # we don't test that as the code is invalid anyway
-        assert_expansion("__ENV__.foo")
-      end
+      assert_expansion("__ENV__.foo")
     end
 
-    if Version.match?(System.version(), ">= 1.16.0") do
-      test "expands quote literal" do
-        assert_expansion("quote do: 2")
-        assert_expansion("quote do: :foo")
-        assert_expansion("quote do: \"asd\"")
-        assert_expansion("quote do: []")
-        assert_expansion("quote do: [12]")
-        assert_expansion("quote do: [12, 34]")
-        assert_expansion("quote do: [12 | 34]")
-        assert_expansion("quote do: [12 | [34]]")
-        assert_expansion("quote do: {12}")
-        assert_expansion("quote do: {12, 34}")
-        assert_expansion("quote do: %{a: 12}")
-      end
+    test "expands quote literal" do
+      assert_expansion("quote do: 2")
+      assert_expansion("quote do: :foo")
+      assert_expansion("quote do: \"asd\"")
+      assert_expansion("quote do: []")
+      assert_expansion("quote do: [12]")
+      assert_expansion("quote do: [12, 34]")
+      assert_expansion("quote do: [12 | 34]")
+      assert_expansion("quote do: [12 | [34]]")
+      assert_expansion("quote do: {12}")
+      assert_expansion("quote do: {12, 34}")
+      assert_expansion("quote do: %{a: 12}")
     end
 
-    if Version.match?(System.version(), ">= 1.16.0") do
-      test "expands quote variable" do
-        assert_expansion("quote do: abc")
-      end
+    test "expands quote variable" do
+      assert_expansion("quote do: abc")
     end
 
-    if Version.match?(System.version(), ">= 1.16.0") do
-      test "expands quote quote" do
-        assert_expansion("""
-        quote do: (quote do: 1)
-        """)
-      end
+    test "expands quote quote" do
+      assert_expansion("""
+      quote do: (quote do: 1)
+      """)
     end
 
     test "expands quote block" do
@@ -445,44 +424,36 @@ defmodule ElixirSense.Core.CompilerTest do
       """)
     end
 
-    if Version.match?(System.version(), ">= 1.16.0") do
-      test "expands quote unquote_splicing" do
-        assert_expansion("""
-        a = [1, 2, 3]
-        quote do: (unquote_splicing(a))
-        """)
-      end
+    test "expands quote unquote_splicing" do
+      assert_expansion("""
+      a = [1, 2, 3]
+      quote do: (unquote_splicing(a))
+      """)
     end
 
-    if Version.match?(System.version(), ">= 1.16.0") do
-      test "expands quote unquote_splicing in list" do
-        assert_expansion("""
-        a = [1, 2, 3]
-        quote do: [unquote_splicing(a) | [1]]
-        """)
+    test "expands quote unquote_splicing in list" do
+      assert_expansion("""
+      a = [1, 2, 3]
+      quote do: [unquote_splicing(a) | [1]]
+      """)
 
-        assert_expansion("""
-        a = [1, 2, 3]
-        quote do: [1 | unquote_splicing(a)]
-        """)
-      end
+      assert_expansion("""
+      a = [1, 2, 3]
+      quote do: [1 | unquote_splicing(a)]
+      """)
     end
 
-    if Version.match?(System.version(), ">= 1.16.0") do
-      test "expands quote alias" do
-        assert_expansion("quote do: Date")
-        assert_expansion("quote do: Elixir.Date")
-        assert_expansion("quote do: String.Chars")
-        assert_expansion("alias String.Chars; quote do: Chars")
-        assert_expansion("alias String.Chars; quote do: Chars.foo().A")
-      end
+    test "expands quote alias" do
+      assert_expansion("quote do: Date")
+      assert_expansion("quote do: Elixir.Date")
+      assert_expansion("quote do: String.Chars")
+      assert_expansion("alias String.Chars; quote do: Chars")
+      assert_expansion("alias String.Chars; quote do: Chars.foo().A")
     end
 
-    if Version.match?(System.version(), ">= 1.16.0") do
-      test "expands quote import" do
-        assert_expansion("quote do: inspect(1)")
-        assert_expansion("quote do: &inspect/1")
-      end
+    test "expands quote import" do
+      assert_expansion("quote do: inspect(1)")
+      assert_expansion("quote do: &inspect/1")
     end
 
     if Version.match?(System.version(), ">= 1.17.0") do
@@ -498,14 +469,12 @@ defmodule ElixirSense.Core.CompilerTest do
       end
     end
 
-    if Version.match?(System.version(), ">= 1.16.0") do
-      test "expands quote with unquote false" do
-        assert_expansion("""
-        quote unquote: false do
-          unquote("hello")
-        end
-        """)
+    test "expands quote with unquote false" do
+      assert_expansion("""
+      quote unquote: false do
+        unquote("hello")
       end
+      """)
     end
 
     if Version.match?(System.version(), ">= 1.17.0") do
@@ -516,28 +485,22 @@ defmodule ElixirSense.Core.CompilerTest do
       end
     end
 
-    if Version.match?(System.version(), ">= 1.16.0") do
-      test "expands quote with line" do
-        assert_expansion("""
-        quote line: 123, do: bar(1, 2, 3)
-        """)
-      end
+    test "expands quote with line" do
+      assert_expansion("""
+      quote line: 123, do: bar(1, 2, 3)
+      """)
     end
 
-    if Version.match?(System.version(), ">= 1.16.0") do
-      test "expands quote with location: keep" do
-        assert_expansion("""
-        quote location: :keep, do: bar(1, 2, 3)
-        """)
-      end
+    test "expands quote with location: keep" do
+      assert_expansion("""
+      quote location: :keep, do: bar(1, 2, 3)
+      """)
     end
 
-    if Version.match?(System.version(), ">= 1.16.0") do
-      test "expands quote with context" do
-        assert_expansion("""
-        quote context: Foo, do: abc = 3
-        """)
-      end
+    test "expands quote with context" do
+      assert_expansion("""
+      quote context: Foo, do: abc = 3
+      """)
     end
 
     test "expands &super" do
@@ -648,22 +611,20 @@ defmodule ElixirSense.Core.CompilerTest do
       """)
     end
 
-    if Version.match?(System.version(), ">= 1.15.0") do
-      test "expands for with bitstring generator" do
-        assert_expansion("""
-        for <<r::8, g::8, b::8 <- "foo">> do
-          :ok
-        end
-        """)
+    test "expands for with bitstring generator" do
+      assert_expansion("""
+      for <<r::8, g::8, b::8 <- "foo">> do
+        :ok
       end
+      """)
+    end
 
-      test "expands for with reduce" do
-        assert_expansion("""
-        for <<x <- "AbCabCABc">>, x in ?a..?z, reduce: %{} do
-          acc -> acc
-        end
-        """)
+    test "expands for with reduce" do
+      assert_expansion("""
+      for <<x <- "AbCabCABc">>, x in ?a..?z, reduce: %{} do
+        acc -> acc
       end
+      """)
     end
 
     test "expands for in block" do
@@ -777,37 +738,35 @@ defmodule ElixirSense.Core.CompilerTest do
       assert state_to_map(state) == elixir_ex_to_map(elixir_state)
     end
 
-    if Version.match?(System.version(), ">= 1.15.0") do
-      test "expands nullary call if_undefined: :warn" do
-        Code.put_compiler_option(:on_undefined_variable, :warn)
-        ast = {:self, [], nil}
+    test "expands nullary call if_undefined: :warn" do
+      Code.put_compiler_option(:on_undefined_variable, :warn)
+      ast = {:self, [], nil}
 
-        {expanded, state, env} =
-          Compiler.expand(
-            ast,
-            %State{
-              prematch:
-                if(Version.match?(System.version(), ">= 1.18.0"),
-                  do: :none,
-                  else: Code.get_compiler_option(:on_undefined_variable)
-                ) || :warn
-            },
-            Compiler.env()
-          )
+      {expanded, state, env} =
+        Compiler.expand(
+          ast,
+          %State{
+            prematch:
+              if(Version.match?(System.version(), ">= 1.18.0"),
+                do: :none,
+                else: Code.get_compiler_option(:on_undefined_variable)
+              ) || :warn
+          },
+          Compiler.env()
+        )
 
-        env = %{env | tracers: []}
+      env = %{env | tracers: []}
 
-        elixir_env = :elixir_env.new()
+      elixir_env = :elixir_env.new()
 
-        {elixir_expanded, elixir_state, elixir_env} =
-          :elixir_expand.expand(ast, :elixir_env.env_to_ex(elixir_env), elixir_env)
+      {elixir_expanded, elixir_state, elixir_env} =
+        :elixir_expand.expand(ast, :elixir_env.env_to_ex(elixir_env), elixir_env)
 
-        assert expanded == elixir_expanded
-        assert env == elixir_env
-        assert state_to_map(state) == elixir_ex_to_map(elixir_state)
-      after
-        Code.put_compiler_option(:on_undefined_variable, :raise)
-      end
+      assert expanded == elixir_expanded
+      assert env == elixir_env
+      assert state_to_map(state) == elixir_ex_to_map(elixir_state)
+    after
+      Code.put_compiler_option(:on_undefined_variable, :raise)
     end
 
     test "expands local call" do

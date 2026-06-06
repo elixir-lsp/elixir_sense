@@ -69,15 +69,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
         quoted = expander.(stop_generated(args), env)
         next = :elixir_module.next_counter(env.module)
 
-        if Version.match?(System.version(), ">= 1.14.0-dev") do
-          :elixir_quote.linify_with_context_counter(expansion_meta, {receiver, next}, quoted)
-        else
-          :elixir_quote.linify_with_context_counter(
-            expansion_meta |> Keyword.get(:line, 0),
-            {receiver, next},
-            quoted
-          )
-        end
+        :elixir_quote.linify_with_context_counter(expansion_meta, {receiver, next}, quoted)
       end
     end
   end
@@ -525,14 +517,8 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
       end)
     end
 
-    if Version.match?(System.version(), ">= 1.15.0-dev") do
-      defp remove_internals(set) do
-        set -- [{:behaviour_info, 1}, {:module_info, 1}, {:module_info, 0}]
-      end
-    else
-      defp remove_internals(set) do
-        set -- [{:module_info, 1}, {:module_info, 0}]
-      end
+    defp remove_internals(set) do
+      set -- [{:behaviour_info, 1}, {:module_info, 1}, {:module_info, 0}]
     end
 
     defp ensure_keyword_list([]) do
@@ -569,14 +555,8 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
   end
 
   defmodule Dispatch do
-    if Version.match?(System.version(), ">= 1.14.0-dev") do
-      defp local_for(meta, name, arity, kinds, env) do
-        :elixir_def.local_for(meta, name, arity, kinds, env)
-      end
-    else
-      defp local_for(_meta, name, arity, kinds, env) do
-        :elixir_def.local_for(env.module, name, arity, kinds)
-      end
+    defp local_for(meta, name, arity, kinds, env) do
+      :elixir_def.local_for(meta, name, arity, kinds, env)
     end
 
     def expand_import(meta, name, arity, e, extra, allow_locals, trace) do
@@ -717,11 +697,9 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
     defp prune_stacktrace([{m, f, a, _} | _], {m, f, a}, info, _e), do: info
 
     # Mirrors upstream commit 5a1fa351d — Fix invalid module reference in
-    # prune_stacktrace. `:elixir_exp` was the historical name (and is still
-    # referenced in older Elixir releases); `:elixir_expand` is the current
-    # one. We keep both so this works across 1.16+.
+    # prune_stacktrace
     defp prune_stacktrace([{mod, _, _, _} | _], _mfa, info, _e)
-         when mod in [:elixir_dispatch, :elixir_exp, :elixir_expand, __MODULE__],
+         when mod in [:elixir_dispatch, :elixir_expand, __MODULE__],
          do: info
 
     # Also prune ElixirSense's own expansion plumbing so the surfaced trace

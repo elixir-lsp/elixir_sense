@@ -1737,12 +1737,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), "< 1.15.0") do
-        assert [%VarInfo{type: {:intersection, [{:atom, :my_var}, {:local_call, :x, _, []}]}}] =
-                 state |> get_line_vars(3)
-      else
-        assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
-      end
+      assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
     end
 
     test "variable binding simple case match context reverse order" do
@@ -1755,12 +1750,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), "< 1.15.0") do
-        assert [%VarInfo{type: {:intersection, [{:atom, :my_var}, {:local_call, :x, _, []}]}}] =
-                 state |> get_line_vars(3)
-      else
-        assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
-      end
+      assert [%VarInfo{type: {:atom, :my_var}}] = state |> get_line_vars(3)
     end
 
     test "variable binding simple case match context guard" do
@@ -2269,11 +2259,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
              ] = state |> get_line_vars(16)
 
-      if Version.match?(System.version(), "< 1.15.0") do
-        assert maybe_local_call == {:local_call, :now, {11, 12}, []}
-      else
-        assert maybe_local_call == nil
-      end
+      assert maybe_local_call == nil
 
       assert [
                %VarInfo{name: :abc, type: nil},
@@ -4600,15 +4586,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert get_line_aliases(state, 3) == [{Child, OtherParent.Child}]
 
-      if Version.match?(System.version(), "< 1.16.0") do
-        assert get_line_aliases(state, 5) == []
-        assert get_line_aliases(state, 7) == []
-      else
-        # on elixir >= 1.16 no unaliasing is happening
-        # https://github.com/elixir-lang/elixir/issues/12456
-        assert get_line_aliases(state, 5) == [{Child, OtherParent.Child}]
-        assert get_line_aliases(state, 7) == [{Child, OtherParent.Child}]
-      end
+      # on elixir >= 1.16 no unaliasing is happening
+      # https://github.com/elixir-lang/elixir/issues/12456
+      assert get_line_aliases(state, 5) == [{Child, OtherParent.Child}]
+      assert get_line_aliases(state, 7) == [{Child, OtherParent.Child}]
     end
 
     # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
@@ -7541,23 +7522,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      if Version.match?(System.version(), ">= 1.15.0") do
-        assert state.calls
-               |> Enum.flat_map(fn {_line, info} -> info end)
-               |> Enum.filter(fn info -> info.kind == :local_function end) == []
-      else
-        assert %{
-                 4 => [
-                   %CallInfo{
-                     arity: 0,
-                     func: :func_1,
-                     position: {4, 5},
-                     mod: NyModule,
-                     kind: :local_function
-                   }
-                 ]
-               } = state.calls
-      end
+      assert state.calls
+             |> Enum.flat_map(fn {_line, info} -> info end)
+             |> Enum.filter(fn info -> info.kind == :local_function end) == []
     end
 
     test "registers macro calls" do
@@ -9295,9 +9262,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
              } = state.types
 
-      if Version.match?(System.version(), ">= 1.15.0") do
-        assert "All the types that implement this protocol" <> _ = doc
-      end
+      assert "All the types that implement this protocol" <> _ = doc
     end
 
     test "specs and callbacks" do

@@ -735,11 +735,7 @@ defmodule ElixirSense.Core.Compiler do
               :pin
 
             _ ->
-              if Version.match?(System.version(), ">= 1.15.0-dev") do
-                Code.get_compiler_option(:on_undefined_variable)
-              else
-                :warn
-              end
+              Code.get_compiler_option(:on_undefined_variable)
           end
       end
 
@@ -2045,12 +2041,7 @@ defmodule ElixirSense.Core.Compiler do
       if Version.match?(System.version(), ">= 1.18.0-dev") do
         :none
       else
-        if Version.match?(System.version(), ">= 1.15.0-dev") do
-          # Code.get_compiler_option(:on_undefined_variable)
-          :raise
-        else
-          :warn
-        end
+        Code.get_compiler_option(:on_undefined_variable)
       end
 
     {e_guard, state, env_for_expand} =
@@ -2070,11 +2061,7 @@ defmodule ElixirSense.Core.Compiler do
       if Version.match?(System.version(), ">= 1.18.0-dev") do
         state.prematch
       else
-        if Version.match?(System.version(), ">= 1.15.0-dev") do
-          Code.get_compiler_option(:on_undefined_variable)
-        else
-          :warn
-        end
+        Code.get_compiler_option(:on_undefined_variable)
       end
 
     state =
@@ -2291,15 +2278,6 @@ defmodule ElixirSense.Core.Compiler do
   # defmodule automatically defines aliases, we need to mirror this feature here.
 
   # defmodule Elixir.Alias
-  if Version.match?(System.version(), "< 1.16.0-dev") do
-    # see https://github.com/elixir-lang/elixir/pull/12451#issuecomment-1461393633
-    defp alias_defmodule({:__aliases__, meta, [:"Elixir", t] = x}, module, env) do
-      alias = String.to_atom("Elixir." <> Atom.to_string(t))
-      {:ok, env} = NormalizedMacroEnv.define_alias(env, meta, alias, as: alias, trace: true)
-      {module, env}
-    end
-  end
-
   defp alias_defmodule({:__aliases__, _, [:"Elixir", _ | _]}, module, env), do: {module, env}
 
   # defmodule Alias in root
@@ -2947,11 +2925,7 @@ defmodule ElixirSense.Core.Compiler do
     {e_args, State.close_write(sa, s), ea}
   end
 
-  if Version.match?(System.version(), ">= 1.15.0-dev") do
-    @internals [{:behaviour_info, 1}, {:module_info, 1}, {:module_info, 0}]
-  else
-    @internals [{:module_info, 1}, {:module_info, 0}]
-  end
+  @internals [{:behaviour_info, 1}, {:module_info, 1}, {:module_info, 0}]
 
   defp expand_without_aliases_report({:__aliases__, _, _} = alias, state, env) do
     expand_aliases(alias, state, env, false)
