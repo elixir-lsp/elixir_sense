@@ -524,7 +524,8 @@ defmodule ElixirSense.Core.ElixirTypes do
         stack = init_stack(module, function, file, mode)
 
         if stack do
-          stack = %{stack | refine_vars: true}
+          # Elixir 1.20 dropped the dev-era `stack.refine_vars` flag; variable
+          # refinement now happens unconditionally inside Pattern.of_match/6.
           context = init_context(Keyword.get(opts, :variables))
 
           {pattern_ast, value_ast, full_match} = normalize_match(pattern_ast, match_ast)
@@ -607,7 +608,14 @@ defmodule ElixirSense.Core.ElixirTypes do
         Module.Types.Expr.of_expr(value_ast, refined_expected, full_match, stack, ctx)
       end
 
-      case Module.Types.Pattern.of_match(pattern_ast, expected_fun, full_match, stack, context) do
+      case Module.Types.Pattern.of_match(
+             pattern_ast,
+             expected_fun,
+             full_match,
+             pattern_meta(pattern_ast),
+             stack,
+             context
+           ) do
         {_type, %{vars: vars_map} = out_ctx} ->
           # Enhanced variable shape extraction with type refinement
           var_shapes =
@@ -650,7 +658,14 @@ defmodule ElixirSense.Core.ElixirTypes do
       end
 
       {_type, %{vars: vars_map} = out_ctx} =
-        Module.Types.Pattern.of_match(pattern_ast, expected_fun, full_match, stack, context)
+        Module.Types.Pattern.of_match(
+          pattern_ast,
+          expected_fun,
+          full_match,
+          pattern_meta(pattern_ast),
+          stack,
+          context
+        )
 
       var_shapes =
         extract_refined_var_shapes(
@@ -1157,6 +1172,10 @@ defmodule ElixirSense.Core.ElixirTypes do
     to_shape_eager(descr)
   end
 
+  # Extract AST meta from a pattern node, defaulting to [] for literals.
+  defp pattern_meta({_form, meta, _args}) when is_list(meta), do: meta
+  defp pattern_meta(_), do: []
+
   # Convert a Module.Types.Descr descriptor to an ElixirSense shape.
   # Uses Descr.to_quoted/1 to get stable AST representation, then translates
   # that AST to ElixirSense shapes — avoiding internal BDD pattern matching.
@@ -1550,7 +1569,17 @@ defmodule ElixirSense.Core.ElixirTypes do
     Enum.reduce(vars, %{}, fn
       {{name, version}, type_like}, acc when is_atom(name) and is_integer(version) ->
         type_descr = coerce_var_type(type_like)
-        data = %{type: type_descr, name: name, context: nil, off_traces: []}
+        # Mirror the fresh-variable shape from Module.Types.Of (Elixir 1.20 added
+        # the `paths` and `deps` fields used by cross-variable refinement).
+        data = %{
+          type: type_descr,
+          name: name,
+          context: nil,
+          off_traces: [],
+          paths: [],
+          deps: %{}
+        }
+
         Map.put(acc, version, data)
 
       _other, acc ->
@@ -1804,12 +1833,22 @@ defmodule ElixirSense.Core.ElixirTypes do
       body = body |> ensure_body_var_versions() |> replace_module_attributes()
 
       try do
-        {trees, clause_ctx} =
+        # Elixir 1.20 changed of_head/7 -> of_head/8 (added `previous` for
+        # cross-clause typing) and split the old `{:infer, expected}` tag into a
+        # `previous` + `info` pair. We infer each clause independently, so we
+        # pass a fresh `init_previous/0`. The `info` tag only feeds warnings,
+        # which we run in :infer mode and discard. of_domain/3 likewise now
+        # takes `stack` in place of the expected types.
+        previous = Module.Types.Pattern.init_previous()
+        info = {{:def, :def, :infer, expected}, args, guards || []}
+
+        {trees, _precise?, _no_previous_args_types, _previous, clause_ctx} =
           Module.Types.Pattern.of_head(
             args,
             guards || [],
             expected,
-            {:infer, expected},
+            previous,
+            info,
             meta,
             stack,
             context
@@ -1818,7 +1857,7 @@ defmodule ElixirSense.Core.ElixirTypes do
         {return_type, clause_ctx} =
           Module.Types.Expr.of_expr(body, Module.Types.Descr.term(), body, stack, clause_ctx)
 
-        arg_types = Module.Types.Pattern.of_domain(trees, expected, clause_ctx)
+        arg_types = Module.Types.Pattern.of_domain(trees, stack, clause_ctx)
 
         {:cont, [{arg_types, return_type} | acc]}
       catch
@@ -1851,23 +1890,41 @@ defmodule ElixirSense.Core.ElixirTypes do
     %{meta: meta || [], args: args || [], guards: guards, body: body || {:__block__, [], []}}
   end
 
+  # Module.Types.Pattern.of_pattern requires every pattern variable — including
+  # underscores — to carry a `:version` in its meta (Keyword.fetch!/2). Named
+  # vars coming from the metadata builder are already versioned; this is a
+  # safety net for any that slipped through. Each `_` is independent, so we hand
+  # them unique versions from a high base (well above the small versions the
+  # compiler assigns) to avoid aliasing them to each other or to real vars.
+  @underscore_version_base 1_000_000
+
   defp ensure_body_var_versions(ast) do
-    Macro.prewalk(ast, fn
-      {:@, _, _} = node ->
-        node
+    {ast, _counter} =
+      Macro.prewalk(ast, @underscore_version_base, fn
+        {:@, _, _} = node, counter ->
+          {node, counter}
 
-      {name, meta, context} = node
-      when is_atom(name) and is_list(meta) and is_atom(context) and
-             name not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__, :_] ->
-        if Keyword.has_key?(meta, :version) do
-          node
-        else
-          {name, Keyword.put(meta, :version, 0), context}
-        end
+        {:_, meta, context} = node, counter when is_list(meta) and is_atom(context) ->
+          if Keyword.has_key?(meta, :version) do
+            {node, counter}
+          else
+            {{:_, Keyword.put(meta, :version, counter), context}, counter + 1}
+          end
 
-      node ->
-        node
-    end)
+        {name, meta, context} = node, counter
+        when is_atom(name) and is_list(meta) and is_atom(context) and
+               name not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__] ->
+          if Keyword.has_key?(meta, :version) do
+            {node, counter}
+          else
+            {{name, Keyword.put(meta, :version, 0), context}, counter}
+          end
+
+        node, counter ->
+          {node, counter}
+      end)
+
+    ast
   end
 
   # Replace @attr references with placeholder variables so Module.Types.Expr.of_expr can process them

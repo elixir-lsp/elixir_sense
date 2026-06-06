@@ -120,13 +120,15 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert ElixirTypes.to_shape(Module.Types.Descr.open_map(foo: Module.Types.Descr.binary())) ==
                {:map, [foo: {:binary, nil}], nil}
 
-      # open_map with default is also converted (known fields extracted)
+      # Elixir 1.20 removed the open_map/2 "default" form (replaced by domain
+      # keys). An open map with multiple atom fields still has all known fields
+      # extracted, losing the open/closed distinction (keys come back sorted).
       assert ElixirTypes.to_shape(
                Module.Types.Descr.open_map(
-                 [foo: Module.Types.Descr.binary()],
-                 Module.Types.Descr.atom()
+                 foo: Module.Types.Descr.binary(),
+                 bar: Module.Types.Descr.integer()
                )
-             ) == {:map, [foo: {:binary, nil}], nil}
+             ) == {:map, [bar: {:integer, nil}, foo: {:binary, nil}], nil}
     end
 
     test "handles open tuple" do

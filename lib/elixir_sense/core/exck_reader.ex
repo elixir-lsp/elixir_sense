@@ -185,9 +185,18 @@ defmodule ElixirSense.Core.ExCkReader do
       {:error, :invalid_chunk}
   end
 
-  defp extract_signatures({:elixir_checker_v3, contents}), do: do_extract_signatures(contents)
-  defp extract_signatures({:elixir_checker_v2, contents}), do: do_extract_signatures(contents)
-  defp extract_signatures({:elixir_checker_v1, contents}), do: do_extract_signatures(contents)
+  # The ExCk chunk is tagged with a checker version atom (elixir_checker_v1
+  # through v8 and counting). The `%{exports: [...], mode: ...}` contents layout
+  # — including the per-export `:sig` entry — has stayed stable across these
+  # bumps, so we accept any `:elixir_checker_v*` tag rather than enumerating
+  # versions that drift on every Elixir release.
+  defp extract_signatures({tag, contents}) when is_atom(tag) do
+    case Atom.to_string(tag) do
+      "elixir_checker_v" <> _ -> do_extract_signatures(contents)
+      _ -> {:error, :invalid_payload}
+    end
+  end
+
   defp extract_signatures(_), do: {:error, :invalid_payload}
 
   defp do_extract_signatures(contents) when is_map(contents) do
