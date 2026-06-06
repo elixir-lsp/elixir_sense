@@ -513,14 +513,22 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "local call" do
-      assert_old_and_native("foo(a)", {:local_call, :foo, {1, 1}, [{:variable, :a, 1}]}, nil)
+      # Native typing returns nil for this unsupported local call, so the engine
+      # falls back to the {:local_call, ...} shape Binding relies on.
+      assert_old_and_native(
+        "foo(a)",
+        {:local_call, :foo, {1, 1}, [{:variable, :a, 1}]},
+        {:local_call, :foo, {1, 1}, [{:variable, :a, 1}]}
+      )
     end
 
     test "remote call" do
+      # Likewise the {:call, ...} shape is preserved when native typing has no
+      # signature for the remote call.
       assert_old_and_native(
         ":foo.bar(a)",
         {:call, {:atom, :foo}, :bar, [{:variable, :a, 1}]},
-        nil
+        {:call, {:atom, :foo}, :bar, [{:variable, :a, 1}]}
       )
     end
 

@@ -286,8 +286,9 @@ defmodule ElixirSense.Core.Compiler.Clauses do
             s = State.merge_inferred_types(s, enhanced_vars)
             s = State.merge_inferred_elixir_types(s, var_descrs)
 
-            # L1 occurrence typing: within this branch, narrow the scrutinee
-            # variable itself to the type the clause pattern matched.
+            # Occurrence typing (positive narrowing only — no prior-clause
+            # subtraction yet): within this branch, narrow the scrutinee variable
+            # itself to the type the clause pattern matched.
             s = State.merge_inferred_types(s, Occurrence.scrutinee_refinements(scrutinee_ast, h))
 
             {c, s, e}
@@ -337,8 +338,8 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   # A cond clause head is a single-element arg list `[condition]`. In the branch
-  # where the condition holds, refine the tested variables (L1 occurrence
-  # typing) so the clause body sees the narrowed types.
+  # where the condition holds, refine the tested variables (positive occurrence
+  # narrowing) so the clause body sees the narrowed types.
   defp expand_cond_head([_condition] = args, s, e) do
     {e_args, s, e} = Compiler.expand_args(args, s, e)
     s = State.merge_inferred_types(s, Occurrence.condition_refinements(hd(e_args)))
@@ -441,8 +442,8 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     sl = State.merge_inferred_types(sl, enhanced_vars)
     sl = State.merge_inferred_elixir_types(sl, var_descrs)
 
-    # L1 occurrence typing: in the success continuation, narrow the right-hand
-    # side variable to the type the left pattern matched.
+    # Occurrence typing (positive narrowing): in the success continuation,
+    # narrow the right-hand side variable to the type the left pattern matched.
     sl = State.merge_inferred_types(sl, Occurrence.scrutinee_refinements(e_right, e_left))
 
     {{:<-, meta, [e_left, e_right]}, {sl, el}}

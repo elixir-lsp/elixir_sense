@@ -29,8 +29,17 @@ abstraction layer dispatched by **capability probing**, not version numbers.
   5-tuple return, `of_domain` arg order, `stack.refine_vars` dropped, context
   vars carry `paths`/`deps`, `_` patterns versioned, `ExCkReader` accepts any
   `elixir_checker_v*` tag).
-- **Capability layer** — `ElixirTypes.capabilities/0` + `available?/1`, probing
-  the `Module.Types` surface via `function_exported?/3` (the seam for 1.17–1.20).
+- **Capability layer + version-dispatched calls** — `ElixirTypes.capabilities/0`
+  + `available?/1` probe the `Module.Types` surface via `function_exported?/3`,
+  and the adapter dispatches `Pattern.of_match` (`/6` vs `/5`), `of_head`
+  (`/8` + 5-tuple vs `/7` + 2-tuple) and `of_domain` (`stack` vs `expected`) on
+  the exported arity. So `enabled?/0` being true on 1.19 (it has `Expr.of_expr/5`)
+  no longer means the pattern paths raise — they take the 1.19 forms. (The 1.19
+  forms run through `apply/3` so Dialyzer's `:unknown` flag stays happy on 1.20;
+  they're exercised once the system Elixir is 1.19.)
+- **Call-shape preservation** — when native typing returns `nil` for a remote
+  (`{:call, …}`) or local (`{:local_call, …}`) call it can't type, the engine
+  keeps the legacy shape Binding depends on instead of erasing it.
 - **L1 occurrence typing** — `TypeInference.Occurrence`, wired into
   `Compiler.Clauses` for `case`/`cond`/`with`: a variable scrutinee/condition is
   narrowed to the matched pattern's type within each branch. Always-on,

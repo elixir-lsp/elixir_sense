@@ -32,11 +32,15 @@ defmodule ElixirSense.Core.TypeInference do
 
   def type_of({{:., _, [target, fun]}, _meta, args} = ast, context)
       when is_atom(fun) and is_list(args) do
-    if ElixirSense.Core.ElixirTypes.enabled?() do
-      type_of_with_elixir_types(ast, context)
+    # Native typing only narrows calls it understands; when it returns nil
+    # (unsupported call/signature) keep the `{:call, ...}` shape Binding relies on.
+    with true <- ElixirSense.Core.ElixirTypes.enabled?(),
+         native when not is_nil(native) <- type_of_with_elixir_types(ast, context) do
+      native
     else
-      target = type_of(target, context)
-      {:call, target, fun, Enum.map(args, &type_of(&1, context))}
+      _ ->
+        target = type_of(target, context)
+        {:call, target, fun, Enum.map(args, &type_of(&1, context))}
     end
   end
 
@@ -266,12 +270,16 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   def type_of({var, meta, args} = ast, context) when is_atom(var) and is_list(args) do
-    if ElixirSense.Core.ElixirTypes.enabled?() do
-      type_of_with_elixir_types(ast, context)
+    # As with remote calls: fall back to the `{:local_call, ...}` shape Binding
+    # relies on when native typing returns nil for this local call.
+    with true <- ElixirSense.Core.ElixirTypes.enabled?(),
+         native when not is_nil(native) <- type_of_with_elixir_types(ast, context) do
+      native
     else
-      line = Keyword.get(meta, :line, 1)
-      column = Keyword.get(meta, :column, 1)
-      {:local_call, var, {line, column}, Enum.map(args, &type_of(&1, context))}
+      _ ->
+        line = Keyword.get(meta, :line, 1)
+        column = Keyword.get(meta, :column, 1)
+        {:local_call, var, {line, column}, Enum.map(args, &type_of(&1, context))}
     end
   end
 

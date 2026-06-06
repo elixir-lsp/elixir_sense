@@ -164,6 +164,59 @@ defmodule ElixirSense.Core.ElixirTypes do
     Code.ensure_loaded?(module) and function_exported?(module, fun, arity)
   end
 
+  # --- Version-dispatched Module.Types.Pattern calls --------------------------
+  #
+  # `enabled?/0` is true on any Elixir with `Expr.of_expr/5` (1.19+), but the
+  # pattern API changed shape across releases. These helpers dispatch on the
+  # actually-exported arity so the adapter works on 1.19 and 1.20 alike instead
+  # of calling 1.20-only forms and silently degrading on 1.19. The current-Elixir
+  # arity is called directly (so Dialyzer's `:unknown` flag can check it); older
+  # arities go through `apply/3`, which carries no static existence requirement.
+
+  # of_match: 1.20 `of_match/6` (adds `meta`); 1.19 `of_match/5`.
+  # Both return `{type, context}`.
+  defp call_of_match(pattern_ast, expected_fun, expr, meta, stack, context) do
+    if loaded_exported?(Module.Types.Pattern, :of_match, 6) do
+      Module.Types.Pattern.of_match(pattern_ast, expected_fun, expr, meta, stack, context)
+    else
+      apply(Module.Types.Pattern, :of_match, [pattern_ast, expected_fun, expr, stack, context])
+    end
+  end
+
+  # of_head: 1.20 `of_head/8` (`previous` + `info`, 5-tuple return); 1.19
+  # `of_head/7` (single `tag`, 2-tuple return). Normalized to `{trees, context}`.
+  defp call_of_head(args, guards, expected, meta, stack, context) do
+    if loaded_exported?(Module.Types.Pattern, :of_head, 8) do
+      previous = Module.Types.Pattern.init_previous()
+      info = {{:def, :def, :infer, expected}, args, guards}
+
+      {trees, _precise?, _no_previous_args_types, _previous, clause_ctx} =
+        Module.Types.Pattern.of_head(args, guards, expected, previous, info, meta, stack, context)
+
+      {trees, clause_ctx}
+    else
+      apply(Module.Types.Pattern, :of_head, [
+        args,
+        guards,
+        expected,
+        {:infer, expected},
+        meta,
+        stack,
+        context
+      ])
+    end
+  end
+
+  # of_domain: same arity (3) in both, but 1.20 takes `stack` where 1.19 takes
+  # the `expected` types list. Tie the choice to the of_head version.
+  defp call_of_domain(trees, expected, stack, clause_ctx) do
+    if loaded_exported?(Module.Types.Pattern, :of_head, 8) do
+      Module.Types.Pattern.of_domain(trees, stack, clause_ctx)
+    else
+      Module.Types.Pattern.of_domain(trees, expected, clause_ctx)
+    end
+  end
+
   @doc """
   Creates a Module.Types stack for typing operations.
   """
@@ -678,7 +731,7 @@ defmodule ElixirSense.Core.ElixirTypes do
         Module.Types.Expr.of_expr(value_ast, refined_expected, full_match, stack, ctx)
       end
 
-      case Module.Types.Pattern.of_match(
+      case call_of_match(
              pattern_ast,
              expected_fun,
              full_match,
@@ -728,7 +781,7 @@ defmodule ElixirSense.Core.ElixirTypes do
       end
 
       {_type, %{vars: vars_map} = out_ctx} =
-        Module.Types.Pattern.of_match(
+        call_of_match(
           pattern_ast,
           expected_fun,
           full_match,
@@ -1903,31 +1956,14 @@ defmodule ElixirSense.Core.ElixirTypes do
       body = body |> ensure_body_var_versions() |> replace_module_attributes()
 
       try do
-        # Elixir 1.20 changed of_head/7 -> of_head/8 (added `previous` for
-        # cross-clause typing) and split the old `{:infer, expected}` tag into a
-        # `previous` + `info` pair. We infer each clause independently, so we
-        # pass a fresh `init_previous/0`. The `info` tag only feeds warnings,
-        # which we run in :infer mode and discard. of_domain/3 likewise now
-        # takes `stack` in place of the expected types.
-        previous = Module.Types.Pattern.init_previous()
-        info = {{:def, :def, :infer, expected}, args, guards || []}
-
-        {trees, _precise?, _no_previous_args_types, _previous, clause_ctx} =
-          Module.Types.Pattern.of_head(
-            args,
-            guards || [],
-            expected,
-            previous,
-            info,
-            meta,
-            stack,
-            context
-          )
+        # of_head / of_domain shapes differ between 1.19 and 1.20; call_of_head/
+        # call_of_domain dispatch on the exported arity (see their definitions).
+        {trees, clause_ctx} = call_of_head(args, guards || [], expected, meta, stack, context)
 
         {return_type, clause_ctx} =
           Module.Types.Expr.of_expr(body, Module.Types.Descr.term(), body, stack, clause_ctx)
 
-        arg_types = Module.Types.Pattern.of_domain(trees, stack, clause_ctx)
+        arg_types = call_of_domain(trees, expected, stack, clause_ctx)
 
         {:cont, [{arg_types, return_type} | acc]}
       catch

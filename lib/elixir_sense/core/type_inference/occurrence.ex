@@ -1,32 +1,40 @@
 defmodule ElixirSense.Core.TypeInference.Occurrence do
   @moduledoc """
-  ElixirSense-native occurrence typing (the always-on "L1" layer).
+  Partial, ElixirSense-native occurrence typing — **positive narrowing only**.
 
-  When a `case`/`with` scrutinee — or a `cond`/`with` condition — is a plain
-  variable, the clause that matched tells us something more specific about that
-  variable *inside the clause body*. For example:
+  > #### This is a first slice, not full occurrence typing {: .warning}
+  >
+  > It refines a scrutinee/condition variable to the type the *current* clause
+  > matched. It does **not** do prior-clause subtraction, so the canonical
+  > example below does not yet narrow `value`:
+  >
+  >     case System.get_env("X") do   # binary() | nil
+  >       nil   -> :none
+  >       value -> value   # NOT narrowed to binary() here — would need negation
+  >     end
+  >
+  > Full 1.20-style occurrence typing (subtracting earlier clauses) is tracked
+  > as follow-up work; see `TYPES_1_20_BACKPORT.md`.
+
+  What it *does* handle — narrowing the scrutinee to the matched pattern within
+  the branch:
 
       case x do
         %User{} = u -> u.<cursor>   # here `x` is a `%User{}`
         {:ok, v}    -> v.<cursor>   # here `x` is `{:ok, _}`
       end
 
-  This module computes those per-branch refinements over ElixirSense's shape
-  vocabulary (see `ElixirSense.Core.TypeInference`). It is intentionally
-  version-independent and does **not** call into Elixir's `Module.Types`; the
-  optional, more precise reverse-arrow pass (Elixir 1.20+) lives behind the
-  capability probe in `ElixirSense.Core.ElixirTypes` and only ever *improves* on
-  the result computed here.
+  Refinements are computed over ElixirSense's shape vocabulary (see
+  `ElixirSense.Core.TypeInference`). The module is intentionally
+  version-independent and does **not** call into Elixir's `Module.Types`.
 
-  ## Scope and conservatism
+  ## Why positive-only
 
-  The shape model is structural and has no negation/difference, so this layer
-  performs **positive narrowing only** (narrowing the scrutinee to the type the
-  branch matched). Cross-clause subtraction (e.g. inferring `value` is non-`nil`
-  in the second clause of `nil -> ...; value -> ...`) requires negation shapes
-  (`not_set`, non-empty, arity bounds) that the shape model does not yet carry;
-  those refinements are deliberately left out until that vocabulary exists, in
-  line with the "do not subtract when unsure" rule.
+  The shape model is structural and has no negation/difference operator, so
+  "`value` is everything except `nil`" is not representable. Cross-clause
+  subtraction therefore waits on a richer shape vocabulary (`not_set`,
+  non-empty, arity bounds, negation); until then we follow the "do not subtract
+  when unsure" rule and only add positive facts.
 
   Refinements are returned as a list of `{{name, version}, type}` tuples, the
   same shape `ElixirSense.Core.Compiler.State.merge_inferred_types/2` consumes
