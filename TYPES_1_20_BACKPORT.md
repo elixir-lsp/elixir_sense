@@ -21,15 +21,40 @@ abstraction layer dispatched by **capability probing**, not version numbers.
 
 ---
 
-## 0. Already done on this branch
+## 0. Status on this branch (Elixir 1.20)
 
-The rebase onto 1.20 support is complete and the suite is green (1485 passed).
-Commit `core/types: adapt Module.Types integration to Elixir 1.20 API` already
-fixed the 1.20.0 drift: `of_match/5→/6`, `of_head/7→/8` (+ `init_previous/0`,
-`info` tag, 5-tuple return), `of_domain` arg order, removed `stack.refine_vars`,
-context vars carry `paths`/`deps`, `_` patterns are versioned, and `ExCkReader`
-accepts any `elixir_checker_v*` tag. So "first PR step 1" (below) is partly
-done; the remaining structural work is the capability layer + occurrence typing.
+**Delivered (always-on, dialyzer/format/test clean on 1.20):**
+
+- 1.20.0 API drift fixed (`of_match/5→/6`, `of_head/7→/8` + `init_previous/0` +
+  5-tuple return, `of_domain` arg order, `stack.refine_vars` dropped, context
+  vars carry `paths`/`deps`, `_` patterns versioned, `ExCkReader` accepts any
+  `elixir_checker_v*` tag).
+- **Capability layer** — `ElixirTypes.capabilities/0` + `available?/1`, probing
+  the `Module.Types` surface via `function_exported?/3` (the seam for 1.17–1.20).
+- **L1 occurrence typing** — `TypeInference.Occurrence`, wired into
+  `Compiler.Clauses` for `case`/`cond`/`with`: a variable scrutinee/condition is
+  narrowed to the matched pattern's type within each branch. Always-on,
+  version-independent.
+- **Guard augmentation** — strict equality (`===`/Erlang `=:=`) and `x in
+  [literals]` now refine (the latter yields a union); `<=`/`=<` normalized.
+- ExCk `:beam_lib` error-handling bugs fixed; dialyxir/erlex bumped for OTP 28.
+
+**Deferred (out of this slice — larger / higher-coupling):**
+
+- **Shape-vocabulary rework (§5)** — `:term` vs `nil`, `:not_set`, non-empty
+  list, tuple arity bounds, `{:domain_key, …}`. Prerequisite for the *negative*
+  guard facts (`not is_map_key`, size bounds) and for cross-clause subtraction
+  (e.g. inferring non-`nil` in a later clause). Cross-cutting (binding.ex,
+  completion reducers) and risky against the strict dialyzer flags, so kept
+  separate. L1 deliberately does positive narrowing only until this lands.
+- **L2 reverse arrows (§4)** — Elixir's 1.20 reverse-arrow machinery does not
+  expose *per-branch* refined variable states from `Expr.of_expr` (vars reset
+  between clauses); surfacing them would mean re-implementing private
+  `Module.Types` orchestration — precisely the fragile coupling that broke
+  during the rebase. Pattern-variable precision is already taken from
+  `Module.Types` via `enhance_*_pattern_vars` when `enabled?()`. The remaining
+  L2 value (cross-clause negative narrowing) is also gated on the shape rework
+  above, so both move together as a follow-up.
 
 ---
 
