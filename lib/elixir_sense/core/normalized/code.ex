@@ -47,7 +47,14 @@ defmodule ElixirSense.Core.Normalized.Code do
             end
 
           :type_docs ->
-            for {{:type, _name, _arity}, _anno, _signatures, _docs, _metadata} = entry <- docs do
+            # Erlang doc chunks normalize all type-kinds (`-type`, `-opaque`,
+            # `-nominal`) to `:type` in doc entries — the actual kind only
+            # appears in `Code.Typespec.fetch_types/1`. Match `:opaque` and
+            # `:nominal` defensively in case the normalization changes in a
+            # future OTP — downstream consumers read the kind out of the
+            # Typespec chunk anyway, so a non-`:type` value here is harmless.
+            for {{kind, _name, _arity}, _anno, _signatures, _docs, _metadata} = entry
+                when kind in [:type, :opaque, :nominal] <- docs do
               map_doc_entry(entry, mime_type, module, app)
             end
         end

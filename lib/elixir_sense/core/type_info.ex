@@ -40,7 +40,7 @@ defmodule ElixirSense.Core.TypeInfo do
         app = ElixirSense.Core.Applications.get_application(module)
 
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(module),
-            kind in [:type, :opaque],
+            kind in [:type, :opaque, :nominal],
             spec = format_type_spec(typedef, line_length: @param_option_spec_line_length),
             type_ast = TypeAst.from_typedef(typedef),
             signature = TypeAst.extract_signature(type_ast),
@@ -81,7 +81,7 @@ defmodule ElixirSense.Core.TypeInfo do
 
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(mod),
             name == type,
-            kind in [:type, :opaque] do
+            kind in [:type, :opaque, :nominal] do
           type_args = Enum.map(args, &(&1 |> elem(2) |> Atom.to_string()))
 
           %{

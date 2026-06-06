@@ -12,7 +12,8 @@ defmodule ElixirSense.Providers.Utils.Field do
     end
   end
 
-  defguardp type_is_public(kind, include_private) when kind == :type or include_private
+  defguardp type_is_public(kind, include_private)
+            when kind == :type or kind == :nominal or include_private
 
   defp get_field_types_from_metadata(
          %Metadata{types: types},

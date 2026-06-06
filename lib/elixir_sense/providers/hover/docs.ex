@@ -615,7 +615,7 @@ defmodule ElixirSense.Providers.Hover.Docs do
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(mod),
             name == fun,
             Introspection.matches_arity?(length(args), arity),
-            kind in [:type, :opaque] do
+            kind in [:type, :opaque, :nominal] do
           spec = TypeInfo.format_type_spec(typedef)
 
           type_args = Enum.map(args, &(&1 |> elem(2) |> Atom.to_string()))

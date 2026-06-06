@@ -1668,7 +1668,8 @@ defmodule ElixirSense.Core.Binding do
     |> drop_no_spec
   end
 
-  defguardp type_is_public(kind, include_private) when kind == :type or include_private
+  defguardp type_is_public(kind, include_private)
+            when kind == :type or kind == :nominal or include_private
 
   defp expand_type_from_metadata(
          %Binding{types: types} = env,

@@ -289,7 +289,7 @@ defmodule ElixirSense.Core.Introspection do
 
     module
     |> Typespec.get_types()
-    |> Enum.filter(fn {kind, {_t, _, _args}} -> kind in [:type, :opaque] end)
+    |> Enum.filter(fn {kind, {_t, _, _args}} -> kind in [:type, :opaque, :nominal] end)
     |> Enum.map(fn {_, {t, _, args}} = type ->
       {doc, metadata} =
         if docs do
@@ -525,10 +525,13 @@ defmodule ElixirSense.Core.Introspection do
     |> String.replace("...()", "...")
   end
 
+  # Args start numbering from 1 (so unnamed args are rendered as `arg1, arg2,
+  # ...` rather than `arg0, arg1, ...`). Mirrors ExDoc commit eb655701 — Fix
+  # typespec arg number.
   defp strip_types(args, arity) do
     args
     |> Enum.take(-arity)
-    |> Enum.with_index()
+    |> Enum.with_index(1)
     |> Enum.map(fn
       {{:"::", _, [left, _]}, i} -> to_var(left, i)
       {{:|, _, _}, i} -> to_var({}, i)
@@ -613,6 +616,12 @@ defmodule ElixirSense.Core.Introspection do
   end
 
   defp to_var({:%, meta, [name, _]}, _), do: {:%, meta, [name, {:%{}, meta, []}]}
+
+  # Remote type reference like `Calendar.iso_days()` — render as the type name
+  # alone (ExDoc commit ea3c9899 — Handle remote types in signatures).
+  defp to_var({{:., meta, [_module, name]}, _, _args}, _) when is_atom(name),
+    do: {name, meta, nil}
+
   defp to_var([{:->, _, _} | _], _), do: {:function, [], nil}
   defp to_var({:<<>>, _, _}, _), do: {:binary, [], nil}
   defp to_var({:%{}, _, _}, _), do: {:map, [], nil}
@@ -976,12 +985,15 @@ defmodule ElixirSense.Core.Introspection do
   defp find_type({mod, type}, %State.Env{typespec: {_, _}}, metadata_types) do
     found =
       Enum.any?(metadata_types, fn
-        {{^mod, ^type, _}, %State.TypeInfo{kind: kind}} when kind in [:type, :opaque] -> true
-        _ -> false
+        {{^mod, ^type, _}, %State.TypeInfo{kind: kind}} when kind in [:type, :opaque, :nominal] ->
+          true
+
+        _ ->
+          false
       end) or
         Typespec.get_types(mod)
         |> Enum.any?(fn {kind, {name, _def, _args}} ->
-          name == type and kind in [:type, :opaque]
+          name == type and kind in [:type, :opaque, :nominal]
         end)
 
     if found do
