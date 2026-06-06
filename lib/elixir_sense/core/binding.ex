@@ -467,8 +467,10 @@ defmodule ElixirSense.Core.Binding do
   def do_expand(_env, {:binary, _} = shape, _stack), do: shape
   def do_expand(_env, {:float, _} = shape, _stack), do: shape
   def do_expand(_env, {:fun, arity} = shape, _stack) when is_integer(arity), do: shape
+
   def do_expand(env, {:fun, args, return}, stack) when is_list(args),
     do: {:fun, Enum.map(args, &expand(env, &1, stack)), expand(env, return, stack)}
+
   def do_expand(env, {:fun_clauses, clauses}, stack) when is_list(clauses) do
     {:fun_clauses,
      Enum.map(clauses, fn {args, return} ->
@@ -1434,9 +1436,29 @@ defmodule ElixirSense.Core.Binding do
     # Expand argument shapes for overload filtering
     expanded_args = Enum.map(arguments, &expand(env, &1, stack))
 
-    case expand_call_from_metadata(env, mod, fun, arity, expanded_args, include_private, position, stack) do
-      result when result not in [:none] -> result
-      _ -> expand_call_from_introspection(env, mod, fun, arity, expanded_args, include_private, stack)
+    case expand_call_from_metadata(
+           env,
+           mod,
+           fun,
+           arity,
+           expanded_args,
+           include_private,
+           position,
+           stack
+         ) do
+      result when result not in [:none] ->
+        result
+
+      _ ->
+        expand_call_from_introspection(
+          env,
+          mod,
+          fun,
+          arity,
+          expanded_args,
+          include_private,
+          stack
+        )
     end
   end
 
@@ -1474,14 +1496,30 @@ defmodule ElixirSense.Core.Binding do
         case expand(env, shape, stack) do
           nil ->
             # Native sig produced nil shape, fall back to ExCk/legacy
-            do_expand_call_from_introspection(env, mod, fun, arity, arg_shapes, include_private, stack)
+            do_expand_call_from_introspection(
+              env,
+              mod,
+              fun,
+              arity,
+              arg_shapes,
+              include_private,
+              stack
+            )
 
           result ->
             result
         end
 
       :error ->
-        do_expand_call_from_introspection(env, mod, fun, arity, arg_shapes, include_private, stack)
+        do_expand_call_from_introspection(
+          env,
+          mod,
+          fun,
+          arity,
+          arg_shapes,
+          include_private,
+          stack
+        )
     end
   end
 

@@ -587,7 +587,6 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
     end
 
     test "converts union types to shape" do
-
       # Test basic atom union
       atom_set = :sets.from_list([:ok, :error])
       union_descr = %{atom: {:union, atom_set}}

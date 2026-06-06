@@ -590,7 +590,12 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       # Both modes now extract fn arity/arg info
       assert_old_and_native("fn -> a end", {:fun, 0}, {:fun, 0})
       assert_old_and_native("fn x -> x + 1 end", {:fun, [nil], nil}, {:fun, [nil], nil})
-      assert_old_and_native("fn x, y -> x * y end", {:fun, [nil, nil], nil}, {:fun, [nil, nil], nil})
+
+      assert_old_and_native(
+        "fn x, y -> x * y end",
+        {:fun, [nil, nil], nil},
+        {:fun, [nil, nil], nil}
+      )
     end
   end
 
@@ -654,6 +659,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     for form <- special_forms do
       test "special form: #{inspect(form)} matches legacy and native mode" do
         old_expected = Map.get(unquote(Macro.escape(old_expectations)), unquote(form))
+
         assert_old_and_native(
           unquote(form),
           old_expected,
@@ -681,7 +687,10 @@ defmodule ElixirSense.Core.TypeInferenceTest do
         end)
 
       state = %{vars_info: [vars_info]}
-      env = Map.merge(%{module: TestModule, function: {:test, 0}, file: "nofile", context: nil}, env)
+
+      env =
+        Map.merge(%{module: TestModule, function: {:test, 0}, file: "nofile", context: nil}, env)
+
       TypeInference.type_of(ast, env[:context], state, env)
     end
 
@@ -690,7 +699,11 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       Application.put_env(:elixir_sense, :use_elixir_types, false)
 
       try do
-        result = type_of_with_context("x", %{{:x, 1} => %VarInfo{name: :x, version: 1, type: {:integer, 1}}})
+        result =
+          type_of_with_context("x", %{
+            {:x, 1} => %VarInfo{name: :x, version: 1, type: {:integer, 1}}
+          })
+
         assert result == {:variable, :x, 1}
       after
         Application.put_env(:elixir_sense, :use_elixir_types, original)

@@ -1894,10 +1894,8 @@ defmodule ElixirSense.Core.BindingTest do
                   :strong,
                   nil,
                   [
-                    {[Module.Types.Descr.integer()],
-                     Module.Types.Descr.atom([:int])},
-                    {[Module.Types.Descr.atom()],
-                     Module.Types.Descr.atom([:atom_type])}
+                    {[Module.Types.Descr.integer()], Module.Types.Descr.atom([:int])},
+                    {[Module.Types.Descr.atom()], Module.Types.Descr.atom([:atom_type])}
                   ]
                 }
               }
@@ -3186,6 +3184,7 @@ defmodule ElixirSense.Core.BindingTest do
 
     test "fun with args and return is expanded recursively" do
       assert Binding.expand(@env, {:fun, [nil, nil], nil}) == {:fun, [nil, nil], nil}
+
       assert Binding.expand(@env, {:fun, [{:atom, :ok}], {:integer, nil}}) ==
                {:fun, [{:atom, :ok}], {:integer, nil}}
     end
