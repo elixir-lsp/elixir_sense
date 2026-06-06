@@ -2098,7 +2098,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert [
-               %VarInfo{name: :a, type: {:attribute, :myattribute}},
+               # occurrence typing: `a` is matched against `[c | _]` in the third
+               # generator, so it is additionally narrowed to a list
+               %VarInfo{name: :a, type: {:intersection, [attribute: :myattribute, list: nil]}},
                %VarInfo{name: :b, type: {:call, {:atom, Date}, :utc_now, []}},
                %VarInfo{name: :c, type: {:list_head, {:variable, :a, 0}}}
              ] = state |> get_line_vars(6)
@@ -2244,7 +2246,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :var1, type: {:call, {:atom, DateTime}, :now, []}},
                %VarInfo{name: :var2, type: {:call, {:atom, :erlang}, :now, []}},
                %VarInfo{name: :var3, type: {:call, {:atom, MyModule}, :now, [{:atom, :abc}]}},
-               %VarInfo{name: :var4, type: {:call, {:atom, DateTime}, :now, [{:binary, "Etc/UTC"}]}}
+               %VarInfo{
+                 name: :var4,
+                 type: {:call, {:atom, DateTime}, :now, [{:binary, "Etc/UTC"}]}
+               }
              ] = state |> get_line_vars(7)
 
       assert [
@@ -3776,7 +3781,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  name: :b,
                  type: {:intersection, [:integer, {:tuple_nth, {:variable, :x, 0}, 1}]}
                },
-               %VarInfo{name: :x, type: nil}
+               # occurrence typing: in this branch the scrutinee `x` matched the
+               # tuple pattern `{a, b}`, so `x` is narrowed to a 2-element tuple
+               %VarInfo{name: :x, type: {:tuple, 2, [nil, nil]}}
              ] = get_line_vars(state, 6)
 
       assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 8)
@@ -3864,7 +3871,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  name: :b,
                  type: {:intersection, [:integer, {:tuple_nth, {:variable, :x, 0}, 1}]}
                },
-               %VarInfo{name: :x, type: nil}
+               # occurrence typing: `x` matched the `{a, b}` pattern on the left
+               # of `<-`, so it is narrowed to a 2-element tuple in the body
+               %VarInfo{name: :x, type: {:tuple, 2, [nil, nil]}}
              ] = get_line_vars(state, 5)
 
       assert [%VarInfo{name: :e, type: :atom}, %VarInfo{name: :x, type: nil}] =

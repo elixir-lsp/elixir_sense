@@ -94,6 +94,92 @@ defmodule ElixirSense.Core.ElixirTypes do
     Application.get_env(:elixir_sense, :use_elixir_types, false) and available?()
   end
 
+  @typedoc """
+  A probed `Module.Types` capability.
+
+  Capabilities are detected at runtime by probing the loaded Elixir's internal
+  API surface (`function_exported?/3`), never by matching `System.version/0`.
+  This keeps the adaptor flexible across Elixir releases — whose `Module.Types`
+  internals are `@moduledoc false` and change every minor version — and avoids
+  baking version numbers into compile-time constants (which would also defeat
+  Dialyzer's reachability analysis).
+  """
+  @type capability ::
+          :expr
+          | :pattern_match
+          | :head
+          | :local_signature
+          | :previous
+          | :reverse_arrow
+          | :domain_map_ops
+
+  @doc """
+  Probes the running Elixir's `Module.Types` capabilities.
+
+  Returns a map from `t:capability/0` to a boolean. Cheap enough to call per
+  operation, but callers may memoize. The mapping to Elixir releases (for
+  reference only — dispatch must use the probes, not versions):
+
+    * `:expr` — expected-type expression typing (`Expr.of_expr/5`), 1.19+
+    * `:pattern_match` — `Pattern.of_match/6` (1.20) or `/5` (1.19)
+    * `:head` — `Pattern.of_head/8` (1.20) or `/7` (1.18/1.19)
+    * `:local_signature` — local handler on the stack (`Module.Types.stack/7`), 1.18+
+    * `:previous` — cross-clause `Pattern.init_previous/0`, 1.20+
+    * `:reverse_arrow` — occurrence typing via `stack.reverse_arrow`, 1.20+
+    * `:domain_map_ops` — domain-aware map ops (`Descr.map_update/5`), 1.20+
+  """
+  def capabilities() do
+    %{
+      expr: loaded_exported?(Module.Types.Expr, :of_expr, 5),
+      pattern_match:
+        loaded_exported?(Module.Types.Pattern, :of_match, 6) or
+          loaded_exported?(Module.Types.Pattern, :of_match, 5),
+      head:
+        loaded_exported?(Module.Types.Pattern, :of_head, 8) or
+          loaded_exported?(Module.Types.Pattern, :of_head, 7),
+      local_signature: loaded_exported?(Module.Types, :stack, 7),
+      previous: loaded_exported?(Module.Types.Pattern, :init_previous, 0),
+      reverse_arrow: reverse_arrow_capability?(),
+      domain_map_ops: loaded_exported?(Module.Types.Descr, :map_update, 5)
+    }
+  end
+
+  @doc """
+  Returns whether a specific `t:capability/0` is available in the running Elixir.
+  """
+  @spec available?(capability()) :: boolean()
+  def available?(capability) when is_atom(capability) do
+    Map.get(capabilities(), capability, false)
+  end
+
+  # `init_previous/0` implies reverse arrows in 1.20, but probe the stack field
+  # directly so a future Elixir that splits these apart is handled correctly.
+  @spec reverse_arrow_capability?() :: boolean()
+  defp reverse_arrow_capability?() do
+    loaded_exported?(Module.Types.Pattern, :init_previous, 0) and
+      loaded_exported?(Module.Types, :stack, 7) and
+      match?(%{reverse_arrow: _}, build_probe_stack())
+  rescue
+    _ -> false
+  end
+
+  defp build_probe_stack() do
+    Module.Types.stack(
+      :infer,
+      "nofile",
+      ElixirSense.ElixirTypes,
+      {:__info__, 1},
+      :all,
+      nil,
+      &__MODULE__.local_handler/4
+    )
+  end
+
+  @spec loaded_exported?(module(), atom(), arity()) :: boolean()
+  defp loaded_exported?(module, fun, arity) do
+    Code.ensure_loaded?(module) and function_exported?(module, fun, arity)
+  end
+
   @doc """
   Creates a Module.Types stack for typing operations.
   """

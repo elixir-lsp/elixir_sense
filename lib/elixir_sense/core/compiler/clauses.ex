@@ -5,6 +5,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   alias ElixirSense.Core.Compiler.Utils
   alias ElixirSense.Core.Compiler.State
   alias ElixirSense.Core.TypeInference
+  alias ElixirSense.Core.TypeInference.Occurrence
 
   # See ElixirSense.Core.Compiler.@stamp_version — gates version stamping
   # on `with` to host Elixir 1.20+ (commit 603602e67 — reverse arrows).
@@ -264,13 +265,13 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
     {case_clauses, sa} =
       Enum.map_reduce(opts, s, fn x, sa ->
-        expand_case(x, match_context, sa, e)
+        expand_case(x, e_expr, match_context, sa, e)
       end)
 
     {case_clauses, sa, e}
   end
 
-  defp expand_case({:do, _} = do_clause, match_context, s, e) do
+  defp expand_case({:do, _} = do_clause, scrutinee_ast, match_context, s, e) do
     expand_clauses(
       fn c, s, e ->
         case head(c, s, e) do
@@ -284,6 +285,10 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
             s = State.merge_inferred_types(s, enhanced_vars)
             s = State.merge_inferred_elixir_types(s, var_descrs)
+
+            # L1 occurrence typing: within this branch, narrow the scrutinee
+            # variable itself to the type the clause pattern matched.
+            s = State.merge_inferred_types(s, Occurrence.scrutinee_refinements(scrutinee_ast, h))
 
             {c, s, e}
 
@@ -328,7 +333,20 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   defp expand_cond({:do, _} = do_clause, s, e) do
-    expand_clauses(&Compiler.expand_args/3, do_clause, s, e)
+    expand_clauses(&expand_cond_head/3, do_clause, s, e)
+  end
+
+  # A cond clause head is a single-element arg list `[condition]`. In the branch
+  # where the condition holds, refine the tested variables (L1 occurrence
+  # typing) so the clause body sees the narrowed types.
+  defp expand_cond_head([_condition] = args, s, e) do
+    {e_args, s, e} = Compiler.expand_args(args, s, e)
+    s = State.merge_inferred_types(s, Occurrence.condition_refinements(hd(e_args)))
+    {e_args, s, e}
+  end
+
+  defp expand_cond_head(args, s, e) do
+    Compiler.expand_args(args, s, e)
   end
 
   # receive
@@ -422,6 +440,10 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
     sl = State.merge_inferred_types(sl, enhanced_vars)
     sl = State.merge_inferred_elixir_types(sl, var_descrs)
+
+    # L1 occurrence typing: in the success continuation, narrow the right-hand
+    # side variable to the type the left pattern matched.
+    sl = State.merge_inferred_types(sl, Occurrence.scrutinee_refinements(e_right, e_left))
 
     {{:<-, meta, [e_left, e_right]}, {sl, el}}
   end
@@ -542,7 +564,9 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     value_vars = TypeInference.find_typed_vars(e_value, nil, :match)
 
     # Enhanced catch pattern refinement with ElixirTypes
-    {enhanced_kind_vars, kind_descrs} = enhance_catch_pattern_vars(kind_vars, e_kind, kind_context, sl)
+    {enhanced_kind_vars, kind_descrs} =
+      enhance_catch_pattern_vars(kind_vars, e_kind, kind_context, sl)
+
     {enhanced_value_vars, value_descrs} = enhance_catch_pattern_vars(value_vars, e_value, nil, sl)
 
     sl = State.merge_inferred_types(sl, enhanced_kind_vars ++ enhanced_value_vars)
@@ -752,14 +776,16 @@ defmodule ElixirSense.Core.Compiler.Clauses do
         end
       rescue
         e ->
-          Logger.debug("match_context_to_descr failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+          Logger.debug(
+            "match_context_to_descr failed: #{Exception.format(:error, e, __STACKTRACE__)}"
+          )
+
           nil
       end
     else
       nil
     end
   end
-
 
   # Merge clause variables with ElixirTypes refinements
   defp merge_clause_vars_with_elixir_types(clause_vars, refined_vars) do
@@ -872,16 +898,21 @@ defmodule ElixirSense.Core.Compiler.Clauses do
         end
       rescue
         e ->
-          Logger.debug("enhance_pattern_vars failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+          Logger.debug(
+            "enhance_pattern_vars failed: #{Exception.format(:error, e, __STACKTRACE__)}"
+          )
+
           {clause_vars, %{}}
       catch
         kind, payload ->
-          Logger.debug("enhance_pattern_vars failed: #{Exception.format(kind, payload, __STACKTRACE__)}")
+          Logger.debug(
+            "enhance_pattern_vars failed: #{Exception.format(kind, payload, __STACKTRACE__)}"
+          )
+
           {clause_vars, %{}}
       end
     else
       {clause_vars, %{}}
     end
   end
-
 end
