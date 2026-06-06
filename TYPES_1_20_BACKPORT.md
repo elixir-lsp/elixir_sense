@@ -1,228 +1,226 @@
-# Elixir 1.19 → 1.20 type-system changes: impact and backport plan
+# ElixirSense type-system integration — consolidated plan (1.17 → 1.20)
 
-Status: analysis + plan (2026-06-06). Companion to `TYPES.md`, `TYPES_M1..M3`.
+Status: consolidated & verified, 2026-06-06. **Supersedes** the two earlier
+drafts and merges them:
 
-This document maps the type-system changes Elixir made between **v1.19.0** and
-**v1.20.0**, assesses what ElixirSense's set-theoretic integration
-(`lib/elixir_sense/core/elixir_types.ex` + `type_inference*`) already does, and
-proposes how to backport / implement the features we are missing — with the
-emphasis the request called out: **native guard typing** and **reverse arrows /
-occurrence typing in `case` / `cond` / `with` branches**.
+- this file's prior 1.19→1.20 draft, and
+- `TYPES_1_20_INDEPENDENT_PLAN.md` (the independent multi-version plan).
 
-The branch was originally written against an Elixir 1.20-*dev* build. Rebasing
-onto `master` (which carries 1.20.0 support) surfaced a wave of internal-API
-drift; that drift is already fixed (see "Rebase fallout", below) and the whole
-suite is green (1485 passed). This document is about the *next* step: using the
-features 1.20.0 actually shipped.
+The independent plan's architecture (a probed, per-version capability layer with
+ElixirSense-native occurrence typing as the floor and Elixir 1.20 reverse arrows
+as a precision upgrade) is **adopted**. Its version/API matrix was
+**independently verified against the local clone** (`/Users/lukaszsamson/elixir`,
+tags `v1.17.0`–`v1.20.0`) and is accurate; the verified table is below. The only
+additions here are the hard-verified API surface, the corrected details, and the
+fact that the 1.20 drift fixes have **already landed** on this branch.
 
----
-
-## 1. What 1.20 shipped (headline features)
-
-From the 1.20 CHANGELOG ("Type system improvements") and the diff of
-`lib/elixir/lib/module/types/**` (`+8039 / -3178` lines across 8 files; `descr.ex`
-alone `+5324`, plus a new `traverse.ex`):
-
-1. **Type inference of guards.** `is_list/1`, `is_integer/1`, `is_map_key/2`,
-   `tuple_size/1 < n`, `not is_map_key/2`, etc. now refine the types of the
-   variables they constrain — including negative information
-   (`%{..., foo: not_set()}`) and size bounds on tuples.
-2. **Whole-body inference.** Argument types are inferred from how the body uses
-   them (`data.foo + data.bar` ⇒ `data` is a map with `:foo`/`:bar` of
-   `integer() | float()`), and inferred return types flow into callers.
-3. **Typing across clauses + occurrence typing** for `case`, `cond`, `with`
-   (and multi-clause heads). A later clause knows what earlier clauses already
-   matched (`nil -> ...; value -> ...` ⇒ `value` is non-`nil`). This is the
-   **reverse-arrow** mechanism.
-4. **Domain (non-atom) keys in maps.** `%{123 => "x", 456.0 => :ok}` types as
-   `%{integer() => binary(), float() => :ok}`; atom and domain keys can mix.
-   (Castagna 2023, "Typing Records, Maps, and Structs".)
-5. **Typed `Map` operations.** `Map.put/delete/replace/fetch!/pop!/update!`
-   propagate per-key set/not_set/if_set information and emit errors for keys
-   proven absent.
-
-### Internal API drift (1.19 → 1.20.0) — verified against the local clone
-
-These are the entry points ElixirSense calls into. All confirmed by diffing
-`v1.19.0..v1.20.0`:
-
-| Symbol | 1.19 | 1.20.0 | Note |
-|---|---|---|---|
-| `Pattern.of_match` | `/5` | `/6` | new `meta` arg (4th) |
-| `Pattern.of_head` | `/7` | `/8` | new `previous` arg + split `info` tag; returns a **5-tuple** `{trees, precise?, no_prev_args, previous, ctx}` |
-| `Pattern.of_domain` | `(trees, expected, ctx)` | `(trees, stack, ctx)` | takes `stack` not expected |
-| `Pattern.of_guard` | `/5` | `/5` | same arity, but `of_guards/4` now *refines* (`{precise?, changed, ctx}`) |
-| `Descr.open_map` | `/0 /1 /2` | `/0 /1` | the `(pairs, default)` "default" form removed → domain keys |
-| `stack` fields | `…, refine_vars` (dev) | `…, reverse_arrow` | `refine_vars` gone; **`reverse_arrow: nil` added** |
-| context var entry | `%{type,name,context,off_traces}` | `+ paths: [], deps: %{}` | needed by `Of`/`of_changed` |
-| ExCk chunk tag | `elixir_checker_v3` | `elixir_checker_v8` | `%{exports, mode}` / per-export `:sig` layout stable |
-| `Expr.of_expr` | `/5` | `/5` | **unchanged** (our capability probe still valid) |
-| `Module.Types.stack/7`, `context/0` | — | — | **unchanged** |
-
-The single most important structural addition is `stack.reverse_arrow`
-(`nil | :cache | :use`) + `context.reverse_arrows` — this *is* the
-occurrence-typing engine (see §4).
+Goal (per request): support Elixir releases **progressively** — deliver
+**1.20 + 1.19 first**, then add **1.18**, then **1.17** (each smaller). Because
+`Module.Types.*` is `@moduledoc false` and unstable, all coupling sits behind an
+abstraction layer dispatched by **capability probing**, not version numbers.
 
 ---
 
-## 2. Rebase fallout (already fixed)
+## 0. Already done on this branch
 
-Because the dev-era calls were wrapped in `try/rescue`, the drift did **not**
-fail loudly — it silently degraded inference to fallbacks while tests stayed
-green. Commit `core/types: adapt Module.Types integration to Elixir 1.20 API`
-fixes:
-
-- `of_match/5 → /6`, `of_head/7 → /8` (+ new 5-tuple destructure + `init_previous/0`
-  + `info` tag), `of_domain` arg order.
-- Removed the dead `stack.refine_vars` write (refinement is now unconditional in
-  `of_match`).
-- Seeded context vars now carry `paths`/`deps` (matches `Module.Types.Of`).
-- `ensure_body_var_versions` now versions `_` patterns (1.20 `of_pattern` does
-  `Keyword.fetch!(meta, :version)` for underscores).
-- `ExCkReader` accepts any `elixir_checker_v*` tag.
-
-**Lesson that shapes the plan:** Module.Types is `@moduledoc false` and its
-internals churn *every* release (v3→v8 of the checker in one minor; three
-signature changes in the pattern module). Any deep coupling must sit behind a
-probed adaptor and be covered by tests that *assert real results* (not
-`:error`-tolerant fallbacks that mask drift).
+The rebase onto 1.20 support is complete and the suite is green (1485 passed).
+Commit `core/types: adapt Module.Types integration to Elixir 1.20 API` already
+fixed the 1.20.0 drift: `of_match/5→/6`, `of_head/7→/8` (+ `init_previous/0`,
+`info` tag, 5-tuple return), `of_domain` arg order, removed `stack.refine_vars`,
+context vars carry `paths`/`deps`, `_` patterns are versioned, and `ExCkReader`
+accepts any `elixir_checker_v*` tag. So "first PR step 1" (below) is partly
+done; the remaining structural work is the capability layer + occurrence typing.
 
 ---
 
-## 3. Where ElixirSense stands today
+## 1. Verified cross-version API matrix
 
-- **Forward pattern typing in `case`** exists: `Clauses.case/4` computes
-  `match_context = TypeInference.type_of(scrutinee)` and binds each clause's
-  pattern vars from it via `find_typed_vars/3`, then refines with
-  `enhance_case_pattern_vars` → `ElixirTypes.of_match`
-  (`lib/elixir_sense/core/compiler/clauses.ex:256-297`).
-- **Custom guard typing** exists and is independent of Elixir's:
-  `TypeInference.Guard.type_information_from_guards/1`
-  (`lib/elixir_sense/core/type_inference/guard.ex`, 316 lines), called from
-  `compiler.ex:2064` and `clauses.ex:223`. It also understands Erlang/Dialyzer
-  guard idioms Elixir's engine does not target.
-- **Local signature inference** (`ElixirTypes.infer_local_signature/5`) already
-  routes through `of_head`, so it *already* benefits from 1.20 native guard
-  refinement and gives results like `helper/0 :: :success | :failure`.
-- **ExCk remote signatures** are read for compiled deps (`ExCkReader`).
+Hard-verified by diffing the four release tags. **This corrects guesswork** — use
+these signatures when building per-version adapters:
 
-What is **missing** relative to 1.20:
+| | 1.17.0 | 1.18.0 | 1.19.0 | 1.20.0 |
+|---|---|---|---|---|
+| `Expr.of_expr` | **/3** `(ast, stack, ctx)` — no expected type | **/3** `(ast, stack, ctx)` — no expected type | **/5** `(ast, expected, expr, stack, ctx)` | **/5** (same) |
+| `Module.Types.stack` | **/5** `(file, module, function, no_warn, cache)` — no mode, no handler | **/7** `(mode, file, module, function, no_warn, cache, handler)` | /7 | /7 |
+| `Module.Types.context` | /0 | /0 | /0 | /0 |
+| Pattern match entry | `of_pattern/3,4` (no `of_match`) | `of_match/7` `(pattern, guards\\[], expected, expr, tag, stack, ctx)` | `of_match/5` `(pattern, expected_fun, expr, stack, ctx)` | `of_match/6` (+ `meta`) |
+| `Pattern.of_head` | **/5** `(patterns, guards, meta, stack, ctx)` | **/7** | **/7** | **/8** (+ `previous`, split `info`/`tag`, 5-tuple return) |
+| `Pattern.init_previous` | no | no | no | **yes** |
+| `stack.reverse_arrow` / `context.reverse_arrows` | no | no | no | **yes** |
+| `Apply` module | **no** | yes | yes | yes |
+| ExCk chunk tag | `elixir_checker_v1` | `v1` | `v3` | `v8` |
+| Descr map ops | basic | `map_put/3`, `map_fetch/2`, `map_fetch_and_put/3`, `map_delete` | + `map_get`, `map_refresh`; `map_fetch_and_put` still present | **domain-aware**: `map_update/5`, `map_get`; `map_fetch`/`map_fetch_and_put`/`map_delete` **removed** |
+| domain (non-atom) keys, `not_set()` reverse facts | no | no | partial helpers, not 1.20 semantics | **yes** |
 
-| 1.20 feature | ElixirSense today | Gap |
-|---|---|---|
-| Guard inference | custom `guard.ex` (forward only, no negative/size info), not unified with Descr | unify with / augment by `of_guards` |
-| Reverse arrows in `case`/`cond`/`with` | forward only (pattern←scrutinee); scrutinee var **not** refined per branch; no cross-clause subtraction | **primary gap** |
-| Whole-body arg inference | only via `infer_local_signature` (signature path), not surfaced at cursor binding | wire into binding |
-| Domain map keys | `to_shape`/`quoted_to_shape` lose/ignore non-atom keys | extend shape model |
-| Typed `Map` ops | rely on hand-written expansions in `binding.ex` | optionally defer to Descr |
+Implications:
 
----
-
-## 4. Reverse arrows / occurrence typing — the primary ask
-
-### How 1.20 does it (verified in `expr.ex`)
-
-For `case`/`cond`/`with` and `=`/`<-`, the scrutinee is typed twice:
-
-1. **Cache pass:** `of_expr(scrutinee, term(), …, %{stack | reverse_arrow: :cache}, ctx)`
-   records the inference "arrows" keyed by the scrutinee variable's `version`
-   into `context.reverse_arrows[version]` (`cache_result`/`cache_arrows`,
-   `expr.ex:941-966`).
-2. **Use pass, per clause:** for clause head type `t`,
-   `of_expr(scrutinee, t, …, %{stack | reverse_arrow: :use}, ctx)` looks up the
-   cached arrows and *reverse-propagates* `t` back onto the scrutinee variable —
-   so inside the branch the scrutinee (and any vars derived from it) are
-   narrowed to what that clause actually matched (`expr.ex:385-387`, 432-486).
-3. **Cross-clause:** `of_head` threads `previous` (`init_previous/0` →
-   `concat_previous/2`) so clause *n* subtracts what clauses `1..n-1` matched;
-   redundant/dead clauses fall out (`pattern.ex:183-220`).
-
-### Plan
-
-ElixirSense does not need warnings or dead-clause detection — it needs the
-**refined variable types per branch** for completion/hover. Two layers:
-
-- **L1 (cheap, no upstream coupling) — extend the existing forward path.**
-  In `Clauses.expand_case/expand_cond/expand_with`, after binding pattern vars,
-  also **narrow the scrutinee variable(s)** within the branch:
-  - For `case x do pat -> … end`: in each branch set `x`'s inferred type to
-    `intersection(type_of(x), type_of(pat))`, and for later clauses subtract the
-    union of earlier patterns (`difference`). This reproduces the
-    "value is non-`nil`" example without calling Module.Types.
-  - Requires knowing the scrutinee's *variable identity*; we already compute
-    `match_context` from the scrutinee AST — extend `type_of` to also return the
-    `{:variable, name, version}` when the scrutinee is a var, then update
-    `State.merge_inferred_types` for that version inside the branch.
-  - `cond` clauses: a truthy/falsy split on the tested variable (`@truthy`/`@falsy`
-    analog) — narrow to non-`nil`/non-`false` in the matched branch.
-  - This is self-contained, testable, and survives Module.Types churn.
-
-- **L2 (precise, opt-in) — borrow the real arrows.** Behind `enabled?()`, run the
-  cache/use two-pass via `Module.Types.Expr.of_expr` with
-  `%{stack | reverse_arrow: :cache}` then `:use`, seeding `context.reverse_arrows`,
-  and read the refined `context.vars[version]` back through `to_shape`. Gate by
-  probing `Map.has_key?(Module.Types.stack(...), :reverse_arrow)` so older/newer
-  Elixirs degrade to L1. Use L2 to *upgrade* L1's result (intersect), never to
-  replace the always-on L1 behavior.
-
-Start with **L1** — it directly delivers the requested case-branch reverse-arrow
-behavior with zero coupling, and L2 layers on precision later.
+- **1.17 and 1.18 have no expected-type expression typing** (`of_expr/3`), so
+  bidirectional/expected-directed inference and most pattern refinement that the
+  1.19/1.20 path relies on simply do not exist there. Treat 1.17/1.18 as
+  literal/container/expression typing + ExCk reads, with refinement supplied by
+  ElixirSense-native code.
+- **1.17 has no `Apply` and `stack/5`** (no `mode`, no `local_handler`) → no
+  local-signature inference machinery. 1.17 is the smallest "expression-only"
+  adapter; pattern entry is `of_pattern`, not `of_match`.
+- Descr map-op names churn hard (e.g. `map_fetch_and_put/3` exists in 1.18/1.19
+  but is **gone** in 1.20; `map_update/5` is 1.20-only). These make excellent
+  capability probes (and are why version-number gating is wrong).
 
 ---
 
-## 5. Guard typing
+## 2. Abstraction layer (adopted from the independent plan)
 
-`infer_local_signature` already gets native guard refinement for free (guards
-flow into `of_head` → `of_guards`). The remaining work is at **cursor/binding**
-time, where the custom `guard.ex` runs:
+Stable ElixirSense-facing facade; implementation swapped by capability:
 
-- **Keep `guard.ex`** as the always-on, version-independent path. It is the only
-  thing that handles Dialyzer/Erlang guard idioms and works on partial code, and
-  it is decoupled from Module.Types drift.
-- **Augment, don't replace.** Add the negative/size facts 1.20 introduced but
-  `guard.ex` lacks: `not is_map_key/2` ⇒ key `not_set`; `tuple_size(x) op n` ⇒
-  tuple arity bound; `is_map_key/2` ⇒ key present. These are pure extensions to
-  `type_information_from_guards/1` and need no upstream calls.
-- **Optional L2:** when `enabled?()`, intersect `guard.ex`'s result with the
-  refinement `of_head`/`of_guards` produced for the same clause (we already build
-  the head context there). Same probe-and-degrade discipline as §4.
+```elixir
+defmodule ElixirSense.Core.ElixirTypes do
+  def capabilities()                                   # %{expr: :v5|:v3, head: :v8|:v7|:v5, reverse_arrow: bool, ...}
+  def available?(capability)
+  def expr(ast, opts)                                  # -> {:ok, %{descr, shape, vars, caps}} | {:error, reason}
+  def pattern_match(pattern, value, opts)
+  def head(args, guards, opts)
+  def local_signature(module, fun_arity, clauses, opts)
+  def descr_to_shape(descr, opts) / shape_to_descr(shape, opts)
+end
+```
+
+Backends: `ElixirTypes.V20`, `.V19`, `.V18`, `.V17`, `.Noop`. **Dispatch by
+probing**, verified to work:
+
+- `function_exported?(Module.Types.Expr, :of_expr, 5)` ⇒ 1.19/1.20 expr API;
+  `…, :of_expr, 3)` ⇒ 1.17/1.18.
+- `function_exported?(Module.Types.Pattern, :init_previous, 0)` ⇒ 1.20
+  previous/reverse-arrow support.
+- `Map.has_key?(Module.Types.stack(...), :reverse_arrow)` ⇒ 1.20 reverse arrows.
+- `function_exported?(Module.Types.Descr, :map_update, 5)` ⇒ 1.20 domain map ops;
+  `…, :map_fetch_and_put, 3)` ⇒ 1.18/1.19 atom-key map ops.
+- `function_exported?(Module.Types, :stack, 7)` ⇒ 1.18+ (vs `/5` for 1.17);
+  `Code.ensure_loaded?(Module.Types.Apply)` ⇒ 1.18+.
+
+Rules:
+- Return structured `{:ok, %{...}} | {:error, reason}` — **no broad
+  `rescue _ -> :error`** around a path whose capability was detected. Drift must
+  fail a test with an actionable reason, not silently degrade (this is exactly
+  how the dev-vs-1.20.0 drift hid until this rebase).
+- Probe results cached per-VM; `Noop` backend keeps everything working with the
+  custom engine when no usable capability is present.
 
 ---
 
-## 6. Smaller items
+## 3. Occurrence typing (case / cond / with) — the headline feature
 
-- **Domain map keys (§1.4).** Extend the ElixirSense shape model (`to_shape` /
-  `quoted_to_shape`, `coerce_var_type`) to carry non-atom key domains rather than
-  dropping them. The `Descr.to_quoted` output already encodes them
-  (`%{integer() => …}`); today we only translate atom-keyed maps. Medium effort,
-  isolated to the shape translation layer.
-- **Typed `Map` ops (§1.5).** Low priority for completion. Optionally, when
-  `enabled?()`, defer `Map.put/delete/replace/fetch!` result typing to Descr
-  instead of the hand-written `binding.ex` expansions; keep the expansions as the
-  always-on fallback.
-- **Whole-body arg inference (§1.2).** Surface `infer_local_signature` domains at
-  the cursor: when completing inside a def whose args lack annotations, use the
-  inferred domain to type the parameter variables. Reuses existing machinery.
+Two layers; **L1 is always-on and version-independent**, L2 upgrades precision.
+
+### L1 — ElixirSense-native (all versions, no Module.Types coupling)
+
+New `ElixirSense.Core.TypeInference.Occurrence` with
+`case_refinements/cond_refinements/with_refinements`. For `case x do pat -> body`:
+
+- identify the scrutinee variable+version when the scrutinee is a var;
+- pattern vars keep the existing forward inferred types (`find_typed_vars/3`);
+- inside the branch, narrow the scrutinee var to
+  `intersection(original, branch_pattern_type)`;
+- track a running union of earlier patterns and, for later branches, apply a
+  **conservative difference** (only for cases we can subtract safely): literal
+  atoms/booleans, `nil` vs non-`nil`, tagged tuples (`{:ok, _}`/`{:error, _}`),
+  struct tags; otherwise do not subtract.
+
+`cond`/`if`: truthy branch narrows the tested var to "not `nil`/`false`"; negated
+condition flips; predicate conditions reuse guard inference. `with`: type each
+`<-` RHS, bind pattern vars in the success path, carry the union of LHS failures
+to `else`.
+
+This delivers the requested `nil -> …; value -> …` ⇒ `value` non-`nil` behavior
+on **every** supported Elixir, including 1.17/1.18.
+
+### L2 — Elixir 1.20 reverse arrows (precision upgrade)
+
+When `:reverse_arrow` is present (1.20): type scrutinee with
+`%{stack | reverse_arrow: :cache}`, type the branch pattern, re-type with
+`:use`, read refined `context.vars[version]` back through `descr_to_shape`,
+**intersect into L1**. Thread `Pattern.init_previous/0` for cross-clause
+subtraction. L2 must only ever improve L1; if it fails, L1 stands.
 
 ---
 
-## 7. Recommended sequencing
+## 4. Guard typing — keep the floor, augment with 1.20 facts
 
-1. **(done)** Rebase + 1.20.0 API adaptation; suite green.
-2. **Harden the adaptor against drift:** add `enabled?()` integration tests that
-   assert *real* inferred shapes for guards / case branches / local sigs, so the
-   next Elixir bump fails loudly instead of silently degrading. (This rebase only
-   passed because such assertions were thin.)
-3. **L1 reverse arrows** in `case`/`cond`/`with` (§4) — the headline ask, no
-   coupling.
-4. **Guard augmentation** (§5) — negative + size facts in `guard.ex`.
-5. **L2 precision passes** (reverse-arrow + guard intersection) behind the probe.
-6. Domain keys → whole-body arg inference → typed `Map` ops, as appetite allows.
+`TypeInference.Guard` stays always-on (works on partial code; covers
+Dialyzer/Erlang idioms outside Elixir's checker goals; immune to drift).
+`infer_local_signature` already gets native guard refinement for free via
+`of_head` (1.18+). Augment the custom path with the facts 1.20 surfaces that
+matter for completion:
 
-**Architectural recommendation:** stay with the **hybrid adaptor** strategy of
-`TYPES.md` (call into Module.Types behind a probed boundary; never fork). The
-v3→v8 / triple-signature churn observed in a *single* minor release is decisive
-evidence against vendoring or replacing. ElixirSense's always-on, drift-immune
-path (custom `guard.ex`, forward pattern typing, hand-written remote expansions,
-L1 reverse arrows) must remain the floor; Module.Types is the precision *upgrade*
-when present and matching the expected version.
+- `is_map_key(k, m)` ⇒ positive: `%{..., k: term()}`; negative branch:
+  `%{..., k: not_set()}` (and `not is_map_key` ⇒ `not_set`).
+- `tuple_size(x) == n` ⇒ exact arity; `<,<=,>,>=` ⇒ arity bound.
+- `map_size(x) > 0`, `length(x) > 0` ⇒ non-empty facts.
+- `Map.fetch!/map_get` ⇒ key-present + value type.
+
+This needs a slightly richer internal fact format than today's
+`%{{var,version} => shape}` — carry `%{positive, negative, descr}` and convert
+back at the call boundary until the rest of the compiler consumes it.
+
+---
+
+## 5. Shape / descriptor boundary cleanup (prerequisite for precision)
+
+Before leaning harder on Descr, fix the lossy boundary (from the independent
+plan):
+
+- introduce `:term` as **top**, keep `nil` = "unknown / no useful shape", keep
+  `:none` = bottom (today `term()`/`dynamic()` all collapse to `nil`, conflating
+  top/unknown/no-result);
+- keep Binding projection thunks (`{:map_key,…}`, `{:tuple_nth,…}`,
+  `{:list_head/tail,…}`) **private** — never let them cross the native boundary;
+- standardize shapes: `{:float, nil}`, `:pid/:port/:reference`, `{:fun, arity}`
+  → `{:fun, args, return}`, non-empty list, `{:map, fields, :open|:closed|:unknown}`,
+  `:not_set` / `{:if_set, shape}`, and **`{:domain_key, key_shape, value_shape}`**
+  so 1.20 non-atom keys are preserved (start by not dropping them).
+
+---
+
+## 6. ExCk reader (done; extend coverage)
+
+Generic `elixir_checker_v*` parsing already landed. Validate the
+`%{exports: …, mode: …}` / per-export `:sig` payload **per version in tests**
+(v1 for 1.17/1.18, v3 for 1.19, v8 for 1.20) since the inner layout is only
+"stable enough".
+
+---
+
+## 7. Sequencing
+
+1. **Stabilize 1.19/1.20 adapter** — *partly done* (1.20 drift fixed, ExCk
+   generic). Remaining: introduce the capability module + dispatch; replace broad
+   silent fallbacks with structured errors on detected capabilities.
+2. **Fix the shape boundary** (`:term`/`:not_set`/openness/non-empty; keep
+   projections private; descriptor-backed union/intersection/difference helpers).
+3. **L1 occurrence typing** — `case` (nil/non-nil, booleans, tagged tuples,
+   structs, literal atoms) → `cond` → `with`.
+4. **Augment guards** — positive/negative `is_map_key`, tuple-size bounds,
+   non-empty facts.
+5. **L2 1.20 precision** — reverse-arrow cache/use, previous-clause threading,
+   native domain map-op descriptors where conversion preserves facts.
+6. **Add 1.18** — `Expr.of_expr/3` adapter; `of_match/7`, `of_head/7` only after
+   tests prove the context shape; ExCk v1.
+7. **Add 1.17** — minimal `of_expr/3` + `of_pattern/3,4`; `stack/5`; no local
+   signature inference; rely on L1 + custom guards for user-visible refinement.
+
+### Recommended first PR
+Capability dispatch scaffold + structured (non-silent) results + per-version ExCk
+tests + **L1 `case` occurrence typing for nil/non-nil and tagged tuples**. This
+is visible value on 1.19/1.20 today and the foundation for everything else,
+without deepening coupling.
+
+---
+
+## 8. Why not vendor or replace
+
+The verified churn — checker chunk v1→v3→v8, `of_head/5→/7→/8`,
+`of_expr/3→/5`, `stack/5→/7`, Descr map-op functions appearing and vanishing
+across **three consecutive minors** — is decisive. Stay hybrid: the always-on,
+drift-immune ElixirSense path (custom guards, forward + L1 occurrence typing,
+hand-written remote expansions) is the floor; `Module.Types` is the precision
+upgrade only when a probed capability is present and matches the expected shape.
+See [[elixir-types-internal-api-drift]] in memory.
