@@ -610,6 +610,26 @@ defmodule ElixirSense.Core.Binding do
     merge_list_elem(list_element_type(left), list_element_type(right))
   end
 
+  # The number-tower result of `+`/`-`/`*`: float() if any operand is a float,
+  # integer() if all are integers, otherwise number() (covers unknown operands).
+  defp numeric_result(env, args, stack) do
+    kinds = Enum.map(args, fn arg -> numeric_kind(expand(env, arg, stack)) end)
+
+    cond do
+      :float in kinds -> {:float, nil}
+      Enum.all?(kinds, &(&1 == :integer)) -> {:integer, nil}
+      true -> :number
+    end
+  end
+
+  defp numeric_kind({:integer, _}), do: :integer
+  defp numeric_kind(:integer), do: :integer
+  defp numeric_kind({:float, _}), do: :float
+  defp numeric_kind(:float), do: :float
+  # number() operand, or an operand we can't pin down — either way the result is
+  # at best number().
+  defp numeric_kind(_other), do: :number
+
   # Field values are unioned per key (keys are the same on both sides). A key
   # missing from one side unions with nil, which `normalize_union/1` treats as
   # unknown.
@@ -1663,6 +1683,71 @@ defmodule ElixirSense.Core.Binding do
     else
       {:map, fields, nil}
     end
+  end
+
+  # Raising functions never return a value, so they are `:none` (bottom). This
+  # also lets them drop out of branch-result unions: `if c, do: 1, else: raise "x"`
+  # is `1`, and `a and b` (which expands to a `case` with an `:erlang.error`
+  # branch) loses that branch.
+  defp expand_call(_env, {:atom, :erlang}, fun, _args, _include_private, _, _stack)
+       when fun in [:error, :throw, :exit, :raise] do
+    :none
+  end
+
+  # Built-in operator result types (after expansion these are `:erlang` calls).
+  # Bitwise and integer-only ops always return integer().
+  defp expand_call(_env, {:atom, :erlang}, fun, _args, _include_private, _, _stack)
+       when fun in [:band, :bor, :bxor, :bsl, :bsr, :bnot, :div, :rem] do
+    {:integer, nil}
+  end
+
+  # Float division always returns float().
+  defp expand_call(_env, {:atom, mod}, :/, _args, _include_private, _, _stack)
+       when mod in [:erlang, Kernel] do
+    {:float, nil}
+  end
+
+  # `+`/`-`/`*` follow the number tower: integer() if every operand is an
+  # integer, float() if any is a float, otherwise number().
+  defp expand_call(env, {:atom, mod}, fun, args, _include_private, _, stack)
+       when mod in [:erlang, Kernel] and fun in [:+, :-, :*] and is_list(args) do
+    numeric_result(env, args, stack)
+  end
+
+  # Comparisons and (strict) boolean ops / type guards return a boolean.
+  defp expand_call(_env, {:atom, mod}, fun, _args, _include_private, _, _stack)
+       when mod in [:erlang, Kernel] and
+              fun in [
+                :==,
+                :"/=",
+                :"=<",
+                :<,
+                :>=,
+                :>,
+                :"=:=",
+                :"=/=",
+                :and,
+                :or,
+                :not,
+                :xor,
+                :andalso,
+                :orelse,
+                :is_atom,
+                :is_integer,
+                :is_float,
+                :is_number,
+                :is_binary,
+                :is_bitstring,
+                :is_boolean,
+                :is_list,
+                :is_map,
+                :is_tuple,
+                :is_function,
+                :is_pid,
+                :is_port,
+                :is_reference
+              ] do
+    :boolean
   end
 
   # function call

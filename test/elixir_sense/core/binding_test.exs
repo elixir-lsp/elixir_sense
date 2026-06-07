@@ -2240,6 +2240,51 @@ defmodule ElixirSense.Core.BindingTest do
   end
 
   describe "Kernel functions" do
+    defp expand_call_type(call) do
+      Binding.expand(
+        %{
+          @env
+          | vars: [
+              %VarInfo{version: 1, name: :a, type: nil},
+              %VarInfo{version: 1, name: :b, type: nil}
+            ]
+        },
+        call
+      )
+    end
+
+    test "arithmetic / bitwise / boolean operator result types" do
+      a = {:variable, :a, 1}
+      b = {:variable, :b, 1}
+      erl = {:atom, :erlang}
+
+      # integer-only: bitwise + div/rem
+      for fun <- [:band, :bor, :bxor, :bsl, :bsr, :div, :rem] do
+        assert {:integer, nil} == expand_call_type({:call, erl, fun, [a, b]})
+      end
+
+      assert {:integer, nil} == expand_call_type({:call, erl, :bnot, [a]})
+
+      # float division
+      assert {:float, nil} == expand_call_type({:call, erl, :/, [a, b]})
+
+      # number tower for +,-,*
+      assert {:integer, nil} ==
+               expand_call_type({:call, erl, :+, [{:integer, 1}, {:integer, 2}]})
+
+      assert {:float, nil} == expand_call_type({:call, erl, :*, [{:float, 1.0}, {:integer, 2}]})
+      assert :number == expand_call_type({:call, erl, :-, [a, b]})
+
+      # comparisons / boolean ops / type guards -> boolean()
+      for fun <- [:==, :"/=", :<, :>=, :"=:=", :not, :is_integer, :is_map] do
+        assert :boolean == expand_call_type({:call, erl, fun, [a]})
+      end
+
+      # raising functions -> :none (drop out of result unions)
+      assert :none == expand_call_type({:call, erl, :error, [a]})
+      assert :none == expand_call_type({:call, erl, :throw, [a]})
+    end
+
     test "++" do
       # `++` unions both operands' element types.
       assert {:list, {:union, [{:integer, 1}, {:integer, 2}]}} ==

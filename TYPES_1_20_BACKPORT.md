@@ -77,6 +77,15 @@ abstraction layer dispatched by **capability probing**, not version numbers.
   `Keyword.merge`/`Keyword.keys` raise on non-atom keys. Map-update field order
   now follows the base map's declaration order (updates in place, new keys
   appended).
+- **Built-in operator result types** — `Binding` now resolves the inlined
+  `:erlang` operators instead of leaving `{:call, …}` thunks: bitwise
+  (`band`/`bor`/`bxor`/`bsl`/`bsr`/`bnot`) and `div`/`rem` → `integer()`; `/` →
+  `float()`; `+`/`-`/`*` follow the number tower (`integer()` if all integer,
+  `float()` if any float, else `number()`); comparisons, strict `and`/`or`/`not`,
+  and `is_*` guards → `boolean()`. `++`/`--` always yield a list (left could be a
+  list, element type = union of both sides). Raising functions
+  (`error`/`throw`/`exit`/`raise`) are `:none`, so they drop out of branch-result
+  unions (`if c, do: 1, else: raise "x"` → `1`).
 - **Tuple projection bounds fix** — `{:tuple_nth, t, n}` accepted `n == size`
   (0-based), silently yielding `nil` instead of `:none` and erasing precision;
   now bounded to `0 ≤ n < size`.
