@@ -274,8 +274,24 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   # Threads the patterns matched by earlier clauses so each clause can be typed
   # against the scrutinee MINUS what already matched (cross-clause / occurrence
   # typing). For the first clause `prior` is empty and behaviour is unchanged.
-  defp expand_case({:do, clauses} = _do_clause, scrutinee_ast, match_context, s, e)
+  defp expand_case({:do, clauses}, scrutinee_ast, match_context, s, e)
        when is_list(clauses) and clauses != [] do
+    {values, se} = expand_subject_clauses(clauses, scrutinee_ast, match_context, s, e)
+    {{:do, values}, se}
+  end
+
+  defp expand_case({:do, _} = do_clause, _scrutinee_ast, _match_context, s, e) do
+    # empty / cursor-recovery do-block: nothing to type
+    expand_clauses(&head/3, do_clause, s, e)
+  end
+
+  # Expand a list of alternative clauses (case `do`, with `else`) that all match
+  # the same subject, threading the patterns matched by earlier clauses so each
+  # clause is typed against the subject MINUS what already matched (cross-clause
+  # / occurrence typing). `scrutinee_ast` is the subject variable when there is
+  # one (case over a variable), or `nil` (e.g. with/else, whose subject is the
+  # synthetic failure space).
+  defp expand_subject_clauses(clauses, scrutinee_ast, match_context, s, e) do
     {values, {se, _prior}} =
       Enum.map_reduce(clauses, {s, []}, fn clause, {sa, prior} ->
         refined_context = match_context_minus_prior(match_context, prior)
@@ -289,12 +305,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
         {e_clause, {State.remove_vars_scope(s_acc, sa), [clause_pattern_type(clause) | prior]}}
       end)
 
-    {{:do, values}, se}
-  end
-
-  defp expand_case({:do, _} = do_clause, _scrutinee_ast, _match_context, s, e) do
-    # empty / cursor-recovery do-block: nothing to type
-    expand_clauses(&head/3, do_clause, s, e)
+    {values, se}
   end
 
   defp expand_case_head(c, scrutinee_ast, match_context, refined_context, s, e) do
@@ -336,17 +347,15 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   defp prior_union([single]), do: single
   defp prior_union(prior), do: {:union, Enum.reverse(prior)}
 
+  # Strip a `when` guard, keeping just the pattern.
+  defp strip_guard({:when, _meta, [pattern | _guards]}), do: pattern
+  defp strip_guard(other), do: other
+
   # Best-effort type of a clause's (raw) pattern, used as the subtracted type for
   # later clauses. Literals/atoms (the cases we can actually subtract) type
   # precisely here; anything else stays conservative.
   defp clause_pattern_type({:->, _meta, [[head | _], _body]}) do
-    pattern =
-      case head do
-        {:when, _, [pat | _guards]} -> pat
-        pat -> pat
-      end
-
-    TypeInference.type_of(pattern, :match)
+    head |> strip_guard() |> TypeInference.type_of(:match)
   end
 
   defp clause_pattern_type(_clause), do: nil
@@ -459,9 +468,9 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
     opts0 = sanitize_opts(opts0, @valid_with_opts)
     s0 = State.new_vars_scope(s)
-    {e_exprs, {s1, e1}} = Enum.map_reduce(exprs, {s0, e}, &expand_with/2)
+    {e_exprs, {s1, e1, failure_types}} = Enum.map_reduce(exprs, {s0, e, []}, &expand_with/2)
     {e_do, opts1, s2} = expand_with_do(meta, opts0, s, s1, e1)
-    {e_opts, _opts2, s3} = expand_with_else(opts1, s2, e)
+    {e_opts, _opts2, s3} = expand_with_else(opts1, s2, e, with_else_context(failure_types))
 
     # Stamp a {:version, N} on `with` (1.20+ only — commit 603602e67).
     {meta, s3} =
@@ -475,7 +484,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     {{:with, meta, e_exprs ++ [[{:do, e_do} | e_opts]]}, s3, e}
   end
 
-  defp expand_with({:<-, meta, [left, right]}, {s, e}) do
+  defp expand_with({:<-, meta, [left, right]}, {s, e, failures}) do
     {e_right, sr, er} = Compiler.expand(right, s, e)
     sm = State.reset_read(sr, s)
     {[e_left], sl, el} = head([left], sm, er)
@@ -494,13 +503,35 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     # narrow the right-hand side variable to the type the left pattern matched.
     sl = State.merge_inferred_types(sl, Occurrence.scrutinee_refinements(e_right, e_left))
 
-    {{:<-, meta, [e_left, e_right]}, {sl, el}}
+    # The value that reaches `else` from this generator is the RHS minus what the
+    # left pattern matched (the failing part). A bare-variable (or `_`) pattern
+    # always matches, so it contributes nothing to the failure space. Strip any
+    # `when` guard first so we type the pattern, not the guard expression.
+    failure_pattern = strip_guard(e_left)
+
+    failures =
+      if bare_var_pattern?(failure_pattern) do
+        failures
+      else
+        difference =
+          {:difference, match_context_r, TypeInference.type_of(failure_pattern, :match)}
+
+        [difference | failures]
+      end
+
+    {{:<-, meta, [e_left, e_right]}, {sl, el, failures}}
   end
 
-  defp expand_with(expr, {s, e}) do
+  defp expand_with(expr, {s, e, failures}) do
     {e_expr, se, ee} = Compiler.expand(expr, s, e)
-    {e_expr, {se, ee}}
+    {e_expr, {se, ee, failures}}
   end
+
+  # The failure space `else` matches: the union of each generator's RHS value
+  # with its pattern subtracted. nil when there are no `<-` generators.
+  defp with_else_context([]), do: nil
+  defp with_else_context([single]), do: single
+  defp with_else_context(failures), do: {:union, Enum.reverse(failures)}
 
   defp expand_with_do(_meta, opts, s, acc, e) do
     {expr, rest_opts} = Keyword.pop(opts, :do)
@@ -513,16 +544,20 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     {e_expr, rest_opts, State.remove_vars_scope(s_acc, s)}
   end
 
-  defp expand_with_else(opts, s, e) do
+  defp expand_with_else(opts, s, e, else_context) do
     case Keyword.pop(opts, :else) do
       {nil, _} ->
         {[], opts, s}
 
-      {expr, rest_opts} ->
-        pair = {:else, expr}
+      {[_ | _] = clauses, rest_opts} when not is_nil(else_context) ->
+        # `else` clauses match the failure space (the `<-` RHS values that did
+        # not match), so type them like a `case` over that subject — including
+        # cross-clause subtraction. There is no subject variable to narrow.
+        {values, se} = expand_subject_clauses(clauses, nil, else_context, s, e)
+        {[{:else, values}], rest_opts, se}
 
-        # no point in doing type inference here, we have no idea what data we are matching against
-        {e_pair, se} = expand_clauses(&head/3, pair, s, e)
+      {expr, rest_opts} ->
+        {e_pair, se} = expand_clauses(&head/3, {:else, expr}, s, e)
         {[e_pair], rest_opts, se}
     end
   end

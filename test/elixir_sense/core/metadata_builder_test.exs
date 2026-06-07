@@ -3881,8 +3881,22 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :x, type: {:tuple, 2, [nil, nil]}}
              ] = get_line_vars(state, 5)
 
-      assert [%VarInfo{name: :e, type: :atom}, %VarInfo{name: :x, type: nil}] =
-               get_line_vars(state, 8)
+      # `else` now types its clauses against the failure space (the `<-` RHS
+      # with the generator pattern subtracted): `e` is `:atom` (from the guard)
+      # intersected with the 2nd element of that space. `x` (param) is unknown,
+      # so the difference resolves to nil and the intersection reduces to :atom.
+      assert [
+               %VarInfo{
+                 name: :e,
+                 type:
+                   {:intersection,
+                    [
+                      :atom,
+                      {:tuple_nth, {:difference, {:variable, :x, 0}, {:tuple, 2, [nil, nil]}}, 1}
+                    ]}
+               },
+               %VarInfo{name: :x, type: nil}
+             ] = get_line_vars(state, 8)
 
       assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 10)
 

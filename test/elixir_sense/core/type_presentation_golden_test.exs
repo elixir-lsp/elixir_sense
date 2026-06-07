@@ -94,6 +94,23 @@ defmodule ElixirSense.Core.TypePresentationGoldenTest do
     assert hint(code, :v, {5, 16}) == {:ok, "5"}
   end
 
+  test "with/else narrows to the failure space" do
+    code = """
+    defmodule M do
+      def f(x) when x in [:ok, :error] do
+        with :ok <- x do
+          :done
+        else
+          other -> IO.inspect(other)
+        end
+      end
+    end
+    """
+
+    # `else` matches the failure space: (:ok | :error) with :ok subtracted = :error
+    assert hint(code, :other, {6, 20}) == {:ok, ":error"}
+  end
+
   test "fields_for_receiver exposes a receiver's fields for property completion" do
     code = """
     defmodule M do
