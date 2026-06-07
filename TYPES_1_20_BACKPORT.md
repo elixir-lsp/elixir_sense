@@ -136,6 +136,20 @@ Precision follow-ups shipped in this pass:
   available; any branch we can't type widens the union to `nil` (never
   over-promises). `if`/`unless`/`&&`/`||`/`!` flow through (they expand to
   case/cond): `!a` → `boolean()`, `if a, do: 1` → `1 | nil`.
+  - **`with` without `else`** — the result also unions each `<-` generator's
+    failure value (`with {:ok, v} <- a do … end` can return `a` directly), not
+    just the `do`/`else` bodies.
+  - **No clause-local leaks** — a branch body that *is* a head-bound variable
+    (`{:ok, v} -> v`) widens to `nil`: that var is out of scope at the result
+    site. Structured bodies (`{:wrapped, v}`, `process(v)`) keep their shape; the
+    head-local leaf resolves harmlessly to unknown.
+- **`for` filters refine the body** — `for x <- xs, is_integer(x), do: x` narrows
+  `x` to `integer()` in the comprehension body (guard facts from filters merged
+  into the body scope), like `cond` conditions.
+- **`<<>>` bitstring vs binary** — a constructor with a sub-byte segment
+  (`<<1::1>>`, `<<x::bitstring>>`, `<<x::integer-size(4)>>`) is `bitstring()`;
+  byte-aligned ones (`<<1,2,3>>`, `<<x::binary-size(4)>>`, `<<x::utf8>>`) stay
+  `binary()` (was unconditionally `binary()`).
 - **`fn`/captures** stay arity-rendered (`fn x -> … end` → `(term() -> term())`).
   Deeper anonymous-call (`f.(x)`) return typing is native-only and low value
   (fn bodies usually end in untyped calls) — left to the native path.

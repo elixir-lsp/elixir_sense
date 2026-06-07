@@ -1926,6 +1926,23 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                 ]}
     end
 
+    test "for filter narrows tested generator vars in the body" do
+      state =
+        """
+        defmodule M do
+          def f(xs) do
+            for x <- xs, is_integer(x) do
+              IO.inspect(x)
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      assert Enum.find(get_line_vars(state, 4), &(&1.name == :x)).type ==
+               {:intersection, [{:for_expression, {:variable, :xs, 0}}, :integer]}
+    end
+
     test "for ... reduce: leaves a guarded accumulator to guard inference" do
       state =
         """

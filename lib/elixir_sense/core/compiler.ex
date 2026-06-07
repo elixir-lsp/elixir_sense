@@ -2910,8 +2910,17 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_for_generator(x, s, e) do
-    {x, s, e} = expand(x, s, e)
-    {x, s, e}
+    # A non-generator clause is a filter; if it is a guard-like test
+    # (`for x <- xs, is_integer(x)`), narrow the tested vars for the rest of the
+    # comprehension (generators/filters thread state into the body scope).
+    {e_x, s, e} = expand(x, s, e)
+
+    refinements =
+      e_x
+      |> Guard.type_information_from_guards()
+      |> Enum.reject(fn {_key, type} -> is_nil(type) end)
+
+    {e_x, State.merge_inferred_types(s, refinements), e}
   end
 
   defp sanitize_for_options([{:into, _} = pair | opts], _into, uniq, reduce, return, meta, e, acc) do

@@ -248,9 +248,15 @@ defmodule ElixirSense.Core.TypeInference do
     type_of_with_elixir_types(ast, context) || for_result_type(List.last(clauses), context)
   end
 
-  # Binaries always produce a binary
-  def type_of({:<<>>, _meta, _clauses} = ast, context) do
-    type_of_with_elixir_types(ast, context) || {:binary, nil}
+  # A `<<>>` constructor is a `binary()` when every segment is byte-aligned,
+  # otherwise a `bitstring()` (`<<1::1>>`). We only downgrade to bitstring when a
+  # segment is explicitly sub-byte (`::bitstring`/`::bits`, or a literal bit size
+  # not divisible by 8); everything else stays `binary()`.
+  def type_of({:<<>>, _meta, segments} = ast, context) do
+    type_of_with_elixir_types(ast, context) ||
+      if Enum.any?(List.wrap(segments), &sub_byte_segment?/1),
+        do: :bitstring,
+        else: {:binary, nil}
   end
 
   # special forms
@@ -316,60 +322,165 @@ defmodule ElixirSense.Core.TypeInference do
 
   # Conservative result type of a clause construct (`case`/`cond`/`with`/`try`/
   # `receive`/`if`/`unless`): the union of each branch's body type. Used native-
-  # off and on 1.18, where the engine doesn't compute these. A branch whose body
-  # type is unknown (`nil`) widens the whole union to `nil` in `Binding`.
+  # off and on 1.18, where the engine doesn't compute these.
+  #
+  # Branches are `{head_or_nil, body}`. A body whose type is itself a variable
+  # bound by its own `head` (`{:ok, v} -> v`, or a `with` body over its
+  # generators) is widened to `nil`: that var is out of scope at the construct's
+  # result site, so storing it would leak a dangling thunk. Structured bodies
+  # (`{:wrapped, v}`, `process(v)`) keep their shape — any head-local leaf inside
+  # resolves harmlessly to unknown via `Binding`. Any `nil` branch collapses the
+  # whole result to `nil` (the value could be that unknown branch).
   defp clause_result_type(ast, context) do
-    case clause_result_bodies(ast) do
+    case clause_result_branches(ast) do
       [] ->
         nil
 
-      bodies ->
-        case bodies |> Enum.map(&type_of(&1, context)) |> Enum.uniq() do
-          [single] -> single
-          members -> {:union, members}
+      branches ->
+        types = Enum.map(branches, fn {head, body} -> branch_result_type(head, body, context) end)
+
+        cond do
+          Enum.any?(types, &is_nil/1) ->
+            nil
+
+          true ->
+            case Enum.uniq(types) do
+              [single] -> single
+              members -> {:union, members}
+            end
         end
     end
   end
 
-  defp clause_result_bodies({:case, _, [_subject, blocks]}) when is_list(blocks),
-    do: clause_bodies(blocks[:do])
+  defp branch_result_type(nil, body, context), do: type_of(body, context)
 
-  defp clause_result_bodies({:cond, _, [blocks]}) when is_list(blocks),
-    do: clause_bodies(blocks[:do])
+  defp branch_result_type(head, body, context) do
+    case type_of(body, context) do
+      {:variable, name, _} = var ->
+        if MapSet.member?(head_var_names(head), name), do: nil, else: var
 
-  defp clause_result_bodies({:receive, _, [blocks]}) when is_list(blocks),
-    do: clause_bodies(blocks[:do]) ++ clause_bodies(blocks[:after])
-
-  defp clause_result_bodies({:try, _, [blocks]}) when is_list(blocks) do
-    # On success the value is the `do` body, unless `else` is present (then the
-    # value is an `else` clause body). `rescue`/`catch` bodies are also possible
-    # results; `after` does not contribute.
-    main = if blocks[:else], do: clause_bodies(blocks[:else]), else: [blocks[:do]]
-    main ++ clause_bodies(blocks[:rescue]) ++ clause_bodies(blocks[:catch])
-  end
-
-  defp clause_result_bodies({form, _, [_cond, blocks]})
-       when form in [:if, :unless] and is_list(blocks),
-       do: [blocks[:do], blocks[:else]]
-
-  defp clause_result_bodies({:with, _, args}) when is_list(args) do
-    case List.last(args) do
-      opts when is_list(opts) ->
-        if Keyword.has_key?(opts, :do),
-          do: [opts[:do] | clause_bodies(opts[:else])],
-          else: []
-
-      _ ->
-        []
+      other ->
+        other
     end
   end
 
-  defp clause_result_bodies(_other), do: []
+  defp clause_result_branches({:case, _, [_subject, blocks]}) when is_list(blocks),
+    do: clause_branches(blocks[:do])
+
+  defp clause_result_branches({:cond, _, [blocks]}) when is_list(blocks),
+    do: clause_branches(blocks[:do])
+
+  defp clause_result_branches({:receive, _, [blocks]}) when is_list(blocks),
+    do: clause_branches(blocks[:do]) ++ clause_branches(blocks[:after])
+
+  defp clause_result_branches({:try, _, [blocks]}) when is_list(blocks) do
+    # On success the value is the `do` body, unless `else` is present (then the
+    # value is an `else` clause body). `rescue`/`catch` bodies are also possible
+    # results; `after` does not contribute. The `do` body has no clause head.
+    main = if blocks[:else], do: clause_branches(blocks[:else]), else: [{nil, blocks[:do]}]
+    main ++ clause_branches(blocks[:rescue]) ++ clause_branches(blocks[:catch])
+  end
+
+  defp clause_result_branches({form, _, [_cond, blocks]})
+       when form in [:if, :unless] and is_list(blocks),
+       do: [{nil, blocks[:do]}, {nil, blocks[:else]}]
+
+  defp clause_result_branches({:with, _, args}) when is_list(args) do
+    {generators, opts} = with_split(args)
+
+    cond do
+      not (is_list(opts) and Keyword.has_key?(opts, :do)) ->
+        []
+
+      Keyword.has_key?(opts, :else) ->
+        # `else` clauses handle the failure space; the `do` body is typed against
+        # the generators' bound vars (so a body over them widens out).
+        [{with_patterns(generators), opts[:do]} | clause_branches(opts[:else])]
+
+      true ->
+        # Without `else`, a failed `<-` returns its unmatched right-hand value, so
+        # the result is `do_body | each <- RHS`. All are typed against the
+        # generators' bound vars.
+        bound = with_patterns(generators)
+
+        [
+          {bound, opts[:do]}
+          | for({:<-, _, [_pattern, rhs]} <- generators, do: {bound, rhs})
+        ]
+    end
+  end
+
+  defp clause_result_branches(_other), do: []
+
+  defp with_split(args) do
+    case List.last(args) do
+      opts when is_list(opts) -> {Enum.drop(args, -1), opts}
+      _ -> {args, nil}
+    end
+  end
+
+  # The patterns a `with`'s generators bind (`<-` and `=`); used as the "head" of
+  # the `do`/failure branches so bodies referencing those vars widen out.
+  defp with_patterns(generators) do
+    for {op, _, [pattern, _rhs]} <- generators, op in [:<-, :=], do: pattern
+  end
+
+  defp clause_branches(clauses) when is_list(clauses),
+    do: for({:->, _, [heads, body]} <- clauses, do: {heads, body})
+
+  defp clause_branches(_other), do: []
+
+  # Variable names introduced by a clause head (pattern + guard vars). Pinned
+  # variables (`^x`) reference outer scope, so they are not collected (the pin
+  # subtree is replaced with an atom so prewalk does not descend into it).
+  defp head_var_names(head) do
+    {_ast, names} =
+      Macro.prewalk(head, MapSet.new(), fn
+        {:^, _, [_pinned]}, acc ->
+          {:__pinned__, acc}
+
+        {name, _meta, ctx} = node, acc when is_atom(name) and is_atom(ctx) and name != :_ ->
+          {node, MapSet.put(acc, name)}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    names
+  end
 
   defp clause_bodies(clauses) when is_list(clauses),
     do: for({:->, _, [_heads, body]} <- clauses, do: body)
 
   defp clause_bodies(_other), do: []
+
+  # A binary segment is sub-byte (makes the whole `<<>>` a bitstring) only when
+  # it is an explicit `::bitstring`/`::bits`, or an integer/bit segment with a
+  # size not divisible by 8. A `binary`/`bytes`/`utf*`/`float` part keeps it
+  # byte-aligned (e.g. `binary-size(4)` is 4 *bytes*).
+  defp sub_byte_segment?({:"::", _, [_value, spec]}) do
+    parts = flatten_segment_spec(spec)
+
+    cond do
+      Enum.any?(parts, &(&1 in [:binary, :bytes, :utf8, :utf16, :utf32, :float])) -> false
+      Enum.any?(parts, &(&1 in [:bitstring, :bits])) -> true
+      true -> Enum.any?(parts, &(is_integer(&1) and rem(&1, 8) != 0))
+    end
+  end
+
+  # A segment without `::` is the default (integer, 8 bits — byte-aligned).
+  defp sub_byte_segment?(_other), do: false
+
+  defp flatten_segment_spec({:-, _, [left, right]}),
+    do: flatten_segment_spec(left) ++ flatten_segment_spec(right)
+
+  defp flatten_segment_spec({:*, _, [left, right]}),
+    do: flatten_segment_spec(left) ++ flatten_segment_spec(right)
+
+  defp flatten_segment_spec({:size, _, [n]}) when is_integer(n), do: [n]
+  defp flatten_segment_spec({name, _, _}) when is_atom(name), do: [name]
+  defp flatten_segment_spec(n) when is_integer(n), do: [n]
+  defp flatten_segment_spec(_other), do: []
 
   # The result type of a `for` from its (last-clause) opts. `:reduce` wins over
   # `:into`/list because its opts keyword list also carries `:do`.

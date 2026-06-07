@@ -652,6 +652,34 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       assert type_of("fn x -> x + 1 end") == {:fun, [nil], nil}
       assert type_of("fn -> :ok end") == {:fun, 0}
     end
+
+    test "with without else unions the do body and each <- failure value" do
+      assert type_of("with {:ok, v} <- a, do: :done") ==
+               {:union, [{:atom, :done}, {:variable, :a, 1}]}
+    end
+
+    test "a clause body that is just a head-bound var widens to nil (no leak)" do
+      # `v` is out of scope at the case result site, so it must not leak.
+      assert type_of("case a do\n  {:ok, v} -> v\n  _ -> :err\nend") == nil
+    end
+
+    test "a structured clause body keeps its shape" do
+      assert type_of("case a do\n  1 -> {:wrapped, :a}\n  2 -> {:wrapped, :b}\nend") ==
+               {:union,
+                [
+                  {:tuple, 2, [{:atom, :wrapped}, {:atom, :a}]},
+                  {:tuple, 2, [{:atom, :wrapped}, {:atom, :b}]}
+                ]}
+    end
+
+    test "bitstring vs binary: sub-byte segments are bitstrings" do
+      assert type_of("<<1::1>>") == :bitstring
+      assert type_of("<<x::bitstring>>") == :bitstring
+      assert type_of("<<x::integer-size(4)>>") == :bitstring
+      assert type_of("<<1, 2, 3>>") == {:binary, nil}
+      assert type_of("<<x::binary-size(4)>>") == {:binary, nil}
+      assert type_of("<<x::utf8>>") == {:binary, nil}
+    end
   end
 
   describe "special forms" do
@@ -685,8 +713,14 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       "receive do\n  {:msg, msg} -> process(msg)\nend" =>
         {:local_call, :process, {2, 1}, [{:variable, :msg, 1}]},
       "for x <- list, do: x * 2" => {:list, nil},
+      # no `else`: result is the `do` body unioned with each `<-` failure value
       "with {:ok, a} <- fetch_a(), {:ok, b} <- fetch_b(a), do: a + b" =>
-        {:local_call, :+, {1, 1}, [{:variable, :a, 1}, {:variable, :b, 1}]},
+        {:union,
+         [
+           {:local_call, :+, {1, 1}, [{:variable, :a, 1}, {:variable, :b, 1}]},
+           {:local_call, :fetch_a, {1, 1}, []},
+           {:local_call, :fetch_b, {1, 1}, [{:variable, :a, 1}]}
+         ]},
       "quote do: a + b" => nil,
       "unquote(expr)" => nil,
       "unquote_splicing(expr)" => nil,
@@ -708,8 +742,14 @@ defmodule ElixirSense.Core.TypeInferenceTest do
          ]},
       "receive do\n  {:msg, msg} -> process(msg)\nend" =>
         {:local_call, :process, {2, 1}, [{:variable, :msg, 1}]},
+      # no `else`: result is the `do` body unioned with each `<-` failure value
       "with {:ok, a} <- fetch_a(), {:ok, b} <- fetch_b(a), do: a + b" =>
-        {:local_call, :+, {1, 1}, [{:variable, :a, 1}, {:variable, :b, 1}]},
+        {:union,
+         [
+           {:local_call, :+, {1, 1}, [{:variable, :a, 1}, {:variable, :b, 1}]},
+           {:local_call, :fetch_a, {1, 1}, []},
+           {:local_call, :fetch_b, {1, 1}, [{:variable, :a, 1}]}
+         ]},
       "for x <- list, do: x * 2" => {:list, nil}
     }
 
