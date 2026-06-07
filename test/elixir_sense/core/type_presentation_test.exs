@@ -193,4 +193,18 @@ defmodule ElixirSense.Core.TypePresentationTest do
       assert TP.render({:map, [foo: :not_set], nil}) == {:ok, "%{foo: not_set()}"}
     end
   end
+
+  describe "domain (non-atom) map keys" do
+    test "renders a domain key as `key_type => value_type`" do
+      shape = {:map, [{{:domain, {:integer, nil}}, {:binary, nil}}], nil}
+      assert TP.render(shape) == {:ok, "%{integer() => binary()}"}
+    end
+
+    test "renders mixed atom and domain keys" do
+      shape =
+        {:map, [{:root, {:integer, nil}}, {{:domain, {:integer, nil}}, {:binary, nil}}], nil}
+
+      assert TP.render(shape) == {:ok, "%{root: integer(), integer() => binary()}"}
+    end
+  end
 end

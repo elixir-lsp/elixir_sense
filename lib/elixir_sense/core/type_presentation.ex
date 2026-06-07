@@ -228,7 +228,10 @@ defmodule ElixirSense.Core.TypePresentation do
   defp arrow(args, return), do: "(" <> Enum.join(args, ", ") <> " -> " <> return <> ")"
 
   defp fields(fields) do
-    Enum.map_join(fields, ", ", fn {key, value} -> "#{key}: #{segment(value)}" end)
+    Enum.map_join(fields, ", ", fn
+      {{:domain, key_shape}, value} -> segment(key_shape) <> " => " <> segment(value)
+      {key, value} -> "#{key}: #{segment(value)}"
+    end)
   end
 
   # An intersection is "all of these at once"; for display pick the most

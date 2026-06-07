@@ -1647,12 +1647,17 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   # Convert quoted map fields to either a struct or map shape.
   defp quoted_map_to_shape(fields) do
-    # Extract field key-value pairs, skipping open map markers
+    # Extract field key-value pairs, skipping open map markers. Non-atom
+    # (domain) keys like `integer() => binary()` are preserved as
+    # `{{:domain, key_shape}, value}` rather than collapsed to a nil key.
     kv_pairs =
       for {key_quoted, value_quoted} <- fields,
-          not match?({:..., [], _}, key_quoted),
-          key = extract_quoted_map_key(key_quoted),
-          do: {key, value_quoted}
+          not match?({:..., [], _}, key_quoted) do
+        case extract_quoted_map_key(key_quoted) do
+          nil -> {{:domain, quoted_to_shape(key_quoted)}, value_quoted}
+          atom_key -> {atom_key, value_quoted}
+        end
+      end
 
     # Check if this is a struct (has __struct__ field with a module atom)
     struct_module =

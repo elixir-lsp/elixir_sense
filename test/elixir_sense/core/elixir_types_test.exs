@@ -247,6 +247,20 @@ defmodule ElixirSense.Core.ElixirTypesTest do
              ) == {:map, [bar: {:integer, nil}, foo: {:binary, nil}], nil}
     end
 
+    test "preserves domain (non-atom) keys" do
+      # %{integer() => binary()} keeps the domain key as {:domain, key_shape}
+      # rather than dropping it. (open_map also admits other domains, hence
+      # membership rather than equality.)
+      descr =
+        Module.Types.Descr.open_map([
+          {Module.Types.Descr.to_domain_keys(Module.Types.Descr.integer()),
+           Module.Types.Descr.binary()}
+        ])
+
+      assert {:map, fields, nil} = ElixirTypes.to_shape(descr)
+      assert {{:domain, {:integer, nil}}, {:binary, nil}} in fields
+    end
+
     test "handles open tuple" do
       # Open tuple with known elements - treat as minimum-size tuple, lose open/closed distinction
       assert ElixirTypes.to_shape(
@@ -575,7 +589,9 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert {:map, fields, nil} = shape
-      assert fields == [key: {:atom, :value}]
+      # the string key is generalized to a binary() domain key, now preserved
+      # alongside the atom key (previously the domain key was dropped)
+      assert fields == [{{:domain, {:binary, nil}}, {:binary, nil}}, {:key, {:atom, :value}}]
     end
 
     test "types struct AST" do
