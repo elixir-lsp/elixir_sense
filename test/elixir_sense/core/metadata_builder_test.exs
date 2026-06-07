@@ -2541,8 +2541,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
              ] = state |> get_line_vars(6)
 
+      # `%{"asd" => "dsds"}` — non-atom key preserved as a domain key.
       assert [
-               %VarInfo{type: {:map, [], nil}}
+               %VarInfo{type: {:map, [{{:domain, {:binary, "asd"}}, {:binary, "dsds"}}], nil}}
              ] = state |> get_line_vars(8)
 
       assert [

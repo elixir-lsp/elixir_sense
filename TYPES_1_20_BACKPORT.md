@@ -70,7 +70,16 @@ abstraction layer dispatched by **capability probing**, not version numbers.
   cons patterns / list literals stay `{:list, …}` to avoid churning ~100
   assertions for marginal value.
 - **Domain keys** — non-atom map keys preserved as `{{:domain, key_shape},
-  value}` (renders `%{integer() => binary()}`) instead of being dropped.
+  value}` (renders `%{integer() => binary()}`) instead of being dropped. This now
+  also applies to the **native-off literal path** (`%{"asd" => a}` →
+  `%{"asd" => …}`, was `map()`); field operations in `Binding` (update merge,
+  same-key check) are key-type-agnostic (`put_fields`/`field_keys`) since
+  `Keyword.merge`/`Keyword.keys` raise on non-atom keys. Map-update field order
+  now follows the base map's declaration order (updates in place, new keys
+  appended).
+- **Tuple projection bounds fix** — `{:tuple_nth, t, n}` accepted `n == size`
+  (0-based), silently yielding `nil` instead of `:none` and erasing precision;
+  now bounded to `0 ≤ n < size`.
 
 **Grammar-coverage pass — delivered:** Variable inlay hints are grammar-agnostic
 (the provider annotates every `VarInfo`), so coverage = "does the builder bind a

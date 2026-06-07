@@ -640,9 +640,17 @@ defmodule ElixirSense.Core.TypeInference do
   defp type_of_into_target(_), do: nil
 
   defp get_fields_type(fields, context) do
-    for {field, value} <- fields,
-        is_atom(field) do
-      {field, type_of(value, context)}
+    for {field, value} <- fields do
+      case field do
+        atom when is_atom(atom) ->
+          {atom, type_of(value, context)}
+
+        # Non-atom keys (`%{"asd" => a}`, `%{n => v}`) are preserved as domain
+        # keys `{{:domain, key_type}, value_type}` (rendered `key => value`;
+        # property completion skips them as they aren't statically nameable).
+        other ->
+          {{:domain, type_of(other, context)}, type_of(value, context)}
+      end
     end
   end
 

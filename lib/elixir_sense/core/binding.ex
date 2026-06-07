@@ -173,7 +173,7 @@ defmodule ElixirSense.Core.Binding do
       expanded = expand(env, updated_struct, stack)
 
       {fields, module} =
-        get_struct_fields(env, get_fields_from(expanded) |> Keyword.merge(fields), module)
+        get_struct_fields(env, put_fields(get_fields_from(expanded), fields), module)
 
       {:struct, fields, if(module != nil, do: {:atom, module}), nil}
     else
@@ -184,10 +184,10 @@ defmodule ElixirSense.Core.Binding do
   def do_expand(env, {:map, fields, updated_map}, stack) do
     case expand(env, updated_map, stack) do
       {:map, expanded_fields, nil} ->
-        {:map, expanded_fields |> Keyword.merge(fields), nil}
+        {:map, put_fields(expanded_fields, fields), nil}
 
       {:struct, expanded_fields, type, nil} ->
-        {:struct, expanded_fields |> Keyword.merge(fields), type, nil}
+        {:struct, put_fields(expanded_fields, fields), type, nil}
 
       nil ->
         {:map, fields, nil}
@@ -215,7 +215,8 @@ defmodule ElixirSense.Core.Binding do
 
   def do_expand(env, {:tuple_nth, tuple_candidate, n}, stack) do
     case expand(env, tuple_candidate, stack) do
-      {:tuple, size, fields} when size > n ->
+      # `n` is a 0-based index, so valid positions are `0..(size - 1)`.
+      {:tuple, size, fields} when n >= 0 and n < size ->
         fields |> Enum.at(n)
 
       nil ->
@@ -549,7 +550,18 @@ defmodule ElixirSense.Core.Binding do
   defp mergeable?(_a, _b), do: false
 
   defp same_keys?(fields_1, fields_2) do
-    Enum.sort(Keyword.keys(fields_1)) == Enum.sort(Keyword.keys(fields_2))
+    Enum.sort(field_keys(fields_1)) == Enum.sort(field_keys(fields_2))
+  end
+
+  # Field keys, tolerating non-atom (domain) keys — `Keyword.keys/1` would raise.
+  defp field_keys(fields), do: Enum.map(fields, &elem(&1, 0))
+
+  # Override `base` fields with `overrides` by key, for any key type (atom or
+  # `{:domain, _}`). `Keyword.merge/2` raises on non-atom keys.
+  defp put_fields(base, overrides) do
+    Enum.reduce(overrides, base, fn {key, _value} = pair, acc ->
+      List.keystore(acc, key, 0, pair)
+    end)
   end
 
   defp merge_members({:list, elem_1}, {:list, elem_2}),
@@ -1478,7 +1490,7 @@ defmodule ElixirSense.Core.Binding do
     if :none in (fields ++ other_fields) do
       :none
     else
-      {:map, Keyword.merge(fields, other_fields), nil}
+      {:map, put_fields(fields, other_fields), nil}
     end
   end
 
@@ -1496,7 +1508,7 @@ defmodule ElixirSense.Core.Binding do
         |> MapSet.to_list()
         |> Enum.map(&{&1, nil})
 
-      merged = fields |> Keyword.merge(other_fields) |> Keyword.merge(conflicts)
+      merged = fields |> put_fields(other_fields) |> put_fields(conflicts)
 
       {:map, merged, nil}
     end

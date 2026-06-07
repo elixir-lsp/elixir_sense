@@ -113,12 +113,31 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "map update" do
-      assert {:map, [{:efg, {:atom, :a}}, {:abc, nil}, {:cde, {:variable, :a, 1}}], nil} ==
+      # Updated keys keep the base map's declaration order; new keys append.
+      assert {:map, [{:abc, nil}, {:cde, {:variable, :a, 1}}, {:efg, {:atom, :a}}], nil} ==
                Binding.expand(
                  @env,
                  {:map, [abc: nil, cde: {:variable, :a, 1}],
                   {:map, [abc: nil, cde: nil, efg: {:atom, :a}], nil}}
                )
+    end
+
+    test "map update with a non-atom (domain) key does not crash" do
+      assert {:map, fields, nil} =
+               Binding.expand(
+                 @env,
+                 {:map, [{{:domain, {:binary, "k"}}, {:integer, 1}}], {:map, [abc: nil], nil}}
+               )
+
+      assert {{:domain, {:binary, "k"}}, {:integer, 1}} in fields
+      assert {:abc, nil} in fields
+    end
+
+    test "tuple_nth out-of-bounds index resolves to :none, not nil" do
+      tuple = {:tuple, 2, [{:atom, :a}, {:integer, 1}]}
+      assert Binding.expand(@env, {:tuple_nth, tuple, 1}) == {:integer, 1}
+      # index == size is out of bounds (0-based) -> :none, not a silent nil
+      assert Binding.expand(@env, {:tuple_nth, tuple, 2}) == :none
     end
 
     test "introspection struct" do

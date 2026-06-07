@@ -460,8 +460,9 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     test "map" do
       assert type_of("%{}") == {:map, [], nil}
       assert type_of("%{asd: a}") == {:map, [{:asd, {:variable, :a, 1}}], nil}
-      # NOTE non atom keys are not supported
-      assert type_of("%{\"asd\" => a}") == {:map, [], nil}
+      # Non-atom keys are preserved as domain keys (`{:domain, key_type}`).
+      assert type_of("%{\"asd\" => a}") ==
+               {:map, [{{:domain, {:binary, "asd"}}, {:variable, :a, 1}}], nil}
 
       assert type_of("%{b | asd: a}") ==
                {:map, [{:asd, {:variable, :a, 1}}], {:variable, :b, 1}}
