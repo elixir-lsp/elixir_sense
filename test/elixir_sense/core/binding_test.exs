@@ -3221,6 +3221,18 @@ defmodule ElixirSense.Core.BindingTest do
                {:binary, nil}
     end
 
+    test "subtracts a tagged-tuple family (element-wise, _ as wildcard)" do
+      ok = {:tuple, 2, [{:atom, :ok}, {:integer, nil}]}
+      error = {:tuple, 2, [{:atom, :error}, {:atom, :reason}]}
+      env = union_env({:union, [ok, error]})
+
+      # `{:ok, _}` subtracts the whole :ok branch, leaving the :error branch
+      assert Binding.expand(
+               env,
+               {:difference, {:variable, :x, 1}, {:tuple, 2, [{:atom, :ok}, nil]}}
+             ) == error
+    end
+
     test "a generic subtracted type removes all matching literals" do
       env = union_env({:union, [{:atom, :a}, {:integer, 1}, {:integer, 2}]})
 

@@ -44,7 +44,21 @@ defmodule ElixirSense.Core.Compiler.State do
   @type structs_t :: %{optional(module) => ElixirSense.Core.State.StructInfo.t()}
   @type records_t :: %{optional({module, atom}) => ElixirSense.Core.State.RecordInfo.t()}
   @type protocol_t :: {module, nonempty_list(module)}
-  @type var_type :: nil | {:atom, atom} | {:map, keyword} | {:struct, keyword, module}
+  @typedoc """
+  The internal "shape" stored in `VarInfo.type` / `AttributeInfo.type`.
+
+  This is ElixirSense's pragmatic type vocabulary — *not* Elixir typespecs. The
+  full set of forms is produced by `ElixirSense.Core.TypeInference` and consumed
+  by `ElixirSense.Core.Binding` (e.g. `nil` = unknown, `:none` = bottom, the
+  scalar atoms `:atom`/`:integer`/..., and tuples such as `{:atom, value}`,
+  `{:tuple, n, [...]}`, `{:map, fields, updated}`, `{:struct, fields, type,
+  updated}`, `{:union, [...]}`, `{:intersection, [...]}`). A stored shape may be
+  unresolved — it can contain `{:variable, ...}`, `{:call, ...}`, projection
+  thunks (`{:map_key, ...}`, `{:tuple_nth, ...}`, ...) or `{:difference, ...}` —
+  until concretized by `ElixirSense.Core.Binding.expand/2`. Every shape is
+  therefore `nil`, a bare atom, or a tuple.
+  """
+  @type var_type :: nil | atom | tuple
 
   @type t :: %__MODULE__{
           attributes: list(list(ElixirSense.Core.State.AttributeInfo.t())),

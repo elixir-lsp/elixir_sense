@@ -521,9 +521,14 @@ defmodule ElixirSense.Core.Binding do
   defp union_to_list(other), do: [other]
 
   # Does shape `a` subsume shape `b`? Used to decide which union members a
-  # subtracted type removes. Conservative — only exact matches and generic
-  # (value-less) types covering their literals.
+  # subtracted type removes. Conservative — exact matches, generic (value-less)
+  # types covering their literals, tagged tuples (element-wise, with `nil` as a
+  # wildcard element), and structs by module.
   defp covers?(same, same), do: true
+  # `nil` as a *subtracted* element means "any value here" (e.g. the `_` in
+  # `{:ok, _}`), so it covers any member element. Reached only inside tuple
+  # recursion — a top-level nil subtrahend is short-circuited by difference/2.
+  defp covers?(nil, _b), do: true
   defp covers?(:atom, {:atom, _}), do: true
   defp covers?(:boolean, {:atom, bool}) when is_boolean(bool), do: true
   defp covers?(:integer, {:integer, _}), do: true
@@ -532,6 +537,15 @@ defmodule ElixirSense.Core.Binding do
   defp covers?({:float, nil}, {:float, _}), do: true
   defp covers?(:binary, {:binary, _}), do: true
   defp covers?({:binary, nil}, {:binary, _}), do: true
+
+  defp covers?({:tuple, n, sub_elems}, {:tuple, n, mem_elems}) do
+    sub_elems
+    |> Enum.zip(mem_elems)
+    |> Enum.all?(fn {sub, mem} -> covers?(sub, mem) end)
+  end
+
+  defp covers?({:struct, _, {:atom, mod}, _}, {:struct, _, {:atom, mod}, _}), do: true
+  defp covers?({:struct, _, nil, _}, {:struct, _, _, _}), do: true
   defp covers?(_a, _b), do: false
 
   defp drop_no_spec(:no_spec), do: nil

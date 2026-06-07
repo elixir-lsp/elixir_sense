@@ -1,23 +1,24 @@
 defmodule ElixirSense.Core.TypeInference.Occurrence do
   @moduledoc """
-  Partial, ElixirSense-native occurrence typing — **positive narrowing only**.
+  ElixirSense-native occurrence typing — the *positive* half.
 
-  > #### This is a first slice, not full occurrence typing {: .warning}
-  >
-  > It refines a scrutinee/condition variable to the type the *current* clause
-  > matched. It does **not** do prior-clause subtraction, so the canonical
-  > example below does not yet narrow `value`:
-  >
-  >     case System.get_env("X") do   # binary() | nil
-  >       nil   -> :none
-  >       value -> value   # NOT narrowed to binary() here — would need negation
-  >     end
-  >
-  > Full 1.20-style occurrence typing (subtracting earlier clauses) is tracked
-  > as follow-up work; see `TYPES_1_20_BACKPORT.md`.
+  This module narrows a scrutinee/condition variable to the type the *current*
+  clause matched. The complementary *negative* half — subtracting the patterns
+  earlier clauses already matched — is implemented in
+  `ElixirSense.Core.Compiler.Clauses` (`expand_case`), which types each clause
+  against a `{:difference, scrutinee, prior_patterns}` shape resolved by
+  `ElixirSense.Core.Binding`. Together they give, for a union scrutinee:
 
-  What it *does* handle — narrowing the scrutinee to the matched pattern within
-  the branch:
+      case System.get_env("X") do   # binary() | nil
+        nil   -> :none
+        value -> value   # narrowed to binary() (nil subtracted by Clauses)
+      end
+
+  Subtraction is only as precise as `Binding.difference/2` (it narrows union
+  bases; opaque bases pass through unchanged).
+
+  What *this* module handles — narrowing the scrutinee to the matched pattern
+  within the branch:
 
       case x do
         %User{} = u -> u.<cursor>   # here `x` is a `%User{}`
@@ -28,13 +29,13 @@ defmodule ElixirSense.Core.TypeInference.Occurrence do
   `ElixirSense.Core.TypeInference`). The module is intentionally
   version-independent and does **not** call into Elixir's `Module.Types`.
 
-  ## Why positive-only
+  ## Division of labour
 
-  The shape model is structural and has no negation/difference operator, so
-  "`value` is everything except `nil`" is not representable. Cross-clause
-  subtraction therefore waits on a richer shape vocabulary (`not_set`,
-  non-empty, arity bounds, negation); until then we follow the "do not subtract
-  when unsure" rule and only add positive facts.
+  This module emits only positive facts; the negative (subtraction) side is the
+  lazy `{:difference, ...}` shape built in `Clauses` and resolved by `Binding`.
+  Keeping them separate means subtraction stays representable without a general
+  negation operator: `Binding.difference/2` narrows a union base and leaves an
+  opaque base untouched, so we never invent a "not X" shape we can't display.
 
   Refinements are returned as a list of `{{name, version}, type}` tuples, the
   same shape `ElixirSense.Core.Compiler.State.merge_inferred_types/2` consumes
