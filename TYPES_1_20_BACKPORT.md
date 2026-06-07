@@ -68,14 +68,19 @@ abstraction layer dispatched by **capability probing**, not version numbers.
   (e.g. inferring non-`nil` in a later clause). Cross-cutting (binding.ex,
   completion reducers) and risky against the strict dialyzer flags, so kept
   separate. L1 deliberately does positive narrowing only until this lands.
-- **L2 reverse arrows (§4)** — Elixir's 1.20 reverse-arrow machinery does not
-  expose *per-branch* refined variable states from `Expr.of_expr` (vars reset
-  between clauses); surfacing them would mean re-implementing private
-  `Module.Types` orchestration — precisely the fragile coupling that broke
-  during the rebase. Pattern-variable precision is already taken from
-  `Module.Types` via `enhance_*_pattern_vars` when `enabled?()`. The remaining
-  L2 value (cross-clause negative narrowing) is also gated on the shape rework
-  above, so both move together as a follow-up.
+**L2 native precision — delivered (without reverse-arrow orchestration):** The
+intended L2 value (precise per-branch narrowing with native typing on) is
+achieved by composition rather than by re-implementing Elixir's private
+reverse-arrow machinery (which doesn't expose per-branch variable states and was
+the fragile coupling we avoided). With `enabled?()`: `type_of/4` types the
+scrutinee precisely via the native engine (`System.get_env/1 :: binary() | nil`),
+L1 cross-clause subtraction removes earlier clauses' patterns, and the result
+renders cleanly — `nil -> …; value -> …` gives `value :: binary()`. Two
+pre-existing bugs that blocked this were fixed: `build_env_context/2` using
+`env[:key]` Access on the env struct (raised, abandoning every native
+`case`/`with` body), and `enhance_*_pattern_vars` leaking the synthetic
+`{:variable_match, …}` marker into bare-variable shapes (now skipped — L1 types
+bare vars precisely; native enhance still refines structured patterns).
 
 ---
 
