@@ -1364,7 +1364,7 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
           raise "unexpected #{inspect(other)} for hint #{inspect(hint)}"
       end
 
-    for {key, value} when is_atom(key) <- fields,
+    for {key, value} when is_atom(key) and value != :not_set <- fields,
         key_str = Atom.to_string(key),
         not Regex.match?(~r/^[A-Z]/u, key_str),
         Matcher.match?(key_str, hint) do

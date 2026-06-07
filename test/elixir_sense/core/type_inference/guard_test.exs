@@ -215,6 +215,12 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       assert result == %{{:x, 0} => nil}
     end
 
+    test "negative is_map_key records the key as :not_set" do
+      guard_expr = quote(do: not is_map_key(x, :foo)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:map, [foo: :not_set], nil}}
+    end
+
     # for simplicity we do not traverse not guards in the guard tree
     # this should return :number type
     test "handles nested not guards" do

@@ -180,5 +180,16 @@ defmodule ElixirSense.Core.TypePresentationTest do
     test "is empty for a non-map/struct receiver" do
       assert TP.fields_for_receiver(@env, {:integer, 1}) == %{}
     end
+
+    test "skips :not_set (known-absent) keys" do
+      shape = {:map, [present: {:integer, 1}, missing: :not_set], nil}
+      assert TP.fields_for_receiver(@env, shape) == %{present: "1"}
+    end
+  end
+
+  describe "not_set rendering" do
+    test "renders a known-absent map key" do
+      assert TP.render({:map, [foo: :not_set], nil}) == {:ok, "%{foo: not_set()}"}
+    end
   end
 end

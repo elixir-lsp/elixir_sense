@@ -99,7 +99,8 @@ defmodule ElixirSense.Core.TypePresentation do
   end
 
   defp field_map(fields) do
-    for {key, value} <- fields, is_atom(key), into: %{} do
+    # `:not_set` keys are known-absent (from `not is_map_key/2`) — not real fields.
+    for {key, value} <- fields, is_atom(key), value != :not_set, into: %{} do
       {key, render_field(value)}
     end
   end
@@ -148,6 +149,7 @@ defmodule ElixirSense.Core.TypePresentation do
   # structure so a single unknown leaf doesn't sink the whole rendering.
   defp segment(nil), do: "term()"
   defp segment(:none), do: "none()"
+  defp segment(:not_set), do: "not_set()"
   defp segment(:empty), do: "[]"
   defp segment(:atom), do: "atom()"
   defp segment(:integer), do: "integer()"

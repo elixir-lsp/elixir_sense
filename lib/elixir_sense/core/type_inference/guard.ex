@@ -33,6 +33,18 @@ defmodule ElixirSense.Core.TypeInference.Guard do
     end
   end
 
+  # Negative `is_map_key`: the key is known to be ABSENT, recorded as
+  # `:not_set` (so e.g. `x.key` would be a violation and completion won't
+  # suggest the key). Erlang arg order is `is_map_key(key, map)`.
+  def type_information_from_guards(
+        {{:., _, [:erlang, :not]}, _, [{{:., _, [:erlang, :is_map_key]}, _, [key, var]}]}
+      ) do
+    case extract_var_type(var, not_set_map_type(key)) do
+      nil -> %{}
+      {var_key, type} -> %{var_key => type}
+    end
+  end
+
   def type_information_from_guards({{:., _, [:erlang, :not]}, _, [guard_l]}) do
     left = type_information_from_guards(guard_l)
     for {k, _v} <- left, into: %{}, do: {k, nil}
@@ -128,6 +140,12 @@ defmodule ElixirSense.Core.TypeInference.Guard do
 
     acc
   end
+
+  # A map known to NOT have `key` (from `not is_map_key/2`).
+  defp not_set_map_type(key) when is_atom(key) or is_binary(key) or is_integer(key),
+    do: {:map, [{key, :not_set}], nil}
+
+  defp not_set_map_type(_key), do: {:map, [], nil}
 
   defp extract_var_type({var, meta, context}, type) when is_atom(var) and is_atom(context) do
     case Keyword.fetch(meta, :version) do
