@@ -76,4 +76,149 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
              "expected `value` in scope; got #{inspect(Enum.map(env.vars, & &1.name))}"
     end
   end
+
+  # --- Native-on full-pipeline sweep ------------------------------------------
+  #
+  # The build_env_context crash showed that native typing can silently abandon a
+  # whole clause body. This sweep runs the full metadata pipeline native-on over
+  # the clause-bearing constructs and asserts their binding variables survive
+  # (no silent drop). Native typing may still degrade gracefully for some
+  # patterns (logging a caught warning), which is fine — the invariant is that
+  # variables stay in scope.
+
+  # All variable names that appear in scope anywhere in the module (robust to
+  # exact positions). Logs from graceful native degradation are swallowed.
+  defp scoped_var_names(code) do
+    {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
+
+    ExUnit.CaptureLog.capture_log(fn ->
+      st = ElixirSense.Core.MetadataBuilder.build(ast)
+
+      send(
+        self(),
+        {:vars,
+         st.lines_to_env
+         |> Enum.flat_map(fn {_l, e} -> Enum.map(e.vars, & &1.name) end)
+         |> MapSet.new()}
+      )
+    end)
+
+    receive do
+      {:vars, names} -> names
+    end
+  end
+
+  defp assert_in_scope(code, names) do
+    if ElixirTypes.available?() do
+      scoped = scoped_var_names(code)
+
+      for name <- names do
+        assert MapSet.member?(scoped, name),
+               "expected `#{name}` in scope native-on; got #{inspect(MapSet.to_list(scoped))}"
+      end
+    end
+  end
+
+  test "native-on: with binds generator and else vars" do
+    assert_in_scope(
+      """
+      defmodule M do
+        def f(a) do
+          with {:ok, x} <- a,
+               {:ok, y} <- x do
+            IO.inspect({x, y})
+          else
+            err -> IO.inspect(err)
+          end
+        end
+      end
+      """,
+      [:x, :y, :err]
+    )
+  end
+
+  test "native-on: cond keeps tested vars" do
+    assert_in_scope(
+      """
+      defmodule M do
+        def f(a) do
+          cond do
+            is_integer(a) -> IO.inspect(a)
+            true -> :other
+          end
+        end
+      end
+      """,
+      [:a]
+    )
+  end
+
+  test "native-on: for comprehension binds pattern vars" do
+    assert_in_scope(
+      """
+      defmodule M do
+        def f(list) do
+          for {:ok, v} <- list do
+            IO.inspect(v)
+          end
+        end
+      end
+      """,
+      [:v]
+    )
+  end
+
+  test "native-on: nested patterns bind inner vars" do
+    assert_in_scope(
+      """
+      defmodule M do
+        def f(a) do
+          case a do
+            {:ok, %{id: id}} -> IO.inspect(id)
+            _ -> :other
+          end
+        end
+      end
+      """,
+      [:id]
+    )
+  end
+
+  test "native-on: try/rescue binds the exception var" do
+    assert_in_scope(
+      """
+      defmodule M do
+        def f(g) do
+          try do
+            g.()
+          rescue
+            e in RuntimeError -> IO.inspect(e)
+          end
+        end
+      end
+      """,
+      [:e]
+    )
+  end
+
+  test "native-on: cond narrows a tested variable via guard" do
+    if ElixirTypes.available?() do
+      code = """
+      defmodule M do
+        def f(a) do
+          cond do
+            is_integer(a) -> IO.inspect(a)
+            true -> :other
+          end
+        end
+      end
+      """
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        send(self(), {:hint, hint(code, :a, {4, 22})})
+      end)
+
+      assert_received {:hint, {:ok, "integer()"}}
+    end
+  end
 end
