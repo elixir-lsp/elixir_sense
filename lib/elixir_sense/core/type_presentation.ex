@@ -124,9 +124,30 @@ defmodule ElixirSense.Core.TypePresentation do
   defp segment({:intersection, members}) when is_list(members),
     do: intersection(members)
 
-  # Unresolved thunks, calls, variables, attributes, fun shapes, etc. — anything
-  # we can't render precisely. Kept total on purpose.
+  # Functions. `{:fun, arity}` knows only the arity (args/return are unknown);
+  # `{:fun, args, return}` knows the signature; `{:fun_clauses, [...]}` carries
+  # one arrow per clause.
+  defp segment({:fun, arity}) when is_integer(arity) and arity >= 0,
+    do: arrow(List.duplicate("term()", arity), "term()")
+
+  defp segment({:fun, args, return}) when is_list(args),
+    do: arrow(Enum.map(args, &segment/1), segment(return))
+
+  defp segment({:fun_clauses, []}), do: "fun()"
+
+  defp segment({:fun_clauses, clauses}) when is_list(clauses) do
+    clauses
+    |> Enum.map(fn {args, return} -> arrow(Enum.map(args, &segment/1), segment(return)) end)
+    |> Enum.uniq()
+    |> Enum.join(" | ")
+  end
+
+  # Unresolved thunks, calls, variables, attributes, etc. — anything we can't
+  # render precisely. Kept total on purpose.
   defp segment(_other), do: "term()"
+
+  defp arrow([], return), do: "(-> " <> return <> ")"
+  defp arrow(args, return), do: "(" <> Enum.join(args, ", ") <> " -> " <> return <> ")"
 
   defp fields(fields) do
     Enum.map_join(fields, ", ", fn {key, value} -> "#{key}: #{segment(value)}" end)

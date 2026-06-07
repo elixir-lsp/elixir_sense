@@ -432,30 +432,7 @@ defmodule ElixirSense.Core.Binding do
   def do_expand(_env, {:integer, integer}, _stack), do: {:integer, integer}
 
   def do_expand(env, {:union, all}, stack) do
-    all =
-      all
-      |> Enum.map(&expand(env, &1, stack))
-      |> Enum.reject(&(&1 == :none))
-
-    cond do
-      all == [] ->
-        :none
-
-      Enum.any?(all, &(&1 == nil)) ->
-        nil
-
-      match?([_], all) ->
-        hd(all)
-
-      true ->
-        first = hd(all)
-
-        if Enum.all?(tl(all), &(&1 == first)) do
-          first
-        else
-          {:union, Enum.uniq(all)}
-        end
-    end
+    all |> Enum.map(&expand(env, &1, stack)) |> normalize_union()
   end
 
   def do_expand(_env, :none, _stack), do: :none
@@ -519,6 +496,40 @@ defmodule ElixirSense.Core.Binding do
 
   defp union_to_list({:union, members}), do: members
   defp union_to_list(other), do: [other]
+
+  # Normalize an expanded union: flatten nested unions, drop :none, drop members
+  # subsumed by a more general sibling (e.g. `5 | integer()` -> `integer()`),
+  # dedup, and collapse. A `nil` (unknown) member poisons the whole union to
+  # `nil`, since we no longer know it's bounded.
+  defp normalize_union(members) do
+    members = flatten_unions(members)
+
+    cond do
+      Enum.any?(members, &is_nil/1) ->
+        nil
+
+      true ->
+        case members |> Enum.reject(&(&1 == :none)) |> Enum.uniq() |> drop_subsumed() do
+          [] -> :none
+          [one] -> one
+          many -> {:union, many}
+        end
+    end
+  end
+
+  defp flatten_unions(members) do
+    Enum.flat_map(members, fn
+      {:union, inner} -> inner
+      other -> [other]
+    end)
+  end
+
+  # Keep a member only if no *other* member subsumes it.
+  defp drop_subsumed(members) do
+    Enum.reject(members, fn m ->
+      Enum.any?(members, fn n -> n != m and covers?(n, m) end)
+    end)
+  end
 
   # Does shape `a` subsume shape `b`? Used to decide which union members a
   # subtracted type removes. Conservative — exact matches, generic (value-less)
@@ -2235,7 +2246,16 @@ defmodule ElixirSense.Core.Binding do
     end)
   end
 
-  defp combine_intersection(_, _), do: :none
+  # Scalar specificity: if one side subsumes the other the intersection is the
+  # narrower of the two (e.g. `integer() and 5` is `5`, `atom() and :ok` is
+  # `:ok`). Genuinely disjoint shapes intersect to :none.
+  defp combine_intersection(a, b) do
+    cond do
+      covers?(a, b) -> b
+      covers?(b, a) -> a
+      true -> :none
+    end
+  end
 
   defp expand_map_fields(env, map_or_struct, stack) do
     case expand(env, map_or_struct, stack) do

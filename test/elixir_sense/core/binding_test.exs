@@ -3260,4 +3260,31 @@ defmodule ElixirSense.Core.BindingTest do
       assert Binding.expand(@env, {:difference, {:variable, :missing, 9}, {:atom, :a}}) == :none
     end
   end
+
+  describe "union / intersection normalization" do
+    test "drops union members subsumed by a more general sibling" do
+      # `:integer` expands to the generic `{:integer, nil}`, which subsumes `5`
+      assert Binding.expand(@env, {:union, [{:integer, 5}, :integer]}) == {:integer, nil}
+      assert Binding.expand(@env, {:union, [{:atom, :ok}, :atom]}) == :atom
+    end
+
+    test "flattens nested unions and drops :none" do
+      assert Binding.expand(@env, {:union, [{:atom, :a}, {:union, [{:atom, :b}, :none]}]}) ==
+               {:union, [{:atom, :a}, {:atom, :b}]}
+    end
+
+    test "keeps distinct literals" do
+      assert Binding.expand(@env, {:union, [{:integer, 1}, {:integer, 2}]}) ==
+               {:union, [{:integer, 1}, {:integer, 2}]}
+    end
+
+    test "intersection of a generic and its literal is the literal" do
+      assert Binding.expand(@env, {:intersection, [:integer, {:integer, 5}]}) == {:integer, 5}
+      assert Binding.expand(@env, {:intersection, [:atom, {:atom, :ok}]}) == {:atom, :ok}
+    end
+
+    test "intersection of disjoint scalars is :none" do
+      assert Binding.expand(@env, {:intersection, [{:atom, :a}, {:integer, 5}]}) == :none
+    end
+  end
 end

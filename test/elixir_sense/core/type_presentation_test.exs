@@ -53,6 +53,17 @@ defmodule ElixirSense.Core.TypePresentationTest do
       assert TP.render({:union, [{:atom, :a}, {:atom, :b}]}) == {:ok, ":a | :b"}
     end
 
+    test "functions" do
+      assert TP.render({:fun, 0}) == {:ok, "(-> term())"}
+      assert TP.render({:fun, 2}) == {:ok, "(term(), term() -> term())"}
+      assert TP.render({:fun, [{:atom, :ok}], {:integer, nil}}) == {:ok, "(:ok -> integer())"}
+      assert TP.render({:fun, [nil, nil], nil}) == {:ok, "(term(), term() -> term())"}
+      assert TP.render({:fun_clauses, [{[nil], {:atom, :ok}}]}) == {:ok, "(term() -> :ok)"}
+
+      assert TP.render({:fun_clauses, [{[], {:atom, :ok}}, {[{:integer, nil}], {:atom, :error}}]}) ==
+               {:ok, "(-> :ok) | (integer() -> :error)"}
+    end
+
     test "an unknown leaf inside a structure renders as term()" do
       assert TP.render({:tuple, 2, [{:atom, :ok}, nil]}) == {:ok, "{:ok, term()}"}
     end
