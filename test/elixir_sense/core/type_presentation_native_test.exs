@@ -184,6 +184,49 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
     )
   end
 
+  test "native-on: matches referencing earlier body vars produce no crash noise" do
+    if ElixirTypes.available?() do
+      # Regression: typing each `=`/`<-`/clause in isolation crashed native
+      # `refine_body_var`/`of_pattern`/`of_match_var` when the value referenced an
+      # earlier body var, used a `{_, …}` tuple, a guard, or a `@attr` binary
+      # segment. Now all referenced vars (incl. `_` and `@attr` placeholders) are
+      # seeded and guards are stripped before native of_match.
+      code = """
+      defmodule M do
+        @sep 0x3A
+        def create_checksum(hrp, data) do
+          payload = expand_hrp(hrp) ++ data
+          values = payload ++ [0, 0, 0]
+          mod = polymod(values)
+          for p <- 0..7, do: mod
+        end
+
+        def decode(bech) do
+          with {_, false} <- {:mixed, bech != bech},
+               <<hrp::binary-size(1), @sep, data::binary>> = bech do
+            {hrp, data}
+          end
+        end
+
+        defp expand_hrp(hrp), do: :binary.bin_to_list(hrp) ++ [0]
+        defp polymod(data), do: Enum.reduce(data, 1, fn d, c -> c + d end)
+      end
+      """
+
+      {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          ElixirSense.Core.MetadataBuilder.build(ast)
+        end)
+
+      refute log =~ "MatchError"
+      refute log =~ "FunctionClauseError"
+      refute log =~ "Unable to infer"
+      refute log =~ "fallback_match failed"
+    end
+  end
+
   test "native-on: nested patterns / underscore produce no log noise" do
     if ElixirTypes.available?() do
       code = """

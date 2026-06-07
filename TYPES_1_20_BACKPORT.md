@@ -81,6 +81,28 @@ abstraction layer dispatched by **capability probing**, not version numbers.
   (0-based), silently yielding `nil` instead of `:none` and erasing precision;
   now bounded to `0 ≤ n < size`.
 
+**Native isolated-typing robustness — delivered:** elixir_sense types each
+`=`/`<-`/clause and each expression *in isolation*, but `Module.Types` refines
+**every** variable a construct references. When a referenced version wasn't in
+the seeded context, internal native functions raised (caught + logged, but
+noisy and inference-degrading). Fixed so a real file (e.g. a CashAddr module:
+`payload = expand_hrp(hrp) ++ data`, `with {_, false} <- …`,
+`<<hrp::binary-size(pos), @sep, data::binary>>`) produces **zero** native errors:
+
+- **`of_match` auto-seeds referenced vars** — like `of_expr_impl`, it now seeds
+  every versioned var in the match AST (`variables_from_ast`) plus any caller
+  types, so `refine_body_var` never hits an unseeded version (`mod =
+  polymod(values)`, `size(pos)` binary segments).
+- **`variables_from_ast` seeds `_`** — native versions and refines each
+  underscore, so `{_, false}`-style patterns must seed them (was excluded).
+- **guards stripped before native `of_match`** — `of_pattern` has no `{:when,…}`
+  clause; the L1 guard layer handles guard facts.
+- **`@attr` replaced in the match path too** — `replace_module_attributes` now
+  runs in `of_match` (not just signature inference), so `{:@, …}` nodes in
+  binary patterns don't hit `of_match_var`.
+- **`infer_local_signature` seeds clause vars** — args+guards+body versioned vars
+  pre-seeded so body `of_expr` doesn't crash on isolated typing.
+
 **Set-algebra hardening (`Binding`) — delivered:**
 
 - **`union ∩ union` collects all overlaps** — `(:a | :b | :c) ∩ (:b | :c)` is

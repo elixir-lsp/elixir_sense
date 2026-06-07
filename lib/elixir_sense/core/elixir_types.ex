@@ -785,17 +785,25 @@ defmodule ElixirSense.Core.ElixirTypes do
         stack = init_stack(module, function, file, mode)
 
         if stack do
-          # Elixir 1.20 dropped the dev-era `stack.refine_vars` flag; variable
-          # refinement now happens unconditionally inside Pattern.of_match/6.
-          context = init_context(Keyword.get(opts, :variables))
-
-          # Stamp :version on any unversioned pattern/value vars before building
-          # full_match, so native of_match/of_expr don't raise (see of_expr_impl).
+          # Stamp :version on any unversioned pattern/value vars, and replace
+          # `@attr` references with placeholder vars, before building full_match —
+          # native of_match/of_pattern raises on unversioned vars and on `{:@, …}`
+          # nodes (e.g. `<<…, @separator, …>>` binary patterns).
           {pattern_ast, value_ast, full_match} =
             normalize_match(
-              ensure_body_var_versions(pattern_ast),
-              ensure_body_var_versions(match_ast)
+              pattern_ast |> ensure_body_var_versions() |> replace_module_attributes(),
+              match_ast |> ensure_body_var_versions() |> replace_module_attributes()
             )
+
+          # Elixir 1.20 dropped the dev-era `stack.refine_vars` flag; variable
+          # refinement now happens unconditionally inside Pattern.of_match/6 — and
+          # it refines *every* variable the match references (e.g. a `size(pos)`
+          # in a binary pattern, or a value-expression var). Seed them all (auto
+          # from the AST, plus any caller-provided types) so `refine_body_var`
+          # doesn't crash on a version that isn't in the context.
+          auto_vars = variables_from_ast(full_match)
+          effective_vars = merge_variables(Keyword.get(opts, :variables), auto_vars)
+          context = init_context(effective_vars)
 
           expected_descr = expected_descr || Module.Types.Descr.term()
 
@@ -1955,7 +1963,10 @@ defmodule ElixirSense.Core.ElixirTypes do
             new_acc =
               case Keyword.fetch(meta, :version) do
                 {:ok, version} when is_integer(version) ->
-                  if valid_variable_name?(name) do
+                  # Seed `_` too: native versions and refines each underscore, so
+                  # it must be present in the context (otherwise `refine_body_var`
+                  # crashes on `{_, false}`-style patterns typed in isolation).
+                  if name == :_ or valid_variable_name?(name) do
                     Map.put(acc, {name, version}, Module.Types.Descr.dynamic())
                   else
                     acc
@@ -2089,12 +2100,19 @@ defmodule ElixirSense.Core.ElixirTypes do
       %{meta: meta, args: args, guards: guards, body: body} = normalise_clause(clause)
       body = body |> ensure_body_var_versions() |> replace_module_attributes()
 
+      # Seed every variable referenced in the clause (args + guards + body) into
+      # the context as `:dynamic`. We type the body in isolation, so a body var
+      # referencing an earlier binding (`mod = polymod(values)`) would otherwise
+      # crash native `refine_body_var` on a not-yet-present version.
+      seeded_context =
+        init_context(collect_versioned_vars([args, guards || [], body])) || context
+
       try do
         # of_head / of_domain shapes differ across 1.18/1.19/1.20; the helpers
         # dispatch on pattern_api() (see their definitions). `head_kind` is
         # :trees (1.19/1.20, needs of_domain) or :types (1.18, types as-is).
         {head_result, clause_ctx, head_kind} =
-          call_of_head(args, guards || [], expected, meta, stack, context)
+          call_of_head(args, guards || [], expected, meta, stack, seeded_context)
 
         {return_type, clause_ctx} =
           call_of_expr(body, Module.Types.Descr.term(), body, stack, clause_ctx)
@@ -2138,6 +2156,33 @@ defmodule ElixirSense.Core.ElixirTypes do
   # them unique versions from a high base (well above the small versions the
   # compiler assigns) to avoid aliasing them to each other or to real vars.
   @underscore_version_base 1_000_000
+
+  # All `{name, version} => :dynamic` pairs for versioned variables in `ast`
+  # (a list of ASTs), used to pre-seed an isolated native typing context.
+  defp collect_versioned_vars(asts) do
+    asts
+    |> List.wrap()
+    |> Enum.reduce(%{}, fn ast, acc ->
+      {_ast, acc} =
+        Macro.prewalk(ast, acc, fn
+          {name, meta, context} = node, acc
+          when is_atom(name) and is_list(meta) and is_atom(context) and
+                 name not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__] ->
+            case Keyword.fetch(meta, :version) do
+              {:ok, version} when is_integer(version) ->
+                {node, Map.put(acc, {name, version}, :dynamic)}
+
+              _ ->
+                {node, acc}
+            end
+
+          node, acc ->
+            {node, acc}
+        end)
+
+      acc
+    end)
+  end
 
   defp ensure_body_var_versions(ast) do
     {ast, _counter} =

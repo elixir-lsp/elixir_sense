@@ -998,8 +998,14 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
   # Common implementation for pattern matching refinement via ElixirTypes
   defp enhance_pattern_vars(clause_vars, pattern_ast, match_context, match_label, state) do
+    # Native `of_match` types the pattern only — strip any `when` guard
+    # (guards go through `of_guard`, not `of_pattern`, which has no `{:when, …}`
+    # clause and would raise). The guard's facts are applied separately by the
+    # L1 guard layer.
+    native_pattern = strip_guard(pattern_ast)
+
     if ElixirSense.Core.ElixirTypes.enabled?() and clause_vars != [] and
-         not bare_var_pattern?(pattern_ast) do
+         not bare_var_pattern?(native_pattern) do
       try do
         env = env_for_meta_clauses(state, pattern_ast)
         module = env && env.module
@@ -1010,7 +1016,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
         target_keys = Enum.map(clause_vars, &elem(&1, 0))
 
         case ElixirSense.Core.ElixirTypes.of_match(
-               pattern_ast,
+               native_pattern,
                expected_descr,
                {:variable_match, match_label},
                module,

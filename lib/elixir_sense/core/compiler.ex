@@ -3213,6 +3213,13 @@ defmodule ElixirSense.Core.Compiler do
 
         target_keys = Enum.map(existing_vars, &elem(&1, 0))
 
+        # Seed every in-scope variable into the native context. We type each `=`
+        # match in isolation, but the value expression may reference earlier body
+        # vars (`mod = polymod(values)`); without them, native `refine_body_var`
+        # raises when it can't find their version. Seed as `:dynamic` — present
+        # but unconstrained — so native still infers the expression's own type.
+        variables = elixir_types_scope_variables(state)
+
         case ElixirSense.Core.ElixirTypes.of_match(
                pattern_ast,
                nil,
@@ -3221,7 +3228,8 @@ defmodule ElixirSense.Core.Compiler do
                function,
                file,
                :dynamic,
-               target_keys: target_keys
+               target_keys: target_keys,
+               variables: variables
              ) do
           {:ok, refined, var_descrs} when map_size(refined) > 0 ->
             {merge_pattern_types(existing_vars, refined), var_descrs}
@@ -3233,6 +3241,19 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp merge_elixir_types_pattern_vars(existing_vars, _expr_ast, _state), do: {existing_vars, %{}}
+
+  # All in-scope variables as `{name, version} => :dynamic`, to seed the native
+  # `of_match` context so value-expression vars resolve (avoids refine_body_var
+  # crashing on an unseeded version).
+  defp elixir_types_scope_variables(%{vars_info: [scope | _]}) when is_map(scope) do
+    for {{name, version}, %ElixirSense.Core.State.VarInfo{}} <- scope,
+        is_atom(name) and is_integer(version),
+        into: %{} do
+      {{name, version}, :dynamic}
+    end
+  end
+
+  defp elixir_types_scope_variables(_state), do: %{}
 
   defp merge_pattern_types(existing_vars, refined_map) do
     existing_map = Map.new(existing_vars)
