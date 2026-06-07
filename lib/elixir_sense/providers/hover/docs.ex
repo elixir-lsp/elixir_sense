@@ -14,6 +14,7 @@ defmodule ElixirSense.Providers.Hover.Docs do
   alias ElixirSense.Core.SurroundContext
   alias ElixirSense.Core.State.ModFunInfo
   alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Core.TypePresentation
   alias ElixirSense.Core.Parser
 
   @type markdown :: String.t()
@@ -44,7 +45,9 @@ defmodule ElixirSense.Providers.Hover.Docs do
 
   @type variable_doc :: %{
           name: atom(),
-          kind: :variable
+          kind: :variable,
+          # Rendered inferred type (best-effort), or nil when nothing useful.
+          type: String.t() | nil
         }
 
   @type attribute_doc :: %{
@@ -137,9 +140,16 @@ defmodule ElixirSense.Providers.Hover.Docs do
         var_info = Metadata.find_var(metadata, variable, version, context.begin)
 
         if var_info != nil do
+          rendered_type =
+            case TypePresentation.render_hint(binding_env, var_info) do
+              {:ok, text} -> text
+              :skip -> nil
+            end
+
           %{
             name: Atom.to_string(variable),
-            kind: :variable
+            kind: :variable,
+            type: rendered_type
           }
         else
           mod_fun_docs(

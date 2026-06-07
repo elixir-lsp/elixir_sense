@@ -52,6 +52,7 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Core.TypePresentation
 
   alias ElixirSense.Providers.Utils.Matcher
 
@@ -1380,10 +1381,25 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
         subtype: subtype,
         value_is_map: value_is_map,
         origin: origin,
-        type_spec: types[key]
+        # Prefer the declared typespec; fall back to the inferred field type
+        # rendered from the resolved receiver shape (e.g. for plain maps, or
+        # struct fields without a @type).
+        type_spec: types[key] || rendered_field_type(value)
       }
     end
     |> Enum.sort_by(& &1.name)
+  end
+
+  # `type_spec` here is a quoted type AST (to_entries renders it with
+  # Macro.to_string). TypePresentation renders to text, so parse it back to an
+  # AST; the rendered forms are always valid type expressions.
+  defp rendered_field_type(value) do
+    with {:ok, text} <- TypePresentation.render(value),
+         {:ok, ast} <- Code.string_to_quoted(text) do
+      ast
+    else
+      _ -> nil
+    end
   end
 
   ## Ad-hoc conversions
