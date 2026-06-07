@@ -807,24 +807,18 @@ defmodule ElixirSense.Core.ElixirTypes do
 
           expected_descr = expected_descr || Module.Types.Descr.term()
 
-          # Enhanced pattern matching refinement
-          result =
-            perform_enhanced_match(
-              pattern_ast,
-              value_ast,
-              expected_descr,
-              full_match,
-              stack,
-              context,
-              targets
-            )
+          # Only real match patterns can be typed by `Pattern.of_match`. Quoted /
+          # macro code routed through here can carry non-pattern AST — local or
+          # remote calls (`decompose_args(...)`, `Kernel.to_timeout(...)`),
+          # typespec operators (`{:"__::__"}`, `{:"__|__"}`) — on which native
+          # `of_pattern` raises a `FunctionClauseError`. Skip native typing for
+          # those (the custom engine still handles the match).
+          cond do
+            not native_typeable_pattern?(pattern_ast) ->
+              :error
 
-          case result do
-            {:ok, var_shapes, var_descrs} ->
-              {:ok, var_shapes, var_descrs}
-
-            :error ->
-              fallback_match(
+            true ->
+              do_native_match(
                 pattern_ast,
                 value_ast,
                 expected_descr,
@@ -851,6 +845,63 @@ defmodule ElixirSense.Core.ElixirTypes do
       :error
     end
   end
+
+  defp do_native_match(
+         pattern_ast,
+         value_ast,
+         expected_descr,
+         full_match,
+         stack,
+         context,
+         targets
+       ) do
+    case perform_enhanced_match(
+           pattern_ast,
+           value_ast,
+           expected_descr,
+           full_match,
+           stack,
+           context,
+           targets
+         ) do
+      {:ok, var_shapes, var_descrs} ->
+        {:ok, var_shapes, var_descrs}
+
+      :error ->
+        fallback_match(
+          pattern_ast,
+          value_ast,
+          expected_descr,
+          full_match,
+          stack,
+          context,
+          targets
+        )
+    end
+  end
+
+  # AST node names (with list args) that are legitimate inside a match pattern.
+  # Anything else with list args is a call/operator that `Pattern.of_pattern`
+  # can't handle.
+  @native_pattern_forms [:{}, :%{}, :%, :<<>>, :^, :=, :|, :"::", :__aliases__, :when, :__block__]
+
+  # True if `ast` is a real match pattern (no function/macro calls, no typespec
+  # operators) and so safe to hand to native `Pattern.of_match`.
+  defp native_typeable_pattern?(ast) do
+    {_ast, safe?} =
+      Macro.prewalk(ast, true, fn node, acc -> {node, acc and pattern_node_ok?(node)} end)
+
+    safe?
+  end
+
+  # remote call `Mod.fun(...)` — never a pattern
+  defp pattern_node_ok?({{:., _, _}, _, _}), do: false
+
+  # `{form, meta, args}` with list args is a call/operator unless it is one of the
+  # pattern special forms (a bare var's context is an atom, not a list).
+  defp pattern_node_ok?({form, _meta, args}) when is_list(args), do: form in @native_pattern_forms
+
+  defp pattern_node_ok?(_node), do: true
 
   # Enhanced pattern matching with better variable type refinement
   defp perform_enhanced_match(

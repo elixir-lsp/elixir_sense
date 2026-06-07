@@ -227,6 +227,39 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
     end
   end
 
+  test "native-on: call/operator-shaped patterns (quoted code) produce no crash noise" do
+    if ElixirTypes.available?() do
+      # Quoted / macro code can route non-pattern AST through case-clause typing:
+      # local calls, remote calls, and typespec operators are not valid patterns,
+      # and native `of_pattern` raised on them. They must be skipped, not crash.
+      code = """
+      defmodule M do
+        defmacro gen(x) do
+          quote do
+            case unquote(x) do
+              decompose_args({name, _, args}) -> {name, args}
+              Kernel.to_timeout(timeout) -> timeout
+              split_words(string, [mod], caller) -> {string, mod, caller}
+              other -> other
+            end
+          end
+        end
+      end
+      """
+
+      {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          ElixirSense.Core.MetadataBuilder.build(ast)
+        end)
+
+      refute log =~ "FunctionClauseError"
+      refute log =~ "of_pattern"
+      refute log =~ "fallback_match failed"
+    end
+  end
+
   test "native-on: nested patterns / underscore produce no log noise" do
     if ElixirTypes.available?() do
       code = """

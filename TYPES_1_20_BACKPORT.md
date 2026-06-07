@@ -102,6 +102,13 @@ noisy and inference-degrading). Fixed so a real file (e.g. a CashAddr module:
   binary patterns don't hit `of_match_var`.
 - **`infer_local_signature` seeds clause vars** — args+guards+body versioned vars
   pre-seeded so body `of_expr` doesn't crash on isolated typing.
+- **non-pattern AST is skipped** — quoted/macro code can route local calls
+  (`decompose_args(...)`), remote calls (`Kernel.to_timeout(...)`), and typespec
+  operators (`{:"__::__"}`, `{:"__|__"}`) through case-clause typing; these
+  aren't valid patterns and native `of_pattern` raises on them, so `of_match`
+  now skips any pattern containing a call/operator (`native_typeable_pattern?`).
+- **stored native descriptors are seeded** (not `:dynamic`) so types propagate
+  across statements (`m = %{…}; n = m`).
 
 **Set-algebra hardening (`Binding`) — delivered:**
 
