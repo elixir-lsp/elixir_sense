@@ -916,9 +916,18 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     enhance_pattern_vars(clause_vars, pattern_ast, match_context, :__catch_value__, state)
   end
 
+  # A bare-variable (or `_`) pattern: a 3-tuple with an atom name and an atom
+  # context. Such patterns need no native structural refinement — the forward /
+  # cross-clause (L1) path already types them precisely — and feeding them to
+  # native of_match only risks leaking the synthetic match-subject marker into
+  # the variable's shape.
+  defp bare_var_pattern?({name, _meta, ctx}) when is_atom(name) and is_atom(ctx), do: true
+  defp bare_var_pattern?(_other), do: false
+
   # Common implementation for pattern matching refinement via ElixirTypes
   defp enhance_pattern_vars(clause_vars, pattern_ast, match_context, match_label, state) do
-    if ElixirSense.Core.ElixirTypes.enabled?() and clause_vars != [] do
+    if ElixirSense.Core.ElixirTypes.enabled?() and clause_vars != [] and
+         not bare_var_pattern?(pattern_ast) do
       try do
         env = env_for_meta_clauses(state, pattern_ast)
         module = env && env.module

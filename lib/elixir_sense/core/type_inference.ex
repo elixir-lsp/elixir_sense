@@ -329,10 +329,12 @@ defmodule ElixirSense.Core.TypeInference do
       |> Map.values()
       |> Enum.filter(&match?(%ElixirSense.Core.State.VarInfo{}, &1))
 
+    # `env` is a compiler env struct (no Access behaviour), so use Map.get
+    # rather than `env[:key]`, which would raise.
     %{
-      module: env[:module],
-      function: env[:function],
-      file: env[:file],
+      module: Map.get(env, :module),
+      function: Map.get(env, :function),
+      file: Map.get(env, :file),
       vars: vars
     }
   end
