@@ -2241,7 +2241,8 @@ defmodule ElixirSense.Core.BindingTest do
 
   describe "Kernel functions" do
     test "++" do
-      assert {:list, {:integer, 1}} ==
+      # `++` unions both operands' element types.
+      assert {:list, {:union, [{:integer, 1}, {:integer, 2}]}} ==
                Binding.expand(
                  @env
                  |> Map.put(:vars, [
@@ -2251,7 +2252,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:local_call, :++, {1, 1}, [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
                )
 
-      assert {:list, {:integer, 1}} ==
+      assert {:list, {:union, [{:integer, 1}, {:integer, 2}]}} ==
                Binding.expand(
                  @env
                  |> Map.put(:vars, [
@@ -2260,6 +2261,13 @@ defmodule ElixirSense.Core.BindingTest do
                  ]),
                  {:call, {:atom, :erlang}, :++,
                   [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
+               )
+
+      # `a ++ b` is a list even when the left element type is unknown.
+      assert {:list, nil} ==
+               Binding.expand(
+                 @env |> Map.put(:vars, [%VarInfo{version: 1, name: :a, type: nil}]),
+                 {:call, {:atom, :erlang}, :++, [{:variable, :a, 1}, {:list, {:integer, 0}}]}
                )
     end
 

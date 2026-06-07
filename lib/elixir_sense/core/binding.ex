@@ -589,6 +589,27 @@ defmodule ElixirSense.Core.Binding do
   defp merge_list_elem(elem, :empty), do: elem
   defp merge_list_elem(elem_1, elem_2), do: normalize_union([elem_1, elem_2])
 
+  # Could this shape be a list? Concrete list shapes yes; `nil` (unknown) is
+  # treated as "maybe a list" so list operators stay list-typed; any other
+  # concrete shape is not a list.
+  defp list_like?({:list, _}), do: true
+  defp list_like?({:nonempty_list, _}), do: true
+  defp list_like?(:list), do: true
+  defp list_like?(nil), do: true
+  defp list_like?(_other), do: false
+
+  # The element type of a (possibly unknown) list shape.
+  defp list_element_type({:list, :empty}), do: :empty
+  defp list_element_type({:list, elem}), do: elem
+  defp list_element_type({:nonempty_list, elem}), do: elem
+  defp list_element_type(_other), do: nil
+
+  # The element type of `a ++ b`: the union of both element types. An unknown
+  # element on either side widens the result element to `nil` (list of `term()`).
+  defp concat_element_type(left, right) do
+    merge_list_elem(list_element_type(left), list_element_type(right))
+  end
+
   # Field values are unioned per key (keys are the same on both sides). A key
   # missing from one side unions with nil, which `normalize_union/1` treats as
   # unknown.
@@ -747,21 +768,38 @@ defmodule ElixirSense.Core.Binding do
          env,
          {:atom, module},
          name,
-         [list_candidate | _],
+         [left_candidate | rest],
          _include_private,
          _,
          stack
        )
        when name in [:++, :--] and module in [Kernel, :erlang] do
-    case expand(env, list_candidate, stack) do
-      {:list, type} ->
-        {:list, type}
+    # `a ++ b` / `a -- b` always produce a list (the left side must be a list),
+    # so the result is `{:list, …}` even when the left's element type is unknown
+    # (e.g. `payload` here is an unresolved `expand_hrp(hrp) ++ data` thunk). A
+    # concrete non-list left is a type error -> :none.
+    left = expand(env, left_candidate, stack)
 
-      nil ->
-        nil
-
-      _ ->
+    cond do
+      left == :none ->
         :none
+
+      not list_like?(left) ->
+        :none
+
+      name == :-- ->
+        # `a -- b` is a sublist of `a`: same element type.
+        {:list, list_element_type(left)}
+
+      true ->
+        # `a ++ b`: elements are the union of both sides' element types.
+        right = if match?([r | _], rest), do: expand(env, hd(rest), stack), else: nil
+
+        if right == :none do
+          :none
+        else
+          {:list, concat_element_type(left, right)}
+        end
     end
   end
 
