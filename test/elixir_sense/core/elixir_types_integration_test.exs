@@ -32,8 +32,9 @@ defmodule ElixirSense.Core.ElixirTypesIntegrationTest do
       result = TypeInference.type_of({:{}, [], [1, 2, 3]}, :none)
       assert {:tuple, 3, [{:integer, 1}, {:integer, 2}, {:integer, 3}]} = result
 
+      # The element type is the union of every element's type.
       result = TypeInference.type_of([1, 2, 3], :none)
-      assert {:list, {:integer, 1}} = result
+      assert {:list, {:union, [{:integer, 1}, {:integer, 2}, {:integer, 3}]}} = result
     end
   end
 

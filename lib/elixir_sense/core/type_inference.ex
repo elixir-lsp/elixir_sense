@@ -178,8 +178,22 @@ defmodule ElixirSense.Core.TypeInference do
           [{:|, _, [head, _tail]}] ->
             type_of(head, context)
 
-          [head | _] ->
-            type_of(head, context)
+          elements ->
+            # The element type is the union of every element's type (a trailing
+            # cons `[a, b | t]` contributes its head `b`; the tail var is
+            # unknown). Single-type lists collapse back to that one type; an
+            # unknown element widens to `nil` via `Binding.normalize_union/1`
+            # when the stored shape is later expanded.
+            elements
+            |> Enum.map(fn
+              {:|, _, [head, _tail]} -> type_of(head, context)
+              element -> type_of(element, context)
+            end)
+            |> Enum.uniq()
+            |> case do
+              [single] -> single
+              members -> {:union, members}
+            end
         end
 
       {:list, type}
@@ -217,26 +231,21 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   def type_of({form, _meta, _clauses} = ast, context)
-      when form in [:case, :cond, :try, :receive, :with] do
-    type_of_with_elixir_types(ast, context)
+      when form in [:case, :cond, :try, :receive, :with, :if, :unless] do
+    # Prefer native precision; otherwise (native off, or 1.18) fall back to a
+    # conservative union of the construct's branch result types. Any branch we
+    # can't type poisons the union to `nil` (unknown) in `Binding`, so we never
+    # over-promise.
+    type_of_with_elixir_types(ast, context) || clause_result_type(ast, context)
   end
 
-  # for comprehensions produce a list (unless :into is specified)
+  # A `for` produces a list, the `:into` target, or — with `:reduce` — the union
+  # of the seed value and every reduce-clause body (upstream seeds the result
+  # with `reduce:` and unions the clause returns). The opts keyword list is the
+  # last clause; `:do` is emitted first, so we must look options up by key
+  # rather than matching the head.
   def type_of({:for, _meta, clauses} = ast, context) when is_list(clauses) do
-    native_result = type_of_with_elixir_types(ast, context)
-
-    if native_result do
-      native_result
-    else
-      # Basic: check if :into option is present
-      opts = List.last(clauses)
-
-      case opts do
-        [{:into, into_target} | _] -> type_of_into_target(into_target)
-        [{:do, _body} | _] -> {:list, nil}
-        _ -> nil
-      end
-    end
+    type_of_with_elixir_types(ast, context) || for_result_type(List.last(clauses), context)
   end
 
   # Binaries always produce a binary
@@ -304,6 +313,97 @@ defmodule ElixirSense.Core.TypeInference do
 
   # other
   def type_of(ast, context), do: type_of_with_elixir_types(ast, context)
+
+  # Conservative result type of a clause construct (`case`/`cond`/`with`/`try`/
+  # `receive`/`if`/`unless`): the union of each branch's body type. Used native-
+  # off and on 1.18, where the engine doesn't compute these. A branch whose body
+  # type is unknown (`nil`) widens the whole union to `nil` in `Binding`.
+  defp clause_result_type(ast, context) do
+    case clause_result_bodies(ast) do
+      [] ->
+        nil
+
+      bodies ->
+        case bodies |> Enum.map(&type_of(&1, context)) |> Enum.uniq() do
+          [single] -> single
+          members -> {:union, members}
+        end
+    end
+  end
+
+  defp clause_result_bodies({:case, _, [_subject, blocks]}) when is_list(blocks),
+    do: clause_bodies(blocks[:do])
+
+  defp clause_result_bodies({:cond, _, [blocks]}) when is_list(blocks),
+    do: clause_bodies(blocks[:do])
+
+  defp clause_result_bodies({:receive, _, [blocks]}) when is_list(blocks),
+    do: clause_bodies(blocks[:do]) ++ clause_bodies(blocks[:after])
+
+  defp clause_result_bodies({:try, _, [blocks]}) when is_list(blocks) do
+    # On success the value is the `do` body, unless `else` is present (then the
+    # value is an `else` clause body). `rescue`/`catch` bodies are also possible
+    # results; `after` does not contribute.
+    main = if blocks[:else], do: clause_bodies(blocks[:else]), else: [blocks[:do]]
+    main ++ clause_bodies(blocks[:rescue]) ++ clause_bodies(blocks[:catch])
+  end
+
+  defp clause_result_bodies({form, _, [_cond, blocks]})
+       when form in [:if, :unless] and is_list(blocks),
+       do: [blocks[:do], blocks[:else]]
+
+  defp clause_result_bodies({:with, _, args}) when is_list(args) do
+    case List.last(args) do
+      opts when is_list(opts) ->
+        if Keyword.has_key?(opts, :do),
+          do: [opts[:do] | clause_bodies(opts[:else])],
+          else: []
+
+      _ ->
+        []
+    end
+  end
+
+  defp clause_result_bodies(_other), do: []
+
+  defp clause_bodies(clauses) when is_list(clauses),
+    do: for({:->, _, [_heads, body]} <- clauses, do: body)
+
+  defp clause_bodies(_other), do: []
+
+  # The result type of a `for` from its (last-clause) opts. `:reduce` wins over
+  # `:into`/list because its opts keyword list also carries `:do`.
+  defp for_result_type(opts, context) when is_list(opts) do
+    cond do
+      not Keyword.keyword?(opts) -> nil
+      Keyword.has_key?(opts, :reduce) -> reduce_result_type(opts, context)
+      Keyword.has_key?(opts, :into) -> type_of_into_target(opts[:into])
+      Keyword.has_key?(opts, :do) -> {:list, nil}
+      true -> nil
+    end
+  end
+
+  defp for_result_type(_opts, _context), do: nil
+
+  # `for ..., reduce: seed do acc -> body end` returns the seed value unioned
+  # with every reduce-clause body's type (matching upstream).
+  defp reduce_result_type(opts, context) do
+    seed_type = type_of(Keyword.fetch!(opts, :reduce), context)
+
+    body_types =
+      case Keyword.get(opts, :do) do
+        clauses when is_list(clauses) ->
+          clauses |> clause_bodies() |> Enum.map(&type_of(&1, context))
+
+        _ ->
+          []
+      end
+
+    case Enum.uniq([seed_type | body_types]) do
+      [single] -> single
+      members -> {:union, members}
+    end
+  end
 
   @doc """
   Type an expression with compiler state and env context.
@@ -642,8 +742,10 @@ defmodule ElixirSense.Core.TypeInference do
   defp binary_segment_type({:-, _, [left, _right]}), do: binary_segment_type(left)
   defp binary_segment_type({:binary, _, _}), do: {:binary, nil}
   defp binary_segment_type({:bytes, _, _}), do: {:binary, nil}
-  defp binary_segment_type({:bitstring, _, _}), do: {:binary, nil}
-  defp binary_segment_type({:bits, _, _}), do: {:binary, nil}
+  # `::bitstring`/`::bits` are not byte-aligned, so they are `bitstring()`, a
+  # supertype of `binary()`.
+  defp binary_segment_type({:bitstring, _, _}), do: :bitstring
+  defp binary_segment_type({:bits, _, _}), do: :bitstring
   defp binary_segment_type({:utf8, _, _}), do: {:integer, nil}
   defp binary_segment_type({:utf16, _, _}), do: {:integer, nil}
   defp binary_segment_type({:utf32, _, _}), do: {:integer, nil}

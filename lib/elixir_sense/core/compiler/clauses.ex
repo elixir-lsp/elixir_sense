@@ -584,35 +584,72 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
     opts = sanitize_opts(opts, @valid_try_opts)
 
-    {try_clauses, sa} =
-      Enum.map_reduce(opts, s, fn x, sa ->
-        expand_try(x, sa, e)
+    # `sanitize_opts` orders by @valid_try_opts, so `:do` is expanded before
+    # `:else`; we thread the `do` body's result type so the `else` clauses can be
+    # typed against the value the `do` block returns (upstream types `else`
+    # against the `try do` result).
+    {try_clauses, {sa, _do_type}} =
+      Enum.map_reduce(opts, {s, nil}, fn x, {sa, do_type} ->
+        {clause, sa, do_type} = expand_try(x, sa, e, do_type)
+        {clause, {sa, do_type}}
       end)
 
     {try_clauses, sa, e}
   end
 
-  defp expand_try({:do, expr}, s, e) do
+  defp expand_try({:do, expr}, s, e, _do_type) do
     {e_expr, se, _ee} = Compiler.expand(expr, State.new_vars_scope(s), e)
-    {{:do, e_expr}, State.remove_vars_scope(se, s)}
+    do_type = TypeInference.type_of(e_expr, e.context, se, e)
+    {{:do, e_expr}, State.remove_vars_scope(se, s), do_type}
   end
 
-  defp expand_try({:after, expr}, s, e) do
+  defp expand_try({:after, expr}, s, e, do_type) do
     {e_expr, se, _ee} = Compiler.expand(expr, State.new_vars_scope(s), e)
-    {{:after, e_expr}, State.remove_vars_scope(se, s)}
+    {{:after, e_expr}, State.remove_vars_scope(se, s), do_type}
   end
 
-  defp expand_try({:else, _} = else_clause, s, e) do
-    # TODO we could try to infer type from last try block expression
-    expand_clauses(&head/3, else_clause, s, e)
+  # `else` matches the value returned by the `do` block, so type each (non-
+  # guarded) clause pattern against `do_type`. Guarded clauses are left to guard
+  # inference — intersecting a guard with an often-unresolvable `do` result type
+  # only degrades the result.
+  defp expand_try({:else, clauses} = else_clause, s, e, do_type)
+       when is_list(clauses) and clauses != [] do
+    head_fun = fn c, cs, ce ->
+      {e_head, cs, ce} = head(c, cs, ce)
+
+      cs =
+        case e_head do
+          [{:when, _, _} | _] ->
+            cs
+
+          [pattern | _] ->
+            vars = TypeInference.find_typed_vars(pattern, do_type, :match)
+            State.merge_inferred_types(cs, vars)
+
+          _ ->
+            cs
+        end
+
+      {e_head, cs, ce}
+    end
+
+    {clause, se} = expand_clauses(head_fun, else_clause, s, e)
+    {clause, se, do_type}
   end
 
-  defp expand_try({:catch, _} = catch_clause, s, e) do
-    expand_clauses_with_stacktrace(&expand_catch/4, catch_clause, s, e)
+  defp expand_try({:else, _} = else_clause, s, e, do_type) do
+    {clause, se} = expand_clauses(&head/3, else_clause, s, e)
+    {clause, se, do_type}
   end
 
-  defp expand_try({:rescue, _} = rescue_clause, s, e) do
-    expand_clauses_with_stacktrace(&expand_rescue/4, rescue_clause, s, e)
+  defp expand_try({:catch, _} = catch_clause, s, e, do_type) do
+    {clause, se} = expand_clauses_with_stacktrace(&expand_catch/4, catch_clause, s, e)
+    {clause, se, do_type}
+  end
+
+  defp expand_try({:rescue, _} = rescue_clause, s, e, do_type) do
+    {clause, se} = expand_clauses_with_stacktrace(&expand_rescue/4, rescue_clause, s, e)
+    {clause, se, do_type}
   end
 
   defp expand_clauses_with_stacktrace(fun, clauses, s, e) do

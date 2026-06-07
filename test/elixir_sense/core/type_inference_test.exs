@@ -425,10 +425,16 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       assert type_of("[a | 1]", :match) == {:list, nil}
       assert type_of("[^a]", :match) == {:list, {:variable, :a, 1}}
       assert type_of("[[1]]") == {:list, {:list, {:integer, 1}}}
-      # TODO union a | b?
-      assert type_of("[a, b]") == {:list, {:variable, :a, 1}}
+      # The element type is the union of every element's type.
+      assert type_of("[a, b]") ==
+               {:list, {:union, [{:variable, :a, 1}, {:variable, :b, 1}]}}
+
+      # A pure cons `[a | b]` keeps only the head's type (the tail is a var).
       assert type_of("[a | b]") == {:list, {:variable, :a, 1}}
-      assert type_of("[a, b | c]") == {:list, {:variable, :a, 1}}
+
+      # A trailing cons `[a, b | c]` contributes its head `b`; tail `c` is unknown.
+      assert type_of("[a, b | c]") ==
+               {:list, {:union, [{:variable, :a, 1}, {:variable, :b, 1}]}}
     end
 
     test "list operators" do
@@ -630,6 +636,22 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     test "__CALLER__ returns {:struct, [], {:atom, Macro.Env}, nil}" do
       assert type_of("__CALLER__") == {:struct, [], {:atom, Macro.Env}, nil}
     end
+
+    test "if/unless result is the union of both branches (native-off)" do
+      assert type_of("if a, do: :yes, else: :no") ==
+               {:union, [{:atom, :yes}, {:atom, :no}]}
+
+      assert type_of("unless a, do: :no, else: :yes") ==
+               {:union, [{:atom, :no}, {:atom, :yes}]}
+
+      # An `if` without `else` can return nil.
+      assert type_of("if a, do: :yes") == {:union, [{:atom, :yes}, {:atom, nil}]}
+    end
+
+    test "anonymous functions render by arity (native-off fallback)" do
+      assert type_of("fn x -> x + 1 end") == {:fun, [nil], nil}
+      assert type_of("fn -> :ok end") == {:fun, 0}
+    end
   end
 
   describe "special forms" do
@@ -648,13 +670,23 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       "require Module"
     ]
 
+    # Native (1.19+) types `case`/`cond` precisely; for `try`/`receive`/`with`
+    # over undefined calls native returns nil, so the conservative branch-result
+    # union (same as native-off) applies.
     native_expectations = %{
       "case a do\n  :ok -> 1\n  :error -> 2\nend" => {:integer, nil},
       "cond do\n  a -> 1\n  b -> 2\nend" => {:integer, nil},
-      "try do\n  risky_operation()\nrescue\n  e -> handle(e)\nend" => nil,
-      "receive do\n  {:msg, msg} -> process(msg)\nend" => nil,
+      "try do\n  risky_operation()\nrescue\n  e -> handle(e)\nend" =>
+        {:union,
+         [
+           {:local_call, :risky_operation, {2, 1}, []},
+           {:local_call, :handle, {4, 1}, [{:variable, :e, 1}]}
+         ]},
+      "receive do\n  {:msg, msg} -> process(msg)\nend" =>
+        {:local_call, :process, {2, 1}, [{:variable, :msg, 1}]},
       "for x <- list, do: x * 2" => {:list, nil},
-      "with {:ok, a} <- fetch_a(), {:ok, b} <- fetch_b(a), do: a + b" => nil,
+      "with {:ok, a} <- fetch_a(), {:ok, b} <- fetch_b(a), do: a + b" =>
+        {:local_call, :+, {1, 1}, [{:variable, :a, 1}, {:variable, :b, 1}]},
       "quote do: a + b" => nil,
       "unquote(expr)" => nil,
       "unquote_splicing(expr)" => nil,
@@ -663,7 +695,21 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       "require Module" => nil
     }
 
+    # Native-off (legacy / 1.18): clause constructs now return a conservative
+    # union of their branch result types instead of nil.
     old_expectations = %{
+      "case a do\n  :ok -> 1\n  :error -> 2\nend" => {:union, [{:integer, 1}, {:integer, 2}]},
+      "cond do\n  a -> 1\n  b -> 2\nend" => {:union, [{:integer, 1}, {:integer, 2}]},
+      "try do\n  risky_operation()\nrescue\n  e -> handle(e)\nend" =>
+        {:union,
+         [
+           {:local_call, :risky_operation, {2, 1}, []},
+           {:local_call, :handle, {4, 1}, [{:variable, :e, 1}]}
+         ]},
+      "receive do\n  {:msg, msg} -> process(msg)\nend" =>
+        {:local_call, :process, {2, 1}, [{:variable, :msg, 1}]},
+      "with {:ok, a} <- fetch_a(), {:ok, b} <- fetch_b(a), do: a + b" =>
+        {:local_call, :+, {1, 1}, [{:variable, :a, 1}, {:variable, :b, 1}]},
       "for x <- list, do: x * 2" => {:list, nil}
     }
 

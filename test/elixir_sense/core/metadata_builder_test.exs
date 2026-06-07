@@ -1767,6 +1767,220 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                state |> get_line_vars(3)
     end
 
+    test "function-parameter binary-segment vars are typed from their spec" do
+      # A def head has no scrutinee, so most params bind no type — but a
+      # binary-segment spec fixes the type intrinsically.
+      state =
+        """
+        defmodule MyModule do
+          def parse(<<n::integer, rest::binary>>) do
+            IO.inspect({n, rest})
+          end
+        end
+        """
+        |> string_to_state
+
+      vars = get_line_vars(state, 3)
+      assert Enum.find(vars, &(&1.name == :n)).type == {:integer, nil}
+      assert Enum.find(vars, &(&1.name == :rest)).type == {:binary, nil}
+    end
+
+    test "non-intrinsic function parameters stay untyped" do
+      # Without a value to match, tuple/list element params can't be typed.
+      state =
+        """
+        defmodule MyModule do
+          def f({:ok, x}, [h | t]) do
+            IO.inspect({x, h, t})
+          end
+        end
+        """
+        |> string_to_state
+
+      vars = get_line_vars(state, 3)
+      assert Enum.find(vars, &(&1.name == :x)).type == nil
+      assert Enum.find(vars, &(&1.name == :h)).type == nil
+      assert Enum.find(vars, &(&1.name == :t)).type == nil
+    end
+
+    test "defimpl types the first function argument as the implemented-for type" do
+      # A struct `for:` and a built-in `for:`.
+      state =
+        """
+        defimpl Inspect, for: URI do
+          def inspect(term, _opts) do
+            IO.inspect(term)
+          end
+        end
+
+        defimpl Inspect, for: Integer do
+          def inspect(term, _opts) do
+            IO.inspect(term)
+          end
+        end
+        """
+        |> string_to_state
+
+      struct_var = Enum.find(get_line_vars(state, 3), &(&1.name == :term))
+      assert struct_var.type == {:struct, [], {:atom, URI}, nil}
+
+      integer_var = Enum.find(get_line_vars(state, 9), &(&1.name == :term))
+      assert integer_var.type == {:integer, nil}
+    end
+
+    test "defimpl only types protocol callbacks, not helper functions" do
+      # `inspect/2` is the protocol callback (typed); `helper/1` is a plain
+      # function in the impl module — public or private, it is NOT a callback,
+      # so its first argument must stay untyped.
+      state =
+        """
+        defimpl Inspect, for: URI do
+          def inspect(term, _opts) do
+            pub_helper(term) || priv_helper(term)
+          end
+
+          def pub_helper(x), do: IO.inspect(x)
+          defp priv_helper(y), do: IO.inspect(y)
+        end
+        """
+        |> string_to_state
+
+      assert Enum.find(get_line_vars(state, 6), &(&1.name == :x)).type == nil
+      assert Enum.find(get_line_vars(state, 7), &(&1.name == :y)).type == nil
+    end
+
+    test "defimpl with same-file protocol types the callback via the local index" do
+      state =
+        """
+        defprotocol Sized do
+          def size(t)
+        end
+
+        defimpl Sized, for: URI do
+          def size(t), do: IO.inspect(t)
+        end
+        """
+        |> string_to_state
+
+      assert Enum.find(get_line_vars(state, 6), &(&1.name == :t)).type ==
+               {:struct, [], {:atom, URI}, nil}
+    end
+
+    test "defimpl for multiple targets types the first arg as a union" do
+      state =
+        """
+        defprotocol Sized do
+          def size(t)
+        end
+
+        defimpl Sized, for: [List, Map] do
+          def size(t), do: IO.inspect(t)
+        end
+        """
+        |> string_to_state
+
+      assert Enum.find(get_line_vars(state, 6), &(&1.name == :t)).type ==
+               {:union, [{:list, nil}, {:map, [], nil}]}
+    end
+
+    test "for ... reduce: types the accumulator from the seed value" do
+      state =
+        """
+        defmodule M do
+          def f(list) do
+            for x <- list, reduce: %{} do
+              acc -> Map.put(acc, x, 1)
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      assert Enum.find(get_line_vars(state, 4), &(&1.name == :acc)).type ==
+               {:map, [], nil}
+    end
+
+    test "for ... reduce: result is the seed unioned with clause bodies (not a list)" do
+      state =
+        """
+        defmodule M do
+          def f(list) do
+            x =
+              for i <- list, reduce: %{} do
+                acc -> Map.put(acc, i, 1)
+              end
+
+            IO.inspect(x)
+          end
+        end
+        """
+        |> string_to_state
+
+      # Regression: reduce comprehensions were mistyped as {:list, nil}.
+      assert Enum.find(get_line_vars(state, 8), &(&1.name == :x)).type ==
+               {:union,
+                [
+                  {:map, [], nil},
+                  {:call, {:atom, Map}, :put,
+                   [{:variable, :acc, 2}, {:variable, :i, 1}, {:integer, 1}]}
+                ]}
+    end
+
+    test "for ... reduce: leaves a guarded accumulator to guard inference" do
+      state =
+        """
+        defmodule M do
+          def f(list) do
+            for x <- list, reduce: %{} do
+              acc when is_integer(acc) -> acc + x
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      # guard wins; the seed type is not intersected in
+      assert Enum.find(get_line_vars(state, 4), &(&1.name == :acc)).type == :integer
+    end
+
+    test "try ... else types a (non-guarded) clause var against the do result" do
+      state =
+        """
+        defmodule M do
+          def f do
+            try do
+              :ok
+            else
+              v -> IO.inspect(v)
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      assert Enum.find(get_line_vars(state, 6), &(&1.name == :v)).type == {:atom, :ok}
+    end
+
+    test "boolean operators (! / && / ||) flow through to assigned-var result type" do
+      # `!`/`&&`/`||`/`unless` expand to case/cond, so the result-type union
+      # applies. `!` yields a boolean; `unless` unions both literal branches.
+      state =
+        """
+        defmodule M do
+          def f(a) do
+            n = !a
+            u = unless a, do: :no, else: :yes
+            IO.inspect({n, u})
+          end
+        end
+        """
+        |> string_to_state
+
+      vars = get_line_vars(state, 5)
+      assert Enum.find(vars, &(&1.name == :n)).type == {:union, [{:atom, true}, {:atom, false}]}
+      assert Enum.find(vars, &(&1.name == :u)).type == {:union, [{:atom, :no}, {:atom, :yes}]}
+    end
+
     test "module attributes value binding to and from variables" do
       state =
         """
@@ -1914,12 +2128,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{
                  name: :myattribute,
                  positions: [{3, 3}, {4, 28}, {5, 20}],
-                 type: {:list, {:atom, :ok}}
+                 # element type is the union of every element's type
+                 type: {:list, {:union, [{:atom, :ok}, {:atom, :error}, {:atom, :other}]}}
                },
                %AttributeInfo{
                  name: :other1,
                  positions: [{4, 3}],
-                 type: {:list, {:atom, :some}}
+                 # `[:some, :error | @myattribute]`: heads `:some` and `:error`
+                 type: {:list, {:union, [{:atom, :some}, {:atom, :error}]}}
                },
                %AttributeInfo{name: :other2, positions: [{5, 3}], type: {:list, {:atom, :some}}}
              ]
@@ -2725,10 +2941,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
              ] = state |> get_line_vars(15)
 
+      # `else a -> ...` matches the value returned by the `do` block
+      # (`Some.call()`), so `a` carries that call's (unresolved) result type.
       assert [
                %VarInfo{
                  name: :a,
-                 type: nil
+                 type: {:call, {:atom, Some}, :call, []}
                }
              ] = state |> get_line_vars(18)
     end

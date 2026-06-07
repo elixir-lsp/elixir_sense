@@ -246,4 +246,122 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
       assert_received {:hint, {:ok, "integer()"}}
     end
   end
+
+  # --- Coverage fixtures: every construct keeps its bindings in scope native-on
+  # (precision may stay off==on; what matters is no clause-body var is dropped). ---
+
+  test "native-on: fn clauses keep their pattern vars" do
+    assert_in_scope(
+      """
+      defmodule M do
+        def f do
+          fn
+            {:ok, x} -> IO.inspect(x)
+            {:error, y} -> IO.inspect(y)
+          end
+        end
+      end
+      """,
+      [:x, :y]
+    )
+  end
+
+  test "native-on: receive binds the message-pattern var" do
+    assert_in_scope(
+      """
+      defmodule M do
+        def f do
+          receive do
+            {:msg, payload} -> IO.inspect(payload)
+          after
+            1000 -> :timeout
+          end
+        end
+      end
+      """,
+      [:payload]
+    )
+  end
+
+  test "native-on: try else/catch/after keep all their vars" do
+    assert_in_scope(
+      """
+      defmodule M do
+        def f(g) do
+          try do
+            g.()
+          else
+            result -> IO.inspect(result)
+          catch
+            kind, value -> IO.inspect({kind, value})
+          after
+            :ok
+          end
+        end
+      end
+      """,
+      [:result, :kind, :value]
+    )
+  end
+
+  test "native-on: binary-segment and bitstring-generator vars stay in scope and typed" do
+    code = """
+    defmodule M do
+      def f(bin) do
+        <<n::integer, rest::binary>> = bin
+
+        for <<b <- rest>> do
+          IO.inspect({n, b})
+        end
+      end
+    end
+    """
+
+    assert_in_scope(code, [:n, :rest, :b])
+
+    if ElixirTypes.available?() do
+      # Segment/generator types are intrinsic to the spec, so off==on.
+      assert hint(code, :n, {4, 18}) == {:ok, "integer()"}
+      assert hint(code, :rest, {4, 18}) == {:ok, "binary()"}
+      assert hint(code, :b, {6, 22}) == {:ok, "integer()"}
+    end
+  end
+
+  test "native-on: for ... reduce: accumulator stays in scope and typed" do
+    code = """
+    defmodule M do
+      def f(list) do
+        for x <- list, reduce: %{} do
+          acc -> Map.put(acc, x, 1)
+        end
+      end
+    end
+    """
+
+    assert_in_scope(code, [:acc])
+
+    if ElixirTypes.available?() do
+      assert hint(code, :acc, {4, 9}) == {:ok, "map()"}
+    end
+  end
+
+  test "native-on: try/else and clause-result assignment keep their vars" do
+    assert_in_scope(
+      """
+      defmodule M do
+        def f(a) do
+          x =
+            try do
+              a
+            else
+              v -> v
+            end
+
+          IO.inspect(x)
+        end
+      end
+      """,
+      [:x, :v]
+    )
+  end
 end

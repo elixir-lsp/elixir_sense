@@ -50,6 +50,16 @@ defmodule ElixirSense.Core.TypePresentationTest do
       assert TP.render({:struct, [], {:atom, URI}, nil}) == {:ok, "%URI{}"}
     end
 
+    test "structs drop uninformative term() fields" do
+      # A struct typed only by its module (e.g. a `defimpl for:` arg) renders as
+      # `%URI{}`, keeping only fields we actually know something about.
+      shape = {:struct, [host: nil, scheme: {:binary, nil}], {:atom, URI}, nil}
+      assert TP.render(shape) == {:ok, "%URI{scheme: binary()}"}
+
+      all_unknown = {:struct, [host: nil, scheme: nil], {:atom, URI}, nil}
+      assert TP.render(all_unknown) == {:ok, "%URI{}"}
+    end
+
     test "unions" do
       assert TP.render({:union, [{:atom, :a}, {:atom, :b}]}) == {:ok, ":a | :b"}
     end

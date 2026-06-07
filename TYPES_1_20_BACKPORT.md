@@ -72,8 +72,95 @@ abstraction layer dispatched by **capability probing**, not version numbers.
 - **Domain keys** — non-atom map keys preserved as `{{:domain, key_shape},
   value}` (renders `%{integer() => binary()}`) instead of being dropped.
 
-Still deferred (genuinely larger / lower value): `:term`-vs-`nil` disambiguation
-and tuple arity bounds (new shape forms with broad reach, little hint value).
+**Grammar-coverage pass — delivered:** Variable inlay hints are grammar-agnostic
+(the provider annotates every `VarInfo`), so coverage = "does the builder bind a
+var for every construct?" — confirmed across binary patterns, bitstring/multi
+`for` generators, `&` capture, `try/catch`, `receive` (all in scope, no drops).
+Precision follow-ups shipped in this pass:
+
+- **Function-parameter binary segments** — `def f(<<n::integer, rest::binary>>)`
+  now types `n :: integer()`, `rest :: binary()`. Def heads previously ran no
+  `find_typed_vars`; a single `nil`-context call captures the *intrinsic* segment
+  types while leaving every value-dependent param (`def f({:ok, x})`) untyped.
+- **Bitstring generators** — `for <<b <- bin>>` types `b` from its segment spec.
+- **`::bitstring` / `::bits`** — now `bitstring()` (a supertype of `binary()`),
+  not `binary()`; the `:bitstring` shape is preserved through `Binding.expand`.
+- **List-literal element type** — folds *all* elements into a union
+  (`[1, "a", :b]` ⇒ `[1 | "a" | :b]`) instead of head-only; `Tuple.to_list`
+  likewise. Trailing cons contributes its head; a pure cons keeps the head only.
+- **`defimpl` first argument** — the first parameter of a protocol **callback**
+  in an implementation is typed as the implemented-for type
+  (`defimpl Inspect, for: URI` → `def inspect(t, _)` has `t :: %URI{}`; built-ins
+  like `for: Integer` → `integer()`). Callbacks are detected by name/arity
+  against the protocol's callback set — via reflection
+  (`protocol.__protocol__(:functions)`, covering built-in and compiled
+  protocols) or the collected `@callback` metadata (a same-file `defprotocol`
+  registers each function as a `:callback` spec; more precise than the function
+  index, which also holds generated `impl_for/1` etc.) — so plain
+  helper `def`s in the impl (public or private) are left untyped. Multiple
+  `for:` targets resolve to a union (`for: [List, Map]` → `[term()] | map()`),
+  since the generated modules share source lines; `for: Any` carries no info.
+  Version-independent (1.19/1.20+).
+- **`term()` subsumption in unions** — `nil | term()` collapses to `term()`
+  (removes redundant optional-field noise).
+- **Struct fields drop `term()`** — a struct typed only by its module renders as
+  `%URI{}` rather than `%URI{a: term(), …}`; informative fields are still shown.
+  (Completion's `fields_for_receiver/2` is unaffected — it still lists all
+  fields.)
+- **try/catch** — `kind :: :error | :exit | :throw` (already in place); `value`
+  stays `term()`/skip — a caught reason is *not* reliably an exception (only
+  `rescue` guarantees that), so we don't fabricate an exception type.
+
+**Clause-construct result + accumulator typing — delivered (audit vs. v1.20.0 of
+`Module.Types.{Expr,Pattern}`; checker-only features intentionally excluded):**
+
+- **`for ... reduce:` result** — typed as the seed value unioned with every
+  reduce-clause body (matching upstream, which seeds the result with `reduce:`
+  and unions the clause returns). Fixes a bug where reduce comprehensions were
+  mistyped as `{:list, nil}`.
+- **`for ... reduce:` accumulator (LSP heuristic, *not* Elixir-equivalent)** —
+  the accumulator var is typed from the seed value (`reduce: %{}` → `acc ::
+  map()`). Upstream deliberately types reduce clause *heads* as `dynamic()` (the
+  accumulator becomes the previous body's result after iteration one), so this
+  is an optimistic heuristic that's correct for the common type-stable
+  accumulators (maps, counters, lists) and over-narrow for type-changing ones.
+  Guarded heads (`acc when …`) are left to guard inference (the seed type isn't
+  intersected in — it would only add noise).
+- **`try ... else` value** — each non-guarded `else` clause pattern is typed
+  against the `try do` body's result type (`try do :ok else v -> …` → `v ::
+  :ok`). Guarded `else` clauses keep guard-only typing (intersecting a guard
+  with the often-unresolvable `do` result degrades the hint to `:skip`).
+- **Native-off result types for clause constructs** — `x = case/cond/with/try/
+  receive/if/unless …` now yields a conservative union of the branch result
+  types instead of `nil` (1.18 + native-off). Native precision is preferred when
+  available; any branch we can't type widens the union to `nil` (never
+  over-promises). `if`/`unless`/`&&`/`||`/`!` flow through (they expand to
+  case/cond): `!a` → `boolean()`, `if a, do: 1` → `1 | nil`.
+- **`fn`/captures** stay arity-rendered (`fn x -> … end` → `(term() -> term())`).
+  Deeper anonymous-call (`f.(x)`) return typing is native-only and low value
+  (fn bodies usually end in untyped calls) — left to the native path.
+
+Still deferred (genuinely larger / lower value): `:term`-vs-`nil` disambiguation;
+**tuple arity bounds** — `tuple_size(x) == n` already gives an exact-arity tuple,
+but bounds (`tuple_size(x) < 3`) stay generic `tuple()` (a new bounded-arity shape
+has broad reach and little hint value); deeper `f.(x)`/function-application return
+typing (native-only).
+
+**Consumer/roadmap notes (no elixir_sense code change):**
+
+- **(A) Native engine is default-OFF** — `enabled?/0` is
+  `get_env(:elixir_sense, :use_elixir_types, false) and available?()`. To drive
+  hints with `Module.Types`, elixir-ls would set
+  `config :elixir_sense, use_elixir_types: true`. It's experimental and changes
+  completion/binding LS-wide, so gate + benchmark before flipping; the custom
+  engine (flag off) is what every default-path test above exercises.
+- **(D) Function params from `@spec`/usage** — even native-on, `def run(arg)`
+  leaves `arg` untyped (no scrutinee). Propagating param types from specs/call
+  sites is real L2 work and the highest-impact remaining precision lever; it
+  stays roadmap, not a quick patch.
+- **Singleton literal widening** — `value = 42` renders `42` (not `integer()`).
+  Kept intentionally: the whole custom engine preserves literal values for
+  precision; widening is a display choice the LSP layer can opt into later.
 **L2 native precision — delivered (without reverse-arrow orchestration):** The
 intended L2 value (precise per-branch narrowing with native typing on) is
 achieved by composition rather than by re-implementing Elixir's private

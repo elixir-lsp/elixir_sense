@@ -2060,6 +2060,31 @@ defmodule ElixirSense.Core.Compiler do
         | context: :match
       })
 
+    # Function-parameter patterns have no scrutinee, so most bind no type
+    # (`def f({:ok, x})` can't know `x` without a value). A binary-segment
+    # spec, however, fixes the variable type intrinsically
+    # (`def f(<<n::integer, rest::binary>>)` → `n :: integer`, `rest :: binary`).
+    # Passing `nil` as the match context keeps every non-intrinsic pattern at
+    # `nil`, so only the segment-typed vars are captured — nothing spurious.
+    param_typed_vars = TypeInference.find_typed_vars(e_args_no_defaults, nil, :match)
+    state = State.merge_inferred_types(state, param_typed_vars)
+
+    # Inside a `defimpl`, the first argument of a *protocol callback* is the type
+    # being implemented for (`defimpl String.Chars, for: URI` → in
+    # `def to_string(t)`, `t :: %URI{}`). This matches Elixir 1.19/1.20 and is
+    # version-independent here. Only functions whose name/arity belong to the
+    # protocol are callbacks — plain helper `def`s in the impl are left alone.
+    state =
+      with :def <- def_kind,
+           for_type when not is_nil(for_type) <-
+             protocol_impl_arg_type(state, env_for_expand, name, arity),
+           [first_arg | _] <- e_args_no_defaults do
+        impl_vars = TypeInference.find_typed_vars(first_arg, for_type, :match)
+        State.merge_inferred_types(state, impl_vars)
+      else
+        _ -> state
+      end
+
     # elixir calls validate_cycles here
 
     args =
@@ -2328,6 +2353,74 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_defaults([], s, _e, acc_no_defaults, acc),
     do: {Enum.reverse(acc_no_defaults), Enum.reverse(acc), s}
+
+  # The shape of a `defimpl`'s first argument: the type(s) being implemented for.
+  # Returns `nil` unless we are expanding a *protocol callback* (a function whose
+  # name/arity belongs to the protocol) inside an implementation module. Multiple
+  # `for:` targets resolve to a union — their generated modules share source
+  # lines, so we can't tell which dispatch a position belongs to.
+  defp protocol_impl_arg_type(%{protocol: {protocol, for_list}} = state, env, name, arity)
+       when is_list(for_list) and is_atom(protocol) do
+    in_impl? = Enum.any?(for_list, fn for -> env.module == Module.concat(protocol, for) end)
+
+    if in_impl? and protocol_callback?(state, protocol, name, arity) do
+      for_list_union(for_list)
+    end
+  end
+
+  defp protocol_impl_arg_type(_state, _env, _name, _arity), do: nil
+
+  # A function is a protocol callback if its name/arity belongs to the protocol's
+  # callback set. Reflection covers built-in and already-compiled protocols; the
+  # collected `@callback` metadata covers a protocol defined in the same file
+  # (`defprotocol` registers each function as a `:callback` spec — this is more
+  # precise than the function index, which also holds generated `impl_for/1`
+  # etc.).
+  defp protocol_callback?(state, protocol, name, arity) do
+    reflected_protocol_function?(protocol, name, arity) or
+      metadata_callback?(state, protocol, name, arity)
+  end
+
+  defp reflected_protocol_function?(protocol, name, arity) do
+    Code.ensure_loaded?(protocol) and
+      function_exported?(protocol, :__protocol__, 1) and
+      {name, arity} in protocol.__protocol__(:functions)
+  rescue
+    _ -> false
+  end
+
+  defp metadata_callback?(state, protocol, name, arity) do
+    case state.specs[{protocol, name, arity}] do
+      %{kind: kind} -> kind in [:callback, :macrocallback]
+      _ -> false
+    end
+  end
+
+  defp for_list_union(for_list) do
+    case for_list |> Enum.map(&impl_for_shape/1) |> Enum.reject(&is_nil/1) |> Enum.uniq() do
+      [] -> nil
+      [single] -> single
+      many -> {:union, many}
+    end
+  end
+
+  # The built-in protocol targets map to their base types; any other module is a
+  # struct (`for: URI` ⇒ `%URI{}`). `Any` and unresolved aliases carry no info.
+  defp impl_for_shape(Atom), do: :atom
+  defp impl_for_shape(Integer), do: {:integer, nil}
+  defp impl_for_shape(Float), do: {:float, nil}
+  defp impl_for_shape(List), do: {:list, nil}
+  defp impl_for_shape(Map), do: {:map, [], nil}
+  defp impl_for_shape(Tuple), do: :tuple
+  defp impl_for_shape(BitString), do: :bitstring
+  defp impl_for_shape(Function), do: :fun
+  defp impl_for_shape(PID), do: :pid
+  defp impl_for_shape(Port), do: :port
+  defp impl_for_shape(Reference), do: :reference
+  defp impl_for_shape(Any), do: nil
+  defp impl_for_shape(:"Elixir.__Unknown__"), do: nil
+  defp impl_for_shape(module) when is_atom(module), do: {:struct, [], {:atom, module}, nil}
+  defp impl_for_shape(_), do: nil
 
   # defmodule helpers
   # defmodule automatically defines aliases, we need to mirror this feature here.
@@ -2692,7 +2785,12 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_for_do_block(expr, s, e, false), do: expand(expr, s, e)
 
-  defp expand_for_do_block([{:->, _, _} | _] = clauses, s, e, {:reduce, _}) do
+  defp expand_for_do_block([{:->, _, _} | _] = clauses, s, e, {:reduce, reduce_acc}) do
+    # The accumulator pattern matches the `reduce:` seed on the first iteration;
+    # that initial value is the one type we can be certain of, so type the
+    # accumulator var against it (`reduce: %{}` → `acc :: map()`).
+    acc_type = TypeInference.type_of(reduce_acc, e.context, s, e)
+
     transformer = fn
       {:->, clause_meta, [args, right]}, sa ->
         # elixir checks here that clause has exactly 1 arg by matching against {_, _, [[_], _]}
@@ -2717,9 +2815,34 @@ defmodule ElixirSense.Core.Compiler do
         clause = {:->, clause_meta, [args, right]}
         s_reset = State.new_vars_scope(sa)
 
-        # no point in doing type inference here, we are only certain of the initial value of the accumulator
+        # Type the accumulator pattern against the seed value's type, *inside*
+        # head expansion (so the type is captured before the clause scope is
+        # recorded). Use the single accumulator pattern, not the one-element arg
+        # list (`find_typed_vars` would read a list as a list pattern).
+        head_fun = fn c, cs, ce ->
+          {e_head, cs, ce} = __MODULE__.Clauses.head(c, cs, ce)
+
+          cs =
+            case e_head do
+              # Skip guarded heads: a guard (`acc when is_integer(acc)`) is the
+              # intentional, more precise constraint, and intersecting the seed
+              # type with it only adds noise.
+              [{:when, _, _} | _] ->
+                cs
+
+              [acc_pattern | _] ->
+                acc_vars = TypeInference.find_typed_vars(acc_pattern, acc_type, :match)
+                State.merge_inferred_types(cs, acc_vars)
+
+              _ ->
+                cs
+            end
+
+          {e_head, cs, ce}
+        end
+
         {e_clause, s_acc, _e_acc} =
-          __MODULE__.Clauses.clause(&__MODULE__.Clauses.head/3, clause, s_reset, e)
+          __MODULE__.Clauses.clause(head_fun, clause, s_reset, e)
 
         {e_clause, State.remove_vars_scope(s_acc, sa)}
     end
@@ -2773,7 +2896,11 @@ defmodule ElixirSense.Core.Compiler do
             er
           )
 
-        # no point in doing type inference here, we're only going to find integers and binaries
+        # Binary-generator element vars get their type from the segment specs
+        # (`for <<b <- bin>>` → `b :: integer`, `for <<r::utf8 <- bin>>` → the
+        # codepoint type). The scrutinee is irrelevant, so pass a nil context.
+        vars_with_inferred_types = TypeInference.find_typed_vars(e_left, nil, :match)
+        sl = State.merge_inferred_types(sl, vars_with_inferred_types)
 
         {{:<<>>, meta, [{:<-, op_meta, [e_left, e_right]}]}, sl, el}
 

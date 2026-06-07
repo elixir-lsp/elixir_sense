@@ -187,7 +187,10 @@ defmodule ElixirSense.Core.TypePresentation do
   defp segment({:map, fields, _updated}) when is_list(fields), do: "%{" <> fields(fields) <> "}"
 
   defp segment({:struct, fields, {:atom, module}, _updated}) when is_atom(module) do
-    case fields |> Keyword.delete(:__struct__) do
+    # Drop fields we have no information about (`term()`): a struct typed only by
+    # its module (e.g. a `defimpl for:` arg) renders as `%URI{}`, not
+    # `%URI{a: term(), b: term(), …}`. Informative fields are still shown.
+    case fields |> Keyword.delete(:__struct__) |> Enum.reject(&uninformative_field?/1) do
       [] -> "%" <> inspect(module) <> "{}"
       kept -> "%" <> inspect(module) <> "{" <> fields(kept) <> "}"
     end
@@ -196,7 +199,15 @@ defmodule ElixirSense.Core.TypePresentation do
   defp segment({:struct, _fields, _type, _updated}), do: "struct()"
 
   defp segment({:union, members}) when is_list(members) do
-    members |> Enum.map(&segment/1) |> Enum.uniq() |> Enum.join(" | ")
+    rendered = members |> Enum.map(&segment/1) |> Enum.uniq()
+
+    # `term()` is the top type, so any union containing it *is* `term()` —
+    # rendering `nil | term()` (e.g. an optional struct field) is redundant noise.
+    if "term()" in rendered do
+      "term()"
+    else
+      Enum.join(rendered, " | ")
+    end
   end
 
   defp segment({:intersection, members}) when is_list(members),
@@ -233,6 +244,8 @@ defmodule ElixirSense.Core.TypePresentation do
       {key, value} -> "#{key}: #{segment(value)}"
     end)
   end
+
+  defp uninformative_field?({_key, value}), do: segment(value) == "term()"
 
   # An intersection is "all of these at once"; for display pick the most
   # informative member (a concrete struct/map beats a generic), dropping the
