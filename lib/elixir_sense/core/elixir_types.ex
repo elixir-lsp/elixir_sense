@@ -1875,30 +1875,20 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp coerce_var_type({:map, fields, _}) when is_list(fields) do
-    pairs = for {k, v} when is_atom(k) <- fields, do: {k, coerce_var_type(v)}
-    Module.Types.Descr.closed_map(pairs)
+    coerce_map_descr(fields, [])
   end
 
   defp coerce_var_type({:map, fields}) when is_list(fields) do
-    pairs = for {k, v} when is_atom(k) <- fields, do: {k, coerce_var_type(v)}
-    Module.Types.Descr.closed_map(pairs)
+    coerce_map_descr(fields, [])
   end
 
   defp coerce_var_type({:struct, fields, {:atom, module}, _updated})
        when is_atom(module) and is_list(fields) do
-    pairs =
-      [{:__struct__, Module.Types.Descr.atom([module])}] ++
-        for {k, v} when is_atom(k) <- fields, do: {k, coerce_var_type(v)}
-
-    Module.Types.Descr.closed_map(pairs)
+    coerce_map_descr(fields, [{:__struct__, Module.Types.Descr.atom([module])}])
   end
 
   defp coerce_var_type({:struct, fields, module}) when is_atom(module) do
-    pairs =
-      [{:__struct__, Module.Types.Descr.atom([module])}] ++
-        for {k, v} when is_atom(k) <- fields, do: {k, coerce_var_type(v)}
-
-    Module.Types.Descr.closed_map(pairs)
+    coerce_map_descr(fields, [{:__struct__, Module.Types.Descr.atom([module])}])
   end
 
   defp coerce_var_type({:fun, arity}) when is_integer(arity) do
@@ -1917,16 +1907,6 @@ defmodule ElixirSense.Core.ElixirTypes do
     end
   end
 
-  # Descr.fun/1 (arity-specific function descr) is 1.20+. On 1.18/1.19 fall back
-  # to the generic `fun/0`. `apply/3` avoids an undefined-function warning there.
-  defp fun_descr(arity) do
-    if function_exported?(Module.Types.Descr, :fun, 1) do
-      apply(Module.Types.Descr, :fun, [arity])
-    else
-      Module.Types.Descr.fun()
-    end
-  end
-
   defp coerce_var_type({:union, types}) when is_list(types) do
     types
     |> Enum.map(&coerce_var_type/1)
@@ -1942,6 +1922,29 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp coerce_var_type({:optional, inner}), do: coerce_var_type(inner)
 
   defp coerce_var_type(_), do: Module.Types.Descr.dynamic()
+
+  # Build a map descriptor from shape fields. Only atom keys can be sent to
+  # `Descr` as concrete pairs; if the shape also carries non-atom (domain) keys
+  # we emit an *open* map so those keys are not wrongly asserted absent.
+  defp coerce_map_descr(fields, extra_pairs) do
+    atom_pairs = extra_pairs ++ for({k, v} when is_atom(k) <- fields, do: {k, coerce_var_type(v)})
+
+    if Enum.all?(fields, fn {k, _} -> is_atom(k) end) do
+      Module.Types.Descr.closed_map(atom_pairs)
+    else
+      Module.Types.Descr.open_map(atom_pairs)
+    end
+  end
+
+  # Descr.fun/1 (arity-specific function descr) is 1.20+. On 1.18/1.19 fall back
+  # to the generic `fun/0`. `apply/3` avoids an undefined-function warning there.
+  defp fun_descr(arity) do
+    if function_exported?(Module.Types.Descr, :fun, 1) do
+      apply(Module.Types.Descr, :fun, [arity])
+    else
+      Module.Types.Descr.fun()
+    end
+  end
 
   # Collect variables from AST and seed them as dynamic() types
   defp variables_from_ast(ast) do

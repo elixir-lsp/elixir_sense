@@ -432,6 +432,10 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       # A pure cons `[a | b]` keeps only the head's type (the tail is a var).
       assert type_of("[a | b]") == {:list, {:variable, :a, 1}}
 
+      # `[a | [b]]`: the tail is a list, so its element type folds in.
+      assert type_of("[a | [b]]") ==
+               {:list, {:union, [{:variable, :a, 1}, {:variable, :b, 1}]}}
+
       # A trailing cons `[a, b | c]` contributes its head `b`; tail `c` is unknown.
       assert type_of("[a, b | c]") ==
                {:list, {:union, [{:variable, :a, 1}, {:variable, :b, 1}]}}

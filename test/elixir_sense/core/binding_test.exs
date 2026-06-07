@@ -140,6 +140,42 @@ defmodule ElixirSense.Core.BindingTest do
       assert Binding.expand(@env, {:tuple_nth, tuple, 2}) == :none
     end
 
+    test "intersection of two unions collects all overlaps" do
+      a = {:union, [{:atom, :a}, {:atom, :b}, {:atom, :c}]}
+      b = {:union, [{:atom, :b}, {:atom, :c}]}
+
+      assert Binding.expand(@env, {:intersection, [a, b]}) ==
+               {:union, [{:atom, :b}, {:atom, :c}]}
+
+      # disjoint unions intersect to :none (not nil)
+      assert Binding.expand(@env, {:intersection, [{:atom, :a}, {:union, [{:atom, :b}]}]}) ==
+               :none
+    end
+
+    test "union subsumption: list/nonempty/:list, bitstring/binary, map top" do
+      int = {:integer, nil}
+      assert Binding.expand(@env, {:union, [{:list, int}, {:nonempty_list, int}]}) == {:list, int}
+      assert Binding.expand(@env, {:union, [:list, {:list, int}]}) == :list
+      assert Binding.expand(@env, {:union, [:bitstring, {:binary, nil}]}) == :bitstring
+
+      assert Binding.expand(@env, {:union, [{:map, [], nil}, {:map, [a: {:integer, 1}], nil}]}) ==
+               {:map, [], nil}
+    end
+
+    test "difference output is normalized" do
+      assert Binding.expand(
+               @env,
+               {:difference, {:union, [{:integer, 5}, {:integer, nil}]}, {:integer, 5}}
+             ) == {:integer, nil}
+    end
+
+    test "map_key projects a non-atom (domain) key" do
+      m = {:map, [{{:domain, {:binary, "a"}}, {:integer, 1}}], nil}
+      assert Binding.expand(@env, {:map_key, m, {:binary, "a"}}) == {:integer, 1}
+      # a key shape that doesn't match any domain key -> unknown
+      assert Binding.expand(@env, {:map_key, m, {:binary, "z"}}) == nil
+    end
+
     test "introspection struct" do
       assert {:struct,
               [

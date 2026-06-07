@@ -175,8 +175,18 @@ defmodule ElixirSense.Core.TypeInference do
           [] ->
             :empty
 
-          [{:|, _, [head, _tail]}] ->
-            type_of(head, context)
+          [{:|, _, [head, tail]}] ->
+            # `[a | b]`: if the tail is itself a list, fold its element type in
+            # (proper list `a ∪ tail_elems`); otherwise keep the head's type
+            # (the tail is a variable / improper suffix we can't see through).
+            head_type = type_of(head, context)
+
+            case type_of(tail, context) do
+              {:list, :empty} -> head_type
+              {:list, tail_elem} -> union_element([head_type, tail_elem])
+              {:nonempty_list, tail_elem} -> union_element([head_type, tail_elem])
+              _ -> head_type
+            end
 
           elements ->
             # The element type is the union of every element's type (a trailing
@@ -189,11 +199,7 @@ defmodule ElixirSense.Core.TypeInference do
               {:|, _, [head, _tail]} -> type_of(head, context)
               element -> type_of(element, context)
             end)
-            |> Enum.uniq()
-            |> case do
-              [single] -> single
-              members -> {:union, members}
-            end
+            |> union_element()
         end
 
       {:list, type}
@@ -452,7 +458,14 @@ defmodule ElixirSense.Core.TypeInference do
   defp clause_bodies(clauses) when is_list(clauses),
     do: for({:->, _, [_heads, body]} <- clauses, do: body)
 
-  defp clause_bodies(_other), do: []
+  # Collapse a list of element types into a single element type: one type stays
+  # itself, several become a `{:union, …}` (normalized later by `Binding`).
+  defp union_element(types) do
+    case Enum.uniq(types) do
+      [single] -> single
+      members -> {:union, members}
+    end
+  end
 
   # A binary segment is sub-byte (makes the whole `<<>>` a bitstring) only when
   # it is an explicit `::bitstring`/`::bits`, or an integer/bit segment with a

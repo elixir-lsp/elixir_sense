@@ -81,6 +81,33 @@ abstraction layer dispatched by **capability probing**, not version numbers.
   (0-based), silently yielding `nil` instead of `:none` and erasing precision;
   now bounded to `0 ≤ n < size`.
 
+**Set-algebra hardening (`Binding`) — delivered:**
+
+- **`union ∩ union` collects all overlaps** — `(:a | :b | :c) ∩ (:b | :c)` is
+  `:b | :c` (was first-overlap-only, `:b`); empty overlap is `:none`, never
+  `nil`. Fixed a latent infinite loop where two-union intersection flipped
+  left/right forever (the union-left clause now precedes the flip clause).
+- **`covers?/2` container relations** — `:list` over `{:list,_}`/
+  `{:nonempty_list,_}`; `{:list,t}` over `{:nonempty_list,t}` (element-covariant);
+  map-top `%{}` over concrete maps/structs; `bitstring()` over `binary()`. These
+  feed union subsumption and difference. (`:list` now also survives `expand/2`.)
+- **`difference/2` output is normalized** — the remainder after member removal is
+  run through `normalize_union/1` (collapse/subsume/poison) instead of left raw.
+  Subtraction stays *member-granular* (no partial `integer() - 1`, field/element
+  residuals) — documented as the boundary.
+- **Domain keys safe across set ops** — map merge/coalesce/conflict-detection
+  use key-type-agnostic helpers (`put_fields`, `field_keys`, all-key
+  `safe_keys`); `Keyword.merge`/`Keyword.keys` would raise on `{:domain,_}` keys.
+- **`{:map_key, map, key}` projects non-atom keys** — `%{"a" => v}["a"]` resolves
+  via exact domain-key shape match (dynamic/fuzzy keys → unknown).
+- **Native coercion preserves domain keys** — a shape with non-atom keys coerces
+  to an *open* `Descr` map (atoms known, rest open) instead of a closed atom-only
+  map that wrongly asserts the domain keys absent.
+- **Improper-list / list-element folding** — `[a | tail]` folds the tail's
+  element type when the tail is itself a list (`[a | [b]]` → `[a | b]`); a
+  variable/opaque suffix keeps the head type. No explicit improper-suffix shape
+  (rare, usually a bug) — documented boundary.
+
 **Grammar-coverage pass — delivered:** Variable inlay hints are grammar-agnostic
 (the provider annotates every `VarInfo`), so coverage = "does the builder bind a
 var for every construct?" — confirmed across binary patterns, bitstring/multi

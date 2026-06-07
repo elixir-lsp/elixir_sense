@@ -198,18 +198,26 @@ defmodule ElixirSense.Core.Binding do
   end
 
   def do_expand(env, {:map_key, map_candidate, key_candidate}, stack) do
-    case expand(env, key_candidate, stack) do
-      {:atom, key} ->
-        expanded_fields = expand_map_fields(env, map_candidate, stack)
+    expanded_key = expand(env, key_candidate, stack)
+    expanded_fields = expand_map_fields(env, map_candidate, stack)
 
-        if :none in expanded_fields do
-          :none
-        else
-          expanded_fields |> Keyword.get(key)
-        end
+    cond do
+      :none in expanded_fields ->
+        :none
 
-      _ ->
-        nil
+      match?({:atom, _}, expanded_key) ->
+        {:atom, key} = expanded_key
+        # `Keyword.get/2` tolerates non-atom (domain) keys present in the list.
+        Keyword.get(expanded_fields, key)
+
+      true ->
+        # Non-atom key: project through a matching domain key (`%{"a" => v}["a"]`).
+        # Requires the key shape to match exactly — a fuzzier (dynamic) key
+        # yields `nil` (unknown).
+        Enum.find_value(expanded_fields, fn
+          {{:domain, key_shape}, value} -> if key_shape == expanded_key, do: value
+          _ -> nil
+        end)
     end
   end
 
@@ -454,6 +462,9 @@ defmodule ElixirSense.Core.Binding do
   def do_expand(_env, :bitstring, _stack), do: :bitstring
   def do_expand(_env, :fun, _stack), do: :fun
   def do_expand(_env, :tuple, _stack), do: :tuple
+  # `:list` is the generic list shape (from `is_list/1`); keep it as-is so union
+  # subsumption (`:list` over `{:list, _}`) and intersection work on it.
+  def do_expand(_env, :list, _stack), do: :list
   def do_expand(_env, {:binary, _} = shape, _stack), do: shape
   def do_expand(_env, {:float, _} = shape, _stack), do: shape
   def do_expand(_env, {:fun, arity} = shape, _stack) when is_integer(arity), do: shape
@@ -486,11 +497,12 @@ defmodule ElixirSense.Core.Binding do
   defp difference({:union, members}, subtracted) do
     removed = union_to_list(subtracted)
 
-    case Enum.reject(members, fn m -> Enum.any?(removed, &covers?(&1, m)) end) do
-      [] -> :none
-      [one] -> one
-      rest -> {:union, rest}
-    end
+    # Normalize the remainder so the subtraction result is collapsed/subsumed
+    # like any other union (e.g. removing one of `5 | integer()`'s redundant
+    # members), rather than left as a raw member list.
+    members
+    |> Enum.reject(fn m -> Enum.any?(removed, &covers?(&1, m)) end)
+    |> normalize_union()
   end
 
   defp difference(base, subtracted) do
@@ -633,6 +645,28 @@ defmodule ElixirSense.Core.Binding do
   defp covers?(:fun, {:fun, _, _}), do: true
   defp covers?(:fun, {:fun_clauses, _}), do: true
 
+  # `bitstring()` subsumes `binary()` (binaries are byte-aligned bitstrings).
+  defp covers?(:bitstring, {:binary, _}), do: true
+  defp covers?(:bitstring, :binary), do: true
+
+  # Lists: the generic `:list` atom subsumes any list; a (possibly-empty) list
+  # subsumes a non-empty list of the same/covered element; element type is
+  # covariant.
+  defp covers?(:list, {:list, _}), do: true
+  defp covers?(:list, {:nonempty_list, _}), do: true
+  defp covers?({:list, :empty}, {:list, :empty}), do: true
+  defp covers?({:list, sub_elem}, {:list, mem_elem}), do: list_elem_covers?(sub_elem, mem_elem)
+
+  defp covers?({:list, sub_elem}, {:nonempty_list, mem_elem}),
+    do: list_elem_covers?(sub_elem, mem_elem)
+
+  defp covers?({:nonempty_list, sub_elem}, {:nonempty_list, mem_elem}),
+    do: list_elem_covers?(sub_elem, mem_elem)
+
+  # Map top (`%{}` / `map()`) subsumes any concrete map or struct.
+  defp covers?({:map, [], nil}, {:map, _, _}), do: true
+  defp covers?({:map, [], nil}, {:struct, _, _, _}), do: true
+
   defp covers?({:tuple, n, sub_elems}, {:tuple, n, mem_elems}) do
     sub_elems
     |> Enum.zip(mem_elems)
@@ -642,6 +676,11 @@ defmodule ElixirSense.Core.Binding do
   defp covers?({:struct, _, {:atom, mod}, _}, {:struct, _, {:atom, mod}, _}), do: true
   defp covers?({:struct, _, nil, _}, {:struct, _, _, _}), do: true
   defp covers?(_a, _b), do: false
+
+  # List element coverage: `:empty` (the element of `[]`) is covered by anything,
+  # and otherwise defer to `covers?/2`.
+  defp list_elem_covers?(_sub, :empty), do: true
+  defp list_elem_covers?(sub, mem), do: covers?(sub, mem)
 
   defp drop_no_spec(:no_spec), do: nil
   defp drop_no_spec(other), do: other
@@ -2316,18 +2355,23 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  # Union on the left is handled here; this clause must come *before* the flip
+  # clause below, otherwise `union ∩ union` flips left/right forever.
+  defp combine_intersection({:union, variants}, other) do
+    # Collect *every* non-empty overlap, not just the first — `(:a | :b | :c) ∩
+    # (:b | :c)` is `:b | :c`, not `:b`. Empty overlap is `:none` (bottom), never
+    # nil.
+    variants
+    |> Enum.map(&combine_intersection(&1, other))
+    |> Enum.reject(&(&1 == :none))
+    |> case do
+      [] -> :none
+      results -> normalize_union(results)
+    end
+  end
+
   defp combine_intersection(other, {:union, variants}),
     do: combine_intersection({:union, variants}, other)
-
-  defp combine_intersection({:union, variants}, other) do
-    Enum.find_value(variants, fn v ->
-      combined = combine_intersection(v, other)
-
-      if combined != :none do
-        combined
-      end
-    end)
-  end
 
   # Scalar specificity: if one side subsumes the other the intersection is the
   # narrower of the two (e.g. `integer() and 5` is `5`, `atom() and :ok` is
@@ -2384,8 +2428,10 @@ defmodule ElixirSense.Core.Binding do
 
   def from_var(_), do: nil
 
+  # All field keys (atom or `{:domain, _}`), so map-merge conflict detection
+  # covers domain keys too. The `{key, _}` filter skips any `:none` sentinel.
   defp safe_keys(maybe_keyword) do
-    for {key, _} when is_atom(key) <- maybe_keyword do
+    for {key, _} <- maybe_keyword do
       key
     end
   end
