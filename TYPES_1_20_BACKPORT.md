@@ -47,6 +47,18 @@ abstraction layer dispatched by **capability probing**, not version numbers.
 - **Guard augmentation** — strict equality (`===`/Erlang `=:=`) and `x in
   [literals]` now refine (the latter yields a union); `<=`/`=<` normalized.
 - ExCk `:beam_lib` error-handling bugs fixed; dialyxir/erlex bumped for OTP 28.
+- **Cross-clause subtraction** — a `{:difference, base, subtracted}` shape thunk
+  (resolved lazily by `Binding`) lets a later `case` clause type the scrutinee
+  as "what earlier clauses didn't match": `nil -> …; value -> …` narrows `value`
+  to the non-`nil` part of a union; tagged-tuple/struct families subtract
+  element-wise. `Binding.difference/2` narrows union bases and leaves opaque
+  bases unchanged (no invented negation).
+- **LSP type rendering** — `ElixirSense.Core.TypePresentation` resolves a stored
+  shape through `Binding` (concretizing all thunks) and renders Elixir-ish text
+  for inlay hints/hover/completion; never leaks a raw thunk (unknown → `term()`
+  inside structures, top-level → `:unknown`). Prefers the native descriptor.
+  Property-aware completion already routes receivers through `Binding.expand`,
+  so it picks up the narrowing for free.
 
 **Deferred (out of this slice — larger / higher-coupling):**
 
