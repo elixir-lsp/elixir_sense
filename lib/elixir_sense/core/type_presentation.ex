@@ -7,21 +7,40 @@ defmodule ElixirSense.Core.TypePresentation do
   Stored shapes (in `VarInfo.type`) may contain unresolved thunks —
   `{:variable, ...}`, `{:call, ...}`, `{:map_key, ...}`, `{:tuple_nth, ...}`,
   `{:difference, ...}`, etc. Callers must never display those directly. This
-  module guarantees a resolved, thunk-free rendering or `:unknown`:
+  module guarantees a resolved, thunk-free result.
 
-    * `resolve_and_render/2` — expand a shape via `Binding`, then render.
-    * `render_var/2` — render a `VarInfo`, preferring the precise native
-      `Module.Types` descriptor when present.
-    * `render/1` — render an already-resolved (thunk-free) shape.
+  ## External API (stable surface for the LSP layer)
+
+    * `resolve_shape/2` — `{:ok, resolved_shape} | :unknown` (shape, not text).
+    * `render_hint/2` — `{:ok, text} | :skip` for a `VarInfo` (inlay hints;
+      skips uninformative `term()`/`none()`/unknown).
+    * `fields_for_receiver/2` — `%{field => rendered_type}` for a map/struct
+      receiver (property-aware completion/definition).
+
+  Lower-level helpers: `resolve_and_render/2`, `render_var/2`, `render/1`.
 
   Rendering is best-effort and total: anything it can't make precise renders as
-  `term()` inside a structure, or yields `:unknown` at the top level (so an
-  inlay-hint provider can simply skip it).
+  `term()` inside a structure, or yields `:unknown` at the top level.
   """
 
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.State.VarInfo
+
+  @doc """
+  Resolve `shape` through `binding`, concretizing all thunks.
+
+  Returns `{:ok, resolved_shape}` (never a raw thunk; may be `:none`) or
+  `:unknown` when there is no information (`nil`). This is the shape-level
+  entry point for consumers that want to inspect the resolved structure rather
+  than display text (e.g. `fields_for_receiver/2`).
+  """
+  def resolve_shape(%Binding{} = binding, shape) do
+    case Binding.expand(binding, shape) do
+      nil -> :unknown
+      resolved -> {:ok, resolved}
+    end
+  end
 
   @doc """
   Resolve `shape` through `binding` (concretizing all thunks) and render it.
@@ -33,15 +52,71 @@ defmodule ElixirSense.Core.TypePresentation do
   end
 
   @doc """
-  Render a variable's type, preferring the native `Module.Types` descriptor
-  (when one was inferred) over the structural shape.
+  Render a variable's type for display.
+
+  Prefers the **structural** type (`VarInfo.type`), which carries the L1 /
+  cross-clause refinements, falling back to the native `Module.Types`
+  descriptor only when the structural type renders to nothing useful
+  (`:unknown`, `term()` or `none()`). This keeps a branch-narrowed shape from
+  being masked by a broader/stale descriptor.
   """
   def render_var(%Binding{} = binding, %VarInfo{elixir_types_descr: descr, type: type}) do
-    case render_descr(descr) do
-      {:ok, _} = ok -> ok
-      :unknown -> resolve_and_render(binding, type)
+    structural = resolve_and_render(binding, type)
+
+    if informative?(structural) do
+      structural
+    else
+      case render_descr(descr) do
+        {:ok, _} = ok -> ok
+        :unknown -> structural
+      end
     end
   end
+
+  @doc """
+  Render a variable as an inlay-hint string, or `:skip` for uninformative
+  types. Skips `:unknown`, `term()` and `none()` so a provider can drop the
+  hint rather than show noise.
+  """
+  def render_hint(%Binding{} = binding, %VarInfo{} = var_info) do
+    case render_var(binding, var_info) do
+      {:ok, text} -> if hint_noise?(text), do: :skip, else: {:ok, text}
+      :unknown -> :skip
+    end
+  end
+
+  @doc """
+  The resolved field types of a map/struct receiver, for property-aware
+  completion/definition. Returns `%{field_name => rendered_type_text}` (the
+  `__struct__` field is dropped), or `%{}` when the receiver isn't a map/struct.
+  """
+  def fields_for_receiver(%Binding{} = binding, shape) do
+    case Binding.expand(binding, shape) do
+      {:map, fields, _updated} -> field_map(fields)
+      {:struct, fields, _type, _updated} -> field_map(Keyword.delete(fields, :__struct__))
+      _other -> %{}
+    end
+  end
+
+  defp field_map(fields) do
+    for {key, value} <- fields, is_atom(key), into: %{} do
+      {key, render_field(value)}
+    end
+  end
+
+  defp render_field(value) do
+    case render(value) do
+      {:ok, text} -> text
+      :unknown -> "term()"
+    end
+  end
+
+  defp informative?({:ok, text}) when text not in ["term()", "none()"], do: true
+  defp informative?(_other), do: false
+
+  defp hint_noise?("term()"), do: true
+  defp hint_noise?("none()"), do: true
+  defp hint_noise?(_other), do: false
 
   @doc """
   Render an already-resolved, thunk-free shape. Returns `{:ok, text}` or

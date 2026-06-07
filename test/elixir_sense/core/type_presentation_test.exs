@@ -94,16 +94,91 @@ defmodule ElixirSense.Core.TypePresentationTest do
     end
   end
 
-  describe "render_var/2" do
-    test "falls back to the structural shape when no native descriptor" do
+  describe "render_var/2 — structural type takes precedence" do
+    test "renders the structural shape" do
       var = %VarInfo{version: 1, name: :x, type: {:atom, :ok}, elixir_types_descr: nil}
       assert TP.render_var(@env, var) == {:ok, ":ok"}
     end
 
-    test "prefers the native descriptor when present" do
+    test "uses the native descriptor only when the structural type is uninformative" do
       descr = Module.Types.Descr.integer()
       var = %VarInfo{version: 1, name: :x, type: nil, elixir_types_descr: descr}
       assert TP.render_var(@env, var) == {:ok, "integer()"}
+    end
+
+    test "structural branch refinement wins over a broader/stale descriptor" do
+      # y : binary() | nil; x is `y` with nil subtracted (a later clause).
+      y = %VarInfo{version: 2, name: :y, type: {:union, [{:binary, nil}, {:atom, nil}]}}
+
+      env = %Binding{
+        functions: __ENV__.functions,
+        macros: __ENV__.macros,
+        vars: [y]
+      }
+
+      # the descriptor is the broader, pre-narrowing `binary() | nil`
+      descr =
+        Module.Types.Descr.union(Module.Types.Descr.binary(), Module.Types.Descr.atom([nil]))
+
+      x = %VarInfo{
+        version: 1,
+        name: :x,
+        type: {:difference, {:variable, :y, 2}, {:atom, nil}},
+        elixir_types_descr: descr
+      }
+
+      # structural narrowing (binary()) must win over the descriptor (binary() | nil)
+      assert TP.render_var(env, x) == {:ok, "binary()"}
+      assert TP.render_hint(env, x) == {:ok, "binary()"}
+    end
+  end
+
+  describe "render_hint/2" do
+    test "skips uninformative types" do
+      unknown = %VarInfo{version: 1, name: :x, type: nil, elixir_types_descr: nil}
+      assert TP.render_hint(@env, unknown) == :skip
+
+      # a difference with an unresolvable base -> none() -> :skip (not "none()")
+      bottom = %VarInfo{
+        version: 1,
+        name: :x,
+        type: {:difference, {:variable, :z, 9}, {:atom, :a}}
+      }
+
+      assert TP.render_hint(@env, bottom) == :skip
+    end
+
+    test "returns informative text" do
+      var = %VarInfo{version: 1, name: :x, type: {:atom, :ok}}
+      assert TP.render_hint(@env, var) == {:ok, ":ok"}
+    end
+  end
+
+  describe "resolve_shape/2" do
+    test "returns the resolved shape" do
+      assert TP.resolve_shape(@env, {:atom, :ok}) == {:ok, {:atom, :ok}}
+    end
+
+    test "nil is :unknown" do
+      assert TP.resolve_shape(@env, nil) == :unknown
+    end
+  end
+
+  describe "fields_for_receiver/2" do
+    test "maps a map's fields to rendered types" do
+      shape = {:map, [a: {:integer, 1}, b: {:binary, nil}], nil}
+      assert TP.fields_for_receiver(@env, shape) == %{a: "1", b: "binary()"}
+    end
+
+    test "drops __struct__ for structs" do
+      shape = {:struct, [__struct__: {:atom, URI}, host: {:binary, "h"}], {:atom, URI}, nil}
+      fields = TP.fields_for_receiver(@env, shape)
+      assert fields[:host] == ~s("h")
+      refute Map.has_key?(fields, :__struct__)
+    end
+
+    test "is empty for a non-map/struct receiver" do
+      assert TP.fields_for_receiver(@env, {:integer, 1}) == %{}
     end
   end
 end
