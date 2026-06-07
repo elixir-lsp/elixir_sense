@@ -236,8 +236,37 @@ defmodule ElixirSense.Core.TypeInference do
     end
   end
 
+  # `case` over a *call* scrutinee: a `{:case_result, …}` thunk so `Binding` can
+  # drop clauses whose pattern can't match the scrutinee's (resolved) return type
+  # — the case raises instead of returning that body. We scope this to call
+  # scrutinees (`case some() do …`), where the return type is known from inferred
+  # signatures and a dead clause is most likely; var/literal scrutinees keep the
+  # plain branch-union (and avoid deferring the many conditionals that expand to
+  # `case`). Resolving the scrutinee needs the binding env, hence the deferral.
+  def type_of({:case, _meta, [scrutinee, [{:do, clauses} | _]]} = ast, context)
+      when is_list(clauses) do
+    scrutinee_type = type_of(scrutinee, context)
+
+    if call_shape?(scrutinee_type) do
+      specs =
+        for {:->, _, [head, body]} <- clauses do
+          pattern =
+            case head do
+              [p | _] -> p
+              _ -> nil
+            end
+
+          {type_of(strip_when_guard(pattern), :match), branch_result_type(head, body, context)}
+        end
+
+      {:case_result, scrutinee_type, specs}
+    else
+      type_of_with_elixir_types(ast, context) || clause_result_type(ast, context)
+    end
+  end
+
   def type_of({form, _meta, _clauses} = ast, context)
-      when form in [:case, :cond, :try, :receive, :with, :if, :unless] do
+      when form in [:cond, :try, :receive, :with, :if, :unless] do
     # Prefer native precision; otherwise (native off, or 1.18) fall back to a
     # conservative union of the construct's branch result types. Any branch we
     # can't type poisons the union to `nil` (unknown) in `Binding`, so we never
@@ -357,6 +386,9 @@ defmodule ElixirSense.Core.TypeInference do
         end
     end
   end
+
+  defp strip_when_guard({:when, _, [pattern | _]}), do: pattern
+  defp strip_when_guard(other), do: other
 
   defp branch_result_type(nil, body, context), do: type_of(body, context)
 
@@ -536,8 +568,22 @@ defmodule ElixirSense.Core.TypeInference do
   context from the compiler state into the native inference engine. Falls back to
   `type_of/2` when native typing is disabled or returns nil.
   """
-  def type_of(ast, context, %{vars_info: [current_scope | _]} = _state, env)
-      when is_map(current_scope) do
+  # A `case` over a *call* scrutinee is typed by our feasibility-aware
+  # `{:case_result, …}` thunk (type_of/2) rather than native — native types the
+  # result as the clause body even when a clause can't match the scrutinee.
+  # Other cases (and everything else) prefer native precision.
+  def type_of({:case, _, [scrutinee | _]} = ast, context, state, env) do
+    if call_shape?(type_of(scrutinee, context)) do
+      type_of(ast, context)
+    else
+      type_of_with_state(ast, context, state, env)
+    end
+  end
+
+  def type_of(ast, context, state, env), do: type_of_with_state(ast, context, state, env)
+
+  defp type_of_with_state(ast, context, %{vars_info: [current_scope | _]} = _state, env)
+       when is_map(current_scope) do
     if ElixirSense.Core.ElixirTypes.expr_typing_enabled?() do
       env_context = build_env_context(current_scope, env)
       native_result = type_of_with_elixir_types(ast, context, nil, nil, env_context)
@@ -547,7 +593,11 @@ defmodule ElixirSense.Core.TypeInference do
     end
   end
 
-  def type_of(ast, context, _state, _env), do: type_of(ast, context)
+  defp type_of_with_state(ast, context, _state, _env), do: type_of(ast, context)
+
+  defp call_shape?({:call, _, _, _}), do: true
+  defp call_shape?({:local_call, _, _, _}), do: true
+  defp call_shape?(_other), do: false
 
   defp build_env_context(current_scope, env) do
     vars =

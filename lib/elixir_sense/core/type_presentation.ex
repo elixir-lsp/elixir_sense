@@ -112,7 +112,12 @@ defmodule ElixirSense.Core.TypePresentation do
     end
   end
 
-  defp informative?({:ok, text}) when text not in ["term()", "none()"], do: true
+  # `term()` is "unknown/top" — prefer the native descriptor if it's more
+  # specific. `none()` is *definitive* (the value never exists, e.g. a `case`
+  # whose every clause is dead), so it is informative and must NOT be overridden
+  # by a stale/optimistic descriptor.
+  defp informative?({:ok, "term()"}), do: false
+  defp informative?({:ok, _text}), do: true
   defp informative?(_other), do: false
 
   defp hint_noise?("term()"), do: true

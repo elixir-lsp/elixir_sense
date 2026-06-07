@@ -295,6 +295,23 @@ defmodule ElixirSense.Core.Binding do
     difference(expand(env, base_candidate, stack), expand(env, subtracted_candidate, stack))
   end
 
+  # `case` result: union the bodies of clauses whose pattern can actually match
+  # the scrutinee. A clause whose pattern is disjoint from the (resolved)
+  # scrutinee type can't match — the case raises instead of returning that body —
+  # so it's dropped. If no clause can match, the result is `:none`.
+  def do_expand(env, {:case_result, scrutinee_candidate, clause_specs}, stack)
+      when is_list(clause_specs) do
+    scrutinee = expand(env, scrutinee_candidate, stack)
+
+    bodies =
+      for {pattern_candidate, body_candidate} <- clause_specs,
+          clause_feasible?(env, scrutinee, pattern_candidate, stack) do
+        expand(env, body_candidate, stack)
+      end
+
+    normalize_union(bodies)
+  end
+
   # dependency injection
   def do_expand(env, {:call, {:atom, Application}, fun, args}, stack)
       when fun in ~w(compile_env!)a do
@@ -512,6 +529,22 @@ defmodule ElixirSense.Core.Binding do
 
   defp union_to_list({:union, members}), do: members
   defp union_to_list(other), do: [other]
+
+  # Can a clause whose pattern has type `pattern_candidate` match a scrutinee of
+  # type `scrutinee`? Conservative: an unknown scrutinee or pattern is treated as
+  # "could match"; otherwise the pattern must overlap the scrutinee (their
+  # intersection isn't empty).
+  defp clause_feasible?(env, scrutinee, pattern_candidate, stack) do
+    pattern = expand(env, pattern_candidate, stack)
+
+    cond do
+      # `nil`/`:none` means the scrutinee or pattern is unknown/unresolvable
+      # (e.g. an un-inferable local call) — we can't rule the clause out.
+      scrutinee in [nil, :none] -> true
+      pattern in [nil, :none] -> true
+      true -> combine_intersection(scrutinee, pattern) != :none
+    end
+  end
 
   # Normalize an expanded union: flatten nested unions, drop :none, drop members
   # subsumed by a more general sibling (e.g. `5 | integer()` -> `integer()`),
@@ -813,7 +846,7 @@ defmodule ElixirSense.Core.Binding do
 
       true ->
         # `a ++ b`: elements are the union of both sides' element types.
-        right = if match?([r | _], rest), do: expand(env, hd(rest), stack), else: nil
+        right = if match?([_ | _], rest), do: expand(env, hd(rest), stack), else: nil
 
         if right == :none do
           :none

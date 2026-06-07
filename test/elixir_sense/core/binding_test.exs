@@ -169,6 +169,33 @@ defmodule ElixirSense.Core.BindingTest do
              ) == {:integer, nil}
     end
 
+    test "case_result drops clauses whose pattern can't match the scrutinee" do
+      # scrutinee is a map; the tuple clause is unreachable -> :none (the case
+      # raises rather than returning that body).
+      assert :none ==
+               Binding.expand(@env, {
+                 :case_result,
+                 {:map, [a: {:integer, 1}], nil},
+                 [{{:tuple, 2, [{:atom, :ok}, nil]}, {:atom, Enum}}]
+               })
+
+      # an unknown/unresolvable scrutinee keeps every clause (can't rule any out)
+      assert {:union, [{:integer, 1}, {:integer, 2}]} ==
+               Binding.expand(@env, {
+                 :case_result,
+                 nil,
+                 [{{:atom, :ok}, {:integer, 1}}, {{:atom, :error}, {:integer, 2}}]
+               })
+
+      # a matching clause survives
+      assert {:atom, :result} ==
+               Binding.expand(@env, {
+                 :case_result,
+                 {:map, [a: {:integer, 1}], nil},
+                 [{{:map, [a: nil], nil}, {:atom, :result}}]
+               })
+    end
+
     test "map_key projects a non-atom (domain) key" do
       m = {:map, [{{:domain, {:binary, "a"}}, {:integer, 1}}], nil}
       assert Binding.expand(@env, {:map_key, m, {:binary, "a"}}) == {:integer, 1}

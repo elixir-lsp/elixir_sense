@@ -77,6 +77,18 @@ abstraction layer dispatched by **capability probing**, not version numbers.
   `Keyword.merge`/`Keyword.keys` raise on non-atom keys. Map-update field order
   now follows the base map's declaration order (updates in place, new keys
   appended).
+- **`case` dead-clause result narrowing** — for `case some_call() do … end`, a
+  clause whose pattern can't match the scrutinee's (resolved) return type is
+  dropped from the result (the case raises instead of returning that body). A
+  `{:case_result, scrutinee, clauses}` thunk defers the check to `Binding`, which
+  resolves the scrutinee (incl. inferred local-call return types) and tests
+  pattern/scrutinee disjointness. So `e = case some() do {:ok, a} -> Enum end`
+  where `some/0` returns a map infers `none()` (→ no hint) rather than `Enum`.
+  Scoped to *call* scrutinees (where the return type is known and a dead clause
+  is most likely); var/literal scrutinees keep the plain branch-union. This goes
+  beyond native, which types the result as the body and flags the dead clause as
+  a separate warning. (`none()` is also now treated as a *definitive* render
+  result — it no longer falls back to a stale/optimistic native descriptor.)
 - **Built-in operator result types** — `Binding` now resolves the inlined
   `:erlang` operators instead of leaving `{:call, …}` thunks: bitwise
   (`band`/`bor`/`bxor`/`bsl`/`bsr`/`bnot`) and `div`/`rem` → `integer()`; `/` →
