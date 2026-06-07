@@ -60,14 +60,20 @@ abstraction layer dispatched by **capability probing**, not version numbers.
   Property-aware completion already routes receivers through `Binding.expand`,
   so it picks up the narrowing for free.
 
-**Deferred (out of this slice — larger / higher-coupling):**
+**Shape-vocabulary additions — delivered:**
 
-- **Shape-vocabulary rework (§5)** — `:term` vs `nil`, `:not_set`, non-empty
-  list, tuple arity bounds, `{:domain_key, …}`. Prerequisite for the *negative*
-  guard facts (`not is_map_key`, size bounds) and for cross-clause subtraction
-  (e.g. inferring non-`nil` in a later clause). Cross-cutting (binding.ex,
-  completion reducers) and risky against the strict dialyzer flags, so kept
-  separate. L1 deliberately does positive narrowing only until this lands.
+- **Negative facts** — `not is_map_key(x, key)` ⇒ `x :: %{key: :not_set}`
+  (`:not_set` renders as `not_set()`; completion / `fields_for_receiver` skip
+  known-absent keys).
+- **Non-empty lists** — `{:nonempty_list, elem}` from `length(x) > 0` (renders
+  `[elem, ...]`; head/tail projections work). Scoped to the guard producer;
+  cons patterns / list literals stay `{:list, …}` to avoid churning ~100
+  assertions for marginal value.
+- **Domain keys** — non-atom map keys preserved as `{{:domain, key_shape},
+  value}` (renders `%{integer() => binary()}`) instead of being dropped.
+
+Still deferred (genuinely larger / lower value): `:term`-vs-`nil` disambiguation
+and tuple arity bounds (new shape forms with broad reach, little hint value).
 **L2 native precision — delivered (without reverse-arrow orchestration):** The
 intended L2 value (precise per-branch narrowing with native typing on) is
 achieved by composition rather than by re-implementing Elixir's private
