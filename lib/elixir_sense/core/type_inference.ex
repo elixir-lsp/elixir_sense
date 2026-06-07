@@ -49,10 +49,12 @@ defmodule ElixirSense.Core.TypeInference do
   def type_of({:^, _, [pinned]}, :match), do: type_of(pinned, nil)
   def type_of({:^, _, [_pinned]}, _context), do: :none
 
-  # variable
-  def type_of({:_, _meta, var_context}, context)
-      when is_atom(var_context) and context != :match,
-      do: :none
+  # underscore: matches anything, has no useful standalone type. Handle every
+  # context so it never falls through to native of_expr (which raises on a bare
+  # `_`). In :match it is `nil` (unknown — neutral in intersect, so `_ = expr`
+  # keeps expr's type); elsewhere `:none` (not a valid standalone value).
+  def type_of({:_, _meta, var_context}, :match) when is_atom(var_context), do: nil
+  def type_of({:_, _meta, var_context}, _context) when is_atom(var_context), do: :none
 
   def type_of({var, meta, var_context}, context)
       when is_atom(var) and is_atom(var_context) and

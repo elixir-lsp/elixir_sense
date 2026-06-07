@@ -184,6 +184,31 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
     )
   end
 
+  test "native-on: nested patterns / underscore produce no log noise" do
+    if ElixirTypes.available?() do
+      code = """
+      defmodule M do
+        def f(a) do
+          case a do
+            {:ok, %{id: id}} -> IO.inspect(id)
+            _ -> :other
+          end
+        end
+      end
+      """
+
+      {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          ElixirSense.Core.MetadataBuilder.build(ast)
+        end)
+
+      refute log =~ "version not found"
+      refute log =~ "Unable to infer"
+    end
+  end
+
   test "native-on: try/rescue binds the exception var" do
     assert_in_scope(
       """

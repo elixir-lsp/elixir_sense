@@ -518,6 +518,11 @@ defmodule ElixirSense.Core.ElixirTypes do
         if available?(:expr) do
           try do
             stack = init_stack(module, function, file, mode, local_sigs_map, metadata)
+            # Module.Types requires every var to carry a :version. Pattern
+            # sub-expressions reaching here (e.g. typed via TypeInference for a
+            # case clause) can have unversioned vars (notably nested map-pattern
+            # vars); stamp them so native typing doesn't raise + log noise.
+            ast = ensure_body_var_versions(ast)
             # Seed context with provided variables or infer from AST (dynamic types)
             auto_vars = variables_from_ast(ast)
             effective_vars = merge_variables(variables, auto_vars)
@@ -784,7 +789,14 @@ defmodule ElixirSense.Core.ElixirTypes do
           # refinement now happens unconditionally inside Pattern.of_match/6.
           context = init_context(Keyword.get(opts, :variables))
 
-          {pattern_ast, value_ast, full_match} = normalize_match(pattern_ast, match_ast)
+          # Stamp :version on any unversioned pattern/value vars before building
+          # full_match, so native of_match/of_expr don't raise (see of_expr_impl).
+          {pattern_ast, value_ast, full_match} =
+            normalize_match(
+              ensure_body_var_versions(pattern_ast),
+              ensure_body_var_versions(match_ast)
+            )
+
           expected_descr = expected_descr || Module.Types.Descr.term()
 
           # Enhanced pattern matching refinement
