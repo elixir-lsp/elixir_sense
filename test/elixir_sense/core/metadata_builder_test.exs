@@ -1998,6 +1998,34 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Enum.find(vars, &(&1.name == :u)).type == {:union, [{:atom, :no}, {:atom, :yes}]}
     end
 
+    test "if/unless do not leak the macro-generated guard variable" do
+      # `if`/`unless`/`&&`/`||` expand to a `case` with a `x when x in [false, nil]`
+      # clause. That synthetic `x` must not appear as a (source) variable, or it
+      # surfaces as a stray `: false | nil` inlay hint on the `if`.
+      state =
+        """
+        defmodule M do
+          def f(cond, base) do
+            base = if cond, do: [base], else: base
+            base
+          end
+        end
+        """
+        |> string_to_state
+
+      names =
+        state.vars_info_per_scope_id
+        |> Map.values()
+        |> Enum.flat_map(fn s -> if is_map(s), do: Map.values(s), else: [] end)
+        |> Enum.map(& &1.name)
+        |> Enum.uniq()
+
+      assert :base in names
+      refute :x in names
+      # no compiler-generated bindings leaked at all
+      assert Enum.all?(names, &(&1 in [:cond, :base]))
+    end
+
     test "module attributes value binding to and from variables" do
       state =
         """

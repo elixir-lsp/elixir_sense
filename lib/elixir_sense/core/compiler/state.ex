@@ -1463,27 +1463,42 @@ defmodule ElixirSense.Core.Compiler.State do
   defp resolve_spec_module({:__MODULE__, _, _}, current_module), do: current_module
   defp resolve_spec_module(_, _), do: nil
 
-  def add_var_write(%__MODULE__{} = state, {name, meta, _}) when name != :_ do
-    version = meta[:version]
-    scope_id = hd(state.scope_ids)
-
-    info = %VarInfo{
-      name: name,
-      version: version,
-      positions: [extract_position(meta)],
-      scope_id: scope_id
-    }
-
-    [vars_from_scope | other_vars] = state.vars_info
-    vars_from_scope = Map.put(vars_from_scope, {name, version}, info)
-
-    %__MODULE__{
+  def add_var_write(%__MODULE__{} = state, {name, meta, context}) when name != :_ do
+    if generated_var?(meta, context) do
+      # Compiler-generated bindings (e.g. the `x` in the `case` an `if`/`unless`/
+      # `&&`/`||` expands to: `x when x in [false, nil] -> …`) are not source
+      # variables. Skipping them keeps them out of the var list so consumers like
+      # inlay hints don't render a type on the `if` keyword.
       state
-      | vars_info: [vars_from_scope | other_vars]
-    }
+    else
+      version = meta[:version]
+      scope_id = hd(state.scope_ids)
+
+      info = %VarInfo{
+        name: name,
+        version: version,
+        positions: [extract_position(meta)],
+        scope_id: scope_id
+      }
+
+      [vars_from_scope | other_vars] = state.vars_info
+      vars_from_scope = Map.put(vars_from_scope, {name, version}, info)
+
+      %__MODULE__{
+        state
+        | vars_info: [vars_from_scope | other_vars]
+      }
+    end
   end
 
   def add_var_write(%__MODULE__{} = state, _), do: state
+
+  # A binding is compiler-generated when its AST carries `generated: true` (set by
+  # macro expansion) or a non-nil hygiene context (a real source variable's
+  # context is `nil`).
+  defp generated_var?(meta, context) do
+    Keyword.get(meta, :generated, false) == true or (is_atom(context) and not is_nil(context))
+  end
 
   def add_var_read(%__MODULE__{} = state, {name, meta, _}) when name != :_ do
     version = meta[:version]
