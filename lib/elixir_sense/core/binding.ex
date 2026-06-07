@@ -228,7 +228,7 @@ defmodule ElixirSense.Core.Binding do
 
   def do_expand(env, {:for_expression, list_candidate}, stack) do
     case expand(env, list_candidate, stack) do
-      {:list, type} when type not in [:empty, :none] ->
+      {list, type} when list in [:list, :nonempty_list] and type not in [:empty, :none] ->
         type
 
       {:map, fields, nil} ->
@@ -250,7 +250,7 @@ defmodule ElixirSense.Core.Binding do
 
   def do_expand(env, {:list_head, list_candidate}, stack) do
     case expand(env, list_candidate, stack) do
-      {:list, type} when type not in [:empty, :none] ->
+      {list, type} when list in [:list, :nonempty_list] and type not in [:empty, :none] ->
         type
 
       nil ->
@@ -263,7 +263,7 @@ defmodule ElixirSense.Core.Binding do
 
   def do_expand(env, {:list_tail, list_candidate}, stack) do
     case expand(env, list_candidate, stack) do
-      {:list, type} when type not in [:empty, :none] ->
+      {list, type} when list in [:list, :nonempty_list] and type not in [:empty, :none] ->
         {:list, type}
 
       nil ->
@@ -273,6 +273,9 @@ defmodule ElixirSense.Core.Binding do
         :none
     end
   end
+
+  def do_expand(env, {:nonempty_list, type}, stack),
+    do: {:nonempty_list, expand(env, type, stack)}
 
   # Set difference, used for cross-clause occurrence typing (a later `case`
   # clause sees the scrutinee type minus what earlier clauses matched). Resolved

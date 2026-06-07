@@ -178,6 +178,7 @@ defmodule ElixirSense.Core.TypePresentation do
 
   defp segment({:list, :empty}), do: "[]"
   defp segment({:list, elem}), do: "[" <> segment(elem) <> "]"
+  defp segment({:nonempty_list, elem}), do: "[" <> segment(elem) <> ", ...]"
 
   defp segment({:tuple, _size, elems}) when is_list(elems),
     do: "{" <> Enum.map_join(elems, ", ", &segment/1) <> "}"

@@ -178,6 +178,18 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       assert result == %{{:x, 0} => :list}
     end
 
+    test "length(x) > 0 infers a non-empty list" do
+      assert Guard.type_information_from_guards(quote(do: length(x) > 0) |> expand()) ==
+               %{{:x, 0} => {:nonempty_list, nil}}
+
+      assert Guard.type_information_from_guards(quote(do: length(x) >= 1) |> expand()) ==
+               %{{:x, 0} => {:nonempty_list, nil}}
+
+      # a plain length comparison that doesn't imply non-empty stays a list
+      assert Guard.type_information_from_guards(quote(do: length(x) < 3) |> expand()) ==
+               %{{:x, 0} => :list}
+    end
+
     test "infers type from guard with list: hd/1 and tl/1" do
       guard_expr = quote(do: hd(x) == 1 and tl(x) == [2]) |> expand
       result = Guard.type_information_from_guards(guard_expr)

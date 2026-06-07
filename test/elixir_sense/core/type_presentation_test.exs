@@ -35,6 +35,7 @@ defmodule ElixirSense.Core.TypePresentationTest do
     test "containers" do
       assert TP.render({:list, {:atom, :ok}}) == {:ok, "[:ok]"}
       assert TP.render({:list, :empty}) == {:ok, "[]"}
+      assert TP.render({:nonempty_list, {:integer, nil}}) == {:ok, "[integer(), ...]"}
 
       assert TP.render({:tuple, 2, [{:atom, :ok}, {:integer, nil}]}) ==
                {:ok, "{:ok, integer()}"}

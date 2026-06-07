@@ -3330,6 +3330,13 @@ defmodule ElixirSense.Core.BindingTest do
                {:list, {:integer, 1}}
     end
 
+    test "nonempty_list resolves and supports head/tail projections" do
+      env = union_env({:nonempty_list, {:integer, 5}})
+      assert Binding.expand(env, {:variable, :x, 1}) == {:nonempty_list, {:integer, 5}}
+      assert Binding.expand(env, {:list_head, {:variable, :x, 1}}) == {:integer, 5}
+      assert Binding.expand(env, {:list_tail, {:variable, :x, 1}}) == {:list, {:integer, 5}}
+    end
+
     test "number() subsumes integer()/float() in a union" do
       assert Binding.expand(@env, {:union, [:number, {:integer, 5}]}) == :number
       assert Binding.expand(@env, {:union, [:number, {:float, 1.0}]}) == :number

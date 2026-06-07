@@ -141,6 +141,12 @@ defmodule ElixirSense.Core.TypeInference.Guard do
     acc
   end
 
+  # Does `length(x) p size` imply x is non-empty?
+  defp nonempty_length?(:>, n) when is_integer(n) and n >= 0, do: true
+  defp nonempty_length?(:>=, n) when is_integer(n) and n >= 1, do: true
+  defp nonempty_length?(p, n) when p in [:==, :===] and is_integer(n) and n >= 1, do: true
+  defp nonempty_length?(_p, _n), do: false
+
   # A map known to NOT have `key` (from `not is_map_key/2`).
   defp not_set_map_type(key) when is_atom(key) or is_binary(key) or is_integer(key),
     do: {:map, [{key, :not_set}], nil}
@@ -217,6 +223,18 @@ defmodule ElixirSense.Core.TypeInference.Guard do
   defp guard_predicate_type(p, [lhs, {{:., _, [:erlang, guard]}, _, _guard_params} = call])
        when p in [:==, :===, :>=, :>, :<=, :<] and guard in [:hd, :tl] do
     guard_predicate_type(p, [call, lhs])
+  end
+
+  # when length(x) > 0 / >= 1 / == n (n >= 1) -> non-empty list
+  defp guard_predicate_type(p, [{{:., _, [:erlang, :length]}, _, [first | _]}, size])
+       when p in [:>, :>=, :==, :===] do
+    type = if nonempty_length?(p, size), do: {:nonempty_list, nil}, else: {:list, nil}
+    {type, first}
+  end
+
+  defp guard_predicate_type(p, [size, {{:., _, [:erlang, :length]}, _, _guard_params} = call])
+       when p in [:>, :>=, :<=, :<, :==, :===] do
+    guard_predicate_type(p, [call, size])
   end
 
   defp guard_predicate_type(p, [first | _]) when p in [:is_tuple],

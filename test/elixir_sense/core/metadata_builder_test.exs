@@ -4127,8 +4127,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %VarInfo{name: :x, type: {:list, {:integer, 1}}} = var_with_guards("hd(x) == 1")
       assert %VarInfo{name: :x, type: {:list, {:integer, 1}}} = var_with_guards("1 == hd(x)")
       assert %VarInfo{name: :x, type: :list} = var_with_guards("tl(x) == [1]")
-      assert %VarInfo{name: :x, type: :list} = var_with_guards("length(x) == 1")
-      assert %VarInfo{name: :x, type: :list} = var_with_guards("1 == length(x)")
+      # length == n (n >= 1) implies a non-empty list
+      assert %VarInfo{name: :x, type: {:nonempty_list, nil}} =
+               var_with_guards("length(x) == 1")
+
+      assert %VarInfo{name: :x, type: {:nonempty_list, nil}} =
+               var_with_guards("1 == length(x)")
+
       assert %VarInfo{name: :x, type: {:list, :boolean}} = var_with_guards("hd(x)")
     end
 
