@@ -3329,5 +3329,27 @@ defmodule ElixirSense.Core.BindingTest do
       assert Binding.expand(@env, {:union, [{:list, :empty}, {:list, {:integer, 1}}]}) ==
                {:list, {:integer, 1}}
     end
+
+    test "number() subsumes integer()/float() in a union" do
+      assert Binding.expand(@env, {:union, [:number, {:integer, 5}]}) == :number
+      assert Binding.expand(@env, {:union, [:number, {:float, 1.0}]}) == :number
+      # without number() present, integer()|float() stays precise (no widening)
+      assert Binding.expand(@env, {:union, [{:integer, nil}, {:float, nil}]}) ==
+               {:union, [{:integer, nil}, {:float, nil}]}
+    end
+
+    test "intersection narrows number() to integer()/float()" do
+      assert Binding.expand(@env, {:intersection, [:number, {:integer, 5}]}) == {:integer, 5}
+      assert Binding.expand(@env, {:intersection, [:number, :integer]}) == {:integer, nil}
+    end
+
+    test "generic tuple()/fun() subsume their concrete instances" do
+      assert Binding.expand(@env, {:union, [:tuple, {:tuple, 2, [{:atom, :ok}, nil]}]}) == :tuple
+
+      assert Binding.expand(@env, {:intersection, [:tuple, {:tuple, 1, [{:atom, :ok}]}]}) ==
+               {:tuple, 1, [{:atom, :ok}]}
+
+      assert Binding.expand(@env, {:union, [:fun, {:fun, 1}]}) == :fun
+    end
   end
 end

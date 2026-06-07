@@ -606,6 +606,18 @@ defmodule ElixirSense.Core.Binding do
   defp covers?(:binary, {:binary, _}), do: true
   defp covers?({:binary, nil}, {:binary, _}), do: true
 
+  # Number tower: number() subsumes integer() and float() (in either spelling).
+  defp covers?(:number, {:integer, _}), do: true
+  defp covers?(:number, {:float, _}), do: true
+  defp covers?(:number, :integer), do: true
+  defp covers?(:number, :float), do: true
+
+  # Generic container/callable atoms subsume their concrete instances.
+  defp covers?(:tuple, {:tuple, _, _}), do: true
+  defp covers?(:fun, {:fun, _}), do: true
+  defp covers?(:fun, {:fun, _, _}), do: true
+  defp covers?(:fun, {:fun_clauses, _}), do: true
+
   defp covers?({:tuple, n, sub_elems}, {:tuple, n, mem_elems}) do
     sub_elems
     |> Enum.zip(mem_elems)
