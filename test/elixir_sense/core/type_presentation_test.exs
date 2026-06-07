@@ -86,6 +86,12 @@ defmodule ElixirSense.Core.TypePresentationTest do
       assert TP.resolve_and_render(@env, {:difference, {:variable, :missing, 9}, {:atom, :a}}) ==
                {:ok, "none()"}
     end
+
+    test "renders a field-wise-merged map union" do
+      m1 = {:map, [a: {:integer, 1}], nil}
+      m2 = {:map, [a: {:integer, 2}], nil}
+      assert TP.resolve_and_render(@env, {:union, [m1, m2]}) == {:ok, "%{a: 1 | 2}"}
+    end
   end
 
   describe "render_var/2" do

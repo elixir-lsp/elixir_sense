@@ -3286,5 +3286,48 @@ defmodule ElixirSense.Core.BindingTest do
     test "intersection of disjoint scalars is :none" do
       assert Binding.expand(@env, {:intersection, [{:atom, :a}, {:integer, 5}]}) == :none
     end
+
+    test "merges same-key maps field-wise" do
+      m1 = {:map, [a: {:integer, 1}], nil}
+      m2 = {:map, [a: {:integer, 2}], nil}
+
+      assert Binding.expand(@env, {:union, [m1, m2]}) ==
+               {:map, [a: {:union, [{:integer, 1}, {:integer, 2}]}], nil}
+    end
+
+    test "keeps maps with different key sets as a union" do
+      m1 = {:map, [a: {:integer, 1}], nil}
+      m2 = {:map, [b: {:integer, 2}], nil}
+
+      assert Binding.expand(@env, {:union, [m1, m2]}) == {:union, [m1, m2]}
+    end
+
+    test "merges same-module structs field-wise" do
+      # expansion fills all URI fields; only the differing `host` becomes a union
+      s1 = {:struct, [__struct__: {:atom, URI}, host: {:binary, "a"}], {:atom, URI}, nil}
+      s2 = {:struct, [__struct__: {:atom, URI}, host: {:binary, "b"}], {:atom, URI}, nil}
+
+      assert {:struct, fields, {:atom, URI}, nil} = Binding.expand(@env, {:union, [s1, s2]})
+      assert Keyword.fetch!(fields, :host) == {:union, [{:binary, "a"}, {:binary, "b"}]}
+      assert Keyword.fetch!(fields, :port) == nil
+    end
+
+    test "keeps different-module structs as a union" do
+      s1 = {:struct, [__struct__: {:atom, URI}, host: {:binary, "a"}], {:atom, URI}, nil}
+      s2 = {:struct, [__struct__: {:atom, Date}, year: {:integer, 2024}], {:atom, Date}, nil}
+
+      assert {:union, [{:struct, _, {:atom, URI}, nil}, {:struct, _, {:atom, Date}, nil}]} =
+               Binding.expand(@env, {:union, [s1, s2]})
+    end
+
+    test "merges list members, unioning element types" do
+      assert Binding.expand(@env, {:union, [{:list, {:integer, 1}}, {:list, {:integer, 2}}]}) ==
+               {:list, {:union, [{:integer, 1}, {:integer, 2}]}}
+    end
+
+    test "merges an empty list with a non-empty list" do
+      assert Binding.expand(@env, {:union, [{:list, :empty}, {:list, {:integer, 1}}]}) ==
+               {:list, {:integer, 1}}
+    end
   end
 end

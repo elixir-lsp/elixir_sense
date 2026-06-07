@@ -509,12 +509,66 @@ defmodule ElixirSense.Core.Binding do
         nil
 
       true ->
-        case members |> Enum.reject(&(&1 == :none)) |> Enum.uniq() |> drop_subsumed() do
+        case members
+             |> Enum.reject(&(&1 == :none))
+             |> Enum.uniq()
+             |> drop_subsumed()
+             |> coalesce_union() do
           [] -> :none
           [one] -> one
           many -> {:union, many}
         end
     end
+  end
+
+  # Merge structurally-compatible union members field-/element-wise, preserving
+  # first-occurrence order: same-shape lists become one list whose element type
+  # is the union of the originals; maps with the same key set and structs of the
+  # same module merge their fields key-by-key (`%{a: 1} | %{a: 2}` -> `%{a:
+  # 1 | 2}`). Other members are left untouched.
+  defp coalesce_union(members) do
+    Enum.reduce(members, [], fn member, acc ->
+      case Enum.find_index(acc, &mergeable?(&1, member)) do
+        nil -> acc ++ [member]
+        index -> List.update_at(acc, index, &merge_members(&1, member))
+      end
+    end)
+  end
+
+  defp mergeable?({:list, _}, {:list, _}), do: true
+
+  defp mergeable?({:map, fields_1, updated}, {:map, fields_2, updated}),
+    do: same_keys?(fields_1, fields_2)
+
+  defp mergeable?({:struct, _, {:atom, mod}, updated}, {:struct, _, {:atom, mod}, updated}),
+    do: true
+
+  defp mergeable?(_a, _b), do: false
+
+  defp same_keys?(fields_1, fields_2) do
+    Enum.sort(Keyword.keys(fields_1)) == Enum.sort(Keyword.keys(fields_2))
+  end
+
+  defp merge_members({:list, elem_1}, {:list, elem_2}),
+    do: {:list, merge_list_elem(elem_1, elem_2)}
+
+  defp merge_members({:map, fields_1, updated}, {:map, fields_2, _}),
+    do: {:map, merge_fields(fields_1, fields_2), updated}
+
+  defp merge_members({:struct, fields_1, type, updated}, {:struct, fields_2, _, _}),
+    do: {:struct, merge_fields(fields_1, fields_2), type, updated}
+
+  defp merge_list_elem(:empty, elem), do: elem
+  defp merge_list_elem(elem, :empty), do: elem
+  defp merge_list_elem(elem_1, elem_2), do: normalize_union([elem_1, elem_2])
+
+  # Field values are unioned per key (keys are the same on both sides). A key
+  # missing from one side unions with nil, which `normalize_union/1` treats as
+  # unknown.
+  defp merge_fields(fields_1, fields_2) do
+    Enum.map(fields_1, fn {key, value_1} ->
+      {key, normalize_union([value_1, Keyword.get(fields_2, key)])}
+    end)
   end
 
   defp flatten_unions(members) do
@@ -524,10 +578,13 @@ defmodule ElixirSense.Core.Binding do
     end)
   end
 
-  # Keep a member only if no *other* member subsumes it.
+  # Keep a member unless another member *strictly* subsumes it (covers it but
+  # is not covered by it). Strictness matters because `covers?/2` is symmetric
+  # for e.g. two same-module structs — those must be kept (and later merged
+  # field-wise by coalesce_union/1), not mutually dropped to nothing.
   defp drop_subsumed(members) do
     Enum.reject(members, fn m ->
-      Enum.any?(members, fn n -> n != m and covers?(n, m) end)
+      Enum.any?(members, fn n -> n != m and covers?(n, m) and not covers?(m, n) end)
     end)
   end
 
