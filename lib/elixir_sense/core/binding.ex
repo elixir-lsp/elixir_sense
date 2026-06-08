@@ -187,7 +187,7 @@ defmodule ElixirSense.Core.Binding do
 
   def do_expand(env, {:tuple_nth, tuple_candidate, n}, stack) do
     case expand(env, tuple_candidate, stack) do
-      {:tuple, size, fields} when size >= n ->
+      {:tuple, size, fields} when size > n ->
         fields |> Enum.at(n)
 
       nil ->
