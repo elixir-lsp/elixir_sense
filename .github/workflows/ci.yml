@@ -152,6 +152,11 @@ jobs:
           mix deps.get
       - name: Restore timestamps to prevent unnecessary recompilation
         run: IFS=$'\n'; for f in $(git ls-files); do touch -d "$(git log -n 1 --pretty='%cI' -- $f)" "$f"; done
+      # Blocking gate: the app's lib code must compile without warnings. Run in
+      # the default (dev) env so test/support fixtures — which carry intentional
+      # warnings (unused alias/require) — are not on elixirc_paths. `--force`
+      # ensures warnings re-emit even when the build cache is warm.
+      - run: mix compile --force --warnings-as-errors
       - run: mix format --check-formatted
       - run: mix credo --all --strict
       # Dialyzer is clean (known warnings tracked in .dialyzer_ignore.exs); keep
