@@ -7,7 +7,8 @@ defmodule ElixirSense.Providers.Plugins.Ecto.QueryTest do
   alias ElixirSense.Providers.Plugins.Ecto.Query
 
   defmodule Post do
-    def __schema__(:association, :comments), do: %{related: ElixirSense.Providers.Plugins.Ecto.QueryTest.Comment}
+    def __schema__(:association, :comments),
+      do: %{related: ElixirSense.Providers.Plugins.Ecto.QueryTest.Comment}
   end
 
   defmodule Comment do

@@ -218,12 +218,12 @@ defmodule ElixirSense.Providers.Plugins.Ecto.Query do
   end
 
   defp infer_type(
-          {:assoc, _, [{var, _, _}, assoc]},
-          vars,
-          _env,
-          _buffer_metadata,
-          _cursor_position
-        ) do
+         {:assoc, _, [{var, _, _}, assoc]},
+         vars,
+         _env,
+         _buffer_metadata,
+         _cursor_position
+       ) do
     assoc =
       case assoc do
         atom when is_atom(atom) -> atom
