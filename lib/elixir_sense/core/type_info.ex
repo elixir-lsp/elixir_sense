@@ -346,7 +346,7 @@ defmodule ElixirSense.Core.TypeInfo do
           end
         end)
 
-      if callback_specs do
+      if callback_specs != [] do
         callback_specs
       else
         [{nil, []}]
