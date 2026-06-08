@@ -1127,6 +1127,7 @@ defmodule ElixirSense.Core.Binding do
     else
       case expand(env, key, stack) do
         {:atom, atom} ->
+          value = expand(env, value, stack)
           {:map, fields |> Keyword.put(atom, value), nil}
 
         :none ->
@@ -1147,7 +1148,7 @@ defmodule ElixirSense.Core.Binding do
     else
       case expand(env, key, stack) do
         {:atom, atom} ->
-          value = if fun == :put_new, do: value
+          value = if fun == :put_new, do: expand(env, value, stack)
           {:map, fields |> Keyword.put_new(atom, value), nil}
 
         :none ->

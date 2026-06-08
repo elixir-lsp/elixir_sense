@@ -83,6 +83,26 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(@env, {:map, [abc: nil, cde: {:variable, :a, 1}], nil})
     end
 
+    test "Map.put expands value" do
+      assert {:map, [abc: {:atom, :value}], nil} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:vars, [%VarInfo{version: 1, name: :v, type: {:atom, :value}}]),
+                 {:call, {:atom, Map}, :put,
+                  [{:map, [abc: nil], nil}, {:atom, :abc}, {:variable, :v, 1}]}
+               )
+    end
+
+    test "Map.put_new expands value" do
+      assert {:map, [abc: {:atom, :value}], nil} ==
+               Binding.expand(
+                 @env
+                 |> Map.put(:vars, [%VarInfo{version: 1, name: :v, type: {:atom, :value}}]),
+                 {:call, {:atom, Map}, :put_new,
+                  [{:map, [], nil}, {:atom, :abc}, {:variable, :v, 1}]}
+               )
+    end
+
     test "Enum.intersperse keeps list type" do
       assert {:list, {:atom, :item}} ==
                Binding.expand(
