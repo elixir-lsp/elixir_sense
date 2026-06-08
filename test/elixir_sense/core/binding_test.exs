@@ -83,6 +83,15 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(@env, {:map, [abc: nil, cde: {:variable, :a, 1}], nil})
     end
 
+    test "Enum.intersperse keeps list type" do
+      assert {:list, {:atom, :item}} ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Enum}, :intersperse,
+                  [{:list, {:atom, :item}}, {:atom, :separator}]}
+               )
+    end
+
     test "map update" do
       assert {:map, [{:efg, {:atom, :a}}, {:abc, nil}, {:cde, {:variable, :a, 1}}], nil} ==
                Binding.expand(

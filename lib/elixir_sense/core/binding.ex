@@ -887,7 +887,7 @@ defmodule ElixirSense.Core.Binding do
               :drop_every,
               :drop_while,
               :filter,
-              :intrperse,
+              :intersperse,
               :reject,
               :reverse,
               :reverse_slice,
