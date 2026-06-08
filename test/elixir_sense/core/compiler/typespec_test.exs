@@ -236,7 +236,7 @@ defmodule ElixirSense.Core.Compiler.TypespecTest do
     assert {{:%{}, [], [{{:optional, [], [:foo]}, :bar}]}, _state} =
              expand_typespec({:%{}, [], [{{:optional, [], [:foo]}, :bar}]})
 
-    assert {{:%{}, [], [foo: :bar]}, _state} =
+    assert {{:%{}, [], [{{:required, [], [:foo]}, :bar}]}, _state} =
              expand_typespec({:%{}, [], [{{:required, [], [:foo]}, :bar}]})
 
     # illegal update

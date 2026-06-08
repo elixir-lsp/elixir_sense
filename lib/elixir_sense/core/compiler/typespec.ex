@@ -320,10 +320,10 @@ defmodule ElixirSense.Core.Compiler.Typespec do
   ## Handle maps and structs
   defp typespec({:%{}, meta, fields}, vars, caller, state) do
     fun = fn
-      {{:required, _meta2, [k]}, v}, state ->
+      {{:required, meta2, [k]}, v}, state ->
         {arg1, state} = typespec(k, vars, caller, state)
         {arg2, state} = typespec(v, vars, caller, state)
-        {{arg1, arg2}, state}
+        {{{:required, meta2, [arg1]}, arg2}, state}
 
       {{:optional, meta2, [k]}, v}, state ->
         {arg1, state} = typespec(k, vars, caller, state)
