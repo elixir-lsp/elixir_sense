@@ -131,11 +131,20 @@ jobs:
       - name: Cache build artifacts
         uses: actions/cache@v5
         with:
+          # Cache deps and the dialyzer PLT (the slow part), but NOT this app's
+          # own compiled output. Caching `_build/dev/lib/elixir_sense` would let
+          # orphaned beams from since-deleted source (e.g. the old
+          # `src/elixir_sense_parser.yrl`) linger and get re-analyzed by
+          # dialyzer. The key is salted (`-v2-`) and hashes `mix.lock` so the
+          # previously-poisoned cache is not restored and dep changes bust it.
           path: |
             ~/.hex
             ~/.mix
             _build
-          key: ${{ matrix.otp }}-${{ matrix.elixir }}-static_analysis-build
+            !_build/*/lib/elixir_sense
+          key: ${{ matrix.otp }}-${{ matrix.elixir }}-static_analysis-build-v2-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ matrix.otp }}-${{ matrix.elixir }}-static_analysis-build-v2-
       - name: Install Dependencies
         run: |
           mix local.hex --force
