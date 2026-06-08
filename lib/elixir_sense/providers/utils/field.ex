@@ -1,4 +1,5 @@
 defmodule ElixirSense.Providers.Utils.Field do
+  @moduledoc false
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Normalized.Typespec

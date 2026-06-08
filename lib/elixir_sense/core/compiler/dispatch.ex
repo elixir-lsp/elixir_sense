@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Dispatch do
+  @moduledoc false
   alias ElixirSense.Core.Compiler.Rewrite
   alias ElixirSense.Core.State.ModFunInfo
   import :ordsets, only: [is_element: 2]

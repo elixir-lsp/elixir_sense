@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Rewrite do
+  @moduledoc false
   def inline(module, fun, arity) do
     :elixir_rewrite.inline(module, fun, arity)
   end

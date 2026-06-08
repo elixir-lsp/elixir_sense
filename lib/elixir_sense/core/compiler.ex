@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Compiler do
+  @moduledoc false
   alias ElixirSense.Core.Compiler.State
   require Logger
   alias ElixirSense.Core.Introspection
@@ -146,7 +147,7 @@ defmodule ElixirSense.Core.Compiler do
 
   # =/2
 
-  defp do_expand({:=, meta, [_, _]} = expr, s, e = %{context: :match}) do
+  defp do_expand({:=, meta, [_, _]} = expr, s, %{context: :match} = e) do
     {e_expr, se, ee} = __MODULE__.Clauses.parallel_match(meta, expr, s, e)
 
     vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, :match)
@@ -575,11 +576,11 @@ defmodule ElixirSense.Core.Compiler do
 
   defp do_expand({:__cursor__, meta, args}, s, e) when is_list(args) do
     s =
-      unless s.cursor_env do
+      if s.cursor_env do
         s
-        |> State.add_cursor_env(meta, e)
       else
         s
+        |> State.add_cursor_env(meta, e)
       end
 
     case args do
@@ -1096,12 +1097,12 @@ defmodule ElixirSense.Core.Compiler do
           end)
 
         state =
-          unless has_unquotes do
-            # restore module vars
-            State.remove_func_vars_scope(state, state_orig)
-          else
+          if has_unquotes do
             # remove scope
             State.remove_vars_scope(state, state_orig)
+          else
+            # restore module vars
+            State.remove_func_vars_scope(state, state_orig)
           end
 
         state
@@ -1629,8 +1630,11 @@ defmodule ElixirSense.Core.Compiler do
     {ast, state, env} =
       expand_macro_callback!(meta, Kernel, :defprotocol, args, callback, state, env)
 
-    # TODO
-    # [warning] Unable to expand ast node {:defprotocol, [end_of_expression: [newlines: 1, line: 3, column: 4], do: [line: 1, column: 19], end: [line: 3, column: 1], line: 1, column: 1], [{:__aliases__, [last: [line: 1, column: 13], line: 1, column: 13], [:Proto]}, [do: {:def, [end_of_expression: [newlines: 1, line: 2, column: 20], line: 2, column: 3], [{:reverse, [closing: [line: 2, column: 19], line: 2, column: 7], [{:term, [line: 2, column: 15], nil}]}]}]]}: ** (MatchError) no match of right hand side value: []
+    # TODO this can raise on some shapes, e.g. expanding a `defprotocol` whose
+    # body fails to expand surfaces:
+    #   [warning] Unable to expand ast node {:defprotocol, ...,
+    #   [{:__aliases__, ..., [:Proto]}, [do: {:def, ..., [{:reverse, ...}]}]]}:
+    #   ** (MatchError) no match of right hand side value: []
     [module] = env.context_modules -- original_env.context_modules
     # add behaviour_info builtin
     # generate callbacks as macro expansion currently fails
@@ -1995,20 +1999,20 @@ defmodule ElixirSense.Core.Compiler do
 
     # based on :elixir_def.env_for_expansion
     state =
-      unless has_unquotes do
-        # module vars are not accessible in def body
-        %{
-          state
-          | caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
-        }
-        |> State.new_func_vars_scope()
-      else
+      if has_unquotes do
         # make module variables accessible if there are unquote fragments in def body
         %{
           state
           | caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
         }
         |> State.new_vars_scope()
+      else
+        # module vars are not accessible in def body
+        %{
+          state
+          | caller: def_kind in [:defmacro, :defmacrop, :defguard, :defguardp]
+        }
+        |> State.new_func_vars_scope()
       end
 
     # no need to reset versioned_vars - we never update it
@@ -2109,12 +2113,12 @@ defmodule ElixirSense.Core.Compiler do
       %{state | caller: false}
 
     state =
-      unless has_unquotes do
-        # restore module vars
-        State.remove_func_vars_scope(state, state_orig)
-      else
+      if has_unquotes do
         # remove scope
         State.remove_vars_scope(state, state_orig)
+      else
+        # restore module vars
+        State.remove_func_vars_scope(state, state_orig)
       end
 
     # result of def expansion is fa tuple
@@ -2388,7 +2392,7 @@ defmodule ElixirSense.Core.Compiler do
     end
   end
 
-  defp expand_local(meta, :when, [_, _] = args, state, env = %{context: nil}) do
+  defp expand_local(meta, :when, [_, _] = args, state, %{context: nil} = env) do
     # naked when, try to transform into a case
     ast =
       {:case, meta,

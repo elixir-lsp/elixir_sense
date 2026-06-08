@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Utils do
+  @moduledoc false
   def generated([{:generated, true} | _] = meta), do: meta
   def generated(meta), do: [{:generated, true} | meta]
 

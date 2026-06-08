@@ -541,7 +541,7 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
-  defp marker(), do: "(__cursor__())"
+  defp marker, do: "(__cursor__())"
 
   defp get_line_from_meta(meta) when is_integer(meta), do: meta
   defp get_line_from_meta(meta), do: Keyword.fetch!(meta, :line)

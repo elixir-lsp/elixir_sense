@@ -646,12 +646,13 @@ defmodule ElixirSense.Core.Binding do
          stack
        )
        when (module == Tuple and fun == :to_list) or (module == :erlang and fun == :tuple_to_list) do
-    with {:tuple, _elems_count, elems} <- expand(env, tuple_candidate, stack) do
-      case elems do
-        [] -> {:list, :empty}
-        [first | _] -> {:list, first}
-      end
-    else
+    case expand(env, tuple_candidate, stack) do
+      {:tuple, _elems_count, elems} ->
+        case elems do
+          [] -> {:list, :empty}
+          [first | _] -> {:list, first}
+        end
+
       nil ->
         nil
 
@@ -670,14 +671,10 @@ defmodule ElixirSense.Core.Binding do
          stack
        )
        when module in [Kernel, :erlang] do
-    with {:tuple, elems_count, _elems} <- expand(env, tuple_candidate, stack) do
-      {:integer, elems_count}
-    else
-      nil ->
-        nil
-
-      _ ->
-        :none
+    case expand(env, tuple_candidate, stack) do
+      {:tuple, elems_count, _elems} -> {:integer, elems_count}
+      nil -> nil
+      _ -> :none
     end
   end
 

@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.TypeInference do
+  @moduledoc false
   def type_of(
         {:%, _struct_meta,
          [

@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Options do
+  @moduledoc false
   alias ElixirSense.Core.Normalized.Typespec, as: NormalizedTypespec
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.State.ModFunInfo

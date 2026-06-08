@@ -1,4 +1,5 @@
 defmodule ElixirSense.Providers.Plugin do
+  @moduledoc false
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.State
   @type suggestion :: ElixirSense.Providers.Completion.Suggestion.generic()

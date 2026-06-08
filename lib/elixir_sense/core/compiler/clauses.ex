@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Clauses do
+  @moduledoc false
   alias ElixirSense.Core.Compiler
   alias ElixirSense.Core.Compiler.Utils
   alias ElixirSense.Core.Compiler.State
@@ -8,7 +9,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   # on `with` to host Elixir 1.20+ (commit 603602e67 — reverse arrows).
   @stamp_version Version.match?(System.version(), ">= 1.20.0-dev")
 
-  def parallel_match(meta, expr, s, e = %{context: :match}) do
+  def parallel_match(meta, expr, s, %{context: :match} = e) do
     %{vars: {_read, write}} = s
 
     matches = unpack_match(expr, meta, [])
@@ -518,7 +519,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
   defp expand_catch(_meta, [arg], s, e), do: head([:throw, arg], s, e)
 
-  defp expand_catch(_meta, args = [_, _], s, e) do
+  defp expand_catch(_meta, [_, _] = args, s, e) do
     # TODO is it worth to infer type of the first arg? :error | :exit | :throw | {:EXIT, pid()}
     head(args, s, e)
   end

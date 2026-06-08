@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Fn do
+  @moduledoc false
   alias ElixirSense.Core.Compiler
   alias ElixirSense.Core.Compiler.Clauses
   alias ElixirSense.Core.Compiler.Dispatch

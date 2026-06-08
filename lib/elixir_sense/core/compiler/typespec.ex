@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Typespec do
+  @moduledoc false
   alias ElixirSense.Core.Compiler
   alias ElixirSense.Core.Compiler.Utils
   alias ElixirSense.Core.Compiler.State
@@ -61,14 +62,14 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     # unless there are unquotes module vars are not accessible
     state_orig = state
 
-    unless Compiler.Quote.has_unquotes(ast) do
-      {ast, state, env} = do_expand_spec(ast, State.new_func_vars_scope(state), env)
-
-      {ast, State.remove_func_vars_scope(state, state_orig), env}
-    else
+    if Compiler.Quote.has_unquotes(ast) do
       {ast, state, env} = do_expand_spec(ast, State.new_vars_scope(state), env)
 
       {ast, State.remove_vars_scope(state, state_orig), env}
+    else
+      {ast, state, env} = do_expand_spec(ast, State.new_func_vars_scope(state), env)
+
+      {ast, State.remove_func_vars_scope(state, state_orig), env}
     end
   end
 
@@ -204,14 +205,14 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     # unless there are unquotes module vars are not accessible
     state_orig = state
 
-    unless Compiler.Quote.has_unquotes(ast) do
-      {ast, state, env} = do_expand_type(ast, State.new_func_vars_scope(state), env)
-
-      {ast, State.remove_func_vars_scope(state, state_orig), env}
-    else
+    if Compiler.Quote.has_unquotes(ast) do
       {ast, state, env} = do_expand_type(ast, State.new_vars_scope(state), env)
 
       {ast, State.remove_vars_scope(state, state_orig), env}
+    else
+      {ast, state, env} = do_expand_type(ast, State.new_func_vars_scope(state), env)
+
+      {ast, State.remove_func_vars_scope(state, state_orig), env}
     end
   end
 
@@ -285,11 +286,11 @@ defmodule ElixirSense.Core.Compiler.Typespec do
 
   defp typespec({:__cursor__, meta, args}, vars, caller, state) when is_list(args) do
     state =
-      unless state.cursor_env do
+      if state.cursor_env do
         state
-        |> State.add_cursor_env(meta, caller)
       else
         state
+        |> State.add_cursor_env(meta, caller)
       end
 
     node =
@@ -561,9 +562,9 @@ defmodule ElixirSense.Core.Compiler.Typespec do
     arity = length(args)
 
     {remote, kind} =
-      if not :erl_internal.is_type(name, arity),
-        do: {caller.module, :local_typespec},
-        else: {nil, :builtin_typespec}
+      if :erl_internal.is_type(name, arity),
+        do: {nil, :builtin_typespec},
+        else: {caller.module, :local_typespec}
 
     state = State.add_call_to_line(state, {remote, name, arity}, meta, kind)
 

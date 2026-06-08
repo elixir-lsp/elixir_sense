@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Macro do
+  @moduledoc false
   alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
 
   @spec expand_literals(Macro.input(), Macro.Env.t()) :: Macro.output()

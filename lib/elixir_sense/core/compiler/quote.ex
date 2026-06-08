@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Quote do
+  @moduledoc false
   alias ElixirSense.Core.Compiler.Dispatch
   alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
 

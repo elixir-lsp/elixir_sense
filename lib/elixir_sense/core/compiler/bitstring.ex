@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Bitstring do
+  @moduledoc false
   alias ElixirSense.Core.Compiler
   alias ElixirSense.Core.Compiler.Utils
   alias ElixirSense.Core.Compiler.State

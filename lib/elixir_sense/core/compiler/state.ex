@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Compiler.State do
+  @moduledoc false
   alias ElixirSense.Core.BuiltinFunctions
   alias ElixirSense.Core.State.Env
 
@@ -565,7 +566,7 @@ defmodule ElixirSense.Core.Compiler.State do
 
     # underscored and @impl defs are hidden by default unless they have @doc
     meta =
-      if (String.starts_with?(to_string(func), "_") or hidden == :impl) and doc == "" do
+      if doc == "" and (String.starts_with?(to_string(func), "_") or hidden == :impl) do
         Map.put(meta, :hidden, true)
       else
         if hidden != true do

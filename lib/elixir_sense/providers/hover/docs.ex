@@ -1,4 +1,6 @@
 defmodule ElixirSense.Providers.Hover.Docs do
+  @moduledoc false
+  alias ElixirSense.Core.Applications
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.BuiltinAttributes
   alias ElixirSense.Core.BuiltinFunctions
@@ -332,7 +334,7 @@ defmodule ElixirSense.Providers.Hover.Docs do
                     }
 
                   {_, docs, callback_meta, mime_type} ->
-                    app = ElixirSense.Core.Applications.get_application(behaviour)
+                    app = Applications.get_application(behaviour)
                     docs = docs |> NormalizedCode.extract_docs(mime_type, behaviour, app)
                     # as of OTP 25 erlang callback doc entry does not have signature in meta
                     # pass meta with implementing flag to trigger looking for specs in behaviour module
@@ -422,7 +424,7 @@ defmodule ElixirSense.Providers.Hover.Docs do
 
       _ ->
         if Code.ensure_loaded?(mod) do
-          app = ElixirSense.Core.Applications.get_application(mod)
+          app = Applications.get_application(mod)
 
           %{
             kind: :module,
@@ -501,7 +503,7 @@ defmodule ElixirSense.Providers.Hover.Docs do
   defp get_func_docs_from_typespec(mod, fun, call_arity) do
     # TypeInfo.get_function_specs does fallback to behaviours
     function_specs = TypeInfo.get_function_specs(mod, fun, call_arity)
-    app = ElixirSense.Core.Applications.get_application(mod)
+    app = Applications.get_application(mod)
 
     results =
       for {behaviour, specs} <- function_specs, {{_name, arity}, [params | _]} <- specs do
@@ -552,7 +554,7 @@ defmodule ElixirSense.Providers.Hover.Docs do
           %{builtin: true, app: :erts}
         else
           # TODO remove this fallback?
-          app = ElixirSense.Core.Applications.get_application(mod)
+          app = Applications.get_application(mod)
           %{app: app}
         end
 
@@ -610,7 +612,7 @@ defmodule ElixirSense.Providers.Hover.Docs do
     case docs do
       [] ->
         # TODO remove this fallback?
-        app = ElixirSense.Core.Applications.get_application(mod)
+        app = Applications.get_application(mod)
 
         for {kind, {name, _type, args}} = typedef <- Typespec.get_types(mod),
             name == fun,

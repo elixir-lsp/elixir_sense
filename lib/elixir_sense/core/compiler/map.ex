@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Compiler.Map do
+  @moduledoc false
   alias ElixirSense.Core.Compiler
 
   def expand_struct(meta, left, {:%{}, map_meta, map_args}, s, %{context: context} = e) do

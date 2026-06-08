@@ -58,7 +58,7 @@ defmodule ElixirSense.Core.State.Env do
     }
   end
 
-  def update_from_macro_env(%__MODULE__{} = env, macro_env = %Macro.Env{}) do
+  def update_from_macro_env(%__MODULE__{} = env, %Macro.Env{} = macro_env) do
     # we omit lexical_tracker and tracers
     %__MODULE__{
       env

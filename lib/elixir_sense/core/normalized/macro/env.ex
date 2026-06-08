@@ -1,4 +1,5 @@
 defmodule ElixirSense.Core.Normalized.Macro.Env do
+  @moduledoc false
   if Version.match?(System.version(), ">= 1.19.0-rc.1") do
     defdelegate expand_import(env, meta, name, arity, opts), to: Macro.Env
   else
@@ -143,6 +144,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
   end
 
   defmodule Aliases do
+    @moduledoc false
     def require(meta, ref, opts, e, trace) do
       trace && :elixir_env.trace({:require, meta, ref, opts}, e)
       %{e | requires: :ordsets.add_element(ref, e.requires)}
@@ -300,6 +302,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
   end
 
   defmodule Import do
+    @moduledoc false
     alias ElixirSense.Core.Normalized.Macro.Env.Aliases
 
     def import(meta, ref, opts, e, warn, trace) do
@@ -369,7 +372,9 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
               {added2, _used2, macs} =
                 import_listed_macros(meta, ref, only, e, warn, info_callback)
 
-              # for {name, arity} <- (only -- used1) -- used2, warn, do: elixir_errors.file_warn(meta, e, __MODULE__, {:invalid_import, {ref, name, arity}})
+              # for {name, arity} <- (only -- used1) -- used2, warn,
+              #   do: elixir_errors.file_warn(meta, e, __MODULE__,
+              #     {:invalid_import, {ref, name, arity}})
               {funs, macs, added1 or added2}
 
             :ok ->
@@ -555,6 +560,7 @@ defmodule ElixirSense.Core.Normalized.Macro.Env do
   end
 
   defmodule Dispatch do
+    @moduledoc false
     defp local_for(meta, name, arity, kinds, env) do
       :elixir_def.local_for(meta, name, arity, kinds, env)
     end

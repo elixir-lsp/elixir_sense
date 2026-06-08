@@ -47,7 +47,7 @@ defmodule ElixirSense.Providers.Completion.Reducers.Params do
               ElixirSense.Core.Options.get_param_options(mod, fun, npar + 1, env, buffer_metadata) do
           case opt do
             {name, type} ->
-              # match on atom: 
+              # match on atom:
               if Matcher.match?(to_string(name) <> ":", hint) do
                 expanded_spec = Introspection.to_string_with_parens(type)
 
