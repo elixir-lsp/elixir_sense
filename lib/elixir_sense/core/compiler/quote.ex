@@ -323,8 +323,8 @@ defmodule ElixirSense.Core.Compiler.Quote do
   # Two-element tuples
 
   defp do_quote({left, right}, %__MODULE__{unquote: true} = q, state)
-       when is_tuple(left) and elem(left, 0) == :unquote_splicing and
-              is_tuple(right) and elem(right, 0) == :unquote_splicing do
+       when (is_tuple(left) and elem(left, 0) == :unquote_splicing) or
+              (is_tuple(right) and elem(right, 0) == :unquote_splicing) do
     do_quote({:{}, [], [left, right]}, q, state)
   end
 
