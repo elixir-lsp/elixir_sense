@@ -323,12 +323,13 @@ defmodule ElixirSense.Providers.Definition.Locator do
 
   # When a function's recorded definition sits on a `use SomeModule` line, the
   # function was injected by `SomeModule.__using__/1`. In that case we try to
-  # locate the real `def`/`defmacro` inside that macro body and point there.
+  # locate the real definition (def/defmacro/defdelegate/defguard) inside that
+  # macro body and point there.
   #
   # Two guards keep this from misfiring:
   #
   #   * the `use`-site check (`use_site?/3`) — a genuine local or remote `def`
-  #     has its position on its own `def`/`defmacro` line, which is not a `use`
+  #     has its position on its own definition line, which is not a `use`
   #     statement, so we leave it untouched (this is what makes a locally
   #     overridden function resolve to the local definition, not the injected
   #     one);
@@ -409,7 +410,10 @@ defmodule ElixirSense.Providers.Definition.Locator do
   defp find_def_in_using_body(file, using_line, using_end_line, fun) do
     case File.read(file) do
       {:ok, content} ->
-        regex = ~r/\bdef(?:macro)?\s+(#{Regex.escape(Atom.to_string(fun))})\b/
+        # Matches public definition forms: def, defmacro, defdelegate, defguard.
+        # The mandatory whitespace after the keyword excludes private variants
+        # (defp/defmacrop/defguardp) and defmodule.
+        regex = ~r/\bdef(?:macro|delegate|guard)?\s+(#{Regex.escape(Atom.to_string(fun))})\b/
 
         content
         |> Source.split_lines()

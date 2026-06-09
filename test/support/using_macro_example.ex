@@ -41,3 +41,23 @@ defmodule ElixirSenseExample.ModuleWithLocalUse do
 
   def using_macro_function_unrelated(), do: :local
 end
+
+# Injects definitions via `defdelegate` and `defguard` (not just `def`) so the
+# go-to-definition search must recognise those forms too.
+defmodule ElixirSenseExample.UsingMacroOtherForms do
+  def delegated_target(), do: :ok
+
+  defmacro __using__(_opts) do
+    quote do
+      defdelegate delegated_function(),
+        to: ElixirSenseExample.UsingMacroOtherForms,
+        as: :delegated_target
+
+      defguard is_even(value) when is_integer(value) and rem(value, 2) == 0
+    end
+  end
+end
+
+defmodule ElixirSenseExample.ModuleUsingOtherForms do
+  use ElixirSenseExample.UsingMacroOtherForms
+end

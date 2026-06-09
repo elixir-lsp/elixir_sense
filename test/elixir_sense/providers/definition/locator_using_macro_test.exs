@@ -129,6 +129,43 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       assert location.line == 4
       assert location.column == 11
     end
+
+    test "finds definition injected via defdelegate" do
+      code = """
+      defmodule MyModule do
+        def test do
+          ElixirSenseExample.ModuleUsingOtherForms.delegated_function()
+        end
+      end
+      """
+
+      location = Locator.definition(code, 3, 48)
+
+      assert location != nil
+      assert location.file =~ "using_macro_example.ex"
+      # `defdelegate delegated_function(), ...` inside __using__
+      assert location.line == 52
+      assert location.column == 19
+    end
+
+    test "finds definition injected via defguard" do
+      # A remote guard must be called from a guard context (and the module
+      # required) to resolve as a macro — unrelated to the using-macro search.
+      code = """
+      defmodule MyModule do
+        require ElixirSenseExample.ModuleUsingOtherForms
+        def test(x) when ElixirSenseExample.ModuleUsingOtherForms.is_even(x), do: x
+      end
+      """
+
+      location = Locator.definition(code, 3, 62)
+
+      assert location != nil
+      assert location.file =~ "using_macro_example.ex"
+      # `defguard is_even(value) when ...` inside __using__
+      assert location.line == 56
+      assert location.column == 16
+    end
   end
 
   describe "regression guards (must NOT misfire)" do
