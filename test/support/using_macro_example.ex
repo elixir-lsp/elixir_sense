@@ -15,6 +15,12 @@ defmodule ElixirSenseExample.ModuleUsingMacroExample do
   use ElixirSenseExample.UsingMacroExample
 end
 
+# A plain module that does not `use` anything, with an ordinary function.
+# Used to assert go-to-definition of a regular remote function is unaffected.
+defmodule ElixirSenseExample.PlainModuleExample do
+  def plain_function(), do: :ok
+end
+
 # Module using Kernel.use qualified call
 defmodule ElixirSenseExample.ModuleUsingKernelUse do
   Kernel.use(ElixirSenseExample.UsingMacroExample)

@@ -177,7 +177,26 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       assert location.line > 30
     end
 
-    test "ordinary remote function is unaffected" do
+    test "ordinary remote function (module without use) is unaffected" do
+      code = """
+      defmodule MyModule do
+        def test do
+          ElixirSenseExample.PlainModuleExample.plain_function()
+        end
+      end
+      """
+
+      location = Locator.definition(code, 3, 45)
+
+      assert location != nil
+      assert location.file =~ "using_macro_example.ex"
+      assert location.type in [:function, :macro]
+      # resolves to the real def, not redirected anywhere
+      refute is_nil(location.line)
+    end
+
+    @tag requires_source: true
+    test "ordinary stdlib remote function is unaffected" do
       code = """
       defmodule MyModule do
         def test do

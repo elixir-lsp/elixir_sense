@@ -407,34 +407,35 @@ defmodule ElixirSense.Providers.Definition.Locator do
   # end line) for the injected definition. Bounding the search to the macro
   # body avoids matching unrelated defs elsewhere in the same file.
   defp find_def_in_using_body(file, using_line, using_end_line, fun) do
-    with {:ok, content} <- File.read(file) do
-      name = Atom.to_string(fun)
-      regex = ~r/\bdef(?:macro)?\s+(#{Regex.escape(name)})\b/
+    case File.read(file) do
+      {:ok, content} ->
+        regex = ~r/\bdef(?:macro)?\s+(#{Regex.escape(Atom.to_string(fun))})\b/
 
-      content
-      |> Source.split_lines()
-      |> Enum.slice((using_line - 1)..(using_end_line - 1)//1)
-      |> Enum.with_index()
-      |> Enum.find_value(fn {line_text, idx} ->
-        case Regex.run(regex, line_text, return: :index) do
-          [_whole, {name_offset, name_len}] ->
-            target_line = using_line + idx
+        content
+        |> Source.split_lines()
+        |> Enum.slice((using_line - 1)..(using_end_line - 1)//1)
+        |> Enum.with_index()
+        |> Enum.find_value(fn {line_text, idx} ->
+          case Regex.run(regex, line_text, return: :index) do
+            [_whole, {name_offset, name_len}] ->
+              target_line = using_line + idx
 
-            %Location{
-              type: :function,
-              file: file,
-              line: target_line,
-              column: name_offset + 1,
-              end_line: target_line,
-              end_column: name_offset + 1 + name_len
-            }
+              %Location{
+                type: :function,
+                file: file,
+                line: target_line,
+                column: name_offset + 1,
+                end_line: target_line,
+                end_column: name_offset + 1 + name_len
+              }
 
-          _ ->
-            nil
-        end
-      end)
-    else
-      _ -> nil
+            _ ->
+              nil
+          end
+        end)
+
+      _ ->
+        nil
     end
   end
 end
