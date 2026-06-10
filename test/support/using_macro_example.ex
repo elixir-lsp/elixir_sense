@@ -61,3 +61,43 @@ end
 defmodule ElixirSenseExample.ModuleUsingOtherForms do
   use ElixirSenseExample.UsingMacroOtherForms
 end
+
+# Transitive `use` chain: the injected function is defined several `use` hops
+# away. `UsingMacroOuter.__using__` itself does `use UsingMacroInner`, which is
+# where `nested_using_function` actually lives (mirrors MyApp.Repo ->
+# AshPostgres.Repo -> Ecto.Repo). Go-to-definition must follow the chain.
+defmodule ElixirSenseExample.UsingMacroInner do
+  defmacro __using__(_opts) do
+    quote do
+      def nested_using_function(), do: :nested
+    end
+  end
+end
+
+defmodule ElixirSenseExample.UsingMacroOuter do
+  defmacro __using__(_opts) do
+    quote do
+      use ElixirSenseExample.UsingMacroInner
+    end
+  end
+end
+
+defmodule ElixirSenseExample.ModuleUsingNested do
+  use ElixirSenseExample.UsingMacroOuter
+end
+
+# Multi-line `use` with options. The recorded definition line is the `use`
+# keyword line (`use ...,`), which is not valid Elixir on its own, so the
+# use-site detection must not rely on parsing that line in isolation.
+defmodule ElixirSenseExample.UsingMacroWithOpts do
+  defmacro __using__(_opts) do
+    quote do
+      def opted_using_function(), do: :ok
+    end
+  end
+end
+
+defmodule ElixirSenseExample.ModuleUsingWithOpts do
+  use ElixirSenseExample.UsingMacroWithOpts,
+    some: :opt
+end

@@ -338,19 +338,22 @@ defmodule ElixirSense.Providers.Definition.Locator do
   #
   # The set of used modules comes from the tracked `uses` (resolved at macro
   # expansion time, so aliases and `Kernel.use/1` are handled correctly).
+  #
+  # The injected function may live several `use` hops away: `MyApp.Repo` does
+  # `use AshPostgres.Repo`, whose `__using__/1` does `use Ecto.Repo`, whose
+  # `__using__/1` actually defines `aggregate`. We therefore walk the `use`
+  # chain (see `search_using_chain/4`) rather than only the directly-used
+  # modules.
+  #
+  # `@using_chain_max_depth` caps the number of `use` hops to follow: a safety
+  # net for pathologically deep (or, together with the visited set, cyclic)
+  # chains; real chains are only a few levels deep.
+  @using_chain_max_depth 5
+
   defp redirect_into_using_macro(%Location{line: line} = location, mod, fun, metadata) do
     with true <- use_site?(location, metadata, line),
          [_ | _] = used_modules <- used_modules(location, mod, metadata) do
-      Enum.find_value(used_modules, fn used_module ->
-        case Location.find_mod_fun_source(used_module, :__using__, :any) do
-          %Location{file: file, line: using_line, end_line: using_end_line}
-          when not is_nil(file) ->
-            find_def_in_using_body(file, using_line, using_end_line, fun)
-
-          _ ->
-            nil
-        end
-      end)
+      search_using_chain(used_modules, fun, MapSet.new(), @using_chain_max_depth)
     else
       _ -> nil
     end
@@ -358,17 +361,89 @@ defmodule ElixirSense.Providers.Definition.Locator do
 
   defp redirect_into_using_macro(_location, _mod, _fun, _metadata), do: nil
 
+  # Walk the `use` chain looking for the injected definition. For each module we
+  # search its `__using__/1` body for the `def`; on a miss we recurse into the
+  # modules that body itself `use`s. The visited set prevents cycles and the
+  # depth cap bounds the search.
+  defp search_using_chain(_modules, _fun, _visited, depth) when depth <= 0, do: nil
+
+  defp search_using_chain(modules, fun, visited, depth) do
+    Enum.find_value(modules, &search_one_module(&1, fun, visited, depth))
+  end
+
+  defp search_one_module(mod, _fun, visited, _depth) when is_map_key(visited, mod), do: nil
+
+  defp search_one_module(mod, fun, visited, depth) do
+    with %Location{file: file, line: l, end_line: el} when not is_nil(file) <-
+           Location.find_mod_fun_source(mod, :__using__, :any) do
+      search_using_body(file, l, el, fun) ||
+        search_using_chain(
+          nested_used_modules(file, l, el),
+          fun,
+          MapSet.put(visited, mod),
+          depth - 1
+        )
+    end
+  end
+
+  # Read the `__using__/1` body once and scan it for both the target definition
+  # and nested `use` modules. `search_using_body` looks for the def;
+  # `nested_used_modules` extracts `use`d modules for the next chain hop.
+  # Both share `body_lines/3` to avoid duplicate `File.read` + slice work.
+
+  defp body_lines(file, using_line, using_end_line) do
+    case File.read(file) do
+      {:ok, content} ->
+        content
+        |> Source.split_lines()
+        |> Enum.slice((using_line - 1)..(using_end_line - 1)//1)
+
+      _ ->
+        []
+    end
+  end
+
+  # Modules `use`d *within* a `__using__/1` body. These nested uses live inside
+  # the macro's quote block, so they are not part of the using module's own
+  # `metadata.uses`; we scan the body text directly.
+  defp nested_used_modules(file, using_line, using_end_line) do
+    file
+    |> body_lines(using_line, using_end_line)
+    |> Enum.flat_map(&extract_used_modules/1)
+    |> Enum.uniq()
+  end
+
+  # Extracts module names from `use` statements on a single line. Uses
+  # `Regex.scan/3` to capture all matches (e.g. `use Foo; use Bar`).
+  # Skips comment lines to avoid false positives like `# use Phoenix.Router`.
+  @nested_use_extractor ~r/\buse\s+([A-Z][A-Za-z0-9_.]*)/
+
+  defp extract_used_modules(line_text) do
+    if comment_line?(line_text) do
+      []
+    else
+      @nested_use_extractor
+      |> Regex.scan(line_text, capture: :all_but_first)
+      |> Enum.map(fn [name] -> Module.concat(String.split(name, ".")) end)
+    end
+  end
+
+  defp comment_line?(line_text), do: String.match?(String.trim_leading(line_text), ~r/^#/)
+
+  # Matches the start of a `use Foo` / `use Foo, opts` / `Kernel.use(Foo)` /
+  # `Kernel.use Foo` statement. The trailing `[\s(]` ensures we match the `use`
+  # keyword and not an identifier like `use_foo`.
+  @use_line_detector ~r/^\s*(?:Kernel\s*\.\s*)?use[\s(]/
+
   # Does the recorded definition sit on a `use Foo` / `Kernel.use(Foo)` line?
+  #
+  # We match the line textually rather than parsing it: a `use` may span
+  # several lines (`use Foo,\n  opt: 1`), in which case the recorded line on its
+  # own (`use Foo,`) is not valid Elixir and would fail to parse.
   defp use_site?(location, metadata, line) do
     with source when is_binary(source) <- location_source(location, metadata),
-         text when is_binary(text) <- Enum.at(Source.split_lines(source), line - 1),
-         {:ok, ast} <- Code.string_to_quoted(text) do
-      case ast do
-        {:use, _, [_ | _]} -> true
-        {{:., _, [{:__aliases__, _, [:Kernel]}, :use]}, _, [_ | _]} -> true
-        {{:., _, [Kernel, :use]}, _, [_ | _]} -> true
-        _ -> false
-      end
+         text when is_binary(text) <- Enum.at(Source.split_lines(source), line - 1) do
+      Regex.match?(@use_line_detector, text)
     else
       _ -> false
     end
@@ -407,39 +482,37 @@ defmodule ElixirSense.Providers.Definition.Locator do
   # Search only within the `__using__/1` macro body (between its def line and
   # end line) for the injected definition. Bounding the search to the macro
   # body avoids matching unrelated defs elsewhere in the same file.
-  defp find_def_in_using_body(file, using_line, using_end_line, fun) do
-    case File.read(file) do
-      {:ok, content} ->
-        # Matches public definition forms: def, defmacro, defdelegate, defguard.
-        # The mandatory whitespace after the keyword excludes private variants
-        # (defp/defmacrop/defguardp) and defmodule.
-        regex = ~r/\bdef(?:macro|delegate|guard)?\s+(#{Regex.escape(Atom.to_string(fun))})\b/
+  defp search_using_body(file, using_line, using_end_line, fun) do
+    # Matches public definition forms: def, defmacro, defdelegate, defguard.
+    # The mandatory whitespace after the keyword excludes private variants
+    # (defp/defmacrop/defguardp) and defmodule.
+    regex = ~r/\bdef(?:macro|delegate|guard)?\s+(#{Regex.escape(Atom.to_string(fun))})\b/
 
-        content
-        |> Source.split_lines()
-        |> Enum.slice((using_line - 1)..(using_end_line - 1)//1)
-        |> Enum.with_index()
-        |> Enum.find_value(fn {line_text, idx} ->
-          case Regex.run(regex, line_text, return: :index) do
-            [_whole, {name_offset, name_len}] ->
-              target_line = using_line + idx
+    lines = body_lines(file, using_line, using_end_line)
 
-              %Location{
-                type: :function,
-                file: file,
-                line: target_line,
-                column: name_offset + 1,
-                end_line: target_line,
-                end_column: name_offset + 1 + name_len
-              }
-
-            _ ->
-              nil
-          end
-        end)
-
-      _ ->
+    lines
+    |> Enum.with_index()
+    |> Enum.find_value(fn {line_text, idx} ->
+      if comment_line?(line_text) do
         nil
-    end
+      else
+        case Regex.run(regex, line_text, return: :index) do
+          [_whole, {name_offset, name_len}] ->
+            target_line = using_line + idx
+
+            %Location{
+              type: :function,
+              file: file,
+              line: target_line,
+              column: name_offset + 1,
+              end_line: target_line,
+              end_column: name_offset + 1 + name_len
+            }
+
+          _ ->
+            nil
+        end
+      end
+    end)
   end
 end

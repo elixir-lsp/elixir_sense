@@ -148,6 +148,67 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       assert location.column == 19
     end
 
+    test "finds definition injected through a transitive use chain (current source)" do
+      code = """
+      defmodule MyModule do
+        use ElixirSenseExample.UsingMacroOuter
+
+        def test do
+          nested_using_function()
+        end
+      end
+      """
+
+      location = Locator.definition(code, 5, 5)
+
+      assert location != nil
+      assert location.type == :function
+      assert location.file =~ "using_macro_example.ex"
+      # `def nested_using_function` lives in UsingMacroInner.__using__, two hops
+      # away (MyModule -> UsingMacroOuter -> UsingMacroInner)
+      assert location.line == 72
+      assert location.column == 11
+    end
+
+    test "finds definition through a transitive use chain via external module" do
+      code = """
+      defmodule MyModule do
+        def test do
+          ElixirSenseExample.ModuleUsingNested.nested_using_function()
+        end
+      end
+      """
+
+      location = Locator.definition(code, 3, 48)
+
+      assert location != nil
+      assert location.type == :function
+      assert location.file =~ "using_macro_example.ex"
+      assert location.line == 72
+      assert location.column == 11
+    end
+
+    test "finds definition when the use spans multiple lines (use Foo, opts)" do
+      code = """
+      defmodule MyModule do
+        use ElixirSenseExample.UsingMacroWithOpts,
+          some: :opt
+
+        def test do
+          opted_using_function()
+        end
+      end
+      """
+
+      location = Locator.definition(code, 6, 5)
+
+      assert location != nil
+      assert location.type == :function
+      assert location.file =~ "using_macro_example.ex"
+      assert location.line == 95
+      assert location.column == 11
+    end
+
     test "finds definition injected via defguard" do
       # A remote guard must be called from a guard context (and the module
       # required) to resolve as a macro — unrelated to the using-macro search.
