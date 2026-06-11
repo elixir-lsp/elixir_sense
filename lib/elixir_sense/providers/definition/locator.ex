@@ -367,7 +367,7 @@ defmodule ElixirSense.Providers.Definition.Locator do
   defp use_site?(location, metadata, line) do
     with source when is_binary(source) <- location_source(location, metadata),
          text when is_binary(text) <- Enum.at(Source.split_lines(source), line - 1) do
-      Regex.match?(@use_line_detector, text)
+      not comment_line?(text) and Regex.match?(@use_line_detector, text)
     else
       _ -> false
     end

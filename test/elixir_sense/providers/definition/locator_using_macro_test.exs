@@ -188,7 +188,7 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       assert location.column == 11
     end
 
-    test "finds definition when the use spans multiple lines (use Foo, opts)" do
+    test "finds definition when the use spans multiple lines (current source)" do
       code = """
       defmodule MyModule do
         use ElixirSenseExample.UsingMacroWithOpts,
@@ -201,6 +201,24 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       """
 
       location = Locator.definition(code, 6, 5)
+
+      assert location != nil
+      assert location.type == :function
+      assert location.file =~ "using_macro_example.ex"
+      assert location.line == 95
+      assert location.column == 11
+    end
+
+    test "finds definition when the use spans multiple lines (external module)" do
+      code = """
+      defmodule MyModule do
+        def test do
+          ElixirSenseExample.ModuleUsingWithOpts.opted_using_function()
+        end
+      end
+      """
+
+      location = Locator.definition(code, 3, 45)
 
       assert location != nil
       assert location.type == :function
