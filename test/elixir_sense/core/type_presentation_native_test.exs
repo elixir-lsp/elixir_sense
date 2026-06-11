@@ -36,6 +36,26 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
     end
   end
 
+  test "render_hint/3 attributes a native-descr-backed var as source: :native" do
+    if ElixirTypes.available?() do
+      descr =
+        Module.Types.Descr.union(Module.Types.Descr.binary(), Module.Types.Descr.atom([nil]))
+
+      # No structural type — the native descriptor must produce the text.
+      var = %ElixirSense.Core.State.VarInfo{
+        version: 1,
+        name: :x,
+        type: nil,
+        elixir_types_descr: descr
+      }
+
+      env = %Binding{functions: __ENV__.functions, macros: __ENV__.macros}
+
+      assert {:ok, %{source: :native, full: full}} = TP.render_hint(env, var, [])
+      assert full =~ "binary()"
+    end
+  end
+
   test "native scrutinee type + cross-clause subtraction narrows the catch-all" do
     if ElixirTypes.available?() do
       code = """

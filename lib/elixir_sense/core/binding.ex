@@ -514,8 +514,17 @@ defmodule ElixirSense.Core.Binding do
      end)}
   end
 
-  # Optional map field values — unwrap to the inner type
-  def do_expand(env, {:optional, inner}, stack), do: expand(env, inner, stack)
+  # Optional map field values (`if_set`, from `ElixirTypes.to_shape`). Preserve
+  # the `{:optional, _}` wrapper so consumers (TypePresentation `if_set(...)`,
+  # `uninformative_field?`, completion field listing) can distinguish a possibly
+  # absent key from a present one. Expand the inner shape and re-wrap; if the
+  # inner shape resolves to nothing (`nil`), drop the wrapper too.
+  def do_expand(env, {:optional, inner}, stack) do
+    case expand(env, inner, stack) do
+      nil -> nil
+      expanded -> {:optional, expanded}
+    end
+  end
 
   def do_expand(_env, _other, _stack), do: nil
 
@@ -772,6 +781,16 @@ defmodule ElixirSense.Core.Binding do
 
   defp covers?({:struct, _, {:atom, mod}, _}, {:struct, _, {:atom, mod}, _}), do: true
   defp covers?({:struct, _, nil, _}, {:struct, _, _, _}), do: true
+
+  # Optional map-field wrappers (`if_set`). Treat the wrapper transparently:
+  # coverage is decided by the inner shapes. This keeps `{:optional, x}` from
+  # being spuriously disjoint from `x` (or from another optional of a covered
+  # type). A possibly-absent key plus its inner value is conservatively handled
+  # by comparing the values it can hold when present.
+  defp covers?({:optional, sub}, {:optional, mem}), do: covers?(sub, mem)
+  defp covers?({:optional, sub}, mem), do: covers?(sub, mem)
+  defp covers?(sub, {:optional, mem}), do: covers?(sub, mem)
+
   defp covers?(_a, _b), do: false
 
   # List element coverage: `:empty` (the element of `[]`) is covered by anything,

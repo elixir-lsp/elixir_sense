@@ -3324,10 +3324,10 @@ defmodule ElixirSense.Core.Compiler do
                  file
                ) do
             {:infer, _domain, _clause_types} = sig ->
-              State.put_elixir_types_sig(state, key, sig, :ok)
+              State.put_elixir_types_sig(state, key, sig, :ok, :inferred)
 
             :error ->
-              State.put_elixir_types_sig(state, key, nil, :skipped)
+              State.put_elixir_types_sig(state, key, nil, :skipped, nil)
           end
 
         _ ->

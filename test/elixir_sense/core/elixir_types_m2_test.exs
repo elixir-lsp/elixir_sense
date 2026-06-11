@@ -921,9 +921,16 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       case result do
         {:ok, vars, _descrs} when is_map(vars) ->
-          # Should handle list patterns
+          # Should handle list patterns. Native of_match is authoritative (Task
+          # 2): the tail of `[h | t] = [1, 2, 3]` types as a (possibly empty)
+          # list of integers — `{:list, {:integer, nil}}` — rather than the AST
+          # refinement's hand-built union.
           assert vars[{:head, 1}] == {:integer, nil}
-          assert vars[{:tail, 2}] == {:union, [list: {:integer, nil}, list: :empty]}
+
+          assert vars[{:tail, 2}] in [
+                   {:list, {:integer, nil}},
+                   {:union, [list: {:integer, nil}, list: :empty]}
+                 ]
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")
@@ -961,7 +968,9 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       case result do
         {:ok, vars, _descrs} when is_map(vars) ->
           assert vars[{:status_var, 1}] in [{:integer, 200}, {:integer, nil}]
-          assert vars[{:data_var, 2}] == {:binary, "ok"}
+          # Native of_match is authoritative; it widens the literal to a generic
+          # binary() rather than keeping the AST literal "ok" (Task 2).
+          assert vars[{:data_var, 2}] in [{:binary, "ok"}, {:binary, nil}]
 
         other ->
           flunk("Unexpected result: #{inspect(other)}")
@@ -1030,8 +1039,9 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
       case result do
         {:ok, vars, _descrs} when is_map(vars) ->
-          # Should handle map patterns
-          assert vars[{:name_var, 1}] == {:binary, "John"}
+          # Should handle map patterns. Native of_match is authoritative (Task
+          # 2) and widens the literal to a generic binary().
+          assert vars[{:name_var, 1}] in [{:binary, "John"}, {:binary, nil}]
           assert vars[{:age_var, 2}] in [{:integer, 30}, {:integer, nil}]
 
         other ->
@@ -1121,8 +1131,9 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         case result do
           {:ok, vars, _descrs} when is_map(vars) ->
-            # Pattern refinement should work
-            assert vars[{:n, 1}] == {:binary, "test"}
+            # Pattern refinement should work. Native is authoritative and
+            # widens the literal to generic binary() (Task 2).
+            assert vars[{:n, 1}] in [{:binary, "test"}, {:binary, nil}]
 
           other ->
             flunk("Unexpected result: #{inspect(other)}")
@@ -1168,10 +1179,11 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         case result do
           {:ok, vars, _descrs} when is_map(vars) ->
-            # Pattern refinement should work
+            # Pattern refinement should work. Native is authoritative and widens
+            # the "" literal to generic binary() (Task 2).
             assert vars[{:a, 1}] == {:integer, nil}
             assert vars[{:b, 2}] == {:atom, :ok}
-            assert vars[{:c, 3}] == {:binary, ""}
+            assert vars[{:c, 3}] in [{:binary, ""}, {:binary, nil}]
 
           :error ->
             # Acceptable fallback for conservative implementation
@@ -1194,9 +1206,14 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         case result do
           {:ok, vars, _descrs} when is_map(vars) ->
-            # Pattern refinement should work
+            # Pattern refinement should work. Native of_match is authoritative
+            # (Task 2): the tail types as `{:list, {:integer, nil}}`.
             assert vars[{:head, 1}] == {:integer, nil}
-            assert vars[{:tail, 2}] == {:union, [list: {:integer, nil}, list: :empty]}
+
+            assert vars[{:tail, 2}] in [
+                     {:list, {:integer, nil}},
+                     {:union, [list: {:integer, nil}, list: :empty]}
+                   ]
 
           other ->
             flunk("Unexpected result: #{inspect(other)}")
@@ -1324,8 +1341,9 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         case result do
           {:ok, vars, _descrs} when is_map(vars) ->
-            # Should handle nested patterns conservatively
-            assert vars[{:n, 1}] == {:binary, "Alice"}
+            # Should handle nested patterns conservatively. Native is
+            # authoritative and widens the literal to binary() (Task 2).
+            assert vars[{:n, 1}] in [{:binary, "Alice"}, {:binary, nil}]
 
           other ->
             flunk("Unexpected result: #{inspect(other)}")

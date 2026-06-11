@@ -288,6 +288,131 @@ defmodule ElixirSense.Core.TypePresentationTest do
     end
   end
 
+  describe "render_hint/3 source attribution" do
+    test "structural type yields source: :shape" do
+      var = %VarInfo{version: 1, name: :x, type: {:atom, :ok}}
+      assert {:ok, %{source: :shape}} = TP.render_hint(@env, var, [])
+    end
+
+    # The `:native` attribution path requires toggling the global
+    # `use_elixir_types` flag, so it lives in the async: false
+    # TypePresentationNativeTest to avoid cross-test interference.
+
+    test "structural narrowing wins over descriptor and is attributed :shape" do
+      y = %VarInfo{version: 2, name: :y, type: {:binary, nil}}
+
+      env = %Binding{functions: __ENV__.functions, macros: __ENV__.macros, vars: [y]}
+
+      descr =
+        Module.Types.Descr.union(Module.Types.Descr.binary(), Module.Types.Descr.atom([nil]))
+
+      x = %VarInfo{
+        version: 1,
+        name: :x,
+        type: {:difference, {:variable, :y, 2}, {:atom, nil}},
+        elixir_types_descr: descr
+      }
+
+      assert {:ok, %{source: :shape, full: "binary()"}} = TP.render_hint(env, x, [])
+    end
+  end
+
+  describe "render_hint/3 literal widening" do
+    test "widens integer/float/binary literals (hint only)" do
+      assert {:ok, %{full: "integer()"}} =
+               TP.render_hint(@env, %VarInfo{version: 1, name: :x, type: {:integer, 5}}, [])
+
+      assert {:ok, %{full: "float()"}} =
+               TP.render_hint(@env, %VarInfo{version: 1, name: :x, type: {:float, 1.5}}, [])
+
+      assert {:ok, %{full: "binary()"}} =
+               TP.render_hint(@env, %VarInfo{version: 1, name: :x, type: {:binary, "hi"}}, [])
+    end
+
+    test "keeps atom literals (compiler prints them)" do
+      assert {:ok, %{full: ":ok"}} =
+               TP.render_hint(@env, %VarInfo{version: 1, name: :x, type: {:atom, :ok}}, [])
+    end
+
+    test "widens recursively inside maps, tuples, lists and unions" do
+      map = %VarInfo{version: 1, name: :x, type: {:map, [a: {:integer, 1}], nil}}
+      assert {:ok, %{full: "%{a: integer()}"}} = TP.render_hint(@env, map, [])
+
+      tuple =
+        %VarInfo{version: 1, name: :x, type: {:tuple, 2, [{:atom, :ok}, {:integer, 7}]}}
+
+      assert {:ok, %{full: "{:ok, integer()}"}} = TP.render_hint(@env, tuple, [])
+
+      list = %VarInfo{version: 1, name: :x, type: {:list, {:integer, 9}}}
+      assert {:ok, %{full: "list(integer())"}} = TP.render_hint(@env, list, [])
+
+      union =
+        %VarInfo{version: 1, name: :x, type: {:union, [{:integer, 1}, {:atom, :ok}]}}
+
+      assert {:ok, %{full: "integer() or :ok"}} = TP.render_hint(@env, union, [])
+    end
+
+    test "widens inside optional (if_set) map fields" do
+      var =
+        %VarInfo{version: 1, name: :x, type: {:map, [a: {:optional, {:integer, 7}}], nil}}
+
+      assert {:ok, %{full: "%{a: if_set(integer())}"}} = TP.render_hint(@env, var, [])
+    end
+
+    test "widen_literals: false preserves literal spellings" do
+      assert {:ok, %{full: "5"}} =
+               TP.render_hint(
+                 @env,
+                 %VarInfo{version: 1, name: :x, type: {:integer, 5}},
+                 widen_literals: false
+               )
+
+      map = %VarInfo{version: 1, name: :x, type: {:map, [a: {:integer, 1}], nil}}
+
+      assert {:ok, %{full: "%{a: 1}"}} =
+               TP.render_hint(@env, map, widen_literals: false)
+    end
+
+    test "hover render_var/2 is unaffected by widening" do
+      var = %VarInfo{version: 1, name: :x, type: {:integer, 5}}
+      assert TP.render_var(@env, var) == {:ok, "5"}
+    end
+  end
+
+  describe "render_hint/3 full-text cap" do
+    test "caps full at max_full_length with grapheme-safe elision" do
+      members = for i <- 1..50, do: {:atom, :"atom_number_#{i}"}
+      var = %VarInfo{version: 1, name: :x, type: {:union, members}}
+
+      {:ok, result} = TP.render_hint(@env, var, max_full_length: 40)
+      assert String.length(result.full) <= 40
+      assert String.ends_with?(result.full, "…")
+    end
+
+    test "default cap is 1000" do
+      members = for i <- 1..500, do: {:atom, :"long_atom_name_number_#{i}"}
+      var = %VarInfo{version: 1, name: :x, type: {:union, members}}
+
+      {:ok, result} = TP.render_hint(@env, var, [])
+      assert String.length(result.full) <= 1000
+      assert String.ends_with?(result.full, "…")
+    end
+
+    test "label is derived from the capped full" do
+      members = for i <- 1..50, do: {:atom, :"atom_number_#{i}"}
+      var = %VarInfo{version: 1, name: :x, type: {:union, members}}
+
+      {:ok, result} = TP.render_hint(@env, var, max_full_length: 40, max_length: 20)
+      assert String.length(result.label) <= 20
+      assert String.length(result.full) <= 40
+    end
+
+    test "short text is not capped" do
+      var = %VarInfo{version: 1, name: :x, type: {:atom, :ok}}
+      assert {:ok, %{full: ":ok"}} = TP.render_hint(@env, var, max_full_length: 1000)
+    end
+  end
+
   describe "resolve_shape/2" do
     test "returns the resolved shape" do
       assert TP.resolve_shape(@env, {:atom, :ok}) == {:ok, {:atom, :ok}}
@@ -318,6 +443,17 @@ defmodule ElixirSense.Core.TypePresentationTest do
     test "skips :not_set (known-absent) keys" do
       shape = {:map, [present: {:integer, 1}, missing: :not_set], nil}
       assert TP.fields_for_receiver(@env, shape) == %{present: "1"}
+    end
+
+    test "surfaces optional (if_set) fields with if_set(...) text" do
+      # An optional key is still completable; it must appear, rendered as
+      # if_set(...) rather than dropped or crashing the round-trip.
+      shape = {:map, [maybe: {:optional, {:binary, nil}}, sure: {:atom, :ok}], nil}
+
+      assert TP.fields_for_receiver(@env, shape) == %{
+               maybe: "if_set(binary())",
+               sure: ":ok"
+             }
     end
   end
 

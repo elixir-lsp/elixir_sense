@@ -77,15 +77,51 @@ defmodule ElixirSense.Core.TypePresentation do
   (`:unknown`, `term()` or `none()`). This keeps a branch-narrowed shape from
   being masked by a broader/stale descriptor.
   """
-  def render_var(%Binding{} = binding, %VarInfo{elixir_types_descr: descr, type: type}) do
-    structural = resolve_and_render(binding, type)
+  def render_var(%Binding{} = binding, %VarInfo{} = var_info) do
+    case render_var_sourced(binding, var_info) do
+      {:ok, text, _source} -> {:ok, text}
+      :unknown -> :unknown
+    end
+  end
+
+  # Like `render_var/2` but also reports *which* path produced the displayed
+  # text and (when available) the resolved shape behind it.
+  #
+  #   * `:shape`  — the structural engine produced the string (it was
+  #     informative, so it wins over the native descriptor). The resolved shape
+  #     is returned so the hint path can post-process it (literal widening).
+  #   * `:native` — the structural type was uninformative and the native
+  #     `Module.Types` descriptor produced the string. The shape is `nil` when
+  #     the exact compiler string (`descr_to_string`) was used (no shape), or the
+  #     `to_shape`-derived shape when that fallback fired.
+  #
+  # `:spec`-derived flows are not cheaply distinguishable from inferred shapes
+  # here (a spec signature is lowered to the same `{:fun_clauses, ...}` /
+  # structural shapes as inference), so they currently surface as `:shape` or
+  # `:native`. `:spec` is reserved and not emitted.
+  #
+  # Returns `{:ok, text, source}` or `:unknown`. (The shape is threaded
+  # separately via `render_var_for_hint/2`.)
+  defp render_var_sourced(%Binding{} = binding, %VarInfo{
+         elixir_types_descr: descr,
+         type: type
+       }) do
+    resolved = Binding.expand(binding, type)
+    structural = render(resolved)
 
     if informative?(structural) do
-      structural
+      {:ok, text} = structural
+      {:ok, text, {:shape, resolved}}
     else
-      case render_descr(descr) do
-        {:ok, _} = ok -> ok
-        :unknown -> structural
+      case render_descr_sourced(descr) do
+        {:ok, text, shape} ->
+          {:ok, text, {:native, shape}}
+
+        :unknown ->
+          case structural do
+            {:ok, text} -> {:ok, text, {:shape, resolved}}
+            :unknown -> :unknown
+          end
       end
     end
   end
@@ -103,27 +139,138 @@ defmodule ElixirSense.Core.TypePresentation do
   end
 
   @doc """
-  Render a variable as an inlay-hint result with optional length elision.
+  Render a variable as an inlay-hint result with source attribution, literal
+  widening, and optional length elision.
 
   ## Options
 
     * `max_length:` (`pos_integer | nil`, default `nil`) — when set, `label` is
       truncated to at most that many graphemes with a trailing `…`; `full`
       always contains the complete text. Elision prefers cutting at an ` or `
-      boundary within unions. When `nil`, `label == full`.
+      boundary within unions. When `nil`, `label == full` (subject to
+      `max_full_length:`).
 
-  Returns `{:ok, %{label: String.t(), full: String.t()}}` or `:skip`.
+    * `max_full_length:` (`pos_integer`, default `1000`) — hard cap on the
+      `full` text (huge unions can otherwise blow up a tooltip). Truncated
+      grapheme-safe with a trailing `…`. `label` is derived from the capped
+      `full`.
+
+    * `widen_literals:` (`boolean`, default `true`) — widen literal leaf types
+      the compiler would never print as a type (`{:integer, n} → integer()`,
+      `{:float, x} → float()`, `{:binary, "s"} → binary()`), recursively inside
+      containers/unions. Atom literals are kept (the compiler prints them). This
+      applies to **inlay hints only**; hover (`render_var/2`) and completion
+      (`render/1`) are unaffected.
+
+  ## Result
+
+  `{:ok, %{label: String.t(), full: String.t(), source: source}}` or `:skip`,
+  where `source` is:
+
+    * `:shape`  — text produced by the structural engine.
+    * `:native` — text produced by the native `Module.Types` descriptor path.
+
+  Spec-derived signatures are lowered to the same structural shapes as inferred
+  types, so they are not separately attributable here; they surface as `:shape`
+  or `:native`. The `:spec` value is reserved for a future cheaply-detectable
+  signal and is not currently emitted.
   """
   def render_hint(%Binding{} = binding, %VarInfo{} = var_info, opts) when is_list(opts) do
-    case render_hint(binding, var_info) do
-      :skip ->
+    case render_var_sourced(binding, var_info) do
+      :unknown ->
         :skip
 
-      {:ok, full} ->
-        max_length = Keyword.get(opts, :max_length, nil)
-        label = elide(full, max_length)
-        {:ok, %{label: label, full: full}}
+      {:ok, text, {source, shape}} ->
+        widen? = Keyword.get(opts, :widen_literals, true)
+
+        full_raw =
+          if widen? and not is_nil(shape) do
+            # Re-render from the widened shape so widening reaches every leaf,
+            # including inside containers/unions. Falls back to the original
+            # text if rendering the widened shape somehow fails.
+            case render(widen_literals(shape)) do
+              {:ok, widened} -> widened
+              :unknown -> text
+            end
+          else
+            text
+          end
+
+        if hint_noise?(full_raw) do
+          :skip
+        else
+          max_full_length = Keyword.get(opts, :max_full_length, 1000)
+          full = elide(full_raw, max_full_length)
+          max_length = Keyword.get(opts, :max_length, nil)
+          label = elide(full, max_length)
+          {:ok, %{label: label, full: full, source: source}}
+        end
     end
+  end
+
+  # ── Literal widening for inlay hints (task: hints only) ─────────────────────
+  #
+  # The compiler never prints integer/float/binary literals *as types*, so a
+  # hint must not show `5`/`1.0`/`"x"`; widen them to `integer()`/`float()`/
+  # `binary()`. Atom literals stay (`:ok`, `nil`, module atoms are printed by
+  # the compiler). Recurse through every container so `%{a: 1}` widens to
+  # `%{a: integer()}`.
+  defp widen_literals({:integer, _}), do: {:integer, nil}
+  defp widen_literals({:float, _}), do: {:float, nil}
+  defp widen_literals({:binary, _}), do: {:binary, nil}
+
+  # Atom literals are preserved verbatim.
+  defp widen_literals({:atom, _} = atom), do: atom
+
+  defp widen_literals({:list, :empty}), do: {:list, :empty}
+  defp widen_literals({:list, elem}), do: {:list, widen_literals(elem)}
+  defp widen_literals({:nonempty_list, elem}), do: {:nonempty_list, widen_literals(elem)}
+
+  defp widen_literals({:tuple, size, elems}) when is_list(elems),
+    do: {:tuple, size, Enum.map(elems, &widen_literals/1)}
+
+  defp widen_literals({:tuple_open, elems}) when is_list(elems),
+    do: {:tuple_open, Enum.map(elems, &widen_literals/1)}
+
+  defp widen_literals({:optional, inner}), do: {:optional, widen_literals(inner)}
+
+  defp widen_literals({:map, fields, updated}) when is_list(fields),
+    do: {:map, widen_fields(fields), updated}
+
+  defp widen_literals({:struct, fields, type, updated}) when is_list(fields),
+    do: {:struct, widen_fields(fields), type, updated}
+
+  defp widen_literals({:union, members}) when is_list(members),
+    do: {:union, Enum.map(members, &widen_literals/1)}
+
+  defp widen_literals({:intersection, members}) when is_list(members),
+    do: {:intersection, Enum.map(members, &widen_literals/1)}
+
+  defp widen_literals({:dynamic, nil}), do: {:dynamic, nil}
+  defp widen_literals({:dynamic, inner}), do: {:dynamic, widen_literals(inner)}
+
+  defp widen_literals({:fun, args, return}) when is_list(args),
+    do: {:fun, Enum.map(args, &widen_literals/1), widen_literals(return)}
+
+  defp widen_literals({:fun_clauses, clauses}) when is_list(clauses),
+    do:
+      {:fun_clauses,
+       Enum.map(clauses, fn {args, return} ->
+         {Enum.map(args, &widen_literals/1), widen_literals(return)}
+       end)}
+
+  # Everything else (scalars, atoms, `:none`, `{:fun, arity}`, unresolved
+  # thunks) is already non-literal or not widenable — pass through unchanged.
+  defp widen_literals(other), do: other
+
+  defp widen_fields(fields) do
+    Enum.map(fields, fn
+      {{:domain, key_shape}, value} ->
+        {{:domain, widen_literals(key_shape)}, widen_literals(value)}
+
+      {key, value} ->
+        {key, widen_literals(value)}
+    end)
   end
 
   @doc """
@@ -179,20 +326,32 @@ defmodule ElixirSense.Core.TypePresentation do
   # returns the exact compiler text (task #17), then fall back to to_shape +
   # render. Both paths are guarded by enabled?() so the config flag is respected
   # (task #37).
-  defp render_descr(nil), do: :unknown
+  # Native rendering with the originating shape threaded back.
+  #
+  #   * exact compiler string path (`descr_to_string`) → `{:ok, text, nil}`
+  #     (there is no intermediate shape; the string is the compiler's own).
+  #   * `to_shape` fallback → `{:ok, text, shape}` (shape available for the hint
+  #     path's literal widening).
+  defp render_descr_sourced(nil), do: :unknown
 
-  defp render_descr(descr) do
+  defp render_descr_sourced(descr) do
     if ElixirTypes.enabled?() do
       # Try the exact compiler string first; fall through on :error.
       case safe_descr_to_string(descr) do
-        {:ok, _} = ok ->
-          ok
+        {:ok, text} ->
+          {:ok, text, nil}
 
         :error ->
           # Fall back to shape-based rendering.
           case ElixirTypes.to_shape(descr) do
-            nil -> :unknown
-            shape -> render(shape)
+            nil ->
+              :unknown
+
+            shape ->
+              # `render/1` only yields `:unknown` for a `nil` shape; here the
+              # shape is non-nil so we always get `{:ok, _}`.
+              {:ok, text} = render(shape)
+              {:ok, text, shape}
           end
       end
     else

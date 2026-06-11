@@ -457,6 +457,7 @@ defmodule ElixirSense.Core.Compiler.State do
       # Preserve ElixirTypes fields from existing info
       elixir_types_clauses: current_info.elixir_types_clauses || [],
       elixir_types_sig: current_info.elixir_types_sig,
+      elixir_types_sig_source: current_info.elixir_types_sig_source,
       elixir_types_status: current_info.elixir_types_status || :skipped
     }
 
@@ -888,6 +889,16 @@ defmodule ElixirSense.Core.Compiler.State do
   defp combine_specs(nil, new), do: new
 
   defp combine_specs(%SpecInfo{} = existing, %SpecInfo{} = new) do
+    merged_sig = merge_elixir_types_sigs(existing.elixir_types_sig, new.elixir_types_sig)
+
+    # Provenance: :spec if either side has a spec-derived sig, else nil.
+    merged_source =
+      case {existing.elixir_types_sig_source, new.elixir_types_sig_source} do
+        {:spec, _} -> :spec
+        {_, :spec} -> :spec
+        _ -> nil
+      end
+
     %SpecInfo{
       existing
       | positions: [hd(new.positions) | existing.positions],
@@ -895,7 +906,8 @@ defmodule ElixirSense.Core.Compiler.State do
         generated: [hd(new.generated) | existing.generated],
         args: [hd(new.args) | existing.args],
         specs: [hd(new.specs) | existing.specs],
-        elixir_types_sig: merge_elixir_types_sigs(existing.elixir_types_sig, new.elixir_types_sig)
+        elixir_types_sig: merged_sig,
+        elixir_types_sig_source: merged_source
     }
   end
 
@@ -957,11 +969,19 @@ defmodule ElixirSense.Core.Compiler.State do
         meta
       end
 
+    built_sig = build_elixir_types_spec_sig(env, type_name, spec, kind)
+
     type_info = %SpecInfo{
       name: type_name,
       args: [arg_names],
       specs: [spec],
-      elixir_types_sig: build_elixir_types_spec_sig(env, type_name, spec, kind),
+      elixir_types_sig: built_sig,
+      # Record that this sig was derived from a user @spec, @callback, or
+      # @macrocallback annotation (not compiler-verified). Readers that need to
+      # distinguish spec-derived sigs from natively-inferred ones should check
+      # this field rather than the tuple tag, because all sig tuples use the same
+      # 3-element shape and readers pattern-match on the tag only for filtering.
+      elixir_types_sig_source: if(built_sig != nil, do: :spec, else: nil),
       kind: kind,
       generated: [Keyword.get(options, :generated, false)],
       positions: [pos],
@@ -994,8 +1014,13 @@ defmodule ElixirSense.Core.Compiler.State do
          true <- is_list(args) do
       arg_descrs = Enum.map(args, &spec_arg_to_descr(&1, module, guards))
       return_descr = spec_return_to_descr(return_ast, module, guards)
-      # Domain is the arg types for the single clause — enables arg-domain filtering
-      {:strong, arg_descrs, [{arg_descrs, return_descr}]}
+      # Domain is the arg types for the single clause — enables arg-domain filtering.
+      # Label as :infer (not :strong): user @spec annotations are claims, not
+      # compiler-verified constraints. Using :strong would let domain filtering
+      # prune overloads with untrusted domains and treat returns as static facts.
+      # Returns are already dynamic-wrapped by coerce_var_type_public (called from
+      # spec_return_to_descr), so no additional wrapping is needed here.
+      {:infer, arg_descrs, [{arg_descrs, return_descr}]}
     else
       _ -> nil
     end
@@ -2048,8 +2073,22 @@ defmodule ElixirSense.Core.Compiler.State do
 
   @doc """
   Persist the inferred Module.Types signature (or clear it after failure).
+
+  `source` records the provenance of the signature:
+  - `:inferred` — produced by local clause inference (Module.Types)
+  - `:exck`     — loaded from an ExCk compiled-type chunk
+  - `nil`       — sig is nil (status :skipped), no provenance applies
+
+  Stored as a parallel field (`elixir_types_sig_source`) rather than a 4th
+  element in the sig tuple because every reader pattern-matches on a 3-tuple.
   """
-  def put_elixir_types_sig(%__MODULE__{} = state, {module, fun, arity}, sig, status)
+  def put_elixir_types_sig(
+        %__MODULE__{} = state,
+        {module, fun, arity},
+        sig,
+        status,
+        source \\ nil
+      )
       when is_atom(module) and is_atom(fun) and is_integer(arity) do
     key = {module, fun, arity}
 
@@ -2057,6 +2096,7 @@ defmodule ElixirSense.Core.Compiler.State do
       %ModFunInfo{
         info
         | elixir_types_sig: sig,
+          elixir_types_sig_source: source,
           elixir_types_status: status,
           elixir_types_clauses: info.elixir_types_clauses || []
       }

@@ -386,11 +386,25 @@ defmodule ElixirSense.Core.ExCkReader do
   # take the table down with it. Callers spin briefly until the table is
   # visible (covers the winner still being mid-setup).
 
-  defp ensure_table do
+  defp ensure_table(attempts \\ 5)
+
+  defp ensure_table(0), do: :ok
+
+  defp ensure_table(attempts) do
     case :ets.whereis(@table) do
       :undefined ->
         ensure_owner()
-        wait_for_table(50)
+        wait_for_table(20)
+
+        if :ets.whereis(@table) == :undefined do
+          # A dying owner can briefly stay name-registered, making
+          # ensure_owner/0 a no-op while the table is already gone. Give the
+          # VM a beat to unregister the dead pid and retry the whole ensure.
+          Process.sleep(5)
+          ensure_table(attempts - 1)
+        else
+          :ok
+        end
 
       _tid ->
         :ok
@@ -400,8 +414,11 @@ defmodule ElixirSense.Core.ExCkReader do
   defp ensure_owner do
     case Process.whereis(@owner_name) do
       pid when is_pid(pid) ->
-        # Owner already running (possibly still creating the table — the
-        # caller's wait_for_table covers that window).
+        # Owner already running, but the table may have been deleted out from
+        # under it (anyone can delete a public named table). Ask the owner to
+        # (re)create it — creation must happen IN the owner so table ownership
+        # stays tied to the registered process.
+        send(pid, :ensure_table)
         :ok
 
       nil ->
@@ -425,7 +442,8 @@ defmodule ElixirSense.Core.ExCkReader do
 
       # Hold the table open until the VM stops (or this process is killed,
       # in which case the next cache operation starts a fresh owner).
-      Process.sleep(:infinity)
+      # Recreate the table on demand if it was deleted externally.
+      owner_loop()
     end)
 
     :ok
@@ -442,6 +460,19 @@ defmodule ElixirSense.Core.ExCkReader do
       else
         :ok
       end
+  end
+
+  # The owner idles in a receive loop (instead of sleeping forever) so callers
+  # can ask it to recreate the table after an external `:ets.delete/1`.
+  defp owner_loop do
+    receive do
+      :ensure_table ->
+        if :ets.whereis(@table) == :undefined, do: create_table(50)
+        owner_loop()
+
+      _other ->
+        owner_loop()
+    end
   end
 
   defp wait_for_table(0), do: :ok

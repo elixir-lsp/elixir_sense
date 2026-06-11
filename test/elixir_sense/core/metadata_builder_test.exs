@@ -1403,6 +1403,116 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
+  describe "elixir_types_sig provenance" do
+    # These tests verify that @spec-derived signatures are labelled :infer (not
+    # :strong) and that the parallel elixir_types_sig_source field is set to :spec.
+    # User @spec annotations are NOT compiler-verified — treating them as :strong
+    # would let domain filtering prune overloads with untrusted domains and treat
+    # returns as static facts.
+
+    test "spec-derived sig is labelled :infer and has source :spec" do
+      state =
+        """
+        defmodule A do
+          @spec foo(integer()) :: binary()
+          def foo(x), do: to_string(x)
+        end
+        """
+        |> string_to_state
+
+      spec_info = state.specs[{A, :foo, 1}]
+      assert %ElixirSense.Core.State.SpecInfo{} = spec_info
+
+      case spec_info.elixir_types_sig do
+        nil ->
+          # Native types runtime not available; sig not built — acceptable
+          :ok
+
+        {kind, _domain, _clauses} ->
+          assert kind == :infer,
+                 "Expected spec-derived sig to be :infer, got :#{kind}. " <>
+                   "User @spec annotations are claims, not compiler-verified constraints."
+
+          assert spec_info.elixir_types_sig_source == :spec,
+                 "Expected elixir_types_sig_source to be :spec for a @spec-derived sig, " <>
+                   "got #{inspect(spec_info.elixir_types_sig_source)}"
+      end
+    end
+
+    test "callback-derived sig is labelled :infer and has source :spec" do
+      state =
+        """
+        defmodule B do
+          @callback bar(atom()) :: {:ok, atom()} | {:error, term()}
+        end
+        """
+        |> string_to_state
+
+      spec_info = state.specs[{B, :bar, 1}]
+      assert %ElixirSense.Core.State.SpecInfo{} = spec_info
+
+      case spec_info.elixir_types_sig do
+        nil ->
+          :ok
+
+        {kind, _domain, _clauses} ->
+          assert kind == :infer
+          assert spec_info.elixir_types_sig_source == :spec
+      end
+    end
+
+    test "locally-inferred sig has source :inferred on ModFunInfo" do
+      # When native inference is disabled/unavailable, elixir_types_sig is nil
+      # and elixir_types_sig_source is nil. This test asserts the default shape.
+      state =
+        """
+        defmodule C do
+          def baz(x), do: x
+        end
+        """
+        |> string_to_state
+
+      mod_fun_info = state.mods_funs_to_positions[{C, :baz, 1}]
+      assert %ElixirSense.Core.State.ModFunInfo{} = mod_fun_info
+
+      case mod_fun_info.elixir_types_sig do
+        nil ->
+          # No inference ran (e.g. native types not available): source must be nil
+          assert mod_fun_info.elixir_types_sig_source == nil
+
+        {:infer, _domain, _clauses} ->
+          # If inference did run, source must be :inferred
+          assert mod_fun_info.elixir_types_sig_source == :inferred
+      end
+    end
+
+    test "merged multi-clause spec retains :infer and source :spec" do
+      state =
+        """
+        defmodule D do
+          @spec classify(integer()) :: :int
+          @spec classify(atom()) :: :atom_val
+          def classify(x), do: x
+        end
+        """
+        |> string_to_state
+
+      spec_info = state.specs[{D, :classify, 1}]
+      assert %ElixirSense.Core.State.SpecInfo{} = spec_info
+
+      case spec_info.elixir_types_sig do
+        nil ->
+          :ok
+
+        {kind, _domain, clauses} ->
+          assert kind == :infer
+          assert spec_info.elixir_types_sig_source == :spec
+          # Both clauses should be present after merge
+          assert length(clauses) == 2
+      end
+    end
+  end
+
   describe "typespec vars" do
     test "registers type parameters" do
       state =

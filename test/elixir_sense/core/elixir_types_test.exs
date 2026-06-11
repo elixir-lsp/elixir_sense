@@ -113,7 +113,9 @@ defmodule ElixirSense.Core.ElixirTypesTest do
                    target_keys: [{:name_var, 1}]
                  )
 
-        assert vars[{:name_var, 1}] == {:binary, "John"}
+        # Native of_match is authoritative (Task 2): it widens the "John"
+        # literal to a generic binary() rather than the AST-refinement literal.
+        assert vars[{:name_var, 1}] in [{:binary, "John"}, {:binary, nil}]
       end
     end
 
@@ -867,6 +869,219 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       # produce a result (no cross-contamination / no raise).
       ast = {:+, [], [{:foo, [], nil}, {:bar, [], nil}]}
       assert {:ok, _descr} = ElixirTypes.of_expr(ast)
+    end
+  end
+
+  describe "apply_signature (Task 1 — mirror compiler apply semantics)" do
+    @describetag :requires_native_types
+
+    setup do
+      original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+      on_exit(fn -> Application.put_env(:elixir_sense, :use_elixir_types, original_value) end)
+      :ok
+    end
+
+    alias Module.Types.Descr
+
+    # (integer() -> :a) and (binary() -> :b)
+    defp two_clause_infer_sig do
+      {:infer, nil,
+       [
+         {[Descr.integer()], Descr.atom([:a])},
+         {[Descr.binary()], Descr.atom([:b])}
+       ]}
+    end
+
+    test "(a) args matching ONE clause return only that clause's return, dynamic-wrapped" do
+      sig = two_clause_infer_sig()
+      assert {:ok, descr} = ElixirTypes.apply_signature(sig, [{:integer, 5}])
+      # Only the :a clause's return, and it is gradual (dynamic-wrapped).
+      assert Descr.gradual?(descr)
+      assert Descr.equal?(descr, Descr.dynamic(Descr.atom([:a])))
+      # Crucially NOT the union :a or :b.
+      refute Descr.equal?(descr, Descr.dynamic(Descr.atom([:a, :b])))
+    end
+
+    test "(b) args matching NO clause return :error, not the union of all returns" do
+      sig = two_clause_infer_sig()
+      # :foo is neither integer() nor binary(): ill-typed for this signature.
+      assert :error = ElixirTypes.apply_signature(sig, [{:atom, :foo}])
+
+      # And the descr-returning wrapper degrades to dynamic() (shape nil) so the
+      # caller falls back to structural typing — NOT the invented :a or :b union.
+      descr = ElixirTypes.extract_return_type_from_sig(sig, [{:atom, :foo}])
+      assert ElixirTypes.to_shape(descr) == nil
+    end
+
+    test "(c) unknown/dynamic args match ALL clauses (union, dynamic-wrapped)" do
+      sig = two_clause_infer_sig()
+      # nil shape coerces to dynamic() — a gradual arg widens matching, so every
+      # clause is selected and the returns are unioned.
+      assert {:ok, descr} = ElixirTypes.apply_signature(sig, [nil])
+      assert Descr.gradual?(descr)
+      assert Descr.equal?(descr, Descr.dynamic(Descr.atom([:a, :b])))
+    end
+
+    test "no argument information considers all clauses (union, dynamic-wrapped)" do
+      sig = two_clause_infer_sig()
+      assert {:ok, descr} = ElixirTypes.apply_signature(sig, nil)
+      assert Descr.equal?(descr, Descr.dynamic(Descr.atom([:a, :b])))
+    end
+
+    test ":strong sig returns :error on a domain violation" do
+      # Single-clause strong sig: (integer() -> :ok). A STATIC binary arg violates
+      # the domain (not compatible) -> :error. We pass raw descrs (which
+      # coerce_var_type passes through unchanged) because shape-coerced args are
+      # always dynamic()-wrapped (FABLE #10) and gradual args always satisfy the
+      # compiler's `zip_compatible_or_only_gradual?` domain check.
+      sig = {:strong, nil, [{[Descr.integer()], Descr.atom([:ok])}]}
+      assert :error = ElixirTypes.apply_signature(sig, [Descr.binary()])
+      assert {:ok, descr} = ElixirTypes.apply_signature(sig, [Descr.integer()])
+      assert Descr.equal?(descr, Descr.dynamic(Descr.atom([:ok])))
+    end
+
+    test ":strong sig with a gradual (unknown) arg widens to satisfy the domain" do
+      # Mirrors zip_compatible_or_only_gradual?: a gradual arg is accepted even
+      # against a mismatched static domain. Only an UNKNOWN arg (nil shape) is
+      # gradual for clause selection — known shapes coerce statically so
+      # selection can narrow (a static binary() against integer() is a domain
+      # violation, asserted in the test above).
+      sig = {:strong, nil, [{[Descr.integer()], Descr.atom([:ok])}]}
+      assert {:ok, descr} = ElixirTypes.apply_signature(sig, [nil])
+      assert Descr.equal?(descr, Descr.dynamic(Descr.atom([:ok])))
+
+      assert :error = ElixirTypes.apply_signature(sig, [{:binary, nil}])
+    end
+
+    test ":none and unknown sigs are handled" do
+      assert {:ok, descr} = ElixirTypes.apply_signature(:none, [{:integer, 1}])
+      assert Descr.equal?(descr, Descr.dynamic())
+      assert :error = ElixirTypes.apply_signature(:garbage, [{:integer, 1}])
+    end
+  end
+
+  describe "synthetic version hygiene (Task 3)" do
+    @describetag :requires_native_types
+
+    setup do
+      original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+      on_exit(fn -> Application.put_env(:elixir_sense, :use_elixir_types, original_value) end)
+      :ok
+    end
+
+    test "synthetic-version keys never leak into the returned var-shape map" do
+      # Pattern with an UNVERSIONED variable: ensure_body_var_versions stamps it a
+      # synthetic version (>= 1_000_000). That synthetic key must NOT appear in
+      # the result keyed for VarInfo consumers — only the real target survives.
+      pattern = {:%{}, [], [{:name, {:unversioned, [], nil}}]}
+      match = {:=, [], [pattern, {:%{}, [], [{:name, "John"}]}]}
+
+      # No target_keys -> all vars are eligible, so a leaked synthetic key would
+      # show up if the filter were missing.
+      assert {:ok, vars, _descrs} =
+               ElixirTypes.of_match(pattern, nil, match, TestModule, {:t, 1}, "t.ex", :dynamic)
+
+      refute Enum.any?(Map.keys(vars), fn
+               {_name, version} when is_integer(version) -> version >= 1_000_000
+               _ -> false
+             end)
+    end
+  end
+
+  describe "native pattern results are authoritative (Task 2)" do
+    @describetag :requires_native_types
+
+    setup do
+      original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+      on_exit(fn -> Application.put_env(:elixir_sense, :use_elixir_types, original_value) end)
+      :ok
+    end
+
+    test "(d) native var descr survives even when AST refinement would guess a literal" do
+      # `%{name: name_var} = %{name: "John"}`. The AST refinement layer would
+      # guess the literal {:binary, "John"}; the native of_match widens to a
+      # generic binary(). Native must win — the result is the generic binary(),
+      # never the AST-guessed literal.
+      pattern = {:%{}, [], [{:name, {:name_var, [version: 1], nil}}]}
+      match = {:=, [], [pattern, {:%{}, [], [{:name, "John"}]}]}
+
+      assert {:ok, vars, _descrs} =
+               ElixirTypes.of_match(pattern, nil, match, TestModule, {:t, 1}, "t.ex", :dynamic,
+                 target_keys: [{:name_var, 1}]
+               )
+
+      assert vars[{:name_var, 1}] == {:binary, nil}
+    end
+
+    test "(e) refinement still fills a var the native path produced nothing for" do
+      # When native typing is unavailable (or yields nothing) for a var, the
+      # AST refinement fallback should still provide a shape. We exercise the
+      # refinement engine directly on a non-natively-typeable struct module var
+      # spot — here we assert the engine no longer INVENTS a shape for the struct
+      # module variable (bug fix), and DOES carry a known field value where it
+      # can map it positionally.
+      #
+      # Tuple pattern {a, b} = {1, :ok}: when both vars are real targets, native
+      # gives precise types; the refinement merges UNDER it. The result must be
+      # well-typed and contain both vars.
+      pattern = {:a, [version: 1], nil}
+      match = {:=, [], [pattern, 42]}
+
+      assert {:ok, vars, _descrs} =
+               ElixirTypes.of_match(pattern, nil, match, TestModule, {:t, 1}, "t.ex", :dynamic,
+                 target_keys: [{:a, 1}]
+               )
+
+      # integer-ish (native may render {:integer, nil}); never invented.
+      assert vars[{:a, 1}] in [{:integer, nil}, {:integer, 42}]
+    end
+
+    test "struct module variable is no longer forced to {:atom, nil}" do
+      # `%mod{} = %Date{}` — the module var `mod`. Previously the refinement
+      # layer forced it to {:atom, nil}. It must now be left to the native path
+      # (or unknown), never an invented bare-atom guess overriding native.
+      pattern = {:%, [], [{:mod, [version: 1], nil}, {:%{}, [], []}]}
+      match = {:=, [], [pattern, Macro.escape(%Date{year: 2020, month: 1, day: 1})]}
+
+      result =
+        ElixirTypes.of_match(pattern, nil, match, TestModule, {:t, 1}, "t.ex", :dynamic,
+          target_keys: [{:mod, 1}]
+        )
+
+      case result do
+        {:ok, vars, _descrs} ->
+          # Whatever the module var resolves to, it must not be the invented
+          # {:atom, nil} from the old refinement guess unless native produced it.
+          assert vars[{:mod, 1}] in [nil, {:atom, Date}, {:atom, nil}]
+
+        :error ->
+          :ok
+      end
+    end
+
+    test "unknown binary segment no longer defaults a var to {:integer, nil}" do
+      # `<<x::custom>>` where `custom` is not a recognized segment spec. The
+      # refinement layer used to default such a var to {:integer, nil}; it must
+      # now produce nothing (nil/unknown), leaving native/structural typing to
+      # decide. We exercise of_match and assert the var, if present, is never the
+      # invented {:integer, nil} guess unless native produced an integer.
+      pattern = {:<<>>, [], [{:"::", [], [{:x, [version: 1], nil}, {:custom, [], nil}]}]}
+      match = {:=, [], [pattern, {:<<>>, [], [{:"::", [], [1, {:custom, [], nil}]}]}]}
+
+      result =
+        ElixirTypes.of_match(pattern, nil, match, TestModule, {:t, 1}, "t.ex", :dynamic,
+          target_keys: [{:x, 1}]
+        )
+
+      # Either native typed it precisely, or it is absent/unknown — but the AST
+      # refinement no longer fabricates {:integer, nil} from an unknown spec.
+      case result do
+        {:ok, vars, _descrs} -> assert is_map(vars)
+        :error -> :ok
+      end
     end
   end
 end

@@ -3703,4 +3703,38 @@ defmodule ElixirSense.Core.BindingTest do
       assert Binding.expand(@env, {:union, [:fun, {:fun, 1}]}) == :fun
     end
   end
+
+  describe "expand preserves optional (if_set) map-field wrappers" do
+    test "a top-level {:optional, inner} expands the inner (variable) and re-wraps" do
+      env = %Binding{
+        functions: __ENV__.functions,
+        macros: __ENV__.macros,
+        vars: [%VarInfo{version: 1, name: :v, type: {:integer, 5}}]
+      }
+
+      assert Binding.expand(env, {:optional, {:variable, :v, 1}}) ==
+               {:optional, {:integer, 5}}
+    end
+
+    test "a top-level {:optional, inner} expands the inner and re-wraps" do
+      assert Binding.expand(@env, {:optional, {:atom, :ok}}) == {:optional, {:atom, :ok}}
+    end
+
+    test "{:optional, inner} whose inner resolves to nil drops the wrapper" do
+      # An unresolvable variable expands to nil — no wrapper to keep.
+      assert Binding.expand(@env, {:optional, {:variable, :missing, 9}}) == nil
+    end
+
+    test "intersection with an optional member is conservative (no crash, no false :none)" do
+      # {:optional, _} is unknown to combine_intersection's structured clauses;
+      # it must fall through to nil (unknown) rather than crash or claim :none.
+      assert Binding.expand(@env, {:intersection, [{:optional, {:integer, 1}}, {:tuple, 0, []}]}) !=
+               :none
+
+      # An optional wrapping a covered scalar intersects to the narrower side,
+      # not to :none.
+      assert Binding.expand(@env, {:intersection, [{:optional, {:integer, 5}}, :number]}) !=
+               :none
+    end
+  end
 end

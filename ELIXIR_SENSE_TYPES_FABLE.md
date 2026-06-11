@@ -1,5 +1,18 @@
 # ElixirSense types integration — audit tasks (Fable)
 
+## Status after the 2026-06-11 fix pass — round 2 (GPT + deferred items)
+
+Second pass (see ELIXIR_SENSE_TYPES_GPT.md status block for detail): #30 done
+(`apply_signature/2` mirrors apply_infer/apply_strong; static-arg clause selection),
+ #33 done (spec sigs → `:infer`, provenance fields), #29 done (native pattern results
+authoritative, refinement only fills gaps), #8-coercion completed (`Descr.if_set/1` in
+field positions), #41 done (compiler-parity corpus — 30/30 exact rendering parity —
+plus round-trip soundness property and failure-mode suite). `render_hint/3` now returns
+`source: :native | :shape`, widens literals for hints, and caps `full` at
+`max_full_length`. ExCk ETS owner recreates its table on demand (receive loop).
+Gates after round 2: 1756/1756, compile/format/credo clean.
+Still deferred: #31/#32 (operator/spec table routing), #34–#36, #38–#40.
+
 ## Status after the 2026-06-11 fix pass
 
 CI gates on this branch: `mix test` 1693/1693 ✅ · `mix compile --force
