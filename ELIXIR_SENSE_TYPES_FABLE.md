@@ -22,7 +22,27 @@ credo --all --strict all green.
 | `elixir_types_sig_source` provenance is written but never consulted (GPT P0) | **Confirmed, P2.** No reader outside struct defs/write sites. Mitigating accident: spec sigs are `:infer` (never `:strong`), so the kind-based precedence in `build_local_sigs_map` already yields native-inferred-wins-then-spec — the intended trust order. The `{_, {:ok, {:strong, ...}}}` spec-precedence clause is dead code. |
 | Fresh-bug sweep of the da4cba36 round | **No new bugs.** `coerce_var_type(nil)` unaffected by the new `coerce_static_descr` clauses; ExCk `:ensure_table` send fires only on the recovery path (no flood; stray messages drained); mismatched-arity clauses are excluded correctly. One observation: `args_compatible?` rescues an internal Descr `CaseClauseError` to `true` (conservatively keeps the clause) — robustness fallback, acceptable. |
 
-## P1 — Highest-value next work
+## P1 — DONE (fix wave, 2026-06-11 evening)
+
+All four P1 items shipped (commit follows this update):
+- **1.1/1.2** `ElixirSense.Core.TypeHints` facade: `request_context/1`,
+  `type_hint_for_var/4`, `effective_params/4` with request-scoped process-dict caching
+  of the local-sigs map, env resolution, and params. `Binding.from_env/4` gained an
+  additive `local_sigs:` option. elixir-ls now consumes ONLY this facade (no
+  Binding/TypePresentation references remain in the provider).
+- **1.3** Apply parity harness (`elixir_types_apply_parity_test.exs`): real ExCk chunks
+  from `Code.compile_string` with `infer_signatures: true`; local-caller returns used as
+  compiler ground truth; 10 scenarios, ZERO divergences found. Ground-truth correction
+  discovered: `apply_infer` wraps unconditionally; only `apply_strong` routes through
+  `return/3`'s conditional wrap.
+- **1.4** `build_local_sigs_map` precedence is now explicit provenance rank
+  (`:exck` > `:inferred` > `:spec`); dead `:strong`-spec clause deleted; regression test
+  locks that a `:strong`-tagged spec sig cannot outrank native-inferred.
+- **2.1** (pulled forward) strong-sig returns wrap in `dynamic()` only when an argument
+  is gradual, mirroring `Apply.return/3`; infer-sig unconditional wrap retained
+  (matches apply.ex:1827).
+
+## P1 (historical) — Highest-value next work
 
 ### 1.1 Per-request local-sigs memoization (cross-repo perf, with LSP item 1.1)
 `Binding.from_env/3` (`binding.ex:31-37`) rebuilds the local sigs map on every call and

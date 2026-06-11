@@ -2596,20 +2596,38 @@ defmodule ElixirSense.Core.ElixirTypes do
           %{type: type} ->
             kind = get_def_kind_for_types(type)
 
+            # Pick the most-trusted signature by EXPLICIT provenance rather than
+            # by the sig's kind tag. Provenance ordering (highest first):
+            #   :exck     — read from the compiled .beam ExCk chunk (ground truth)
+            #   :inferred — natively inferred locally from the function body
+            #   :spec     — derived from a @spec (a fallback, may be imprecise)
+            # The stored sig carries its source on ModFunInfo
+            # (`elixir_types_sig_source` ∈ {:exck, :inferred}); spec sigs are
+            # always tagged `:spec`. We do NOT rely on the kind tag here: spec
+            # sigs are always `:infer`, so the old `{:strong, ...}`
+            # spec-precedence clause was dead and a hypothetical :strong spec
+            # must still NOT outrank a native-inferred sig.
+            stored_sig = Map.get(info, :elixir_types_sig)
+            stored_source = Map.get(info, :elixir_types_sig_source)
+
+            spec_sig =
+              case spec_signature_from_metadata(metadata, module, fun, arity) do
+                {:ok, s} -> s
+                :error -> nil
+              end
+
+            candidates =
+              [
+                {stored_source, stored_sig},
+                {:spec, spec_sig}
+              ]
+              |> Enum.filter(fn {_source, s} -> s != nil end)
+
             sig =
-              case {Map.get(info, :elixir_types_sig),
-                    spec_signature_from_metadata(metadata, module, fun, arity)} do
-                {_inferred, {:ok, {:strong, _domain, _clauses} = spec_sig}} ->
-                  spec_sig
-
-                {sig, _} when sig != nil ->
-                  sig
-
-                {nil, {:ok, spec_sig}} ->
-                  spec_sig
-
-                _ ->
-                  nil
+              case Enum.min_by(candidates, fn {source, _s} -> sig_source_rank(source) end, fn ->
+                     {nil, nil}
+                   end) do
+                {_source, s} -> s
               end
 
             if sig != nil do
@@ -2628,6 +2646,15 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   def build_local_sigs_map(_metadata, _module), do: %{}
+
+  # Trust ranking for signature provenance (lower = more trusted, picked first
+  # by `Enum.min_by`). :exck (ExCk chunk ground truth) > :inferred (native
+  # local inference) > :spec (@spec-derived fallback). Unknown/nil sources sort
+  # last so a real provenance always wins.
+  defp sig_source_rank(:exck), do: 0
+  defp sig_source_rank(:inferred), do: 1
+  defp sig_source_rank(:spec), do: 2
+  defp sig_source_rank(_), do: 3
 
   @doc """
   Create a closure-based local handler from a signatures map.
@@ -2688,9 +2715,13 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   Returns:
 
-    * `{:ok, descr}` — the `dynamic()`-wrapped union of the matched clause
-      returns (or bare `dynamic()` when more than `@max_clauses` matched, as the
-      compiler does).
+    * `{:ok, descr}` — the union of the matched clause returns. For `:infer`
+      sigs (and the no-arg path) the union is ALWAYS wrapped in `dynamic()`
+      (apply.ex:1827 wraps unconditionally). For `:strong` sigs the union is
+      routed through `Apply.return/3` (apply.ex:1732-1741), which wraps only when
+      an argument is gradual; fully-static args yield the bare static union. A
+      bare `dynamic()` is returned when more than `@max_clauses` matched, as the
+      compiler does.
     * `:error` — the call is ill-typed for this signature (no `:infer` clause's
       domain is non-disjoint with the args, or a `:strong` domain is violated).
       The compiler treats this as a `:badremote` error; callers should fall back
@@ -2707,12 +2738,22 @@ defmodule ElixirSense.Core.ElixirTypes do
   def apply_signature({sig_kind, _domain, clauses}, arg_shapes)
       when sig_kind in [:infer, :strong] and is_list(clauses) do
     arg_descrs = coerce_arg_shapes(arg_shapes)
+    # Mirror the compiler's wrapping precisely. `apply_infer` (apply.ex:1827)
+    # ALWAYS `dynamic()`-wraps its inferred union — it does not consult
+    # `return/3`. Only `apply_strong` routes its return through `return/3`
+    # (apply.ex:1834,1844), which wraps only when an argument is gradual (in the
+    # dynamic-flavored mode ElixirSense always uses; the `:static`-mode branch of
+    # `return/3` never applies here). With no argument information
+    # (`arg_descrs == nil`) we have no static facts to narrow on, so we treat the
+    # call as gradual (wrap).
+    gradual_args? = arg_descrs == nil or Enum.any?(arg_descrs, &descr_gradual?/1)
 
     cond do
       # No argument information at all: consider every clause (as if every arg
       # were gradual). For :infer this is the dynamic()-wrapped union of all
       # returns; for :strong, ditto (the domain check is trivially satisfied by
-      # absent args). Mirrors compiler behavior with fully-gradual args.
+      # absent args). Mirrors compiler behavior with fully-gradual args, which
+      # always wrap.
       arg_descrs == nil ->
         apply_no_args(clauses)
 
@@ -2720,7 +2761,7 @@ defmodule ElixirSense.Core.ElixirTypes do
         apply_infer_mirror(clauses, arg_descrs)
 
       sig_kind == :strong ->
-        apply_strong_mirror(clauses, arg_descrs)
+        apply_strong_mirror(clauses, arg_descrs, gradual_args?)
     end
   end
 
@@ -2779,7 +2820,8 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   # All clauses are candidates (no/unusable argument info). Union returns,
   # dynamic-wrap. > @max_clauses ⇒ bare dynamic(). Mirrors apply_infer with
-  # fully-gradual args (every clause selected).
+  # fully-gradual args (every clause selected), which always wraps
+  # (apply.ex:1827).
   defp apply_no_args(clauses) do
     if length(clauses) > @max_clauses do
       {:ok, Descr.dynamic()}
@@ -2794,7 +2836,8 @@ defmodule ElixirSense.Core.ElixirTypes do
   # Mirror apply.ex:1818-1829 `apply_infer/2`: select clauses whose argument
   # domain is per-position NOT disjoint with the actual args. Zero matches ⇒
   # :error (ill-typed). > @max_clauses matches ⇒ bare dynamic(). Otherwise the
-  # dynamic()-wrapped union of the matched clauses' returns.
+  # union of the matched clauses' returns, ALWAYS wrapped in dynamic()
+  # (apply.ex:1827 wraps unconditionally — it does NOT consult `return/3`).
   defp apply_infer_mirror(clauses, arg_descrs) do
     matched =
       Enum.filter(clauses, fn clause ->
@@ -2821,8 +2864,10 @@ defmodule ElixirSense.Core.ElixirTypes do
   # We treat each clause's argument tuple as its domain (the signatures we
   # produce have non-overlapping :strong domains). A clause contributes its
   # return only when args are compatible; if NO clause is compatible the call is
-  # a domain violation ⇒ :error. Returns are unioned and dynamic-wrapped.
-  defp apply_strong_mirror(clauses, arg_descrs) do
+  # a domain violation ⇒ :error. Returns are unioned and routed through
+  # `return/3` (apply.ex:1834,1844 — wrapped in dynamic() only when an arg is
+  # gradual), unlike apply_infer which always wraps.
+  defp apply_strong_mirror(clauses, arg_descrs, gradual_args?) do
     matched =
       Enum.filter(clauses, fn clause ->
         args_compatible?(clause_arg_types(clause), arg_descrs)
@@ -2837,20 +2882,52 @@ defmodule ElixirSense.Core.ElixirTypes do
 
       true ->
         case extract_return_type_from_clauses(matched) do
-          {:ok, return_type} -> {:ok, wrap_dynamic(return_type)}
+          {:ok, return_type} -> {:ok, maybe_wrap_dynamic(return_type, gradual_args?)}
           :error -> {:ok, Descr.dynamic()}
         end
     end
   end
 
+  # Mirror `Apply.return/3` (apply.ex:1732-1741): only wrap the matched return in
+  # `dynamic()` when an argument is gradual. When all args are statically known
+  # the bare static return is returned, matching what the compiler records for a
+  # static call. `gradual_args?` is computed once in `apply_signature/2`.
+  defp maybe_wrap_dynamic(descr, true), do: wrap_dynamic(descr)
+  defp maybe_wrap_dynamic(descr, false), do: descr
+
   # Wrap a return type in dynamic() (idempotent for already-gradual types), as
-  # the compiler does for inferred/applied returns (apply.ex:1827,1844).
+  # the compiler does for inferred/applied returns when an arg is gradual
+  # (apply.ex:1738).
   defp wrap_dynamic(descr) do
     Descr.dynamic(descr)
   rescue
     _ -> descr
   catch
     _, _ -> descr
+  end
+
+  # Mirror of the compiler's `Descr.gradual?/1` (descr.ex:385-386) with a safe
+  # fallback. `gradual?` is `def` in the source but not exported by the running
+  # stdlib, so we probe and otherwise check the `:dynamic` key directly. `:term`
+  # (the only non-map descr) is not gradual.
+  defp descr_gradual?(:term), do: false
+
+  defp descr_gradual?(descr) do
+    cond do
+      function_exported?(Module.Types.Descr, :gradual?, 1) ->
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
+        apply(Module.Types.Descr, :gradual?, [descr])
+
+      is_map(descr) ->
+        is_map_key(descr, :dynamic)
+
+      true ->
+        false
+    end
+  rescue
+    _ -> false
+  catch
+    _, _ -> false
   end
 
   defp clause_arg_types({arg_types, _return}) when is_list(arg_types), do: arg_types

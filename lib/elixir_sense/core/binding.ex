@@ -29,11 +29,34 @@ defmodule ElixirSense.Core.Binding do
             elixir_types_local_sigs: %{}
 
   def from_env(%State.Env{} = env, %ElixirSense.Core.Metadata{} = metadata, cursor_position) do
+    from_env(env, metadata, cursor_position, [])
+  end
+
+  @doc """
+  Like `from_env/3` but accepts options.
+
+  ## Options
+
+    * `:local_sigs` — a precomputed local sigs map (the result of
+      `ElixirTypes.build_local_sigs_map/2`). When given, the (verified O(N))
+      rebuild is skipped and the supplied map is used verbatim. This is the
+      per-request memoization hook used by `ElixirSense.Core.TypeHints`; passing
+      a stale or wrong-module map only affects native sig lookups, never
+      correctness of the structural engine.
+  """
+  def from_env(%State.Env{} = env, %ElixirSense.Core.Metadata{} = metadata, cursor_position, opts)
+      when is_list(opts) do
     local_sigs =
-      if ElixirTypes.enabled?() and env.module do
-        ElixirTypes.build_local_sigs_map(metadata, env.module)
-      else
-        %{}
+      case Keyword.fetch(opts, :local_sigs) do
+        {:ok, sigs} when is_map(sigs) ->
+          sigs
+
+        _ ->
+          if ElixirTypes.enabled?() and env.module do
+            ElixirTypes.build_local_sigs_map(metadata, env.module)
+          else
+            %{}
+          end
       end
 
     %Binding{

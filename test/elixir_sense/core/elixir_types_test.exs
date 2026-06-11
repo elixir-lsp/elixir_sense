@@ -938,7 +938,11 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       sig = {:strong, nil, [{[Descr.integer()], Descr.atom([:ok])}]}
       assert :error = ElixirTypes.apply_signature(sig, [Descr.binary()])
       assert {:ok, descr} = ElixirTypes.apply_signature(sig, [Descr.integer()])
-      assert Descr.equal?(descr, Descr.dynamic(Descr.atom([:ok])))
+      # Task 2.1: :strong routes through Apply.return/3, which wraps in dynamic()
+      # ONLY when an arg is gradual. integer() is fully static, so the BARE
+      # static return is returned (not dynamic-wrapped).
+      refute Descr.gradual?(descr)
+      assert Descr.equal?(descr, Descr.atom([:ok]))
     end
 
     test ":strong sig with a gradual (unknown) arg widens to satisfy the domain" do
@@ -954,10 +958,104 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert :error = ElixirTypes.apply_signature(sig, [{:binary, nil}])
     end
 
+    test "Task 2.1: :infer ALWAYS dynamic-wraps even with fully-static args (apply.ex:1827)" do
+      # Unlike :strong, the compiler's apply_infer wraps the inferred union
+      # unconditionally — it does not consult return/3. So even a static integer
+      # arg yields a dynamic-wrapped return.
+      sig = two_clause_infer_sig()
+      assert {:ok, descr} = ElixirTypes.apply_signature(sig, [Descr.integer()])
+      assert Descr.gradual?(descr)
+      assert Descr.equal?(descr, Descr.dynamic(Descr.atom([:a])))
+    end
+
+    test "Task 2.1: :strong with a gradual descr arg keeps the dynamic wrap" do
+      # A genuinely gradual descr arg (carries a :dynamic key) triggers return/3's
+      # wrapping branch even though it is type-compatible with the domain.
+      sig = {:strong, nil, [{[Descr.integer()], Descr.atom([:ok])}]}
+      grad = Descr.dynamic(Descr.integer())
+      assert {:ok, descr} = ElixirTypes.apply_signature(sig, [grad])
+      assert Descr.gradual?(descr)
+      assert Descr.equal?(descr, Descr.dynamic(Descr.atom([:ok])))
+    end
+
     test ":none and unknown sigs are handled" do
       assert {:ok, descr} = ElixirTypes.apply_signature(:none, [{:integer, 1}])
       assert Descr.equal?(descr, Descr.dynamic())
       assert :error = ElixirTypes.apply_signature(:garbage, [{:integer, 1}])
+    end
+  end
+
+  describe "build_local_sigs_map provenance precedence (Task 1.4)" do
+    alias ElixirSense.Core.State.ModFunInfo
+    alias ElixirSense.Core.State.SpecInfo
+
+    # Minimal metadata carrying one stored (native) sig + one spec sig for the
+    # same fun/arity. The stored sig source is `:inferred`, the spec sig is
+    # always tagged `:spec`.
+    defp metadata_with_sigs(stored_sig, stored_source, spec_sig) do
+      mfa = {SomeMod, :f, 0}
+
+      mods_funs = %{
+        mfa => %ModFunInfo{
+          type: :def,
+          elixir_types_sig: stored_sig,
+          elixir_types_sig_source: stored_source
+        }
+      }
+
+      specs =
+        case spec_sig do
+          nil ->
+            %{}
+
+          _ ->
+            %{
+              mfa => %SpecInfo{
+                name: :f,
+                kind: :spec,
+                elixir_types_sig: spec_sig,
+                elixir_types_sig_source: :spec
+              }
+            }
+        end
+
+      %{mods_funs_to_positions: mods_funs, specs: specs}
+    end
+
+    test "native-inferred sig wins over a spec sig (current behavior preserved)" do
+      inferred = {:infer, nil, [{[], {:atom, [], []}}]}
+      spec = {:infer, nil, [{[], {:integer, [], []}}]}
+
+      sigs =
+        ElixirTypes.build_local_sigs_map(metadata_with_sigs(inferred, :inferred, spec), SomeMod)
+
+      assert {:def, ^inferred} = sigs[{:f, 0}]
+    end
+
+    test "a hypothetical :strong-kind spec sig does NOT outrank a native-inferred sig" do
+      # The old precedence keyed off the sig kind tag and let a `{:strong, ...}`
+      # spec sig win. Provenance ordering (:inferred > :spec) now makes the
+      # native-inferred sig win regardless of the spec sig's kind. This locks in
+      # the deletion of the dead :strong-spec clause.
+      inferred = {:infer, nil, [{[], {:atom, [], []}}]}
+      strong_spec = {:strong, nil, [{[], {:integer, [], []}}]}
+
+      sigs =
+        ElixirTypes.build_local_sigs_map(
+          metadata_with_sigs(inferred, :inferred, strong_spec),
+          SomeMod
+        )
+
+      assert {:def, ^inferred} = sigs[{:f, 0}]
+      refute match?({:def, {:strong, _, _}}, sigs[{:f, 0}])
+    end
+
+    test "spec sig is used as a fallback when there is no native sig" do
+      spec = {:infer, nil, [{[], {:integer, [], []}}]}
+
+      sigs = ElixirTypes.build_local_sigs_map(metadata_with_sigs(nil, nil, spec), SomeMod)
+
+      assert {:def, ^spec} = sigs[{:f, 0}]
     end
   end
 
