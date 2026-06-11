@@ -74,6 +74,22 @@ precedence clause. Optionally surface the richer source in `render_hint/3`
 (`:native_exck | :native_inferred | :spec | :shape`) so the LSP `minimumTrust` can
 filter precisely (LSP item 2.1). [GPT, verified P2 but cheap and unblocks LSP P2]
 
+## Wave 3 status (2026-06-11 evening — GPT third-review fixes)
+
+Done this wave (details in ELIXIR_SENSE_TYPES_GPT.md status block and commit 603f20a8):
+- **2.2 partially done** — `combine_intersection` is descr-backed behind an
+  exact-shape whitelist (maps/structs and scalar literals excluded by design);
+  `difference` stays custom (dynamic-wrap distribution fails for subtraction).
+- **Richer trust levels** (was "optionally" under 1.4) — TypeHints sources are now
+  `:native_exck > :native_inferred > :spec > :shape` with `trust_rank/1`.
+- **Fail-closed audit** (GPT P0 gate) — per-site guard table, one gap fixed,
+  19 drift canaries, version-guard tightening for the CI matrix.
+- **Local-inference + default-arg coverage** (was 2.7 / GPT P1 tests) — 19 tests.
+
+Still open: 2.2 remainder (difference + map sites), 2.3 open/closed metadata,
+2.4 improper lists, 2.5 resolution consolidation, 2.6 fields_for_receiver,
+2.8 multi-version behavior runs, 2.9 shape-distinction design, P3 items.
+
 ## P2 — Fidelity and architecture
 
 - **2.1 Strong/infer return-wrapping parity** — track arg gradualness through
