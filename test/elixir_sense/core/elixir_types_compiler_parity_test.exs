@@ -192,6 +192,58 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
                end)
     end
 
+    test "closed-map round-trip is EXACT under closed_literals: true" do
+      alias Module.Types.Descr
+
+      # For closed-map descrs, `to_shape/1` yields a `nil` tail (genuinely closed),
+      # and coercing back with `closed_literals: true` reconstructs the same closed
+      # map (modulo the `dynamic/1` wrap every coerced shape carries). This is the
+      # tightened fidelity guarantee — the default open coercion is only a
+      # SUPERtype; closed_literals makes the closed-map round-trip exact.
+      closed_corpus = [
+        {"closed %{a: integer}", Descr.closed_map(a: Descr.integer())},
+        {"closed %{a: integer, b: binary}",
+         Descr.closed_map(a: Descr.integer(), b: Descr.binary())},
+        {"Date struct", Descr.closed_map(date_struct_fields())}
+      ]
+
+      failures =
+        for {label, descr} <- closed_corpus do
+          shape = ElixirTypes.to_shape(descr)
+          coerced = ElixirTypes.coerce_var_type_public(shape, closed_literals: true)
+
+          if Descr.equal?(coerced, Descr.dynamic(descr)) do
+            nil
+          else
+            {label, Descr.to_quoted_string(descr, collapse_structs: true),
+             Descr.to_quoted_string(coerced, collapse_structs: true)}
+          end
+        end
+        |> Enum.reject(&is_nil/1)
+
+      assert failures == [],
+             "Closed round-trip not exact:\n" <>
+               Enum.map_join(failures, "\n", fn {label, orig, got} ->
+                 "  #{label}:\n    orig:    dynamic(#{orig})\n    coerced: #{got}"
+               end)
+    end
+
+    test "open-map round-trip stays OPEN even under closed_literals: true" do
+      alias Module.Types.Descr
+
+      # An open-map descr round-trips to an `:open` tail, which `closed_literals`
+      # must NOT close — it would unsoundly exclude maps with other keys.
+      open = Descr.open_map(a: Descr.integer())
+      shape = ElixirTypes.to_shape(open)
+      assert {:map, _fields, :open} = shape
+
+      coerced = ElixirTypes.coerce_var_type_public(shape, closed_literals: true)
+      with_other = Descr.closed_map(a: Descr.integer(), b: Descr.binary())
+
+      assert Descr.subtype?(Descr.upper_bound(with_other), Descr.upper_bound(coerced)),
+             "closed_literals wrongly closed an :open-tail map"
+    end
+
     test "unconvertible (nil to_shape) corpus entries are well below half" do
       corpus = build_corpus()
       total = length(corpus)
@@ -260,6 +312,17 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------
+
+  # Closed Date-struct field pairs, mirroring the corpus builder. Kept as a
+  # helper so the closed round-trip test can reuse the exact same shape.
+  defp date_struct_fields do
+    alias Module.Types.Descr
+
+    [
+      {:__struct__, Descr.atom([Date])}
+      | for(k <- [:calendar, :month, :day, :year], do: {k, Descr.integer()})
+    ]
+  end
 
   # Normalize whitespace so incidental line-wrapping differences (at 98 chars)
   # do not cause false mismatches.

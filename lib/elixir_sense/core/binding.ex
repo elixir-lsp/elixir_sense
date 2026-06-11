@@ -1,5 +1,227 @@
 defmodule ElixirSense.Core.Binding do
-  @moduledoc false
+  @moduledoc """
+  Binding holds the type environment (variables, attributes, specs, etc.) for
+  a single cursor position and drives the structural type-algebra engine used
+  for completion, hover, and go-to-definition.
+
+  ## Shape vocabulary
+
+  Every resolved type is represented as a *shape* — a plain Elixir term.  The
+  full vocabulary is defined here.  Unless noted, shapes are produced by
+  `expand/3` / `do_expand/3` and consumed by `TypePresentation` (rendering),
+  `covers?/2` (subsumption), `combine_intersection/2`, and
+  `normalize_union/1`.
+
+  ### `nil` — unknown / top
+
+  Meaning: "we have no information; the value could be anything."
+
+  Producer: any fallback `do_expand` clause, `parse_type` for `:term`/`:any`/
+  `:dynamic`, `quoted_to_shape` for `dynamic()`, unresolvable variables, and
+  rescued errors (e.g. `Application.get_env` when the key is absent).
+
+  Consumer / algebra:
+  - `normalize_union/1`: a `nil` member *poisons* the whole union to `nil`
+    (absorbing element). Rationale: once one branch is unbounded the union
+    is unbounded.
+  - `combine_intersection/2`: `nil ∩ T = T` (nil is the identity, i.e. the
+    top); `T ∩ nil = T`.  (See `combine_intersection/2` clauses 3–4.)
+  - `covers?(nil, _b)` returns `true` (nil as subtrahend covers anything —
+    reached only inside tuple element recursion).
+  - Rendering (`TypePresentation.render/1`): `:unknown` → `"term()"` inside
+    structures.
+
+  Note: at the `to_shape` boundary `dynamic()` and `dynamic(inner)` are
+  both unwrapped to `nil` (or to the inner shape) — see `quoted_to_shape/1`.
+  The `{:dynamic, _}` shape tuple is therefore NOT produced by `to_shape/1`;
+  it only appears in `TypePresentation` as a display-only remnant from earlier
+  code paths (task #20 / policy C).  See the `{:dynamic, _}` entry below.
+
+  ### `:none` — bottom
+
+  Meaning: "this branch never produces a value" (e.g. `raise`, dead code,
+  type error).
+
+  Producers: `parse_type` for `no_return()`, unresolvable attribute
+  (attribute not found), non-map base in map update, struct with invalid
+  module, calls to `:erlang.error/:throw/:exit/:raise`, `Application.get_env`
+  returning `:error` for `fetch_env!/1`.
+
+  Consumer / algebra:
+  - `normalize_union/1`: `:none` members are *dropped* from unions
+    (identity / bottom element).  An all-`:none` union collapses to `:none`.
+  - `combine_intersection/2`: `:none ∩ T = :none`; `T ∩ :none = :none`
+    (annihilator).
+  - `covers?(:none, _)` / `covers?(_, :none)` — NOT handled; `:none` is not
+    a valid left-hand of `covers?`.  It falls through to `false`.
+  - Rendering: `"none()"`.
+
+  Inconsistency flag: `:none` propagation in `expand_call` for union targets
+  (line ~1931) filters `:none` and `nil` together before building the result
+  union, which means a fully-`:none` union of targets returns `nil` (unknown)
+  rather than `:none`.  This is conservative (avoids false "dead-code"
+  claims) but differs from how a strict bottom would behave.
+
+  ### `:not_set` — known-absent map value
+
+  Meaning: a map key that is provably *not present* in the map (the compiler
+  knows `not is_map_key(map, k)`).
+
+  Producers: `ElixirTypes.to_shape_eager/1` when the descr has only an
+  `:optional` key with no inner type (i.e. `not_set()`); also produced
+  directly by `type_inference/guard.ex`'s `not_set_map_type/1` helper which
+  builds `{:map, [{key, :not_set}], nil}` shapes for `not is_map_key` guards.
+  `Descr.not_set()` round-trips via `coerce_static_descr(:not_set)`.
+
+  Consumer / filter: both `TypePresentation.fields_for_receiver/2` and
+  `CompletionEngine` filter out any field whose value is `:not_set` — these
+  keys are not real fields for completion or hover purposes.  The
+  `segment/1` fallback renders it as `"not_set()"`.
+
+  Note: `:not_set` is only meaningful as a *field value* inside a map shape;
+  it is never a stand-alone variable type.  `do_expand` has no clause for it
+  and falls through to the `nil`-returning catch-all.
+
+  ### `{:list, :empty}` / `:empty_list`
+
+  Two spellings for the same semantic — the empty list `[]`.
+
+  - `{:list, :empty}` is the *canonical* internal form produced by
+    `parse_type` for the `[]` literal, by `Tuple.to_list` on an empty tuple,
+    and by `List.wrap(nil)`.
+  - `:empty_list` is an alias produced by `ElixirTypes.to_shape` when
+    `Descr.to_quoted` emits `{:empty_list, [], []}`.  `do_expand` maps it
+    back to `{:list, :empty}` immediately (line ~543).
+
+  Algebra: `covers?({:list, :empty}, {:list, :empty})` is true; both are
+  subsumed by `:list` and by `{:list, nil}` (via `list_elem_covers?`).
+
+  Rendering: both render as `"empty_list()"`.
+
+  ### Map tail — `nil` (closed) vs `:open`
+
+  The third element of `{:map, fields, tail}` distinguishes two distinct
+  semantics:
+
+  - `nil` tail ("closed map"): **all** keys are known.  A map literal
+    `%{a: 1}` compiles to `{:map, [a: {:integer, 1}], nil}`.
+  - `:open` tail ("open map"): **additional unknown keys may exist**.
+    Produced when a map update's base cannot be resolved
+    (`def f(m), do: %{m | a: 1}` → `{:map, [a: nil], :open}`), when
+    `expand_map_base` sees an unknown base (`nil` → `{[], :open}`), and by
+    `Map.from_struct` on an unresolvable struct.
+
+  Consumer / algebra:
+  - `covers?({:map, [], tail}, {:map, _, _})` when `tail in [nil, :open]`
+    returns `true` — both spellings of the empty-field map subsume any map.
+  - `merge_tails/2`: the merge of two tails is `:open` if either is `:open`,
+    otherwise `nil`.
+  - `expand_map_base/3` propagates the tail.
+  - Rendering: `{:map, [], :open}` → `"map()"`;
+    `{:map, fields, :open}` → `"%{..., key: type, ...}"`;
+    `{:map, fields, nil}` → `"%{key: type, ...}"` (no open marker).
+
+  ### `{:dynamic, _}` — display-only, not in Binding algebra
+
+  The shape `{:dynamic, nil}` and `{:dynamic, inner}` are defined only in
+  `TypePresentation.segment/1` and `widen_literals/1` as carry-over from an
+  earlier design.  **No `do_expand` clause handles them**, so any
+  `{:dynamic, _}` that somehow reached `expand/3` would fall through to the
+  `nil`-returning catch-all.
+
+  Grep evidence: `grep -rn '{:dynamic' lib/elixir_sense/core/` finds no
+  producer in `binding.ex` or `type_inference.ex`.  The only occurrences
+  outside `elixir_types.ex` are `type_presentation.ex` (rendering) and
+  `compiler/state.ex` (unrelated compiler state tag).
+
+  `to_shape/1` actively strips `{:dynamic, [], []}` → `nil` and
+  `{:dynamic, [], [inner]}` → `quoted_to_shape(inner)`, so `{:dynamic, _}`
+  shapes never enter the Binding algebra from the native type path either.
+
+  Backlog: if the native engine's gradual semantics need first-class
+  representation in shapes (e.g. for hover rendering), a `{:dynamic, inner}`
+  shape *with a `do_expand` clause* should be introduced explicitly — it
+  must not silently degrade to `nil`.
+
+  ### `:term`-rendering shapes
+
+  Several shapes are display aliases — they carry no extra information beyond
+  their kind:
+
+  | Shape            | Renders as          | Notes                                 |
+  |------------------|---------------------|---------------------------------------|
+  | `:atom`          | `"atom()"`          | generic atom                          |
+  | `:integer`       | `"integer()"`       | generic integer (also `{:integer,nil}`) |
+  | `{:integer, v}`  | `"5"` (literal)     | pinned integer                        |
+  | `:float`         | `"float()"`         | generic float                         |
+  | `:binary`        | `"binary()"`        | generic binary                        |
+  | `:number`        | `"number()"`        | `integer() | float()`                 |
+  | `:pid`/`:port`/`:reference` | as named | scalar builtins                |
+  | `:tuple`         | `"tuple()"`         | generic tuple (any arity)             |
+  | `:fun`           | `"fun()"`           | generic function                      |
+  | `:list`          | `"list()"`          | generic list (subsumes all list shapes) |
+  | `:empty_map`     | `"empty_map()"`     | `%{}` from Descr (task #22)           |
+  | `:non_struct_map`| `"non_struct_map()"` | open non-struct map from Descr       |
+  | `:boolean`       | `"boolean()"`       | `false | true`                        |
+  | `:bitstring`     | `"bitstring()"`     | superset of `:binary`                 |
+
+  ### `{:optional, _}` — map-field-only wrapper
+
+  Meaning: a map key that **may or may not be present** when it is present
+  its value has the inner type.
+
+  Producers: `ElixirTypes.to_shape_eager/1` when the descr carries an
+  `:optional` key alongside inner type bits; `quoted_to_shape` for
+  `{:if_set, [], [inner]}` from `Descr.to_quoted`.
+
+  Consumer / algebra:
+  - `do_expand` preserves the wrapper: if the inner shape expands to `nil`
+    the wrapper is dropped; otherwise `{:optional, expanded}` is returned.
+  - `covers?` treats `{:optional, _}` transparently — the inner shapes are
+    compared.  This prevents spurious disjointness in `drop_subsumed`.
+  - `uninformative_field?` keeps optional fields (renders as
+    `"if_set(inner)"`, not `"term()"`).
+  - `fields_for_receiver/2` in `TypePresentation` includes optional fields
+    (they are accessible — the key *may* exist).
+
+  Note: `{:optional, _}` is only meaningful as a *field value* inside a map
+  or struct shape.  Using it as a standalone expression type is undefined.
+
+  ---
+
+  ## Improper-list degradation policy
+
+  The shape algebra has **no representation for improper lists**.  The
+  compiler's set-theoretic type `non_empty_list(head, tail)` with a
+  non-list tail is a proper-type concept that cannot be preserved here.
+  The policy is:
+
+  1. **`to_shape` boundary** (`ElixirTypes.quoted_to_shape/1`): a
+     `{:non_empty_list, [], [_elem, _tail]}` form (improper tail explicit)
+     degrades to `nil` (unknown) rather than claiming a proper list.
+     See line ~1746 in `elixir_types.ex`.
+
+  2. **`++` with unknown or non-list RHS** (`expand_call` for `++`): when
+     the RHS of `++` is not a known proper list (`{:list, _}`,
+     `{:nonempty_list, _}`, or `:list`) and the LHS is not `{:list, :empty}`,
+     the result is `nil` (unknown).  A non-list or improper RHS makes the
+     result potentially improper; the shape `{:list, _}` would over-claim.
+     See line ~959.
+
+  3. **Cons patterns** (`parse_type` for `[head | _]`): the terminator type
+     is silently dropped; `[head | _]` parses to `{:list, head_type}`.  The
+     comment says "for simplicity we skip terminator type" (line ~2276).
+     This means a type-spec's `maybe_improper_list(h, t)` or
+     `nonempty_improper_list(h, t)` is represented as `{:list, h}` — a
+     sound over-approximation (widens to proper list) but loses the
+     improper-tail information.
+
+  **Backlog item**: a `{:improper_list, head, tail}` shape (or a pair of
+  shapes `{head, tail}` at the list level) would let the algebra model the
+  full Erlang/Elixir list tower.  Until that shape exists, all three
+  degradation points above intentionally fall back to `nil` or a widened
+  proper-list shape rather than inventing false precision.
+  """
 
   require Logger
 

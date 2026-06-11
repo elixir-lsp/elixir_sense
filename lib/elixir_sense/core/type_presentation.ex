@@ -277,13 +277,62 @@ defmodule ElixirSense.Core.TypePresentation do
   The resolved field types of a map/struct receiver, for property-aware
   completion/definition. Returns `%{field_name => rendered_type_text}` (the
   `__struct__` field is dropped), or `%{}` when the receiver isn't a map/struct.
+
+  When a `VarInfo` is provided, the function also consults the native
+  `elixir_types_descr` (when `ElixirTypes.enabled?/0` is true) to surface
+  fields that the structural engine does not know about — optional keys
+  (`if_set(...)`), required keys that only appear in the descr, etc.
+  Structural fields always win on conflict (they carry literal precision);
+  descr-derived fields fill in anything absent from the structural shape.
   """
+  def fields_for_receiver(%Binding{} = binding, %VarInfo{
+        type: type,
+        elixir_types_descr: descr
+      }) do
+    structural = fields_from_shape(binding, type)
+    descr_fields = fields_from_descr(descr)
+
+    # Structural wins on conflict when it carries real information (not just the
+    # uninformative "term()" placeholder that Binding.expand fills in for struct
+    # fields it has no data about). Descr-derived values fill in any key that is
+    # absent from the structural map OR where structural only knows "term()".
+    Map.merge(structural, descr_fields, fn _key, s_val, d_val ->
+      if s_val == "term()", do: d_val, else: s_val
+    end)
+  end
+
   def fields_for_receiver(%Binding{} = binding, shape) do
+    fields_from_shape(binding, shape)
+  end
+
+  # Derives the field map from a structural shape (the primary path).
+  defp fields_from_shape(%Binding{} = binding, shape) do
     case Binding.expand(binding, shape) do
       {:map, fields, _updated} -> field_map(fields)
       {:struct, fields, _type, _updated} -> field_map(Keyword.delete(fields, :__struct__))
       _other -> %{}
     end
+  end
+
+  # Derives the field map from a native elixir_types_descr.
+  # Returns %{} when native is disabled, descr is nil, or the descr does not
+  # reduce to a map/struct shape.
+  defp fields_from_descr(nil), do: %{}
+
+  defp fields_from_descr(descr) do
+    if ElixirTypes.enabled?() do
+      case ElixirTypes.to_shape(descr) do
+        {:map, fields, _updated} -> field_map(fields)
+        {:struct, fields, _type, _updated} -> field_map(Keyword.delete(fields, :__struct__))
+        _other -> %{}
+      end
+    else
+      %{}
+    end
+  rescue
+    _ -> %{}
+  catch
+    _, _ -> %{}
   end
 
   defp field_map(fields) do

@@ -969,7 +969,7 @@ defmodule ElixirSense.Core.Compiler.State do
         meta
       end
 
-    built_sig = build_elixir_types_spec_sig(env, type_name, spec, kind)
+    built_sig = build_elixir_types_spec_sig(env, type_name, Keyword.get(options, :spec_ast), kind)
 
     type_info = %SpecInfo{
       name: type_name,
@@ -1002,14 +1002,20 @@ defmodule ElixirSense.Core.Compiler.State do
     %__MODULE__{state | specs: specs}
   end
 
-  defp build_elixir_types_spec_sig(_env, _name, _spec, kind)
+  defp build_elixir_types_spec_sig(_env, _name, _spec_ast, kind)
        when kind not in [:spec, :callback, :macrocallback],
        do: nil
 
-  defp build_elixir_types_spec_sig(%{module: module}, name, spec, _kind)
-       when is_atom(module) and is_atom(name) and is_binary(spec) do
-    with {:ok, {:@, _, [{_kind, _, [ast]}]}} <- Code.string_to_quoted(spec, emit_warnings: false),
-         {:ok, {fun_ast, return_ast, guards}} <- extract_spec_parts(ast),
+  # `spec_ast` is the already-expanded quoted spec AST captured at the @spec
+  # expansion site (Compiler.Typespec.expand_spec/3). We convert it directly
+  # instead of re-parsing the stringified spec, which avoids a round-trip through
+  # Code.string_to_quoted and the drift that introduces (re-parsing loses the
+  # alias/remote-type expansion the compiler already performed). The unwrapped
+  # AST is either `{:when, _, [{:"::", ...}, guards]}` or `{:"::", _, [...]}`,
+  # which is exactly what extract_spec_parts/1 matches.
+  defp build_elixir_types_spec_sig(%{module: module}, name, spec_ast, _kind)
+       when is_atom(module) and is_atom(name) and is_tuple(spec_ast) do
+    with {:ok, {fun_ast, return_ast, guards}} <- extract_spec_parts(spec_ast),
          {^name, _, args} <- fun_ast,
          true <- is_list(args) do
       arg_descrs = Enum.map(args, &spec_arg_to_descr(&1, module, guards))
@@ -1134,7 +1140,7 @@ defmodule ElixirSense.Core.Compiler.State do
         {:binary, nil}
 
       {:bitstring, []} ->
-        {:binary, nil}
+        :bitstring
 
       {:atom, []} ->
         :atom
@@ -1245,7 +1251,7 @@ defmodule ElixirSense.Core.Compiler.State do
         {:binary, nil}
 
       {:nonempty_bitstring, []} ->
-        {:binary, nil}
+        :bitstring
 
       {:as_boolean, [type]} ->
         spec_ast_to_shape(type, module)
@@ -1277,7 +1283,29 @@ defmodule ElixirSense.Core.Compiler.State do
     resolved_remote = resolve_spec_module(remote, module)
 
     if is_atom(resolved_remote) and is_atom(type) and is_list(args) do
-      # Handle well-known remote types
+      # Well-known remote-type table.
+      #
+      # Remote type references (`String.t()`, `Range.t()`, ...) cannot be
+      # converted structurally — the generic conversion above only sees built-in
+      # types and literal AST. We hand-map a small set of high-value stdlib remote
+      # types to shapes so that arg-domain filtering and return-type binding work
+      # for the common cases.
+      #
+      # This table is INTENTIONALLY INCOMPLETE. Anything not listed falls through
+      # to the `_ -> nil` clause (treated as `dynamic()`), which is always sound —
+      # it just gives up precision. Notable things deliberately NOT covered:
+      #   * Opaque/abstract protocol and behaviour types (e.g. Enumerable.t,
+      #     Collectable.t, Inspect.Algebra.t) — no useful structural shape.
+      #   * Generic "any value" aliases (Enum.t/element/acc/default, Map.key/value,
+      #     Keyword.value, Access.key/value, Macro.t/input/output, Registry.key/
+      #     value) — these collapse to `nil` (dynamic), identical to the fallback,
+      #     so they are NOT listed to keep the table small.
+      #   * Third-party / app-defined remote types — out of scope here; those are
+      #     resolved via metadata/introspection elsewhere, not this fast path.
+      #   * Parametrized container precision (e.g. exact element types of nested
+      #     remote generics) — we keep only shallow shapes.
+      # When a listed entry would map to `nil`, prefer deleting it and relying on
+      # the fallback rather than adding a redundant clause.
       case {resolved_remote, type, args} do
         {String, :t, []} ->
           {:binary, nil}
@@ -1288,23 +1316,8 @@ defmodule ElixirSense.Core.Compiler.State do
         {String, :grapheme, []} ->
           {:binary, nil}
 
-        {String, :pattern, []} ->
-          nil
-
-        {Enum, :t, []} ->
-          nil
-
-        {Enum, :acc, []} ->
-          nil
-
-        {Enum, :element, []} ->
-          nil
-
         {Enum, :index, []} ->
           {:integer, nil}
-
-        {Enum, :default, []} ->
-          nil
 
         {Range, :t, []} ->
           {:struct, [__struct__: {:atom, Range}], {:atom, Range}, nil}
@@ -1345,35 +1358,25 @@ defmodule ElixirSense.Core.Compiler.State do
         {Keyword, :key, []} ->
           :atom
 
-        {Keyword, :value, []} ->
-          nil
-
-        {Access, :key, []} ->
-          nil
-
-        {Access, :value, []} ->
-          nil
-
         {IO, :chardata, []} ->
           {:union, [{:binary, nil}, {:list, nil}]}
 
         {IO, :nodata, []} ->
           {:atom, :ok}
 
-        {Macro, :t, []} ->
-          nil
-
-        {Macro, :input, []} ->
-          nil
-
-        {Macro, :output, []} ->
-          nil
-
         {Exception, :t, []} ->
           {:map, [__struct__: :atom, __exception__: {:atom, true}], nil}
 
         {Exception, :kind, []} ->
-          {:union, [{:atom, :error}, {:atom, :exit}, {:atom, :throw}]}
+          # Real typespec (lib/elixir/lib/exception.ex):
+          #   kind :: :error | :exit | :throw | {:EXIT, pid}
+          {:union,
+           [
+             {:atom, :error},
+             {:atom, :exit},
+             {:atom, :throw},
+             {:tuple, 2, [{:atom, :EXIT}, :pid]}
+           ]}
 
         {GenServer, :name, []} ->
           {:union,
@@ -1401,12 +1404,6 @@ defmodule ElixirSense.Core.Compiler.State do
         {File, :posix, []} ->
           :atom
 
-        {Collectable, :t, []} ->
-          nil
-
-        {Enumerable, :t, []} ->
-          nil
-
         {Agent, :agent, []} ->
           {:union,
            [:atom, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
@@ -1423,29 +1420,14 @@ defmodule ElixirSense.Core.Compiler.State do
         {Macro.Env, :t, []} ->
           {:struct, [__struct__: {:atom, Macro.Env}], {:atom, Macro.Env}, nil}
 
-        {Map, :key, []} ->
-          nil
-
-        {Map, :value, []} ->
-          nil
-
         {IO, :device, []} ->
           {:union, [:atom, :pid]}
-
-        {Inspect.Algebra, :t, []} ->
-          nil
 
         {Module, :definition, []} ->
           {:tuple, 2, [:atom, {:integer, nil}]}
 
         {Node, :t, []} ->
           :atom
-
-        {Registry, :key, []} ->
-          nil
-
-        {Registry, :value, []} ->
-          nil
 
         {System, :time_unit, []} ->
           {:union,
@@ -2081,6 +2063,10 @@ defmodule ElixirSense.Core.Compiler.State do
 
   Stored as a parallel field (`elixir_types_sig_source`) rather than a 4th
   element in the sig tuple because every reader pattern-matches on a 3-tuple.
+
+  Once the signature has been computed the accumulated clause ASTs are no longer
+  needed, so we prune `elixir_types_clauses` here to avoid retaining every
+  function body for the lifetime of the metadata.
   """
   def put_elixir_types_sig(
         %__MODULE__{} = state,
@@ -2098,7 +2084,7 @@ defmodule ElixirSense.Core.Compiler.State do
         | elixir_types_sig: sig,
           elixir_types_sig_source: source,
           elixir_types_status: status,
-          elixir_types_clauses: info.elixir_types_clauses || []
+          elixir_types_clauses: []
       }
     end)
   end

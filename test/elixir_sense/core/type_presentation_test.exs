@@ -4,6 +4,7 @@ defmodule ElixirSense.Core.TypePresentationTest do
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.TypePresentation, as: TP
+  alias Module.Types.Descr
 
   @env %Binding{functions: __ENV__.functions, macros: __ENV__.macros}
 
@@ -160,7 +161,7 @@ defmodule ElixirSense.Core.TypePresentationTest do
       Application.put_env(:elixir_sense, :use_elixir_types, true)
 
       try do
-        descr = Module.Types.Descr.integer()
+        descr = Descr.integer()
         var = %VarInfo{version: 1, name: :x, type: nil, elixir_types_descr: descr}
 
         if ElixirSense.Core.ElixirTypes.available?() do
@@ -173,7 +174,7 @@ defmodule ElixirSense.Core.TypePresentationTest do
 
     test "without use_elixir_types config, native descriptor is skipped" do
       # Without the config flag, render_descr returns :unknown regardless of availability.
-      descr = Module.Types.Descr.integer()
+      descr = Descr.integer()
       var = %VarInfo{version: 1, name: :x, type: nil, elixir_types_descr: descr}
       # structural is :unknown, native is skipped (not enabled) → :unknown
       assert TP.render_var(@env, var) == :unknown
@@ -191,7 +192,7 @@ defmodule ElixirSense.Core.TypePresentationTest do
 
       # the descriptor is the broader, pre-narrowing `binary() | nil`
       descr =
-        Module.Types.Descr.union(Module.Types.Descr.binary(), Module.Types.Descr.atom([nil]))
+        Descr.union(Descr.binary(), Descr.atom([nil]))
 
       x = %VarInfo{
         version: 1,
@@ -311,7 +312,7 @@ defmodule ElixirSense.Core.TypePresentationTest do
       env = %Binding{functions: __ENV__.functions, macros: __ENV__.macros, vars: [y]}
 
       descr =
-        Module.Types.Descr.union(Module.Types.Descr.binary(), Module.Types.Descr.atom([nil]))
+        Descr.union(Descr.binary(), Descr.atom([nil]))
 
       x = %VarInfo{
         version: 1,
@@ -473,6 +474,36 @@ defmodule ElixirSense.Core.TypePresentationTest do
                maybe: "if_set(binary())",
                sure: ":ok"
              }
+    end
+
+    test "VarInfo overload with no descr behaves like shape-only path" do
+      # When use_elixir_types is not set (native off), VarInfo with nil descr
+      # returns the structural fields unchanged.
+      var = %VarInfo{
+        version: 1,
+        name: :x,
+        type: {:map, [a: {:integer, 1}, b: {:binary, nil}], nil},
+        elixir_types_descr: nil
+      }
+
+      assert TP.fields_for_receiver(@env, var) == %{a: "1", b: "binary()"}
+    end
+
+    test "VarInfo overload — native off: descr is ignored, structural shape used" do
+      # Even if a descr is present, when use_elixir_types is false (native off),
+      # descr-derived fields must NOT appear.
+      # We construct a synthetic descr (any map will do — it won't be consulted).
+      var = %VarInfo{
+        version: 1,
+        name: :x,
+        type: {:map, [structural_key: {:atom, :ok}], nil},
+        elixir_types_descr: %{some: :descr}
+      }
+
+      # Without Application.put_env(:elixir_sense, :use_elixir_types, true),
+      # ElixirTypes.enabled?() is false — descr path is skipped.
+      fields = TP.fields_for_receiver(@env, var)
+      assert fields == %{structural_key: ":ok"}
     end
   end
 

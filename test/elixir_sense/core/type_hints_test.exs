@@ -411,7 +411,7 @@ defmodule ElixirSense.Core.TypeHintsTest do
             false
         end)
 
-      assert length(keys_before) > 0, "expected some pdict entries to exist before discard"
+      assert keys_before != [], "expected some pdict entries to exist before discard"
 
       TypeHints.discard(ctx)
 
@@ -453,7 +453,7 @@ defmodule ElixirSense.Core.TypeHintsTest do
             false
         end)
 
-      assert length(keys) > 0
+      assert keys != []
     end
 
     test "discard on a fresh (unused) context is a no-op" do
@@ -461,6 +461,125 @@ defmodule ElixirSense.Core.TypeHintsTest do
       ctx = TypeHints.request_context(md)
       # Must not raise.
       assert TypeHints.discard(ctx) == :ok
+    end
+  end
+
+  describe "type_hint_at/4 — flow-sensitive read-position API" do
+    # Empirical probe result: inside `cond do is_integer(x) ->` at line 5,
+    # env.vars contains VarInfo{name: :x, type: :integer} (narrowed), whereas
+    # at the binding site (line 2) env.vars contains VarInfo{name: :x, type: nil}.
+    # The metadata model DOES support flow-sensitivity at read positions via
+    # the per-line lines_to_env map populated by the compiler walk.
+
+    @flow_code """
+    defmodule FlowM do
+      def f(x) do
+        cond do
+          is_integer(x) ->
+            x
+          true ->
+            x
+        end
+      end
+    end
+    """
+
+    test "returns :skip when var name is not in scope at position" do
+      md = metadata(@flow_code, {5, 9})
+      ctx = TypeHints.request_context(md)
+      assert TypeHints.type_hint_at(ctx, {5, 9}, :no_such_var, []) == :skip
+    end
+
+    test "flow-sensitivity: hint at read position inside narrowing branch shows narrowed type" do
+      # At position {5, 9} (x inside `is_integer(x) ->` branch), the env.vars
+      # entry for x has type: :integer — the narrowed type, not nil/term().
+      md = metadata(@flow_code, {5, 9})
+      ctx = TypeHints.request_context(md)
+      result = TypeHints.type_hint_at(ctx, {5, 9}, :x, [])
+
+      # The hint should be produced and show integer narrowing.
+      assert {:ok, %{label: label, full: full, source: source}} = result
+
+      assert label =~ "integer" or full =~ "integer",
+             "Expected integer type in hint, got label=#{inspect(label)} full=#{inspect(full)}"
+
+      # Source must be one of the valid provenance values.
+      assert source in [:native_exck, :native_inferred, :spec, :shape]
+    end
+
+    test "un-narrowed branch shows broader/nil type (different from narrowed)" do
+      # At position {7, 9} (x inside `true ->` branch), the env.vars entry for x
+      # has type: nil (no narrowing), so the hint may be :skip or a broader type.
+      md = metadata(@flow_code, {7, 9})
+      ctx = TypeHints.request_context(md)
+      result_broad = TypeHints.type_hint_at(ctx, {7, 9}, :x, [])
+
+      md2 = metadata(@flow_code, {5, 9})
+      ctx2 = TypeHints.request_context(md2)
+      result_narrow = TypeHints.type_hint_at(ctx2, {5, 9}, :x, [])
+
+      # The two results must differ (flow-sensitivity is observable).
+      # result_narrow must be {:ok, ...} with integer; result_broad may be :skip
+      # (if nil type renders nothing) or a non-integer hint.
+      assert result_narrow != result_broad,
+             "Flow-sensitivity not observable: both positions returned #{inspect(result_narrow)}"
+    end
+
+    test "result is cached per {ref, :hint_at, position, var_name}" do
+      md = metadata(@flow_code, {5, 9})
+      pos = {5, 9}
+      ctx = TypeHints.request_context(md)
+      cache_key = {TypeHints, ctx.ref, :hint_at, pos, :x}
+
+      assert Process.get(cache_key) == nil
+      result = TypeHints.type_hint_at(ctx, pos, :x, [])
+      assert Process.get(cache_key) == result
+    end
+
+    test "discard/1 also erases hint_at cache entries" do
+      md = metadata(@flow_code, {5, 9})
+      pos = {5, 9}
+      ctx = TypeHints.request_context(md)
+
+      TypeHints.type_hint_at(ctx, pos, :x, [])
+      cache_key = {TypeHints, ctx.ref, :hint_at, pos, :x}
+      assert Process.get(cache_key) != nil
+
+      TypeHints.discard(ctx)
+      assert Process.get(cache_key) == nil
+    end
+
+    test "parity: type_hint_at matches type_hint_for_var when called with the env's own VarInfo" do
+      # type_hint_at(ctx, pos, :x) should produce the same result as
+      # type_hint_for_var(ctx, pos, env.vars[x]) at the same position.
+      pos = {5, 9}
+      md = metadata(@flow_code, pos)
+      env = Metadata.get_env(md, pos)
+      var_info = Enum.find(env.vars, &(&1.name == :x))
+      assert %VarInfo{} = var_info
+
+      ctx = TypeHints.request_context(md)
+      result_at = TypeHints.type_hint_at(ctx, pos, :x, [])
+      result_for = TypeHints.type_hint_for_var(ctx, pos, var_info, [])
+
+      assert result_at == result_for
+    end
+
+    test "works for a plain (non-flow-sensitive) var too" do
+      code = """
+      defmodule PlainM do
+        def f do
+          x = :ok
+          x
+        end
+      end
+      """
+
+      pos = {4, 5}
+      md = metadata(code, pos)
+      ctx = TypeHints.request_context(md)
+
+      assert {:ok, %{label: ":ok"}} = TypeHints.type_hint_at(ctx, pos, :x, [])
     end
   end
 

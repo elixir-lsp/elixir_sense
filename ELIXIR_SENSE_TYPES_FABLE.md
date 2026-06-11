@@ -1,5 +1,39 @@
 # ElixirSense types integration — consolidated backlog (Fable)
 
+## Architectural wave — DONE (2026-06-12, workflow types-architectural-wave)
+
+The remaining architectural P1/P2 items were addressed (gates: 1905 tests, +39;
+compile/format/credo clean):
+- **Open/closed coercion** — `to_shape` now preserves the open-map marker
+  (`:open` tail) vs genuinely-closed (`nil` tail); coercion gains an opt-in
+  `closed_literals: true` building `closed_map` for literal-complete shapes.
+  Default stays open BY DESIGN: guard facts (`is_map_key`) produce PARTIAL
+  nil-tail maps, so closing by default would be unsound — a third "literal"
+  tail marker is the documented follow-up for default closing.
+- **Spec fallback** — the `Code.string_to_quoted` reparse is GONE: `add_spec`
+  receives the compiler-expanded quoted spec AST (`Typespec.expand_spec`
+  output) directly; `bitstring()`/`nonempty_bitstring()` map to `:bitstring`;
+  `Exception.kind()` includes `{:EXIT, pid}`; table inventory documented.
+- **O(n²) local inference** — per-clause re-inference replaced by ONE
+  module-completion inference pass; clause ASTs pruned after sigs are
+  computed (no more retaining every function body).
+- **Descriptor-aware `fields_for_receiver`** — VarInfo overload merges
+  descr-derived fields (optional keys as `if_set`, full struct fields) with
+  structural fields; structural literal precision wins on conflict.
+- **Flow-sensitive reads** — `TypeHints.type_hint_at/4` resolves the variable
+  from the env AT the read position; verified empirically (cond-branch
+  narrowing shows `integer()`); consumed by the LSP read-occurrence path.
+- **Shape vocabulary** — `Binding` moduledoc now defines all sentinel meanings
+  (nil/:none/:not_set/list-empty/map tails/:optional/dynamic) with producers,
+  consumers, algebra behavior, and rendering; 19 contract tests pin them.
+  Improper-list degradation policy documented inline.
+
+Remaining (small, tracked below): third map-tail marker design, improper-list
+modeling, module-resolution consolidation, multi-version CI evidence runs,
+release mechanics (path dep — now guarded by a release-gate CI job in
+elixir-ls), large-file benchmarks beyond the round-4 numbers.
+
+
 ## Round-4 fix wave — DONE (commit follows)
 
 All round-4 findings fixed, gates green (1866 tests, +24):

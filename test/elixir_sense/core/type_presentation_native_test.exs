@@ -11,8 +11,11 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Parser
+  alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.TypePresentation, as: TP
+  alias Module.Types.Descr
 
   setup do
     original = Application.get_env(:elixir_sense, :use_elixir_types, false)
@@ -39,10 +42,10 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
   test "render_hint/3 attributes a native-descr-backed var as source: :native" do
     if ElixirTypes.available?() do
       descr =
-        Module.Types.Descr.union(Module.Types.Descr.binary(), Module.Types.Descr.atom([nil]))
+        Descr.union(Descr.binary(), Descr.atom([nil]))
 
       # No structural type — the native descriptor must produce the text.
-      var = %ElixirSense.Core.State.VarInfo{
+      var = %VarInfo{
         version: 1,
         name: :x,
         type: nil,
@@ -117,7 +120,7 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
     {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
 
     ExUnit.CaptureLog.capture_log(fn ->
-      st = ElixirSense.Core.MetadataBuilder.build(ast)
+      st = MetadataBuilder.build(ast)
 
       send(
         self(),
@@ -209,6 +212,106 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
     )
   end
 
+  # ── fields_for_receiver/2 — descriptor-aware merge tests ─────────────────────
+
+  describe "fields_for_receiver/2 with VarInfo (native-on)" do
+    test "descr-only fields appear when structural shape has none" do
+      if ElixirTypes.available?() do
+        # Build a descr for %{descr_key: integer(), opt_key: if_set(binary())}.
+        # The structural type is nil (no shape), so everything comes from the descr.
+        descr =
+          Descr.closed_map([
+            {:descr_key, Descr.integer()},
+            {:opt_key, Descr.if_set(Descr.binary())}
+          ])
+
+        var = %VarInfo{
+          version: 1,
+          name: :x,
+          type: nil,
+          elixir_types_descr: descr
+        }
+
+        env = %Binding{functions: __ENV__.functions, macros: __ENV__.macros}
+        fields = TP.fields_for_receiver(env, var)
+
+        # descr_key is a required integer field
+        assert Map.has_key?(fields, :descr_key)
+        assert fields[:descr_key] =~ "integer"
+
+        # opt_key is optional (if_set)
+        assert Map.has_key?(fields, :opt_key)
+        assert fields[:opt_key] == "if_set(binary())"
+      end
+    end
+
+    test "structural field wins over descr-derived field for same key (merge precedence)" do
+      if ElixirTypes.available?() do
+        # Structural shape has key :a with a literal value; descr has :a as integer()
+        # and also :b which structural doesn't know about.
+        structural_shape = {:map, [a: {:integer, 42}, b: :not_set], nil}
+
+        descr =
+          Descr.closed_map([
+            {:a, Descr.integer()},
+            {:b, Descr.binary()}
+          ])
+
+        var = %VarInfo{
+          version: 1,
+          name: :x,
+          type: structural_shape,
+          elixir_types_descr: descr
+        }
+
+        env = %Binding{functions: __ENV__.functions, macros: __ENV__.macros}
+        fields = TP.fields_for_receiver(env, var)
+
+        # Structural literal "42" must win over descr's "integer()"
+        assert fields[:a] == "42"
+
+        # :b is :not_set in structural so field_map drops it from structural;
+        # descr adds it as binary().
+        assert fields[:b] == "binary()"
+      end
+    end
+
+    test "struct receiver: descr supplies full fields, structural shape knows a subset" do
+      if ElixirTypes.available?() do
+        # Structural shape only knows :host; descr knows :host and :scheme.
+        structural_shape =
+          {:struct, [__struct__: {:atom, URI}, host: {:binary, "h"}], {:atom, URI}, nil}
+
+        descr =
+          Descr.closed_map([
+            {:__struct__, Descr.atom([URI])},
+            {:host, Descr.binary()},
+            {:scheme, Descr.binary()}
+          ])
+
+        var = %VarInfo{
+          version: 1,
+          name: :x,
+          type: structural_shape,
+          elixir_types_descr: descr
+        }
+
+        env = %Binding{functions: __ENV__.functions, macros: __ENV__.macros}
+        fields = TP.fields_for_receiver(env, var)
+
+        # :__struct__ must be dropped
+        refute Map.has_key?(fields, :__struct__)
+
+        # Structural literal "h" wins for :host
+        assert fields[:host] == ~s("h")
+
+        # :scheme comes from descr
+        assert Map.has_key?(fields, :scheme)
+        assert fields[:scheme] =~ "binary"
+      end
+    end
+  end
+
   test "native-on: matches referencing earlier body vars produce no crash noise" do
     if ElixirTypes.available?() do
       # Regression: typing each `=`/`<-`/clause in isolation crashed native
@@ -242,7 +345,7 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
 
       log =
         ExUnit.CaptureLog.capture_log(fn ->
-          ElixirSense.Core.MetadataBuilder.build(ast)
+          MetadataBuilder.build(ast)
         end)
 
       refute log =~ "MatchError"
@@ -276,7 +379,7 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
 
       log =
         ExUnit.CaptureLog.capture_log(fn ->
-          ElixirSense.Core.MetadataBuilder.build(ast)
+          MetadataBuilder.build(ast)
         end)
 
       refute log =~ "FunctionClauseError"
@@ -302,7 +405,7 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
 
       log =
         ExUnit.CaptureLog.capture_log(fn ->
-          ElixirSense.Core.MetadataBuilder.build(ast)
+          MetadataBuilder.build(ast)
         end)
 
       refute log =~ "version not found"

@@ -1,5 +1,30 @@
 defmodule ElixirSense.Core.TypeInference do
-  @moduledoc false
+  @moduledoc """
+  Converts Elixir AST nodes into *shape* terms understood by
+  `ElixirSense.Core.Binding`.
+
+  ## Relationship to the shape vocabulary
+
+  Every value produced by `type_of/2` is a shape as defined in
+  `ElixirSense.Core.Binding`'s `## Shape vocabulary` moduledoc section.
+  Key invariants:
+
+  - `nil` means "unknown / no information" — callers must treat it as the
+    top type and not assume the absence of the value.
+  - `:none` means "bottom / this branch never returns" — safe to drop from
+    unions.
+  - `{:map, fields, nil}` is a *closed* map (all keys known).
+  - `{:map, fields, :open}` is an *open* map (additional unknown keys exist).
+  - `{:list, :empty}` is the empty-list literal `[]`.
+  - `{:optional, inner}` wraps a possibly-absent map field value; it should
+    only appear as a map field value, never as a top-level expression type.
+  - `:not_set` marks a map key known to be absent (from `not is_map_key/2`
+    guards); it is only meaningful as a field value and is filtered out by
+    field-listing consumers.
+
+  See `ElixirSense.Core.Binding` for the full vocabulary, algebra rules,
+  and the improper-list degradation policy.
+  """
   alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.State.VarInfo
   alias Module.Types.Descr

@@ -62,6 +62,17 @@ defmodule ElixirSense.Core.TypeHints do
   lookups are cached in the process dictionary keyed by `{ref, mfa}`, reusing the
   same caching discipline as the rest of the module.
 
+  ## API summary
+
+  | Function | Description |
+  |---|---|
+  | `request_context/1` | Build a per-request `Context` |
+  | `discard/1` | Erase all process-dictionary entries for a context |
+  | `type_hint_for_var/4` | Render a type hint given an explicit `VarInfo` |
+  | `type_hint_at/4` | Flow-sensitive hint: resolve the var AT a position from the env at that position |
+  | `effective_params/4` | Structured parameter list for `module.fun/arity` |
+  | `trust_rank/1` | Total ordering over `t:source/0` values |
+
   ## Request lifecycle and caching
 
   Create one `Context` per LSP request, in the request process, via
@@ -190,6 +201,72 @@ defmodule ElixirSense.Core.TypeHints do
   end
 
   @doc """
+  Flow-sensitive type hint for variable `var_name` at `position`, or `:skip`.
+
+  Resolves the variable from the environment at the READ position rather than
+  requiring the caller to supply a `VarInfo` from the binding site. This is
+  the preferred entry point when the variable's refined (narrowed) type at the
+  read position differs from its type at the binding site.
+
+  ## Flow sensitivity
+
+  The metadata model captures flow-sensitive narrowing at the per-line level:
+  `Metadata.get_env(metadata, position)` returns an environment whose `vars`
+  list contains the `VarInfo` for each in-scope variable as it is narrowed at
+  that specific position. For example, inside a `cond do is_integer(x) ->`
+  clause, `env.vars` contains a `VarInfo` for `x` with `type: :integer`,
+  whereas at the binding site `x` may only be typed as `nil` / `term()`.
+
+  This empirically-verified fact holds for:
+    - `cond` clause guards (`is_integer/1`, `is_binary/1`, etc.)
+    - `case` clause guards
+    - Rebindings (a new version of the var replaces the old one in `env.vars`)
+
+  **Scope-narrowed `VarInfo` DOES surface in `env.vars` at read positions.**
+
+  ## Selection rule for `env.vars`
+
+  `env.vars` contains at most one entry per variable name at any given env
+  (the env is per-line, so all versions have already been resolved to the
+  single in-scope version). The lookup is therefore:
+
+      Enum.find(env.vars, &(&1.name == var_name))
+
+  No version comparison is needed: if a var of the requested name appears in
+  `env.vars` at the read position, it is the in-scope, possibly narrowed
+  version.
+
+  ## Caching
+
+  Cached per `{ref, :hint_at, position, var_name}` in the process dictionary.
+  The underlying `env_for/2` and `local_sigs_for/2` caches are also reused.
+
+  ## Return values
+
+    * `:skip` — no variable with `var_name` is in scope at `position`, or the
+      resolved `VarInfo` produces an uninformative type (same as
+      `type_hint_for_var/4`).
+    * `{:ok, %{label, full, source}}` — the hint for the flow-sensitive
+      `VarInfo` at the read position.
+  """
+  @spec type_hint_at(Context.t(), {pos_integer, pos_integer}, atom, keyword) ::
+          :skip | {:ok, hint}
+  def type_hint_at(%Context{} = ctx, position, var_name, opts \\ [])
+      when is_atom(var_name) do
+    cache_key = {__MODULE__, ctx.ref, :hint_at, position, var_name}
+
+    case Process.get(cache_key, :__miss__) do
+      :__miss__ ->
+        result = compute_hint_at(ctx, position, var_name, opts)
+        Process.put(cache_key, result)
+        result
+
+      cached ->
+        cached
+    end
+  end
+
+  @doc """
   Total ordering over `t:source/0`, strongest first.
 
   Returns `0..3` so consumers can apply a `minimumTrust` filter without
@@ -267,6 +344,38 @@ defmodule ElixirSense.Core.TypeHints do
 
       cached ->
         cached
+    end
+  end
+
+  # Resolve the var from env.vars at the read position, then delegate to the
+  # existing hint path with that flow-sensitive VarInfo.
+  #
+  # Selection rule: env.vars at a given position holds at most one VarInfo per
+  # name (the in-scope, possibly flow-narrowed version). A plain name match is
+  # sufficient — no version comparison is required.
+  defp compute_hint_at(%Context{} = ctx, position, var_name, opts) do
+    case env_for(ctx, position) do
+      nil ->
+        :skip
+
+      env ->
+        case Enum.find(env.vars, &(&1.name == var_name)) do
+          nil ->
+            :skip
+
+          %VarInfo{} = var_info ->
+            local_sigs = local_sigs_for(ctx, env.module)
+            binding = Binding.from_env(env, ctx.metadata, position, local_sigs: local_sigs)
+
+            case TypePresentation.render_hint(binding, var_info, opts) do
+              {:ok, hint} ->
+                source = classify_source(ctx, env.module, hint.source, var_info.type)
+                {:ok, %{hint | source: source}}
+
+              :skip ->
+                :skip
+            end
+        end
     end
   end
 

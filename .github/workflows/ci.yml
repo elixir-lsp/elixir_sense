@@ -162,3 +162,12 @@ jobs:
       # Dialyzer is clean (known warnings tracked in .dialyzer_ignore.exs); keep
       # it a blocking gate so regressions are caught instead of silently hidden.
       - run: mix dialyzer
+
+  release-gate:
+    name: Reject absolute path deps (release gate)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check for absolute local path dependencies
+        run: |
+          ! grep -rn 'path: "/' --include=mix.exs --include=mix.lock .

@@ -1889,10 +1889,19 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp quoted_map_to_shape(fields) do
     # Extract field key-value pairs. Non-atom (domain) keys like
     # `integer() => binary()` are preserved as `{{:domain, key_shape}, value}`
-    # rather than collapsed to a nil key. The open-map marker `{:..., [], nil}`
-    # is a bare 3-tuple element, not a `{key, value}` pair, so the `{key, value}`
-    # generator already skips it — we treat all maps as open in coercion anyway
-    # (task #22), so the previous explicit 2-tuple filter was dead code.
+    # rather than collapsed to a nil key.
+    #
+    # The open-map marker `{:..., [], nil}` is a bare 3-tuple element (not a
+    # `{key, value}` pair), so the `{key, value}` generator already skips it.
+    # Its PRESENCE, however, is the only signal that distinguishes an open map
+    # (`%{..., a: integer()}` — additional unknown keys exist) from a genuinely
+    # closed map (`%{a: integer()}` — all keys known) in the quoted form. We
+    # record that distinction in the shape tail (`:open` vs `nil`) per the shape
+    # grammar contract so coercion can build the right descr (closed_map for a
+    # nil tail, open_map otherwise). Before this, to_shape collapsed BOTH to a
+    # nil tail, which silently over-reported closedness for open maps.
+    map_tail = if open_map_marker?(fields), do: :open, else: nil
+
     kv_pairs =
       for {key_quoted, value_quoted} <- fields do
         case extract_quoted_map_key(key_quoted) do
@@ -1920,14 +1929,22 @@ defmodule ElixirSense.Core.ElixirTypes do
             key != :__struct__,
             do: {key, quoted_to_shape(value_quoted)}
 
+      # Struct coercion (coerce_struct_descr) derives closed/open from the loaded
+      # defstruct, not the shape tail, so the struct tail stays `nil` regardless.
       {:struct, field_shapes, {:atom, struct_module}, nil}
     else
       field_shapes =
         for {key, value_quoted} <- kv_pairs,
             do: {key, quoted_to_shape(value_quoted)}
 
-      {:map, field_shapes, nil}
+      {:map, field_shapes, map_tail}
     end
+  end
+
+  # The open-map quoted marker is the bare element `{:..., [], nil}` — present
+  # only when the descr has additional unknown keys beyond the listed ones.
+  defp open_map_marker?(fields) do
+    Enum.any?(fields, &match?({:..., [], nil}, &1))
   end
 
   # Extract atom key from quoted map key representation.
@@ -2073,6 +2090,88 @@ defmodule ElixirSense.Core.ElixirTypes do
   # and coerce into a Descr.t()
   def coerce_var_type_public(type_like), do: coerce_var_type(type_like)
 
+  @doc """
+  Like `coerce_var_type_public/1`, but with closed-map fidelity opts.
+
+  ## Options
+
+    * `:closed_literals` (default `false`) — when `true`, a `nil`-tail map shape
+      (`{:map, fields, nil}`) is coerced to a `Descr.closed_map/1` instead of the
+      default `open_map`. Per the shape-grammar contract, a `nil` tail means a
+      GENUINELY closed map (all keys known: map literals, or `to_shape/1` output
+      for a closed descr). An `:open` (or any non-`nil`) tail always coerces to
+      `open_map`.
+
+  ### Soundness — why this is OPT-IN, not the default
+
+  Closing a map asserts all OTHER keys absent. That is correct for literal-complete
+  shapes, but UNSOUND for the partial `nil`-tail maps that guard facts produce —
+  e.g. `is_map_key(m, :a)` narrows `m` to `{:map, [a: nil], nil}` in
+  `type_inference/guard.ex`, which asserts only that `:a` is present, NOT that the
+  map is closed. Those partial producers use a `nil` tail and are indistinguishable
+  from literal-complete `nil`-tail maps AT THE COERCION SITE, and they DO flow into
+  the public coercion path (binding.ex intersection, compiler clause/state seeding).
+  So the default (`:closed_literals` off) keeps every map open, preserving the
+  documented seeding contract (open maps never wrongly exclude a clause).
+
+  Only callers that KNOW their shape is literal-complete (currently: the
+  compiler-parity descr round-trip, where `to_shape/1` of a closed descr yields a
+  `nil` tail and an `:open` tail for an open descr) should pass `closed_literals: true`.
+
+  ### Backlog (third tail marker)
+
+  The fully general fix is a THIRD tail marker (e.g. `:closed`) distinct from both
+  `nil` (currently overloaded as "closed unless a partial producer") and `:open`,
+  so literal-complete and guard-fact-partial maps are distinguishable everywhere.
+  That touches the shared shape grammar consumed across `binding.ex` /
+  `type_presentation.ex` (which pattern-match `tail in [nil, :open]`) and is OUT OF
+  SCOPE for this wave; this opt is the minimal, sound, default-preserving step.
+  """
+  def coerce_var_type_public(type_like, opts) when is_list(opts) do
+    if Keyword.get(opts, :closed_literals, false) do
+      coerce_var_type_closed(type_like)
+    else
+      coerce_var_type(type_like)
+    end
+  end
+
+  # Closed-literal coercion: only the OUTERMOST `nil`-tail map is built closed.
+  # Nested field values go through the normal (open, default-safe) coercion, so a
+  # nested guard-fact partial map can never be wrongly closed. Structs already
+  # derive closed/open from the loaded defstruct in `coerce_struct_descr`, so they
+  # need no special handling here.
+  # An EMPTY-field `nil`-tail map (`{:map, [], nil}`) is the map TOP (`map()`),
+  # NOT the empty closed map (`%{}` round-trips through the distinct `:empty_map`
+  # shape). Closing it to `closed_map([])` would wrongly collapse the top to the
+  # empty map, so leave empty-field maps open even under `closed_literals: true`.
+  defp coerce_var_type_closed({:map, [], nil} = shape) do
+    coerce_var_type(shape)
+  end
+
+  # A `nil`-tail map with DOMAIN keys (`{{:domain, _}, _}`) is open: openness is
+  # encoded by the domain keys (`%{atom() => term(), ...}`), not by a `:...`
+  # marker, so to_shape gives it a nil tail. `coerce_map_descr` drops domain keys
+  # (only atom-keyed pairs survive), so closing here would build an empty/partial
+  # closed map and wrongly exclude maps the domain admits. Keep these open.
+  defp coerce_var_type_closed({:map, fields, nil} = shape)
+       when is_list(fields) do
+    if Enum.all?(fields, &match?({k, _} when is_atom(k), &1)) do
+      try do
+        Descr.dynamic(coerce_map_descr(fields, [], closed: true))
+      rescue
+        # If closed_map construction is unavailable on this Descr, fall back to
+        # the sound open coercion rather than failing.
+        _ -> coerce_var_type(shape)
+      catch
+        _, _ -> coerce_var_type(shape)
+      end
+    else
+      coerce_var_type(shape)
+    end
+  end
+
+  defp coerce_var_type_closed(type_like), do: coerce_var_type(type_like)
+
   # task #10: Binding shapes are best-effort. Seeding them as *static* descrs
   # makes the typesystem treat them as certain, so intersections/matches collapse
   # to none() and valid clauses get filtered out. The compiler wraps inferred
@@ -2144,7 +2243,13 @@ defmodule ElixirSense.Core.ElixirTypes do
     Descr.open_tuple(Enum.map(elements, &coerce_var_type/1))
   end
 
-  defp coerce_static_descr({:map, fields, _}) when is_list(fields) do
+  # The map tail (`nil` = closed-by-grammar, `:open` = additional keys) is
+  # deliberately NOT used to close the descr on this default path: guard facts in
+  # `type_inference/guard.ex` emit `nil`-tail PARTIAL maps (e.g. `is_map_key/2`
+  # narrowing) that are indistinguishable from literal-complete maps here, and a
+  # closed_map would unsoundly exclude maps with other keys. Closed-map fidelity
+  # is available opt-in via `coerce_var_type_public(_, closed_literals: true)`.
+  defp coerce_static_descr({:map, fields, _tail}) when is_list(fields) do
     coerce_map_descr(fields, [])
   end
 
@@ -2200,15 +2305,28 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   defp coerce_static_descr(_), do: Descr.dynamic()
 
-  # Build a map descriptor from plain-map shape fields. task #10: always build an
-  # OPEN map — Binding shapes only know a subset of keys, and a closed_map would
-  # assert all other keys absent, making the intersection with the real (open or
-  # fuller) map empty and filtering out valid clauses.
-  defp coerce_map_descr(fields, extra_pairs) do
+  # Build a map descriptor from plain-map shape fields.
+  #
+  # Default (open: not set / `closed: false`) builds an OPEN map — task #10:
+  # Binding shapes (and guard-fact partial maps) only know a subset of keys, and
+  # a closed_map would assert all other keys absent, making the intersection with
+  # the real (open or fuller) map empty and filtering out valid clauses. This is
+  # the soundness-preserving default for the public seeding path.
+  #
+  # `closed: true` builds a CLOSED map (all keys known). Used only by the opt-in
+  # `coerce_var_type_public(_, closed_literals: true)` path, where the caller has
+  # established the shape is literal-complete (a `nil`-tail map that is NOT a
+  # partial guard fact — e.g. `to_shape/1` of a closed descr). See that function's
+  # doc for the soundness contract.
+  defp coerce_map_descr(fields, extra_pairs, opts \\ []) do
     atom_pairs =
       extra_pairs ++ for({k, v} when is_atom(k) <- fields, do: {k, coerce_field_value(v)})
 
-    Descr.open_map(atom_pairs)
+    if Keyword.get(opts, :closed, false) do
+      Descr.closed_map(atom_pairs)
+    else
+      Descr.open_map(atom_pairs)
+    end
   end
 
   # Map-field values preserve optionality: an {:optional, inner} shape coerces

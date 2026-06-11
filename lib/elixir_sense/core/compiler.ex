@@ -1452,7 +1452,7 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> State.add_spec(env, name, type_args, spec, kind, range)
+      |> State.add_spec(env, name, type_args, spec, kind, range, spec_ast: expr)
       |> State.with_typespec({name, length(type_args)})
       |> State.add_current_env_to_line(attr_meta, env)
       |> State.with_typespec(nil)
@@ -1840,6 +1840,11 @@ defmodule ElixirSense.Core.Compiler do
 
     {_result, state, e_env} = expand(block, state, %{env | module: full})
 
+    # The module body is fully expanded, so every clause of every local function
+    # has been accumulated. Run ElixirTypes local inference exactly once per
+    # function now, then prune the stored clause ASTs.
+    state = infer_module_local_signatures(state, %{env | module: full})
+
     # here we handle module callbacks. Only before_compile macro callbacks are expanded as they
     # affect module body. Func before_compile callbacks are not executed. on_definition after_compile and after_verify
     # are not executed as we do not preform a real compilation
@@ -2176,9 +2181,12 @@ defmodule ElixirSense.Core.Compiler do
           body: e_body
         }
 
-        state
-        |> State.add_clause_ast(env, {name, arity}, clause_ast)
-        |> maybe_infer_local_signature(env, {name, arity})
+        # Only accumulate the clause AST here. Inference is deferred until the
+        # whole module body has been expanded (see infer_module_local_signatures/2
+        # called from defmodule expansion) so that we run inference exactly once
+        # per function instead of re-running it after every clause (was O(n^2) in
+        # the number of clauses — old backlog #39).
+        State.add_clause_ast(state, env, {name, arity}, clause_ast)
       else
         state
       end
@@ -3308,35 +3316,47 @@ defmodule ElixirSense.Core.Compiler do
     end
   end
 
-  # Maybe infer local function signature from accumulated clauses
-  defp maybe_infer_local_signature(state, %{module: module, file: file}, {fun, arity})
-       when is_atom(module) and is_atom(fun) and is_integer(arity) do
+  # Run ElixirTypes local inference once per function of `module`, after the
+  # whole module body has been expanded and all clauses accumulated.
+  #
+  # Previously inference ran after every individual clause via
+  # `maybe_infer_local_signature/3`, re-processing the whole accumulated clause
+  # list each time — quadratic in the number of clauses (old backlog #39). Here
+  # we walk the module's functions once, infer the signature from the complete
+  # clause list, persist it (with `:inferred` provenance), and prune the stored
+  # clause ASTs so we don't retain every function body for the lifetime of the
+  # metadata.
+  defp infer_module_local_signatures(state, %{module: module, file: file})
+       when is_atom(module) do
     if ElixirTypes.enabled?() do
-      key = {module, fun, arity}
-
-      case state.mods_funs_to_positions[key] do
-        %{elixir_types_clauses: clauses} when is_list(clauses) and clauses != [] ->
-          # Run inference on accumulated clauses
-          case ElixirTypes.infer_local_signature(
-                 module,
-                 {fun, arity},
-                 clauses,
-                 file
-               ) do
-            {:infer, _domain, _clause_types} = sig ->
-              State.put_elixir_types_sig(state, key, sig, :ok, :inferred)
-
-            :error ->
-              State.put_elixir_types_sig(state, key, nil, :skipped, nil)
-          end
+      state.mods_funs_to_positions
+      |> Enum.filter(fn
+        {{^module, fun, arity}, %{elixir_types_clauses: clauses}}
+        when is_atom(fun) and is_integer(arity) and is_list(clauses) and clauses != [] ->
+          true
 
         _ ->
-          state
-      end
+          false
+      end)
+      |> Enum.reduce(state, fn {{^module, fun, arity} = key, info}, state ->
+        # `elixir_types_clauses` is stored newest-first (add_clause_ast prepends).
+        # We intentionally pass it as-is to preserve the exact clause ordering the
+        # old per-clause inference observed on its final invocation, which feeds
+        # build_domain / the clause-types union.
+        clauses = info.elixir_types_clauses
+
+        case ElixirTypes.infer_local_signature(module, {fun, arity}, clauses, file) do
+          {:infer, _domain, _clause_types} = sig ->
+            State.put_elixir_types_sig(state, key, sig, :ok, :inferred)
+
+          :error ->
+            State.put_elixir_types_sig(state, key, nil, :skipped, nil)
+        end
+      end)
     else
       state
     end
   end
 
-  defp maybe_infer_local_signature(state, _env, _fun_arity), do: state
+  defp infer_module_local_signatures(state, _env), do: state
 end

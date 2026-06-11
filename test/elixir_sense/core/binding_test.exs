@@ -3869,6 +3869,155 @@ defmodule ElixirSense.Core.BindingTest do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # Shape vocabulary CONTRACT tests.
+  # These pin the documented algebra behaviours so future changes to the engine
+  # break loudly rather than silently.  Do NOT change expected values without
+  # a matching update to the ## Shape vocabulary section in Binding's moduledoc.
+  # ---------------------------------------------------------------------------
+  describe "shape vocabulary contract" do
+    # --- nil (unknown / top) ---
+
+    # nil member in a union poisons the whole union to nil (absorbing element).
+    test "nil member in union poisons union to nil" do
+      assert nil ==
+               Binding.expand(@env, {:union, [{:atom, :ok}, nil, {:integer, 1}]})
+    end
+
+    # nil as an intersection operand is the TOP (identity): T ∩ nil = T.
+    test "nil as intersection identity: T ∩ nil = T" do
+      result = Binding.expand(@env, {:intersection, [{:atom, :ok}, nil]})
+      # nil is the identity in intersection; the result should be the other operand,
+      # i.e. {:atom, :ok}, not :none and not nil.
+      assert result == {:atom, :ok}
+    end
+
+    # --- :none (bottom) ---
+
+    # :none members are dropped from unions — they vanish, leaving the rest.
+    test ":none member is dropped from union" do
+      assert {:atom, :ok} ==
+               Binding.expand(@env, {:union, [{:atom, :ok}, :none]})
+    end
+
+    # An all-:none union collapses to :none.
+    test "all-:none union collapses to :none" do
+      assert :none ==
+               Binding.expand(@env, {:union, [:none, :none]})
+    end
+
+    # :none is the annihilator in intersection: :none ∩ T = :none.
+    test ":none annihilates intersection" do
+      assert :none ==
+               Binding.expand(@env, {:intersection, [:none, {:atom, :ok}]})
+    end
+
+    # --- expand of terminal shapes ---
+
+    test "expand :atom returns :atom" do
+      assert :atom == Binding.expand(@env, :atom)
+    end
+
+    test "expand :none returns :none" do
+      assert :none == Binding.expand(@env, :none)
+    end
+
+    test "expand {:atom, :ok} returns {:atom, :ok}" do
+      assert {:atom, :ok} == Binding.expand(@env, {:atom, :ok})
+    end
+
+    test "expand :empty_list returns {:list, :empty}" do
+      # :empty_list is the alias produced by to_shape; expand normalises it.
+      assert {:list, :empty} == Binding.expand(@env, :empty_list)
+    end
+
+    test "expand {:list, :empty} is idempotent" do
+      assert {:list, :empty} == Binding.expand(@env, {:list, :empty})
+    end
+
+    # --- covers? top cases ---
+
+    # The generic :list atom subsumes any {:list, _} shape.
+    test "covers?: :list subsumes {:list, _}" do
+      # Use difference/2 indirectly: `[:a] | :list` should reduce to :list
+      # because {:atom, :a} is subsumed by... wait, let's directly test via
+      # normalize_union which calls drop_subsumed which uses covers?.
+      # {:list, {:atom, :ok}} should be dropped when :list is also present.
+      result = Binding.expand(@env, {:union, [:list, {:list, {:atom, :ok}}]})
+      assert result == :list
+    end
+
+    # nil (as covers? left-side) means "any element matches" — used only
+    # inside tuple element coverage; indirectly tested through difference.
+    test "covers?: nil left-side covers anything (wildcard)" do
+      # A {:tuple, 1, [nil]} pattern covers {:tuple, 1, [{:atom, :ok}]}
+      # which means the latter is dropped from the union when the former is present.
+      result = Binding.expand(@env, {:union, [{:tuple, 1, [nil]}, {:tuple, 1, [{:atom, :ok}]}]})
+      # {:tuple, 1, [nil]} subsumes {:tuple, 1, [{:atom, :ok}]}, so only the
+      # more general member remains.
+      assert result == {:tuple, 1, [nil]}
+    end
+
+    # --- :open vs nil map tail distinction ---
+
+    test "closed map tail nil renders with no open marker" do
+      # {:map, [a: {:integer, 1}], nil} = closed
+      alias ElixirSense.Core.TypePresentation
+      shape = {:map, [a: {:integer, 1}], nil}
+      {:ok, rendered} = TypePresentation.render(shape)
+      # closed map — must NOT contain the "..." open marker
+      refute String.contains?(rendered, "...")
+    end
+
+    test "open map tail :open renders with open marker" do
+      alias ElixirSense.Core.TypePresentation
+      shape = {:map, [a: {:integer, 1}], :open}
+      {:ok, rendered} = TypePresentation.render(shape)
+      # open map — must contain the "..." open marker
+      assert String.contains?(rendered, "...")
+    end
+
+    test "empty open map renders as map()" do
+      alias ElixirSense.Core.TypePresentation
+      {:ok, rendered} = TypePresentation.render({:map, [], :open})
+      assert rendered == "map()"
+    end
+
+    # --- :not_set filtering in fields_for_receiver ---
+
+    test ":not_set field values are excluded from fields_for_receiver" do
+      alias ElixirSense.Core.TypePresentation
+      env_binding = %Binding{functions: __ENV__.functions, macros: __ENV__.macros}
+
+      # Build a map shape with one normal field and one :not_set field.
+      # :not_set means the key is provably absent — should not appear in completion.
+      shape = {:map, [present: {:atom, :ok}, absent: :not_set], nil}
+      fields = TypePresentation.fields_for_receiver(env_binding, shape)
+
+      assert Map.has_key?(fields, :present)
+      refute Map.has_key?(fields, :absent)
+    end
+
+    # --- {:optional, _} wrapper preserved through expand ---
+
+    test "{:optional, inner} is preserved through expand" do
+      assert {:optional, {:atom, :ok}} ==
+               Binding.expand(@env, {:optional, {:atom, :ok}})
+    end
+
+    test "{:optional, inner} with unresolvable inner collapses to nil" do
+      assert nil ==
+               Binding.expand(@env, {:optional, {:variable, :missing_var_xyz, 999}})
+    end
+
+    # optional field IS informative (must not be dropped by uninformative_field?)
+    test "{:optional, inner} renders as if_set(...) not term()" do
+      alias ElixirSense.Core.TypePresentation
+      {:ok, rendered} = TypePresentation.render({:optional, {:atom, :ok}})
+      assert rendered == "if_set(:ok)"
+    end
+  end
+
   describe "expand preserves optional (if_set) map-field wrappers" do
     test "a top-level {:optional, inner} expands the inner (variable) and re-wraps" do
       env = %Binding{

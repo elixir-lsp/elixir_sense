@@ -45,18 +45,20 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         |> elem(1)
         |> MetadataBuilder.build()
 
-      # Check that clauses were captured for add/2
+      # Clauses are captured during the module body and PRUNED once the
+      # module-level inference pass computes the signature (O(n) rework) —
+      # the signature itself is the evidence the clauses were captured.
       add_key = {TestModule, :add, 2}
-      assert %{elixir_types_clauses: add_clauses} = state.mods_funs_to_positions[add_key]
-      assert length(add_clauses) == 1
+
+      assert %{elixir_types_clauses: [], elixir_types_sig: {:infer, _, _}} =
+               state.mods_funs_to_positions[add_key]
 
       # Check that clauses were captured for factorial/1
       factorial_key = {TestModule, :factorial, 1}
 
-      assert %{elixir_types_clauses: factorial_clauses} =
-               state.mods_funs_to_positions[factorial_key]
-
-      assert length(factorial_clauses) == 2
+      # Recursive functions deliberately skip inference (local handler
+      # disabled); clauses are pruned after the module pass either way.
+      assert %{elixir_types_clauses: []} = state.mods_funs_to_positions[factorial_key]
     end
 
     test "infers signatures from captured clauses" do
@@ -117,8 +119,10 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
                elixir_types_status: status
              } = state.mods_funs_to_positions[key]
 
-      # Should have captured both clauses
-      assert length(clauses) == 2
+      # Clauses pruned post-inference; the two-clause sig proves capture.
+      assert clauses == []
+      assert {:infer, _domain, sig_clauses} = sig
+      assert length(sig_clauses) == 2
 
       # Status should be ok or skipped
       assert status == :ok
@@ -168,8 +172,11 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       public_key = {TestModule, :public_fun, 1}
       private_key = {TestModule, :private_fun, 1}
 
-      assert %{elixir_types_clauses: [_]} = state.mods_funs_to_positions[public_key]
-      assert %{elixir_types_clauses: [_]} = state.mods_funs_to_positions[private_key]
+      assert %{elixir_types_clauses: [], elixir_types_sig: {:infer, _, _}} =
+               state.mods_funs_to_positions[public_key]
+
+      assert %{elixir_types_clauses: [], elixir_types_sig: {:infer, _, _}} =
+               state.mods_funs_to_positions[private_key]
     end
 
     test "local handler integration works" do
